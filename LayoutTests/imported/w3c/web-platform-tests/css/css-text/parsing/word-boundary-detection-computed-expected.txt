@@ -1,0 +1,4 @@
+
+PASS Property word-boundary-detection value 'normal'
+FAIL Property word-boundary-detection value 'manual' assert_true: 'manual' is a supported value for word-boundary-detection. expected true got false
+
