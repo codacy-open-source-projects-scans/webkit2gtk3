@@ -38,6 +38,9 @@ fast/events/autoscroll-main-document.html [ Pass ]
 
 fast/forms/enterkeyhint-attribute-values.html [ Pass ]
 
+fast/forms/fixed-size-checkbox-vertically-centered.html [ Pass ]
+fast/forms/fixed-size-radio-vertically-centered.html [ Pass ]
+
 accessibility/smart-invert.html [ Pass ]
 webkit.org/b/189818 accessibility/smart-invert-reference.html [ Pass ImageOnlyFailure ]
 fast/media/mq-inverted-colors-live-update.html [ Pass ]
@@ -1103,7 +1106,6 @@ webkit.org/b/188924 fast/mediastream/device-change-event-2.html [ Pass Timeout ]
 
 webkit.org/b/212721 svg/custom/textPath-change-id.svg [ Pass ImageOnlyFailure ]
 
-webkit.org/b/212042 [ Debug ] fast/scrolling/mac/scrollbars/overlay-scrollbar-reveal.html [ Pass Timeout ]
 webkit.org/b/212042 [ Debug ] fast/scrolling/mac/scrollbars/select-overlay-scrollbar-reveal.html [ Pass Timeout ]
 
 webkit.org/b/213461 fast/mediastream/mediastreamtrack-video-frameRate-clone-increasing.html [ Pass Failure ]
@@ -1208,13 +1210,9 @@ webkit.org/b/230113 [ Monterey+ Debug arm64 ] svg/animations/animate-elem-14-t-d
 
 webkit.org/b/230696 imported/w3c/web-platform-tests/webrtc/RTCDataChannel-close.html [ Pass Failure ]
 
-webkit.org/b/215611 [ Debug ] fast/scrolling/mac/scrollbars/overflow-overlay-scrollbar-hovered.html [ Pass Timeout ]
-
 # rdar://65269589 ([ macOS and iOS ] media/vp9.html is failing consistently.)
 [ Monterey+ ] media/vp9.html [ Pass ]
 [ Monterey+ ] webrtc/vp9-vtb.html [ Pass ]
-
-webkit.org/b/215700 fast/scrolling/mac/scrollbars/overlay-scrollbar-hovered.html [ Pass Failure Timeout ]
 
 webkit.org/b/214997 [ Release ] http/tests/workers/service/basic-install-event-waitUntil-reject.html [ Pass Timeout ]
 
@@ -1769,8 +1767,6 @@ webgl/2.0.y/conformance2/offscreencanvas/offscreencanvas-transfer-image-bitmap.h
 
 webkit.org/b/251187 [ Debug ] imported/w3c/web-platform-tests/fetch/api/redirect/redirect-back-to-original-origin.any.html [ Pass Crash ]
 
-webkit.org/b/254001 http/wpt/service-workers/service-worker-spinning-activate.https.html [ Failure Pass Timeout ]
-
 webkit.org/b/250046 [ Monterey+ ] svg/clip-path/clip-opacity-translate.svg [ ImageOnlyFailure ]
 
 # Early hints require network callbacks that are only present in macOS 12 / iOS 15 or greater.
@@ -1789,6 +1785,9 @@ webkit.org/b/256217 [ Debug ] imported/w3c/web-platform-tests/background-fetch/p
 webkit.org/b/238749 imported/w3c/web-platform-tests/html/semantics/interactive-elements/the-dialog-element/focus-after-close.html [ Pass Failure ]
 
 webkit.org/b/258325 [ Debug ] media/modern-media-controls/pip-support/pip-support-click.html [ Crash ]
+
+[ Monterey x86_64 ] imported/w3c/web-platform-tests/webcodecs/temporal-svc-encoding.https.any.html?vp9 [ Failure ]
+[ Monterey x86_64 ] imported/w3c/web-platform-tests/webcodecs/temporal-svc-encoding.https.any.worker.html?vp9 [ Failure ]
 
 # webkit.org/b/258328 Umbrella Bug: Batch mark expectations slowing down EWS (258328) 
 [ Debug ] imported/w3c/web-platform-tests/webcodecs/videoFrame-construction.crossOriginSource.sub.html [ Pass Failure ]

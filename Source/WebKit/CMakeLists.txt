@@ -341,7 +341,7 @@ set(WebKit_MESSAGES_IN_FILES
 set(WebKit_SERIALIZATION_IN_FILES
     GPUProcess/GPUProcessSessionParameters.serialization.in
 
-    GPUProcess/graphics/InlinePathData.serialization.in
+    GPUProcess/graphics/PathSegment.serialization.in
     GPUProcess/graphics/RemoteRenderingBackendCreationParameters.serialization.in
 
     GPUProcess/graphics/WebGPU/RemoteGPURequestAdapterResponse.serialization.in
@@ -372,7 +372,6 @@ set(WebKit_SERIALIZATION_IN_FILES
     Shared/Model.serialization.in
     Shared/NavigationActionData.serialization.in
     Shared/NetworkProcessConnectionParameters.serialization.in
-    Shared/PALArgumentCoders.serialization.in
     Shared/Pasteboard.serialization.in
     Shared/PlatformPopupMenuData.serialization.in
     Shared/PolicyDecision.serialization.in

@@ -67,10 +67,41 @@ webkit.org/b/204115 imported/w3c/web-platform-tests/pointerevents/pointerevent_t
 webkit.org/b/204115 imported/w3c/web-platform-tests/pointerevents/pointerevent_touch-action-inherit_highest-parent-none_touch.html [ Skip ]
 webkit.org/b/204115 imported/w3c/web-platform-tests/pointerevents/pointerevent_touch-action-pan-x-pan-y_touch.html [ Skip ]
 webkit.org/b/204115 imported/w3c/web-platform-tests/pointerevents/pointerevent_pointerout_pen.html [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/capturing_boundary_event_handler_at_ua_shadowdom.html?touch [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/coalesced_events_attributes.html?touch [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/coalesced_events_attributes_under_load.html?touch [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_after_target_removed.html?touch [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_attributes_hoverable_pointers.html?pen [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_attributes_hoverable_rightbutton.html?mouse [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_attributes_hoverable_rightbutton.html?pen [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_boundary_events_in_capturing.html?pen [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_boundary_events_in_capturing.html?touch [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_click_is_a_pointerevent.html?pen [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_click_is_a_pointerevent.html?touch [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_click_is_a_pointerevent_multiple_clicks.html?touch [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_contextmenu_is_a_pointerevent.html?touch [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_disabled_form_control.html?touch [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_fractional_coordinates.html?touch [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_iframe-touch-action-none_touch.html [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_movementxy.html?pen [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_movementxy.html?touch [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_pointerId_scope.html [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_pointercapture_in_frame.html?pen [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_pointercapture_in_frame.html?touch [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_releasepointercapture_events_to_original_target.html?pen [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_releasepointercapture_events_to_original_target.html?touch [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_releasepointercapture_pointerup_touch.html [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_sequence_at_implicit_release_on_click.html?pen [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_sequence_at_implicit_release_on_click.html?touch [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_setpointercapture_pointerup_touch.html [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_touch-action-modified_touch.html [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_touch-adjustment_click_target.html [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerup_after_pointerdown_target_removed.html?touch [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/predicted_events_attributes.html?touch [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/touch-action-with-swipe-dir-change.html?touch [ Skip ]
 imported/w3c/web-platform-tests/pointerevents/compat/pointerevent_touch-action_two-finger_interaction.html [ Skip ]
 imported/w3c/web-platform-tests/pointerevents/pointerevent_attributes_nohover_pointers.html [ Skip ]
 imported/w3c/web-platform-tests/pointerevents/pointerevent_boundary_events_in_capturing.html [ Skip ]
-imported/w3c/web-platform-tests/pointerevents/pointerevent_coalesced_events_attributes.html [ Skip ]
 imported/w3c/web-platform-tests/pointerevents/pointerevent_disabled_form_control.html [ Skip ]
 imported/w3c/web-platform-tests/pointerevents/pointerevent_pointercapture_in_frame.html [ Skip ]
 imported/w3c/web-platform-tests/pointerevents/pointerevent_releasepointercapture_events_to_original_target.html [ Skip ]
@@ -788,8 +819,6 @@ fast/text/hangul-generic-font-families.html [ WontFix ]
 # Skip tests requiring UIScriptController to generate events
 webkit.org/b/153833 css3/touch-action/touch-action-manipulation-fast-clicks.html [ Skip ]
 webkit.org/b/153833 fast/events/can-click-element-on-page-with-active-pseudo-class-and-search-field.html [ Skip ]
-webkit.org/b/153833 fast/events/before-input-prevent-insert-replacement.html [ Skip ]
-webkit.org/b/153833 fast/events/input-event-insert-replacement.html [ Skip ]
 
 # These tests test the Shadow DOM based HTML form validation UI but GTK WK2 is using native dialogs instead.
 fast/forms/validation-message-on-listbox.html [ Skip ]
@@ -1789,6 +1818,7 @@ webkit.org/b/100238 fast/history/window-open.html [ Failure ]
 
 # These failures appear to be bugs in the EventSender
 webkit.org/b/53964 fast/forms/listbox-onchange.html [ Failure ]
+fast/html/transient-activation.html [ Skip ]
 
 Bug(GTK) http/tests/misc/acid3.html [ Failure ]
 
@@ -1978,10 +2008,6 @@ webkit.org/b/172270 fast/text/font-interstitial-invisible-width-while-loading.ht
 webkit.org/b/172271 fast/text/softbank-emoji.html [ Failure ]
 webkit.org/b/172271 fast/text/tatechuyoko.html [ Failure ]
 
-webkit.org/b/172272 fast/visual-viewport/client-coordinates-relative-to-layout-viewport.html [ Failure Crash ]
-
-webkit.org/b/172273 fast/visual-viewport/client-rects-relative-to-layout-viewport.html [ Failure Crash ]
-
 webkit.org/b/172811 fast/forms/input-text-word-wrap.html [ Failure ]
 webkit.org/b/172811 fast/forms/number/number-appearance-rtl.html [ Failure ]
 webkit.org/b/172811 fast/forms/number/number-appearance-spinbutton-disabled-readonly.html [ Failure ]
@@ -2114,9 +2140,6 @@ webkit.org/b/196061 editing/pasteboard/smart-paste-paragraph-002.html [ Failure 
 webkit.org/b/196061 editing/pasteboard/smart-paste-paragraph-004.html [ Failure ]
 
 webkit.org/b/196197 http/wpt/cache-storage/cache-quota-after-restart.any.html [ Failure ]
-
-webkit.org/b/197248 fast/events/autoscroll-when-input-is-offscreen.html [ Failure Crash ]
-webkit.org/b/197248 fast/events/autoscroll-with-software-keyboard.html [ Failure Crash ]
 
 webkit.org/b/197708 http/wpt/beacon/beacon-async-error-logging.html [ Failure ]
 
@@ -2280,6 +2303,11 @@ imported/w3c/web-platform-tests/css/css-tables/tentative/baseline-td.html [ Fail
 imported/w3c/web-platform-tests/css/css-tables/tentative/caption.html [ Failure ]
 imported/w3c/web-platform-tests/css/css-tables/tentative/colgroup-col.html [ Failure ]
 imported/w3c/web-platform-tests/css/css-tables/tentative/table-quirks.html [ Failure ]
+
+imported/w3c/web-platform-tests/css/css-color/deprecated-sameas-018.html [ Failure ]
+imported/w3c/web-platform-tests/css/css-color/deprecated-sameas-019.html [ Failure ]
+imported/w3c/web-platform-tests/css/css-color/system-color-compute.html [ Failure ]
+imported/w3c/web-platform-tests/css/css-color/system-color-consistency.html [ Failure ]
 
 # Timeout
 fast/canvas/webgl/lose-context-on-timeout-async.html [ Skip ]

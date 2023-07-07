@@ -64,7 +64,7 @@
 #include <wtf/RetainPtr.h>
 #include <wtf/WeakPtr.h>
 
-#if PLATFORM(IOS_FAMILY)
+#if USE(RUNNINGBOARD)
 #include "WebSQLiteDatabaseTracker.h"
 #endif
 
@@ -489,7 +489,7 @@ private:
 
 #if HAVE(NW_PROXY_CONFIG)
     void clearProxyConfigData(PAL::SessionID);
-    void setProxyConfigData(PAL::SessionID, Vector<std::pair<Vector<uint8_t>, UUID>>&& proxyConfigurations);
+    void setProxyConfigData(PAL::SessionID, Vector<std::pair<Vector<uint8_t>, WTF::UUID>>&& proxyConfigurations);
 #endif
     
 #if USE(SOUP)
@@ -516,7 +516,7 @@ private:
     void registerURLSchemeAsNoAccess(const String&) const;
     void registerURLSchemeAsCORSEnabled(const String&) const;
 
-#if PLATFORM(IOS_FAMILY)
+#if USE(RUNNINGBOARD)
     void setIsHoldingLockedFiles(bool);
 #endif
     void stopRunLoopIfNecessary();
@@ -552,7 +552,7 @@ private:
     NetworkContentRuleListManager m_networkContentRuleListManager;
 #endif
 
-#if PLATFORM(IOS_FAMILY)
+#if USE(RUNNINGBOARD)
     WebSQLiteDatabaseTracker m_webSQLiteDatabaseTracker;
     RefPtr<ProcessAssertion> m_holdingLockedFileAssertion;
 #endif

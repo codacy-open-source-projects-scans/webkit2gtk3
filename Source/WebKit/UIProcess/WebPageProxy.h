@@ -167,6 +167,7 @@ enum class MediaProducerMutedState : uint8_t;
 enum class ModalContainerControlType : uint8_t;
 enum class ModalContainerDecision : uint8_t;
 enum class MouseEventPolicy : uint8_t;
+enum class PermissionName : uint8_t;
 enum class PermissionState : uint8_t;
 enum class PolicyAction : uint8_t;
 enum class ReasonForDismissingAlternativeText : uint8_t;
@@ -387,6 +388,7 @@ class WebPageDebuggable;
 class WebPageGroup;
 class WebPageInjectedBundleClient;
 class WebPageInspectorController;
+class WebPageProxyMessageReceiverRegistration;
 class WebPopupMenuProxy;
 class WebPopupMenuProxyClient;
 class WebPreferences;
@@ -2095,6 +2097,7 @@ public:
 
 #if ENABLE(MEDIA_STREAM)
     WebCore::CaptureSourceOrError createRealtimeMediaSourceForSpeechRecognition();
+    void clearUserMediaPermissionRequestHistory(WebCore::PermissionName);
 #endif
 
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
@@ -2177,9 +2180,9 @@ public:
 #endif
 
     void showNotification(IPC::Connection&, const WebCore::NotificationData&, RefPtr<WebCore::NotificationResources>&&);
-    void cancelNotification(const UUID& notificationID);
-    void clearNotifications(const Vector<UUID>& notificationIDs);
-    void didDestroyNotification(const UUID& notificationID);
+    void cancelNotification(const WTF::UUID& notificationID);
+    void clearNotifications(const Vector<WTF::UUID>& notificationIDs);
+    void didDestroyNotification(const WTF::UUID& notificationID);
     void pageWillLikelyUseNotifications();
 
 #if USE(SYSTEM_PREVIEW)
@@ -2236,6 +2239,8 @@ public:
     void reportNetworkIssue(const URL&);
 #endif
 
+    void useRedirectionForCurrentNavigation(const WebCore::ResourceResponse&);
+
 #if ENABLE(ACCESSIBILITY_ANIMATION_CONTROL)
     void pauseAllAnimations(CompletionHandler<void()>&&);
     void playAllAnimations(CompletionHandler<void()>&&);
@@ -2257,6 +2262,8 @@ public:
 #if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
     OptionSet<WebCore::AdvancedPrivacyProtections> advancedPrivacyProtectionsPolicies() const { return m_advancedPrivacyProtectionsPolicies; }
 #endif
+
+    WebPageProxyMessageReceiverRegistration& messageReceiverRegistration();
 
 private:
     WebPageProxy(PageClient&, WebProcessProxy&, Ref<API::PageConfiguration>&&);

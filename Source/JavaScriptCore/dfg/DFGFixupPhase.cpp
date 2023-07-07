@@ -442,9 +442,7 @@ private:
             
         case UInt32ToNumber: {
             fixIntConvertingEdge(node->child1());
-            if (bytecodeCanTruncateInteger(node->arithNodeFlags()))
-                node->convertToIdentity();
-            else if (node->canSpeculateInt32(FixupPass))
+            if (bytecodeCanTruncateInteger(node->arithNodeFlags()) || node->canSpeculateInt32(FixupPass))
                 node->setArithMode(Arith::CheckOverflow);
             else {
                 node->setArithMode(Arith::DoOverflow);
@@ -2912,7 +2910,7 @@ private:
 
         case GlobalIsNaN: {
             if (node->child1()->shouldSpeculateInt32()) {
-                fixEdge<Int32Use>(node->child1());
+                insertCheck<Int32Use>(node->child1().node());
                 m_graph.convertToConstant(node, jsBoolean(false));
                 break;
             }
@@ -2926,7 +2924,7 @@ private:
 
         case NumberIsNaN: {
             if (node->child1()->shouldSpeculateInt32()) {
-                fixEdge<Int32Use>(node->child1());
+                insertCheck<Int32Use>(node->child1().node());
                 m_graph.convertToConstant(node, jsBoolean(false));
                 break;
             }
@@ -2944,6 +2942,11 @@ private:
         case DateGetInt32OrNaN:
         case DateGetTime:
             fixEdge<DateObjectUse>(node->child1());
+            break;
+
+        case DateSetTime:
+            fixEdge<DateObjectUse>(node->child1());
+            fixEdge<DoubleRepUse>(node->child2());
             break;
 
         case DataViewGetInt:
@@ -3728,6 +3731,8 @@ private:
                         return;
                     }
                 }
+                if (edge->op() == ToPrimitive)
+                    return;
                 goodToGo = false;
             });
         if (!goodToGo)
@@ -3756,6 +3761,10 @@ private:
                 if (edge->shouldSpeculateStringOrStringObject()) {
                     addCheckStructureForOriginalStringObjectUse(StringOrStringObjectUse, node->origin, edge.node());
                     convertStringAddUse<StringOrStringObjectUse>(node, edge);
+                    return;
+                }
+                if (edge->op() == ToPrimitive) {
+                    convertStringAddUse<KnownPrimitiveUse>(node, edge);
                     return;
                 }
                 RELEASE_ASSERT_NOT_REACHED();

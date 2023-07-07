@@ -232,7 +232,7 @@ class SubstituteData;
 class TextCheckingRequest;
 class VisiblePosition;
 
-enum SyntheticClickType : int8_t;
+enum class SyntheticClickType : uint8_t;
 enum class COEPDisposition : bool;
 enum class CaretAnimatorType : uint8_t;
 enum class CreateNewGroupForHighlight : bool;
@@ -999,7 +999,7 @@ public:
     void didChangeSelection(WebCore::LocalFrame&);
     void didChangeOverflowScrollPosition();
     void didChangeContents();
-    void discardedComposition();
+    void discardedComposition(const WebCore::Document&);
     void canceledComposition();
     void didUpdateComposition();
     void didEndUserTriggeredSelectionChanges();
@@ -2128,6 +2128,8 @@ private:
 
     bool hasPendingEditorStateUpdate() const;
     bool shouldAvoidComputingPostLayoutDataForEditorState() const;
+
+    void useRedirectionForCurrentNavigation(WebCore::ResourceResponse&&);
 
     WebCore::PageIdentifier m_identifier;
 

@@ -746,18 +746,26 @@ WebPageProxy::~WebPageProxy()
     if (m_preferences->mediaSessionCoordinatorEnabled())
         GroupActivitiesSessionNotifier::sharedNotifier().removeWebPage(*this);
 #endif
+
+    internals().remotePageProxyInOpenerProcess = nullptr;
+    internals().openedRemotePageProxies.clear();
 }
 
 void WebPageProxy::addAllMessageReceivers()
 {
-    m_process->addMessageReceiver(Messages::WebPageProxy::messageReceiverName(), internals().webPageID, *this);
+    internals().messageReceiverRegistration.startReceivingMessages(m_process, internals().webPageID, *this);
     m_process->addMessageReceiver(Messages::NotificationManagerMessageHandler::messageReceiverName(), internals().webPageID, internals().notificationManagerMessageHandler);
 }
 
 void WebPageProxy::removeAllMessageReceivers()
 {
-    m_process->removeMessageReceiver(Messages::WebPageProxy::messageReceiverName(), internals().webPageID);
+    internals().messageReceiverRegistration.stopReceivingMessages();
     m_process->removeMessageReceiver(Messages::NotificationManagerMessageHandler::messageReceiverName(), internals().webPageID);
+}
+
+WebPageProxyMessageReceiverRegistration& WebPageProxy::messageReceiverRegistration()
+{
+    return internals().messageReceiverRegistration;
 }
 
 // FIXME: Should return a const PageClient& and add a separate non-const
@@ -3339,6 +3347,9 @@ void WebPageProxy::sendWheelEvent(const WebWheelEvent& event, OptionSet<WheelEve
             if (!protectedThis)
                 return;
 
+            if (protectedThis->isClosed())
+                return;
+
             protectedThis->handleWheelEventReply(wheelEvent, nodeID, gestureState, wasHandledForScrolling, handled);
         });
     }
@@ -3355,11 +3366,9 @@ void WebPageProxy::handleWheelEventReply(const WebWheelEvent& event, ScrollingNo
     MESSAGE_CHECK(m_process, wheelEventCoalescer().hasEventsBeingProcessed());
 
 #if ENABLE(ASYNC_SCROLLING) && PLATFORM(MAC)
-    if (nodeID) {
-        if (auto* scrollingCoordinatorProxy = this->scrollingCoordinatorProxy()) {
-            scrollingCoordinatorProxy->wheelEventHandlingCompleted(platform(event), nodeID, gestureState);
-            return;
-        }
+    if (auto* scrollingCoordinatorProxy = this->scrollingCoordinatorProxy()) {
+        scrollingCoordinatorProxy->wheelEventHandlingCompleted(platform(event), nodeID, gestureState);
+        return;
     }
 #else
     UNUSED_PARAM(event);
@@ -3373,11 +3382,15 @@ void WebPageProxy::wheelEventHandlingCompleted(bool wasHandled)
 {
     auto oldestProcessedEvent = wheelEventCoalescer().takeOldestEventBeingProcessed();
 
-    LOG_WITH_STREAM(WheelEvents, stream << "WebPageProxy::wheelEventHandlingCompleted - finished handling " << platform(oldestProcessedEvent) << " handled " << wasHandled);
+    if (oldestProcessedEvent)
+        LOG_WITH_STREAM(WheelEvents, stream << "WebPageProxy::wheelEventHandlingCompleted - finished handling " << platform(*oldestProcessedEvent) << " handled " << wasHandled);
+    else
+        LOG_WITH_STREAM(WheelEvents, stream << "WebPageProxy::wheelEventHandlingCompleted - no event, handled " << wasHandled);
 
-    if (!wasHandled) {
-        m_uiClient->didNotHandleWheelEvent(this, oldestProcessedEvent);
-        pageClient().wheelEventWasNotHandledByWebCore(oldestProcessedEvent);
+    if (oldestProcessedEvent && !wasHandled) {
+        m_uiClient->didNotHandleWheelEvent(this, *oldestProcessedEvent);
+        if (m_pageClient)
+            m_pageClient->wheelEventWasNotHandledByWebCore(*oldestProcessedEvent);
     }
 
     if (auto eventToSend = wheelEventCoalescer().nextEventToDispatch()) {
@@ -4017,7 +4030,8 @@ void WebPageProxy::receivedPolicyDecision(PolicyAction action, API::Navigation* 
     if (action == PolicyAction::Download) {
         // Create a download proxy.
         auto download = m_process->processPool().createDownloadProxy(m_websiteDataStore, internals().decidePolicyForResponseRequest, this, navigation ? navigation->originatingFrameInfo() : FrameInfoData { });
-        download->setDidStartCallback([this, weakThis = WeakPtr { *this }, navigationActionOrResponse = WTFMove(navigationActionOrResponse)] (auto* downloadProxy) {            if (!weakThis || !downloadProxy)
+        download->setDidStartCallback([this, weakThis = WeakPtr { *this }, navigationActionOrResponse = WTFMove(navigationActionOrResponse)] (auto* downloadProxy) {
+            if (!weakThis || !downloadProxy)
                 return;
             WTF::switchOn(navigationActionOrResponse,
                 [&] (const Ref<API::NavigationResponse>& response) {
@@ -6261,7 +6275,7 @@ void WebPageProxy::decidePolicyForNavigationAction(Ref<WebProcessProxy>&& proces
     navigation->setLastNavigationAction(navigationActionData);
     navigation->setOriginatingFrameInfo(originatingFrameInfoData);
     navigation->setDestinationFrameSecurityOrigin(frameInfo.securityOrigin);
-    navigation->setOriginatorAdvancedPrivacyProtections(navigationActionData.advancedPrivacyProtections);
+    navigation->setOriginatorAdvancedPrivacyProtections(navigation->wasUserInitiated() ? navigationActionData.advancedPrivacyProtections : navigationActionData.originatorAdvancedPrivacyProtections);
 
     API::Navigation* mainFrameNavigation = frame.isMainFrame() ? navigation.get() : nullptr;
     auto* originatingFrame = originatingFrameInfoData.frameID ? WebFrameProxy::webFrame(*originatingFrameInfoData.frameID) : nullptr;
@@ -9715,6 +9729,12 @@ UserMediaPermissionRequestManagerProxy& WebPageProxy::userMediaPermissionRequest
     return *m_userMediaPermissionRequestManager;
 }
 
+void WebPageProxy::clearUserMediaPermissionRequestHistory(WebCore::PermissionName name)
+{
+    if (m_userMediaPermissionRequestManager)
+        m_userMediaPermissionRequestManager->clearUserMediaPermissionRequestHistory(name);
+}
+
 void WebPageProxy::setMockCaptureDevicesEnabledOverride(std::optional<bool> enabled)
 {
     userMediaPermissionRequestManager().setMockCaptureDevicesEnabledOverride(enabled);
@@ -9927,17 +9947,17 @@ void WebPageProxy::showNotification(IPC::Connection& connection, const WebCore::
         internals().pageAllowedToRunInTheBackgroundToken = process().throttler().pageAllowedToRunInTheBackgroundToken();
 }
 
-void WebPageProxy::cancelNotification(const UUID& notificationID)
+void WebPageProxy::cancelNotification(const WTF::UUID& notificationID)
 {
     m_process->processPool().supplement<WebNotificationManagerProxy>()->cancel(this, notificationID);
 }
 
-void WebPageProxy::clearNotifications(const Vector<UUID>& notificationIDs)
+void WebPageProxy::clearNotifications(const Vector<WTF::UUID>& notificationIDs)
 {
     m_process->processPool().supplement<WebNotificationManagerProxy>()->clearNotifications(this, notificationIDs);
 }
 
-void WebPageProxy::didDestroyNotification(const UUID& notificationID)
+void WebPageProxy::didDestroyNotification(const WTF::UUID& notificationID)
 {
     m_process->processPool().supplement<WebNotificationManagerProxy>()->didDestroyNotification(this, notificationID);
 }
@@ -12448,7 +12468,6 @@ Vector<SandboxExtension::Handle> WebPageProxy::createNetworkExtensionsSandboxExt
 void WebPageProxy::createMediaSessionCoordinator(Ref<MediaSessionCoordinatorProxyPrivate>&& privateCoordinator, CompletionHandler<void(bool)>&& completionHandler)
 {
     sendWithAsyncReply(Messages::WebPage::CreateMediaSessionCoordinator(privateCoordinator->identifier()), [weakThis = WeakPtr { *this }, privateCoordinator = WTFMove(privateCoordinator), completionHandler = WTFMove(completionHandler)](bool success) mutable {
-
         if (!weakThis || !success) {
             completionHandler(false);
             return;
@@ -12802,6 +12821,12 @@ void WebPageProxy::setSystemPreviewCompletionHandlerForLoadTesting(CompletionHan
         m_systemPreviewController->setCompletionHandlerForLoadTesting(WTFMove(handler));
 }
 #endif
+
+void WebPageProxy::useRedirectionForCurrentNavigation(const ResourceResponse& response)
+{
+    ASSERT(response.isRedirection());
+    send(Messages::WebPage::UseRedirectionForCurrentNavigation(response));
+}
 
 } // namespace WebKit
 

@@ -120,6 +120,7 @@ public:
     virtual void scrollingTreeNodeWillStartPanGesture(WebCore::ScrollingNodeID) { }
     virtual void scrollingTreeNodeWillStartScroll(WebCore::ScrollingNodeID) { }
     virtual void scrollingTreeNodeDidEndScroll(WebCore::ScrollingNodeID) { }
+    virtual void clearNodesWithUserScrollInProgress() { }
     virtual void hasNodeWithAnimatedScrollChanged(bool) { }
     virtual void setRootNodeIsInUserScroll(bool) { }
 
@@ -143,6 +144,7 @@ public:
     void deferWheelEventTestCompletionForReason(WebCore::ScrollingNodeID, WebCore::WheelEventTestMonitor::DeferReason);
     void removeWheelEventTestCompletionDeferralForReason(WebCore::ScrollingNodeID, WebCore::WheelEventTestMonitor::DeferReason);
 
+    virtual void windowScreenWillChange() { }
     virtual void windowScreenDidChange(WebCore::PlatformDisplayID, std::optional<WebCore::FramesPerSecond>) { }
 
     float topContentInset() const;

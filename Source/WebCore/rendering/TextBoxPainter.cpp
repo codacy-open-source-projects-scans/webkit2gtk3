@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2021-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -121,7 +121,7 @@ void TextBoxPainter<TextBoxPath>::paint()
 
     bool shouldRotate = !textBox().isHorizontal() && !m_isCombinedText;
     if (shouldRotate)
-        m_paintInfo.context().concatCTM(rotation(m_paintRect, Clockwise));
+        m_paintInfo.context().concatCTM(rotation(m_paintRect, RotationDirection::Clockwise));
 
     if (m_paintInfo.phase == PaintPhase::Foreground) {
         if (!m_isPrinting)
@@ -140,7 +140,7 @@ void TextBoxPainter<TextBoxPath>::paint()
     }
 
     if (shouldRotate)
-        m_paintInfo.context().concatCTM(rotation(m_paintRect, Counterclockwise));
+        m_paintInfo.context().concatCTM(rotation(m_paintRect, RotationDirection::Counterclockwise));
 }
 
 template<typename TextBoxPath>
@@ -368,6 +368,9 @@ void TextBoxPainter<TextBoxPath>::paintForegroundAndDecorations()
     } else {
         // Coalesce styles of adjacent marked texts to minimize the number of drawing commands.
         auto coalescedStyledMarkedTexts = StyledMarkedText::coalesceAdjacentWithEqualForeground(styledMarkedTexts);
+
+        if (coalescedStyledMarkedTexts.isEmpty())
+            return;
 
         for (auto& markedText : coalescedStyledMarkedTexts)
             paintCompositionForeground(markedText);
@@ -598,7 +601,7 @@ template<typename TextBoxPath>
 void TextBoxPainter<TextBoxPath>::paintBackgroundDecorations(TextDecorationPainter& decorationPainter, const StyledMarkedText& markedText, const FloatRect& textBoxPaintRect)
 {
     if (m_isCombinedText)
-        m_paintInfo.context().concatCTM(rotation(m_paintRect, Clockwise));
+        m_paintInfo.context().concatCTM(rotation(m_paintRect, RotationDirection::Clockwise));
 
     auto textRun = m_paintTextRun.subRun(markedText.startOffset, markedText.endOffset - markedText.startOffset);
 
@@ -633,7 +636,7 @@ void TextBoxPainter<TextBoxPath>::paintBackgroundDecorations(TextDecorationPaint
                 overlineOffset(),
                 computedLinethroughCenter(decoratingBox.style, textDecorationThickness, autoTextDecorationThickness),
                 decoratingBox.style.metricsOfPrimaryFont().ascent() + 2.f,
-                wavyStrokeParameters(decoratingBox.style.computedFontPixelSize())
+                wavyStrokeParameters(decoratingBox.style.computedFontSize())
             };
         };
 
@@ -641,7 +644,7 @@ void TextBoxPainter<TextBoxPath>::paintBackgroundDecorations(TextDecorationPaint
     }
 
     if (m_isCombinedText)
-        m_paintInfo.context().concatCTM(rotation(m_paintRect, Counterclockwise));
+        m_paintInfo.context().concatCTM(rotation(m_paintRect, RotationDirection::Counterclockwise));
 }
 
 template<typename TextBoxPath>
@@ -658,7 +661,7 @@ void TextBoxPainter<TextBoxPath>::paintForegroundDecorations(TextDecorationPaint
         return;
 
     if (m_isCombinedText)
-        m_paintInfo.context().concatCTM(rotation(m_paintRect, Clockwise));
+        m_paintInfo.context().concatCTM(rotation(m_paintRect, RotationDirection::Clockwise));
 
     auto deviceScaleFactor = m_document.deviceScaleFactor();
     auto textDecorationThickness = computedTextDecorationThickness(styleToUse, deviceScaleFactor);
@@ -667,10 +670,10 @@ void TextBoxPainter<TextBoxPath>::paintForegroundDecorations(TextDecorationPaint
         , textBoxPaintRect.width()
         , textDecorationThickness
         , linethroughCenter
-        , wavyStrokeParameters(styleToUse.computedFontPixelSize()) }, markedText.style.textDecorationStyles);
+        , wavyStrokeParameters(styleToUse.computedFontSize()) }, markedText.style.textDecorationStyles);
 
     if (m_isCombinedText)
-        m_paintInfo.context().concatCTM(rotation(m_paintRect, Counterclockwise));
+        m_paintInfo.context().concatCTM(rotation(m_paintRect, RotationDirection::Counterclockwise));
 }
 
 static FloatRoundedRect::Radii radiiForUnderline(const CompositionUnderline& underline, unsigned markedTextStartOffset, unsigned markedTextEndOffset)

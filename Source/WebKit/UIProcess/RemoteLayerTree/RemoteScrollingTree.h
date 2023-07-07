@@ -52,6 +52,7 @@ public:
 
     virtual void willSendEventForDefaultHandling(const WebCore::PlatformWheelEvent&) { }
     virtual void waitForEventDefaultHandlingCompletion(const WebCore::PlatformWheelEvent&) { }
+    virtual void receivedEventAfterDefaultHandling(const WebCore::PlatformWheelEvent&, std::optional<WebCore::WheelScrollGestureState>) { };
     virtual WebCore::WheelEventHandlingResult handleWheelEventAfterDefaultHandling(const WebCore::PlatformWheelEvent&, WebCore::ScrollingNodeID, std::optional<WebCore::WheelScrollGestureState>) { return WebCore::WheelEventHandlingResult::unhandled(); }
 
     RemoteScrollingCoordinatorProxy* scrollingCoordinatorProxy() const;
@@ -63,6 +64,7 @@ public:
 
     void scrollingTreeNodeWillStartScroll(WebCore::ScrollingNodeID) override;
     void scrollingTreeNodeDidEndScroll(WebCore::ScrollingNodeID) override;
+    void clearNodesWithUserScrollInProgress() override;
 
     void scrollingTreeNodeDidBeginScrollSnapping(WebCore::ScrollingNodeID) override;
     void scrollingTreeNodeDidEndScrollSnapping(WebCore::ScrollingNodeID) override;

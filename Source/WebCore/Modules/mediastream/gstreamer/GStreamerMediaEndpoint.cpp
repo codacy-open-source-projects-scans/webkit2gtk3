@@ -191,7 +191,8 @@ void GStreamerMediaEndpoint::teardownPipeline()
 #endif
     m_statsCollector->setElement(nullptr);
 
-    g_signal_handlers_disconnect_by_data(m_webrtcBin.get(), this);
+    if (m_webrtcBin)
+        g_signal_handlers_disconnect_by_data(m_webrtcBin.get(), this);
     disconnectSimpleBusMessageCallback(m_pipeline.get());
     gst_element_set_state(m_pipeline.get(), GST_STATE_NULL);
 
@@ -447,7 +448,7 @@ void GStreamerMediaEndpoint::doSetRemoteDescription(const RTCSessionDescription&
 
             // https://gitlab.freedesktop.org/gstreamer/gst-plugins-bad/-/merge_requests/1907
             if (sdpMediaHasAttributeKey(media, "ice-lite")) {
-                GRefPtr<GObject> ice;
+                GRefPtr<GstWebRTCICE> ice;
                 g_object_get(m_webrtcBin.get(), "ice-agent", &ice.outPtr(), nullptr);
                 g_object_set(ice.get(), "ice-lite", TRUE, nullptr);
             }

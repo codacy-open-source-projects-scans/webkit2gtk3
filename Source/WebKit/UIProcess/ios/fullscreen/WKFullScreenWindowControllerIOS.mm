@@ -191,14 +191,14 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 static constexpr NSTimeInterval kAnimationDuration = 0.2;
 #if PLATFORM(VISION)
 static constexpr CGFloat kFullScreenWindowCornerRadius = 12;
-static constexpr CGFloat kDarknessAnimationDuration = 2;
+static constexpr CGFloat kDarknessAnimationDuration = 0.6;
 static constexpr CGFloat kOutgoingWindowFadeDuration = 0.4;
-static constexpr CGFloat kOutgoingWindowTranslationDuration = 0.6;
 static constexpr CGFloat kOutgoingWindowZOffset = -150;
 static constexpr CGFloat kIncomingWindowFadeDuration = 0.6;
 static constexpr CGFloat kIncomingWindowFadeDelay = 0.2;
-static constexpr CGFloat kIncomingWindowTranslationDuration = 0.6;
 static constexpr CGFloat kIncomingWindowZOffset = -170;
+static constexpr CGFloat kWindowTranslationDuration = 0.6;
+static constexpr NSString *kPrefersFullScreenDimmingKey = @"WebKitPrefersFullScreenDimming";
 #endif
 
 #pragma mark -
@@ -475,12 +475,17 @@ static constexpr CGFloat kIncomingWindowZOffset = -170;
 @property (nonatomic, readonly) RSSSceneChromeOptions sceneChromeOptions;
 @property (nonatomic, readonly) MRUISceneResizingBehavior sceneResizingBehavior;
 @property (nonatomic, readonly) MRUIDarknessPreference preferredDarkness;
+@property (nonatomic, readonly) BOOL prefersOrnamentsHidden;
+
+@property (nonatomic, readonly) NSMapTable<MRUIPlatterOrnament *, NSNumber *> *ornamentDepths;
 
 - (id)initWithWindow:(UIWindow *)window;
 
 @end
 
-@implementation WKFullScreenParentWindowState
+@implementation WKFullScreenParentWindowState {
+    RetainPtr<NSMapTable<MRUIPlatterOrnament *, NSNumber *>> _ornamentDepths;
+}
 
 - (id)initWithWindow:(UIWindow *)window
 {
@@ -489,12 +494,26 @@ static constexpr CGFloat kIncomingWindowZOffset = -170;
 
     _transform3D = window.transform3D;
     _windowClass = object_getClass(window);
-    _sceneMinimumSize = window.windowScene.sizeRestrictions.minimumSize;
-    _sceneChromeOptions = window.windowScene.mrui_placement.preferredChromeOptions;
-    _sceneResizingBehavior = window.windowScene.mrui_placement.preferredResizingBehavior;
     _preferredDarkness = UIApplication.sharedApplication.mrui_activeStage.preferredDarkness;
 
+    UIWindowScene *windowScene = window.windowScene;
+    _sceneMinimumSize = windowScene.sizeRestrictions.minimumSize;
+    _sceneChromeOptions = windowScene.mrui_placement.preferredChromeOptions;
+    _sceneResizingBehavior = windowScene.mrui_placement.preferredResizingBehavior;
+    _prefersOrnamentsHidden = windowScene.prefersOrnamentsHidden_forLMKOnly;
+
+    _ornamentDepths = [NSMapTable weakToStrongObjectsMapTable];
+
+    MRUIPlatterOrnamentManager *ornamentManager = windowScene._mrui_platterOrnamentManager;
+    for (MRUIPlatterOrnament *ornament in ornamentManager.ornaments)
+        [_ornamentDepths setObject:@(ornament._depthDisplacement) forKey:ornament];
+
     return self;
+}
+
+- (NSMapTable<MRUIPlatterOrnament *, NSNumber *> *)ornamentDepths
+{
+    return _ornamentDepths.get();
 }
 
 @end
@@ -755,7 +774,9 @@ static constexpr CGFloat kIncomingWindowZOffset = -170;
     [_fullscreenViewController setExitFullScreenAction:@selector(requestExitFullScreen)];
     _fullscreenViewController.get().view.frame = _rootViewController.get().view.bounds;
 #if PLATFORM(VISION)
-    [_fullscreenViewController hideCancelAndPIPButtons:manager->isVideoElement()];
+    [_fullscreenViewController setToggleDimmingAction:@selector(_toggleSceneDimming)];
+    [_fullscreenViewController setSceneDimmed:[self _prefersSceneDimming]];
+    [_fullscreenViewController hideCustomControls:manager->isVideoElement()];
 #endif
     [self _updateLocationInfo];
 
@@ -1487,6 +1508,24 @@ static constexpr CGFloat kIncomingWindowZOffset = -170;
 
 #if PLATFORM(VISION)
 
+- (BOOL)_sceneDimmingEnabled
+{
+    if (auto page = [self._webView _page])
+        return page->preferences().fullscreenSceneDimmingEnabled();
+    return NO;
+}
+
+- (BOOL)_prefersSceneDimming
+{
+    if (![self _sceneDimmingEnabled])
+        return NO;
+
+    if (NSNumber *value = [[NSUserDefaults standardUserDefaults] objectForKey:kPrefersFullScreenDimmingKey])
+        return value.boolValue;
+
+    return YES;
+}
+
 - (void)_configureSpatialFullScreenTransition
 {
     CGRect originalWindowBounds = [_lastKnownParentWindow bounds];
@@ -1527,7 +1566,7 @@ static constexpr CGFloat kIncomingWindowZOffset = -170;
 
     inWindow.transform3D = CATransform3DTranslate(originalState.transform3D, 0, 0, kIncomingWindowZOffset);
 
-    if ([[NSUserDefaults standardUserDefaults] boolForKey:@"WebKitEnableFullScreenDimming"]) {
+    if ([self _prefersSceneDimming]) {
         [UIView animateWithDuration:kDarknessAnimationDuration animations:^{
             MRUIStage *stage = UIApplication.sharedApplication.mrui_activeStage;
             stage.preferredDarkness = enter ? MRUIDarknessPreferenceVeryDark : originalState.preferredDarkness;
@@ -1536,20 +1575,32 @@ static constexpr CGFloat kIncomingWindowZOffset = -170;
 
     [UIView animateWithDuration:kOutgoingWindowFadeDuration delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
         outWindow.alpha = 0;
+        if (enter)
+            outWindow.windowScene.prefersOrnamentsHidden_forLMKOnly = YES;
     } completion:nil];
 
-    [UIView animateWithDuration:kOutgoingWindowTranslationDuration delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
+    [UIView animateWithDuration:kWindowTranslationDuration delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
         outWindow.transform3D = CATransform3DTranslate(outWindow.transform3D, 0, 0, kOutgoingWindowZOffset);
     } completion:nil];
 
-    [UIView animateWithDuration:kIncomingWindowTranslationDuration delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
+    [UIView animateWithDuration:kWindowTranslationDuration delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
         inWindow.transform3D = originalState.transform3D;
     } completion:nil];
 
-    auto completion = makeBlockPtr([controller = retainPtr(controller), inWindow = retainPtr(inWindow), originalState = retainPtr(originalState), enter, completionHandler = WTFMove(completionHandler)] (BOOL finished) mutable {
-        if (!finished)
-            return;
+    for (MRUIPlatterOrnament *ornament in originalState.ornamentDepths) {
+        CGFloat originalDepth = [[originalState.ornamentDepths objectForKey:ornament] floatValue];
+        CGFloat finalDepth = originalDepth;
+        if (enter)
+            finalDepth += kOutgoingWindowZOffset;
+        else
+            [ornament _setDepthDisplacement:originalDepth + kIncomingWindowZOffset];
 
+        [UIView animateWithDuration:kWindowTranslationDuration delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
+            [ornament _setDepthDisplacement:finalDepth];
+        } completion:nil];
+    }
+
+    auto completion = makeBlockPtr([controller = retainPtr(controller), inWindow = retainPtr(inWindow), originalState = retainPtr(originalState), enter, completionHandler = WTFMove(completionHandler)] (BOOL finished) mutable {
         WebKit::resizeScene([inWindow windowScene], [inWindow bounds].size, [controller, inWindow, originalState, enter, completionHandler = WTFMove(completionHandler)]() mutable {
             Class inWindowClass = enter ? [UIWindow class] : [originalState windowClass];
             object_setClass(inWindow.get(), inWindowClass);
@@ -1576,7 +1627,20 @@ static constexpr CGFloat kIncomingWindowZOffset = -170;
 
     [UIView animateWithDuration:kIncomingWindowFadeDuration delay:kIncomingWindowFadeDelay options:UIViewAnimationOptionCurveEaseInOut animations:^{
         inWindow.alpha = 1;
+        if (!enter)
+            inWindow.windowScene.prefersOrnamentsHidden_forLMKOnly = originalState.prefersOrnamentsHidden;
     } completion:completion.get()];
+}
+
+- (void)_toggleSceneDimming
+{
+    BOOL updatedPrefersSceneDimming = ![self _prefersSceneDimming];
+
+    [[NSUserDefaults standardUserDefaults] setBool:updatedPrefersSceneDimming forKey:kPrefersFullScreenDimmingKey];
+    [_fullscreenViewController setSceneDimmed:updatedPrefersSceneDimming];
+
+    MRUIStage *stage = UIApplication.sharedApplication.mrui_activeStage;
+    stage.preferredDarkness = updatedPrefersSceneDimming ? MRUIDarknessPreferenceVeryDark : [_parentWindowState preferredDarkness];
 }
 
 #endif // PLATFORM(VISION)

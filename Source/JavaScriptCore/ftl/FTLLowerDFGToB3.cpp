@@ -1755,6 +1755,9 @@ private:
         case DateGetTime:
             compileDateGet();
             break;
+        case DateSetTime:
+            compileDateSet();
+            break;
         case DataViewGetInt:
         case DataViewGetFloat:
             compileDataViewGet();
@@ -9446,14 +9449,17 @@ IGNORE_CLANG_WARNINGS_END
             
         case CellUse:
         case NotCellUse:
-        case UntypedUse: {
+        case UntypedUse:
+        case KnownPrimitiveUse: {
             LValue value;
             if (m_node->child1().useKind() == CellUse)
                 value = lowCell(m_node->child1());
             else if (m_node->child1().useKind() == NotCellUse)
                 value = lowNotCell(m_node->child1());
-            else
+            else if (m_node->child1().useKind() == UntypedUse)
                 value = lowJSValue(m_node->child1());
+            else
+                value = lowJSValue(m_node->child1(), ManualOperandSpeculation);
             
             LBasicBlock isCell = m_out.newBlock();
             LBasicBlock notString = m_out.newBlock();
@@ -9803,32 +9809,32 @@ IGNORE_CLANG_WARNINGS_END
     {
         LValue base = lowString(m_graph.child(m_node, 0));
         LValue index = lowInt32(m_graph.child(m_node, 1));
-            
+
         LBasicBlock fastPath = m_out.newBlock();
         LBasicBlock slowPath = m_out.newBlock();
         LBasicBlock continuation = m_out.newBlock();
-            
+
         LValue stringImpl = m_out.loadPtr(base, m_heaps.JSString_value);
         m_out.branch(
             m_out.aboveOrEqual(
                 index, m_out.load32NonNegative(stringImpl, m_heaps.StringImpl_length)),
             rarely(slowPath), usually(fastPath));
-            
+
         LBasicBlock lastNext = m_out.appendTo(fastPath, slowPath);
-            
+
         LBasicBlock is8Bit = m_out.newBlock();
         LBasicBlock is16Bit = m_out.newBlock();
         LBasicBlock bitsContinuation = m_out.newBlock();
         LBasicBlock bigCharacter = m_out.newBlock();
-            
+
         m_out.branch(
             m_out.testIsZero32(
                 m_out.load32(stringImpl, m_heaps.StringImpl_hashAndFlags),
                 m_out.constInt32(StringImpl::flagIs8Bit())),
             unsure(is16Bit), unsure(is8Bit));
-            
+
         m_out.appendTo(is8Bit, is16Bit);
-            
+
         // FIXME: Need to cage strings!
         // https://bugs.webkit.org/show_bug.cgi?id=174924
         ValueFromBlock char8Bit = m_out.anchor(
@@ -9836,7 +9842,7 @@ IGNORE_CLANG_WARNINGS_END
                 m_heaps.characters8, m_out.loadPtr(stringImpl, m_heaps.StringImpl_data), m_out.zeroExtPtr(index),
                 provenValue(m_graph.child(m_node, 1)))));
         m_out.jump(bitsContinuation);
-            
+
         m_out.appendTo(is16Bit, bigCharacter);
 
         LValue char16BitValue = m_out.load16ZeroExt32(
@@ -9847,54 +9853,58 @@ IGNORE_CLANG_WARNINGS_END
         m_out.branch(
             m_out.above(char16BitValue, m_out.constInt32(maxSingleCharacterString)),
             rarely(bigCharacter), usually(bitsContinuation));
-            
+
         m_out.appendTo(bigCharacter, bitsContinuation);
-            
+
         Vector<ValueFromBlock, 4> results;
         results.append(m_out.anchor(vmCall(
             Int64, operationSingleCharacterString,
             m_vmValue, char16BitValue)));
         m_out.jump(continuation);
-            
+
         m_out.appendTo(bitsContinuation, slowPath);
-            
+
         LValue character = m_out.phi(Int32, char8Bit, char16Bit);
-            
+
         LValue smallStrings = m_out.constIntPtr(vm().smallStrings.singleCharacterStrings());
-            
+
         results.append(m_out.anchor(m_out.loadPtr(m_out.baseIndex(
             m_heaps.singleCharacterStrings, smallStrings, m_out.zeroExtPtr(character)))));
         m_out.jump(continuation);
-            
+
         m_out.appendTo(slowPath, continuation);
-            
-        if (m_node->arrayMode().isInBounds()) {
-            speculate(OutOfBounds, noValue(), nullptr, m_out.booleanTrue);
-            results.append(m_out.anchor(m_out.intPtrZero));
+
+        if (m_node->op() == StringCharAt) {
+            // String#charAt can accept out of range index and it always returns an empty string.
+            results.append(m_out.anchor(weakPointer(jsEmptyString(vm()))));
         } else {
-            // FIXME: Revisit JSGlobalObject.
-            // https://bugs.webkit.org/show_bug.cgi?id=203204
-            JSGlobalObject* globalObject = m_graph.globalObjectFor(m_origin.semantic);
-            if (m_graph.isWatchingStringPrototypeChainIsSaneWatchpoint(m_node)) {
-                // FIXME: This could be captured using a Speculation mode that means
-                // "out-of-bounds loads return a trivial value", something like
-                // OutOfBoundsSaneChain.
-                // https://bugs.webkit.org/show_bug.cgi?id=144668
-                LBasicBlock negativeIndex = m_out.newBlock();
-                    
-                results.append(m_out.anchor(m_out.constInt64(JSValue::encode(jsUndefined()))));
-                m_out.branch(
-                    m_out.lessThan(index, m_out.int32Zero),
-                    rarely(negativeIndex), usually(continuation));
-                    
-                m_out.appendTo(negativeIndex, continuation);
+            if (m_node->arrayMode().isInBounds()) {
+                speculate(OutOfBounds, noValue(), nullptr, m_out.booleanTrue);
+                results.append(m_out.anchor(m_out.intPtrZero));
+            } else {
+                // FIXME: Revisit JSGlobalObject.
+                // https://bugs.webkit.org/show_bug.cgi?id=203204
+                JSGlobalObject* globalObject = m_graph.globalObjectFor(m_origin.semantic);
+                if (m_graph.isWatchingStringPrototypeChainIsSaneWatchpoint(m_node)) {
+                    // FIXME: This could be captured using a Speculation mode that means
+                    // "out-of-bounds loads return a trivial value", something like
+                    // OutOfBoundsSaneChain.
+                    // https://bugs.webkit.org/show_bug.cgi?id=144668
+                    LBasicBlock negativeIndex = m_out.newBlock();
+
+                    results.append(m_out.anchor(m_out.constInt64(JSValue::encode(jsUndefined()))));
+                    m_out.branch(
+                        m_out.lessThan(index, m_out.int32Zero),
+                        rarely(negativeIndex), usually(continuation));
+
+                    m_out.appendTo(negativeIndex, continuation);
+                }
+
+                results.append(m_out.anchor(vmCall(Int64, operationGetByValStringInt, weakPointer(globalObject), base, index)));
             }
-                
-            results.append(m_out.anchor(vmCall(Int64, operationGetByValStringInt, weakPointer(globalObject), base, index)));
         }
-            
         m_out.jump(continuation);
-            
+
         m_out.appendTo(continuation, lastNext);
         // We have to keep base alive since that keeps storage alive.
         ensureStillAliveHere(base);
@@ -17890,6 +17900,16 @@ IGNORE_CLANG_WARNINGS_END
         default:
             RELEASE_ASSERT_NOT_REACHED();
         }
+    }
+
+    void compileDateSet()
+    {
+        LValue base = lowDateObject(m_node->child1());
+        LValue arg = lowDouble(m_node->child2());
+        LValue time = m_out.add(m_out.doubleTrunc(arg), m_out.constDouble(0));
+        LValue result = m_out.select(m_out.doubleGreaterThan(m_out.doubleAbs(arg), m_out.constDouble(WTF::maxECMAScriptTime)), m_out.constDouble(PNaN), time);
+        m_out.storeDouble(result, base, m_heaps.DateInstance_internalNumber);
+        setDouble(result);
     }
 
     void compileLoopHint()

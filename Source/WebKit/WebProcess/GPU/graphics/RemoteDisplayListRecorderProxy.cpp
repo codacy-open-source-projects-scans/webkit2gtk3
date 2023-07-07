@@ -74,7 +74,12 @@ ALWAYS_INLINE void RemoteDisplayListRecorderProxy::send(T&& message)
         return;
 
     m_imageBuffer->backingStoreWillChange();
-    m_renderingBackend->streamConnection().send(WTFMove(message), m_destinationBufferIdentifier, defaultSendTimeout);
+    auto result = m_renderingBackend->streamConnection().send(WTFMove(message), m_destinationBufferIdentifier, RemoteRenderingBackendProxy::defaultTimeout);
+    if (UNLIKELY(result != IPC::Error::NoError)) {
+        auto& parameters = m_renderingBackend->parameters();
+        RELEASE_LOG(RemoteLayerBuffers, "[pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", renderingBackend=%" PRIu64 "] RemoteDisplayListRecorderProxy::send - failed, name:%" PUBLIC_LOG_STRING ", error:%" PUBLIC_LOG_STRING,
+            parameters.pageProxyID.toUInt64(), parameters.pageID.toUInt64(), parameters.identifier.toUInt64(), IPC::description(T::name()), IPC::errorAsString(result));
+    }
 }
 
 template<typename T>
@@ -84,7 +89,12 @@ ALWAYS_INLINE void RemoteDisplayListRecorderProxy::sendSync(T&& message)
         return;
 
     m_imageBuffer->backingStoreWillChange();
-    m_renderingBackend->streamConnection().sendSync(WTFMove(message), m_destinationBufferIdentifier, defaultSendTimeout);
+    auto result = m_renderingBackend->streamConnection().sendSync(WTFMove(message), m_destinationBufferIdentifier, RemoteRenderingBackendProxy::defaultTimeout);
+    if (UNLIKELY(!result.succeeded())) {
+        auto& parameters = m_renderingBackend->parameters();
+        RELEASE_LOG(RemoteLayerBuffers, "[pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", renderingBackend=%" PRIu64 "] RemoteDisplayListRecorderProxy::sendSync - failed, name:%" PUBLIC_LOG_STRING ", error:%" PUBLIC_LOG_STRING,
+            parameters.pageProxyID.toUInt64(), parameters.pageID.toUInt64(), parameters.identifier.toUInt64(), IPC::description(T::name()), IPC::errorAsString(result.error));
+    }
 }
 
 RenderingMode RemoteDisplayListRecorderProxy::renderingMode() const
@@ -337,27 +347,32 @@ void RemoteDisplayListRecorderProxy::recordFillRectWithRoundedHole(const FloatRe
 
 #if ENABLE(INLINE_PATH_DATA)
 
-void RemoteDisplayListRecorderProxy::recordFillLine(const LineData& data)
+void RemoteDisplayListRecorderProxy::recordFillLine(const PathDataLine& line)
 {
-    send(Messages::RemoteDisplayListRecorder::FillLine(data));
+    send(Messages::RemoteDisplayListRecorder::FillLine(line));
 }
 
-void RemoteDisplayListRecorderProxy::recordFillArc(const ArcData& data)
+void RemoteDisplayListRecorderProxy::recordFillArc(const PathArc& arc)
 {
-    send(Messages::RemoteDisplayListRecorder::FillArc(data));
+    send(Messages::RemoteDisplayListRecorder::FillArc(arc));
 }
 
-void RemoteDisplayListRecorderProxy::recordFillQuadCurve(const QuadCurveData& data)
+void RemoteDisplayListRecorderProxy::recordFillQuadCurve(const PathDataQuadCurve& curve)
 {
-    send(Messages::RemoteDisplayListRecorder::FillQuadCurve(data));
+    send(Messages::RemoteDisplayListRecorder::FillQuadCurve(curve));
 }
 
-void RemoteDisplayListRecorderProxy::recordFillBezierCurve(const BezierCurveData& data)
+void RemoteDisplayListRecorderProxy::recordFillBezierCurve(const PathDataBezierCurve& curve)
 {
-    send(Messages::RemoteDisplayListRecorder::FillBezierCurve(data));
+    send(Messages::RemoteDisplayListRecorder::FillBezierCurve(curve));
 }
 
 #endif // ENABLE(INLINE_PATH_DATA)
+
+void RemoteDisplayListRecorderProxy::recordFillPathSegment(const PathSegment& segment)
+{
+    send(Messages::RemoteDisplayListRecorder::FillPathSegment(segment));
+}
 
 void RemoteDisplayListRecorderProxy::recordFillPath(const Path& path)
 {
@@ -397,32 +412,37 @@ void RemoteDisplayListRecorderProxy::recordStrokeRect(const FloatRect& rect, flo
 
 #if ENABLE(INLINE_PATH_DATA)
 
-void RemoteDisplayListRecorderProxy::recordStrokeLine(const LineData& data)
+void RemoteDisplayListRecorderProxy::recordStrokeLine(const PathDataLine& line)
 {
-    send(Messages::RemoteDisplayListRecorder::StrokeLine(data));
+    send(Messages::RemoteDisplayListRecorder::StrokeLine(line));
 }
 
-void RemoteDisplayListRecorderProxy::recordStrokeLineWithColorAndThickness(SRGBA<uint8_t> color, float thickness, const LineData& data)
+void RemoteDisplayListRecorderProxy::recordStrokeLineWithColorAndThickness(const PathDataLine& line, SRGBA<uint8_t> color, float thickness)
 {
-    send(Messages::RemoteDisplayListRecorder::StrokeLineWithColorAndThickness(color, thickness, data));
+    send(Messages::RemoteDisplayListRecorder::StrokeLineWithColorAndThickness(line, color, thickness));
 }
 
-void RemoteDisplayListRecorderProxy::recordStrokeArc(const ArcData& data)
+void RemoteDisplayListRecorderProxy::recordStrokeArc(const PathArc& arc)
 {
-    send(Messages::RemoteDisplayListRecorder::StrokeArc(data));
+    send(Messages::RemoteDisplayListRecorder::StrokeArc(arc));
 }
 
-void RemoteDisplayListRecorderProxy::recordStrokeQuadCurve(const QuadCurveData& data)
+void RemoteDisplayListRecorderProxy::recordStrokeQuadCurve(const PathDataQuadCurve& curve)
 {
-    send(Messages::RemoteDisplayListRecorder::StrokeQuadCurve(data));
+    send(Messages::RemoteDisplayListRecorder::StrokeQuadCurve(curve));
 }
 
-void RemoteDisplayListRecorderProxy::recordStrokeBezierCurve(const BezierCurveData& data)
+void RemoteDisplayListRecorderProxy::recordStrokeBezierCurve(const PathDataBezierCurve& curve)
 {
-    send(Messages::RemoteDisplayListRecorder::StrokeBezierCurve(data));
+    send(Messages::RemoteDisplayListRecorder::StrokeBezierCurve(curve));
 }
 
 #endif // ENABLE(INLINE_PATH_DATA)
+
+void RemoteDisplayListRecorderProxy::recordStrokePathSegment(const PathSegment& segment)
+{
+    send(Messages::RemoteDisplayListRecorder::StrokePathSegment(segment));
+}
 
 void RemoteDisplayListRecorderProxy::recordStrokePath(const Path& path)
 {

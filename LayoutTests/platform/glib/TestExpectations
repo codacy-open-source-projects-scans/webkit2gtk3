@@ -457,6 +457,9 @@ accessibility/progress-element-value-changes.html [ Skip ]
 accessibility/svg-font-face.html [ Skip ]
 accessibility/aria-labelledby-on-password-input.html [ Skip ]
 
+# Skipped because text marker APIs not implemented.
+accessibility/display-contents/end-text-marker.html [ Skip ]
+
 # Need to implement AccessibilityUIElement::insertText.
 accessibility/insert-text-into-password-field.html [ Skip ]
 
@@ -1115,6 +1118,15 @@ webkit.org/b/239750 media/media-source/media-mp4-xhe-aac.html [ Skip ]
 # Apple baseline.
 media/media-hevc-video-as-img.html [ ImageOnlyFailure ]
 
+# Temporal scalability support
+imported/w3c/web-platform-tests/webcodecs/reconfiguring-encoder.https.any.html?h264_annexb [ Failure ]
+imported/w3c/web-platform-tests/webcodecs/reconfiguring-encoder.https.any.html?h264_avc [ Failure ]
+imported/w3c/web-platform-tests/webcodecs/reconfiguring-encoder.https.any.worker.html?h264_annexb [ Failure ]
+imported/w3c/web-platform-tests/webcodecs/reconfiguring-encoder.https.any.worker.html?h264_avc [ Failure ]
+imported/w3c/web-platform-tests/webcodecs/temporal-svc-encoding.https.any.html?h264 [ Failure ]
+imported/w3c/web-platform-tests/webcodecs/temporal-svc-encoding.https.any.html?vp8 [ Failure ]
+imported/w3c/web-platform-tests/webcodecs/temporal-svc-encoding.https.any.html?vp9 [ Failure ]
+
 imported/w3c/web-platform-tests/webcodecs/videoFrame-createImageBitmap.any.worker.html [ Pass ]
 
 # Likely bugs related with dav1ddec.
@@ -1338,7 +1350,7 @@ webkit.org/b/212202 css3/scroll-snap/scroll-snap-wheel-event.html [ Skip ]
 css3/scroll-snap/scroll-snap-discrete-wheel-event-in-mainframe.html [ Skip ]
 css3/scroll-snap/scroll-snap-discrete-wheel-events-with-layout.html [ Skip ]
 
-webkit.org/b/213921 fast/visual-viewport/scroll-event-fired-during-scroll-alone.html [ Crash ]
+fast/visual-viewport/client-coordinates-relative-to-layout-viewport.html [ Failure ]
 
 #////////////////////////////////////////////////////////////////////////////////////////
 # End of Scrolling-related bugs
@@ -2388,6 +2400,7 @@ webgl/webgl-fail-remote-context-ipc-buffer-allocation-no-crash.html [ Skip ]
 
 # Payment Request
 imported/w3c/web-platform-tests/payment-request [ Skip ]
+imported/w3c/web-platform-tests/permissions-policy/payment-allowed-by-permissions-policy-attribute-redirect-on-load.https.sub.html [ Skip ]
 
 # WebArchive
 webarchive [ WontFix ]
@@ -2647,22 +2660,6 @@ webkit.org/b/162815 fast/text/variations/font-selection-properties.html [ ImageO
 webkit.org/b/162815 fast/text/variations/skia-postscript-name.html [ ImageOnlyFailure ]
 webkit.org/b/163981 fast/css3-text/css3-text-decoration/text-underline-position/underline-visual-overflow-with-subpixel-position.html [ Failure ]
 
-# Skip tests requiring UIScriptController::zoomToScale.
-webkit.org/b/168050 fast/visual-viewport/resize-event-fired.html [ Skip ]
-webkit.org/b/168050 fast/visual-viewport/rtl-zoomed-rects.html [ Skip ]
-webkit.org/b/168050 fast/visual-viewport/scroll-event-fired.html [ Skip ]
-webkit.org/b/168050 fast/visual-viewport/viewport-dimensions-exclude-custom-scrollbars.html [ Skip ]
-webkit.org/b/168050 fast/visual-viewport/viewport-dimensions-exclude-scrollbars.html [ Skip ]
-webkit.org/b/168050 fast/visual-viewport/viewport-dimensions.html [ Skip ]
-webkit.org/b/168050 fast/visual-viewport/viewport-dimensions-iframe.html [ Skip ]
-webkit.org/b/168050 fast/visual-viewport/viewport-dimensions-under-page-zoom.html [ Skip ]
-webkit.org/b/168050 fast/visual-viewport/zoomed-fixed-header-and-footer.html [ Skip ]
-webkit.org/b/168050 fast/visual-viewport/zoomed-fixed.html [ Skip ]
-webkit.org/b/168050 fast/visual-viewport/zoomed-fixed-scroll-down-then-up.html [ Skip ]
-webkit.org/b/168050 fast/visual-viewport/zoomed-rects.html [ Skip ]
-webkit.org/b/168050 fast/zooming/client-rect-in-fixed-zoomed.html [ Skip ]
-webkit.org/b/168050 fast/zooming/uiscript-zooming.html [ Skip ]
-
 # Skip tests requiring UIScriptController::singleTapAtPoint.
 media/modern-media-controls/button/button-active-state.html [ Skip ]
 media/modern-media-controls/button/button.html [ Skip ]
@@ -2698,6 +2695,12 @@ media/modern-media-controls/volume-support/volume-support-drag-to-mute.html [ Sk
 
 webkit.org/b/168191 fast/text/system-font-weight.html [ Failure ]
 webkit.org/b/168370 accessibility/hidden-th-still-column-header.html [ Failure ]
+
+# Skip tests requiring unimplemented features in UIScriptController.
+fast/events/autoscroll-when-input-is-offscreen.html [ Skip ]
+fast/events/autoscroll-with-software-keyboard.html [ Skip ]
+fast/events/before-input-prevent-insert-replacement.html [ Skip ]
+fast/events/input-event-insert-replacement.html [ Skip ]
 
 # [GTK][WPE] Some reftest fail with only one or two pixel differences in diff image
 webkit.org/b/168426 fast/html/details-comment-crash.html [ ImageOnlyFailure ]
@@ -3342,6 +3345,16 @@ webkit.org/b/258162 fast/images/image-alt-text-vertical.html [ ImageOnlyFailure 
 fast/scrolling/keyboard-scrolling-distance-downArrow.html [ Skip ] # Timeout
 
 webgl/2.0.y/conformance/textures/misc/texture-corner-case-videos.html [ Skip ] # Timeout
+
+# Path with marker failures
+fast/canvas/canvas-ellipse-connecting-line.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/svg/painting/marker-003.svg [ Failure ]
+imported/w3c/web-platform-tests/svg/painting/marker-009.svg [ Failure ]
+imported/w3c/web-platform-tests/svg/painting/marker-orient-001.svg [ Failure ]
+imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-021.svg [ Failure ]
+imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-022.svg [ Failure ]
+imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-023.svg [ Failure ]
+svg/W3C-SVG-1.1/painting-marker-03-f.svg [ Failure ]
 
 # End: Common failures between GTK and WPE.
 

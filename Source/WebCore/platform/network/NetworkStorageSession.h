@@ -136,6 +136,7 @@ public:
     void setCookieObserverHandler(Function<void ()>&&);
     void getCredentialFromPersistentStorage(const ProtectionSpace&, GCancellable*, Function<void (Credential&&)>&& completionHandler);
     void saveCredentialToPersistentStorage(const ProtectionSpace&, const Credential&);
+    WEBCORE_EXPORT void replaceCookies(const Vector<Cookie>&);
 #elif USE(CURL)
     WEBCORE_EXPORT NetworkStorageSession(PAL::SessionID, const String& alternativeServicesDirectory = nullString());
     WEBCORE_EXPORT ~NetworkStorageSession();
@@ -179,7 +180,6 @@ public:
 #if HAVE(COOKIE_CHANGE_LISTENER_API)
     WEBCORE_EXPORT void startListeningForCookieChangeNotifications(CookieChangeObserver&, const String& host);
     WEBCORE_EXPORT void stopListeningForCookieChangeNotifications(CookieChangeObserver&, const HashSet<String>& hosts);
-    WEBCORE_EXPORT bool supportsCookieChangeListenerAPI() const;
 #endif
 
 #if ENABLE(TRACKING_PREVENTION)

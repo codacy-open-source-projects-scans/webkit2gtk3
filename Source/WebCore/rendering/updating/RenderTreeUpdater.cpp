@@ -349,15 +349,15 @@ void RenderTreeUpdater::updateElementRenderer(Element& element, const Style::Ele
         element.clearDisplayContentsStyle();
 
     if (!hasDisplayContents) {
-        if (elementUpdateStyle.containIntrinsicLogicalWidthType() != ContainIntrinsicSizeType::AutoAndLength)
+        if (!elementUpdateStyle.containIntrinsicWidthHasAuto())
             element.clearLastRememberedLogicalWidth();
-        if (elementUpdateStyle.containIntrinsicLogicalHeightType() != ContainIntrinsicSizeType::AutoAndLength)
+        if (!elementUpdateStyle.containIntrinsicHeightHasAuto())
             element.clearLastRememberedLogicalHeight();
     }
     auto scopeExit = makeScopeExit([&] {
         if (!hasDisplayContents) {
             auto* box = element.renderBox();
-            if (box && box->style().hasAutoLengthContainIntrinsicSize() && !box->shouldSkipContent())
+            if (box && box->style().hasAutoLengthContainIntrinsicSize() && !box->isSkippedContentRoot())
                 m_document.observeForContainIntrinsicSize(element);
             else
                 m_document.unobserveForContainIntrinsicSize(element);

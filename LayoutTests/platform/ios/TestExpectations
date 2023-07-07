@@ -53,6 +53,7 @@ fast/media/ios [ Pass ]
 
 fast/forms/textarea/ios [ Pass ]
 fast/text-autosizing/ios [ Pass ]
+fast/text/data-detectors/ios [ Pass ]
 fast/zooming/ios [ Pass ]
 http/tests/preload/viewport [ Pass ]
 http/tests/gzip-content-encoding [ Pass ]
@@ -226,8 +227,6 @@ imported/w3c/web-platform-tests/touch-events [ Skip ]
 platform/ios/ios/fast/forms/range-input-container-touches.html [ Skip ]
 platform/ios/ios/fast/forms/range-input-readonly-and-disabled.html [ Skip ]
 platform/ios/ios/fast/forms/range-input-touches.html [ Skip ]
-platform/ios/ios/fast/text/data-detectors/phone-disabled.html [ Skip ]
-platform/ios/ios/fast/text/data-detectors/phone.html [ Skip ]
 platform/ios/ios/touch [ Skip ]
 media/modern-media-controls/css/pointer-events-none.html [ Skip ]
 
@@ -1038,6 +1037,7 @@ fast/forms/validation-message-maxLength.html [ Skip ]
 fast/forms/ValidityState-valueMissing-002.html [ Skip ]
 fast/frames/focus-controller-crash-change-event.html
 fast/html/details-keyboard-show-hide.html [ Skip ]
+fast/html/transient-activation.html [ Skip ]
 fast/shadow-dom/activate-over-slotted-content.html [ Skip ]
 fast/shadow-dom/clear-active-state-in-shadow.html [ Skip ]
 fast/shadow-dom/focus-across-details-element.html [ Skip ]
@@ -1082,6 +1082,7 @@ imported/w3c/web-platform-tests/shadow-dom/accesskey.tentative.html [ Skip ]
 
 # Tests that use EventSender's mouseMoveTo, mouseUp and mouseDown
 css3/viewport-percentage-lengths/vh-resize.html [ Skip ]
+editing/caret/caret-type-for-user-select-none.html [ Skip ]
 editing/pasteboard/can-read-in-dragstart-event.html [ Skip ]
 editing/pasteboard/cleanup-on-move.html [ Skip ]
 editing/pasteboard/copy-crash.html [ Skip ]
@@ -3686,9 +3687,6 @@ webkit.org/b/240929 [ Debug ]  resize-observer/resize-observer-with-zoom.html [ 
 
 webkit.org/b/241253 fast/text/bulgarian-system-language-shaping.html [ Pass ]
 
-# webkit.org/b/258095 [ iOS, macOS ]  media/track/video-track-add-remove.html  is a flaky crash.
-[ Debug ] media/track/video-track-add-remove.html [ Pass Crash ]
-
 # These tests have different results on iOS
 imported/w3c/web-platform-tests/css/css-scroll-anchoring/device-pixel-adjustment.html
 imported/w3c/web-platform-tests/css/css-scroll-anchoring/history-restore-anchors.html
@@ -4365,3 +4363,6 @@ webkit.org/b/256189 [ Debug ] ipc/wait-for-video-output-will-change.html [ Crash
 
 webkit.org/256217 [ Debug ] imported/w3c/web-platform-tests/background-fetch/port-blocking.https.window.html [ Pass Crash ]
 webkit.org/b/258328 [ Debug ] imported/w3c/web-platform-tests/webcodecs/videoFrame-construction.crossOriginSource.sub.html [ Pass Failure ]
+
+webkit.org/b/258532 svg/zoom/page/text-with-non-scaling-stroke.html [ Pass ImageOnlyFailure ]
+webkit.org/b/258532 fast/forms/input-placeholder-text-indent.html [ Pass ImageOnlyFailure ]

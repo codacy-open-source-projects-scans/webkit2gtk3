@@ -140,10 +140,6 @@
 #include "LegacyTileCache.h"
 #endif
 
-#if PLATFORM(MAC)
-#include "LocalDefaultSystemAppearance.h"
-#endif
-
 #include "DisplayView.h"
 #include "LayoutContext.h"
 
@@ -3914,6 +3910,7 @@ void LocalFrameView::scheduleResizeEventIfNeeded()
 
     auto* document = m_frame->document();
     if (document->quirks().shouldSilenceWindowResizeEvents()) {
+        document->addConsoleMessage(MessageSource::Other, MessageLevel::Info, "Window resize events silenced due to: http://webkit.org/b/258597"_s);
         FRAMEVIEW_RELEASE_LOG(Events, "scheduleResizeEventIfNeeded: Not firing resize events because they are temporarily disabled for this page");
         return;
     }
@@ -4568,11 +4565,6 @@ void LocalFrameView::paintScrollCorner(GraphicsContext& context, const IntRect& 
         m_scrollCorner->paintIntoRect(context, cornerRect.location(), cornerRect);
         return;
     }
-
-#if PLATFORM(MAC)
-    // Keep this in sync with ScrollAnimatorMac's effectiveAppearanceForScrollerImp:.
-    LocalDefaultSystemAppearance localAppearance(useDarkAppearanceForScrollbars());
-#endif
 
     ScrollView::paintScrollCorner(context, cornerRect);
 }

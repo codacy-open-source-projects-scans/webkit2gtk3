@@ -6926,9 +6926,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
     if (self.isFirstResponder && !_suppressSelectionAssistantReasons)
         [_textInteractionAssistant activateSelection];
 
-#if !PLATFORM(WATCHOS)
     [self reloadInputViews];
-#endif
 }
 
 - (void)_hideKeyboard
@@ -7224,14 +7222,13 @@ static RetainPtr<NSObject <WKFormPeripheral>> createInputPeripheralWithView(WebK
     if (!_isChangingFocus)
         [self presentViewControllerForCurrentFocusedElement];
 #else
-    [self reloadInputViews];
-#endif
-
     if (requiresKeyboard) {
         [self _showKeyboard];
         if (!self.window.keyWindow)
             [self.window makeKeyWindow];
-    }
+    } else
+        [self reloadInputViews];
+#endif
 
     if (!UIKeyboard.activeKeyboard) {
         // The lack of keyboard here suggests that we're not running in a context where the keyboard can become visible
@@ -7248,11 +7245,26 @@ static RetainPtr<NSObject <WKFormPeripheral>> createInputPeripheralWithView(WebK
     // selection rect before we can zoom and reveal the selection. Non-selectable elements (e.g. <select>) can be zoomed
     // immediately because they have no selection to reveal.
     if (requiresKeyboard) {
+        bool ignorePreviousKeyboardWillShowNotification = [] {
+            // In the case where out-of-process keyboard is enabled and the software keyboard is shown,
+            // we end up getting two sets of "KeyboardWillShow" -> "KeyboardDidShow" notifications when
+            // the keyboard animates up, after reloading input views. When the first set of notifications
+            // is dispatched underneath the call to -reloadInputViews above, the keyboard hasn't yet
+            // become full height, so attempts to reveal the focused element using the current height will
+            // fail. The second set of keyboard notifications contains the final keyboard height, and is the
+            // one we should use for revealing the focused element.
+            // See also: <rdar://111704216>.
+            if (!UIKeyboard.usesInputSystemUI)
+                return false;
+
+            auto keyboard = UIKeyboard.activeKeyboard;
+            return keyboard && !keyboard.isMinimized;
+        }();
         _revealFocusedElementDeferrer = WebKit::RevealFocusedElementDeferrer::create(self, [&] {
             OptionSet reasons { WebKit::RevealFocusedElementDeferralReason::EditorState };
             if (!self._scroller.firstResponderKeyboardAvoidanceEnabled)
                 reasons.add(WebKit::RevealFocusedElementDeferralReason::KeyboardDidShow);
-            else if (_waitingForKeyboardAppearanceAnimationToStart)
+            else if (_waitingForKeyboardAppearanceAnimationToStart || ignorePreviousKeyboardWillShowNotification)
                 reasons.add(WebKit::RevealFocusedElementDeferralReason::KeyboardWillShow);
             return reasons;
         }());
@@ -11221,6 +11233,9 @@ static RetainPtr<NSItemProvider> createItemProvider(const WebKit::WebPageProxy& 
 - (void)imageAnalysisGestureDidBegin:(WKImageAnalysisGestureRecognizer *)gestureRecognizer
 {
     ASSERT(WebKit::isLiveTextAvailableAndEnabled());
+
+    if ([self _isPanningScrollViewOrAncestor:gestureRecognizer.lastTouchedScrollView])
+        return;
 
     auto requestIdentifier = WebKit::ImageAnalysisRequestIdentifier::generate();
 
