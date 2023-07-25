@@ -2293,10 +2293,15 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
     case StringCodePointAt:
         setNonCellTypeForNode(node, SpecInt32Only);
         break;
-        
+
+    case StringIndexOf:
+        setNonCellTypeForNode(node, SpecInt32Only);
+        break;
+
     case StringFromCharCode:
         switch (node->child1().useKind()) {
         case Int32Use:
+        case KnownInt32Use:
             break;
         case UntypedUse:
             clobberWorld();

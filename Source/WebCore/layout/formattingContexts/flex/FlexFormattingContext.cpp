@@ -106,10 +106,11 @@ FlexLayout::LogicalFlexItems FlexFormattingContext::convertFlexItemsToLogicalSpa
                         mainAxis.definiteFlexBasis = valueForLength(style.width(), constraints.horizontal().logicalWidth);
                 } else if (!style.flexBasis().isContent())
                     mainAxis.definiteFlexBasis = valueForLength(style.flexBasis(), constraints.horizontal().logicalWidth);
-                if (style.maxWidth().isSpecified())
-                    mainAxis.maximumSize = valueForLength(style.maxWidth(), constraints.horizontal().logicalWidth);
-                if (!style.minWidth().isSpecified())
-                    mainAxis.minimumSize = valueForLength(style.minWidth(), constraints.horizontal().logicalWidth);
+                if (style.width().isSpecified()) {
+                    // FIXME: Add support for non-fixed content and clamp them to min/max.
+                    mainAxis.minimumUsedSize = valueForLength(style.width(), constraints.horizontal().logicalWidth);
+                    mainAxis.maximumUsedSize = mainAxis.minimumUsedSize;
+                }
                 if (!style.marginStart().isAuto())
                     mainAxis.marginStart = flexItemGeometry.marginStart();
                 if (!style.marginEnd().isAuto())
@@ -126,7 +127,7 @@ FlexLayout::LogicalFlexItems FlexFormattingContext::convertFlexItemsToLogicalSpa
                     crossAxis.definiteSize = height.value();
                 if (style.maxHeight().isSpecified())
                     crossAxis.maximumSize = valueForLength(style.maxHeight(), constraints.availableVerticalSpace().value_or(0));
-                if (!style.minHeight().isSpecified())
+                if (style.minHeight().isSpecified())
                     crossAxis.minimumSize = valueForLength(style.minHeight(), constraints.availableVerticalSpace().value_or(0));
                 crossAxis.borderAndPadding = flexItemGeometry.verticalBorderAndPadding();
                 break;

@@ -212,12 +212,26 @@ void MemoryBackingStoreTransaction::abort()
 
     for (const auto& iterator : m_originalIndexNames) {
         auto* index = iterator.key;
-        auto identifier = index->objectStore().info().identifier();
-        auto indexToReRegister = index->objectStore().takeIndexByIdentifier(identifier).releaseNonNull();
-        index->objectStore().info().deleteIndex(identifier);
-        index->rename(iterator.value);
-        index->objectStore().info().addExistingIndex(index->info());
-        index->objectStore().registerIndex(WTFMove(indexToReRegister));
+        auto originalName = iterator.value;
+        auto identifier = index->info().identifier();
+
+        // If a new index was added with the original name of an index being renamed in this transaction, we need to delete it.
+        RefPtr<MemoryIndex> indexToDelete;
+        for (auto addedIndex : m_indexes) {
+            if (addedIndex->info().name() == originalName && addedIndex->info().identifier() != identifier) {
+                indexToDelete = addedIndex;
+                break;
+            }
+        }
+        if (indexToDelete)
+            indexToDelete->objectStore().deleteIndex(*this, indexToDelete->info().identifier());
+
+        auto& objectStore = index->objectStore();
+        auto indexToReRegister = objectStore.takeIndexByIdentifier(identifier).releaseNonNull();
+        objectStore.info().deleteIndex(identifier);
+        index->rename(originalName);
+        objectStore.info().addExistingIndex(index->info());
+        objectStore.registerIndex(WTFMove(indexToReRegister));
     }
     m_originalIndexNames.clear();
 

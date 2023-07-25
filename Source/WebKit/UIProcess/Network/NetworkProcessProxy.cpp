@@ -94,6 +94,7 @@
 #endif
 
 #if PLATFORM(COCOA)
+#include "DefaultWebBrowserChecks.h"
 #include "LegacyCustomProtocolManagerClient.h"
 #endif
 
@@ -228,6 +229,10 @@ void NetworkProcessProxy::sendCreationParametersToNewProcess()
 
     parameters.allowedFirstPartiesForCookies = WebProcessProxy::allowedFirstPartiesForCookies();
 
+#if PLATFORM(COCOA)
+    parameters.isParentProcessFullWebBrowserOrRunningTest = isFullWebBrowserOrRunningTest();
+#endif
+
     WebProcessPool::platformInitializeNetworkProcess(parameters);
     sendWithAsyncReply(Messages::NetworkProcess::InitializeNetworkProcess(parameters), [weakThis = WeakPtr { *this }] {
         if (weakThis)
@@ -253,6 +258,9 @@ NetworkProcessProxy::NetworkProcessProxy()
     , m_customProtocolManagerClient(makeUniqueRef<API::CustomProtocolManagerClient>())
 #endif
     , m_throttler(*this, WebProcessPool::anyProcessPoolNeedsUIBackgroundAssertion())
+#if PLATFORM(MAC)
+    , m_backgroundActivityToPreventSuspension(m_throttler.backgroundActivity("Prevent suspension"_s))
+#endif
 {
     RELEASE_LOG(Process, "%p - NetworkProcessProxy::NetworkProcessProxy", this);
 

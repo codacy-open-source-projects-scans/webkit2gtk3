@@ -40,6 +40,7 @@ class Color;
 class ContentData;
 class CounterContent;
 class CursorList;
+class Element;
 class FillLayer;
 class FilterOperations;
 class FloatPoint;
@@ -694,7 +695,7 @@ public:
 
     inline ContentVisibility contentVisibility() const;
 
-    inline bool effectiveSkipsContent() const;
+    inline bool effectiveSkippedContent() const;
 
     inline ContainIntrinsicSizeType containIntrinsicWidthType() const;
     inline ContainIntrinsicSizeType containIntrinsicHeightType() const;
@@ -702,6 +703,8 @@ public:
     inline ContainIntrinsicSizeType containIntrinsicLogicalHeightType() const;
     inline bool containIntrinsicWidthHasAuto() const;
     inline bool containIntrinsicHeightHasAuto() const;
+    inline bool containIntrinsicLogicalWidthHasAuto() const;
+    inline bool containIntrinsicLogicalHeightHasAuto() const;
     inline std::optional<Length> containIntrinsicWidth() const;
     inline std::optional<Length> containIntrinsicHeight() const;
     inline bool hasAutoLengthContainIntrinsicSize() const;
@@ -1041,6 +1044,7 @@ public:
 
     bool shouldPlaceVerticalScrollbarOnLeft() const;
 
+    inline bool usesStandardScrollbarStyle() const;
     inline bool usesLegacyScrollbarStyle() const;
 
 #if ENABLE(APPLE_PAY)
@@ -1266,7 +1270,7 @@ public:
 
     inline void setContentVisibility(ContentVisibility);
 
-    inline void setEffectiveSkipsContent(bool);
+    inline void setEffectiveSkippedContent(bool);
 
     inline void setListStyleType(ListStyleType);
     void setListStyleImage(RefPtr<StyleImage>&&);
@@ -1589,6 +1593,8 @@ public:
     inline SVGPaintType fillPaintType() const;
     inline StyleColor fillPaintColor() const;
     inline void setFillPaintColor(const StyleColor&);
+    inline void setHasExplicitlySetColor(bool);
+    inline bool hasExplicitlySetColor() const;
     inline float fillOpacity() const;
     inline void setFillOpacity(float);
 
@@ -2196,6 +2202,8 @@ private:
         unsigned autosizeStatus : 5;
 #endif
         // 51 bits
+        unsigned hasExplicitlySetColor : 1;
+        // 52 bits
     };
 
     // This constructor is used to implement the replace operation.
@@ -2257,5 +2265,7 @@ constexpr BorderStyle collapsedBorderStyle(BorderStyle);
 inline bool pseudoElementRendererIsNeeded(const RenderStyle*);
 inline bool generatesBox(const RenderStyle&);
 inline bool isNonVisibleOverflow(Overflow);
+
+inline bool isSkippedContentRoot(const RenderStyle&, const Element*);
 
 } // namespace WebCore

@@ -344,6 +344,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     Modules/cookie-consent/CookieConsentDecisionResult.h
 
+    Modules/cookie-store/CookieStoreGetOptions.h
+
     Modules/encryptedmedia/CDMClient.h
     Modules/encryptedmedia/MediaKeySystemClient.h
     Modules/encryptedmedia/MediaKeySystemController.h
@@ -1927,6 +1929,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/MediaSourcePrivate.h
     platform/graphics/MediaSourcePrivateClient.h
     platform/graphics/MediaUsageInfo.h
+    platform/graphics/Model.h
     platform/graphics/NativeImage.h
     platform/graphics/NullGraphicsContext.h
     platform/graphics/Path.h

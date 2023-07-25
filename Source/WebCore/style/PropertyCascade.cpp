@@ -155,6 +155,13 @@ void PropertyCascade::setDeferred(CSSPropertyID id, CSSValue& cssValue, const Ma
     setPropertyInternal(property, id, cssValue, matchedProperties, cascadeLevel);
 }
 
+bool PropertyCascade::hasProperty(CSSPropertyID propertyID, const CSSValue& value)
+{
+    if (propertyID == CSSPropertyCustom)
+        return hasCustomProperty(downcast<CSSCustomPropertyValue>(value).name());
+    return propertyID < firstDeferredProperty ? hasNormalProperty(propertyID) : hasDeferredProperty(propertyID);
+}
+
 const PropertyCascade::Property* PropertyCascade::lastDeferredPropertyResolvingRelated(CSSPropertyID propertyID, TextDirection direction, WritingMode writingMode) const
 {
     auto relatedID = [&] {
@@ -196,42 +203,51 @@ bool PropertyCascade::addMatch(const MatchedProperties& matchedProperties, Casca
     auto propertyAllowlist = matchedProperties.allowlistType;
     bool hasImportantProperties = false;
 
-    for (auto current : *matchedProperties.properties) {
+    for (auto current : matchedProperties.properties.get()) {
         if (current.isImportant())
             hasImportantProperties = true;
         if (important != current.isImportant())
             continue;
 
+        auto propertyID = current.id();
+
         auto shouldIncludeProperty = [&] {
+#if ENABLE(VIDEO)
+            if (propertyAllowlist == PropertyAllowlist::Cue && !isValidCueStyleProperty(propertyID))
+                return false;
+#endif
+            if (propertyAllowlist == PropertyAllowlist::Marker && !isValidMarkerStyleProperty(propertyID))
+                return false;
+
             if (m_includedProperties.containsAll(allProperties()))
                 return true;
             if (m_includedProperties.contains(PropertyType::Inherited) && current.isInherited())
                 return true;
             if (m_includedProperties.contains(PropertyType::NonInherited) && !current.isInherited())
                 return true;
+
+            // If we have applied this property for some reason already we must apply anything that overrides it.
+            if (hasProperty(propertyID, *current.value()))
+                return true;
+
             if (m_includedProperties.contains(PropertyType::VariableReference)) {
                 if (current.value()->hasVariableReferences())
+                    return true;
+                // Apply all deferred properties if we have applied any. They may override the ones we already applied.
+                if (propertyID >= firstDeferredProperty && m_lastIndexForDeferred)
                     return true;
             }
             if (m_includedProperties.containsAny({ PropertyType::AfterAnimation, PropertyType::AfterTransition })) {
                 if (shouldApplyAfterAnimation(current)) {
-                    m_animationLayer->overriddenProperties.add(current.id());
+                    m_animationLayer->overriddenProperties.add(propertyID);
                     return true;
                 }
             }
+
             return false;
         }();
 
         if (!shouldIncludeProperty)
-            continue;
-
-        auto propertyID = current.id();
-
-#if ENABLE(VIDEO)
-        if (propertyAllowlist == PropertyAllowlist::Cue && !isValidCueStyleProperty(propertyID))
-            continue;
-#endif
-        if (propertyAllowlist == PropertyAllowlist::Marker && !isValidMarkerStyleProperty(propertyID))
             continue;
 
         if (propertyID < firstDeferredProperty)
@@ -249,15 +265,6 @@ bool PropertyCascade::shouldApplyAfterAnimation(const StyleProperties::PropertyR
 
     auto id = property.id();
     auto* customProperty = dynamicDowncast<CSSCustomPropertyValue>(*property.value());
-
-    auto hasPropertyAlready = [&] {
-        if (customProperty)
-            return hasCustomProperty(customProperty->name());
-        return id < firstDeferredProperty ? hasNormalProperty(id) : hasDeferredProperty(id);
-    }();
-
-    if (hasPropertyAlready)
-        return true;
 
     auto isAnimatedProperty = [&] {
         if (customProperty)
@@ -337,7 +344,7 @@ void PropertyCascade::addImportantMatches(CascadeLevel cascadeLevel)
     for (unsigned i = 0; i < matchedDeclarations.size(); ++i) {
         const MatchedProperties& matchedProperties = matchedDeclarations[i];
 
-        if (!hasImportantProperties(*matchedProperties.properties))
+        if (!hasImportantProperties(matchedProperties.properties))
             continue;
 
         importantMatches.append({ i, matchedProperties.styleScopeOrdinal, matchedProperties.cascadeLayerPriority, matchedProperties.fromStyleAttribute });

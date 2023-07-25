@@ -1123,12 +1123,12 @@ void WebGLRenderingContextBase::paintRenderingResultsToCanvas()
     }
 }
 
-RefPtr<PixelBuffer> WebGLRenderingContextBase::paintRenderingResultsToPixelBuffer()
+RefPtr<PixelBuffer> WebGLRenderingContextBase::paintRenderingResultsToPixelBuffer(GraphicsContextGL::FlipY flipY)
 {
     if (isContextLost())
         return nullptr;
     clearIfComposited(CallerTypeOther);
-    return m_context->paintRenderingResultsToPixelBuffer();
+    return m_context->paintRenderingResultsToPixelBuffer(flipY);
 }
 
 #if ENABLE(MEDIA_STREAM) || ENABLE(WEB_CODECS)
@@ -3279,12 +3279,8 @@ void WebGLRenderingContextBase::makeXRCompatible(MakeXRCompatiblePromise&& promi
         m_isXRCompatible = true;
 
 #if PLATFORM(COCOA)
-        // FIXME: This is ugly. It's something needed at the GraphicsContextGL
-        // level, not WebGLRenderingContext. We should move this down to a
-        // virtual makeXRCompatible or something on GCGL.
-        enableSupportedExtension("GL_OES_EGL_image"_s);
-        enableSupportedExtension("GL_EXT_sRGB"_s);
-        enableSupportedExtension("GL_ANGLE_framebuffer_multisample"_s);
+        if (!m_context->enableRequiredWebXRExtensions())
+            return;
 #endif
 
         promise.resolve();

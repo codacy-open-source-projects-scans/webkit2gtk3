@@ -44,6 +44,11 @@ messages -> NetworkConnectionToWebProcess LegacyReceiver {
     SetRawCookie(struct WebCore::Cookie cookie)
     DeleteCookie(URL url, String cookieName) -> ()
     DomCookiesForHost(URL host, bool subscribeToCookieChangeNotifications) -> (Vector<WebCore::Cookie> cookies) Synchronous
+
+    CookiesForDOMAsync(URL firstParty, struct WebCore::SameSiteInfo sameSiteInfo, URL url, WebCore::FrameIdentifier frameID, WebCore::PageIdentifier pageID, enum:bool WebCore::IncludeSecureCookies includeSecureCookies, enum:bool WebCore::ApplyTrackingPrevention applyTrackingPrevention, enum:bool WebCore::ShouldRelaxThirdPartyCookieBlocking shouldRelaxThirdPartyCookieBlocking, struct WebCore::CookieStoreGetOptions options) -> (std::optional<Vector<WebCore::Cookie>> cookies)
+
+    SetCookieFromDOMAsync(URL firstParty, struct WebCore::SameSiteInfo sameSiteInfo, URL url, WebCore::FrameIdentifier frameID, WebCore::PageIdentifier pageID, enum:bool WebCore::ApplyTrackingPrevention applyTrackingPrevention, enum:bool WebCore::ShouldRelaxThirdPartyCookieBlocking shouldRelaxThirdPartyCookieBlocking, struct WebCore::Cookie cookie) -> (bool setSuccessfully)
+
 #if HAVE(COOKIE_CHANGE_LISTENER_API)
     UnsubscribeFromCookieChangeNotifications(HashSet<String> hosts)
 #endif

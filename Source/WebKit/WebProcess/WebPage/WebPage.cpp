@@ -512,13 +512,16 @@ static Vector<UserContentURLPattern> parseAndAllowAccessToCORSDisablingPatterns(
     return parsedPatterns;
 }
 
-static std::variant<UniqueRef<LocalFrameLoaderClient>, PageConfiguration::RemoteMainFrameCreationParameters> clientForMainFrame(Ref<WebFrame>&& mainFrame, std::optional<WebCore::ProcessIdentifier> remoteProcessIdentifier)
+static std::variant<UniqueRef<LocalFrameLoaderClient>, UniqueRef<RemoteFrameClient>> clientForMainFrame(Ref<WebFrame>&& mainFrame, auto frameType)
 {
     auto invalidator = mainFrame->makeInvalidator();
-    if (!remoteProcessIdentifier)
-        return UniqueRef<WebCore::LocalFrameLoaderClient>(makeUniqueRef<WebLocalFrameLoaderClient>(WTFMove(mainFrame), WTFMove(invalidator)));
-
-    return PageConfiguration::RemoteMainFrameCreationParameters { UniqueRef<RemoteFrameClient>(makeUniqueRef<WebRemoteFrameClient>(WTFMove(mainFrame), WTFMove(invalidator))), remoteProcessIdentifier.value() };
+    switch (frameType) {
+    case Frame::FrameType::Local:
+        return UniqueRef<LocalFrameLoaderClient>(makeUniqueRef<WebLocalFrameLoaderClient>(WTFMove(mainFrame), WTFMove(invalidator)));
+    case Frame::FrameType::Remote:
+        return UniqueRef<RemoteFrameClient>(makeUniqueRef<WebRemoteFrameClient>(WTFMove(mainFrame), WTFMove(invalidator)));
+    }
+    RELEASE_ASSERT_NOT_REACHED();
 }
 
 WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
@@ -641,9 +644,9 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
 
     m_pageGroup = WebProcess::singleton().webPageGroup(parameters.pageGroupData);
 
-    std::optional<ProcessIdentifier> remoteProcessIdentifier;
+    auto frameType { Frame::FrameType::Local };
     if (parameters.subframeProcessFrameTreeCreationParameters && !parameters.openerFrameIdentifier)
-        remoteProcessIdentifier = parameters.subframeProcessFrameTreeCreationParameters->remoteProcessIdentifier;
+        frameType = Frame::FrameType::Remote;
 
     PageConfiguration pageConfiguration(
         pageID,
@@ -656,7 +659,7 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
         WebBackForwardListProxy::create(*this),
         WebProcess::singleton().cookieJar(),
         makeUniqueRef<WebProgressTrackerClient>(*this),
-        clientForMainFrame(m_mainFrame.copyRef(), remoteProcessIdentifier),
+        clientForMainFrame(m_mainFrame.copyRef(), frameType),
         m_mainFrame->frameID(),
         makeUniqueRef<WebSpeechRecognitionProvider>(pageID),
         makeUniqueRef<MediaRecorderProvider>(*this),
@@ -1039,19 +1042,19 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
 
 void WebPage::constructFrameTree(WebFrame& parent, const FrameTreeCreationParameters& treeCreationParameters)
 {
-    auto frame = WebFrame::createRemoteSubframe(*this, parent, treeCreationParameters.frameID, treeCreationParameters.remoteProcessIdentifier);
+    auto frame = WebFrame::createRemoteSubframe(*this, parent, treeCreationParameters.frameID);
     for (auto& parameters : treeCreationParameters.children)
         constructFrameTree(frame, parameters);
 }
 
-void WebPage::createRemoteSubframe(WebCore::FrameIdentifier parentID, WebCore::FrameIdentifier newChildID, WebCore::ProcessIdentifier remoteProcessIdentifier)
+void WebPage::createRemoteSubframe(WebCore::FrameIdentifier parentID, WebCore::FrameIdentifier newChildID)
 {
     auto* parentFrame = WebProcess::singleton().webFrame(parentID);
     if (!parentFrame) {
         ASSERT_NOT_REACHED();
         return;
     }
-    WebFrame::createRemoteSubframe(*this, *parentFrame, newChildID, remoteProcessIdentifier);
+    WebFrame::createRemoteSubframe(*this, *parentFrame, newChildID);
 }
 
 void WebPage::getFrameInfo(WebCore::FrameIdentifier frameID, CompletionHandler<void(FrameInfoData&&)>&& completionHandler)
@@ -1079,14 +1082,14 @@ void WebPage::continueWillSubmitForm(WebCore::FrameIdentifier frameID, WebKit::F
     frame->continueWillSubmitForm(formListenerID);
 }
 
-void WebPage::didCommitLoadInAnotherProcess(WebCore::FrameIdentifier frameID, std::optional<WebCore::LayerHostingContextIdentifier> layerHostingContextIdentifier, WebCore::ProcessIdentifier remoteProcessIdentifier)
+void WebPage::didCommitLoadInAnotherProcess(WebCore::FrameIdentifier frameID, std::optional<WebCore::LayerHostingContextIdentifier> layerHostingContextIdentifier)
 {
     auto* frame = WebProcess::singleton().webFrame(frameID);
     if (!frame) {
         ASSERT_NOT_REACHED();
         return;
     }
-    frame->didCommitLoadInAnotherProcess(layerHostingContextIdentifier, remoteProcessIdentifier);
+    frame->didCommitLoadInAnotherProcess(layerHostingContextIdentifier);
 }
 
 void WebPage::didFinishLoadInAnotherProcess(WebCore::FrameIdentifier frameID)
@@ -7671,7 +7674,7 @@ void WebPage::dispatchDidReachLayoutMilestone(OptionSet<WebCore::LayoutMilestone
 
     // The drawing area might want to defer dispatch of didLayout to the UI process.
     if (m_drawingArea) {
-        static auto paintMilestones = OptionSet<WebCore::LayoutMilestone> { DidHitRelevantRepaintedObjectsAreaThreshold, DidFirstFlushForHeaderLayer, DidFirstPaintAfterSuppressedIncrementalRendering, DidRenderSignificantAmountOfText, DidFirstMeaningfulPaint };   
+        static auto paintMilestones = OptionSet<WebCore::LayoutMilestone> { DidHitRelevantRepaintedObjectsAreaThreshold, DidFirstPaintAfterSuppressedIncrementalRendering, DidRenderSignificantAmountOfText, DidFirstMeaningfulPaint };
         auto drawingAreaRelatedMilestones = milestones & paintMilestones;
         if (drawingAreaRelatedMilestones && m_drawingArea->addMilestonesToDispatch(drawingAreaRelatedMilestones))
             milestones.remove(drawingAreaRelatedMilestones);
@@ -8024,10 +8027,18 @@ void WebPage::updateAttachmentIcon(const String& identifier, ShareableBitmap::Ha
                     icon->paint(imageBuffer->context(), IntPoint::zero(), IntRect(IntPoint::zero(), icon->size()));
                     auto data = imageBuffer->toData("image/png"_s);
                     attachment->updateIconForWideLayout(WTFMove(data));
+                    return;
                 }
-            } else
+            } else {
                 attachment->updateIconForNarrowLayout(icon->createImage(), size);
+                return;
+            }
         }
+
+        if (attachment->isWideLayout())
+            attachment->updateIconForWideLayout({ });
+        else
+            attachment->updateIconForNarrowLayout({ }, size);
     }
 }
 
@@ -8912,7 +8923,7 @@ bool WebPage::shouldSkipDecidePolicyForResponse(const WebCore::ResourceResponse&
     if (response.url().protocolIsFile())
         return false;
 
-    if (auto components = response.httpHeaderField(HTTPHeaderName::ContentDisposition).split(';'); !components.isEmpty() && equalIgnoringASCIICase(components[0].trim(isHTTPSpace), "attachment"_s))
+    if (auto components = response.httpHeaderField(HTTPHeaderName::ContentDisposition).split(';'); !components.isEmpty() && equalIgnoringASCIICase(components[0].trim(isASCIIWhitespaceWithoutFF<UChar>), "attachment"_s))
         return false;
 
     return true;

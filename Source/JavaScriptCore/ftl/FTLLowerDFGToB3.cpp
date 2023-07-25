@@ -1298,6 +1298,9 @@ private:
         case StringLocaleCompare:
             compileStringLocaleCompare();
             break;
+        case StringIndexOf:
+            compileStringIndexOf();
+            break;
         case GetByOffset:
         case GetGetterSetterByOffset:
             compileGetByOffset();
@@ -10035,7 +10038,7 @@ IGNORE_CLANG_WARNINGS_END
             return;
         }
 
-        DFG_ASSERT(m_graph, m_node, childEdge.useKind() == Int32Use, childEdge.useKind());
+        DFG_ASSERT(m_graph, m_node, childEdge.useKind() == Int32Use || childEdge.useKind() == KnownInt32Use, childEdge.useKind());
 
         LValue value = lowInt32(childEdge);
         
@@ -10071,6 +10074,32 @@ IGNORE_CLANG_WARNINGS_END
     {
         auto* globalObject = m_graph.globalObjectFor(m_origin.semantic);
         setInt32(m_out.castToInt32(vmCall(Int64, operationStringLocaleCompare, weakPointer(globalObject), lowString(m_node->child1()), lowString(m_node->child2()))));
+    }
+
+    void compileStringIndexOf()
+    {
+        std::optional<UChar> character;
+        String searchString = m_node->child2()->tryGetString(m_graph);
+        if (!!searchString) {
+            if (searchString.length() == 1)
+                character = searchString.characterAt(0);
+        }
+
+        LValue base = lowString(m_node->child1());
+        LValue search = lowString(m_node->child2());
+        auto* globalObject = m_graph.globalObjectFor(m_origin.semantic);
+        if (m_node->child3()) {
+            if (character)
+                setInt32(m_out.castToInt32(vmCall(Int64, operationStringIndexOfWithIndexWithOneChar, weakPointer(globalObject), base, lowInt32(m_node->child3()), m_out.constInt32(character.value()))));
+            else
+                setInt32(m_out.castToInt32(vmCall(Int64, operationStringIndexOfWithIndex, weakPointer(globalObject), base, search, lowInt32(m_node->child3()))));
+            return;
+        }
+
+        if (character)
+            setInt32(m_out.castToInt32(vmCall(Int64, operationStringIndexOfWithOneChar, weakPointer(globalObject), base, m_out.constInt32(character.value()))));
+        else
+            setInt32(m_out.castToInt32(vmCall(Int64, operationStringIndexOf, weakPointer(globalObject), base, search)));
     }
     
     void compileGetByOffset()
@@ -18430,7 +18459,7 @@ IGNORE_CLANG_WARNINGS_END
                 // all of the compiler tiers.
                 jit.emitAllocateWithNonNullAllocator(
                     params[0].gpr(), actualAllocator, allocatorGPR, params.gpScratch(0),
-                    jumpToSlowPath);
+                    jumpToSlowPath, CCallHelpers::SlowAllocationResult::UndefinedBehavior);
                 
                 CCallHelpers::Jump jumpToSuccess;
                 if (!params.fallsThroughToSuccessor(0))

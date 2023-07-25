@@ -92,39 +92,11 @@
     return evaluationResult.autorelease();
 }
 
-#if PLATFORM(MAC)
-
-// Note: this testing strategy makes a couple of assumptions:
-// 1. The network process hasn't already died and allowed the system to reuse the same PID.
-// 2. The API test did not take more than ~120 seconds to run.
-- (NSArray<NSString *> *)collectLogsForNewConnections
-{
-    auto predicate = [NSString stringWithFormat:@"subsystem == 'com.apple.network'"
-        " AND category == 'connection'"
-        " AND eventMessage endswith 'start'"
-        " AND processIdentifier == %d", self._networkProcessIdentifier];
-    RetainPtr pipe = [NSPipe pipe];
-    // FIXME: This is currently reliant on `NSTask`, which is absent on iOS. We should find a way to
-    // make this helper work on both platforms.
-    auto task = adoptNS([NSTask new]);
-    [task setLaunchPath:@"/usr/bin/log"];
-    [task setArguments:@[ @"show", @"--last", @"2m", @"--style", @"json", @"--predicate", predicate ]];
-    [task setStandardOutput:pipe.get()];
-    [task launch];
-    [task waitUntilExit];
-
-    auto rawData = [pipe fileHandleForReading].availableData;
-    auto messages = [NSMutableArray<NSString *> array];
-    for (id messageData in dynamic_objc_cast<NSArray>([NSJSONSerialization JSONObjectWithData:rawData options:0 error:nil]))
-        [messages addObject:dynamic_objc_cast<NSString>([messageData objectForKey:@"eventMessage"])];
-    return messages;
-}
-
-#endif // PLATFORM(MAC)
-
 @end
 
 namespace TestWebKitAPI {
+
+#if HAVE(SYSTEM_SUPPORT_FOR_ADVANCED_PRIVACY_PROTECTIONS)
 
 static IMP makeQueryParameterRequestHandler(NSArray<NSString *> *parameters, bool& didHandleRequest)
 {
@@ -191,6 +163,7 @@ private:
     std::unique_ptr<InstanceMethodSwizzler> m_swizzler;
     bool m_didHandleRequest { false };
 };
+#endif // HAVE(SYSTEM_SUPPORT_FOR_ADVANCED_PRIVACY_PROTECTIONS)
 
 static RetainPtr<TestWKWebView> createWebViewWithAdvancedPrivacyProtections(BOOL enabled = YES, RetainPtr<WKWebpagePreferences>&& preferences = { }, WKWebsiteDataStore *dataStore = nil)
 {
@@ -210,6 +183,8 @@ static RetainPtr<TestWKWebView> createWebViewWithAdvancedPrivacyProtections(BOOL
 
     return adoptNS([[TestWKWebView alloc] initWithFrame:CGRectMake(0, 0, 800, 600) configuration:configuration.get()]);
 }
+
+#if HAVE(SYSTEM_SUPPORT_FOR_ADVANCED_PRIVACY_PROTECTIONS)
 
 TEST(AdvancedPrivacyProtections, DoNotRemoveTrackingQueryParametersWhenPrivacyProtectionsAreDisabled)
 {
@@ -551,8 +526,6 @@ TEST(AdvancedPrivacyProtections, DoNotHideQueryParametersAfterEffectiveSameSiteN
     EXPECT_WK_STREQ("thirdparty: custom://firstparty.co.uk/index.html?hello=123", results[0]);
 }
 
-#if HAVE(SYSTEM_SUPPORT_FOR_ADVANCED_PRIVACY_PROTECTIONS)
-
 TEST(AdvancedPrivacyProtections, LinkPreconnectUsesEnhancedPrivacy)
 {
     auto createMarkupString = [](unsigned serverPort) {
@@ -663,6 +636,8 @@ TEST(AdvancedPrivacyProtections, DoNotHideReferrerAfterReducingPrivacyProtection
     EXPECT_WK_STREQ(expectedReferrer, result);
 }
 
+#if HAVE(SYSTEM_SUPPORT_FOR_ADVANCED_PRIVACY_PROTECTIONS)
+
 TEST(AdvancedPrivacyProtections, DoNotRemoveTrackingParametersAfterReducingPrivacyProtections)
 {
     QueryParameterRequestSwizzler blockListSwizzler { @[ @"someID" ] };
@@ -715,6 +690,8 @@ TEST(AdvancedPrivacyProtections, DoNotRemoveTrackingParametersAfterReducingPriva
     checkForExpectedQueryParameters([NSURL URLWithString:documentURLString]);
     checkForExpectedQueryParameters([webView URL]);
 }
+
+#endif // HAVE(SYSTEM_SUPPORT_FOR_ADVANCED_PRIVACY_PROTECTIONS)
 
 TEST(AdvancedPrivacyProtections, HideScreenMetricsFromBindings)
 {
@@ -809,9 +786,10 @@ TEST(AdvancedPrivacyProtections, ClampScreenSizeToFixedValues)
         EXPECT_EQ(expectedSize.height, sizeForBindings.height);
     };
 
-    runTestWithScreenSize(CGSizeMake(393, 852), CGSizeMake(414, 736));
-    runTestWithScreenSize(CGSizeMake(320,  568), CGSizeMake(320,  568));
-    runTestWithScreenSize(CGSizeMake(440,  900), CGSizeMake(414,  736));
+    runTestWithScreenSize(CGSizeMake(320, 568), CGSizeMake(320, 568));
+    runTestWithScreenSize(CGSizeMake(388, 844), CGSizeMake(390, 844));
+    runTestWithScreenSize(CGSizeMake(390, 848), CGSizeMake(390, 844));
+    runTestWithScreenSize(CGSizeMake(440, 900), CGSizeMake(414, 896));
 }
 
 #endif // PLATFORM(IOS_FAMILY)

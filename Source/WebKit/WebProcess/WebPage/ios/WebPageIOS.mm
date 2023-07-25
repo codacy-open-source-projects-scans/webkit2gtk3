@@ -312,7 +312,6 @@ void WebPage::getPlatformEditorState(LocalFrame& frame, EditorState& result) con
             VisibleSelection compositionSelection(*compositionRange);
             visualData.markedTextCaretRectAtStart = view->contentsToRootView(compositionSelection.visibleStart().absoluteCaretBounds(nullptr /* insideFixed */));
             visualData.markedTextCaretRectAtEnd = view->contentsToRootView(compositionSelection.visibleEnd().absoluteCaretBounds(nullptr /* insideFixed */));
-
         }
     }
 
@@ -387,8 +386,10 @@ void WebPage::getPlatformEditorState(LocalFrame& frame, EditorState& result) con
             // FIXME: The caret color style should be computed using the selection caret's container
             // rather than the focused element. This causes caret colors in editable children to be
             // ignored in favor of the editing host's caret color. See: <https://webkit.org/b/229809>.
-            if (RefPtr editableRoot = selection.rootEditableElement(); editableRoot && editableRoot->renderer())
-                postLayoutData.caretColor = CaretBase::computeCaretColor(editableRoot->renderer()->style(), editableRoot.get(), std::nullopt);
+            if (RefPtr editableRoot = selection.rootEditableElement(); editableRoot && editableRoot->renderer()) {
+                postLayoutData.caretColor = CaretBase::computeCaretColor(editableRoot->renderer()->style(), editableRoot.get());
+                postLayoutData.hasGrammarDocumentMarkers = editableRoot->document().markers().hasMarkers(makeRangeSelectingNodeContents(*editableRoot), DocumentMarker::Grammar);
+            }
         }
 
         computeEditableRootHasContentAndPlainText(selection, postLayoutData);
@@ -4309,7 +4310,7 @@ static inline void adjustVelocityDataForBoundedScale(VelocityData& velocityData,
         velocityData.verticalVelocity = 0;
     }
 
-    if (exposedRectScale >= maximumScale || exposedRectScale <= minimumScale)
+    if (exposedRectScale >= maximumScale || exposedRectScale <= minimumScale || scalesAreEssentiallyEqual(exposedRectScale, minimumScale) || scalesAreEssentiallyEqual(exposedRectScale, maximumScale))
         velocityData.scaleChangeRate = 0;
 }
 
@@ -4542,16 +4543,18 @@ void WebPage::computePagesForPrintingiOS(WebCore::FrameIdentifier frameID, const
     reply(pageRects.size());
 }
 
-void WebPage::drawToImage(WebCore::FrameIdentifier frameID, const PrintInfo& printInfo, size_t pageCount, CompletionHandler<void(WebKit::ShareableBitmap::Handle&&)>&& reply)
+void WebPage::drawToImage(WebCore::FrameIdentifier frameID, const PrintInfo& printInfo, CompletionHandler<void(WebKit::ShareableBitmap::Handle&&)>&& reply)
 {  
     Vector<WebCore::IntRect> pageRects;
     double totalScaleFactor;
     auto margin = printInfo.margin;
     computePagesForPrintingImpl(frameID, printInfo, pageRects, totalScaleFactor, margin);
 
-    RELEASE_LOG(Printing, "Drawing to image. Page rects size = %zu", pageRects.size());
+    size_t pageCount = pageRects.size();
 
-    ASSERT(pageRects.size() >= 1);
+    RELEASE_LOG(Printing, "Drawing to image. Page rects size = %zu", pageCount);
+
+    ASSERT(pageCount >= 1);
 
     if (!m_printContext) {
         reply({ });
@@ -5179,9 +5182,10 @@ FloatSize WebPage::screenSizeForFingerprintingProtections(const LocalFrame&, Flo
         return m_viewportConfiguration.minimumLayoutSize();
 
     static constexpr std::array fixedSizes {
-        FloatSize { 320,  568 },
-        FloatSize { 375,  667 },
-        FloatSize { 414,  736 },
+        FloatSize { 320, 568 },
+        FloatSize { 375, 667 },
+        FloatSize { 390, 844 },
+        FloatSize { 414, 896 },
     };
 
     for (auto fixedSize : fixedSizes) {

@@ -26,6 +26,10 @@
 #include "config.h"
 #include "RemotePageDrawingAreaProxy.h"
 
+#include "DrawingAreaProxy.h"
+#include "WebPageProxy.h"
+#include "WebProcessProxy.h"
+
 namespace WebKit {
 
 RemotePageDrawingAreaProxy::RemotePageDrawingAreaProxy(DrawingAreaProxy& drawingArea, WebProcessProxy& process)
@@ -48,8 +52,6 @@ void RemotePageDrawingAreaProxy::didReceiveMessage(IPC::Connection& connection, 
 {
     if (m_drawingArea)
         m_drawingArea->didReceiveMessage(connection, decoder);
-    else
-        ASSERT_NOT_REACHED();
 }
 
 bool RemotePageDrawingAreaProxy::didReceiveSyncMessage(IPC::Connection& connection, IPC::Decoder& decoder, UniqueRef<IPC::Encoder>& encoder)

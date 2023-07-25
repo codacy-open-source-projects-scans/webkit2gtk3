@@ -27,6 +27,7 @@
 #import "TestController.h"
 
 #import "CrashReporterInfo.h"
+#import "LayoutTestSpellChecker.h"
 #import "Options.h"
 #import "PlatformWebView.h"
 #import "StringFunctions.h"
@@ -167,11 +168,6 @@ WKContextRef TestController::platformContext()
     return (__bridge WKContextRef)[globalWebViewConfiguration() processPool];
 }
 
-WKPreferencesRef TestController::platformPreferences()
-{
-    return (__bridge WKPreferencesRef)[globalWebViewConfiguration() preferences];
-}
-
 TestFeatures TestController::platformSpecificFeatureOverridesDefaultsForTest(const TestCommand&) const
 {
     TestFeatures features;
@@ -286,6 +282,7 @@ void TestController::finishCreatingPlatformWebView(PlatformWebView* view, const 
 WKContextRef TestController::platformAdjustContext(WKContextRef context, WKContextConfigurationRef contextConfiguration)
 {
     initializeWebViewConfiguration(libraryPathForTesting(), injectedBundlePath(), context, contextConfiguration);
+    m_preferences = (__bridge WKPreferencesRef)[globalWebViewConfiguration() preferences];
     return (__bridge WKContextRef)[globalWebViewConfiguration() processPool];
 }
 
@@ -367,6 +364,8 @@ void TestController::cocoaResetStateToConsistentValues(const TestOptions& option
         [platformView _resetNavigationGestureStateForTesting];
         [platformView.configuration.preferences setTextInteractionEnabled:options.textInteractionEnabled()];
     }
+
+    [LayoutTestSpellChecker uninstallAndReset];
 
     WebCoreTestSupport::setAdditionalSupportedImageTypesForTesting(String::fromLatin1(options.additionalSupportedImageTypes().c_str()));
 }

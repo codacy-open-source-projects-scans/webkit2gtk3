@@ -1669,9 +1669,9 @@ void WebChromeClient::enumerateImmersiveXRDevices(CompletionHandler<void(const P
     m_page.xrSystemProxy().enumerateImmersiveXRDevices(WTFMove(completionHandler));
 }
 
-void WebChromeClient::requestPermissionOnXRSessionFeatures(const SecurityOriginData& origin, PlatformXR::SessionMode mode, const PlatformXR::Device::FeatureList& granted, const PlatformXR::Device::FeatureList& consentRequired, const PlatformXR::Device::FeatureList& consentOptional, CompletionHandler<void(std::optional<PlatformXR::Device::FeatureList>&&)>&& completionHandler)
+void WebChromeClient::requestPermissionOnXRSessionFeatures(const SecurityOriginData& origin, PlatformXR::SessionMode mode, const PlatformXR::Device::FeatureList& granted, const PlatformXR::Device::FeatureList& consentRequired, const PlatformXR::Device::FeatureList& consentOptional, const PlatformXR::Device::FeatureList& requiredFeaturesRequested, const PlatformXR::Device::FeatureList& optionalFeaturesRequested,  CompletionHandler<void(std::optional<PlatformXR::Device::FeatureList>&&)>&& completionHandler)
 {
-    m_page.xrSystemProxy().requestPermissionOnSessionFeatures(origin, mode, granted, consentRequired, consentOptional, WTFMove(completionHandler));
+    m_page.xrSystemProxy().requestPermissionOnSessionFeatures(origin, mode, granted, consentRequired, consentOptional, requiredFeaturesRequested, optionalFeaturesRequested, WTFMove(completionHandler));
 }
 #endif
 
@@ -1690,9 +1690,9 @@ void WebChromeClient::abortApplePayAMSUISession()
 #endif // ENABLE(APPLE_PAY_AMS_UI)
 
 #if USE(SYSTEM_PREVIEW)
-void WebChromeClient::handleSystemPreview(const URL& url, const SystemPreviewInfo& systemPreviewInfo)
+void WebChromeClient::beginSystemPreview(const URL& url, const SystemPreviewInfo& systemPreviewInfo, CompletionHandler<void()>&& completionHandler)
 {
-    m_page.send(Messages::WebPageProxy::HandleSystemPreview(WTFMove(url), WTFMove(systemPreviewInfo)));
+    m_page.sendWithAsyncReply(Messages::WebPageProxy::BeginSystemPreview(WTFMove(url), WTFMove(systemPreviewInfo)), WTFMove(completionHandler));
 }
 #endif
 

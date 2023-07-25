@@ -377,6 +377,8 @@ public:
 #if PLATFORM(COCOA)
     void appPrivacyReportTestingData(PAL::SessionID, CompletionHandler<void(const AppPrivacyReportTestingData&)>&&);
     void clearAppPrivacyReportTestingData(PAL::SessionID, CompletionHandler<void()>&&);
+
+    bool isParentProcessFullWebBrowserOrRunningTest() const { return m_isParentProcessFullWebBrowserOrRunningTest; }
 #endif
 
 #if ENABLE(WEB_RTC)
@@ -414,7 +416,6 @@ public:
     void deleteWebsiteDataForOrigin(PAL::SessionID, OptionSet<WebsiteDataType>, const WebCore::ClientOrigin&, CompletionHandler<void()>&&);
     void deleteWebsiteDataForOrigins(PAL::SessionID, OptionSet<WebsiteDataType>, const Vector<WebCore::SecurityOriginData>& origins, const Vector<String>& cookieHostNames, const Vector<String>& HSTSCacheHostnames, const Vector<RegistrableDomain>&, CompletionHandler<void()>&&);
 
-    bool allowsFirstPartyForCookies(WebCore::ProcessIdentifier, const URL&);
     bool allowsFirstPartyForCookies(WebCore::ProcessIdentifier, const RegistrableDomain&);
     void addAllowedFirstPartyForCookies(WebCore::ProcessIdentifier, WebCore::RegistrableDomain&&, LoadedWebArchive, CompletionHandler<void()>&&);
     void webProcessWillLoadWebArchive(WebCore::ProcessIdentifier);
@@ -469,7 +470,6 @@ private:
 #if PLATFORM(COCOA)
     void publishDownloadProgress(DownloadID, const URL&, SandboxExtension::Handle&&);
 #endif
-    void continueWillSendRequest(DownloadID, WebCore::ResourceRequest&&);
     void dataTaskWithRequest(WebPageProxyIdentifier, PAL::SessionID, WebCore::ResourceRequest&&, IPC::FormDataReference&&, CompletionHandler<void(DataTaskIdentifier)>&&);
     void cancelDataTask(DataTaskIdentifier, PAL::SessionID);
     void applicationDidEnterBackground();
@@ -577,6 +577,7 @@ private:
     bool m_didSyncCookiesForClose { false };
 #if PLATFORM(COCOA)
     int m_mediaStreamingActivitityToken { NOTIFY_TOKEN_INVALID };
+    bool m_isParentProcessFullWebBrowserOrRunningTest { false };
 #endif
 };
 

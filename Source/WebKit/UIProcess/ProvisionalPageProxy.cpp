@@ -103,6 +103,7 @@ ProvisionalPageProxy::ProvisionalPageProxy(WebPageProxy& page, Ref<WebProcessPro
         ASSERT(&suspendedPage->process() == m_process.ptr());
         suspendedPage->unsuspend();
         m_mainFrame = &suspendedPage->mainFrame();
+        m_remotePageMap = suspendedPage->takeRemotePageMap();
     }
 
     initializeWebPage(websitePolicies);
@@ -150,6 +151,11 @@ void ProvisionalPageProxy::setNavigation(API::Navigation& navigation)
 
     m_navigationID = navigation.navigationID();
     navigation.setProcessID(m_process->coreProcessIdentifier());
+}
+
+std::optional<HashMap<WebCore::RegistrableDomain, WeakPtr<RemotePageProxy>>> ProvisionalPageProxy::takeRemotePageMap()
+{
+    return std::exchange(m_remotePageMap, std::nullopt);
 }
 
 void ProvisionalPageProxy::cancel()
@@ -355,9 +361,9 @@ void ProvisionalPageProxy::didCommitLoadForFrame(FrameIdentifier frameID, FrameI
         auto* openerFrame = m_page->openerFrame();
         if (auto* openerPage = openerFrame ? openerFrame->page() : nullptr) {
             auto& page = this->page();
-            RegistrableDomain navigationDomain(request.url());
-            page.send(Messages::WebPage::DidCommitLoadInAnotherProcess(page.mainFrame()->frameID(), std::nullopt, m_process->coreProcessIdentifier()));
-            page.setRemotePageProxyInOpenerProcess(RemotePageProxy::create(page, openerPage->process(), navigationDomain, &page.messageReceiverRegistration()));
+            RegistrableDomain openerDomain(openerFrame->url());
+            page.send(Messages::WebPage::DidCommitLoadInAnotherProcess(page.mainFrame()->frameID(), std::nullopt));
+            page.setRemotePageProxyInOpenerProcess(RemotePageProxy::create(page, openerPage->process(), openerDomain, &page.messageReceiverRegistration()));
             page.mainFrame()->setProcess(m_process.get());
         }
     }

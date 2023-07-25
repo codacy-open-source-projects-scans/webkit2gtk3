@@ -598,12 +598,12 @@ public:
     WebCore::Frame* mainFrame() const; // May return nullptr.
     WebCore::LocalFrameView* mainFrameView() const; // May return nullptr.
 
-    void createRemoteSubframe(WebCore::FrameIdentifier parentID, WebCore::FrameIdentifier newChildID, WebCore::ProcessIdentifier remoteProcessIdentifier);
+    void createRemoteSubframe(WebCore::FrameIdentifier parentID, WebCore::FrameIdentifier newChildID);
 
     void getFrameInfo(WebCore::FrameIdentifier, CompletionHandler<void(FrameInfoData&&)>&&);
     void getFrameTree(CompletionHandler<void(FrameTreeNodeData&&)>&&);
     void continueWillSubmitForm(WebCore::FrameIdentifier, WebKit::FormSubmitListenerIdentifier);
-    void didCommitLoadInAnotherProcess(WebCore::FrameIdentifier, std::optional<WebCore::LayerHostingContextIdentifier>, WebCore::ProcessIdentifier remoteProcessIdentifier);
+    void didCommitLoadInAnotherProcess(WebCore::FrameIdentifier, std::optional<WebCore::LayerHostingContextIdentifier>);
     void didFinishLoadInAnotherProcess(WebCore::FrameIdentifier);
 
     std::optional<WebCore::SimpleRange> currentSelectionAsRange();
@@ -1118,7 +1118,7 @@ public:
 #if PLATFORM(IOS_FAMILY)
     void computePagesForPrintingiOS(WebCore::FrameIdentifier, const PrintInfo&, CompletionHandler<void(size_t)>&&);
     void drawToPDFiOS(WebCore::FrameIdentifier, const PrintInfo&, size_t, CompletionHandler<void(RefPtr<WebCore::SharedBuffer>&&)>&&);
-    void drawToImage(WebCore::FrameIdentifier, const PrintInfo&, size_t, CompletionHandler<void(WebKit::ShareableBitmap::Handle&&)>&&);
+    void drawToImage(WebCore::FrameIdentifier, const PrintInfo&, CompletionHandler<void(WebKit::ShareableBitmap::Handle&&)>&&);
 #endif
 
     void drawToPDF(WebCore::FrameIdentifier, const std::optional<WebCore::FloatRect>&, bool allowTransparentBackground,  CompletionHandler<void(RefPtr<WebCore::SharedBuffer>&&)>&&);

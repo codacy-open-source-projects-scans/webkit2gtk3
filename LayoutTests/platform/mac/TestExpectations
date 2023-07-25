@@ -1600,6 +1600,7 @@ accessibility/mac/isolated-tree-mode-on-off.html [ Skip ]
 
 # Requires (INLINE_PREDICTIONS)
 accessibility/mac/attributed-string/attributed-string-has-completion-annotation.html [ Skip ]
+accessibility/mac/text-input-session-notifications.html [ Skip ]
 
 webkit.org/b/202064 webaudio/silent-audio-interrupted-in-background.html [ Pass Crash ]
 
@@ -2728,9 +2729,9 @@ webkit.org/b/237415 webgl/1.0.x/conformance/rendering/clipping-wide-points.html 
 [ Monterey ] imported/w3c/web-platform-tests/css/css-fonts/variations/variable-opsz-size-adjust.html [ Skip ]
 
 # webkit.org/b/255178 [ Ventura iOS arm64 ] 3X imported/w3c/web-platform-tests/css/css-color/parsing (layout-tests) are constant text failures
-[ Ventura ] imported/w3c/web-platform-tests/css/css-color/parsing/color-computed-color-mix-function.html [ Failure ]
-[ Ventura ] imported/w3c/web-platform-tests/css/css-color/parsing/color-computed-relative-color.html [ Failure ]
-[ Ventura ] imported/w3c/web-platform-tests/css/css-color/parsing/color-valid-relative-color.html [ Failure ]
+[ Ventura x86_64 ] imported/w3c/web-platform-tests/css/css-color/parsing/color-computed-color-mix-function.html [ Failure ]
+[ Ventura x86_64 ] imported/w3c/web-platform-tests/css/css-color/parsing/color-computed-relative-color.html [ Failure ]
+[ Ventura x86_64 ] imported/w3c/web-platform-tests/css/css-color/parsing/color-valid-relative-color.html [ Failure ]
 
 # webkit.org/b/255427 [ Ventura ] 4/13 batch mark expectations and branch bugs
 [ Ventura ] http/tests/media/hls/track-in-band-hls-metadata-cue-duration.html [ Pass Failure ]
@@ -2754,10 +2755,15 @@ webkit.org/b/256108 media/video-audio-session-mode.html [ Failure ]
 [ x86_64 ] media/media-source/media-source-webm-configuration-framerate.html [ Pass Failure ]
 [ x86_64 ] media/media-source/media-source-webm-configuration-vp9-header-color.html [ Pass Failure ]
 
-webkit.org/b/258181 [ Monterey+ Debug ] inspector/debugger/async-stack-trace-truncate.html [ Timeout ]
+webkit.org/b/258181 [ Debug ] inspector/debugger/async-stack-trace-truncate.html [ Slow ]
 
 # webkit.org/b/258328 Umbrella Bug: Batch mark expectations slowing down EWS
 [ arm64 ] imported/w3c/web-platform-tests/webaudio/the-audio-api/the-audioworklet-interface/audioworklet-denormals.https.window.html [ Failure ]
 [ Debug ] media/modern-media-controls/pip-support/pip-support-enabled.html [ Pass Crash ]
 
 webkit.org/b/236128 imported/w3c/web-platform-tests/html/user-activation/activation-trigger-mouse-right.html [ Skip ]
+
+webkit.org/b/252322 [ X86_64 ] media/media-source/media-source-video-renders.html [ ImageOnlyFailure ]
+
+# Requires Ventura or later
+[ BigSur Monterey ] media/media-source/media-source-paint-after-display-none.html [ Skip ]

@@ -62,12 +62,6 @@
         "subtests": {
             "/webkit/WebKitSettings/javascript-markup": {
                 "expected": {"all@Debug": {"status": ["CRASH"], "bug": "webkit.org/b/221119"}}
-            },
-            "/webkit/WebKitSettings/webkit-settings": {
-                "expected": {"all": {"status": ["FAIL"], "bug": "webkit.org/b/256557"}}
-            },
-            "/webkit/WebKitSettings/new-with-settings": {
-                "expected": {"all": {"status": ["FAIL"], "bug": "webkit.org/b/256557"}}
             }
         }
     },
@@ -135,14 +129,8 @@
             "/webkit/WebKitWebsiteData/appcache": {
                 "expected": {"all": {"status": ["PASS", "FAIL"], "bug": "webkit.org/b/188117"}}
             },
-            "/webkit/WebKitWebsiteData/storage": {
-                "expected": { "wpe": {"status": ["PASS", "FAIL"]}}
-            },
             "/webkit/WebKitWebsiteData/cache": {
                 "expected": {"gtk": {"status": ["PASS", "FAIL"], "bug": "webkit.org/b/254002"}}
-            },
-            "/webkit/WebKitWebsiteData/configuration": {
-                "expected": {"wpe": {"status": ["FAIL"], "bug": "webkit.org/b/256557"}}
             },
             "/webkit/WebKitWebsiteData/ephemeral": {
                 "expected": {"wpe": {"status": ["FAIL"], "bug": "webkit.org/b/256557"}}
@@ -363,20 +351,6 @@
             "/webkit/WebKitWebView/popup-event-signal": {
                 "expected": {
                     "gtk": {"status": ["PASS", "TIMEOUT"], "bug": "webkit.org/b/248213"}
-                }
-            }
-        }
-    },
-    "TestResources": {
-        "subtests": {
-            "/webkit/WebKitWebResource/get-data-error": {
-                "expected": {
-                    "wpe": {"status": ["FAIL"]}
-                }
-            },
-            "/webkit/WebKitWebResource/get-data-empty": {
-                "expected": {
-                    "wpe": {"status": ["FAIL"]}
                 }
             }
         }

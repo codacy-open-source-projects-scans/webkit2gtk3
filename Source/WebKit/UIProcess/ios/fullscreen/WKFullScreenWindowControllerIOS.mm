@@ -586,7 +586,7 @@ static constexpr NSString *kPrefersFullScreenDimmingKey = @"WebKitPrefersFullScr
 
 #pragma mark -
 
-@interface WKFullScreenWindowController () <UIGestureRecognizerDelegate>
+@interface WKFullScreenWindowController () <UIGestureRecognizerDelegate, WKFullScreenViewControllerDelegate>
 @property (weak, nonatomic) WKWebView *_webView; // Cannot be retained, see <rdar://problem/14884666>.
 - (void)placeholderWillMoveToSuperview:(UIView *)superview;
 @end
@@ -770,11 +770,9 @@ static constexpr NSString *kPrefersFullScreenDimmingKey = @"WebKitPrefersFullScr
     [_fullscreenViewController setModalPresentationStyle:UIModalPresentationCustom];
     [_fullscreenViewController setTransitioningDelegate:self];
     [_fullscreenViewController setModalPresentationCapturesStatusBarAppearance:YES];
-    [_fullscreenViewController setTarget:self];
-    [_fullscreenViewController setExitFullScreenAction:@selector(requestExitFullScreen)];
+    [_fullscreenViewController setDelegate:self];
     _fullscreenViewController.get().view.frame = _rootViewController.get().view.bounds;
 #if PLATFORM(VISION)
-    [_fullscreenViewController setToggleDimmingAction:@selector(_toggleSceneDimming)];
     [_fullscreenViewController setSceneDimmed:[self _prefersSceneDimming]];
     [_fullscreenViewController hideCustomControls:manager->isVideoElement()];
 #endif
@@ -1515,6 +1513,13 @@ static constexpr NSString *kPrefersFullScreenDimmingKey = @"WebKitPrefersFullScr
     return NO;
 }
 
+- (BOOL)_sceneAspectRatioLockingEnabled
+{
+    if (auto page = [self._webView _page])
+        return page->preferences().fullscreenSceneAspectRatioLockingEnabled();
+    return YES;
+}
+
 - (BOOL)_prefersSceneDimming
 {
     if (![self _sceneDimmingEnabled])
@@ -1610,7 +1615,8 @@ static constexpr NSString *kPrefersFullScreenDimmingKey = @"WebKitPrefersFullScr
             [inWindow setFrame:scene.coordinateSpace.bounds];
 
             if (enter) {
-                scene.mrui_placement.preferredResizingBehavior = MRUISceneResizingBehaviorUniform;
+                if ([controller _sceneAspectRatioLockingEnabled])
+                    scene.mrui_placement.preferredResizingBehavior = MRUISceneResizingBehaviorUniform;
                 scene.delegate = adoptNS([[WKFullscreenWindowSceneDelegate alloc] initWithController:controller.get() originalDelegate:scene.delegate]).get();
             } else {
                 scene.sizeRestrictions.minimumSize = [originalState sceneMinimumSize];
@@ -1632,7 +1638,7 @@ static constexpr NSString *kPrefersFullScreenDimmingKey = @"WebKitPrefersFullScr
     } completion:completion.get()];
 }
 
-- (void)_toggleSceneDimming
+- (void)toggleDimming
 {
     BOOL updatedPrefersSceneDimming = ![self _prefersSceneDimming];
 
@@ -1645,7 +1651,22 @@ static constexpr NSString *kPrefersFullScreenDimmingKey = @"WebKitPrefersFullScr
 
 #endif // PLATFORM(VISION)
 
-@end
+- (void)showUI
+{
+#if PLATFORM(VISION)
+    UIWindowScene *scene = [_window windowScene];
+    scene.mrui_placement.preferredChromeOptions = [_parentWindowState sceneChromeOptions];
+#endif
+}
 
+- (void)hideUI
+{
+#if PLATFORM(VISION)
+    UIWindowScene *scene = [_window windowScene];
+    scene.mrui_placement.preferredChromeOptions = RSSSceneChromeOptionsNone;
+#endif
+}
+
+@end
 
 #endif // PLATFORM(IOS_FAMILY) && ENABLE(FULLSCREEN_API)

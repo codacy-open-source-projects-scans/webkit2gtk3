@@ -29,7 +29,6 @@
 #if ENABLE(DFG_JIT)
 
 #include "DFGArgumentsEliminationPhase.h"
-#include "DFGBackwardsPropagationPhase.h"
 #include "DFGByteCodeParser.h"
 #include "DFGCFAPhase.h"
 #include "DFGCFGSimplificationPhase.h"
@@ -271,7 +270,6 @@ Plan::CompilationPath Plan::compileInThreadImpl()
     if (validationEnabled())
         validate(dfg);
         
-    RUN_PHASE(performBackwardsPropagationAfterFixup);
     RUN_PHASE(performStrengthReduction);
     RUN_PHASE(performCPSRethreading);
     RUN_PHASE(performCFA);
@@ -372,6 +370,8 @@ Plan::CompilationPath Plan::compileInThreadImpl()
         RUN_PHASE(performSSALowering);
         
         // Ideally, these would be run to fixpoint with the object allocation sinking phase.
+        if (Options::usePutStackSinking())
+            RUN_PHASE(performPutStackSinking);
         RUN_PHASE(performArgumentsElimination);
         if (Options::usePutStackSinking())
             RUN_PHASE(performPutStackSinking);

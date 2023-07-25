@@ -129,6 +129,7 @@ fast/animation/request-animation-frame-in-two-pages.html [ Pass ]
 fast/forms/file/entries-api/image-transcode-open-panel.html [ Pass ]
 fast/forms/file/entries-api/pages-jpeg-open-panel.html [ Pass ]
 fast/forms/file/entries-api/pdf-jpeg-open-panel.html [ Pass ]
+fast/forms/file/entries-api/png-raw-open-panel.html [ Pass ]
 
 storage/indexeddb/database-transaction-cycle.html [ Pass ]
 
@@ -1278,8 +1279,6 @@ webkit.org/b/222183 [ Monterey+ ] imported/w3c/web-platform-tests/media-source/m
 
 webkit.org/b/222365 inspector/dom/attributeModified.html [ Pass Timeout ]
 
-webkit.org/b/222500 fast/canvas/webgl/texImage2D-video-flipY-false.html [ Pass Timeout ]
-
 webkit.org/b/222677 inspector/model/auditTestCase.html [ Pass Timeout ]
 
 webkit.org/b/221487 imported/w3c/web-platform-tests/server-timing/server_timing_header-parsing.https.html [ Pass Failure ]
@@ -1347,8 +1346,6 @@ webkit.org/b/224633 media/presentationmodechanged-fired-once.html [ Pass Timeout
 webkit.org/b/228713 [ BigSur Debug arm64 ] compositing/video/video-object-fit.html [ Pass Timeout ]
 
 webkit.org/b/224698 [ BigSur Release arm64 ] inspector/console/console-oom.html [ Pass Crash ]
-
-webkit.org/b/238033 imported/w3c/web-platform-tests/css/css-contain/content-visibility/content-visibility-050.html [ Pass Failure ]
 
 webkit.org/b/224963 [ BigSur arm64 ] webrtc/captureCanvas-webrtc.html [ Pass Timeout ]
 
@@ -1694,7 +1691,6 @@ webkit.org/b/255407 [ Monterey x86_64 ] imported/w3c/web-platform-tests/html/sem
 [ Monterey+ x86_64 ] imported/w3c/web-platform-tests/css/css-grid/alignment/grid-item-aspect-ratio-stretch-2.html [ ImageOnlyFailure ]
 [ Monterey+ x86_64 ] imported/mozilla/svg/blend-luminosity.svg [ ImageOnlyFailure ]
 [ Ventura+ Debug x86_64 ] fast/visual-viewport/viewport-dimensions-exclude-custom-scrollbars.html [ Pass Failure ]
-[ Ventura+ Debug x86_64 ] fast/text/international/system-language/han-text-style.html [ ImageOnlyFailure ]
 [ Ventura+ Debug x86_64 ] fast/visual-viewport/tiled-drawing/zoomed-fixed-scrolled-down-then-up.html [ Failure ]
 [ Ventura+ Debug x86_64 ] fast/visual-viewport/tiled-drawing/zoomed-fixed-scrolled-down.html [ Failure ]
 [ Ventura+ Debug x86_64 ] fast/visual-viewport/tiled-drawing/zoomed-fixed-scrolling-layers-state.html [ Failure ]
@@ -1810,3 +1806,18 @@ media/video-source-load.html [ Pass Crash ]
 media/track/video-track.html [ Pass Crash ]
 imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/interfaces/TextTrack/activeCues.html [ Pass Crash ]
 http/tests/media/media-stream/audio-capture-and-category.https.html [ Pass Crash ]
+
+# Lack of support for WPT custom domains.
+imported/w3c/web-platform-tests/html/semantics/embedded-content/the-iframe-element/sandbox-top-navigation-escalate-privileges.tentative.sub.window.html [ Failure ]
+
+webkit.org/b/259160 http/tests/privateClickMeasurement/triggering-event-with-attribution-source-through-fetch-keepalive.html [ Pass Failure ]
+
+webkit.org/b/259228 [ Release ] fast/dom/lazy-image-loading-document-leak.html [ Pass Failure ]
+
+webkit.org/b/259374 http/tests/inspector/network/xhr-request-type.html [ Failure ]
+
+webkit.org/b/259379 http/wpt/webcodecs/videoFrame-video-element.html [ Pass Failure ]
+
+webkit.org/b/259403 [ x86_64 ] fast/canvas/webgl/texImage2D-video-flipY-false.html [ Failure ]
+
+webkit.org/b/259412 [ Ventura ] accessibility/content-editable-set-inner-text-generates-axvalue-notification.html [ Pass Failure ]

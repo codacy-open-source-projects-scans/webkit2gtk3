@@ -112,7 +112,7 @@ static bool shouldAllowAccessibilityRoleAsPointerCursorReplacement(const Element
     }
 }
 
-static bool elementMatchesHoverRules(Element& element)
+bool elementMatchesHoverRules(Element& element)
 {
     bool foundHoverRules = false;
     bool initialValue = element.isUserActionElement() && element.document().userActionElements().isHovered(element);
@@ -173,7 +173,12 @@ static bool isOverlay(const RenderElement& renderer)
 
     if (auto* renderBox = dynamicDowncast<RenderBox>(renderer)) {
         auto refContentBox = renderBox->absoluteContentBox();
+        auto lastRenderer = renderBox;
         for (auto& ancestor : ancestorsOfType<RenderBox>(renderer)) {
+            // We don't want to occlude any previous siblings.
+            if (ancestor.firstChildBox() != lastRenderer)
+                return false;
+            lastRenderer = &ancestor;
             if (ancestor.absoluteContentBox() != refContentBox)
                 return false;
             if (ancestor.isFixedPositioned())
