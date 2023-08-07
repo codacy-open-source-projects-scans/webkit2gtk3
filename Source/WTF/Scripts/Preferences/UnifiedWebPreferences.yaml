@@ -5774,17 +5774,17 @@ SelectionFlippingEnabled:
 
 SendMouseEventsToDisabledFormControlsEnabled:
   type: bool
-  status: preview
+  status: stable
   category: html
   humanReadableName: "Send mouse events to disabled form controls"
   humanReadableDescription: "Send mouse events to disabled form controls"
   defaultValue:
     WebKit:
-      default: false
+      default: true
     WebKitLegacy:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 SerifFontFamily:
   type: String
@@ -7391,13 +7391,13 @@ WebCryptoSafeCurvesEnabled:
   humanReadableDescription: "Enable Web Crypto Safe Curves"
   defaultValue:
     WebKitLegacy:
-      "PLATFORM(COCOA)": true
+      "PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
     WebKit:
-      "PLATFORM(COCOA)": true
+      "PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
     WebCore:
-      "PLATFORM(COCOA)": true
+      "PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
 
 WebGLDraftExtensionsEnabled:

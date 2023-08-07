@@ -145,10 +145,6 @@
 #import <UIKit/UIPointerStyle_Private.h>
 #endif
 
-#if HAVE(UIKIT_HOVER_EVENT_PROTOCOL)
-#import <UIKit/UIHoverEvent_RequiresApproval.h>
-#endif
-
 #if HAVE(UIKIT_RESIZABLE_WINDOWS)
 #import <UIKit/UIWindowScene_RequiresApproval.h>
 #import <UIKit/_UIInvalidatable.h>
@@ -383,17 +379,6 @@ typedef enum {
 typedef enum {
     UIAllCorners = 0xFF,
 } UIRectCorners;
-
-#if HAVE(UIKIT_HOVER_EVENT_PROTOCOL)
-
-@protocol _UIHoverEventRespondable <NSObject>
-- (void)_hoverEntered:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event;
-- (void)_hoverMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event;
-- (void)_hoverExited:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event;
-- (void)_hoverCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event;
-@end
-
-#endif // HAVE(UIKIT_HOVER_EVENT_PROTOCOL)
 
 @interface UIImagePickerController ()
 @property (nonatomic, setter=_setAllowsMultipleSelection:) BOOL _allowsMultipleSelection;
@@ -1521,6 +1506,12 @@ typedef NS_ENUM(NSUInteger, _UIScrollDeviceCategory) {
 
 @end
 
+#endif
+
+#if HAVE(AUTOCORRECTION_ENHANCEMENTS)
+@interface UIWKDocumentContext (Staging_112795757)
+@property (nonatomic, copy) NSArray<NSValue *> *autocorrectedRanges;
+@end
 #endif
 
 WTF_EXTERN_C_BEGIN

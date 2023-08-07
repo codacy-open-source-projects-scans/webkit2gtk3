@@ -36,6 +36,7 @@
 #include <WebKit/WKCredential.h>
 #include <WebKit/WKDownloadClient.h>
 #include <WebKit/WKDownloadRef.h>
+#include <WebKit/WKFrameInfoRef.h>
 #include <WebKit/WKHTTPCookieStoreRef.h>
 #include <WebKit/WKInspector.h>
 #include <WebKit/WKNavigationResponseRef.h>
@@ -510,7 +511,22 @@ void WebKitBrowserWindow::decidePolicyForNavigationResponse(WKPageRef page, WKNa
         text << L"URL: " << createString(adoptWK(WKURLResponseCopyURL(response.get())).get());
         MessageBox(thisWindow.m_hMainWnd, text.str().c_str(), L"No Content", MB_OK | MB_ICONWARNING);
     }
-    WKFramePolicyListenerUse(listener);
+
+    auto isMainFrame = WKFrameInfoGetIsMainFrame(adoptWK(WKNavigationResponseCopyFrameInfo(navigationResponse)).get());
+    if (WKNavigationResponseCanShowMIMEType(navigationResponse) || !isMainFrame)
+        WKFramePolicyListenerUse(listener);
+    else {
+        std::wstringstream text;
+        text << L"Do you want to save this file?" << std::endl;
+        text << std::endl;
+        text << L"MIME type: " << createString(adoptWK(WKURLResponseCopyMIMEType(response.get())).get()) << std::endl;
+        text << L"URL: " << createString(adoptWK(WKURLResponseCopyURL(response.get())).get());
+
+        if (MessageBox(thisWindow.hwnd(), text.str().c_str(), L"Unsupported MIME type", MB_OKCANCEL | MB_ICONWARNING) == IDOK)
+            WKFramePolicyListenerDownload(listener);
+        else
+            WKFramePolicyListenerIgnore(listener);
+    }
 }
 
 void WebKitBrowserWindow::didFailProvisionalNavigation(WKPageRef page, WKNavigationRef navigation, WKErrorRef error, WKTypeRef userData, const void* clientInfo)

@@ -1041,7 +1041,7 @@ void CanvasRenderingContext2DBase::clip(Path2D& path, CanvasFillRule windingRule
     clipInternal(path.path(), windingRule);
 }
 
-static inline IntRect computeImageDataRect(const ImageBuffer& buffer, int width, int height, IntRect destRect, const IntSize& destOffset)
+static inline IntRect computeImageDataRect(const ImageBuffer& buffer, int width, int height, IntRect& destRect, const IntSize& destOffset)
 {
     destRect.intersect(IntRect { 0, 0, width, height });
     destRect.move(destOffset);
@@ -1392,9 +1392,9 @@ void CanvasRenderingContext2DBase::applyShadow()
     if (shouldDrawShadows()) {
         float width = state().shadowOffset.width();
         float height = state().shadowOffset.height();
-        c->setDropShadow({ FloatSize(width, -height), state().shadowBlur, state().shadowColor, ShadowRadiusMode::Legacy });
+        c->setDropShadow({ { width, -height }, state().shadowBlur, state().shadowColor, ShadowRadiusMode::Legacy });
     } else
-        c->setDropShadow({ FloatSize(), 0, Color::transparentBlack, ShadowRadiusMode::Legacy });
+        c->setDropShadow({ { }, 0, Color::transparentBlack, ShadowRadiusMode::Legacy });
 }
 
 bool CanvasRenderingContext2DBase::shouldDrawShadows() const
@@ -2381,6 +2381,8 @@ void CanvasRenderingContext2DBase::putImageData(ImageData& data, int dx, int dy,
 
     IntSize destOffset { dx, dy };
     IntRect destRect { dirtyX, dirtyY, dirtyWidth, dirtyHeight };
+    // FIXME: computeImageDataRect also updates destRect. Maybe return a tuple? Or move
+    // the calculation of the real destRect to here.
     IntRect sourceRect = computeImageDataRect(*buffer, data.width(), data.height(), destRect, destOffset);
 
     if (!sourceRect.isEmpty())
@@ -2584,13 +2586,14 @@ void CanvasRenderingContext2DBase::drawTextUnchecked(const TextRun& textRun, dou
             FloatSize offset(0, 2 * maskRect.height());
 
             auto shadow = c->dropShadow();
+            ASSERT(shadow);
 
             FloatRect shadowRect(maskRect);
-            shadowRect.inflate(shadow.blurRadius * 1.4);
-            shadowRect.move(shadow.offset * -1);
+            shadowRect.inflate(shadow->radius * 1.4);
+            shadowRect.move(shadow->offset * -1);
             c->clip(shadowRect);
 
-            c->setDropShadow({ shadow.offset + offset, shadow.blurRadius, shadow.color, ShadowRadiusMode::Legacy });
+            c->setDropShadow({ shadow->offset + offset, shadow->radius, shadow->color, ShadowRadiusMode::Legacy });
 
             if (fill)
                 c->setFillColor(Color::black);
