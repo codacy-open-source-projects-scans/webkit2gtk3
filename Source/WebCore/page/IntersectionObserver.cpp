@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2016-2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2020 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -41,6 +42,7 @@
 #include "Logging.h"
 #include "Performance.h"
 #include "RenderBlock.h"
+#include "RenderBoxInlines.h"
 #include "RenderInline.h"
 #include "RenderLineBreak.h"
 #include "RenderView.h"
@@ -55,6 +57,7 @@ static ExceptionOr<LengthBox> parseRootMargin(String& rootMargin)
 {
     CSSTokenizer tokenizer(rootMargin);
     auto tokenRange = tokenizer.tokenRange();
+    tokenRange.consumeWhitespace();
     Vector<Length, 4> margins;
     while (!tokenRange.atEnd()) {
         if (margins.size() == 4)
@@ -115,6 +118,9 @@ ExceptionOr<Ref<IntersectionObserver>> IntersectionObserver::create(Document& do
     }, [&thresholds] (Vector<double>& initThresholds) {
         thresholds = WTFMove(initThresholds);
     });
+
+    if (thresholds.isEmpty())
+        thresholds.append(0.f);
 
     for (auto threshold : thresholds) {
         if (!(threshold >= 0 && threshold <= 1))

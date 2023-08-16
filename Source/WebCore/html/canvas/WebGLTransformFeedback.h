@@ -27,7 +27,7 @@
 
 #if ENABLE(WEBGL)
 
-#include "WebGLSharedObject.h"
+#include "WebGLObject.h"
 #include <wtf/RefPtr.h>
 #include <wtf/Vector.h>
 
@@ -45,11 +45,11 @@ class WebGL2RenderingContext;
 class WebGLBuffer;
 class WebGLProgram;
 
-class WebGLTransformFeedback final : public WebGLSharedObject {
+class WebGLTransformFeedback final : public WebGLObject {
 public:
     virtual ~WebGLTransformFeedback();
 
-    static Ref<WebGLTransformFeedback> create(WebGL2RenderingContext&);
+    static RefPtr<WebGLTransformFeedback> create(WebGL2RenderingContext&);
     
     bool isActive() const { return m_active; }
     bool isPaused() const { return m_paused; }

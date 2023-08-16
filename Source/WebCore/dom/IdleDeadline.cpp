@@ -36,21 +36,11 @@ namespace WebCore {
 DOMHighResTimeStamp IdleDeadline::timeRemaining(Document& document) const
 {
     RefPtr window { document.domWindow() };
-    if (!window)
+    if (!window || m_didTimeout == DidTimeout::Yes)
         return 0;
-    return window->performance().relativeTimeFromTimeOriginInReducedResolution(m_deadline);
-}
-
-bool IdleDeadline::didTimeout(Document& document) const
-{
-    RefPtr window { document.domWindow() };
-    if (!window)
-        return true;
-
-    // Reduce the resolution before the comparision to prevent resolution leakage.
-    auto deadline = window->performance().relativeTimeFromTimeOriginInReducedResolution(m_deadline);
-    auto now = window->performance().now();
-    return deadline >= now;
+    auto duration = document.windowEventLoop().computeIdleDeadline() - MonotonicTime::now();
+    auto remainingTime = window->performance().reduceTimeResolution(duration);
+    return remainingTime < 0_s ? 0 : remainingTime.milliseconds();
 }
 
 } // namespace WebCore

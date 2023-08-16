@@ -1870,8 +1870,9 @@ void WebProcessPool::processForNavigation(WebPageProxy& page, WebFrameProxy& fra
     if (!frame.isMainFrame() && page.preferences().siteIsolationEnabled()) {
         RegistrableDomain navigationDomain(navigation.currentRequest().url());
         if (!navigationDomain.isEmpty() && navigationDomain != mainFrameDomain) {
+            frame.setRemotePageProxy(nullptr);
             auto remotePageProxy = RemotePageProxy::create(page, process, navigationDomain);
-            frame.setRemotePageProxy(remotePageProxy);
+            frame.setRemotePageProxy(remotePageProxy.ptr());
             remotePageProxy->injectPageIntoNewProcess();
         }
     }
@@ -2003,7 +2004,7 @@ std::tuple<Ref<WebProcessProxy>, SuspendedPageProxy*, ASCIILiteral> WebProcessPo
     if (!m_configuration->processSwapsOnNavigationWithinSameNonHTTPFamilyProtocol() && !sourceURL.protocolIsInHTTPFamily() && sourceURL.protocol() == targetURL.protocol())
         return { WTFMove(sourceProcess), nullptr, "Navigation within the same non-HTTP(s) protocol"_s };
 
-    if (!sourceURL.isValid() || !targetURL.isValid() || sourceURL.isEmpty() || sourceURL.protocolIsAbout() || targetRegistrableDomain.matches(sourceURL))
+    if (!sourceURL.isValid() || !targetURL.isValid() || sourceURL.isEmpty() || targetRegistrableDomain.matches(sourceURL) || (sourceURL.protocolIsAbout() && (!sourceProcess->hasCommittedAnyMeaningfulProvisionalLoads() || sourceProcess->registrableDomain().matches(targetURL))) || targetRegistrableDomain.matches(sourceURL))
         return { WTFMove(sourceProcess), nullptr, "Navigation is same-site"_s };
 
     auto reason = "Navigation is cross-site"_s;
@@ -2076,20 +2077,6 @@ void WebProcessPool::resetMockMediaDevices()
 #if ENABLE(GPU_PROCESS)
     ensureGPUProcess().resetMockMediaDevices();
 #endif
-#endif
-}
-
-void WebProcessPool::sendDisplayConfigurationChangedMessageForTesting()
-{
-#if PLATFORM(MAC)
-    auto display = CGSMainDisplayID();
-    CGDisplayChangeSummaryFlags flags = kCGDisplaySetModeFlag | kCGDisplayDesktopShapeChangedFlag;
-    for (auto& processPool : WebProcessPool::allProcessPools()) {
-        processPool->sendToAllProcesses(Messages::WebProcess::DisplayConfigurationChanged(display, kCGDisplayBeginConfigurationFlag));
-        processPool->sendToAllProcesses(Messages::WebProcess::DisplayConfigurationChanged(display, flags));
-        if (auto gpuProcess = processPool->gpuProcess())
-            gpuProcess->displayConfigurationChanged(display, flags);
-    }
 #endif
 }
 

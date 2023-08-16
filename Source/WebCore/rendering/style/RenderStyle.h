@@ -27,6 +27,7 @@
 
 #include <unicode/utypes.h>
 #include <wtf/DataRef.h>
+#include <wtf/OptionSet.h>
 #include <wtf/Vector.h>
 
 namespace WebCore {
@@ -104,6 +105,7 @@ enum class AspectRatioType : uint8_t;
 enum class AutoRepeatType : uint8_t;
 enum class BackfaceVisibility : uint8_t;
 enum class BlendMode : uint8_t;
+enum class BlockFlowDirection : uint8_t;
 enum class BlockStepInsert : bool;
 enum class BorderCollapse : bool;
 enum class BorderStyle : uint8_t;
@@ -172,6 +174,7 @@ enum class Overflow : uint8_t;
 enum class OverflowAnchor : bool;
 enum class OverflowWrap : uint8_t;
 enum class OverscrollBehavior : uint8_t;
+enum class PaintBehavior : uint32_t;
 enum class PaintOrder : uint8_t;
 enum class PaintType : uint8_t;
 enum class PointerEvents : uint8_t;
@@ -214,6 +217,7 @@ enum class TextZoom : bool;
 enum class TouchAction : uint8_t;
 enum class TransformBox : uint8_t;
 enum class TransformStyle3D : uint8_t;
+enum class TypographicMode : bool;
 enum class UnicodeBidi : uint8_t;
 enum class UsedClear : uint8_t;
 enum class UsedFloat : uint8_t;
@@ -242,6 +246,7 @@ struct MasonryAutoFlow;
 struct NamedGridAreaMap;
 struct NamedGridLinesMap;
 struct OrderedNamedGridLinesMap;
+
 struct ScrollSnapAlign;
 struct ScrollSnapType;
 struct ScrollbarGutter;
@@ -1006,6 +1011,8 @@ public:
     inline bool isVerticalWritingMode() const;
     inline bool isFlippedLinesWritingMode() const;
     inline bool isFlippedBlocksWritingMode() const;
+    BlockFlowDirection blockFlowDirection() const;
+    TypographicMode typographicMode() const;
 
     inline ImageOrientation imageOrientation() const;
     inline ImageRendering imageRendering() const;
@@ -1730,8 +1737,8 @@ public:
     // Resolves the currentColor keyword, but must not be used for the "color" property which has a different semantic.
     WEBCORE_EXPORT Color colorResolvingCurrentColor(const StyleColor&) const;
 
-    WEBCORE_EXPORT Color visitedDependentColor(CSSPropertyID) const;
-    WEBCORE_EXPORT Color visitedDependentColorWithColorFilter(CSSPropertyID) const;
+    WEBCORE_EXPORT Color visitedDependentColor(CSSPropertyID, OptionSet<PaintBehavior> paintBehavior = { }) const;
+    WEBCORE_EXPORT Color visitedDependentColorWithColorFilter(CSSPropertyID, OptionSet<PaintBehavior> paintBehavior = { }) const;
 
     WEBCORE_EXPORT Color colorByApplyingColorFilter(const Color&) const;
     WEBCORE_EXPORT Color colorWithColorFilter(const StyleColor&) const;
@@ -2195,15 +2202,15 @@ private:
         // 44 bits
 
         // CSS Text Layout Module Level 3: Vertical writing support
-        unsigned writingMode : 2; // WritingMode
-        // 46 bits
+        unsigned writingMode : 3; // WritingMode
+        // 47 bits
 
 #if ENABLE(TEXT_AUTOSIZING)
         unsigned autosizeStatus : 5;
 #endif
-        // 51 bits
-        unsigned hasExplicitlySetColor : 1;
         // 52 bits
+        unsigned hasExplicitlySetColor : 1;
+        // 53 bits
     };
 
     // This constructor is used to implement the replace operation.

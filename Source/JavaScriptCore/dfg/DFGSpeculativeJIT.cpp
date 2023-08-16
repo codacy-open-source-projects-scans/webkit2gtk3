@@ -8854,7 +8854,7 @@ void SpeculativeJIT::compileGetTypedArrayByteOffset(Node* node)
 #if USE(LARGE_TYPED_ARRAYS)
         load64(Address(baseGPR, JSArrayBufferView::offsetOfByteOffset()), resultGPR);
         // AI promises that the result of GetTypedArrayByteOffset will be Int32, so we must uphold that promise here.
-        speculationCheck(ExitKind::Overflow, JSValueRegs(), nullptr, branch32(Above, resultGPR, TrustedImm32(std::numeric_limits<int32_t>::max())));
+        speculationCheck(ExitKind::Overflow, JSValueRegs(), nullptr, branch64(Above, resultGPR, TrustedImm32(std::numeric_limits<int32_t>::max())));
 #else
         load32(Address(baseGPR, JSArrayBufferView::offsetOfByteOffset()), resultGPR);
 #endif
@@ -8880,7 +8880,7 @@ void SpeculativeJIT::compileGetTypedArrayByteOffset(Node* node)
 #if USE(LARGE_TYPED_ARRAYS)
     load64(Address(baseGPR, JSArrayBufferView::offsetOfByteOffset()), resultGPR);
     // AI promises that the result of GetTypedArrayByteOffset will be Int32, so we must uphold that promise here.
-    speculationCheck(ExitKind::Overflow, JSValueRegs(), nullptr, branch32(Above, resultGPR, TrustedImm32(std::numeric_limits<int32_t>::max())));
+    speculationCheck(ExitKind::Overflow, JSValueRegs(), nullptr, branch64(Above, resultGPR, TrustedImm32(std::numeric_limits<int32_t>::max())));
 #else
     load32(Address(baseGPR, JSArrayBufferView::offsetOfByteOffset()), resultGPR);
 #endif
@@ -11929,6 +11929,116 @@ void SpeculativeJIT::compileNewSymbol(Node* node)
     GPRReg resultGPR = result.gpr();
     callOperation(operationNewSymbolWithDescription, resultGPR, LinkableConstant::globalObject(*this, node), inputRegs);
     exceptionCheck();
+    cellResult(resultGPR, node);
+}
+
+void SpeculativeJIT::compileNewMap(Node* node)
+{
+    GPRTemporary head(this);
+    GPRTemporary result(this);
+    GPRTemporary scratch1(this);
+    GPRTemporary scratch2(this);
+
+    GPRReg headGPR = head.gpr();
+    GPRReg resultGPR = result.gpr();
+    GPRReg scratch1GPR = scratch1.gpr();
+    GPRReg scratch2GPR = scratch2.gpr();
+
+    JumpList slowPath;
+
+    Allocator allocatorValue = allocatorForConcurrently<JSMap::BucketType>(vm(), sizeof(JSMap::BucketType), AllocatorForMode::AllocatorIfExists);
+    emitAllocateJSCell(headGPR, JITAllocator::constant(allocatorValue), scratch1GPR, TrustedImmPtr(m_graph.registerStructure(vm().hashMapBucketMapStructure.get())), scratch2GPR, slowPath, SlowAllocationResult::UndefinedBehavior);
+
+    ASSERT(JSMap::BucketType::offsetOfNext() + 8 == JSMap::BucketType::offsetOfPrev());
+    ASSERT(JSMap::BucketType::offsetOfKey() + 8 == JSMap::BucketType::offsetOfValue());
+#if CPU(ARM64)
+    ASSERT(JSValue::encode(JSValue()) == 0);
+    storePairPtr(ARM64Registers::zr, ARM64Registers::zr, Address(headGPR, JSMap::BucketType::offsetOfNext()));
+    storePairPtr(ARM64Registers::zr, ARM64Registers::zr, Address(headGPR, JSMap::BucketType::offsetOfKey()));
+#else
+    storePtr(TrustedImmPtr(nullptr), Address(headGPR, JSMap::BucketType::offsetOfNext()));
+    storePtr(TrustedImmPtr(nullptr), Address(headGPR, JSMap::BucketType::offsetOfPrev()));
+    storeTrustedValue(JSValue(), Address(headGPR, JSMap::BucketType::offsetOfKey()));
+    storeTrustedValue(JSValue(), Address(headGPR, JSMap::BucketType::offsetOfValue()));
+#endif
+    mutatorFence(vm());
+
+    auto butterfly = TrustedImmPtr(nullptr);
+    emitAllocateJSObject<JSMap>(resultGPR, TrustedImmPtr(node->structure()), butterfly, scratch1GPR, scratch2GPR, slowPath, SlowAllocationResult::UndefinedBehavior);
+
+#if CPU(ARM64)
+    ASSERT(JSValue::encode(JSValue()) == 0);
+    ASSERT(JSMap::offsetOfHead() + 8 == JSMap::offsetOfTail());
+    ASSERT(JSMap::offsetOfBuffer() + 8 == JSMap::offsetOfKeyCount());
+    ASSERT(JSMap::offsetOfKeyCount() + 4 == JSMap::offsetOfDeleteCount());
+    storePairPtr(headGPR, headGPR, Address(resultGPR, JSMap::offsetOfHead()));
+    storePairPtr(ARM64Registers::zr, ARM64Registers::zr, Address(resultGPR, JSMap::offsetOfBuffer()));
+    store32(ARM64Registers::zr, Address(resultGPR, JSMap::offsetOfCapacity()));
+#else
+    storePtr(headGPR, Address(resultGPR, JSMap::offsetOfHead()));
+    storePtr(headGPR, Address(resultGPR, JSMap::offsetOfTail()));
+    storePtr(TrustedImmPtr(nullptr), Address(resultGPR, JSMap::offsetOfBuffer()));
+    store32(TrustedImm32(0), Address(resultGPR, JSMap::offsetOfKeyCount()));
+    store32(TrustedImm32(0), Address(resultGPR, JSMap::offsetOfDeleteCount()));
+    store32(TrustedImm32(0), Address(resultGPR, JSMap::offsetOfCapacity()));
+#endif
+    mutatorFence(vm());
+
+    addSlowPathGenerator(slowPathCall(slowPath, this, operationNewMap, resultGPR, TrustedImmPtr(&vm()), node->structure()));
+
+    cellResult(resultGPR, node);
+}
+
+void SpeculativeJIT::compileNewSet(Node* node)
+{
+    GPRTemporary head(this);
+    GPRTemporary result(this);
+    GPRTemporary scratch1(this);
+    GPRTemporary scratch2(this);
+
+    GPRReg headGPR = head.gpr();
+    GPRReg resultGPR = result.gpr();
+    GPRReg scratch1GPR = scratch1.gpr();
+    GPRReg scratch2GPR = scratch2.gpr();
+
+    JumpList slowPath;
+
+    Allocator allocatorValue = allocatorForConcurrently<JSSet::BucketType>(vm(), sizeof(JSSet::BucketType), AllocatorForMode::AllocatorIfExists);
+    emitAllocateJSCell(headGPR, JITAllocator::constant(allocatorValue), scratch1GPR, TrustedImmPtr(m_graph.registerStructure(vm().hashMapBucketSetStructure.get())), scratch2GPR, slowPath, SlowAllocationResult::UndefinedBehavior);
+
+    ASSERT(JSSet::BucketType::offsetOfNext() + 8 == JSSet::BucketType::offsetOfPrev());
+#if CPU(ARM64)
+    storePairPtr(ARM64Registers::zr, ARM64Registers::zr, Address(headGPR, JSSet::BucketType::offsetOfNext()));
+#else
+    storePtr(TrustedImmPtr(nullptr), Address(headGPR, JSSet::BucketType::offsetOfNext()));
+    storePtr(TrustedImmPtr(nullptr), Address(headGPR, JSSet::BucketType::offsetOfPrev()));
+#endif
+    storeTrustedValue(JSValue(), Address(headGPR, JSSet::BucketType::offsetOfKey()));
+    mutatorFence(vm());
+
+    auto butterfly = TrustedImmPtr(nullptr);
+    emitAllocateJSObject<JSSet>(resultGPR, TrustedImmPtr(node->structure()), butterfly, scratch1GPR, scratch2GPR, slowPath, SlowAllocationResult::UndefinedBehavior);
+
+#if CPU(ARM64)
+    ASSERT(JSValue::encode(JSValue()) == 0);
+    ASSERT(JSSet::offsetOfHead() + 8 == JSSet::offsetOfTail());
+    ASSERT(JSSet::offsetOfBuffer() + 8 == JSSet::offsetOfKeyCount());
+    ASSERT(JSSet::offsetOfKeyCount() + 4 == JSSet::offsetOfDeleteCount());
+    storePairPtr(headGPR, headGPR, Address(resultGPR, JSSet::offsetOfHead()));
+    storePairPtr(ARM64Registers::zr, ARM64Registers::zr, Address(resultGPR, JSSet::offsetOfBuffer()));
+    store32(ARM64Registers::zr, Address(resultGPR, JSSet::offsetOfCapacity()));
+#else
+    storePtr(headGPR, Address(resultGPR, JSSet::offsetOfHead()));
+    storePtr(headGPR, Address(resultGPR, JSSet::offsetOfTail()));
+    storePtr(TrustedImmPtr(nullptr), Address(resultGPR, JSSet::offsetOfBuffer()));
+    store32(TrustedImm32(0), Address(resultGPR, JSSet::offsetOfKeyCount()));
+    store32(TrustedImm32(0), Address(resultGPR, JSSet::offsetOfDeleteCount()));
+    store32(TrustedImm32(0), Address(resultGPR, JSSet::offsetOfCapacity()));
+#endif
+    mutatorFence(vm());
+
+    addSlowPathGenerator(slowPathCall(slowPath, this, operationNewSet, resultGPR, TrustedImmPtr(&vm()), node->structure()));
+
     cellResult(resultGPR, node);
 }
 

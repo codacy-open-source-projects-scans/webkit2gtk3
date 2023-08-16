@@ -947,7 +947,7 @@ class CleanWorkingDirectory(shell.ShellCommandNewStyle):
     def run(self):
         platform = self.getProperty('platform')
         if platform in ('gtk', 'wpe'):
-            self.setCommand(self.command + ['--keep-jhbuild-directory'])
+            self.command = self.command + ['--keep-jhbuild-directory']
         return super().run()
 
 
@@ -3481,17 +3481,20 @@ class RunWebKitTests(shell.Test, AddToLogMixin):
 
     def evaluateCommand(self, cmd):
         rc = self.evaluateResult(cmd)
+        previous_build_summary = self.getProperty('build_summary', '')
         if rc == SUCCESS or rc == WARNINGS:
             message = 'Passed layout tests'
             self.descriptionDone = message
             self.build.results = SUCCESS
-            self.setProperty('build_summary', message)
+            if RunWebKitTestsInStressMode.FAILURE_MSG_IN_STRESS_MODE not in previous_build_summary:
+                self.setProperty('build_summary', message)
         elif (self.preexisting_failures_in_results_db and len(self.failing_tests_filtered) == 0):
             # This means all the tests which failed in this run were also failing or flaky in results database
             message = f"Ignored pre-existing failure: {', '.join(self.preexisting_failures_in_results_db)}"
             self.descriptionDone = message
             self.build.results = SUCCESS
-            self.setProperty('build_summary', message)
+            if RunWebKitTestsInStressMode.FAILURE_MSG_IN_STRESS_MODE not in previous_build_summary:
+                self.setProperty('build_summary', message)
             self.build.addStepsAfterCurrentStep([ArchiveTestResults(),
                                                 UploadTestResults(),
                                                 ExtractTestResults()])
@@ -3530,6 +3533,7 @@ class RunWebKitTestsInStressMode(RunWebKitTests):
     suffix = 'stress-mode'
     EXIT_AFTER_FAILURES = '10'
     ENABLE_ADDITIONAL_ARGUMENTS = False
+    FAILURE_MSG_IN_STRESS_MODE = 'Found test failures in stress mode'
 
     def __init__(self, num_iterations=100):
         self.num_iterations = num_iterations
@@ -3551,7 +3555,7 @@ class RunWebKitTestsInStressMode(RunWebKitTests):
             self.build.results = SUCCESS
             self.setProperty('build_summary', message)
         else:
-            self.setProperty('build_summary', 'Found test failures')
+            self.setProperty('build_summary', self.FAILURE_MSG_IN_STRESS_MODE)
             self.build.addStepsAfterCurrentStep([
                 ArchiveTestResults(),
                 UploadTestResults(identifier=self.suffix),
@@ -3585,6 +3589,7 @@ class ReRunWebKitTests(RunWebKitTests):
         num_flaky_failures = len(flaky_failures)
         flaky_failures = sorted(list(flaky_failures))[:self.NUM_FAILURES_TO_DISPLAY]
         flaky_failures_string = ', '.join(flaky_failures)
+        previous_build_summary = self.getProperty('build_summary', '')
 
         if rc == SUCCESS or rc == WARNINGS:
             message = 'Passed layout tests'
@@ -3595,13 +3600,15 @@ class ReRunWebKitTests(RunWebKitTests):
                 message = 'Found flaky test{}: {}'.format(pluralSuffix, flaky_failures_string)
                 for flaky_failure in flaky_failures:
                     self.send_email_for_flaky_failure(flaky_failure)
-            self.setProperty('build_summary', message)
+            if RunWebKitTestsInStressMode.FAILURE_MSG_IN_STRESS_MODE not in previous_build_summary:
+                self.setProperty('build_summary', message)
         elif (self.preexisting_failures_in_results_db and len(self.failing_tests_filtered) == 0):
             # This means all the tests which failed in this run were also failing or flaky in results database
             message = f"Ignored pre-existing failure: {', '.join(self.preexisting_failures_in_results_db)}"
             self.descriptionDone = message
             self.build.results = SUCCESS
-            self.setProperty('build_summary', message)
+            if RunWebKitTestsInStressMode.FAILURE_MSG_IN_STRESS_MODE not in previous_build_summary:
+                self.setProperty('build_summary', message)
             self.build.addStepsAfterCurrentStep([ArchiveTestResults(),
                                                 UploadTestResults(identifier='rerun'),
                                                 ExtractTestResults(identifier='rerun')])
@@ -3617,7 +3624,8 @@ class ReRunWebKitTests(RunWebKitTests):
                     self.send_email_for_flaky_failure(flaky_failure)
                 self.descriptionDone = message
                 self.build.results = SUCCESS
-                self.setProperty('build_summary', message)
+                if RunWebKitTestsInStressMode.FAILURE_MSG_IN_STRESS_MODE not in previous_build_summary:
+                    self.setProperty('build_summary', message)
                 self.build.addStepsAfterCurrentStep([ArchiveTestResults(),
                                                     UploadTestResults(identifier='rerun'),
                                                     ExtractTestResults(identifier='rerun')])
@@ -3776,6 +3784,7 @@ class AnalyzeLayoutTestsResults(buildstep.BuildStep, BugzillaMixin, GitHubMixin)
     def report_pre_existing_failures(self, clean_tree_failures, flaky_failures):
         self.build.results = SUCCESS
         self.descriptionDone = 'Passed layout tests'
+        previous_build_summary = self.getProperty('build_summary', '')
         message = ''
         if clean_tree_failures:
             clean_tree_failures_string = ', '.join(sorted(clean_tree_failures)[:self.NUM_FAILURES_TO_DISPLAY])
@@ -3795,7 +3804,8 @@ class AnalyzeLayoutTestsResults(buildstep.BuildStep, BugzillaMixin, GitHubMixin)
             for flaky_failure in list(flaky_failures)[:self.NUM_FAILURES_TO_DISPLAY]:
                 self.send_email_for_flaky_failure(flaky_failure)
 
-        self.setProperty('build_summary', message)
+        if RunWebKitTestsInStressMode.FAILURE_MSG_IN_STRESS_MODE not in previous_build_summary:
+            self.setProperty('build_summary', message)
         return SUCCESS
 
     def retry_build(self, message=''):
@@ -4387,14 +4397,14 @@ class UploadBuiltProduct(transfer.FileUpload):
         return super().getResultSummary()
 
 
-class UploadFileToS3(shell.ShellCommandNewStyle):
+class UploadFileToS3(shell.ShellCommandNewStyle, AddToLogMixin):
     name = 'upload-file-to-s3'
     descriptionDone = name
     haltOnFailure = False
     flunkOnFailure = False
 
     def __init__(self, **kwargs):
-        super().__init__(timeout=5 * 60, logEnviron=False, **kwargs)
+        super().__init__(timeout=6 * 60, logEnviron=False, **kwargs)
 
     @defer.inlineCallbacks
     def run(self):
@@ -4402,6 +4412,7 @@ class UploadFileToS3(shell.ShellCommandNewStyle):
         steps_to_add = [UploadBuiltProduct(), TransferToS3()]
         if not s3url:
             rc = FAILURE
+            yield self._addToLog('stdio', f'Failed to get s3url: {s3url}')
             self.build.addStepsAfterCurrentStep(steps_to_add)
             return defer.returnValue(rc)
 
@@ -4441,10 +4452,15 @@ class GenerateS3URL(master.MasterShellCommand):
         log_text = self.log_observer.getStdout() + self.log_observer.getStderr()
         match = re.search(r'S3 URL: (?P<url>[^\s]+)', log_text)
         # Sample log: S3 URL: https://s3-us-west-2.amazonaws.com/ews-archives.webkit.org/ios-simulator-12-x86_64-release/123456.zip
-        s3url = ''
+
+        self.build.s3url = ''
+        build_url = f'{self.master.config.buildbotURL}#/builders/{self.build._builderid}/builds/{self.build.number}'
         if match:
-            s3url = match.group('url')
-        self.build.s3url = s3url
+            self.build.s3url = match.group('url')
+            print(f'build: {build_url}, url for GenerateS3URL: {self.build.s3url}')
+        else:
+            print(f'build: {build_url}, logs for GenerateS3URL:\n{log_text}')
+            return super().finished(FAILURE)
         return super().finished(results)
 
     def hideStepIf(self, results, step):
@@ -5102,6 +5118,11 @@ class SetBuildSummary(buildstep.BuildStep):
     def start(self):
         build_summary = self.getProperty('build_summary', 'build successful')
         self.finished(SUCCESS)
+        previous_build_summary = self.getProperty('build_summary', '')
+        if RunWebKitTestsInStressMode.FAILURE_MSG_IN_STRESS_MODE in previous_build_summary:
+            self.build.results = FAILURE
+        elif 'Committed ' in previous_build_summary and '@' in previous_build_summary:
+            self.build.results = SUCCESS
         self.build.buildFinished([build_summary], self.build.results)
         return defer.succeed(None)
 

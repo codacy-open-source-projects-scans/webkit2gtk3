@@ -39,17 +39,12 @@ namespace WebCore {
 WTF_MAKE_ISO_ALLOCATED_IMPL(OESVertexArrayObject);
 
 OESVertexArrayObject::OESVertexArrayObject(WebGLRenderingContextBase& context)
-    : WebGLExtension(context)
+    : WebGLExtension(context, OESVertexArrayObjectName)
 {
     context.graphicsContextGL()->ensureExtensionEnabled("GL_OES_vertex_array_object"_s);
 }
 
 OESVertexArrayObject::~OESVertexArrayObject() = default;
-
-WebGLExtension::ExtensionName OESVertexArrayObject::getName() const
-{
-    return OESVertexArrayObjectName;
-}
 
 bool OESVertexArrayObject::supported(GraphicsContextGL& context)
 {
@@ -61,10 +56,7 @@ RefPtr<WebGLVertexArrayObjectOES> OESVertexArrayObject::createVertexArrayOES()
     auto context = WebGLExtensionScopedContext(this);
     if (context.isLost())
         return nullptr;
-
-    auto object = WebGLVertexArrayObjectOES::create(*context, WebGLVertexArrayObjectOES::Type::User);
-    context->addContextObject(object.get());
-    return object;
+    return WebGLVertexArrayObjectOES::createUser(*context);
 }
 
 void OESVertexArrayObject::deleteVertexArrayOES(WebGLVertexArrayObjectOES* arrayObject)
@@ -78,7 +70,7 @@ void OESVertexArrayObject::deleteVertexArrayOES(WebGLVertexArrayObjectOES* array
     if (!arrayObject)
         return;
 
-    if (!arrayObject->validate(context->contextGroup(), *context)) {
+    if (!arrayObject->validate(*context)) {
         context->synthesizeGLError(GraphicsContextGL::INVALID_OPERATION, "delete", "object does not belong to this context");
         return;
     }
@@ -98,7 +90,7 @@ GCGLboolean OESVertexArrayObject::isVertexArrayOES(WebGLVertexArrayObjectOES* ar
     if (context.isLost())
         return false;
 
-    if (!arrayObject || !arrayObject->validate(context->contextGroup(), *context))
+    if (!arrayObject || !arrayObject->validate(*context))
         return false;
 
     if (!arrayObject->hasEverBeenBound())

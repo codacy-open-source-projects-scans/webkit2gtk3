@@ -31,6 +31,7 @@
 #include "ParserPrivate.h"
 #include "WGSLShaderModule.h"
 
+#include <wtf/HashSet.h>
 #include <wtf/text/StringBuilder.h>
 
 namespace WGSL {
@@ -297,17 +298,17 @@ static AST::UnaryOperation toUnaryOperation(const Token& token)
 }
 
 template<typename Lexer>
-std::optional<Error> parse(ShaderModule& shaderModule)
+std::optional<FailedCheck> parse(ShaderModule& shaderModule)
 {
     Lexer lexer(shaderModule.source());
     Parser parser(shaderModule, lexer);
     auto result = parser.parseShader();
     if (!result.has_value())
-        return result.error();
+        return FailedCheck { { result.error() }, { /* warnings */ } };
     return std::nullopt;
 }
 
-std::optional<Error> parse(ShaderModule& shaderModule)
+std::optional<FailedCheck> parse(ShaderModule& shaderModule)
 {
     if (shaderModule.source().is8Bit())
         return parse<Lexer<LChar>>(shaderModule);
@@ -519,8 +520,12 @@ Result<AST::Structure::Ref> Parser<Lexer>::parseStructure(AST::Attribute::List&&
     CONSUME_TYPE(BraceLeft);
 
     AST::StructureMember::List members;
+    HashSet<String> seenMembers;
     while (current().type != TokenType::BraceRight) {
         PARSE(member, StructureMember);
+        auto result = seenMembers.add(member.get().name());
+        if (!result.isNewEntry)
+            FAIL(makeString("duplicate member '", member.get().name(), "' in struct '", name, "'"));
         members.append(member);
         if (current().type == TokenType::Comma)
             consume();
@@ -674,10 +679,26 @@ Result<AST::Variable::Ref> Parser<Lexer>::parseVariableWithAttributes(AST::Attri
     }
 
     AST::Expression::Ptr maybeInitializer = nullptr;
-    if (current().type == TokenType::Equal) {
-        consume();
+    if (varFlavor == AST::VariableFlavor::Const || varFlavor == AST::VariableFlavor::Let || current().type == TokenType::Equal) {
+        CONSUME_TYPE(Equal);
         PARSE(initializerExpr, Expression);
         maybeInitializer = &initializerExpr.get();
+    }
+
+    if (!maybeType && !maybeInitializer) {
+        ASCIILiteral flavor = [&] {
+            switch (varFlavor) {
+            case AST::VariableFlavor::Const:
+                RELEASE_ASSERT_NOT_REACHED();
+            case AST::VariableFlavor::Let:
+                RELEASE_ASSERT_NOT_REACHED();
+            case AST::VariableFlavor::Override:
+                return "override"_s;
+            case AST::VariableFlavor::Var:
+                return "var"_s;
+            }
+        }();
+        FAIL(makeString(flavor, " declaration requires a type or initializer"_s));
     }
 
     RETURN_ARENA_NODE(Variable, varFlavor, WTFMove(name), WTFMove(maybeQualifier), WTFMove(maybeType), WTFMove(maybeInitializer), WTFMove(attributes));

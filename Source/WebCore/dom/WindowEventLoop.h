@@ -29,6 +29,7 @@
 #include "GCReachableRef.h"
 #include "Timer.h"
 #include <wtf/HashSet.h>
+#include <wtf/WeakHashMap.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
@@ -37,6 +38,7 @@ class CustomElementQueue;
 class Document;
 class HTMLSlotElement;
 class MutationObserver;
+class Page;
 class SecurityOrigin;
 
 // https://html.spec.whatwg.org/multipage/webappapis.html#window-event-loop
@@ -52,6 +54,12 @@ public:
     HashSet<RefPtr<MutationObserver>>& suspendedMutationObservers() { return m_suspendedObservers; }
 
     CustomElementQueue& backupElementQueue();
+
+    void didScheduleRenderingUpdate(Page&, MonotonicTime);
+    void didFinishRenderingUpdate(Page&);
+    void opportunisticallyRunIdleCallbacks();
+    bool shouldEndIdlePeriod();
+    MonotonicTime computeIdleDeadline();
 
     WEBCORE_EXPORT static void breakToAllowRenderingUpdate();
 
@@ -80,8 +88,12 @@ private:
     HashSet<RefPtr<MutationObserver>> m_activeObservers;
     HashSet<RefPtr<MutationObserver>> m_suspendedObservers;
 
+    WeakHashMap<Page, MonotonicTime> m_pagesWithRenderingOpportunity;
+
     std::unique_ptr<CustomElementQueue> m_customElementQueue;
     bool m_processingBackupElementQueue { false };
+
+    MonotonicTime m_lastIdlePeriodStartTime;
 };
 
 } // namespace WebCore

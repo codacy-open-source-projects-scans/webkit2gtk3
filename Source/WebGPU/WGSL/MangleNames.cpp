@@ -93,7 +93,6 @@ private:
     MangledName makeMangledName(const String&, MangledName::Kind);
 
     void visitVariableDeclaration(AST::Variable&, MangledName::Kind);
-    void visitFunctionBody(AST::Function&);
 
     const CallGraph& m_callGraph;
     PrepareResult& m_result;
@@ -104,30 +103,23 @@ private:
 void NameManglerVisitor::run()
 {
     auto& module = m_callGraph.ast();
-    for (auto& function : module.functions()) {
-        String originalName = function.name();
-        introduceVariable(function.name(), MangledName::Function);
-        auto it = m_result.entryPoints.find(originalName);
-        if (it != m_result.entryPoints.end())
-            it->value.mangledName = function.name();
-    }
-
     for (auto& structure : module.structures())
         visit(structure);
 
     for (auto& variable : module.variables())
         visit(variable);
 
-    for (auto& function : module.functions())
-        visitFunctionBody(function);
+    for (auto& function : module.functions()) {
+        String originalName = function.name();
+        introduceVariable(function.name(), MangledName::Function);
+        auto it = m_result.entryPoints.find(originalName);
+        if (it != m_result.entryPoints.end())
+            it->value.mangledName = function.name();
+        visit(function);
+    }
 }
 
 void NameManglerVisitor::visit(AST::Function& function)
-{
-    introduceVariable(function.name(), MangledName::Function);
-}
-
-void NameManglerVisitor::visitFunctionBody(AST::Function& function)
 {
     ContextScope functionScope(this);
 
@@ -226,8 +218,9 @@ void NameManglerVisitor::visit(AST::NamedTypeName& type)
 
 void NameManglerVisitor::introduceVariable(AST::Identifier& name, MangledName::Kind kind)
 {
-    const auto& mangledName = ContextProvider::introduceVariable(name, makeMangledName(name, kind));
-    m_callGraph.ast().replace(&name, AST::Identifier::makeWithSpan(name.span(), mangledName.toString()));
+    const auto* mangledName = ContextProvider::introduceVariable(name, makeMangledName(name, kind));
+    ASSERT(mangledName);
+    m_callGraph.ast().replace(&name, AST::Identifier::makeWithSpan(name.span(), mangledName->toString()));
 }
 
 MangledName NameManglerVisitor::makeMangledName(const String& name, MangledName::Kind kind)

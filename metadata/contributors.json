@@ -1137,6 +1137,14 @@
    },
    {
       "emails" : [
+         "ben_schwartz@apple.com"
+      ],
+      "github" : "bls1999",
+      "name" : "Ben Schwartz",
+      "status" : "committer"
+   },
+   {
+      "emails" : [
          "benwells@chromium.org"
       ],
       "name" : "Ben Wells",
@@ -1866,6 +1874,17 @@
       "nicks" : [
          "dana"
       ]
+   },
+   {
+      "emails" : [
+         "destra@apple.com"
+      ],
+      "github" : "danae404",
+      "name" : "Dana Estra",
+      "nicks" : [
+         "destra"
+      ],
+      "status" : "committer"
    },
    {
       "emails" : [
@@ -2789,6 +2808,17 @@
          "forms-bugs@chromium.org"
       ],
       "name" : "Forms Bugs"
+   },
+   {
+      "emails" : [
+         "frances_c@cox.net"
+      ],
+      "expertise" : "Web Inspector",
+      "github" : "francescorn",
+      "name" : "Frances Cornwall",
+      "nicks" : [
+         "Frances"
+      ]
    },
    {
       "emails" : [
@@ -6401,6 +6431,16 @@
       "nicks" : [
          "ruthfong",
          "ruth_fong"
+      ]
+   },
+   {
+      "emails" : [
+         "ryanfuller@apple.com"
+      ],
+      "github" : "rsfuller",
+      "name" : "Ryan Fuller",
+      "nicks" : [
+         "ryanfuller"
       ]
    },
    {

@@ -2412,17 +2412,20 @@ Color RenderStyle::colorResolvingCurrentColor(const StyleColor& color) const
     return color.resolveColor(this->color());
 }
 
-Color RenderStyle::visitedDependentColor(CSSPropertyID colorProperty) const
+Color RenderStyle::visitedDependentColor(CSSPropertyID colorProperty, OptionSet<PaintBehavior> paintBehavior) const
 {
     Color unvisitedColor = colorResolvingCurrentColor(colorProperty, false);
     if (insideLink() != InsideLink::InsideVisited)
+        return unvisitedColor;
+
+    if (paintBehavior.contains(PaintBehavior::DontShowVisitedLinks))
         return unvisitedColor;
 
 #if ENABLE(CSS_COMPOSITING)
     if (isInSubtreeWithBlendMode())
         return unvisitedColor;
 #endif
-    
+
     Color visitedColor = colorResolvingCurrentColor(colorProperty, true);
 
     // FIXME: Technically someone could explicitly specify the color transparent, but for now we'll just
@@ -2437,12 +2440,12 @@ Color RenderStyle::visitedDependentColor(CSSPropertyID colorProperty) const
     return visitedColor.colorWithAlpha(unvisitedColor.alphaAsFloat());
 }
 
-Color RenderStyle::visitedDependentColorWithColorFilter(CSSPropertyID colorProperty) const
+Color RenderStyle::visitedDependentColorWithColorFilter(CSSPropertyID colorProperty, OptionSet<PaintBehavior> paintBehavior) const
 {
     if (!hasAppleColorFilter())
-        return visitedDependentColor(colorProperty);
+        return visitedDependentColor(colorProperty, paintBehavior);
 
-    return colorByApplyingColorFilter(visitedDependentColor(colorProperty));
+    return colorByApplyingColorFilter(visitedDependentColor(colorProperty, paintBehavior));
 }
 
 Color RenderStyle::colorByApplyingColorFilter(const Color& color) const
@@ -2470,14 +2473,14 @@ Color RenderStyle::effectiveAccentColor() const
 
 const BorderValue& RenderStyle::borderBefore() const
 {
-    switch (writingMode()) {
-    case WritingMode::TopToBottom:
+    switch (blockFlowDirection()) {
+    case BlockFlowDirection::TopToBottom:
         return borderTop();
-    case WritingMode::BottomToTop:
+    case BlockFlowDirection::BottomToTop:
         return borderBottom();
-    case WritingMode::LeftToRight:
+    case BlockFlowDirection::LeftToRight:
         return borderLeft();
-    case WritingMode::RightToLeft:
+    case BlockFlowDirection::RightToLeft:
         return borderRight();
     }
     ASSERT_NOT_REACHED();
@@ -2486,14 +2489,14 @@ const BorderValue& RenderStyle::borderBefore() const
 
 const BorderValue& RenderStyle::borderAfter() const
 {
-    switch (writingMode()) {
-    case WritingMode::TopToBottom:
+    switch (blockFlowDirection()) {
+    case BlockFlowDirection::TopToBottom:
         return borderBottom();
-    case WritingMode::BottomToTop:
+    case BlockFlowDirection::BottomToTop:
         return borderTop();
-    case WritingMode::LeftToRight:
+    case BlockFlowDirection::LeftToRight:
         return borderRight();
-    case WritingMode::RightToLeft:
+    case BlockFlowDirection::RightToLeft:
         return borderLeft();
     }
     ASSERT_NOT_REACHED();
@@ -2516,14 +2519,14 @@ const BorderValue& RenderStyle::borderEnd() const
 
 float RenderStyle::borderBeforeWidth() const
 {
-    switch (writingMode()) {
-    case WritingMode::TopToBottom:
+    switch (blockFlowDirection()) {
+    case BlockFlowDirection::TopToBottom:
         return borderTopWidth();
-    case WritingMode::BottomToTop:
+    case BlockFlowDirection::BottomToTop:
         return borderBottomWidth();
-    case WritingMode::LeftToRight:
+    case BlockFlowDirection::LeftToRight:
         return borderLeftWidth();
-    case WritingMode::RightToLeft:
+    case BlockFlowDirection::RightToLeft:
         return borderRightWidth();
     }
     ASSERT_NOT_REACHED();
@@ -2532,14 +2535,14 @@ float RenderStyle::borderBeforeWidth() const
 
 float RenderStyle::borderAfterWidth() const
 {
-    switch (writingMode()) {
-    case WritingMode::TopToBottom:
+    switch (blockFlowDirection()) {
+    case BlockFlowDirection::TopToBottom:
         return borderBottomWidth();
-    case WritingMode::BottomToTop:
+    case BlockFlowDirection::BottomToTop:
         return borderTopWidth();
-    case WritingMode::LeftToRight:
+    case BlockFlowDirection::LeftToRight:
         return borderRightWidth();
-    case WritingMode::RightToLeft:
+    case BlockFlowDirection::RightToLeft:
         return borderLeftWidth();
     }
     ASSERT_NOT_REACHED();
@@ -2623,7 +2626,7 @@ std::pair<FontOrientation, NonCJKGlyphOrientation> RenderStyle::fontAndGlyphOrie
 {
     // FIXME: TextOrientationSideways should map to sideways-left in vertical-lr, which is not supported yet.
 
-    if (isHorizontalWritingMode())
+    if (typographicMode() == TypographicMode::Horizontal)
         return { FontOrientation::Horizontal, NonCJKGlyphOrientation::Mixed };
 
     switch (textOrientation()) {
@@ -2992,7 +2995,7 @@ float RenderStyle::outlineOffset() const
 
 bool RenderStyle::shouldPlaceVerticalScrollbarOnLeft() const
 {
-    return (!isLeftToRightDirection() && isHorizontalWritingMode()) || writingMode() == WritingMode::RightToLeft;
+    return (!isLeftToRightDirection() && isHorizontalWritingMode()) || blockFlowDirection() == BlockFlowDirection::RightToLeft;
 }
 
 std::span<const PaintType, 3> RenderStyle::paintTypesForPaintOrder(PaintOrder order)

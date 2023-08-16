@@ -275,8 +275,6 @@ typedef NS_ENUM(NSInteger, _UIDatePickerOverlayAnchor) {
 @property (nonatomic, readonly, retain) NSString *buildVersion;
 @end
 
-static const UIUserInterfaceIdiom UIUserInterfaceIdiomWatch = (UIUserInterfaceIdiom)4;
-
 typedef enum {
     kUIKeyboardInputRepeat                 = 1 << 0,
     kUIKeyboardInputPopupVariant           = 1 << 1,
@@ -1372,7 +1370,7 @@ typedef NS_ENUM(NSUInteger, _UIScrollDeviceCategory) {
 - (void)translate:(NSString *)text fromRect:(CGRect)presentationRect;
 @end
 
- @interface UIColor (IPI)
+@interface UIColor (IPI)
 + (UIColor *)insertionPointColor;
 @end
 

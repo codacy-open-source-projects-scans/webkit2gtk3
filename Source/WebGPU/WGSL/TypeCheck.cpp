@@ -111,8 +111,6 @@ private:
         Global,
     };
 
-    void visitFunctionBody(AST::Function&);
-    void visitStructMembers(AST::Structure&);
     void visitVariable(AST::Variable&, VariableKind);
     const Type* vectorFieldAccess(const Types::Vector&, AST::FieldAccessExpression&);
     void visitAttributes(AST::Attribute::List&);
@@ -129,8 +127,8 @@ private:
     void inferred(const Type*);
     bool unify(const Type*, const Type*) WARN_UNUSED_RETURN;
     bool isBottom(const Type*) const;
-    void introduceType(const String&, const Type*);
-    void introduceValue(const String&, const Type*);
+    void introduceType(const AST::Identifier&, const Type*);
+    void introduceValue(const AST::Identifier&, const Type*);
 
     template<typename CallArguments>
     const Type* chooseOverload(const char*, const SourceSpan&, const String&, CallArguments&& valueArguments, const Vector<const Type*>& typeArguments);
@@ -148,12 +146,12 @@ TypeChecker::TypeChecker(ShaderModule& shaderModule)
     : m_shaderModule(shaderModule)
     , m_types(shaderModule.types())
 {
-    introduceType("bool"_s, m_types.boolType());
-    introduceType("i32"_s, m_types.i32Type());
-    introduceType("u32"_s, m_types.u32Type());
-    introduceType("f32"_s, m_types.f32Type());
-    introduceType("sampler"_s, m_types.samplerType());
-    introduceType("texture_external"_s, m_types.textureExternalType());
+    introduceType(AST::Identifier::make("bool"_s), m_types.boolType());
+    introduceType(AST::Identifier::make("i32"_s), m_types.i32Type());
+    introduceType(AST::Identifier::make("u32"_s), m_types.u32Type());
+    introduceType(AST::Identifier::make("f32"_s), m_types.f32Type());
+    introduceType(AST::Identifier::make("sampler"_s), m_types.samplerType());
+    introduceType(AST::Identifier::make("texture_external"_s), m_types.textureExternalType());
 
     // This file contains the declarations generated from `TypeDeclarations.rb`
 #include "TypeDeclarations.h" // NOLINT
@@ -166,17 +164,11 @@ std::optional<FailedCheck> TypeChecker::check()
     for (auto& structure : m_shaderModule.structures())
         visit(structure);
 
-    for (auto& structure : m_shaderModule.structures())
-        visitStructMembers(structure);
-
     for (auto& variable : m_shaderModule.variables())
         visitVariable(variable, VariableKind::Global);
 
     for (auto& function : m_shaderModule.functions())
         visit(function);
-
-    for (auto& function : m_shaderModule.functions())
-        visitFunctionBody(function);
 
     if (shouldDumpInferredTypes) {
         for (auto& error : m_errors)
@@ -186,7 +178,6 @@ std::optional<FailedCheck> TypeChecker::check()
     if (m_errors.isEmpty())
         return std::nullopt;
 
-
     // FIXME: add support for warnings
     Vector<Warning> warnings { };
     return FailedCheck { WTFMove(m_errors), WTFMove(warnings) };
@@ -195,33 +186,15 @@ std::optional<FailedCheck> TypeChecker::check()
 // Declarations
 void TypeChecker::visit(AST::Structure& structure)
 {
-    const Type* structType = m_types.structType(structure);
-    introduceType(structure.name(), structType);
-}
-
-void TypeChecker::visitStructMembers(AST::Structure& structure)
-{
-    auto* binding = readVariable(structure.name());
-    ASSERT(binding && binding->kind == Binding::Type);
-    auto* type = binding->type;
-    ASSERT(std::holds_alternative<Types::Struct>(*type));
-
-    // This is the only place we need to modify a type.
-    // Since struct fields can reference other structs declared later in the
-    // program, the creation of struct types is a 2-step process:
-    // - First, we create an empty struct type for all structs in the program,
-    //   and expose them in the global context
-    // - Then, in a second pass, we populate the structs' fields.
-    // This way, the type of all structs will be available at the time we populate
-    // struct fields, even the ones defiend later in the program.
-    auto& structType = std::get<Types::Struct>(*type);
-    auto& fields = const_cast<HashMap<String, const Type*>&>(structType.fields);
+    HashMap<String, const Type*> fields;
     for (auto& member : structure.members()) {
         visitAttributes(member.attributes());
         auto* memberType = resolve(member.type());
         auto result = fields.add(member.name().id(), memberType);
         ASSERT_UNUSED(result, result.isNewEntry);
     }
+    const Type* structType = m_types.structType(structure, WTFMove(fields));
+    introduceType(structure.name(), structType);
 }
 
 void TypeChecker::visit(AST::Variable& variable)
@@ -289,19 +262,15 @@ void TypeChecker::visit(AST::Function& function)
         result = resolve(*function.maybeReturnType());
     else
         result = m_types.voidType();
+
     const Type* functionType = m_types.functionType(WTFMove(parameters), result);
     introduceValue(function.name(), functionType);
-}
 
-void TypeChecker::visitFunctionBody(AST::Function& function)
-{
     ContextScope functionContext(this);
-
     for (auto& parameter : function.parameters()) {
         auto* parameterType = resolve(parameter.typeName());
         introduceValue(parameter.name(), parameterType);
     }
-
     AST::Visitor::visit(function.body());
 }
 
@@ -1053,14 +1022,16 @@ bool TypeChecker::isBottom(const Type* type) const
     return type == m_types.bottomType();
 }
 
-void TypeChecker::introduceType(const String& name, const Type* type)
+void TypeChecker::introduceType(const AST::Identifier& name, const Type* type)
 {
-    introduceVariable(name, { Binding::Type, type });
+    if (!introduceVariable(name, { Binding::Type, type }))
+        typeError(InferBottom::No, name.span(), "redeclaration of '", name, "'");
 }
 
-void TypeChecker::introduceValue(const String& name, const Type* type)
+void TypeChecker::introduceValue(const AST::Identifier& name, const Type* type)
 {
-    introduceVariable(name, { Binding::Value, type });
+    if (!introduceVariable(name, { Binding::Value, type }))
+        typeError(InferBottom::No, name.span(), "redeclaration of '", name, "'");
 }
 
 template<typename... Arguments>

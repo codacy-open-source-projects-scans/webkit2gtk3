@@ -2433,7 +2433,7 @@ header: <WebCore/KeyboardScroll.h>
     WebCore::Length x();
     WebCore::Length y();
     WebCore::Length z();
-    WebCore::TransformOperation::Type type();
+    [Validator='WebCore::TransformOperation::isTranslateTransformOperationType(*type)'] WebCore::TransformOperation::Type type();
 }
 
 [RefCounted] class WebCore::RotateTransformOperation {
@@ -2441,20 +2441,20 @@ header: <WebCore/KeyboardScroll.h>
     double y();
     double z();
     double angle();
-    WebCore::TransformOperation::Type type();
+    [Validator='WebCore::TransformOperation::isRotateTransformOperationType(*type)'] WebCore::TransformOperation::Type type();
 }
 
 [RefCounted] class WebCore::ScaleTransformOperation {
     double x();
     double y();
     double z();
-    WebCore::TransformOperation::Type type();
+    [Validator='WebCore::TransformOperation::isScaleTransformOperationType(*type)'] WebCore::TransformOperation::Type type();
 }
 
 [RefCounted] class WebCore::SkewTransformOperation {
     double angleX();
     double angleY();
-    WebCore::TransformOperation::Type type();
+    [Validator='WebCore::TransformOperation::isSkewTransformOperationType(*type)'] WebCore::TransformOperation::Type type();
 }
 
 [RefCounted] class WebCore::PerspectiveTransformOperation {
@@ -2541,8 +2541,6 @@ struct WebCore::GraphicsContextGLAttributes {
     bool preserveDrawingBuffer;
     bool failIfMajorPerformanceCaveat;
     WebCore::GraphicsContextGLPowerPreference powerPreference;
-    bool shareResources;
-    bool noExtensions;
     float devicePixelRatio;
     WebCore::GraphicsContextGLPowerPreference initialPowerPreference;
     WebCore::GraphicsContextGLWebGLVersion webGLVersion;
@@ -2557,7 +2555,7 @@ struct WebCore::GraphicsContextGLAttributes {
     bool xrCompatible;
 #endif
     bool failPlatformContextCreationForTesting;
-    [NotSerialized] unsigned remoteIPCBufferSizeLog2ForTesting;
+    [NotSerialized] WebCore::GraphicsContextGLSimulatedCreationFailure failContextCreationForTesting;
 };
 #endif // ENABLE(GPU_PROCESS) && ENABLE(WEBGL)
 
@@ -4310,6 +4308,8 @@ struct WebCore::NavigationRequester {
     WebCore::PolicyContainer policyContainer;
     std::optional<WebCore::FrameIdentifier> frameID;
     std::optional<WebCore::PageIdentifier> pageID;
+    WebCore::ScriptExecutionContextIdentifier documentIdentifier;
+    WebCore::SandboxFlags sandboxFlags;
 };
 
 struct WebCore::PolicyContainer {

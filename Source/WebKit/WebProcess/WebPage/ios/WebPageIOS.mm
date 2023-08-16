@@ -52,7 +52,6 @@
 #import "TextCheckingControllerProxy.h"
 #import "UIKitSPI.h"
 #import "UserData.h"
-#import "UserInterfaceIdiom.h"
 #import "ViewGestureGeometryCollector.h"
 #import "VisibleContentRectUpdateInfo.h"
 #import "WKAccessibilityWebPageObjectIOS.h"
@@ -156,6 +155,7 @@
 #import <WebCore/UserGestureIndicator.h>
 #import <WebCore/VisibleUnits.h>
 #import <WebCore/WebEvent.h>
+#import <pal/system/ios/UserInterfaceIdiom.h>
 #import <wtf/MathExtras.h>
 #import <wtf/MemoryPressureHandler.h>
 #import <wtf/Scope.h>
@@ -766,10 +766,9 @@ void WebPage::generateSyntheticEditingCommand(SyntheticEditingCommandType comman
 void WebPage::handleSyntheticClick(Node& nodeRespondingToClick, const WebCore::FloatPoint& location, OptionSet<WebEventModifier> modifiers, WebCore::PointerID pointerId)
 {
     auto& respondingDocument = nodeRespondingToClick.document();
-    auto isFirstSyntheticClickOnPage = !m_hasHandledSyntheticClick;
     m_hasHandledSyntheticClick = true;
 
-    if (!respondingDocument.settings().contentChangeObserverEnabled() || respondingDocument.quirks().shouldDisableContentChangeObserver() || respondingDocument.quirks().shouldIgnoreContentObservationForSyntheticClick(isFirstSyntheticClickOnPage)) {
+    if (!respondingDocument.settings().contentChangeObserverEnabled() || respondingDocument.quirks().shouldDisableContentChangeObserver()) {
         completeSyntheticClick(nodeRespondingToClick, location, modifiers, WebCore::SyntheticClickType::OneFingerTap, pointerId);
         return;
     }
@@ -2599,7 +2598,10 @@ void WebPage::requestAutocorrectionData(const String& textForAutocorrection, Com
         auto position = makeDeprecatedLegacyPosition(range->start).previous();
         if (position.isNull() || position == makeDeprecatedLegacyPosition(range->start))
             break;
-        range = { { wordRangeFromPosition(position)->start, range->end } };
+        auto startRange = wordRangeFromPosition(position);
+        if (!startRange)
+            continue;
+        range = { { startRange->start, range->end } };
         textForRange = plainTextForContext(range);
     }
 
@@ -5196,7 +5198,7 @@ void WebPage::animationDidFinishForElement(const WebCore::Element& animatedEleme
 
 FloatSize WebPage::screenSizeForFingerprintingProtections(const LocalFrame&, FloatSize defaultSize) const
 {
-    if (!currentUserInterfaceIdiomIsSmallScreen())
+    if (!PAL::currentUserInterfaceIdiomIsSmallScreen())
         return m_viewportConfiguration.minimumLayoutSize();
 
     static constexpr std::array fixedSizes {

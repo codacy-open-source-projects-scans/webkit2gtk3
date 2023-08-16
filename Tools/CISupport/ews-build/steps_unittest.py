@@ -2243,7 +2243,7 @@ class TestRunWebKitTestsInStressMode(BuildStepMixinAdditions, unittest.TestCase)
         )
         self.expectOutcome(result=FAILURE, state_string='layout-tests (failure)')
         rc = self.runStep()
-        self.assertEqual(self.getProperty('build_summary'), 'Found test failures')
+        self.assertEqual(self.getProperty('build_summary'), 'Found test failures in stress mode')
         return rc
 
     def test_success(self):
@@ -2346,7 +2346,7 @@ class TestRunWebKitTestsInStressGuardmallocMode(BuildStepMixinAdditions, unittes
         )
         self.expectOutcome(result=FAILURE, state_string='layout-tests (failure)')
         rc = self.runStep()
-        self.assertEqual(self.getProperty('build_summary'), 'Found test failures')
+        self.assertEqual(self.getProperty('build_summary'), 'Found test failures in stress mode')
         return rc
 
 
@@ -3466,6 +3466,19 @@ class TestCleanWorkingDirectory(BuildStepMixinAdditions, unittest.TestCase):
         self.expectOutcome(result=SUCCESS, state_string='Cleaned working directory')
         return self.runStep()
 
+    def test_success_wpe(self):
+        self.setupStep(CleanWorkingDirectory())
+        self.setProperty('platform', 'wpe')
+        self.expectRemoteCommands(
+            ExpectShell(workdir='wkdir',
+                        logEnviron=False,
+                        command=['python3', 'Tools/Scripts/clean-webkit', '--keep-jhbuild-directory'],
+                        )
+            + 0,
+        )
+        self.expectOutcome(result=SUCCESS, state_string='Cleaned working directory')
+        return self.runStep()
+
     def test_failure(self):
         self.setupStep(CleanWorkingDirectory())
         self.expectRemoteCommands(
@@ -4452,7 +4465,8 @@ class TestGenerateS3URL(BuildStepMixinAdditions, unittest.TestCase):
         self.setProperty('architecture', 'x86_64')
         self.setProperty('change_id', '1234')
 
-    def test_success(self):
+    def disabled_test_success(self):
+        # TODO: Figure out how to pass logs to unit-test for MasterShellCommand steps
         self.configureStep()
         self.expectLocalCommands(
             ExpectMasterShellCommand(command=['python3',
@@ -4566,7 +4580,7 @@ class TestUploadFileToS3(BuildStepMixinAdditions, unittest.TestCase):
                         env=dict(UPLOAD_URL='https://test-s3-url'),
                         logEnviron=False,
                         command=['python3', 'Tools/Scripts/upload-file-to-url', '--filename', 'WebKitBuild/release.zip'],
-                        timeout=300,
+                        timeout=360,
                         )
             + 0,
         )
@@ -4581,7 +4595,7 @@ class TestUploadFileToS3(BuildStepMixinAdditions, unittest.TestCase):
                         env=dict(UPLOAD_URL='https://test-s3-url'),
                         logEnviron=False,
                         command=['python3', 'Tools/Scripts/upload-file-to-url', '--filename', 'WebKitBuild/release.zip'],
-                        timeout=300,
+                        timeout=360,
                         )
             + ExpectShell.log('stdio', stdout='''Uploading WebKitBuild/release.zip
 response: <Response [403]>, 403, Forbidden
