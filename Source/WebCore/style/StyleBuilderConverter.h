@@ -199,7 +199,7 @@ public:
     static OffsetRotation convertOffsetRotate(BuilderState&, const CSSValue&);
 
     static OptionSet<Containment> convertContain(BuilderState&, const CSSValue&);
-    static Vector<AtomString> convertContainerName(BuilderState&, const CSSValue&);
+    static Vector<Style::ScopedName> convertContainerName(BuilderState&, const CSSValue&);
 
     static OptionSet<MarginTrimType> convertMarginTrim(BuilderState&, const CSSValue&);
 
@@ -240,7 +240,7 @@ inline Length BuilderConverter::convertLength(const BuilderState& builderState, 
 
     if (primitiveValue.isLength()) {
         Length length = primitiveValue.computeLength<Length>(conversionData);
-        length.setHasQuirk(primitiveValue.primitiveType() == CSSUnitType::CSS_QUIRKY_EMS);
+        length.setHasQuirk(primitiveValue.primitiveType() == CSSUnitType::CSS_QUIRKY_EM);
         return length;
     }
 
@@ -966,7 +966,7 @@ inline float BuilderConverter::convertTextStrokeWidth(BuilderState& builderState
             result *= 3;
         else if (primitiveValue.valueID() == CSSValueThick)
             result *= 5;
-        auto emsValue = CSSPrimitiveValue::create(result, CSSUnitType::CSS_EMS);
+        auto emsValue = CSSPrimitiveValue::create(result, CSSUnitType::CSS_EM);
         width = convertComputedLength<float>(builderState, emsValue);
         break;
     }
@@ -1906,7 +1906,7 @@ inline OffsetRotation BuilderConverter::convertOffsetRotate(BuilderState&, const
     return OffsetRotation(hasAuto, angleInDegrees);
 }
 
-inline Vector<AtomString> BuilderConverter::convertContainerName(BuilderState&, const CSSValue& value)
+inline Vector<Style::ScopedName> BuilderConverter::convertContainerName(BuilderState& state, const CSSValue& value)
 {
     if (is<CSSPrimitiveValue>(value)) {
         ASSERT(value.valueID() == CSSValueNone);
@@ -1915,8 +1915,8 @@ inline Vector<AtomString> BuilderConverter::convertContainerName(BuilderState&, 
     if (!is<CSSValueList>(value))
         return { };
 
-    return WTF::map(downcast<CSSValueList>(value), [](auto& item) {
-        return AtomString { downcast<CSSPrimitiveValue>(item).stringValue() };
+    return WTF::map(downcast<CSSValueList>(value), [&](auto& item) {
+        return Style::ScopedName { AtomString { downcast<CSSPrimitiveValue>(item).stringValue() }, state.styleScopeOrdinal() };
     });
 }
 

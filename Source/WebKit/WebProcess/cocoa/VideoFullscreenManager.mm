@@ -206,16 +206,25 @@ VideoFullscreenInterfaceContext& VideoFullscreenManager::ensureInterface(Playbac
 
 void VideoFullscreenManager::removeContext(PlaybackSessionContextIdentifier contextId)
 {
-    auto [model, interface] = ensureModelAndInterface(contextId);
-
     m_playbackSessionManager->removeClientForContext(contextId);
 
-    RefPtr<HTMLVideoElement> videoElement = model->videoElement();
-    model->setVideoElement(nullptr);
+    auto [model, interface] = m_contextMap.get(contextId);
+    ASSERT(model);
+    ASSERT(interface);
+    if (!model || !interface)
+        return;
+
     model->removeClient(*interface);
     interface->invalidate();
-    m_videoElements.remove(*videoElement);
     m_contextMap.remove(contextId);
+
+    RefPtr videoElement = model->videoElement();
+    ASSERT(videoElement);
+    if (!videoElement)
+        return;
+
+    model->setVideoElement(nullptr);
+    m_videoElements.remove(*videoElement);
 }
 
 void VideoFullscreenManager::addClientForContext(PlaybackSessionContextIdentifier contextId)
@@ -342,7 +351,7 @@ void VideoFullscreenManager::enterVideoFullscreenForVideoElement(HTMLVideoElemen
     auto videoRect = inlineVideoFrame(videoElement);
     FloatRect videoLayerFrame = FloatRect(0, 0, videoRect.width(), videoRect.height());
 
-    FloatSize initialSize = videoElement.videoInlineSize();
+    FloatSize initialSize = videoElement.videoLayerSize();
 
 #if PLATFORM(IOS) || PLATFORM(VISION)
     if (allowLayeredFullscreenVideos)
@@ -703,10 +712,10 @@ void VideoFullscreenManager::didCleanupFullscreen(PlaybackSessionContextIdentifi
 
 void VideoFullscreenManager::setVideoLayerGravityEnum(PlaybackSessionContextIdentifier contextId, unsigned gravity)
 {
-    auto& model = ensureModel(contextId);
-    INFO_LOG(LOGIDENTIFIER, model.logIdentifier(), gravity);
+    Ref model = ensureModel(contextId);
+    INFO_LOG(LOGIDENTIFIER, model->logIdentifier(), gravity);
 
-    model.setVideoLayerGravity((MediaPlayerEnums::VideoGravity)gravity);
+    model->setVideoLayerGravity((MediaPlayerEnums::VideoGravity)gravity);
 }
 
 void VideoFullscreenManager::fullscreenMayReturnToInline(PlaybackSessionContextIdentifier contextId, bool isPageVisible)

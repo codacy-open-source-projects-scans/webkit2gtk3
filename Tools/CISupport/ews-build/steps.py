@@ -31,11 +31,11 @@ from datetime import date
 
 from twisted.internet import defer, reactor, task
 
-from layout_test_failures import LayoutTestFailures
-from send_email import send_email_to_patch_author, send_email_to_bot_watchers, send_email_to_github_admin, FROM_EMAIL
-from results_db import ResultsDatabase
-from twisted_additions import TwistedAdditions
-from utils import load_password
+from .layout_test_failures import LayoutTestFailures
+from .send_email import send_email_to_patch_author, send_email_to_bot_watchers, send_email_to_github_admin, FROM_EMAIL
+from .results_db import ResultsDatabase
+from .twisted_additions import TwistedAdditions
+from .utils import load_password
 
 import json
 import mock
@@ -1655,6 +1655,7 @@ class ValidateChange(buildstep.BuildStep, BugzillaMixin, GitHubMixin):
         verifyMergeQueue=False,
         verifyNoDraftForMergeQueue=False,
         enableSkipEWSLabel=True,
+        branches=None,
     ):
         self.verifyObsolete = verifyObsolete
         self.verifyBugClosed = verifyBugClosed
@@ -1664,6 +1665,10 @@ class ValidateChange(buildstep.BuildStep, BugzillaMixin, GitHubMixin):
         self.verifyNoDraftForMergeQueue = verifyNoDraftForMergeQueue
         self.enableSkipEWSLabel = enableSkipEWSLabel
         self.addURLs = addURLs
+
+        branches = branches or [r'.+']
+        self.branches = [re.compile(branch) if isinstance(branch, str) else branch for branch in branches]
+
         super().__init__()
 
     def getResultSummary(self):
@@ -1694,6 +1699,11 @@ class ValidateChange(buildstep.BuildStep, BugzillaMixin, GitHubMixin):
     def run(self):
         patch_id = self.getProperty('patch_id', '')
         pr_number = self.getProperty('github.number', '')
+        branch = self.getProperty('github.base.ref', DEFAULT_BRANCH)
+
+        if not any(candidate.match(branch) for candidate in self.branches):
+            rc = yield self.skip_build(f"Changes to '{branch}' are not tested")
+            return defer.returnValue(rc)
 
         if not patch_id and not pr_number:
             yield self._addToLog('stdio', 'No patch_id or pr_number found. Unable to proceed without one of them.\n')
@@ -4430,7 +4440,7 @@ class UploadFileToS3(shell.ShellCommandNewStyle, AddToLogMixin):
         return CURRENT_HOSTNAME == EWS_BUILD_HOSTNAME
 
 
-class GenerateS3URL(master.MasterShellCommand):
+class GenerateS3URL(master.MasterShellCommandNewStyle):
     name = 'generate-s3-url'
     descriptionDone = ['Generated S3 URL']
     identifier = WithProperties('%(fullPlatform)s-%(architecture)s-%(configuration)s')
@@ -4443,12 +4453,13 @@ class GenerateS3URL(master.MasterShellCommand):
         kwargs['command'] = self.command
         super().__init__(logEnviron=False, **kwargs)
 
-    def start(self):
+    @defer.inlineCallbacks
+    def run(self):
         self.log_observer = logobserver.BufferLogObserver(wantStderr=True)
         self.addLogObserver('stdio', self.log_observer)
-        return super().start()
 
-    def finished(self, results):
+        rc = yield super().run()
+
         log_text = self.log_observer.getStdout() + self.log_observer.getStderr()
         match = re.search(r'S3 URL: (?P<url>[^\s]+)', log_text)
         # Sample log: S3 URL: https://s3-us-west-2.amazonaws.com/ews-archives.webkit.org/ios-simulator-12-x86_64-release/123456.zip
@@ -4458,10 +4469,10 @@ class GenerateS3URL(master.MasterShellCommand):
         if match:
             self.build.s3url = match.group('url')
             print(f'build: {build_url}, url for GenerateS3URL: {self.build.s3url}')
+            defer.returnValue(rc)
         else:
             print(f'build: {build_url}, logs for GenerateS3URL:\n{log_text}')
-            return super().finished(FAILURE)
-        return super().finished(results)
+            defer.returnValue(FAILURE)
 
     def hideStepIf(self, results, step):
         return results == SUCCESS
@@ -4475,7 +4486,7 @@ class GenerateS3URL(master.MasterShellCommand):
         return super().getResultSummary()
 
 
-class TransferToS3(master.MasterShellCommand):
+class TransferToS3(master.MasterShellCommandNewStyle):
     name = 'transfer-to-s3'
     description = ['transferring to s3']
     descriptionDone = ['Transferred archive to S3']
@@ -4490,18 +4501,20 @@ class TransferToS3(master.MasterShellCommand):
         kwargs['command'] = self.command
         super().__init__(logEnviron=False, **kwargs)
 
-    def start(self):
+    @defer.inlineCallbacks
+    def run(self):
         self.log_observer = logobserver.BufferLogObserver(wantStderr=True)
         self.addLogObserver('stdio', self.log_observer)
-        return super().start()
 
-    def finished(self, results):
+        rc = yield super().run()
+
         log_text = self.log_observer.getStdout() + self.log_observer.getStderr()
         match = re.search(r'S3 URL: (?P<url>[^\s]+)', log_text)
         # Sample log: S3 URL: https://s3-us-west-2.amazonaws.com/ews-archives.webkit.org/ios-simulator-12-x86_64-release/123456.zip
         if match:
             self.addURL('uploaded archive', match.group('url'))
-        return super().finished(results)
+
+        defer.returnValue(rc)
 
     def doStepIf(self, step):
         return CURRENT_HOSTNAME == EWS_BUILD_HOSTNAME
@@ -4930,7 +4943,7 @@ class UploadTestResults(transfer.FileUpload):
         super().__init__(**kwargs)
 
 
-class ExtractTestResults(master.MasterShellCommand):
+class ExtractTestResults(master.MasterShellCommandNewStyle):
     name = 'extract-test-results'
     descriptionDone = ['Extracted test results']
     renderables = ['resultDirectory', 'zipFile']
@@ -4968,9 +4981,11 @@ class ExtractTestResults(master.MasterShellCommand):
         step.addURL('view layout test results', self.resultDirectoryURL() + 'results.html')
         step.addURL('download layout test results', self.resultsDownloadURL())
 
-    def finished(self, result):
+    @defer.inlineCallbacks
+    def run(self):
+        rc = yield super().run()
         self.addCustomURLs()
-        return master.MasterShellCommand.finished(self, result)
+        defer.returnValue(rc)
 
 
 class PrintConfiguration(steps.ShellSequence):
@@ -5071,7 +5086,7 @@ class CleanGitRepo(steps.ShellSequence, ShellMixin):
             ['git', 'checkout', '{}/{}'.format(self.git_remote, self.default_branch), '-f'],  # Checkout branch from specific remote
             ['git', 'branch', '-D', self.default_branch],  # Delete any local cache of the specified branch
             ['git', 'branch', self.default_branch],  # Create local instance of branch from remote, but don't track it
-            self.shell_command("git branch | grep -v ' {}$' | xargs git branch -D || {}".format(self.default_branch, self.shell_exit_0())),
+            self.shell_command("git branch | grep -v ' {}$' | grep -v 'HEAD detached at' | xargs git branch -D || {}".format(self.default_branch, self.shell_exit_0())),
             self.shell_command("git remote | grep -v '{}$' | xargs -L 1 git remote rm || {}".format(self.git_remote, self.shell_exit_0())),
             ['git', 'prune'],
         ]:

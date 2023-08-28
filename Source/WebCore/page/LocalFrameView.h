@@ -109,8 +109,7 @@ public:
     Type viewType() const final { return Type::Local; }
     void writeRenderTreeAsText(TextStream&, OptionSet<RenderAsTextFlag>) override;
 
-    // FIXME: This should return Frame. If it were a RemoteFrame, we would have a RemoteFrameView.
-    WEBCORE_EXPORT Frame& frame() const;
+    WEBCORE_EXPORT LocalFrame& frame() const;
 
     WEBCORE_EXPORT RenderView* renderView() const;
 
@@ -732,6 +731,8 @@ public:
     OverscrollBehavior horizontalOverscrollBehavior() const final;
     OverscrollBehavior verticalOverscrollBehavior() const final;
 
+    Color scrollbarThumbColorStyle() const final;
+    Color scrollbarTrackColorStyle() const final;
     ScrollbarGutter scrollbarGutterStyle() const final;
     ScrollbarWidth scrollbarWidthStyle() const final;
 

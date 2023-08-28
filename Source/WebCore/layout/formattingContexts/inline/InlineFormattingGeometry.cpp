@@ -528,6 +528,9 @@ InlineLayoutUnit InlineFormattingGeometry::inlineItemWidth(const InlineItem& inl
     if (inlineItem.isInlineBoxEnd())
         return boxGeometry.marginEnd() + boxGeometry.borderEnd() + boxGeometry.paddingEnd().value_or(0);
 
+    if (inlineItem.isOpaque())
+        return { };
+
     // FIXME: The overhang should be computed to not overlap the neighboring runs or overflow the line.
     if (auto* rubyAdjustments = layoutBox.rubyAdjustments()) {
         auto& overhang = useFirstLineStyle ? rubyAdjustments->firstLineOverhang : rubyAdjustments->overhang;
@@ -538,53 +541,31 @@ InlineLayoutUnit InlineFormattingGeometry::inlineItemWidth(const InlineItem& inl
     return boxGeometry.marginBoxWidth();
 }
 
-static inline bool endsWithSoftWrapOpportunity(const InlineTextItem& currentTextItem, const InlineTextItem& nextInlineTextItem)
+static inline bool endsWithSoftWrapOpportunity(const InlineTextItem& previousInlineTextItem, const InlineTextItem& nextInlineTextItem)
 {
     ASSERT(!nextInlineTextItem.isWhitespace());
     // We are at the position after a whitespace.
-    if (currentTextItem.isWhitespace())
+    if (previousInlineTextItem.isWhitespace())
         return true;
     // When both these non-whitespace runs belong to the same layout box with the same bidi level, it's guaranteed that
     // they are split at a soft breaking opportunity. See InlineItemsBuilder::moveToNextBreakablePosition.
-    if (&currentTextItem.inlineTextBox() == &nextInlineTextItem.inlineTextBox()) {
-        if (currentTextItem.bidiLevel() == nextInlineTextItem.bidiLevel())
+    if (&previousInlineTextItem.inlineTextBox() == &nextInlineTextItem.inlineTextBox()) {
+        if (previousInlineTextItem.bidiLevel() == nextInlineTextItem.bidiLevel())
             return true;
         // The bidi boundary may or may not be the reason for splitting the inline text box content.
         // FIXME: We could add a "reason flag" to InlineTextItem to tell why the split happened.
-        auto& style = currentTextItem.style();
-        auto lineBreakIteratorFactory = CachedLineBreakIteratorFactory { currentTextItem.inlineTextBox().content(), style.computedLocale(), TextUtil::lineBreakIteratorMode(style.lineBreak()), TextUtil::contentAnalysis(style.wordBreak()) };
+        auto& style = previousInlineTextItem.style();
+        auto lineBreakIteratorFactory = CachedLineBreakIteratorFactory { previousInlineTextItem.inlineTextBox().content(), style.computedLocale(), TextUtil::lineBreakIteratorMode(style.lineBreak()), TextUtil::contentAnalysis(style.wordBreak()) };
         auto softWrapOpportunityCandidate = nextInlineTextItem.start();
         return TextUtil::findNextBreakablePosition(lineBreakIteratorFactory, softWrapOpportunityCandidate, style) == softWrapOpportunityCandidate;
     }
-    // Now we need to collect at least 3 adjacent characters to be able to make a decision whether the previous text item ends with breaking opportunity.
-    // [ex-][ample] <- second to last[x] last[-] current[a]
-    // We need at least 1 character in the current inline text item and 2 more from previous inline items.
-    auto previousContent = currentTextItem.inlineTextBox().content();
-    auto currentContent = nextInlineTextItem.inlineTextBox().content();
-    if (!previousContent.is8Bit()) {
-        // FIXME: Remove this workaround when we move over to a better way of handling prior-context with Unicode.
-        // See the templated CharacterType in nextBreakablePosition for last and lastlast characters.
-        currentContent.convertTo16Bit();
-    }
-    auto& style = nextInlineTextItem.style();
-    auto lineBreakIteratorFactory = CachedLineBreakIteratorFactory { currentContent, style.computedLocale(), TextUtil::lineBreakIteratorMode(style.lineBreak()), TextUtil::contentAnalysis(style.wordBreak()) };
-    auto previousContentLength = previousContent.length();
-    // FIXME: We should look into the entire uncommitted content for more text context.
-    UChar lastCharacter = previousContentLength ? previousContent[previousContentLength - 1] : 0;
-    if (lastCharacter == softHyphen && currentTextItem.style().hyphens() == Hyphens::None)
-        return false;
-    UChar secondToLastCharacter = previousContentLength > 1 ? previousContent[previousContentLength - 2] : 0;
-    lineBreakIteratorFactory.priorContext().set({ secondToLastCharacter, lastCharacter });
-    // Now check if we can break right at the inline item boundary.
-    // With the [ex-ample], findNextBreakablePosition should return the startPosition (0).
-    // FIXME: Check if there's a more correct way of finding breaking opportunities.
-    return !TextUtil::findNextBreakablePosition(lineBreakIteratorFactory, 0, style);
+    return TextUtil::mayBreakInBetween(previousInlineTextItem, nextInlineTextItem);
 }
 
-static inline bool isAtSoftWrapOpportunity(const InlineItem& current, const InlineItem& next)
+static inline bool isAtSoftWrapOpportunity(const InlineItem& previous, const InlineItem& next)
 {
     // FIXME: Transition no-wrapping logic from InlineContentBreaker to here where we compute the soft wrap opportunity indexes.
-    // "is at" simple means that there's a soft wrap opportunity right after the [current].
+    // "is at" simple means that there's a soft wrap opportunity right after the [previous].
     // [text][ ][text][inline box start]... (<div>text content<span>..</div>)
     // soft wrap indexes: 0 and 1 definitely, 2 depends on the content after the [inline box start].
 
@@ -593,10 +574,10 @@ static inline bool isAtSoftWrapOpportunity(const InlineItem& current, const Inli
     // e.g. [inline box start][prior_continuous_content][inline box end] (<span>prior_continuous_content</span>)
     // An incoming <img> box would enable us to commit the "<span>prior_continuous_content</span>" content
     // but an incoming text content would not necessarily.
-    ASSERT(current.isText() || current.isBox());
+    ASSERT(previous.isText() || previous.isBox());
     ASSERT(next.isText() || next.isBox());
-    if (current.isText() && next.isText()) {
-        auto& currentInlineTextItem = downcast<InlineTextItem>(current);
+    if (previous.isText() && next.isText()) {
+        auto& currentInlineTextItem = downcast<InlineTextItem>(previous);
         auto& nextInlineTextItem = downcast<InlineTextItem>(next);
         if (currentInlineTextItem.isWhitespace() && nextInlineTextItem.isWhitespace()) {
             // <span> </span><span> </span>. Depending on the styles, there may or may not be a soft wrap opportunity between these 2 whitespace content.
@@ -612,19 +593,19 @@ static inline bool isAtSoftWrapOpportunity(const InlineItem& current, const Inli
             auto& style = nextInlineTextItem.style();
             return TextUtil::isWrappingAllowed(style) && style.whiteSpaceCollapse() != WhiteSpaceCollapse::BreakSpaces && style.lineBreak() != LineBreak::AfterWhiteSpace;
         }
-        if (current.style().lineBreak() == LineBreak::Anywhere || next.style().lineBreak() == LineBreak::Anywhere) {
+        if (previous.style().lineBreak() == LineBreak::Anywhere || next.style().lineBreak() == LineBreak::Anywhere) {
             // There is a soft wrap opportunity around every typographic character unit, including around any punctuation character
             // or preserved white spaces, or in the middle of words.
             return true;
         }
-        // Both current and next items are non-whitespace text.
+        // Both previous and next items are non-whitespace text.
         // [text][text] : is a continuous content.
         // [text-][text] : after [hyphen] position is a soft wrap opportunity.
         return endsWithSoftWrapOpportunity(currentInlineTextItem, nextInlineTextItem);
     }
-    if (current.layoutBox().isListMarkerBox() || next.layoutBox().isListMarkerBox())
+    if (previous.layoutBox().isListMarkerBox() || next.layoutBox().isListMarkerBox())
         return true;
-    if (current.isBox() || next.isBox()) {
+    if (previous.isBox() || next.isBox()) {
         // [text][inline box start][inline box end][inline box] (text<span></span><img>) : there's a soft wrap opportunity between the [text] and [img].
         // The line breaking behavior of a replaced element or other atomic inline is equivalent to an ideographic character.
         return true;
@@ -645,20 +626,24 @@ size_t InlineFormattingGeometry::nextWrapOpportunity(size_t startIndex, const In
     // [ex-][inline box start][line break][ample] (ex-<span><br>ample). Wrap index is after [br].
     auto previousInlineItemIndex = std::optional<size_t> { };
     for (auto index = startIndex; index < layoutRange.endIndex(); ++index) {
-        auto& inlineItem = inlineItems[index];
-        if (inlineItem.isLineBreak() || inlineItem.isWordBreakOpportunity()) {
+        auto& currentItem = inlineItems[index];
+        if (currentItem.isLineBreak() || currentItem.isWordBreakOpportunity()) {
             // We always stop at explicit wrapping opportunities e.g. <br>. However the wrap position may be at later position.
             // e.g. <span><span><br></span></span> <- wrap position is after the second </span>
             // but in case of <span><br><span></span></span> <- wrap position is right after <br>.
             for (++index; index < layoutRange.endIndex() && inlineItems[index].isInlineBoxEnd(); ++index) { }
             return index;
         }
-        if (inlineItem.isInlineBoxStart() || inlineItem.isInlineBoxEnd()) {
+        if (currentItem.isInlineBoxStart() || currentItem.isInlineBoxEnd()) {
             // Need to see what comes next to decide.
             continue;
         }
-        ASSERT(inlineItem.isText() || inlineItem.isBox() || inlineItem.isFloat());
-        if (inlineItem.isFloat()) {
+        if (currentItem.isOpaque()) {
+            // This item is invisible to line breaking. Need to pretend it's not here.
+            continue;
+        }
+        ASSERT(currentItem.isText() || currentItem.isBox() || currentItem.isFloat());
+        if (currentItem.isFloat()) {
             // While floats are not part of the inline content and they are not supposed to introduce soft wrap opportunities,
             // e.g. [text][float box][float box][text][float box][text] is essentially just [text][text][text]
             // figuring out whether a float (or set of floats) should stay on the line or not (and handle potentially out of order inline items)
@@ -673,7 +658,6 @@ size_t InlineFormattingGeometry::nextWrapOpportunity(size_t startIndex, const In
         }
         // At this point previous and current items are not necessarily adjacent items e.g "previous<span>current</span>"
         auto& previousItem = inlineItems[*previousInlineItemIndex];
-        auto& currentItem = inlineItems[index];
         if (isAtSoftWrapOpportunity(previousItem, currentItem)) {
             if (*previousInlineItemIndex + 1 == index && (!previousItem.isText() || !currentItem.isText())) {
                 // We only know the exact soft wrap opportunity index when the previous and current items are next to each other.
@@ -701,7 +685,7 @@ size_t InlineFormattingGeometry::nextWrapOpportunity(size_t startIndex, const In
             // Soft wrap opportunity is at the first inline box that encloses the trailing content.
             for (auto candidateIndex = start + 1; candidateIndex < end; ++candidateIndex) {
                 auto& inlineItem = inlineItems[candidateIndex];
-                ASSERT(inlineItem.isInlineBoxStart() || inlineItem.isInlineBoxEnd());
+                ASSERT(inlineItem.isInlineBoxStart() || inlineItem.isInlineBoxEnd() || inlineItem.isOpaque());
                 if (inlineItem.isInlineBoxStart())
                     inlineBoxStack.append({ &inlineItem.layoutBox(), candidateIndex });
                 else if (inlineItem.isInlineBoxEnd() && !inlineBoxStack.isEmpty())

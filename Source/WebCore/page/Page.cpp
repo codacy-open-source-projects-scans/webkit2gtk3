@@ -66,6 +66,7 @@
 #include "EventLoop.h"
 #include "EventNames.h"
 #include "ExtensionStyleSheets.h"
+#include "FilterRenderingMode.h"
 #include "FocusController.h"
 #include "FontCache.h"
 #include "FrameLoader.h"
@@ -161,10 +162,10 @@
 #include "TextResourceDecoder.h"
 #include "UserContentProvider.h"
 #include "UserContentURLPattern.h"
-#include "UserInputBridge.h"
 #include "UserScript.h"
 #include "UserStyleSheet.h"
 #include "ValidationMessageClient.h"
+#include "VisibilityState.h"
 #include "VisitedLinkState.h"
 #include "VisitedLinkStore.h"
 #include "VoidCallback.h"
@@ -292,7 +293,6 @@ Page::Page(PageConfiguration&& pageConfiguration)
 #if ENABLE(CONTEXT_MENUS)
     , m_contextMenuController(makeUniqueRef<ContextMenuController>(*this, WTFMove(pageConfiguration.contextMenuClient)))
 #endif
-    , m_userInputBridge(makeUniqueRef<UserInputBridge>(*this))
     , m_inspectorController(makeUniqueRef<InspectorController>(*this, WTFMove(pageConfiguration.inspectorClient)))
     , m_pointerCaptureController(makeUniqueRef<PointerCaptureController>(*this))
 #if ENABLE(POINTER_LOCK)
@@ -1691,9 +1691,10 @@ void Page::scheduleRenderingUpdateInternal()
 
     auto now = MonotonicTime::now();
     forEachWindowEventLoop([&](WindowEventLoop& windowEventLoop) {
-        auto nextRenderingUpdateTime = m_lastRenderingUpdateTimestamp + preferredRenderingUpdateInterval();
+        auto interval = preferredRenderingUpdateInterval();
+        auto nextRenderingUpdateTime = m_lastRenderingUpdateTimestamp + interval;
         if (nextRenderingUpdateTime < now)
-            nextRenderingUpdateTime = now + preferredRenderingUpdateInterval();
+            nextRenderingUpdateTime = now + interval;
         windowEventLoop.didScheduleRenderingUpdate(*this, nextRenderingUpdateTime);
     });
 }
@@ -1751,6 +1752,10 @@ void Page::updateRendering()
     }
 
     m_lastRenderingUpdateTimestamp = MonotonicTime::now();
+
+    forEachWindowEventLoop([&](WindowEventLoop& eventLoop) {
+        eventLoop.didStartRenderingUpdate(*this);
+    });
 
     bool isSVGImagePage = chrome().client().isSVGImageChromeClient();
     if (!isSVGImagePage)
@@ -2044,9 +2049,6 @@ void Page::renderingUpdateCompleted()
 
     if (!isUtilityPage()) {
         auto nextRenderingUpdate = m_lastRenderingUpdateTimestamp + preferredRenderingUpdateInterval();
-        forEachWindowEventLoop([&](WindowEventLoop& eventLoop) {
-            eventLoop.didFinishRenderingUpdate(*this);
-        });
         m_opportunisticTaskScheduler->reschedule(nextRenderingUpdate);
     }
 }
@@ -3068,7 +3070,7 @@ static const double gMaximumUnpaintedAreaRatio = 0.04;
 
 bool Page::isCountingRelevantRepaintedObjects() const
 {
-    return m_isCountingRelevantRepaintedObjects && m_requestedLayoutMilestones.contains(DidHitRelevantRepaintedObjectsAreaThreshold);
+    return m_isCountingRelevantRepaintedObjects && m_requestedLayoutMilestones.contains(LayoutMilestone::DidHitRelevantRepaintedObjectsAreaThreshold);
 }
 
 void Page::startCountingRelevantRepaintedObjects()
@@ -3168,7 +3170,7 @@ void Page::addRelevantRepaintedObject(RenderObject* object, const LayoutRect& ob
         m_isCountingRelevantRepaintedObjects = false;
         resetRelevantPaintedObjectCounter();
         if (auto* frame = dynamicDowncast<LocalFrame>(mainFrame()))
-            frame->loader().didReachLayoutMilestone(DidHitRelevantRepaintedObjectsAreaThreshold);
+            frame->loader().didReachLayoutMilestone(LayoutMilestone::DidHitRelevantRepaintedObjectsAreaThreshold);
     }
 }
 

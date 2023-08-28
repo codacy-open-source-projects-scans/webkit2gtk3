@@ -575,7 +575,7 @@ sub AddToIncludesForIDLType
             return;
         }
 
-        if ($overrideTypeName eq "IDLWebGLAny" || $overrideTypeName eq "IDLWebGLExtension") {
+        if ($overrideTypeName eq "IDLWebGLAny" || $overrideTypeName eq "IDLWebGLExtensionAny") {
             AddToIncludes("JSDOMConvertWebGL.h", $includesRef, $conditional);
             return;
         }
@@ -5222,10 +5222,6 @@ sub GenerateImplementation
                 $rootString  = "    ${implType}* owner = &js${interfaceName}->wrapped();\n";
                 $rootString .= "    if (UNLIKELY(reason))\n";
                 $rootString .= "        *reason = \"Reachable from ${interfaceName}\";\n";
-            } elsif (GetGenerateIsReachable($interface) eq "ImplWebGLRenderingContext") {
-                $rootString  = "    WebGLRenderingContextBase* owner = WTF::getPtr(js${interfaceName}->wrapped().context());\n";
-                $rootString .= "    if (UNLIKELY(reason))\n";
-                $rootString .= "        *reason = \"Reachable from ${interfaceName}\";\n";
             } elsif (GetGenerateIsReachable($interface) eq "ReachableFromDOMWindow") {
                 $rootString  = "    auto* owner = WTF::getPtr(js${interfaceName}->wrapped().window());\n";
                 $rootString .= "    if (!owner)\n";
@@ -7392,7 +7388,7 @@ sub NativeToJSValueDOMConvertNeedsState
         my $overrideTypeName = $type->extendedAttributes->{OverrideIDLType};
         return 1 if $overrideTypeName eq "IDLIDBKey";
         return 1 if $overrideTypeName eq "IDLWebGLAny";
-        return 1 if $overrideTypeName eq "IDLWebGLExtension";
+        return 1 if $overrideTypeName eq "IDLWebGLExtensionAny";
 
         return 0;
     }
@@ -7425,7 +7421,7 @@ sub NativeToJSValueDOMConvertNeedsGlobalObject
         my $overrideTypeName = $type->extendedAttributes->{OverrideIDLType};
         return 1 if $overrideTypeName eq "IDLIDBKey";
         return 1 if $overrideTypeName eq "IDLWebGLAny";
-        return 1 if $overrideTypeName eq "IDLWebGLExtension";
+        return 1 if $overrideTypeName eq "IDLWebGLExtensionAny";
 
         return 0;
     }

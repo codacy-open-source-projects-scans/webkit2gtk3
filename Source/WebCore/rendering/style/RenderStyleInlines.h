@@ -177,7 +177,7 @@ inline bool RenderStyle::containIntrinsicWidthHasAuto() const { return containIn
 inline bool RenderStyle::containIntrinsicLogicalWidthHasAuto() const { return isHorizontalWritingMode() ? containIntrinsicWidthHasAuto() : containIntrinsicHeightHasAuto(); }
 inline std::optional<Length> RenderStyle::containIntrinsicWidth() const { return m_nonInheritedData->rareData->containIntrinsicWidth; }
 inline ContainIntrinsicSizeType RenderStyle::containIntrinsicWidthType() const { return static_cast<ContainIntrinsicSizeType>(m_nonInheritedData->rareData->containIntrinsicWidthType); }
-inline const Vector<AtomString>& RenderStyle::containerNames() const { return m_nonInheritedData->rareData->containerNames; }
+inline const Vector<Style::ScopedName>& RenderStyle::containerNames() const { return m_nonInheritedData->rareData->containerNames; }
 inline ContainerType RenderStyle::containerType() const { return static_cast<ContainerType>(m_nonInheritedData->rareData->containerType); }
 inline bool RenderStyle::containsInlineSize() const { return effectiveContainment().contains(Containment::InlineSize); }
 inline bool RenderStyle::containsLayout() const { return effectiveContainment().contains(Containment::Layout); }
@@ -195,7 +195,6 @@ inline StyleAppearance RenderStyle::effectiveAppearance() const { return static_
 inline OptionSet<Containment> RenderStyle::effectiveContainment() const { return m_nonInheritedData->rareData->effectiveContainment(); }
 inline bool RenderStyle::effectiveInert() const { return m_rareInheritedData->effectiveInert; }
 inline PointerEvents RenderStyle::effectivePointerEvents() const { return effectiveInert() ? PointerEvents::None : pointerEvents(); }
-inline bool RenderStyle::effectiveSkippedContent() const { return m_rareInheritedData->effectiveSkippedContent; }
 inline CSSPropertyID RenderStyle::effectiveStrokeColorProperty() const { return hasExplicitlySetStrokeColor() ? CSSPropertyStrokeColor : CSSPropertyWebkitTextStrokeColor; }
 inline OptionSet<TouchAction> RenderStyle::effectiveTouchActions() const { return m_rareInheritedData->effectiveTouchActions; }
 inline UserModify RenderStyle::effectiveUserModify() const { return effectiveInert() ? UserModify::ReadOnly : userModify(); }
@@ -348,7 +347,7 @@ inline std::optional<Length> RenderStyle::initialContainIntrinsicHeight() { retu
 constexpr ContainIntrinsicSizeType RenderStyle::initialContainIntrinsicHeightType() { return ContainIntrinsicSizeType::None; }
 inline std::optional<Length> RenderStyle::initialContainIntrinsicWidth() { return std::nullopt; }
 constexpr ContainIntrinsicSizeType RenderStyle::initialContainIntrinsicWidthType() { return ContainIntrinsicSizeType::None; }
-inline Vector<AtomString> RenderStyle::initialContainerNames() { return { }; }
+inline Vector<Style::ScopedName> RenderStyle::initialContainerNames() { return { }; }
 constexpr ContainerType RenderStyle::initialContainerType() { return ContainerType::Normal; }
 constexpr OptionSet<Containment> RenderStyle::initialContainment() { return { }; }
 constexpr StyleContentAlignmentData RenderStyle::initialContentAlignment() { return { }; }
@@ -453,7 +452,6 @@ constexpr TabSize RenderStyle::initialTabSize() { return 8; }
 constexpr TableLayoutType RenderStyle::initialTableLayout() { return TableLayoutType::Auto; }
 constexpr TextAlignMode RenderStyle::initialTextAlign() { return TextAlignMode::Start; }
 constexpr TextAlignLast RenderStyle::initialTextAlignLast() { return TextAlignLast::Auto; }
-constexpr TextAutospace RenderStyle::initialTextAutospace() { return { }; }
 constexpr TextBoxTrim RenderStyle::initialTextBoxTrim() { return TextBoxTrim::None; }
 constexpr TextCombine RenderStyle::initialTextCombine() { return TextCombine::None; }
 inline StyleColor RenderStyle::initialTextDecorationColor() { return StyleColor::currentColor(); }
@@ -476,7 +474,6 @@ constexpr TextJustify RenderStyle::initialTextJustify() { return TextJustify::Au
 constexpr TextOrientation RenderStyle::initialTextOrientation() { return TextOrientation::Mixed; }
 constexpr TextOverflow RenderStyle::initialTextOverflow() { return TextOverflow::Clip; }
 constexpr TextSecurity RenderStyle::initialTextSecurity() { return TextSecurity::None; }
-constexpr TextSpacingTrim RenderStyle::initialTextSpacingTrim() { return { }; }
 inline StyleColor RenderStyle::initialTextStrokeColor() { return StyleColor::currentColor(); }
 constexpr OptionSet<TextTransform> RenderStyle::initialTextTransform() { return { }; }
 constexpr TextUnderlineOffset RenderStyle::initialTextUnderlineOffset() { return TextUnderlineOffset::createWithAuto(); }
@@ -502,6 +499,7 @@ inline Length RenderStyle::initialWordSpacing() { return zeroLength(); }
 constexpr WritingMode RenderStyle::initialWritingMode() { return WritingMode::HorizontalTb; }
 inline InputSecurity RenderStyle::inputSecurity() const { return static_cast<InputSecurity>(m_nonInheritedData->rareData->inputSecurity); }
 inline bool RenderStyle::isColumnFlexDirection() const { return flexDirection() == FlexDirection::Column || flexDirection() == FlexDirection::ColumnReverse; }
+inline bool RenderStyle::isRowFlexDirection() const { return flexDirection() == FlexDirection::Row || flexDirection() == FlexDirection::RowReverse; }
 constexpr bool RenderStyle::isDisplayBlockLevel() const { return isDisplayBlockType(display()); }
 constexpr bool RenderStyle::isDisplayDeprecatedFlexibleBox(DisplayType display) { return display == DisplayType::Box || display == DisplayType::InlineBox; }
 constexpr bool RenderStyle::isDisplayFlexibleBox(DisplayType display) { return display == DisplayType::Flex || display == DisplayType::InlineFlex; }
@@ -646,6 +644,11 @@ inline const StyleColor& RenderStyle::scrollbarTrackColor() const { return m_rar
 inline float RenderStyle::shapeImageThreshold() const { return m_nonInheritedData->rareData->shapeImageThreshold; }
 inline const Length& RenderStyle::shapeMargin() const { return m_nonInheritedData->rareData->shapeMargin; }
 inline ShapeValue* RenderStyle::shapeOutside() const { return m_nonInheritedData->rareData->shapeOutside.get(); }
+inline std::optional<ContentVisibility> RenderStyle::skippedContentReason() const
+{
+    auto reason = static_cast<ContentVisibility>(m_rareInheritedData->effectiveSkippedContent);
+    return reason == ContentVisibility::Visible ? std::nullopt : std::optional { reason };
+}
 inline OptionSet<SpeakAs> RenderStyle::speakAs() const { return OptionSet<SpeakAs>::fromRaw(m_rareInheritedData->speakAs); }
 inline const AtomString& RenderStyle::specifiedLocale() const { return fontDescription().specifiedLocale(); }
 inline int RenderStyle::specifiedZIndex() const { return m_nonInheritedData->boxData->specifiedZIndex(); }
@@ -833,12 +836,12 @@ inline bool RenderStyle::NonInheritedFlags::operator==(const NonInheritedFlags& 
         && usesContainerUnits == other.usesContainerUnits
         && hasExplicitlyInheritedProperties == other.hasExplicitlyInheritedProperties
         && disallowsFastPathInheritance == other.disallowsFastPathInheritance
+        && hasContentNone == other.hasContentNone
         && isUnique == other.isUnique
         && emptyState == other.emptyState
         && firstChildState == other.firstChildState
         && lastChildState == other.lastChildState
         && isLink == other.isLink
-        && hasContentNone == other.hasContentNone
         && styleType == other.styleType
         && pseudoBits == other.pseudoBits;
 }

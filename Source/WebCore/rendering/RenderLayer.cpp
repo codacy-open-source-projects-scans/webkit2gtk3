@@ -886,11 +886,6 @@ bool RenderLayer::paintsWithFilters() const
     if (!hasFilter())
         return false;
 
-    // The SVG rendering codepath should've already applied the filter to the SVG root,
-    // so do not apply the filter again.
-    if (renderer().isSVGRootOrLegacySVGRoot())
-        return false;
-
     if (RenderLayerFilters::isIdentity(renderer()))
         return false;
 
@@ -3908,8 +3903,7 @@ bool RenderLayer::hitTest(const HitTestRequest& request, const HitTestLocation& 
         if (settings.visualViewportEnabled() && settings.clientCoordinatesRelativeToLayoutViewport()) {
             auto& frameView = renderer().view().frameView();
             LayoutRect absoluteLayoutViewportRect = frameView.layoutViewportRect();
-            auto* localFrame = dynamicDowncast<LocalFrame>(frameView.frame());
-            auto scaleFactor = localFrame ? localFrame->frameScaleFactor() : 1.0f;
+            auto scaleFactor = frameView.frame().frameScaleFactor();
             if (scaleFactor > 1)
                 absoluteLayoutViewportRect.scale(scaleFactor);
             hitTestArea.intersect(absoluteLayoutViewportRect);
@@ -5585,8 +5579,9 @@ void RenderLayer::updateFiltersAfterStyleChange(StyleDifference diff, const Rend
         return;
     }
 
-    // Add the filter as a client to this renderer.
-    if (renderer().style().filter().hasReferenceFilter()) {
+    // Add the filter as a client to this renderer, unless we are a RenderLayer accommodating
+    // an SVG. In that case it takes care of its own resource management for filters.
+    if (renderer().style().filter().hasReferenceFilter() && !renderer().isSVGRootOrLegacySVGRoot()) {
         ensureLayerFilters();
         m_filters->updateReferenceFilterClients(renderer().style().filter());
     } else if (m_filters)

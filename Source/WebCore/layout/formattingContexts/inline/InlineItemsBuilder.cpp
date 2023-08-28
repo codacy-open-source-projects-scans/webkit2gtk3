@@ -460,8 +460,12 @@ static inline void buildBidiParagraph(const RenderStyle& rootStyle, const Inline
         } else if (inlineItem.isFloat()) {
             // Floats are not part of the inline content which make them opaque to bidi.
             inlineItemOffsetList.uncheckedAppend({ });
+        } else if (inlineItem.isOpaque()) {
+            // opaque items are also opaque to bidi.
+            inlineItemOffsetList.uncheckedAppend({ });
         } else
             ASSERT_NOT_IMPLEMENTED_YET();
+
     }
 }
 
@@ -678,13 +682,6 @@ void InlineItemsBuilder::handleTextContent(const InlineTextBox& inlineTextBox, I
         if (handleWhitespace())
             continue;
 
-        auto checkIfAjdactentInlineTextItemsEligibleForTextOnlyLayout = [&] {
-            if (!m_isNonBidiTextAndForcedLineBreakOnlyContent || inlineItems.size() <= 1)
-                return;
-            auto& adjacentInlineItem = inlineItems[inlineItems.size() - 2];
-            m_isNonBidiTextAndForcedLineBreakOnlyContent = adjacentInlineItem.isLineBreak() || (adjacentInlineItem.isText() && downcast<InlineTextItem>(adjacentInlineItem).isWhitespace());
-        };
-
         auto handleNonBreakingSpace = [&] {
             if (style.nbspMode() != NBSPMode::Space) {
                 // Let's just defer to regular non-whitespace inline items when non breaking space needs no special handling.
@@ -703,10 +700,8 @@ void InlineItemsBuilder::handleTextContent(const InlineTextBox& inlineTextBox, I
             currentPosition = endPosition;
             return true;
         };
-        if (handleNonBreakingSpace()) {
-            checkIfAjdactentInlineTextItemsEligibleForTextOnlyLayout();
+        if (handleNonBreakingSpace())
             continue;
-        }
 
         auto handleNonWhitespace = [&] {
             auto startPosition = currentPosition;
@@ -728,10 +723,8 @@ void InlineItemsBuilder::handleTextContent(const InlineTextBox& inlineTextBox, I
             currentPosition = endPosition;
             return true;
         };
-        if (handleNonWhitespace()) {
-            checkIfAjdactentInlineTextItemsEligibleForTextOnlyLayout();
+        if (handleNonWhitespace())
             continue;
-        }
         // Unsupported content?
         ASSERT_NOT_REACHED();
     }

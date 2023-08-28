@@ -195,15 +195,19 @@ void Line::applyRunExpansion(InlineLayoutUnit horizontalAvailableSpace)
     m_contentLogicalWidth += accumulatedExpansion;
 }
 
-void Line::handleTrailingTrimmableContent(TrailingContentAction trailingTrimmableContentAction)
+InlineLayoutUnit Line::handleTrailingTrimmableContent(TrailingContentAction trailingTrimmableContentAction)
 {
     if (m_trimmableTrailingContent.isEmpty() || m_runs.isEmpty())
-        return;
+        return { };
 
-    if (trailingTrimmableContentAction == TrailingContentAction::Preserve)
-        return m_trimmableTrailingContent.reset();
+    if (trailingTrimmableContentAction == TrailingContentAction::Preserve) {
+        m_trimmableTrailingContent.reset();
+        return { };
+    }
 
-    m_contentLogicalWidth -= m_trimmableTrailingContent.remove();
+    auto trimmedWidth = m_trimmableTrailingContent.remove();
+    m_contentLogicalWidth -= trimmedWidth;
+    return trimmedWidth;
 }
 
 void Line::handleOverflowingNonBreakingSpace(TrailingContentAction trailingContentAction, InlineLayoutUnit overflowingWidth)
@@ -356,6 +360,10 @@ void Line::append(const InlineItem& inlineItem, const RenderStyle& style, Inline
         appendReplacedInlineLevelBox(inlineItem, style, logicalWidth);
     else if (inlineItem.isBox())
         appendNonReplacedInlineLevelBox(inlineItem, style, logicalWidth);
+    else if (inlineItem.isOpaque()) {
+        ASSERT(!logicalWidth);
+        appendOpaqueBox(inlineItem, style);
+    }
     else
         ASSERT_NOT_REACHED();
     m_hasNonDefaultBidiLevelRun = m_hasNonDefaultBidiLevelRun || inlineItem.bidiLevel() != UBIDI_DEFAULT_LTR;
@@ -435,7 +443,7 @@ void Line::appendTextContent(const InlineTextItem& inlineTextItem, const RenderS
             // provided both spaces are within the same inline formatting context—is collapsed to have zero advance width.
             if (run.isText())
                 return run.hasCollapsibleTrailingWhitespace();
-            ASSERT(run.isListMarker() || run.isLineSpanningInlineBoxStart() || run.isInlineBoxStart() || run.isInlineBoxEnd() || run.isWordBreakOpportunity());
+            ASSERT(run.isListMarker() || run.isLineSpanningInlineBoxStart() || run.isInlineBoxStart() || run.isInlineBoxEnd() || run.isWordBreakOpportunity() || run.isOpaque());
         }
         // Leading whitespace.
         return true;
@@ -667,6 +675,11 @@ void Line::appendWordBreakOpportunity(const InlineItem& inlineItem, const Render
     m_runs.append({ inlineItem, style, lastRunLogicalRight() });
 }
 
+void Line::appendOpaqueBox(const InlineItem& inlineItem, const RenderStyle& style)
+{
+    m_runs.append({ inlineItem, style, lastRunLogicalRight() });
+}
+
 InlineLayoutUnit Line::addBorderAndPaddingEndForInlineBoxDecorationClone(const InlineItem& inlineBoxStartItem)
 {
     ASSERT(inlineBoxStartItem.isInlineBoxStart());
@@ -719,6 +732,24 @@ bool Line::lineHasVisuallyNonEmptyContent() const
             return true;
     }
     return false;
+}
+
+bool Line::restoreTrimmedTrailingWhitespace(InlineLayoutUnit trimmedTrailingWhitespaceWidth, RunList& runs)
+{
+    auto& lastRun = runs.last();
+    if (!lastRun.isText()) {
+        ASSERT_NOT_REACHED();
+        return false;
+    }
+    auto& layoutBox = downcast<InlineTextBox>(lastRun.layoutBox());
+    if (lastRun.m_textContent->start + lastRun.m_textContent->length == layoutBox.content().length()) {
+        ASSERT_NOT_REACHED();
+        return false;
+    }
+    lastRun.m_logicalWidth += trimmedTrailingWhitespaceWidth;
+    // This must be collapsed whitespace.
+    lastRun.m_textContent->length += 1;
+    return true;
 }
 
 const InlineFormattingContext& Line::formattingContext() const
@@ -776,7 +807,7 @@ InlineLayoutUnit Line::TrimmableTrailingContent::remove()
     // not produce a run since in ::appendText() we see it as a fully trimmable run.
     for (auto index = *m_firstTrimmableRunIndex + 1; index < m_runs.size(); ++index) {
         auto& run = m_runs[index];
-        ASSERT(run.isWordBreakOpportunity() || run.isLineSpanningInlineBoxStart() || run.isInlineBoxStart() || run.isInlineBoxEnd() || run.isLineBreak());
+        ASSERT(run.isWordBreakOpportunity() || run.isLineSpanningInlineBoxStart() || run.isInlineBoxStart() || run.isInlineBoxEnd() || run.isLineBreak() || run.isOpaque());
         run.moveHorizontally(-trimmedWidth);
     }
     if (!trimmableRun.textContent()->length) {
@@ -811,10 +842,12 @@ inline static Line::Run::Type toLineRunType(const InlineItem& inlineItem)
         return Line::Run::Type::InlineBoxStart;
     case InlineItem::Type::InlineBoxEnd:
         return Line::Run::Type::InlineBoxEnd;
+    case InlineItem::Type::Opaque:
+        return Line::Run::Type::Opaque;
     default:
-        RELEASE_ASSERT_NOT_REACHED();
+        ASSERT_NOT_REACHED();
+        return { };
     }
-    return { };
 }
 
 std::optional<Line::Run::TrailingWhitespace::Type> Line::Run::trailingWhitespaceType(const InlineTextItem& inlineTextItem)

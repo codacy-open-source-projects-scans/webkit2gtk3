@@ -1317,6 +1317,17 @@ struct WebCore::WebCodecsEncodedVideoChunkData {
 };
 #endif
 
+header: <WebCore/WebCodecsEncodedAudioChunk.h>
+#if ENABLE(WEB_CODECS)
+enum class WebCore::WebCodecsEncodedAudioChunkType : bool;
+struct WebCore::WebCodecsEncodedAudioChunkData {
+    WebCore::WebCodecsEncodedAudioChunkType type;
+    int64_t timestamp;
+    std::optional<uint64_t> duration;
+    Vector<uint8_t> buffer;
+};
+#endif
+
 struct WebCore::HTMLModelElementCamera {
     double pitch;
     double yaw;
@@ -1847,22 +1858,25 @@ enum class WebCore::DiagnosticLoggingDomain : uint8_t {
 };
 
 struct WebCore::WindowFeatures {
+    bool hasAdditionalFeatures;
+
     std::optional<float> x;
     std::optional<float> y;
     std::optional<float> width;
     std::optional<float> height;
 
-    bool menuBarVisible;
-    bool statusBarVisible;
-    bool toolBarVisible;
-    bool locationBarVisible;
-    bool scrollbarsVisible;
-    bool resizable;
+    std::optional<bool> popup;
+    std::optional<bool> menuBarVisible;
+    std::optional<bool> statusBarVisible;
+    std::optional<bool> toolBarVisible;
+    std::optional<bool> locationBarVisible;
+    std::optional<bool> scrollbarsVisible;
+    std::optional<bool> resizable;
 
-    bool fullscreen;
-    bool dialog;
-    [NotSerialized] bool noopener;
-    [NotSerialized] bool noreferrer;
+    std::optional<bool> fullscreen;
+    std::optional<bool> dialog;
+    [NotSerialized] std::optional<bool> noopener;
+    [NotSerialized] std::optional<bool> noreferrer;
 
     [NotSerialized] Vector<String> additionalFeatures;
 };
@@ -2049,6 +2063,10 @@ header: <WebCore/ScreenProperties.h>
     uint32_t displayMask;
     WebCore::PlatformGPUID gpuID;
     WebCore::DynamicRangeMode preferredDynamicRangeMode;
+#endif
+#if PLATFORM(GTK)
+    WebCore::IntSize screenSize;
+    double dpi;
 #endif
 #if PLATFORM(MAC) || PLATFORM(IOS_FAMILY)
     float scaleFactor;
@@ -2496,6 +2514,7 @@ class WebCore::TransformOperations {
     WebCore::ColorInterpolationMethod colorInterpolationMethod();
     WebCore::GradientSpreadMethod spreadMethod();
     WebCore::GradientColorStops stops();
+    std::optional<WebCore::RenderingResourceIdentifier> renderingResourceIdentifierIfExists();
 }
 
 [Nested, AdditionalEncoder=StreamConnectionEncoder] struct WebCore::Pattern::Parameters {
@@ -3768,6 +3787,14 @@ header: <WebCore/MediaPlayer.h>
     std::optional<Vector<WebCore::FourCC>> allowedMediaAudioCodecIDs;
     std::optional<Vector<WebCore::FourCC>> allowedMediaCaptionFormatTypes;
 };
+
+header: <WebCore/MediaPlayer.h>
+[CustomHeader] struct WebCore::SeekTarget {
+    MediaTime time;
+    MediaTime negativeThreshold;
+    MediaTime positiveThreshold;
+};
+
 #endif
 
 enum class WebCore::MediaPlayerNetworkState : uint8_t {
@@ -4424,6 +4451,7 @@ enum class WebCore::ServiceWorkerClientFrameType : uint8_t {
     None
 };
 
+enum class WebCore::ServiceWorkerIsInspectable : bool
 enum class WebCore::ShouldNotifyWhenResolved : bool
 
 enum class WebCore::ServiceWorkerUpdateViaCache : uint8_t {
@@ -5726,3 +5754,123 @@ struct WebCore::CookieStoreGetOptions {
     String mimeType()
     URL url()
 }
+
+#if PLATFORM(IOS_FAMILY)
+[Nested] enum class WebCore::InspectorOverlayLabel::Arrow::Direction : uint8_t {
+    None,
+    Down,
+    Up,
+    Left,
+    Right
+};
+
+[Nested] enum class WebCore::InspectorOverlayLabel::Arrow::Alignment : uint8_t {
+    None,
+    Leading,
+    Middle,
+    Trailing,
+};
+
+[Nested] enum class WebCore::InspectorOverlayLabel::Content::Decoration::Type : uint8_t {
+    None,
+    Bordered
+};
+
+[Nested] struct WebCore::InspectorOverlayLabel::Content::Decoration {
+    WebCore::InspectorOverlayLabel::Content::Decoration::Type type;
+    WebCore::Color color;
+};
+
+[Nested] struct WebCore::InspectorOverlayLabel::Content {
+    String text;
+    WebCore::Color textColor;
+    WebCore::InspectorOverlayLabel::Content::Decoration decoration;
+};
+
+[Nested] struct WebCore::InspectorOverlayLabel::Arrow {
+    WebCore::InspectorOverlayLabel::Arrow::Direction direction;
+    WebCore::InspectorOverlayLabel::Arrow::Alignment alignment
+};
+
+class WebCore::InspectorOverlayLabel {
+    Vector<WebCore::InspectorOverlayLabel::Content> m_contents;
+    WebCore::FloatPoint m_location;
+    WebCore::Color m_backgroundColor;
+    WebCore::InspectorOverlayLabel::Arrow m_arrow;
+};
+
+[Nested] struct WebCore::InspectorOverlayHighlight::FlexHighlightOverlay {
+        WebCore::Color color;
+        WebCore::FloatQuad containerBounds;
+        Vector<WebCore::FloatQuad> itemBounds;
+        Vector<WebCore::FloatQuad> mainAxisGaps;
+        Vector<WebCore::FloatQuad> mainAxisSpaceBetweenItemsAndGaps;
+        Vector<WebCore::FloatQuad> spaceBetweenItemsAndCrossAxisSpace;
+        Vector<WebCore::FloatQuad> crossAxisGaps;
+        Vector<WebCore::InspectorOverlayLabel> labels;
+};
+
+[Nested] struct WebCore::InspectorOverlayHighlight::GridHighlightOverlay::Area {
+    String name;
+    WebCore::FloatQuad quad;
+};
+
+[Nested] struct WebCore::InspectorOverlayHighlight::GridHighlightOverlay {
+    WebCore::Color color;
+    Vector<WebCore::FloatLine> gridLines;
+    Vector<WebCore::FloatQuad> gaps;
+    Vector<WebCore::InspectorOverlayHighlight::GridHighlightOverlay::Area> areas;
+    Vector<WebCore::InspectorOverlayLabel> labels;
+};
+
+[Nested] enum class WebCore::InspectorOverlayHighlight::Type : uint8_t {
+    None,
+    Node,
+    NodeList,
+    Rects,
+};
+
+header: <WebCore/InspectorOverlay.h>
+[CustomHeader] struct WebCore::InspectorOverlayHighlight {
+    WebCore::Color contentColor;
+    WebCore::Color contentOutlineColor;
+    WebCore::Color paddingColor;
+    WebCore::Color borderColor;
+    WebCore::Color marginColor;
+    WebCore::InspectorOverlayHighlight::Type type;
+    Vector<WebCore::FloatQuad> quads;
+    Vector<WebCore::InspectorOverlayHighlight::GridHighlightOverlay> gridHighlightOverlays;
+    Vector<WebCore::InspectorOverlayHighlight::FlexHighlightOverlay> flexHighlightOverlays;
+    bool usePageCoordinates;
+};
+
+#endif
+
+header: <WebCore/DiagnosticLoggingClient.h>
+[CustomHeader] struct WebCore::DiagnosticLoggingDictionary {
+    HashMap<String, std::variant<String, uint64_t, int64_t, bool, double>> dictionary;
+};
+
+using WebCore::ViewportConstraints::AnchorEdges = unsigned;
+
+header: <WebCore/ScrollingConstraints.h>
+[CustomHeader] class WebCore::FixedPositionViewportConstraints : WebCore::ViewportConstraints {
+    WebCore::FloatSize alignmentOffset();
+    WebCore::ViewportConstraints::AnchorEdges anchorEdges();
+    WebCore::FloatRect viewportRectAtLastLayout();
+    WebCore::FloatPoint layerPositionAtLastLayout();
+};
+
+[CustomHeader] class WebCore::StickyPositionViewportConstraints : WebCore::ViewportConstraints {
+    WebCore::FloatSize alignmentOffset();
+    WebCore::ViewportConstraints::AnchorEdges anchorEdges();
+    float leftOffset();
+    float rightOffset();
+    float topOffset();
+    float bottomOffset();
+    WebCore::FloatRect constrainingRectAtLastLayout();
+    WebCore::FloatRect containingBlockRect();
+    WebCore::FloatRect stickyBoxRect();
+    WebCore::FloatSize stickyOffsetAtLastLayout();
+    WebCore::FloatPoint layerPositionAtLastLayout();
+};

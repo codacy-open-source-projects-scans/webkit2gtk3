@@ -22,9 +22,12 @@
 
 #if ENABLE(WEB_CODECS) && USE(GSTREAMER)
 
+#include "GStreamerCodecUtilities.h"
 #include "GStreamerCommon.h"
 #include "GStreamerElementHarness.h"
 #include "GStreamerRegistryScanner.h"
+#include "HEVCUtilities.h"
+#include "VP9Utilities.h"
 #include "VideoFrameGStreamer.h"
 #include <wtf/WorkQueue.h>
 
@@ -39,13 +42,23 @@ static WorkQueue& gstDecoderWorkQueue()
     return queue.get();
 }
 
-class GStreamerInternalVideoDecoder : public ThreadSafeRefCounted<GStreamerInternalVideoDecoder> {
+class GStreamerInternalVideoDecoder : public ThreadSafeRefCounted<GStreamerInternalVideoDecoder>
+    , public CanMakeWeakPtr<GStreamerInternalVideoDecoder, WeakPtrFactoryInitialization::Eager> {
+    WTF_MAKE_FAST_ALLOCATED;
+
 public:
     static Ref<GStreamerInternalVideoDecoder> create(const String& codecName, const VideoDecoder::Config& config, VideoDecoder::OutputCallback&& outputCallback, VideoDecoder::PostTaskCallback&& postTaskCallback, GRefPtr<GstElement>&& element)
     {
         return adoptRef(*new GStreamerInternalVideoDecoder(codecName, config, WTFMove(outputCallback), WTFMove(postTaskCallback), WTFMove(element)));
     }
-    ~GStreamerInternalVideoDecoder() = default;
+    ~GStreamerInternalVideoDecoder()
+    {
+        if (isConfigured()) {
+            GST_DEBUG_OBJECT(harnessedElement(), "Disposing video decoder");
+            return;
+        }
+        GST_DEBUG("Disposing un-configured video decoder");
+    }
 
     void postTask(Function<void()>&& task) { m_postTaskCallback(WTFMove(task)); }
     void decode(std::span<const uint8_t>, bool isKeyFrame, int64_t timestamp, std::optional<uint64_t> duration,  VideoDecoder::DecodeCallback&&);
@@ -53,6 +66,8 @@ public:
     void close() { m_isClosed = true; }
 
     bool isConfigured() const { return !!m_inputCaps; }
+
+    GstElement* harnessedElement() const { return m_harness->element(); }
 
 private:
     GStreamerInternalVideoDecoder(const String& codecName, const VideoDecoder::Config&, VideoDecoder::OutputCallback&&, VideoDecoder::PostTaskCallback&&, GRefPtr<GstElement>&&);
@@ -66,12 +81,40 @@ private:
     GRefPtr<GstCaps> m_inputCaps;
 };
 
+static bool validateCodecString(const StringView& codecString)
+{
+    if (codecString.startsWith("avc1"_s)) {
+        auto parameters = parseAVCCodecParameters(codecString);
+        // Limit to High Profile, level 5.2.
+        return parameters && parameters->profileIDC <= 100 && parameters->levelIDC <= 52;
+    }
+    if (codecString.startsWith("vp09"_s)) {
+        auto parameters = parseVPCodecParameters(codecString);
+        return parameters.has_value();
+    }
+    if (codecString.startsWith("hvc1"_s) || codecString.startsWith("hev1"_s))
+        return GStreamerCodecUtilities::parseHEVCProfile(codecString.toString());
+    if (codecString.startsWith("av01."_s)) {
+        auto components = codecString.split('.');
+        auto nextElement = components.begin();
+        ++nextElement;
+
+        auto profile = *nextElement;
+        return profile == "0"_s || profile == "1"_s || profile == "2"_s;
+    }
+
+    return true;
+}
+
 bool GStreamerVideoDecoder::create(const String& codecName, const Config& config, CreateCallback&& callback, OutputCallback&& outputCallback, PostTaskCallback&& postTaskCallback)
 {
     static std::once_flag debugRegisteredFlag;
     std::call_once(debugRegisteredFlag, [] {
         GST_DEBUG_CATEGORY_INIT(webkit_video_decoder_debug, "webkitvideodecoder", 0, "WebKit WebCodecs Video Decoder");
     });
+
+    if (!validateCodecString(codecName))
+        return false;
 
     auto& scanner = GStreamerRegistryScanner::singleton();
     auto lookupResult = scanner.isCodecSupported(GStreamerRegistryScanner::Configuration::Decoding, codecName);
@@ -90,7 +133,7 @@ bool GStreamerVideoDecoder::create(const String& codecName, const Config& config
     gstDecoderWorkQueue().dispatch([callback = WTFMove(callback), decoder = WTFMove(decoder)]() mutable {
         auto internalDecoder = decoder->m_internalDecoder;
         internalDecoder->postTask([callback = WTFMove(callback), decoder = WTFMove(decoder)]() mutable {
-            GST_DEBUG("Video decoder created");
+            GST_DEBUG_OBJECT(decoder->m_internalDecoder->harnessedElement(), "Video decoder created");
             callback(UniqueRef<VideoDecoder> { WTFMove(decoder) });
         });
     });
@@ -191,8 +234,11 @@ GStreamerInternalVideoDecoder::GStreamerInternalVideoDecoder(const String& codec
     } else
         harnessedElement = WTFMove(element);
 
-    m_harness = GStreamerElementHarness::create(WTFMove(harnessedElement), [protectedThis = Ref { *this }, this](auto& stream, const GRefPtr<GstBuffer>& outputBuffer) {
-        if (protectedThis->m_isClosed)
+    m_harness = GStreamerElementHarness::create(WTFMove(harnessedElement), [weakThis = WeakPtr { *this }, this](auto& stream, const GRefPtr<GstBuffer>& outputBuffer) {
+        if (!weakThis)
+            return;
+
+        if (m_isClosed)
             return;
 
         GST_TRACE_OBJECT(m_harness->element(), "Got frame with PTS: %" GST_TIME_FORMAT, GST_TIME_ARGS(GST_BUFFER_PTS(outputBuffer.get())));
@@ -200,8 +246,11 @@ GStreamerInternalVideoDecoder::GStreamerInternalVideoDecoder(const String& codec
         if (m_presentationSize.isEmpty())
             m_presentationSize = getVideoResolutionFromCaps(stream.outputCaps().get()).value_or(FloatSize { 0, 0 });
 
-        m_postTaskCallback([protectedThis = Ref { *this }, this, outputBuffer = GRefPtr<GstBuffer>(outputBuffer), outputCaps = stream.outputCaps()]() mutable {
-            if (protectedThis->m_isClosed)
+        m_postTaskCallback([weakThis = WeakPtr { *this }, this, outputBuffer, outputCaps = stream.outputCaps()]() mutable {
+            if (!weakThis)
+                return;
+
+            if (m_isClosed)
                 return;
 
             auto sample = adoptGRef(gst_sample_new(outputBuffer.get(), outputCaps.get(), nullptr, nullptr));
@@ -217,11 +266,14 @@ void GStreamerInternalVideoDecoder::decode(std::span<const uint8_t> frameData, b
     GST_DEBUG_OBJECT(m_harness->element(), "Decoding%s frame", isKeyFrame ? " key" : "");
     auto buffer = wrapSpanData(frameData);
     if (!buffer) {
-        m_postTaskCallback([protectedThis = Ref { *this }, callback = WTFMove(callback)]() mutable {
-            if (protectedThis->m_isClosed)
+        m_postTaskCallback([weakThis = WeakPtr { *this }, this, callback = WTFMove(callback)]() mutable {
+            if (!weakThis)
                 return;
 
-            protectedThis->m_outputCallback(makeUnexpected("Empty frame"_s));
+            if (m_isClosed)
+                return;
+
+            m_outputCallback(makeUnexpected("Empty frame"_s));
             callback({ });
         });
         return;
@@ -233,14 +285,17 @@ void GStreamerInternalVideoDecoder::decode(std::span<const uint8_t> frameData, b
 
     // FIXME: Maybe configure segment here, could be useful for reverse playback.
     auto result = m_harness->pushSample(adoptGRef(gst_sample_new(buffer.get(), m_inputCaps.get(), nullptr, nullptr)));
-    m_postTaskCallback([protectedThis = Ref { *this }, callback = WTFMove(callback), result]() mutable {
-        if (protectedThis->m_isClosed)
+    m_postTaskCallback([weakThis = WeakPtr { *this }, this, callback = WTFMove(callback), result]() mutable {
+        if (!weakThis)
+            return;
+
+        if (weakThis->m_isClosed)
             return;
 
         if (result)
-            protectedThis->m_harness->processOutputBuffers();
+            m_harness->processOutputBuffers();
         else
-            protectedThis->m_outputCallback(makeUnexpected("Decode error"_s));
+            m_outputCallback(makeUnexpected("Decode error"_s));
 
         callback({ });
     });

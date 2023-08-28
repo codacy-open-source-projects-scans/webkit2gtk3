@@ -2081,8 +2081,7 @@ static RenderObject::BlockContentHeightType includeNonFixedHeight(const RenderOb
 
 void RenderElement::adjustComputedFontSizesOnBlocks(float size, float visibleWidth)
 {
-    auto* localFrame = dynamicDowncast<LocalFrame>(view().frameView().frame());
-    auto* document = localFrame ? localFrame->document() : nullptr;
+    auto* document = view().frameView().frame().document();
     if (!document)
         return;
 
@@ -2112,8 +2111,7 @@ void RenderElement::adjustComputedFontSizesOnBlocks(float size, float visibleWid
 
 void RenderElement::resetTextAutosizing()
 {
-    auto* localFrame = dynamicDowncast<LocalFrame>(view().frameView().frame());
-    auto* document = localFrame ? localFrame->document() : nullptr;
+    auto* document = view().frameView().frame().document();
     if (!document)
         return;
 
@@ -2270,5 +2268,23 @@ bool RenderElement::isSkippedContentRoot() const
 {
     return WebCore::isSkippedContentRoot(style(), element());
 }
+
+bool RenderElement::hasEligibleContainmentForSizeQuery() const
+{
+    if (!shouldApplyLayoutContainment())
+        return false;
+
+    switch (style().containerType()) {
+    case ContainerType::InlineSize:
+        return shouldApplyInlineSizeContainment();
+    case ContainerType::Size:
+        return shouldApplySizeContainment();
+    case ContainerType::Normal:
+        return true;
+    }
+    ASSERT_NOT_REACHED();
+    return false;
+}
+
 
 }

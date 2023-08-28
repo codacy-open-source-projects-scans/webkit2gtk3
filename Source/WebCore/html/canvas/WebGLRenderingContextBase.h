@@ -38,6 +38,8 @@
 #include "WebGLAny.h"
 #include "WebGLBuffer.h"
 #include "WebGLContextAttributes.h"
+#include "WebGLExtension.h"
+#include "WebGLExtensionAny.h"
 #include "WebGLFramebuffer.h"
 #include "WebGLProgram.h"
 #include "WebGLQuery.h"
@@ -74,69 +76,16 @@ class AbstractLocker;
 
 namespace WebCore {
 
-class ANGLEInstancedArrays;
-class EXTBlendMinMax;
-class EXTClipControl;
-class EXTColorBufferFloat;
-class EXTColorBufferHalfFloat;
-class EXTConservativeDepth;
-class EXTDepthClamp;
-class EXTDisjointTimerQuery;
-class EXTDisjointTimerQueryWebGL2;
-class EXTFloatBlend;
-class EXTFragDepth;
-class EXTPolygonOffsetClamp;
-class EXTRenderSnorm;
-class EXTShaderTextureLOD;
-class EXTsRGB;
-class EXTTextureCompressionBPTC;
-class EXTTextureCompressionRGTC;
-class EXTTextureFilterAnisotropic;
-class EXTTextureMirrorClampToEdge;
-class EXTTextureNorm16;
 class HTMLImageElement;
 class ImageData;
 class IntSize;
-class KHRParallelShaderCompile;
-class NVShaderNoperspectiveInterpolation;
-class OESDrawBuffersIndexed;
-class OESElementIndexUint;
-class OESFBORenderMipmap;
-class OESSampleVariables;
-class OESShaderMultisampleInterpolation;
-class OESStandardDerivatives;
-class OESTextureFloat;
-class OESTextureFloatLinear;
-class OESTextureHalfFloat;
-class OESTextureHalfFloatLinear;
-class OESVertexArrayObject;
 class WebCodecsVideoFrame;
 class WebCoreOpaqueRoot;
 class WebGLActiveInfo;
-class WebGLClipCullDistance;
-class WebGLColorBufferFloat;
-class WebGLCompressedTextureASTC;
-class WebGLCompressedTextureETC;
-class WebGLCompressedTextureETC1;
-class WebGLCompressedTexturePVRTC;
-class WebGLCompressedTextureS3TC;
-class WebGLCompressedTextureS3TCsRGB;
-class WebGLDebugRendererInfo;
-class WebGLDebugShaders;
-class WebGLDepthTexture;
-class WebGLDrawBuffers;
-class WebGLDrawInstancedBaseVertexBaseInstance;
-class WebGLExtension;
-class WebGLLoseContext;
-class WebGLMultiDraw;
-class WebGLMultiDrawInstancedBaseVertexBaseInstance;
 class WebGLObject;
 class WebGLPolygonMode;
-class WebGLProvokingVertex;
-class WebGLRenderSharedExponent;
 class WebGLShader;
 class WebGLShaderPrecisionFormat;
-class WebGLStencilTexturing;
 class WebGLUniformLocation;
 
 #if ENABLE(VIDEO)
@@ -273,7 +222,7 @@ public:
     WebGLAny getBufferParameter(GCGLenum target, GCGLenum pname);
     WEBCORE_EXPORT std::optional<WebGLContextAttributes> getContextAttributes();
     GCGLenum getError();
-    virtual WebGLExtension* getExtension(const String& name) = 0;
+    virtual std::optional<WebGLExtensionAny> getExtension(const String& name) = 0;
     virtual WebGLAny getFramebufferAttachmentParameter(GCGLenum target, GCGLenum attachment, GCGLenum pname) = 0;
     virtual WebGLAny getParameter(GCGLenum pname);
     WebGLAny getProgramParameter(WebGLProgram&, GCGLenum pname);
@@ -309,7 +258,7 @@ public:
 
     void lineWidth(GCGLfloat);
     void linkProgram(WebGLProgram&);
-    bool linkProgramWithoutInvalidatingAttribLocations(WebGLProgram*);
+    bool linkProgramWithoutInvalidatingAttribLocations(WebGLProgram&);
     virtual void pixelStorei(GCGLenum pname, GCGLint param);
 #if ENABLE(WEBXR)
     using MakeXRCompatiblePromise = DOMPromiseDeferred<void>;
@@ -564,15 +513,18 @@ protected:
     // like GL_FLOAT, GL_INT, etc.
     unsigned sizeInBytes(GCGLenum type);
 
-    // Validates the incoming WebGL object, which is assumed to be non-null.
-    // Checks that the object belongs to this context and that it's not marked for
-    // deletion. Performs a context lost check internally.
-    bool validateWebGLObject(const char*, WebGLObject*);
+    // Validates the incoming WebGL object.
+    template<typename T> bool validateWebGLObject(const char*, const T&);
+    // Helper function for APIs which can legally receive null objects, including
+    // the bind* calls (bindBuffer, bindTexture, etc.) and useProgram.
+    // This returns true for null WebGLObject arguments!
+    template<typename T> bool validateNullableWebGLObject(const char*, const T*);
+    template<typename T> GCGLboolean validateIsWebGLObject(const T*) const;
 
     // Validates the incoming WebGL program or shader, which is assumed to be
     // non-null. OpenGL ES's validation rules differ for these types of objects
     // compared to others. Performs a context lost check internally.
-    bool validateWebGLProgramOrShader(const char*, WebGLObject*);
+    bool validateWebGLObject(const char*, WebGLObject*);
 
     bool validateVertexArrayObject(const char* functionName);
 
@@ -616,10 +568,10 @@ protected:
     bool m_markedCanvasDirty;
 
     // List of bound VBO's. Used to maintain info about sizes for ARRAY_BUFFER and stored values for ELEMENT_ARRAY_BUFFER
-    RefPtr<WebGLBuffer> m_boundArrayBuffer;
+    WebGLBindingPoint<WebGLBuffer, GraphicsContextGL::ARRAY_BUFFER> m_boundArrayBuffer;
 
     RefPtr<WebGLVertexArrayObjectBase> m_defaultVertexArrayObject;
-    RefPtr<WebGLVertexArrayObjectBase> m_boundVertexArrayObject;
+    WebGLBindingPoint<WebGLVertexArrayObjectBase> m_boundVertexArrayObject;
 
     void setBoundVertexArrayObject(const AbstractLocker&, WebGLVertexArrayObjectBase*);
 
@@ -650,13 +602,13 @@ protected:
     unsigned m_maxVertexAttribs;
 
     RefPtr<WebGLProgram> m_currentProgram;
-    RefPtr<WebGLFramebuffer> m_framebufferBinding;
-    RefPtr<WebGLRenderbuffer> m_renderbufferBinding;
+    WebGLBindingPoint<WebGLFramebuffer> m_framebufferBinding;
+    WebGLBindingPoint<WebGLRenderbuffer> m_renderbufferBinding;
     struct TextureUnitState {
-        RefPtr<WebGLTexture> texture2DBinding;
-        RefPtr<WebGLTexture> textureCubeMapBinding;
-        RefPtr<WebGLTexture> texture3DBinding;
-        RefPtr<WebGLTexture> texture2DArrayBinding;
+        WebGLBindingPoint<WebGLTexture, GraphicsContextGL::TEXTURE_2D> texture2DBinding;
+        WebGLBindingPoint<WebGLTexture, GraphicsContextGL::TEXTURE_CUBE_MAP> textureCubeMapBinding;
+        WebGLBindingPoint<WebGLTexture, GraphicsContextGL::TEXTURE_3D> texture3DBinding;
+        WebGLBindingPoint<WebGLTexture, GraphicsContextGL::TEXTURE_2D_ARRAY> texture2DArrayBinding;
     };
     Vector<TextureUnitState> m_textureUnits;
     unsigned long m_activeTextureUnit;
@@ -1028,14 +980,6 @@ protected:
     // Return false if caller should return without further processing.
     bool deleteObject(const AbstractLocker&, WebGLObject*);
 
-    // Helper function for APIs which can legally receive null objects, including
-    // the bind* calls (bindBuffer, bindTexture, etc.) and useProgram. Checks that
-    // the object belongs to this context and that it's not marked for deletion.
-    // Returns false if the caller should return without further processing.
-    // Performs a context lost check internally.
-    // This returns true for null WebGLObject arguments!
-    bool validateNullableWebGLObject(const char* functionName, WebGLObject*);
-
     // Helper function to validate the target for bufferData and
     // getBufferParameter.
     virtual bool validateBufferTarget(const char* functionName, GCGLenum target);
@@ -1118,7 +1062,44 @@ private:
     WeakPtrFactory<WebGLRenderingContextBase> m_contextObjectWeakPtrFactory;
 };
 
+template<typename T>
+bool WebGLRenderingContextBase::validateWebGLObject(const char* functionName, const T& object)
+{
+    if (object.context() != this) {
+        synthesizeGLError(GraphicsContextGL::INVALID_OPERATION, functionName, "object does not belong to this context");
+        return false;
+    }
+    if (!object.isUsable()) {
+        constexpr GCGLenum error = (std::is_same_v<T, WebGLProgram> || std::is_same_v<T, WebGLShader>) ? GraphicsContextGL::INVALID_VALUE : GraphicsContextGL::INVALID_OPERATION;
+        synthesizeGLError(error, functionName, "attempt to use a deleted object");
+        return false;
+    }
+    return true;
+}
+
+template<typename T>
+bool WebGLRenderingContextBase::validateNullableWebGLObject(const char* functionName, const T* object)
+{
+    return !object || validateWebGLObject(functionName, *object);
+}
+
+template<typename T>
+GCGLboolean WebGLRenderingContextBase::validateIsWebGLObject(const T* object) const
+{
+    if (!object)
+        return false;
+    if (object->context() != this)
+        return false;
+    if (!object->isUsable())
+        return false;
+    if (!object->isInitialized())
+        return false;
+    return true;
+}
+
 WebCoreOpaqueRoot root(WebGLRenderingContextBase*);
+
+WebCoreOpaqueRoot root(const WebGLExtension<WebGLRenderingContextBase>*);
 
 } // namespace WebCore
 

@@ -422,6 +422,9 @@ $(PROJECT_DIR)/Modules/cookie-store/CookieSameSite.idl
 $(PROJECT_DIR)/Modules/cookie-store/CookieStore.idl
 $(PROJECT_DIR)/Modules/cookie-store/CookieStoreDeleteOptions.idl
 $(PROJECT_DIR)/Modules/cookie-store/CookieStoreGetOptions.idl
+$(PROJECT_DIR)/Modules/cookie-store/CookieStoreManager.idl
+$(PROJECT_DIR)/Modules/cookie-store/ExtendableCookieChangeEvent.idl
+$(PROJECT_DIR)/Modules/cookie-store/ExtendableCookieChangeEventInit.idl
 $(PROJECT_DIR)/Modules/cookie-store/LocalDOMWindow+CookieStore.idl
 $(PROJECT_DIR)/Modules/credentialmanagement/BasicCredential.idl
 $(PROJECT_DIR)/Modules/credentialmanagement/CredentialCreationOptions.idl
@@ -964,6 +967,7 @@ $(PROJECT_DIR)/Modules/webauthn/PublicKeyCredentialRequestOptions.idl
 $(PROJECT_DIR)/Modules/webauthn/PublicKeyCredentialType.idl
 $(PROJECT_DIR)/Modules/webauthn/ResidentKeyRequirement.idl
 $(PROJECT_DIR)/Modules/webauthn/UserVerificationRequirement.idl
+$(PROJECT_DIR)/Modules/webcodecs/AudioSampleFormat.idl
 $(PROJECT_DIR)/Modules/webcodecs/AvcEncoderConfig.idl
 $(PROJECT_DIR)/Modules/webcodecs/BitrateMode.idl
 $(PROJECT_DIR)/Modules/webcodecs/HardwareAcceleration.idl
@@ -976,7 +980,14 @@ $(PROJECT_DIR)/Modules/webcodecs/VideoMatrixCoefficients.idl
 $(PROJECT_DIR)/Modules/webcodecs/VideoPixelFormat.idl
 $(PROJECT_DIR)/Modules/webcodecs/VideoTransferCharacteristics.idl
 $(PROJECT_DIR)/Modules/webcodecs/WebCodecsAlphaOption.idl
+$(PROJECT_DIR)/Modules/webcodecs/WebCodecsAudioData.idl
+$(PROJECT_DIR)/Modules/webcodecs/WebCodecsAudioDataOutputCallback.idl
+$(PROJECT_DIR)/Modules/webcodecs/WebCodecsAudioDecoder.idl
+$(PROJECT_DIR)/Modules/webcodecs/WebCodecsAudioDecoderConfig.idl
+$(PROJECT_DIR)/Modules/webcodecs/WebCodecsAudioDecoderSupport.idl
 $(PROJECT_DIR)/Modules/webcodecs/WebCodecsCodecState.idl
+$(PROJECT_DIR)/Modules/webcodecs/WebCodecsEncodedAudioChunk.idl
+$(PROJECT_DIR)/Modules/webcodecs/WebCodecsEncodedAudioChunkType.idl
 $(PROJECT_DIR)/Modules/webcodecs/WebCodecsEncodedVideoChunk.idl
 $(PROJECT_DIR)/Modules/webcodecs/WebCodecsEncodedVideoChunkMetadata.idl
 $(PROJECT_DIR)/Modules/webcodecs/WebCodecsEncodedVideoChunkOutputCallback.idl
@@ -1262,6 +1273,7 @@ $(PROJECT_DIR)/dom/ChildNode.idl
 $(PROJECT_DIR)/dom/ClipboardEvent.idl
 $(PROJECT_DIR)/dom/Comment.idl
 $(PROJECT_DIR)/dom/CompositionEvent.idl
+$(PROJECT_DIR)/dom/ContentVisibilityAutoStateChangeEvent.idl
 $(PROJECT_DIR)/dom/CustomElementRegistry.idl
 $(PROJECT_DIR)/dom/CustomEvent.idl
 $(PROJECT_DIR)/dom/DOMException.idl
@@ -1458,7 +1470,6 @@ $(PROJECT_DIR)/html/HTMLMediaElement+AudioOutput.idl
 $(PROJECT_DIR)/html/HTMLMediaElement+RequestVideoFrameCallback.idl
 $(PROJECT_DIR)/html/HTMLMediaElement.idl
 $(PROJECT_DIR)/html/HTMLMenuElement.idl
-$(PROJECT_DIR)/html/HTMLMenuItemElement.idl
 $(PROJECT_DIR)/html/HTMLMetaElement.idl
 $(PROJECT_DIR)/html/HTMLMeterElement.idl
 $(PROJECT_DIR)/html/HTMLModElement.idl

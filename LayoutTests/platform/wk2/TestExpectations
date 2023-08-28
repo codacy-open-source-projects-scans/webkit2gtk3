@@ -687,6 +687,14 @@ fast/history/page-cache-webdatabase-pending-transaction.html [ Skip ]
 webkit.org/b/115274 http/tests/security/contentSecurityPolicy/report-cross-origin-no-cookies-when-private-browsing-toggled.py [ Skip ]
 webkit.org/b/115274 http/tests/security/contentSecurityPolicy/report-same-origin-no-cookies-when-private-browsing-toggled.py [ Skip ]
 
+# These tests are checking that WebContent is terminated when performing an invalid IPC operation for WK2.
+[ Debug ] ipc/restrictedendpoints/deny-access-testOnlyIPC.html [ Crash ]
+[ Debug ] ipc/restrictedendpoints/deny-access-webGPU.html [ Crash ]
+[ Debug ] ipc/restrictedendpoints/deny-access-modelElement.html [ Crash ]
+[ Debug ] ipc/restrictedendpoints/deny-access-attachmentElement.html [ Crash ]
+[ Debug ] ipc/restrictedendpoints/deny-access-webPush.html [ Crash ]
+[ Debug ] ipc/restrictedendpoints/deny-access-updateQuotaBasedOnSpaceUsageForTesting.html [ Crash ]
+
 ### END OF (4) Features that are not supported in WebKit2 and likely never will be
 ########################################
 
@@ -870,5 +878,4 @@ webkit.org/b/259409 imported/w3c/web-platform-tests/cookies/partitioned-cookies/
 
 webkit.org/b/259482 fast/media/managed-media-source-open-crash.html [ Pass Failure ]
 
-webkit.org/b/260107 [ Debug ] http/wpt/workers/modules/dedicated-worker-import-csp.html [ Skip ]
-webkit.org/b/260107 [ Debug ] http/wpt/workers/modules/shared-worker-import-csp.html [ Skip ]
+webkit.org/b/260640 [ Release arm64 ] editing/execCommand/apply-inline-style-to-element-with-no-renderer-crash.html [ Pass Failure ]

@@ -299,6 +299,9 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/cookie-store/CookieStore.idl
     Modules/cookie-store/CookieStoreDeleteOptions.idl
     Modules/cookie-store/CookieStoreGetOptions.idl
+    Modules/cookie-store/CookieStoreManager.idl
+    Modules/cookie-store/ExtendableCookieChangeEvent.idl
+    Modules/cookie-store/ExtendableCookieChangeEventInit.idl
     Modules/cookie-store/LocalDOMWindow+CookieStore.idl
 
     Modules/credentialmanagement/BasicCredential.idl
@@ -730,10 +733,11 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/webauthn/ResidentKeyRequirement.idl
     Modules/webauthn/UserVerificationRequirement.idl
 
+    Modules/webcodecs/AudioSampleFormat.idl
     Modules/webcodecs/AvcEncoderConfig.idl
     Modules/webcodecs/BitrateMode.idl
-    Modules/webcodecs/LatencyMode.idl
     Modules/webcodecs/HardwareAcceleration.idl
+    Modules/webcodecs/LatencyMode.idl
     Modules/webcodecs/PlaneLayout.idl
     Modules/webcodecs/VideoColorPrimaries.idl
     Modules/webcodecs/VideoColorSpace.idl
@@ -742,7 +746,14 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/webcodecs/VideoPixelFormat.idl
     Modules/webcodecs/VideoTransferCharacteristics.idl
     Modules/webcodecs/WebCodecsAlphaOption.idl
+    Modules/webcodecs/WebCodecsAudioData.idl
+    Modules/webcodecs/WebCodecsAudioDataOutputCallback.idl
+    Modules/webcodecs/WebCodecsAudioDecoder.idl
+    Modules/webcodecs/WebCodecsAudioDecoderConfig.idl
+    Modules/webcodecs/WebCodecsAudioDecoderSupport.idl
     Modules/webcodecs/WebCodecsCodecState.idl
+    Modules/webcodecs/WebCodecsEncodedAudioChunk.idl
+    Modules/webcodecs/WebCodecsEncodedAudioChunkType.idl
     Modules/webcodecs/WebCodecsEncodedVideoChunk.idl
     Modules/webcodecs/WebCodecsEncodedVideoChunkMetadata.idl
     Modules/webcodecs/WebCodecsEncodedVideoChunkOutputCallback.idl
@@ -756,8 +767,8 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/webcodecs/WebCodecsVideoEncoderConfig.idl
     Modules/webcodecs/WebCodecsVideoEncoderEncodeOptions.idl
     Modules/webcodecs/WebCodecsVideoEncoderSupport.idl
-    Modules/webcodecs/WebCodecsVideoFrameOutputCallback.idl
     Modules/webcodecs/WebCodecsVideoFrame.idl
+    Modules/webcodecs/WebCodecsVideoFrameOutputCallback.idl
 
     Modules/webdatabase/Database.idl
     Modules/webdatabase/DatabaseCallback.idl
@@ -956,6 +967,7 @@ set(WebCore_NON_SVG_IDL_FILES
     dom/ClipboardEvent.idl
     dom/Comment.idl
     dom/CompositionEvent.idl
+    dom/ContentVisibilityAutoStateChangeEvent.idl
     dom/CustomElementRegistry.idl
     dom/CustomEvent.idl
     dom/DOMException.idl
@@ -1141,7 +1153,6 @@ set(WebCore_NON_SVG_IDL_FILES
     html/HTMLMediaElement+AudioOutput.idl
     html/HTMLMediaElement.idl
     html/HTMLMenuElement.idl
-    html/HTMLMenuItemElement.idl
     html/HTMLMetaElement.idl
     html/HTMLMeterElement.idl
     html/HTMLModElement.idl
@@ -2713,6 +2724,16 @@ list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/Namespace.cpp)
 WEBKIT_COMPUTE_SOURCES(WebCore)
 
 target_precompile_headers(WebCore PRIVATE WebCorePrefix.h)
+
+list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
+    page/ActivityState.serialization.in
+    page/DragActions.serialization.in
+    page/LayoutMilestones.serialization.in
+
+    platform/PlatformScreen.serialization.in
+
+    platform/graphics/InbandTextTrackPrivate.serialization.in
+)
 
 WEBKIT_COPY_FILES(WebCore_CopyPrivateHeaders
     DESTINATION ${WebCore_PRIVATE_FRAMEWORK_HEADERS_DIR}/WebCore

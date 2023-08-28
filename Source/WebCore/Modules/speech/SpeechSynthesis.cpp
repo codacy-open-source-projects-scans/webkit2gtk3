@@ -78,8 +78,9 @@ void SpeechSynthesis::setPlatformSynthesizer(Ref<PlatformSpeechSynthesizer>&& sy
 {
     m_platformSpeechSynthesizer = synthesizer.ptr();
     m_voiceList.clear();
-    m_currentSpeechUtterance = nullptr;
     m_utteranceQueue.clear();
+    // Finish current utterance.
+    speakingErrorOccurred();
     m_isPaused = false;
     m_speechSynthesisClient = nullptr;
 }
@@ -114,7 +115,7 @@ bool SpeechSynthesis::speaking() const
 {
     // If we have a current speech utterance, then that means we're assumed to be in a speaking state.
     // This state is independent of whether the utterance happens to be paused.
-    return m_currentSpeechUtterance;
+    return !!m_currentSpeechUtterance;
 }
 
 bool SpeechSynthesis::pending() const
@@ -132,7 +133,7 @@ bool SpeechSynthesis::paused() const
 void SpeechSynthesis::startSpeakingImmediately(SpeechSynthesisUtterance& utterance)
 {
     utterance.setStartTime(MonotonicTime::now());
-    m_currentSpeechUtterance = &utterance;
+    m_currentSpeechUtterance = makeUnique<SpeechSynthesisUtteranceActivity>(Ref { utterance });
     m_isPaused = false;
 
     if (m_speechSynthesisClient)
@@ -161,7 +162,7 @@ void SpeechSynthesis::cancel()
 {
     // Remove all the items from the utterance queue.
     // Hold on to the current utterance so the platform synthesizer can have a chance to clean up.
-    RefPtr<SpeechSynthesisUtterance> current = m_currentSpeechUtterance;
+    RefPtr current = protectedCurrentSpeechUtterance();
     m_utteranceQueue.clear();
     if (m_speechSynthesisClient) {
         m_speechSynthesisClient->cancel();
@@ -241,42 +242,42 @@ void SpeechSynthesis::didStartSpeaking()
 {
     if (!m_currentSpeechUtterance)
         return;
-    didStartSpeaking(*m_currentSpeechUtterance->platformUtterance());
+    didStartSpeaking(*protectedCurrentSpeechUtterance()->platformUtterance());
 }
 
 void SpeechSynthesis::didFinishSpeaking()
 {
     if (!m_currentSpeechUtterance)
         return;
-    didFinishSpeaking(*m_currentSpeechUtterance->platformUtterance());
+    didFinishSpeaking(*protectedCurrentSpeechUtterance()->platformUtterance());
 }
 
 void SpeechSynthesis::didPauseSpeaking()
 {
     if (!m_currentSpeechUtterance)
         return;
-    didPauseSpeaking(*m_currentSpeechUtterance->platformUtterance());
+    didPauseSpeaking(*protectedCurrentSpeechUtterance()->platformUtterance());
 }
 
 void SpeechSynthesis::didResumeSpeaking()
 {
     if (!m_currentSpeechUtterance)
         return;
-    didResumeSpeaking(*m_currentSpeechUtterance->platformUtterance());
+    didResumeSpeaking(*protectedCurrentSpeechUtterance()->platformUtterance());
 }
 
 void SpeechSynthesis::speakingErrorOccurred()
 {
     if (!m_currentSpeechUtterance)
         return;
-    speakingErrorOccurred(*m_currentSpeechUtterance->platformUtterance());
+    speakingErrorOccurred(*protectedCurrentSpeechUtterance()->platformUtterance());
 }
 
 void SpeechSynthesis::boundaryEventOccurred(bool wordBoundary, unsigned charIndex, unsigned charLength)
 {
     if (!m_currentSpeechUtterance)
         return;
-    boundaryEventOccurred(*m_currentSpeechUtterance->platformUtterance(), wordBoundary ? SpeechBoundary::SpeechWordBoundary : SpeechBoundary::SpeechSentenceBoundary, charIndex, charLength);
+    boundaryEventOccurred(*protectedCurrentSpeechUtterance()->platformUtterance(), wordBoundary ? SpeechBoundary::SpeechWordBoundary : SpeechBoundary::SpeechSentenceBoundary, charIndex, charLength);
 }
 
 void SpeechSynthesis::voicesChanged()
@@ -314,6 +315,11 @@ void SpeechSynthesis::speakingErrorOccurred(PlatformSpeechSynthesisUtterance& ut
 {
     if (utterance.client())
         handleSpeakingCompleted(static_cast<SpeechSynthesisUtterance&>(*utterance.client()), true);
+}
+
+RefPtr<SpeechSynthesisUtterance> SpeechSynthesis::protectedCurrentSpeechUtterance()
+{
+    return m_currentSpeechUtterance ? &m_currentSpeechUtterance->utterance() : nullptr;
 }
 
 } // namespace WebCore

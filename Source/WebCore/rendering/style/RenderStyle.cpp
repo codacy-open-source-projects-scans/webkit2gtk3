@@ -219,12 +219,12 @@ RenderStyle::RenderStyle(CreateDefaultStyleTag)
     m_nonInheritedFlags.usesContainerUnits = false;
     m_nonInheritedFlags.hasExplicitlyInheritedProperties = false;
     m_nonInheritedFlags.disallowsFastPathInheritance = false;
+    m_nonInheritedFlags.hasContentNone = false;
     m_nonInheritedFlags.isUnique = false;
     m_nonInheritedFlags.emptyState = false;
     m_nonInheritedFlags.firstChildState = false;
     m_nonInheritedFlags.lastChildState = false;
     m_nonInheritedFlags.isLink = false;
-    m_nonInheritedFlags.hasContentNone = false;
     m_nonInheritedFlags.styleType = static_cast<unsigned>(PseudoId::None);
     m_nonInheritedFlags.pseudoBits = static_cast<unsigned>(PseudoId::None);
 
@@ -385,21 +385,28 @@ void RenderStyle::fastPathInheritFrom(const RenderStyle& inheritParent)
 inline void RenderStyle::NonInheritedFlags::copyNonInheritedFrom(const NonInheritedFlags& other)
 {
     // Only some flags are copied because NonInheritedFlags contains things that are not actually style data.
-    clear = other.clear;
-    disallowsFastPathInheritance = other.disallowsFastPathInheritance;
     effectiveDisplay = other.effectiveDisplay;
-    floating = other.floating;
-    hasExplicitlyInheritedProperties = other.hasExplicitlyInheritedProperties;
     originalDisplay = other.originalDisplay;
     overflowX = other.overflowX;
     overflowY = other.overflowY;
+    verticalAlign = other.verticalAlign;
+    clear = other.clear;
     position = other.position;
+    unicodeBidi = other.unicodeBidi;
+    floating = other.floating;
     tableLayout = other.tableLayout;
     textDecorationLine = other.textDecorationLine;
-    unicodeBidi = other.unicodeBidi;
-    usesContainerUnits = other.usesContainerUnits;
+    hasExplicitlySetDirection = other.hasExplicitlySetDirection;
+    hasExplicitlySetWritingMode = other.hasExplicitlySetWritingMode;
+#if ENABLE(DARK_MODE_CSS)
+    hasExplicitlySetColorScheme = other.hasExplicitlySetColorScheme;
+#endif
     usesViewportUnits = other.usesViewportUnits;
-    verticalAlign = other.verticalAlign;
+    usesContainerUnits = other.usesContainerUnits;
+    hasExplicitlyInheritedProperties = other.hasExplicitlyInheritedProperties;
+    disallowsFastPathInheritance = other.disallowsFastPathInheritance;
+    hasContentNone = other.hasContentNone;
+    isUnique = other.isUnique;
 }
 
 void RenderStyle::copyNonInheritedFrom(const RenderStyle& other)
@@ -1216,7 +1223,8 @@ static bool rareDataChangeRequiresRepaint(const StyleRareNonInheritedData& first
 
 static bool rareInheritedDataChangeRequiresRepaint(const StyleRareInheritedData& first, const StyleRareInheritedData& second)
 {
-    return first.userModify != second.userModify
+    return first.effectiveInert != second.effectiveInert
+        || first.userModify != second.userModify
         || first.userSelect != second.userSelect
         || first.appleColorFilter != second.appleColorFilter
         || first.imageRendering != second.imageRendering
@@ -1360,6 +1368,9 @@ bool RenderStyle::changeRequiresRecompositeLayer(const RenderStyle& other, Optio
             || m_nonInheritedData->rareData->overscrollBehaviorY != other.m_nonInheritedData->rareData->overscrollBehaviorY)
             return true;
     }
+
+    if (m_rareInheritedData.ptr() != other.m_rareInheritedData.ptr() && m_rareInheritedData->effectiveInert != other.m_rareInheritedData->effectiveInert)
+        return true;
 
     return false;
 }
@@ -2050,12 +2061,12 @@ float RenderStyle::letterSpacing() const
 
 TextSpacingTrim RenderStyle::textSpacingTrim() const
 {
-    return m_rareInheritedData->textSpacingTrim;
+    return fontDescription().textSpacingTrim();
 }
 
 TextAutospace RenderStyle::textAutospace() const
 {
-    return m_rareInheritedData->textAutospace;
+    return fontDescription().textAutospace();
 }
 
 bool RenderStyle::setFontDescription(FontCascadeDescription&& description)
@@ -2170,6 +2181,26 @@ void RenderStyle::setLetterSpacing(float letterSpacing)
     fontCascade().update(selector);
 
     setLetterSpacingWithoutUpdatingFontDescription(letterSpacing);
+}
+
+void RenderStyle::setTextSpacingTrim(TextSpacingTrim value)
+{
+    auto selector = fontCascade().fontSelector();
+    auto description = fontDescription();
+    description.setTextSpacingTrim(value);
+
+    setFontDescription(WTFMove(description));
+    fontCascade().update(selector);
+}
+
+void RenderStyle::setTextAutospace(TextAutospace value)
+{
+    auto selector = fontCascade().fontSelector();
+    auto description = fontDescription();
+    description.setTextAutospace(value);
+
+    setFontDescription(WTFMove(description));
+    fontCascade().update(selector);
 }
 
 void RenderStyle::setLetterSpacingWithoutUpdatingFontDescription(float letterSpacing)
@@ -2404,12 +2435,12 @@ Color RenderStyle::colorResolvingCurrentColor(CSSPropertyID colorProperty, bool 
         return visitedLink ? visitedLinkColor() : color();
     }
 
-    return colorResolvingCurrentColor(result);
+    return colorResolvingCurrentColor(result, visitedLink);
 }
 
-Color RenderStyle::colorResolvingCurrentColor(const StyleColor& color) const
+Color RenderStyle::colorResolvingCurrentColor(const StyleColor& color, bool visitedLink) const
 {
-    return color.resolveColor(this->color());
+    return color.resolveColor(visitedLink ? visitedLinkColor() : this->color());
 }
 
 Color RenderStyle::visitedDependentColor(CSSPropertyID colorProperty, OptionSet<PaintBehavior> paintBehavior) const
@@ -2469,6 +2500,28 @@ Color RenderStyle::effectiveAccentColor() const
         return colorByApplyingColorFilter(colorResolvingCurrentColor(accentColor()));
 
     return colorResolvingCurrentColor(accentColor());
+}
+
+Color RenderStyle::effectiveScrollbarThumbColor() const
+{
+    if (!scrollbarColor().has_value())
+        return { };
+
+    if (hasAppleColorFilter())
+        return colorByApplyingColorFilter(colorResolvingCurrentColor(scrollbarColor().value().thumbColor));
+
+    return colorResolvingCurrentColor(scrollbarColor().value().thumbColor);
+}
+
+Color RenderStyle::effectiveScrollbarTrackColor() const
+{
+    if (!scrollbarColor().has_value())
+        return { };
+
+    if (hasAppleColorFilter())
+        return colorByApplyingColorFilter(colorResolvingCurrentColor(scrollbarColor().value().trackColor));
+
+    return colorResolvingCurrentColor(scrollbarColor().value().trackColor);
 }
 
 const BorderValue& RenderStyle::borderBefore() const

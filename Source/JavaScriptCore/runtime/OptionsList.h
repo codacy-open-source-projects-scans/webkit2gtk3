@@ -197,6 +197,7 @@ bool canUseWebAssemblyFastMemory();
     v(Bool, forceFencedBarrier, false, Normal, nullptr) \
     v(Bool, verboseVisitRace, false, Normal, nullptr) \
     v(Bool, optimizeParallelSlotVisitorsForStoppedMutator, false, Normal, nullptr) \
+    v(Bool, verboseHeapSnapshotLogging, true, Normal, nullptr) \
     v(Unsigned, largeHeapSize, 32 * 1024 * 1024, Normal, nullptr) \
     v(Unsigned, smallHeapSize, 1 * 1024 * 1024, Normal, nullptr) \
     v(Double, smallHeapRAMFraction, 0.25, Normal, nullptr) \
@@ -571,7 +572,7 @@ bool canUseWebAssemblyFastMemory();
     v(Bool, useArrayGroupMethod, false, Normal, "Expose the Object.groupBy() and Map.groupBy() methods.") \
     v(Bool, useAtomicsWaitAsync, true, Normal, "Expose the waitAsync() methods on Atomics.") \
     v(Bool, useSetMethods, true, Normal, "Expose the various Set.prototype methods for handling combinations of sets") \
-    v(Bool, useImportAssertion, false, Normal, "Enable import assertion.") \
+    v(Bool, useImportAttributes, true, Normal, "Enable import attributes.") \
     v(Bool, useIntlDurationFormat, true, Normal, "Expose the Intl DurationFormat.") \
     v(Bool, usePromiseWithResolversMethod, false, Normal, "Expose the Promise.withResolvers() method.") \
     v(Bool, useResizableArrayBuffer, true, Normal, "Expose ResizableArrayBuffer feature.") \

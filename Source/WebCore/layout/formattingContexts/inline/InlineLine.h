@@ -45,7 +45,7 @@ public:
     void initialize(const Vector<InlineItem>& lineSpanningInlineBoxes, bool isFirstFormattedLine);
 
     void append(const InlineItem&, const RenderStyle&, InlineLayoutUnit logicalWidth);
-    // Reserved for TextOnlyLineBuilder
+    // Reserved for TextOnlySimpleLineBuilder
     void appendTextFast(const InlineTextItem&, const RenderStyle&, InlineLayoutUnit logicalWidth);
 
     bool hasContent() const;
@@ -67,7 +67,7 @@ public:
     void addTrailingHyphen(InlineLayoutUnit hyphenLogicalWidth);
 
     enum class TrailingContentAction : uint8_t { Remove, Preserve };
-    void handleTrailingTrimmableContent(TrailingContentAction);
+    InlineLayoutUnit handleTrailingTrimmableContent(TrailingContentAction);
     void handleTrailingHangingContent(std::optional<IntrinsicWidthMode>, InlineLayoutUnit horizontalAvailableSpace, bool isLastFormattedLine);
     void handleOverflowingNonBreakingSpace(TrailingContentAction, InlineLayoutUnit overflowingWidth);
     void resetBidiLevelForTrailingWhitespace(UBiDiLevel rootBidiLevel);
@@ -86,7 +86,8 @@ public:
             ListMarkerOutside,
             InlineBoxStart,
             InlineBoxEnd,
-            LineSpanningInlineBoxStart
+            LineSpanningInlineBoxStart,
+            Opaque
         };
 
         bool isText() const { return m_type == Type::Text || isWordSeparator() || isNonBreakingSpace(); }
@@ -104,6 +105,7 @@ public:
         bool isInlineBoxStart() const { return m_type == Type::InlineBoxStart; }
         bool isLineSpanningInlineBoxStart() const { return m_type == Type::LineSpanningInlineBoxStart; }
         bool isInlineBoxEnd() const { return m_type == Type::InlineBoxEnd; }
+        bool isOpaque() const { return m_type == Type::Opaque; }
 
         bool isContentful() const { return (isText() && textContent()->length) || isBox() || isLineBreak() || isListMarker(); }
         bool isGenerated() const { return isListMarker(); }
@@ -197,6 +199,8 @@ public:
     };
     Result close();
 
+    static bool restoreTrimmedTrailingWhitespace(InlineLayoutUnit trimmedTrailingWhitespaceWidth, RunList&);
+
 private:
     InlineLayoutUnit lastRunLogicalRight() const { return m_runs.isEmpty() ? 0.0f : m_runs.last().logicalRight(); }
 
@@ -207,6 +211,7 @@ private:
     void appendInlineBoxEnd(const InlineItem&, const RenderStyle&, InlineLayoutUnit logicalWidth);
     void appendLineBreak(const InlineItem&, const RenderStyle&);
     void appendWordBreakOpportunity(const InlineItem&, const RenderStyle&);
+    void appendOpaqueBox(const InlineItem&, const RenderStyle&);
 
     InlineLayoutUnit addBorderAndPaddingEndForInlineBoxDecorationClone(const InlineItem& inlineBoxStartItem);
     InlineLayoutUnit removeBorderAndPaddingEndForInlineBoxDecorationClone(const InlineItem& inlineBoxEndItem);

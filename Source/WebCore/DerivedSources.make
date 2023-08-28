@@ -300,6 +300,9 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/cookie-store/CookieStore.idl \
     $(WebCore)/Modules/cookie-store/CookieStoreGetOptions.idl \
     $(WebCore)/Modules/cookie-store/CookieStoreDeleteOptions.idl \
+    $(WebCore)/Modules/cookie-store/CookieStoreManager.idl \
+    $(WebCore)/Modules/cookie-store/ExtendableCookieChangeEvent.idl \
+    $(WebCore)/Modules/cookie-store/ExtendableCookieChangeEventInit.idl \
     $(WebCore)/Modules/cookie-store/LocalDOMWindow+CookieStore.idl \
     $(WebCore)/Modules/credentialmanagement/BasicCredential.idl \
     $(WebCore)/Modules/credentialmanagement/CredentialCreationOptions.idl \
@@ -714,6 +717,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/webauthn/PublicKeyCredentialType.idl \
     $(WebCore)/Modules/webauthn/ResidentKeyRequirement.idl \
     $(WebCore)/Modules/webauthn/UserVerificationRequirement.idl \
+    $(WebCore)/Modules/webcodecs/AudioSampleFormat.idl \
     $(WebCore)/Modules/webcodecs/AvcEncoderConfig.idl \
     $(WebCore)/Modules/webcodecs/BitrateMode.idl \
     $(WebCore)/Modules/webcodecs/LatencyMode.idl \
@@ -726,6 +730,10 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/webcodecs/VideoPixelFormat.idl \
     $(WebCore)/Modules/webcodecs/VideoTransferCharacteristics.idl \
     $(WebCore)/Modules/webcodecs/WebCodecsAlphaOption.idl \
+    $(WebCore)/Modules/webcodecs/WebCodecsAudioData.idl \
+    $(WebCore)/Modules/webcodecs/WebCodecsAudioDataOutputCallback.idl \
+    $(WebCore)/Modules/webcodecs/WebCodecsEncodedAudioChunk.idl \
+    $(WebCore)/Modules/webcodecs/WebCodecsEncodedAudioChunkType.idl \
     $(WebCore)/Modules/webcodecs/WebCodecsEncodedVideoChunk.idl \
     $(WebCore)/Modules/webcodecs/WebCodecsEncodedVideoChunkMetadata.idl \
     $(WebCore)/Modules/webcodecs/WebCodecsEncodedVideoChunkOutputCallback.idl \
@@ -733,6 +741,10 @@ JS_BINDING_IDLS := \
     $(WebCore)/Modules/webcodecs/WebCodecsErrorCallback.idl \
     $(WebCore)/Modules/webcodecs/WebCodecsCodecState.idl \
     $(WebCore)/Modules/webcodecs/WebCodecsSvcOutputMetadata.idl \
+    $(WebCore)/Modules/webcodecs/WebCodecsAudioData.idl \
+    $(WebCore)/Modules/webcodecs/WebCodecsAudioDecoder.idl \
+    $(WebCore)/Modules/webcodecs/WebCodecsAudioDecoderConfig.idl \
+    $(WebCore)/Modules/webcodecs/WebCodecsAudioDecoderSupport.idl \
     $(WebCore)/Modules/webcodecs/WebCodecsVideoDecoder.idl \
     $(WebCore)/Modules/webcodecs/WebCodecsVideoDecoderConfig.idl \
     $(WebCore)/Modules/webcodecs/WebCodecsVideoDecoderSupport.idl \
@@ -967,6 +979,7 @@ JS_BINDING_IDLS := \
     $(WebCore)/dom/ClipboardEvent.idl \
     $(WebCore)/dom/Comment.idl \
     $(WebCore)/dom/CompositionEvent.idl \
+    $(WebCore)/dom/ContentVisibilityAutoStateChangeEvent.idl \
     $(WebCore)/dom/CustomElementRegistry.idl \
     $(WebCore)/dom/CustomEvent.idl \
     $(WebCore)/dom/DOMException.idl \
@@ -1147,7 +1160,6 @@ JS_BINDING_IDLS := \
     $(WebCore)/html/HTMLMediaElement+AudioOutput.idl \
     $(WebCore)/html/HTMLMediaElement.idl \
     $(WebCore)/html/HTMLMenuElement.idl \
-    $(WebCore)/html/HTMLMenuItemElement.idl \
     $(WebCore)/html/HTMLMetaElement.idl \
     $(WebCore)/html/HTMLMeterElement.idl \
     $(WebCore)/html/HTMLModElement.idl \

@@ -267,6 +267,7 @@ using LayoutBoxExtent = RectEdges<LayoutUnit>;
 
 namespace Style {
 class CustomPropertyRegistry;
+struct ScopedName;
 }
 
 constexpr auto PublicPseudoIDBits = 9;
@@ -696,11 +697,11 @@ public:
     inline bool containsPaint() const;
     inline bool containsLayoutOrPaint() const;
     inline ContainerType containerType() const;
-    inline const Vector<AtomString>& containerNames() const;
+    inline const Vector<Style::ScopedName>& containerNames() const;
 
     inline ContentVisibility contentVisibility() const;
 
-    inline bool effectiveSkippedContent() const;
+    inline std::optional<ContentVisibility> skippedContentReason() const;
 
     inline ContainIntrinsicSizeType containIntrinsicWidthType() const;
     inline ContainIntrinsicSizeType containIntrinsicHeightType() const;
@@ -710,6 +711,8 @@ public:
     inline bool containIntrinsicHeightHasAuto() const;
     inline bool containIntrinsicLogicalWidthHasAuto() const;
     inline bool containIntrinsicLogicalHeightHasAuto() const;
+    inline void containIntrinsicWidthAddAuto();
+    inline void containIntrinsicHeightAddAuto();
     inline std::optional<Length> containIntrinsicWidth() const;
     inline std::optional<Length> containIntrinsicHeight() const;
     inline bool hasAutoLengthContainIntrinsicSize() const;
@@ -731,6 +734,7 @@ public:
     inline const StyleSelfAlignmentData& alignItems() const;
     inline const StyleSelfAlignmentData& alignSelf() const;
     inline FlexDirection flexDirection() const;
+    inline bool isRowFlexDirection() const;
     inline bool isColumnFlexDirection() const;
     inline bool isReverseFlexDirection() const;
     inline FlexWrap flexWrap() const;
@@ -976,6 +980,8 @@ public:
     const ScrollSnapAlign& scrollSnapAlign() const;
     ScrollSnapStop scrollSnapStop() const;
 
+    Color effectiveScrollbarThumbColor() const;
+    Color effectiveScrollbarTrackColor() const;
     inline std::optional<ScrollbarColor> scrollbarColor() const;
     inline const StyleColor& scrollbarThumbColor() const;
     inline const StyleColor& scrollbarTrackColor() const;
@@ -1268,7 +1274,7 @@ public:
 
     inline void setContain(OptionSet<Containment>);
     inline void setContainerType(ContainerType);
-    inline void setContainerNames(const Vector<AtomString>&);
+    inline void setContainerNames(const Vector<Style::ScopedName>&);
 
     inline void setContainIntrinsicWidthType(ContainIntrinsicSizeType);
     inline void setContainIntrinsicHeightType(ContainIntrinsicSizeType);
@@ -1277,7 +1283,7 @@ public:
 
     inline void setContentVisibility(ContentVisibility);
 
-    inline void setEffectiveSkippedContent(bool);
+    inline void setSkippedContentReason(ContentVisibility);
 
     inline void setListStyleType(ListStyleType);
     void setListStyleImage(RefPtr<StyleImage>&&);
@@ -1735,7 +1741,7 @@ public:
     Color colorResolvingCurrentColor(CSSPropertyID colorProperty, bool visitedLink) const;
 
     // Resolves the currentColor keyword, but must not be used for the "color" property which has a different semantic.
-    WEBCORE_EXPORT Color colorResolvingCurrentColor(const StyleColor&) const;
+    WEBCORE_EXPORT Color colorResolvingCurrentColor(const StyleColor&, bool visitedLink = false) const;
 
     WEBCORE_EXPORT Color visitedDependentColor(CSSPropertyID, OptionSet<PaintBehavior> paintBehavior = { }) const;
     WEBCORE_EXPORT Color visitedDependentColorWithColorFilter(CSSPropertyID, OptionSet<PaintBehavior> paintBehavior = { }) const;
@@ -1751,8 +1757,8 @@ public:
 
     inline void setMathStyle(const MathStyle&);
 
-    inline void setTextSpacingTrim(TextSpacingTrim);
-    inline void setTextAutospace(TextAutospace);
+    void setTextSpacingTrim(TextSpacingTrim v);
+    void setTextAutospace(TextAutospace v);
 
     static constexpr Overflow initialOverflowX();
     static constexpr Overflow initialOverflowY();
@@ -1780,8 +1786,6 @@ public:
     static constexpr WritingMode initialWritingMode();
     static constexpr TextCombine initialTextCombine();
     static constexpr TextOrientation initialTextOrientation();
-    static constexpr TextSpacingTrim initialTextSpacingTrim();
-    static constexpr TextAutospace initialTextAutospace();
     static constexpr ObjectFit initialObjectFit();
     static inline LengthPoint initialObjectPosition();
     static constexpr EmptyCell initialEmptyCells();
@@ -1882,7 +1886,7 @@ public:
     static constexpr OptionSet<Containment> contentContainment();
     static constexpr ContainerType initialContainerType();
     static constexpr ContentVisibility initialContentVisibility();
-    static Vector<AtomString> initialContainerNames();
+    static Vector<Style::ScopedName> initialContainerNames();
     static double initialAspectRatioWidth() { return 1.0; }
     static double initialAspectRatioHeight() { return 1.0; }
 
@@ -2159,13 +2163,14 @@ private:
         unsigned usesContainerUnits : 1;
         unsigned hasExplicitlyInheritedProperties : 1; // Explicitly inherits a non-inherited property.
         unsigned disallowsFastPathInheritance : 1;
+        unsigned hasContentNone : 1;
         unsigned isUnique : 1; // Style cannot be shared.
+
+        // Non-property related state bits.
         unsigned emptyState : 1;
         unsigned firstChildState : 1;
         unsigned lastChildState : 1;
         unsigned isLink : 1;
-        unsigned hasContentNone : 1;
-
         unsigned styleType : 4; // PseudoId
         unsigned pseudoBits : PublicPseudoIDBits;
 

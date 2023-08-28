@@ -460,6 +460,7 @@ $(WEB_PREFERENCES_PATTERNS) : $(WTF_BUILD_SCRIPTS_DIR)/GeneratePreferences.rb $(
 SERIALIZATION_DESCRIPTION_FILES = \
 	GPUProcess/GPUProcessSessionParameters.serialization.in \
 	GPUProcess/graphics/PathSegment.serialization.in \
+	GPUProcess/graphics/RemoteGraphicsContextGLInitializationState.serialization.in \
 	GPUProcess/graphics/RemoteRenderingBackendCreationParameters.serialization.in \
 	GPUProcess/graphics/WebGPU/RemoteGPURequestAdapterResponse.serialization.in \
 	GPUProcess/media/AudioTrackPrivateRemoteConfiguration.serialization.in \
@@ -500,6 +501,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/FrameTreeNodeData.serialization.in \
 	Shared/Gamepad/GamepadData.serialization.in \
 	Shared/GPUProcessConnectionParameters.serialization.in \
+        Shared/GoToBackForwardItemParameters.serialization.in \
 	Shared/ios/DynamicViewportSizeUpdate.serialization.in \
 	Shared/ios/InteractionInformationAtPosition.serialization.in \
 	Shared/ios/WebAutocorrectionContext.serialization.in \
@@ -518,7 +520,6 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/ShareableBitmap.serialization.in \
 	Shared/TextFlags.serialization.in \
 	Shared/TextRecognitionResult.serialization.in \
-	Shared/TouchBarMenuItemData.serialization.in \
 	Shared/UserInterfaceIdiom.serialization.in \
 	Shared/WTFArgumentCoders.serialization.in \
 	Shared/WebCoreArgumentCoders.serialization.in \
@@ -615,11 +616,17 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	WebProcess/GPU/media/RemoteAudioSessionConfiguration.serialization.in \
 	WebProcess/GPU/media/RemoteMediaPlayerConfiguration.serialization.in \
 	WebProcess/GPU/media/RemoteMediaPlayerState.serialization.in \
+	WebProcess/GPU/webrtc/SharedVideoFrame.serialization.in \
 	WebProcess/WebCoreSupport/WebSpeechSynthesisVoice.serialization.in \
 #
 
 WEBCORE_SERIALIZATION_DESCRIPTION_FILES = \
 	HTTPHeaderNames.serialization.in \
+	ActivityState.serialization.in \
+	DragActions.serialization.in \
+	InbandTextTrackPrivate.serialization.in \
+	LayoutMilestones.serialization.in \
+	PlatformScreen.serialization.in \
 #
 
 WEBCORE_SERIALIZATION_DESCRIPTION_FILES_FULLPATH := $(foreach I,$(WEBCORE_SERIALIZATION_DESCRIPTION_FILES),$(WebCorePrivateHeaders)/$I)
@@ -645,12 +652,16 @@ EXTENSION_INTERFACES = \
     WebExtensionAPIAlarms \
     WebExtensionAPIEvent \
     WebExtensionAPIExtension \
+    WebExtensionAPILocalization \
     WebExtensionAPINamespace \
     WebExtensionAPIPermissions \
     WebExtensionAPIRuntime \
+    WebExtensionAPITabs \
     WebExtensionAPITest \
     WebExtensionAPIWebNavigation \
     WebExtensionAPIWebNavigationEvent \
+    WebExtensionAPIWindows \
+    WebExtensionAPIWindowsEvent \
 #
 
 JS%.h JS%.mm : %.idl $(BINDINGS_SCRIPTS) $(IDL_ATTRIBUTES_FILE) $(FEATURE_AND_PLATFORM_DEFINE_DEPENDENCIES)

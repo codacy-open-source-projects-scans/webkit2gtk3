@@ -127,7 +127,7 @@ class SubstituteData;
 class TextCheckingRequestData;
 class ValidationBubble;
 
-enum LayoutMilestone : uint16_t;
+enum class LayoutMilestone : uint16_t;
 enum PaginationMode : uint8_t;
 enum ScrollDirection : uint8_t;
 enum ScrollbarOverlayStyle : uint8_t;
@@ -360,7 +360,6 @@ class SharedMemoryHandle;
 class SpeechRecognitionPermissionManager;
 class SuspendedPageProxy;
 class SystemPreviewController;
-class TouchBarMenuData;
 class UserData;
 class UserMediaPermissionRequestManagerProxy;
 class UserMediaPermissionRequestProxy;
@@ -435,7 +434,6 @@ struct ResourceLoadInfo;
 struct SessionState;
 struct TapIdentifierType;
 struct TextCheckerRequestType;
-struct TouchBarMenuItemData;
 struct TransactionIDType;
 struct URLSchemeTaskParameters;
 struct UserMessage;
@@ -476,6 +474,7 @@ enum class ShouldDelayClosingUntilFirstLayerFlush : bool;
 enum class SyntheticEditingCommandType : uint8_t;
 enum class TextRecognitionUpdateResult : uint8_t;
 enum class UndoOrRedo : bool;
+enum class WasNavigationIntercepted : bool;
 enum class WebContentMode : uint8_t;
 enum class WebEventModifier : uint8_t;
 enum class WebEventType : int8_t;
@@ -837,10 +836,6 @@ public:
     void changeListType();
 
     void setBaseWritingDirection(WebCore::WritingDirection);
-
-#if HAVE(TOUCH_BAR)
-    const TouchBarMenuData& touchBarMenuData() const;
-#endif
 
     bool maintainsInactiveSelection() const;
     void setMaintainsInactiveSelection(bool);
@@ -1366,7 +1361,7 @@ public:
     class PolicyDecisionSender;
     enum class WillContinueLoadInNewProcess : bool { No, Yes };
     void receivedPolicyDecision(WebCore::PolicyAction, API::Navigation*, RefPtr<API::WebsitePolicies>&&, std::variant<Ref<API::NavigationResponse>, Ref<API::NavigationAction>>&&, Ref<PolicyDecisionSender>&&, WillContinueLoadInNewProcess, std::optional<SandboxExtensionHandle>);
-    void receivedNavigationPolicyDecision(WebProcessProxy&, WebProcessProxy&, WebCore::PolicyAction, API::Navigation*, Ref<API::NavigationAction>&&, ProcessSwapRequestedByClient, WebFrameProxy&, const FrameInfoData&, Ref<PolicyDecisionSender>&&);
+    void receivedNavigationPolicyDecision(WebProcessProxy&, WebProcessProxy&, WebCore::PolicyAction, API::Navigation*, Ref<API::NavigationAction>&&, ProcessSwapRequestedByClient, WebFrameProxy&, const FrameInfoData&, WasNavigationIntercepted, Ref<PolicyDecisionSender>&&);
 
     void backForwardRemovedItem(const WebCore::BackForwardItemIdentifier&);
 
@@ -1815,13 +1810,6 @@ public:
     void scheduleFullEditorStateUpdate();
     void dispatchDidUpdateEditorState();
 
-#if HAVE(TOUCH_BAR)
-    void touchBarMenuDataRemoved();
-    void touchBarMenuDataChanged(const TouchBarMenuData&);
-    void touchBarMenuItemDataAdded(const TouchBarMenuItemData&);
-    void touchBarMenuItemDataRemoved(const TouchBarMenuItemData&);
-#endif
-
 #if ENABLE(TRACKING_PREVENTION)
     void requestStorageAccessConfirm(const WebCore::RegistrableDomain& subFrameDomain, const WebCore::RegistrableDomain& topFrameDomain, WebCore::FrameIdentifier, CompletionHandler<void(bool)>&&);
     void didCommitCrossSiteLoadWithDataTransferFromPrevalentResource();
@@ -2256,6 +2244,7 @@ public:
 
 #if ENABLE(WEBXR) && !USE(OPENXR)
     PlatformXRSystem* xrSystem() const;
+    void restartXRSessionActivityOnProcessResumeIfNeeded();
 #endif
 
 #if ENABLE(INPUT_TYPE_COLOR)
@@ -2279,6 +2268,9 @@ private:
 
     void notifyProcessPoolToPrewarm();
     bool shouldUseBackForwardCache() const;
+
+    bool attachmentElementEnabled();
+    bool modelElementEnabled();
 
     void forEachWebContentProcess(Function<void(WebProcessProxy&)>&&);
 
@@ -2326,7 +2318,7 @@ private:
     void willPerformClientRedirectForFrame(WebCore::FrameIdentifier, const String& url, double delay, WebCore::LockBackForwardList);
     void didCancelClientRedirectForFrame(WebCore::FrameIdentifier);
     void didChangeProvisionalURLForFrame(WebCore::FrameIdentifier, uint64_t navigationID, URL&&);
-    void didFailProvisionalLoadForFrame(WebCore::FrameIdentifier, FrameInfoData&&, WebCore::ResourceRequest&&, uint64_t navigationID, const String& provisionalURL, const WebCore::ResourceError&, WebCore::WillContinueLoading, const UserData&, WebCore::WillInternallyHandleFailure);
+    void didFailProvisionalLoadForFrame(FrameInfoData&&, WebCore::ResourceRequest&&, uint64_t navigationID, const String& provisionalURL, const WebCore::ResourceError&, WebCore::WillContinueLoading, const UserData&, WebCore::WillInternallyHandleFailure);
     void didFinishDocumentLoadForFrame(WebCore::FrameIdentifier, uint64_t navigationID, const UserData&);
     void didFinishLoadForFrame(WebCore::FrameIdentifier, FrameInfoData&&, WebCore::ResourceRequest&&, uint64_t navigationID, const UserData&);
     void didFailLoadForFrame(WebCore::FrameIdentifier, FrameInfoData&&, WebCore::ResourceRequest&&, uint64_t navigationID, const WebCore::ResourceError&, const UserData&);

@@ -184,7 +184,7 @@ void LocalFrameViewLayoutContext::performLayout()
     LayoutScope layoutScope(*this);
     TraceScope tracingScope(PerformLayoutStart, PerformLayoutEnd);
     ScriptDisallowedScope::InMainThread scriptDisallowedScope;
-    InspectorInstrumentation::willLayout(downcast<LocalFrame>(view().frame()));
+    InspectorInstrumentation::willLayout(view().frame());
     WeakPtr<RenderElement> layoutRoot;
     
     m_layoutTimer.stop();
@@ -240,7 +240,7 @@ void LocalFrameViewLayoutContext::performLayout()
 #endif
         clearSubtreeLayoutRoot();
 
-#if !LOG_DISABLED
+#if !LOG_DISABLED && ENABLE(TREE_DEBUGGING)
         auto layoutLogEnabled = [] {
             return LogLayout.state == WTFLogChannelState::On;
         };
@@ -269,8 +269,8 @@ void LocalFrameViewLayoutContext::performLayout()
         view().didLayout(layoutRoot);
         runOrScheduleAsynchronousTasks();
     }
-    InspectorInstrumentation::didLayout(downcast<LocalFrame>(view().frame()), *layoutRoot);
-    DebugPageOverlays::didLayout(downcast<LocalFrame>(view().frame()));
+    InspectorInstrumentation::didLayout(view().frame(), *layoutRoot);
+    DebugPageOverlays::didLayout(view().frame());
 }
 
 void LocalFrameViewLayoutContext::runOrScheduleAsynchronousTasks()
@@ -637,7 +637,7 @@ void LocalFrameViewLayoutContext::checkLayoutState()
 
 LocalFrame& LocalFrameViewLayoutContext::frame() const
 {
-    return downcast<LocalFrame>(view().frame());
+    return view().frame();
 }
 
 LocalFrameView& LocalFrameViewLayoutContext::view() const

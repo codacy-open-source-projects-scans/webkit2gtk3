@@ -3,6 +3,7 @@ TESTS = \
     TestWithSuperclass \
     TestWithLegacyReceiver \
     TestWithoutAttributes \
+    TestWithoutUsingIPCConnection \
     TestWithIfMessage \
     TestWithSemaphore \
     TestWithImageData \
@@ -11,6 +12,7 @@ TESTS = \
     TestWithStreamBuffer \
     TestWithCVPixelBuffer \
     TestWithStreamServerConnectionHandle \
+    TestWithEnabledIf \
 #
 
 all:

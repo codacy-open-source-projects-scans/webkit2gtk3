@@ -135,6 +135,7 @@ class WebPageProxy;
 #endif
 
 @class UIPointerInteraction;
+@class UIPointerRegion;
 @class UITargetedPreview;
 @class _UILookupGestureRecognizer;
 @class _UIHighlightView;
@@ -335,8 +336,8 @@ struct ImageAnalysisContextMenuActionData {
 
 #if HAVE(UI_POINTER_INTERACTION)
     RetainPtr<UIPointerInteraction> _pointerInteraction;
-    BOOL _hasOutstandingPointerInteractionRequest;
-    std::optional<std::pair<WebKit::InteractionInformationRequest, BlockPtr<void(UIPointerRegion *)>>> _deferredPointerInteractionRequest;
+    RetainPtr<UIPointerRegion> _lastPointerRegion;
+    BOOL _pointerInteractionRegionNeedsUpdate;
 #endif
 
     RetainPtr<UIWKTextInteractionAssistant> _textInteractionAssistant;
@@ -830,10 +831,13 @@ FOR_EACH_PRIVATE_WKCONTENTVIEW_ACTION(DECLARE_WKCONTENTVIEW_ACTION_FOR_WEB_VIEW)
 - (void)beginTextRecognitionForVideoInElementFullscreen:(WebKit::ShareableBitmap::Handle&&)bitmapHandle bounds:(WebCore::FloatRect)bounds;
 - (void)cancelTextRecognitionForVideoInElementFullscreen;
 
+- (BOOL)_tryToHandlePressesEvent:(UIPressesEvent *)event;
+
 @end
 
 @interface WKContentView (WKTesting)
 
+- (void)selectWordBackwardForTesting;
 - (void)_simulateElementAction:(_WKElementActionType)actionType atLocation:(CGPoint)location;
 - (void)_simulateLongPressActionAtLocation:(CGPoint)location;
 - (void)_simulateTextEntered:(NSString *)text;

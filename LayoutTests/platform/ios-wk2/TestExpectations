@@ -167,7 +167,7 @@ storage/filesystemaccess/ [ Pass ]
 requestidlecallback [ Pass ]
 imported/w3c/web-platform-tests/requestidlecallback [ Pass ]
 imported/w3c/web-platform-tests/requestidlecallback/deadline-max-rAF.html [ Pass Failure ]
-http/tests/eventloop/idle-callback-not-affected-by-timers-in-cross-origin.html [ Skip ]
+http/tests/eventloop/idle-callback-not-affected-by-timers-in-cross-origin.html [ Pass ]
 
 #//////////////////////////////////////////////////////////////////////////////////////////
 # End platform-specific directories.
@@ -664,7 +664,7 @@ fast/dom/frame-loading-via-document-write.html # Timeout
 # CSS transform tests that fail:
 transforms/2d/transform-fixed-container.html [ Failure ]
 
-webkit.org/b/228718 [ Release ] editing/inserting/insert-paragraph-separator-with-html-elements-crash.html [ Pass Failure ]
+webkit.org/b/260555 editing/inserting/insert-paragraph-separator-with-html-elements-crash.html [ Failure ]
 
 # Editing tests that fail:
 editing/inserting/caret-position.html [ Failure ]
@@ -2079,7 +2079,6 @@ fast/events/ios/viewport-no-width-value-allows-double-tap.html [ Skip ]
 fast/visual-viewport/ios/stable-update-with-keyboard.html [ Skip ]
 media/modern-media-controls/media-documents/media-document-audio-ios-sizing.html [ Skip ]
 media/modern-media-controls/media-documents/media-document-video-iphone-sizing.html [ Skip ]
-fast/forms/ios/scroll-to-reveal-focused-select.html [ Failure ]
 fast/scrolling/ios/body-overflow-hidden-height-100-percent-zoomed-1.html [ Failure ]
 
 # This test "fails" on iPhone 12 simulator because it supports P3, may need to rebaseline this reftest
@@ -2169,8 +2168,6 @@ imported/w3c/web-platform-tests/html/browsers/the-window-object/open-close/open-
 imported/w3c/web-platform-tests/html/dom/render-blocking/remove-element-unblocks-rendering.optional.html [ Failure ]
 
 # Time out since import.
-imported/w3c/web-platform-tests/html/cross-origin-opener-policy/iframe-popup-same-origin-allow-popups-to-same-origin.https.html [ Skip ]
-imported/w3c/web-platform-tests/html/cross-origin-opener-policy/tentative/restrict-properties/iframe-popup-to-soap.https.html [ Skip ]
 imported/w3c/web-platform-tests/html/editing/focus/sequential-focus-navigation-and-the-tabindex-attribute/focus-tabindex-event.html [ Skip ]
 
 ######################################################
@@ -2220,8 +2217,6 @@ imported/w3c/web-platform-tests/html/canvas/element/manual/imagebitmap/imageBitm
 imported/w3c/web-platform-tests/html/canvas/element/manual/imagebitmap/imageBitmapRendering-transferFromImageBitmap.html [ ImageOnlyFailure ]
 
 js/dom/Promise-reject-large-string.html [ DumpJSConsoleLogInStdErr ]
-
-webkit.org/b/242904 [ Debug ] fast/dom/lazy-image-loading-document-leak.html [ Pass Failure ]
 
 # The Notifications API is not supported on iOS
 imported/w3c/web-platform-tests/permissions/all-permissions.html [ Failure ]
@@ -2478,3 +2473,15 @@ webkit.org/b/259132 imported/w3c/web-platform-tests/html/semantics/disabled-elem
 webkit.org/b/259524 media/audioSession/audioSessionState.html [ Pass Failure ]
 
 webkit.org/b/260225 imported/w3c/web-platform-tests/webrtc/RTCPeerConnection-GC.https.html [ Pass Failure ]
+
+webkit.org/b/260224 compositing/geometry/clipped-out-perspective.html [ ImageOnlyFailure ]
+webkit.org/b/260224 compositing/overlap-blending/opacity-and-infinity.html [ ImageOnlyFailure ]
+webkit.org/b/260224 imported/w3c/web-platform-tests/css/css-transforms/perspective-split-by-zero-w.html [ ImageOnlyFailure ]
+webkit.org/b/260224 imported/w3c/web-platform-tests/css/css-transforms/preserve3d-and-filter-with-perspective.html [ ImageOnlyFailure ]
+webkit.org/b/260224 imported/w3c/web-platform-tests/css/css-transforms/preserve3d-pseudo-element.html [ ImageOnlyFailure ]
+webkit.org/b/260224 imported/w3c/web-platform-tests/css/css-transforms/transform-table-009.html [ ImageOnlyFailure ]
+webkit.org/b/260224 imported/w3c/web-platform-tests/css/css-transforms/transform-table-010.html [ ImageOnlyFailure ]
+webkit.org/b/260224 imported/w3c/web-platform-tests/css/css-transforms/transform-table-011.html [ ImageOnlyFailure ]
+webkit.org/b/260224 imported/w3c/web-platform-tests/css/css-transforms/transform3d-preserve3d-011.html [ ImageOnlyFailure ]
+
+webkit.org/b/260322 imported/w3c/web-platform-tests/html/semantics/popovers/popover-light-dismiss-flat-tree.html [ Failure ]

@@ -1204,6 +1204,9 @@
             ],
             "codegen-properties": {
                 "settings-flag": "cssTextSpacingEnabled",
+                "font-property": true,
+                "high-priority": true,
+                "sink-priority": true,
                 "converter": "TextSpacingTrim",
                 "parser-function": "consumeTextSpacingTrim",
                 "parser-grammar-unused": "auto | space-all | trim-all | [ allow-end || space-first ]",
@@ -1223,6 +1226,9 @@
             ],
             "codegen-properties": {
                 "settings-flag": "cssTextSpacingEnabled",
+                "font-property": true,
+                "high-priority": true,
+                "sink-priority": true,
                 "converter": "TextAutospace",
                 "parser-function": "consumeTextAutospace",
                 "parser-grammar-unused": "normal | auto | no-autospace | [ [ ideograph-alpha || ideograph-numeric || punctuation ] || [ insert | replace ] ]",
@@ -3252,7 +3258,7 @@
             },
             "specification": {
                 "category": "css-lists",
-                "url": "https://www.w3.org/TR/css-lists-3/#propdef-counter-increment"
+                "url": "https://drafts.csswg.org/css-lists/#propdef-counter-increment"
             }
         },
         "counter-reset": {
@@ -3267,7 +3273,22 @@
             },
             "specification": {
                 "category": "css-lists",
-                "url": "https://www.w3.org/TR/css-lists-3/#counter-properties"
+                "url": "https://drafts.csswg.org/css-lists/#propdef-counter-reset"
+            }
+        },
+        "counter-set": {
+            "values": [
+                "none"
+            ],
+            "codegen-properties": {
+                "custom": "All",
+                "parser-function": "consumeCounterSet",
+                "parser-grammar-unused": "[ <counter-name> <integer>? ]+ | none",
+                "parser-grammar-unused-reason": "Needs support for '+' multipliers and optionals."
+            },
+            "specification": {
+                "category": "css-lists",
+                "url": "https://drafts.csswg.org/css-lists/#propdef-counter-set"
             }
         },
         "cursor": {
@@ -5218,6 +5239,7 @@
             }
         },
         "paint-order": {
+            "inherited": true,
             "codegen-properties": {
                 "converter": "PaintOrder",
                 "parser-function": "consumePaintOrder",

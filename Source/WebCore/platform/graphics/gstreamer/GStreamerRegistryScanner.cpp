@@ -120,7 +120,7 @@ GStreamerRegistryScanner& GStreamerRegistryScanner::singleton()
     return sharedInstance;
 }
 
-void GStreamerRegistryScanner::getSupportedDecodingTypes(HashSet<String, ASCIICaseInsensitiveHash>& types)
+void GStreamerRegistryScanner::getSupportedDecodingTypes(HashSet<String>& types)
 {
     if (isInWebProcess())
         types = singleton().mimeTypeSet(GStreamerRegistryScanner::Configuration::Decoding);
@@ -356,7 +356,7 @@ void GStreamerRegistryScanner::refresh()
 #endif
 }
 
-const HashSet<String, ASCIICaseInsensitiveHash>& GStreamerRegistryScanner::mimeTypeSet(Configuration configuration) const
+const HashSet<String>& GStreamerRegistryScanner::mimeTypeSet(Configuration configuration) const
 {
     switch (configuration) {
     case Configuration::Decoding:
@@ -493,7 +493,7 @@ void GStreamerRegistryScanner::initializeDecoders(const GStreamerRegistryScanner
     Vector<GstCapsWebKitMapping> mseCompatibleMapping = {
         { ElementFactories::Type::AudioDecoder, "audio/x-ac3", { }, { "x-ac3"_s, "ac-3"_s, "ac3"_s } },
         { ElementFactories::Type::AudioDecoder, "audio/x-eac3", { "audio/x-ac3"_s },  { "x-eac3"_s, "ec3"_s, "ec-3"_s, "eac3"_s } },
-        { ElementFactories::Type::AudioDecoder, "audio/x-flac", { "audio/x-flac"_s, "audio/flac"_s }, {"x-flac"_s, "flac"_s } },
+        { ElementFactories::Type::AudioDecoder, "audio/x-flac", { "audio/x-flac"_s, "audio/flac"_s }, {"x-flac"_s, "flac"_s, "fLaC"_s } },
     };
     fillMimeTypeSetFromCapsMapping(factories, mseCompatibleMapping);
 
@@ -507,6 +507,8 @@ void GStreamerRegistryScanner::initializeDecoders(const GStreamerRegistryScanner
         { ElementFactories::Type::AudioDecoder, "audio/x-dts", { }, { } },
         { ElementFactories::Type::AudioDecoder, "audio/x-sbc", { }, { } },
         { ElementFactories::Type::AudioDecoder, "audio/x-sid", { }, { } },
+        { ElementFactories::Type::AudioDecoder, "audio/x-alaw", { }, { "alaw"_s } },
+        { ElementFactories::Type::AudioDecoder, "audio/x-mulaw", { }, { "ulaw"_s } },
         { ElementFactories::Type::AudioDecoder, "audio/x-speex", { "audio/speex"_s, "audio/x-speex"_s }, { } },
         { ElementFactories::Type::AudioDecoder, "audio/x-wavpack", { "audio/x-wavpack"_s }, { } },
         { ElementFactories::Type::VideoDecoder, "video/mpeg, mpegversion=(int){1,2}, systemstream=(boolean)false", { "video/mpeg"_s }, { "mpeg"_s } },
@@ -801,8 +803,7 @@ MediaPlayerEnums::SupportsType GStreamerRegistryScanner::isContentTypeSupported(
     if (codecs.isEmpty())
         return SupportsType::MayBeSupported;
 
-    for (const auto& item : codecs) {
-        auto codec = item.convertToASCIILowercase();
+    for (const auto& codec : codecs) {
         bool requiresHardwareSupport = contentTypesRequiringHardwareSupport
             .findIf([containerType, codec](auto& hardwareContentType) -> bool {
             auto hardwareContainer = hardwareContentType.containerType();

@@ -266,7 +266,9 @@ struct IntegerTypeRawKnownTokenTypeFunctionConsumer {
         auto rangeCopy = range;
         if (auto value = consumeCalcRawWithKnownTokenTypeFunction(rangeCopy, CalculationCategory::Number, { }, ValueRange::All)) {
             range = rangeCopy;
-            return clampTo<IntType>(std::round(std::max(value->doubleValue(), computeMinimumValue(integerRange))));
+            // https://drafts.csswg.org/css-values-4/#integers
+            // Rounding to the nearest integer requires rounding in the direction of +∞ when the fractional portion is exactly 0.5.
+            return clampTo<IntType>(std::floor(std::max(value->doubleValue(), computeMinimumValue(integerRange)) + 0.5));
         }
 
         return std::nullopt;
@@ -539,17 +541,22 @@ struct LengthRawKnownTokenTypeDimensionConsumer {
 
         auto unitType = token.unitType();
         switch (unitType) {
-        case CSSUnitType::CSS_QUIRKY_EMS:
+        case CSSUnitType::CSS_QUIRKY_EM:
             if (parserMode != UASheetMode)
                 return std::nullopt;
             FALLTHROUGH;
-        case CSSUnitType::CSS_EMS:
-        case CSSUnitType::CSS_REMS:
-        case CSSUnitType::CSS_LHS:
-        case CSSUnitType::CSS_RLHS:
-        case CSSUnitType::CSS_CHS:
+        case CSSUnitType::CSS_EM:
+        case CSSUnitType::CSS_REM:
+        case CSSUnitType::CSS_LH:
+        case CSSUnitType::CSS_RLH:
+        case CSSUnitType::CSS_CAP:
+        case CSSUnitType::CSS_RCAP:
+        case CSSUnitType::CSS_CH:
+        case CSSUnitType::CSS_RCH:
         case CSSUnitType::CSS_IC:
-        case CSSUnitType::CSS_EXS:
+        case CSSUnitType::CSS_RIC:
+        case CSSUnitType::CSS_EX:
+        case CSSUnitType::CSS_REX:
         case CSSUnitType::CSS_PX:
         case CSSUnitType::CSS_CM:
         case CSSUnitType::CSS_MM:
@@ -800,12 +807,15 @@ struct ResolutionCSSPrimitiveValueWithCalcWithKnownTokenTypeFunctionConsumer {
 
 struct ResolutionCSSPrimitiveValueWithCalcWithKnownTokenTypeDimensionConsumer {
     static constexpr CSSParserTokenType tokenType = DimensionToken;
-    static RefPtr<CSSPrimitiveValue> consume(CSSParserTokenRange& range, const CSSCalcSymbolTable&, ValueRange, CSSParserMode, UnitlessQuirk, UnitlessZeroQuirk)
+    static RefPtr<CSSPrimitiveValue> consume(CSSParserTokenRange& range, const CSSCalcSymbolTable&, ValueRange valueRange, CSSParserMode, UnitlessQuirk, UnitlessZeroQuirk)
     {
         ASSERT(range.peek().type() == DimensionToken);
 
-        if (auto unit = range.peek().unitType(); unit == CSSUnitType::CSS_DPPX || unit == CSSUnitType::CSS_X || unit == CSSUnitType::CSS_DPI || unit == CSSUnitType::CSS_DPCM)
+        if (auto unit = range.peek().unitType(); unit == CSSUnitType::CSS_DPPX || unit == CSSUnitType::CSS_X || unit == CSSUnitType::CSS_DPI || unit == CSSUnitType::CSS_DPCM) {
+            if (valueRange == ValueRange::NonNegative && range.peek().numericValue() < 0)
+                return nullptr;
             return CSSPrimitiveValue::create(range.consumeIncludingWhitespace().numericValue(), unit);
+        }
 
         return nullptr;
     }
@@ -1498,7 +1508,7 @@ RefPtr<CSSPrimitiveValue> consumeTime(CSSParserTokenRange& range, CSSParserMode 
 
 RefPtr<CSSPrimitiveValue> consumeResolution(CSSParserTokenRange& range)
 {
-    return consumeMetaConsumer<ResolutionConsumer>(range, { }, ValueRange::All, CSSParserMode::HTMLStandardMode, UnitlessQuirk::Forbid, UnitlessZeroQuirk::Forbid);
+    return consumeMetaConsumer<ResolutionConsumer>(range, { }, ValueRange::NonNegative, CSSParserMode::HTMLStandardMode, UnitlessQuirk::Forbid, UnitlessZeroQuirk::Forbid);
 }
 
 #if ENABLE(CSS_CONIC_GRADIENTS)
@@ -4480,9 +4490,6 @@ static RefPtr<CSSImageSetOptionValue> consumeImageSetOption(CSSParserTokenRange&
                 return nullptr;
 
             if (optionalArgument->isResolution()) {
-                // ValueRange only clamps calc() expressions so we still need to check for negative "raw" resolutions (e.g. -2x) which are invalid.
-                if (optionalArgument->floatValue() < 0)
-                    return nullptr;
                 resolution = optionalArgument;
                 result->setResolution(optionalArgument.releaseNonNull());
                 continue;
@@ -5548,6 +5555,11 @@ RefPtr<CSSValue> consumeCounterIncrement(CSSParserTokenRange& range)
 }
 
 RefPtr<CSSValue> consumeCounterReset(CSSParserTokenRange& range)
+{
+    return consumeCounter(range, 0);
+}
+
+RefPtr<CSSValue> consumeCounterSet(CSSParserTokenRange& range)
 {
     return consumeCounter(range, 0);
 }
@@ -7517,6 +7529,11 @@ bool isSelfPositionOrLeftOrRightKeyword(CSSValueID id)
     return isSelfPositionKeyword(id) || isLeftOrRightKeyword(id);
 }
 
+bool isGridBreadthIdent(CSSValueID id)
+{
+    return identMatches<CSSValueMinContent, CSSValueWebkitMinContent, CSSValueMaxContent, CSSValueWebkitMaxContent, CSSValueAuto>(id);
+}
+
 RefPtr<CSSValue> consumeSelfPositionOverflowPosition(CSSParserTokenRange& range, IsPositionKeyword isPositionKeyword)
 {
     ASSERT(isPositionKeyword);
@@ -7742,7 +7759,7 @@ bool parseGridTemplateAreasRow(StringView gridRowNames, NamedGridAreaMap& gridAr
 static RefPtr<CSSPrimitiveValue> consumeGridBreadth(CSSParserTokenRange& range, CSSParserMode mode)
 {
     const CSSParserToken& token = range.peek();
-    if (identMatches<CSSValueMinContent, CSSValueWebkitMinContent, CSSValueMaxContent, CSSValueWebkitMaxContent, CSSValueAuto>(token.id()))
+    if (isGridBreadthIdent(token.id()))
         return consumeIdent(range);
     if (token.type() == DimensionToken && token.unitType() == CSSUnitType::CSS_FR) {
         if (range.peek().numericValue() < 0)

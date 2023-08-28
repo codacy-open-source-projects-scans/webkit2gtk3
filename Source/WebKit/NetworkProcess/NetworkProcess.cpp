@@ -339,7 +339,7 @@ void NetworkProcess::initializeNetworkProcess(NetworkProcessCreationParameters&&
 #endif
 
     for (auto [processIdentifier, domain] : parameters.allowedFirstPartiesForCookies) {
-        if (auto* connection = webProcessConnection(processIdentifier))
+        if (RefPtr connection = webProcessConnection(processIdentifier))
             connection->addAllowedFirstPartyForCookies(domain);
         addAllowedFirstPartyForCookies(processIdentifier, WTFMove(domain), LoadedWebArchive::No, [] { });
     }
@@ -399,7 +399,7 @@ void NetworkProcess::createNetworkConnectionToWebProcess(ProcessIdentifier ident
     connection.setOnLineState(NetworkStateNotifier::singleton().onLine());
 
     if (auto* session = networkSession(sessionID))
-        session->storageManager().startReceivingMessageFromConnection(connection.connection());
+        session->storageManager().startReceivingMessageFromConnection(Ref { connection.connection() });
 }
 
 void NetworkProcess::addAllowedFirstPartyForCookies(WebCore::ProcessIdentifier processIdentifier, WebCore::RegistrableDomain&& firstPartyForCookies, LoadedWebArchive loadedWebArchive, CompletionHandler<void()>&& completionHandler)
@@ -585,10 +585,10 @@ void NetworkProcess::destroySession(PAL::SessionID sessionID, CompletionHandler<
 
     if (auto session = m_networkSessions.take(sessionID)) {
         session->invalidateAndCancel();
-        auto& storageManager = session->storageManager();
-        m_closingStorageManagers.add(&storageManager);
-        storageManager.close([this, protectedThis = Ref { *this }, storageManager = &storageManager, completionHandler = std::exchange(completionHandler, { })]() mutable {
-            m_closingStorageManagers.remove(storageManager);
+        Ref storageManager = session->storageManager();
+        m_closingStorageManagers.add(storageManager.copyRef());
+        storageManager->close([this, protectedThis = Ref { *this }, storageManager, completionHandler = std::exchange(completionHandler, { })]() mutable {
+            m_closingStorageManagers.remove(storageManager.ptr());
             completionHandler();
             stopRunLoopIfNecessary();
         });
@@ -2113,6 +2113,11 @@ void NetworkProcess::publishDownloadProgress(DownloadID downloadID, const URL& u
 }
 #endif
 
+void NetworkProcess::continueWillSendRequest(DownloadID downloadID, WebCore::ResourceRequest&& request)
+{
+    downloadManager().continueWillSendRequest(downloadID, WTFMove(request));
+}
+
 void NetworkProcess::findPendingDownloadLocation(NetworkDataTask& networkDataTask, ResponseCompletionHandler&& completionHandler, const ResourceResponse& response)
 {
     uint64_t destinationID = networkDataTask.pendingDownloadID().toUInt64();
@@ -2565,17 +2570,6 @@ void NetworkProcess::deletePushAndNotificationRegistration(PAL::SessionID sessio
     callback("Cannot find network session"_s);
 }
 
-void NetworkProcess::getOriginsWithPushAndNotificationPermissions(PAL::SessionID sessionID, CompletionHandler<void(const Vector<WebCore::SecurityOriginData>&)>&& callback)
-{
-#if ENABLE(BUILT_IN_NOTIFICATIONS)
-    if (auto* session = networkSession(sessionID)) {
-        session->notificationManager().getOriginsWithPushAndNotificationPermissions(WTFMove(callback));
-        return;
-    }
-#endif
-    callback({ });
-}
-
 void NetworkProcess::hasPushSubscriptionForTesting(PAL::SessionID sessionID, URL&& scopeURL, CompletionHandler<void(bool)>&& callback)
 {
 #if ENABLE(BUILT_IN_NOTIFICATIONS)
@@ -2994,5 +2988,15 @@ void NetworkProcess::setIsHoldingLockedFiles(bool isHoldingLockedFiles)
 #endif
 }
 #endif
+
+#if ENABLE(SERVICE_WORKER)
+
+void NetworkProcess::setInspectionForServiceWorkersAllowed(PAL::SessionID sessionID, bool inspectable)
+{
+    if (auto* session = networkSession(sessionID))
+        session->setInspectionForServiceWorkersAllowed(inspectable);
+}
+
+#endif // ENABLE(SERVICE_WORKER)
 
 } // namespace WebKit
