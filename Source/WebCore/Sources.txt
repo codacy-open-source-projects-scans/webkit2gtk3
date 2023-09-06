@@ -471,6 +471,12 @@ Modules/websockets/WebSocketExtensionParser.cpp
 Modules/websockets/WebSocketFrame.cpp
 Modules/websockets/WebSocketHandshake.cpp
 Modules/websockets/WorkerThreadableWebSocketChannel.cpp
+Modules/webtransport/WebTransport.cpp
+Modules/webtransport/WebTransportBidirectionalStream.cpp
+Modules/webtransport/WebTransportDatagramDuplexStream.cpp
+Modules/webtransport/WebTransportError.cpp
+Modules/webtransport/WebTransportReceiveStream.cpp
+Modules/webtransport/WebTransportSendStream.cpp
 Modules/webxr/NavigatorWebXR.cpp
 Modules/webxr/WebXRBoundedReferenceSpace.cpp
 Modules/webxr/WebXRFrame.cpp
@@ -762,6 +768,7 @@ crypto/algorithms/CryptoAlgorithmAES_KW.cpp
 crypto/algorithms/CryptoAlgorithmECDH.cpp
 crypto/algorithms/CryptoAlgorithmECDSA.cpp
 crypto/algorithms/CryptoAlgorithmEd25519.cpp
+crypto/algorithms/CryptoAlgorithmX25519.cpp
 crypto/algorithms/CryptoAlgorithmHKDF.cpp
 crypto/algorithms/CryptoAlgorithmHMAC.cpp
 crypto/algorithms/CryptoAlgorithmPBKDF2.cpp
@@ -1669,6 +1676,7 @@ inspector/agents/WebConsoleAgent.cpp
 inspector/agents/WebDebuggerAgent.cpp
 inspector/agents/WebHeapAgent.cpp
 inspector/agents/page/PageAuditAgent.cpp
+inspector/agents/page/PageCanvasAgent.cpp
 inspector/agents/page/PageConsoleAgent.cpp
 inspector/agents/page/PageDOMDebuggerAgent.cpp
 inspector/agents/page/PageDebuggerAgent.cpp
@@ -1677,6 +1685,7 @@ inspector/agents/page/PageNetworkAgent.cpp
 inspector/agents/page/PageRuntimeAgent.cpp
 inspector/agents/worker/ServiceWorkerAgent.cpp
 inspector/agents/worker/WorkerAuditAgent.cpp
+inspector/agents/worker/WorkerCanvasAgent.cpp
 inspector/agents/worker/WorkerConsoleAgent.cpp
 inspector/agents/worker/WorkerDOMDebuggerAgent.cpp
 inspector/agents/worker/WorkerDebuggerAgent.cpp
@@ -2104,6 +2113,7 @@ platform/SystemSoundManager.cpp
 platform/StaticPasteboard.cpp
 platform/Theme.cpp
 platform/ThemeTypes.cpp
+platform/ThermalMitigationNotifier.cpp
 platform/ThreadGlobalData.cpp
 platform/ThreadTimers.cpp
 platform/Timer.cpp
@@ -2313,6 +2323,7 @@ platform/graphics/controls/SliderTrackPart.cpp
 platform/graphics/cpu/arm/filters/FEBlendNeonApplier.cpp
 platform/graphics/displaylists/DisplayList.cpp
 platform/graphics/displaylists/DisplayListDrawingContext.cpp
+platform/graphics/displaylists/DisplayListItem.cpp
 platform/graphics/displaylists/DisplayListItems.cpp
 platform/graphics/displaylists/DisplayListRecorder.cpp
 platform/graphics/displaylists/DisplayListRecorderImpl.cpp
@@ -2390,6 +2401,7 @@ platform/graphics/transforms/TransformOperations.cpp
 platform/graphics/transforms/TransformState.cpp
 platform/graphics/transforms/TransformationMatrix.cpp
 platform/graphics/transforms/TranslateTransformOperation.cpp
+platform/graphics/transforms/Quaternion.cpp
 platform/mediacapabilities/MediaCapabilitiesLogging.cpp
 platform/mediacapabilities/MediaEngineConfigurationFactory.cpp
 platform/mediarecorder/MediaRecorderPrivate.cpp
@@ -2535,6 +2547,7 @@ rendering/LegacyLineLayout.cpp
 rendering/LegacyRootInlineBox.cpp
 rendering/LegacyInlineTextBox.cpp
 rendering/MarkedText.cpp
+rendering/MotionPath.cpp
 rendering/OrderIterator.cpp
 rendering/PathOperation.cpp
 rendering/PointerEventsHitRules.cpp
@@ -4424,6 +4437,24 @@ JSWebLockManager.cpp
 JSWebLockManagerSnapshot.cpp
 JSWebLockMode.cpp
 JSWebSocket.cpp
+JSWebTransportHash.cpp
+JSWebTransportReceiveStreamStats.cpp
+JSWebTransportErrorOptions.cpp
+JSWebTransportSendStream.cpp
+JSWebTransportSendStreamOptions.cpp
+JSWebTransport.cpp
+JSWebTransportStats.cpp
+JSWebTransportError.cpp
+JSWebTransportDatagramStats.cpp
+JSWebTransportReliabilityMode.cpp
+JSWebTransportDatagramDuplexStream.cpp
+JSWebTransportErrorSource.cpp
+JSWebTransportCloseInfo.cpp
+JSWebTransportOptions.cpp
+JSWebTransportBidirectionalStream.cpp
+JSWebTransportReceiveStream.cpp
+JSWebTransportCongestionControl.cpp
+JSWebTransportSendStreamStats.cpp
 JSWebXRBoundedReferenceSpace.cpp
 JSWebXRFrame.cpp
 JSWebXRHand.cpp
@@ -4461,6 +4492,7 @@ JSWritableStream.cpp
 JSWritableStreamDefaultController.cpp
 JSWritableStreamDefaultWriter.cpp
 JSWritableStreamSink.cpp
+JSX25519Params.cpp
 JSXMLDocument.cpp
 JSXMLHttpRequest.cpp
 JSXMLHttpRequestEventTarget.cpp

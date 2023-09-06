@@ -263,6 +263,7 @@ MESSAGE_RECEIVERS = \
 	GPUProcess/ShapeDetection/RemoteFaceDetector \
 	GPUProcess/ShapeDetection/RemoteTextDetector \
 	GPUProcess/graphics/RemoteDisplayListRecorder \
+	GPUProcess/graphics/RemoteImageBuffer \
 	GPUProcess/graphics/RemoteRenderingBackend \
 	GPUProcess/graphics/RemoteGraphicsContextGL \
 	GPUProcess/graphics/WebGPU/RemoteAdapter \
@@ -369,12 +370,19 @@ ifeq ($(USE_SYSTEM_CONTENT_PATH),YES)
 	SANDBOX_DEFINES = -DUSE_SYSTEM_CONTENT_PATH=1 -DSYSTEM_CONTENT_PATH=$(SYSTEM_CONTENT_PATH)
 endif
 
-SANDBOX_PROFILES = \
+SANDBOX_PROFILES_WITHOUT_WEBPUSHD = \
 	com.apple.WebProcess.sb \
 	com.apple.WebKit.NetworkProcess.sb \
-	com.apple.WebKit.GPUProcess.sb \
+	com.apple.WebKit.GPUProcess.sb
+
+ifeq ($(WK_RELOCATABLE_WEBPUSHD),YES)
+WEBPUSHD_SANDBOX_PROFILE = \
+	com.apple.WebKit.webpushd.relocatable.mac.sb
+else
+WEBPUSHD_SANDBOX_PROFILE = \
 	com.apple.WebKit.webpushd.mac.sb
-	
+endif
+
 SANDBOX_PROFILES_IOS = \
 	com.apple.WebKit.adattributiond.sb \
 	com.apple.WebKit.webpushd.sb \
@@ -384,7 +392,7 @@ SANDBOX_PROFILES_IOS = \
 
 sandbox-profiles-ios : $(SANDBOX_PROFILES_IOS)
 
-all : $(SANDBOX_PROFILES) $(SANDBOX_PROFILES_IOS)
+all : $(SANDBOX_PROFILES_WITHOUT_WEBPUSHD) $(WEBPUSHD_SANDBOX_PROFILE) $(SANDBOX_PROFILES_IOS)
 
 %.sb : %.sb.in
 	@echo Pre-processing $* sandbox profile...
@@ -494,6 +502,8 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/Extensions/WebExtensionContextParameters.serialization.in \
 	Shared/Extensions/WebExtensionControllerParameters.serialization.in \
 	Shared/Extensions/WebExtensionEventListenerType.serialization.in \
+	Shared/Extensions/WebExtensionTab.serialization.in \
+	Shared/Extensions/WebExtensionWindow.serialization.in \
 	Shared/FileSystemSyncAccessHandleInfo.serialization.in \
 	Shared/FocusedElementInformation.serialization.in \
 	Shared/FrameInfoData.serialization.in \
@@ -501,7 +511,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/FrameTreeNodeData.serialization.in \
 	Shared/Gamepad/GamepadData.serialization.in \
 	Shared/GPUProcessConnectionParameters.serialization.in \
-        Shared/GoToBackForwardItemParameters.serialization.in \
+	Shared/GoToBackForwardItemParameters.serialization.in \
 	Shared/ios/DynamicViewportSizeUpdate.serialization.in \
 	Shared/ios/InteractionInformationAtPosition.serialization.in \
 	Shared/ios/WebAutocorrectionContext.serialization.in \
@@ -626,6 +636,11 @@ WEBCORE_SERIALIZATION_DESCRIPTION_FILES = \
 	DragActions.serialization.in \
 	InbandTextTrackPrivate.serialization.in \
 	LayoutMilestones.serialization.in \
+	MediaPlaybackTargetContext.serialization.in \
+	MediaProducer.serialization.in \
+	MDNSRegisterError.serialization.in \
+	PlatformEvent.serialization.in \
+	PlatformMediaSession.serialization.in \
 	PlatformScreen.serialization.in \
 #
 

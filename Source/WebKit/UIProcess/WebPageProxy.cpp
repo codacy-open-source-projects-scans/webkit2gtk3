@@ -815,6 +815,11 @@ ProcessID WebPageProxy::gpuProcessID() const
     return 0;
 }
 
+Ref<WebProcessProxy> WebPageProxy::protectedProcess() const
+{
+    return m_process;
+}
+
 ProcessID WebPageProxy::processID() const
 {
     if (m_isClosed)
@@ -2069,12 +2074,9 @@ RefPtr<API::Navigation> WebPageProxy::goToBackForwardItem(WebBackForwardListItem
             m_backForwardList->goToItem(item);
     }
 
-    RefPtr<API::Navigation> navigation;
-    if (!m_backForwardList->currentItem()->itemIsInSameDocument(item))
-        navigation = m_navigationState->createBackForwardNavigation(process().coreProcessIdentifier(), item, m_backForwardList->currentItem(), frameLoadType);
-
+    auto navigation = m_navigationState->createBackForwardNavigation(process().coreProcessIdentifier(), item, m_backForwardList->currentItem(), frameLoadType);
     auto transaction = internals().pageLoadState.transaction();
-    internals().pageLoadState.setPendingAPIRequest(transaction, { navigation ? navigation->navigationID() : 0, item.url() });
+    internals().pageLoadState.setPendingAPIRequest(transaction, { navigation->navigationID(), item.url() });
 
     m_process->markProcessAsRecentlyUsed();
 
@@ -2083,10 +2085,10 @@ RefPtr<API::Navigation> WebPageProxy::goToBackForwardItem(WebBackForwardListItem
     topPrivatelyControlledDomain = WebCore::topPrivatelyControlledDomain(URL(item.url()).host().toString());
 #endif
     
-    send(Messages::WebPage::GoToBackForwardItem({ navigation ? navigation->navigationID() : 0, item.itemID(), frameLoadType, ShouldTreatAsContinuingLoad::No, std::nullopt, m_lastNavigationWasAppInitiated, std::nullopt, topPrivatelyControlledDomain, { } }));
+    send(Messages::WebPage::GoToBackForwardItem({ navigation->navigationID(), item.itemID(), frameLoadType, ShouldTreatAsContinuingLoad::No, std::nullopt, m_lastNavigationWasAppInitiated, std::nullopt, topPrivatelyControlledDomain, { } }));
     m_process->startResponsivenessTimer();
 
-    return navigation;
+    return RefPtr<API::Navigation> { WTFMove(navigation) };
 }
 
 void WebPageProxy::tryRestoreScrollPosition()
@@ -3210,6 +3212,9 @@ void WebPageProxy::handleMouseEvent(const NativeWebMouseEvent& event)
     if (!hasRunningProcess())
         return;
 
+    if (!m_mainFrame)
+        return;
+
 #if ENABLE(CONTEXT_MENU_EVENT)
     if (event.button() == WebMouseEventButton::RightButton && event.type() == WebEventType::MouseDown) {
         ASSERT(m_contextMenuPreventionState != EventPreventionState::Waiting);
@@ -3246,6 +3251,9 @@ void WebPageProxy::processNextQueuedMouseEvent()
     if (!hasRunningProcess())
         return;
 
+    if (!m_mainFrame)
+        return;
+
     ASSERT(!internals().mouseEventQueue.isEmpty());
 
     const NativeWebMouseEvent& event = internals().mouseEventQueue.first();
@@ -3271,7 +3279,7 @@ void WebPageProxy::processNextQueuedMouseEvent()
 
     LOG_WITH_STREAM(MouseHandling, stream << "UIProcess: sent mouse event " << eventType << " (queue size " << internals().mouseEventQueue.size() << ")");
     m_process->recordUserGestureAuthorizationToken(event.authorizationToken());
-    send(Messages::WebPage::MouseEvent(event, sandboxExtensions));
+    send(Messages::WebPage::MouseEvent(m_mainFrame->frameID(), event, sandboxExtensions));
 }
 
 void WebPageProxy::doAfterProcessingAllPendingMouseEvents(WTF::Function<void ()>&& action)
@@ -3300,7 +3308,11 @@ void WebPageProxy::flushPendingMouseEventCallbacks()
 #if PLATFORM(IOS_FAMILY)
 void WebPageProxy::dispatchWheelEventWithoutScrolling(const WebWheelEvent& event, CompletionHandler<void(bool)>&& completionHandler)
 {
-    sendWithAsyncReply(Messages::WebPage::DispatchWheelEventWithoutScrolling(event), WTFMove(completionHandler));
+    if (!m_mainFrame) {
+        completionHandler(false);
+        return;
+    }
+    sendWithAsyncReply(Messages::WebPage::DispatchWheelEventWithoutScrolling(m_mainFrame->frameID(), event), WTFMove(completionHandler));
 }
 #endif
 
@@ -3362,11 +3374,14 @@ void WebPageProxy::sendWheelEvent(const WebWheelEvent& event, OptionSet<WheelEve
     if (!connection)
         return;
 
+    if (!m_mainFrame)
+        return;
+
     if (drawingArea()->shouldSendWheelEventsToEventDispatcher()) {
         sendWheelEventScrollingAccelerationCurveIfNecessary(event);
         connection->send(Messages::EventDispatcher::WheelEvent(webPageID(), event, rubberBandableEdges), 0, { }, Thread::QOS::UserInteractive);
     } else {
-        sendWithAsyncReply(Messages::WebPage::HandleWheelEvent(event, processingSteps, willStartSwipe), [weakThis = WeakPtr { *this }, wheelEvent = event, wasHandledForScrolling](ScrollingNodeID nodeID, std::optional<WheelScrollGestureState> gestureState, bool handled) {
+        sendWithAsyncReply(Messages::WebPage::HandleWheelEvent(m_mainFrame->frameID(), event, processingSteps, willStartSwipe), [weakThis = WeakPtr { *this }, wheelEvent = event, wasHandledForScrolling](ScrollingNodeID nodeID, std::optional<WheelScrollGestureState> gestureState, bool handled) {
             RefPtr protectedThis = weakThis.get();
             if (!protectedThis)
                 return;
@@ -3515,6 +3530,11 @@ bool WebPageProxy::handleKeyboardEvent(const NativeWebKeyboardEvent& event)
     if (!hasRunningProcess())
         return false;
 
+    if (!m_mainFrame) {
+        m_uiClient->didNotHandleKeyEvent(this, event);
+        return false;
+    }
+
     LOG_WITH_STREAM(KeyHandling, stream << "WebPageProxy::handleKeyboardEvent: " << event.type());
 
     internals().keyEventQueue.append(event);
@@ -3525,7 +3545,7 @@ bool WebPageProxy::handleKeyboardEvent(const NativeWebKeyboardEvent& event)
     if (internals().keyEventQueue.size() == 1) {
         LOG(KeyHandling, " UI process: sent keyEvent from handleKeyboardEvent");
         m_process->recordUserGestureAuthorizationToken(event.authorizationToken());
-        send(Messages::WebPage::KeyEvent(event));
+        send(Messages::WebPage::KeyEvent(m_mainFrame->frameID(), event));
     }
 
     return true;
@@ -4986,11 +5006,6 @@ void WebPageProxy::clearAllDecoratedFoundText()
 void WebPageProxy::didBeginTextSearchOperation()
 {
     send(Messages::WebPage::DidBeginTextSearchOperation());
-}
-
-void WebPageProxy::didEndTextSearchOperation()
-{
-    send(Messages::WebPage::DidEndTextSearchOperation());
 }
 
 void WebPageProxy::requestRectForFoundTextRange(const WebFoundTextRange& range, CompletionHandler<void(WebCore::FloatRect)>&& callbackFunction)
@@ -8561,11 +8576,11 @@ void WebPageProxy::didReceiveEvent(WebEventType eventType, bool handled)
 #endif
 
         bool canProcessMoreKeyEvents = !internals().keyEventQueue.isEmpty();
-        if (canProcessMoreKeyEvents) {
+        if (canProcessMoreKeyEvents && m_mainFrame) {
             auto nextEvent = internals().keyEventQueue.first();
             LOG(KeyHandling, " UI process: sent keyEvent from didReceiveEvent");
             m_process->recordUserGestureAuthorizationToken(nextEvent.authorizationToken());
-            send(Messages::WebPage::KeyEvent(internals().keyEventQueue.first()));
+            send(Messages::WebPage::KeyEvent(m_mainFrame->frameID(), internals().keyEventQueue.first()));
         }
 
         // The call to doneWithKeyEvent may close this WebPage.

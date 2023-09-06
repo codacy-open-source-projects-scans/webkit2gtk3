@@ -31,7 +31,6 @@
 #include "HTMLTextFormControlElement.h"
 #include "InlineWalker.h"
 #include "LayoutIntegrationLineLayout.h"
-#include "LineClampValue.h"
 #include "Logging.h"
 #include "RenderBlockFlow.h"
 #include "RenderChildIterator.h"
@@ -101,9 +100,6 @@ static void printReason(AvoidanceReason reason, TextStream& stream)
     case AvoidanceReason::ContentIsRuby:
         stream << "ruby";
         break;
-    case AvoidanceReason::FlowHasLineClamp:
-        stream << "-webkit-line-clamp";
-        break;
     case AvoidanceReason::FlowHasNonSupportedChild:
         stream << "unsupported child renderer";
         break;
@@ -124,9 +120,6 @@ static void printReason(AvoidanceReason reason, TextStream& stream)
         break;
     case AvoidanceReason::MultiColumnFlowIsFloating:
         stream << "column with floating objects";
-        break;
-    case AvoidanceReason::ChildBoxIsFloatingOrPositioned:
-        stream << "child box is floating or positioned";
         break;
     case AvoidanceReason::ContentIsSVG:
         stream << "SVG content";
@@ -288,37 +281,6 @@ static OptionSet<AvoidanceReason> canUseForStyle(const RenderElement& renderer, 
         SET_REASON_AND_RETURN_IF_NEEDED(FlowHasLineAlignEdges, reasons, includeReasons);
     if (style.lineSnap() != LineSnap::None)
         SET_REASON_AND_RETURN_IF_NEEDED(FlowHasLineSnap, reasons, includeReasons);
-    auto deprecatedFlexBoxAncestor = [&]() -> RenderBlock* {
-        // Line clamp is on the deprecated flex box and not the root.
-        for (auto* ancestor = renderer.containingBlock(); ancestor; ancestor = ancestor->containingBlock()) {
-            if (is<RenderDeprecatedFlexibleBox>(*ancestor))
-                return ancestor;
-            if (ancestor->establishesIndependentFormattingContext())
-                return nullptr;
-        }
-        return nullptr;
-    };
-    if (auto* ancestor = deprecatedFlexBoxAncestor(); ancestor && !ancestor->style().lineClamp().isNone()) {
-        auto isSupportedLineClamp = [&] {
-            for (auto* child = ancestor->firstChild(); child; child = child->nextInFlowSibling()) {
-                if (!is<RenderBlockFlow>(*child))
-                    return false;
-                // No anchor box support either (let's just disable content with links).
-                auto& flexItem = downcast<RenderBlockFlow>(*child);
-                if (flexItem.firstInFlowChild() == flexItem.lastInFlowChild()) {
-                    // Single content does not trigger the anchor box case.
-                    return true;
-                }
-                for (auto* inFlowChild = flexItem.lastInFlowChild(); inFlowChild; inFlowChild = inFlowChild->previousInFlowSibling()) {
-                    if (inFlowChild->style().isLink())
-                        return false;
-                }
-            }
-            return true;
-        };
-        if (!isSupportedLineClamp())
-            SET_REASON_AND_RETURN_IF_NEEDED(FlowHasLineClamp, reasons, includeReasons);
-    }
     return reasons;
 }
 
@@ -352,20 +314,8 @@ static OptionSet<AvoidanceReason> canUseForChild(const RenderBlockFlow& flow, co
     if (renderer.isRubyRun())
         SET_REASON_AND_RETURN_IF_NEEDED(ContentIsRuby, reasons, includeReasons);
 #endif
-    if (is<RenderBlockFlow>(renderer) || is<RenderGrid>(renderer) || is<RenderFlexibleBox>(renderer) || is<RenderDeprecatedFlexibleBox>(renderer) || is<RenderReplaced>(renderer) || is<RenderListItem>(renderer) || is<RenderTable>(renderer)) {
-        auto isSupportedFloatingOrPositioned = [&] (auto& renderer) {
-            if (renderer.isOutOfFlowPositioned()) {
-                if (!renderer.parent()->style().isLeftToRightDirection())
-                    return false;
-                if (is<RenderLayerModelObject>(renderer.parent()) && downcast<RenderLayerModelObject>(*renderer.parent()).shouldPlaceVerticalScrollbarOnLeft())
-                    return false;
-            }
-            return true;
-        };
-        if (!isSupportedFloatingOrPositioned(renderer))
-            SET_REASON_AND_RETURN_IF_NEEDED(ChildBoxIsFloatingOrPositioned, reasons, includeReasons)
+    if (is<RenderBlockFlow>(renderer) || is<RenderGrid>(renderer) || is<RenderFlexibleBox>(renderer) || is<RenderDeprecatedFlexibleBox>(renderer) || is<RenderReplaced>(renderer) || is<RenderListItem>(renderer) || is<RenderTable>(renderer))
         return reasons;
-    }
 
     if (is<RenderListMarker>(renderer))
         return reasons;

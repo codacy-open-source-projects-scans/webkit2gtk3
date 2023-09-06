@@ -85,7 +85,6 @@ LineLayout::LineLayout(RenderBlockFlow& flow)
     , m_layoutState(flow.view().layoutState())
     , m_blockFormattingState(layoutState().ensureBlockFormattingState(rootLayoutBox()))
     , m_inlineFormattingState(layoutState().ensureInlineFormattingState(rootLayoutBox()))
-    , m_inlineFormattingContext(rootLayoutBox(), m_inlineFormattingState)
 {
 }
 
@@ -528,7 +527,7 @@ void LineLayout::updateOverflow()
 
 std::pair<LayoutUnit, LayoutUnit> LineLayout::computeIntrinsicWidthConstraints()
 {
-    auto constraints = m_inlineFormattingContext.computedIntrinsicSizes(m_lineDamage.get());
+    auto constraints = Layout::InlineFormattingContext { rootLayoutBox(), m_inlineFormattingState }.computedIntrinsicSizes(m_lineDamage.get());
     return { constraints.minimum, constraints.maximum };
 }
 
@@ -588,8 +587,7 @@ std::optional<LayoutRect> LineLayout::layout()
     }();
     auto parentBlockLayoutState = Layout::BlockLayoutState { m_blockFormattingState.floatingState(), lineClamp(flow()), textBoxTrim(flow()), intrusiveInitialLetterBottom() };
     auto inlineLayoutState = Layout::InlineLayoutState { parentBlockLayoutState, WTFMove(m_nestedListMarkerOffsets) };
-    auto layoutResult = m_inlineFormattingContext.layoutInFlowAndFloatContent(inlineContentConstraints, inlineLayoutState, m_lineDamage.get());
-    m_inlineFormattingContext.layoutOutOfFlowContent(inlineContentConstraints, inlineLayoutState, layoutResult.displayContent);
+    auto layoutResult = Layout::InlineFormattingContext { rootLayoutBox(), m_inlineFormattingState }.layout(inlineContentConstraints, inlineLayoutState, m_lineDamage.get());
 
     auto repaintRect = LayoutRect { constructContent(inlineLayoutState, WTFMove(layoutResult)) };
 
@@ -719,13 +717,15 @@ void LineLayout::updateInlineContentConstraints()
     auto padding = logicalPadding(flow, isLeftToRightInlineDirection, blockFlowDirection, IsPartOfFormattingContext::No);
     auto border = logicalBorder(flow, isLeftToRightInlineDirection, blockFlowDirection, IsPartOfFormattingContext::No);
     auto scrollbarSize = scrollbarLogicalSize(flow);
+    auto shouldPlaceVerticalScrollbarOnLeft = flow.shouldPlaceVerticalScrollbarOnLeft();
 
     auto contentBoxWidth = WebCore::isHorizontalWritingMode(writingMode) ? flow.contentWidth() : flow.contentHeight();
-    auto contentBoxLeft = border.horizontal.left + padding.horizontal.left;
+    auto contentBoxLeft = border.horizontal.left + padding.horizontal.left + (isLeftToRightInlineDirection && shouldPlaceVerticalScrollbarOnLeft ? scrollbarSize.width() : 0_lu);
     auto contentBoxTop = border.vertical.top + padding.vertical.top;
 
     auto horizontalConstraints = Layout::HorizontalConstraints { contentBoxLeft, contentBoxWidth };
-    auto visualLeft = rootLayoutBox().style().isLeftToRightDirection() ? contentBoxLeft : border.horizontal.right + scrollbarSize.width() + padding.horizontal.right;
+    auto visualLeft = !isLeftToRightInlineDirection || shouldPlaceVerticalScrollbarOnLeft ? border.horizontal.right + scrollbarSize.width() + padding.horizontal.right : contentBoxLeft;
+
     m_inlineContentConstraints = { { horizontalConstraints, contentBoxTop }, visualLeft };
 
     auto createRootGeometryIfNeeded = [&] {
@@ -858,7 +858,17 @@ LayoutUnit LineLayout::contentBoxLogicalHeight() const
         return { };
     }
 
-    auto contentHeight = lines.last().lineBoxLogicalRect().maxY() - lines.first().lineBoxLogicalRect().y();
+    auto lastLineWithInlineContent = [&] {
+        // Out-of-flow/float content only don't produce lines with inline content. They should not be taken into
+        // account when computing content box height.
+        for (auto& line : makeReversedRange(lines)) {
+            ASSERT(line.boxCount());
+            if (line.boxCount() > 1)
+                return line;
+        }
+        return lines.first();
+    };
+    auto contentHeight = lastLineWithInlineContent().lineBoxLogicalRect().maxY() - lines.first().lineBoxLogicalRect().y();
     auto additionalHeight = m_inlineContent->firstLinePaginationOffset + m_inlineContent->clearGapBeforeFirstLine + m_inlineContent->clearGapAfterLastLine;
     return LayoutUnit { contentHeight + additionalHeight };
 }

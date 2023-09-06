@@ -2322,6 +2322,8 @@ void Document::updateLayoutIgnorePendingStylesheets(Document::RunPostLayoutTasks
             scheduleFullStyleRebuild();
     }
 
+    updateRelevancyOfContentVisibilityElements();
+
     updateLayout();
 
     if (runPostLayoutTasks == RunPostLayoutTasks::Synchronously && view())
@@ -2383,6 +2385,8 @@ bool Document::updateLayoutIfDimensionsOutOfDate(Element& element, OptionSet<Dim
         if (owner->document().updateLayoutIfDimensionsOutOfDate(*owner))
             requireFullLayout = true;
     }
+
+    updateRelevancyOfContentVisibilityElements();
 
     updateStyleIfNeeded();
 
@@ -3709,20 +3713,18 @@ void Document::processBaseElement()
         }
     }
 
-    // FIXME: Since this doesn't share code with completeURL it may not handle encodings correctly.
     URL baseElementURL;
-    if (href) {
-        auto trimmedHref = href->string().trim(isASCIIWhitespace);
-        if (!trimmedHref.isEmpty())
-            baseElementURL = URL(fallbackBaseURL(), trimmedHref);
-    }
-    if (m_baseElementURL != baseElementURL && contentSecurityPolicy()->allowBaseURI(baseElementURL)) {
-        if (settings().shouldRestrictBaseURLSchemes() && !SecurityPolicy::isBaseURLSchemeAllowed(baseElementURL))
+    if (href)
+        baseElementURL = completeURL(href->string(), fallbackBaseURL());
+    if (m_baseElementURL != baseElementURL) {
+        if (!contentSecurityPolicy()->allowBaseURI(baseElementURL))
+            m_baseElementURL = { };
+        else if (settings().shouldRestrictBaseURLSchemes() && !SecurityPolicy::isBaseURLSchemeAllowed(baseElementURL)) {
+            m_baseElementURL = { };
             addConsoleMessage(MessageSource::Security, MessageLevel::Error, "Blocked setting " + baseElementURL.stringCenterEllipsizedToLength() + " as the base URL because it does not have an allowed scheme.");
-        else {
+        } else
             m_baseElementURL = baseElementURL;
-            updateBaseURL();
-        }
+        updateBaseURL();
     }
 
     m_baseTarget = target ? *target : nullAtom();
@@ -5885,6 +5887,7 @@ URL Document::completeURL(const String& url, const URL& baseURLOverride, ForceUT
         return URL();
 
     URL baseURL = baseURLForComplete(baseURLOverride);
+    // Same logic as openFunc() in XMLDocumentParserLibxml2.cpp. Keep them in sync.
     if (!m_decoder || forceUTF8 == ForceUTF8::Yes)
         return URL(baseURL, url);
     return URL(baseURL, url, m_decoder->encodingForURLParsing());

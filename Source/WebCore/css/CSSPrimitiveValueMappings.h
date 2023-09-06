@@ -1953,31 +1953,9 @@ enum LengthConversion {
     CalculatedConversion = 1 << 4
 };
 
-inline bool CSSPrimitiveValue::convertingToLengthRequiresNonNullStyle(int lengthConversion) const
-{
-    // This matches the implementation in CSSPrimitiveValue::computeLengthDouble().
-    //
-    // FIXME: We should probably make CSSPrimitiveValue::computeLengthDouble and
-    // CSSPrimitiveValue::computeNonCalcLengthDouble (which has the style assertion)
-    // return std::optional<double> instead of having this check here.
-    switch (primitiveUnitType()) {
-    case CSSUnitType::CSS_EM:
-    case CSSUnitType::CSS_EX:
-    case CSSUnitType::CSS_CAP:
-    case CSSUnitType::CSS_CH:
-    case CSSUnitType::CSS_IC:
-    case CSSUnitType::CSS_LH:
-        return lengthConversion & (FixedIntegerConversion | FixedFloatConversion);
-    case CSSUnitType::CSS_CALC:
-        return m_value.calc->convertingToLengthRequiresNonNullStyle(lengthConversion);
-    default:
-        return false;
-    }
-}
-
 template<int supported> Length CSSPrimitiveValue::convertToLength(const CSSToLengthConversionData& conversionData) const
 {
-    if (convertingToLengthRequiresNonNullStyle(supported) && !conversionData.style())
+    if (!convertingToLengthHasRequiredConversionData(supported, conversionData))
         return Length(LengthType::Undefined);
     if ((supported & FixedIntegerConversion) && isLength())
         return computeLength<Length>(conversionData);
@@ -2362,6 +2340,12 @@ template<> constexpr FontVariantCaps fromCSSValueID(CSSValueID valueID)
     ASSERT_NOT_REACHED_UNDER_CONSTEXPR_CONTEXT();
     return FontVariantCaps::Normal;
 }
+
+#define TYPE FontVariantEmoji
+#define FOR_EACH(CASE) CASE(Normal) CASE(Text) CASE(Emoji) CASE(Unicode)
+DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
+#undef TYPE
+#undef FOR_EACH
 
 constexpr CSSValueID toCSSValueID(FontOpticalSizing sizing)
 {

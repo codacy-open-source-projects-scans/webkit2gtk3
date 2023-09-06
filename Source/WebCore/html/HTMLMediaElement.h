@@ -647,7 +647,6 @@ public:
     WEBCORE_EXPORT LayerHostingContextID layerHostingContextID();
     WEBCORE_EXPORT WebCore::FloatSize naturalSize();
 
-    FloatSize mediaPlayerVideoLayerSize() const override { return videoLayerSize(); }
     WEBCORE_EXPORT WebCore::FloatSize videoLayerSize() const;
     void setVideoLayerSizeFenced(const FloatSize&, WTF::MachSendRight&&);
     void updateMediaState();
@@ -827,6 +826,9 @@ private:
 
     bool mediaPlayerShouldDisableHDR() const final { return shouldDisableHDR(); }
 
+    FloatSize mediaPlayerVideoLayerSize() const final { return videoLayerSize(); }
+    void mediaPlayerVideoLayerSizeDidChange(const FloatSize& size) final { m_videoLayerSize = size; }
+
     void pendingActionTimerFired();
     void progressEventTimerFired();
     void playbackProgressTimerFired();
@@ -947,7 +949,7 @@ private:
     bool isLiveStream() const override { return movieLoadType() == MovieLoadType::LiveStream; }
 
     void updateSleepDisabling();
-    enum class SleepType { None, Display, System };
+    enum class SleepType : uint8_t { None, Display, System };
     SleepType shouldDisableSleep() const;
 
     DOMWrapperWorld& ensureIsolatedWorld();

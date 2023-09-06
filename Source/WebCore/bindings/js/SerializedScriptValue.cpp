@@ -496,9 +496,10 @@ enum class CryptoAlgorithmIdentifierTag {
     HKDF = 20,
     PBKDF2 = 21,
     ED25519 = 22,
+    X25519 = 23,
 };
 
-const uint8_t cryptoAlgorithmIdentifierTagMaximumValue = 22;
+const uint8_t cryptoAlgorithmIdentifierTagMaximumValue = 23;
 
 static unsigned countUsages(CryptoKeyUsageBitmap usages)
 {
@@ -2214,6 +2215,9 @@ private:
         case CryptoAlgorithmIdentifier::Ed25519:
             write(CryptoAlgorithmIdentifierTag::ED25519);
             break;
+        case CryptoAlgorithmIdentifier::X25519:
+            write(CryptoAlgorithmIdentifierTag::X25519);
+            break;
         }
     }
 
@@ -3489,6 +3493,9 @@ private:
         case CryptoAlgorithmIdentifierTag::ED25519:
             result = CryptoAlgorithmIdentifier::Ed25519;
             break;
+        case CryptoAlgorithmIdentifierTag::X25519:
+            result = CryptoAlgorithmIdentifier::X25519;
+            break;
         }
         return true;
     }
@@ -4631,7 +4638,9 @@ private:
             }
             
             RELEASE_ASSERT(m_sharedBuffers->at(index));
-            auto buffer = ArrayBuffer::create(WTFMove(m_sharedBuffers->at(index)));
+            ArrayBufferContents arrayBufferContents;
+            m_sharedBuffers->at(index).shareWith(arrayBufferContents);
+            auto buffer = ArrayBuffer::create(WTFMove(arrayBufferContents));
             JSValue result = getJSValue(buffer.get());
             m_gcBuffer.appendWithCrashOnOverflow(result);
             return result;

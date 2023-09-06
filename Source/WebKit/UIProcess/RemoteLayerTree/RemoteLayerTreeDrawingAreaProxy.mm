@@ -31,6 +31,7 @@
 #import "LayerProperties.h"
 #import "Logging.h"
 #import "MessageSenderInlines.h"
+#import "PageClient.h"
 #import "RemoteLayerTreeDrawingAreaProxyMessages.h"
 #import "RemotePageDrawingAreaProxy.h"
 #import "RemotePageProxy.h"
@@ -142,7 +143,13 @@ void RemoteLayerTreeDrawingAreaProxy::sendUpdateGeometry()
     m_lastSentSizeToContentAutoSizeMaximumSize = m_webPageProxy.sizeToContentAutoSizeMaximumSize();
     m_lastSentSize = m_size;
     m_isWaitingForDidUpdateGeometry = true;
-    m_webPageProxy.sendWithAsyncReply(Messages::DrawingArea::UpdateGeometry(m_size, false /* flushSynchronously */, MachSendRight()), [weakThis = WeakPtr { this }] {
+
+    std::optional<VisibleContentRectUpdateInfo> visibleRectUpdateInfo;
+#if PLATFORM(IOS_FAMILY)
+    visibleRectUpdateInfo = m_webPageProxy.pageClient().createVisibleContentRectUpdateInfo();
+#endif
+
+    m_webPageProxy.sendWithAsyncReply(Messages::DrawingArea::UpdateGeometry(m_size, visibleRectUpdateInfo, false /* flushSynchronously */, MachSendRight()), [weakThis = WeakPtr { this }] {
         if (!weakThis)
             return;
         weakThis->didUpdateGeometry();
@@ -448,11 +455,11 @@ void RemoteLayerTreeDrawingAreaProxy::initializeDebugIndicator()
 
 bool RemoteLayerTreeDrawingAreaProxy::maybePauseDisplayRefreshCallbacks()
 {
-    if (m_webPageProxyProcessState.commitLayerTreeMessageState == NeedsDisplayDidRefresh)
+    if (m_webPageProxyProcessState.commitLayerTreeMessageState == NeedsDisplayDidRefresh || m_webPageProxyProcessState.commitLayerTreeMessageState == CommitLayerTreePending)
         return false;
 
     for (auto pair : m_remotePageProcessState) {
-        if (pair.value.commitLayerTreeMessageState == NeedsDisplayDidRefresh)
+        if (pair.value.commitLayerTreeMessageState == NeedsDisplayDidRefresh || pair.value.commitLayerTreeMessageState == CommitLayerTreePending)
             return false;
     }
 
@@ -493,9 +500,6 @@ void RemoteLayerTreeDrawingAreaProxy::didRefreshDisplay(IPC::Connection* connect
     if (!m_webPageProxy.hasRunningProcess())
         return;
 
-    if (maybePauseDisplayRefreshCallbacks())
-        return;
-
     if (connection) {
         ProcessState& state = processStateForConnection(*connection);
         didRefreshDisplay(state, *connection);
@@ -507,6 +511,9 @@ void RemoteLayerTreeDrawingAreaProxy::didRefreshDisplay(IPC::Connection* connect
                 didRefreshDisplay(pair.value, *pair.key.process().connection());
         }
     }
+
+    if (maybePauseDisplayRefreshCallbacks())
+        return;
 
     m_webPageProxy.didUpdateActivityState();
 }

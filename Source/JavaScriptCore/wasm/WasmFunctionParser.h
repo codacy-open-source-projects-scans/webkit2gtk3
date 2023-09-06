@@ -128,6 +128,7 @@ public:
     FunctionParser(Context&, const uint8_t* functionStart, size_t functionLength, const TypeDefinition&, const ModuleInformation&);
 
     Result WARN_UNUSED_RETURN parse();
+    Result WARN_UNUSED_RETURN parseConstantExpression();
 
     OpType currentOpcode() const { return m_currentOpcode; }
     size_t currentOpcodeStartingOffset() const { return m_currentOpcodeStartingOffset; }
@@ -376,6 +377,23 @@ auto FunctionParser<Context>::parse() -> Result
 }
 
 template<typename Context>
+auto FunctionParser<Context>::parseConstantExpression() -> Result
+{
+    WASM_PARSER_FAIL_IF(!m_signature.is<FunctionSignature>(), "type signature was not a function signature");
+    const auto& signature = *m_signature.as<FunctionSignature>();
+    if (signature.numVectors() || signature.numReturnVectors()) {
+        m_context.notifyFunctionUsesSIMD();
+        if (!Context::tierSupportsSIMD)
+            WASM_TRY_ADD_TO_CONTEXT(addCrash());
+    }
+    ASSERT(!signature.argumentCount());
+
+    WASM_FAIL_IF_HELPER_FAILS(parseBody());
+
+    return { };
+}
+
+template<typename Context>
 auto FunctionParser<Context>::parseBody() -> PartialResult
 {
     m_controlStack.append({ { }, { }, 0, m_context.addTopLevel(&m_signature) });
@@ -386,7 +404,7 @@ auto FunctionParser<Context>::parseBody() -> PartialResult
         WASM_PARSER_FAIL_IF(!isValidOpType(op), "invalid opcode ", op);
 
         m_currentOpcode = static_cast<OpType>(op);
-#if ENABLE(WEBASSEMBLY_B3JIT)
+#if ENABLE(WEBASSEMBLY_OMGJIT)
         if (UNLIKELY(Options::dumpWasmOpcodeStatistics()))
             WasmOpcodeCounter::singleton().increment(m_currentOpcode);
 #endif
@@ -2309,7 +2327,7 @@ FOR_EACH_WASM_MEMORY_STORE_OP(CREATE_CASE)
         WASM_PARSER_FAIL_IF(!parseVarUInt32(extOp), "can't parse atomic extended opcode");
 
         ExtAtomicOpType op = static_cast<ExtAtomicOpType>(extOp);
-#if ENABLE(WEBASSEMBLY_B3JIT)
+#if ENABLE(WEBASSEMBLY_OMGJIT)
         if (UNLIKELY(Options::dumpWasmOpcodeStatistics()))
             WasmOpcodeCounter::singleton().increment(op);
 #endif
@@ -3390,7 +3408,7 @@ auto FunctionParser<Context>::parseUnreachableExpression() -> PartialResult
         WASM_PARSER_FAIL_IF(!parseVarUInt32(extOp), "can't parse extended GC opcode");
 
         ExtGCOpType op = static_cast<ExtGCOpType>(extOp);
-#if ENABLE(WEBASSEMBLY_B3JIT)
+#if ENABLE(WEBASSEMBLY_OMGJIT)
         if (UNLIKELY(Options::dumpWasmOpcodeStatistics()))
             WasmOpcodeCounter::singleton().increment(op);
 #endif

@@ -1573,7 +1573,7 @@ void MediaPlayerPrivateGStreamer::handleStreamCollectionMessage(GstMessage* mess
     // WebKitMediaSrc) parsebin and decodebin3 emit their own stream-collection messages, but late,
     // and sometimes with duplicated streams. Let's only listen for stream-collection messages from
     // the source to avoid these issues.
-    if (GST_MESSAGE_SRC(message) != GST_OBJECT(m_source.get())) {
+    if (!g_str_has_prefix(GST_OBJECT_NAME(m_source.get()), "filesrc") && GST_MESSAGE_SRC(message) != GST_OBJECT(m_source.get())) {
         GST_DEBUG_OBJECT(pipeline(), "Ignoring redundant STREAM_COLLECTION from %" GST_PTR_FORMAT, message->src);
         return;
     }
@@ -3479,6 +3479,9 @@ void MediaPlayerPrivateGStreamer::pushDMABufToCompositor()
     };
 
     GstMappedFrame sourceFrame(m_sample, GST_MAP_READ);
+    if (!sourceFrame)
+        return;
+
     auto* sourceVideoFrame = sourceFrame.get();
     for (unsigned i = 0; i < GST_VIDEO_FRAME_N_PLANES(sourceVideoFrame); ++i) {
         auto& planeData = swapchainBuffer->planeData(i);

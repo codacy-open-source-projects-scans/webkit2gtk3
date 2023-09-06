@@ -1143,7 +1143,6 @@ typedef NS_ENUM(NSUInteger, UIMenuOptionsPrivate) {
 };
 
 @interface UIContextMenuInteraction ()
-@property (nonatomic, readonly) UIGestureRecognizer *gestureRecognizerForFailureRelationships;
 - (void)_presentMenuAtLocation:(CGPoint)location;
 @end
 
@@ -1204,6 +1203,7 @@ typedef NS_ENUM(NSUInteger, UIMenuOptionsPrivate) {
 @property (nonatomic, readonly, getter=_isInLiveResize) BOOL _inLiveResize;
 @end
 
+extern NSNotificationName const _UIWindowSceneDidBeginLiveResizeNotification;
 extern NSNotificationName const _UIWindowSceneDidEndLiveResizeNotification;
 
 #endif // HAVE(UI_WINDOW_SCENE_LIVE_RESIZE)

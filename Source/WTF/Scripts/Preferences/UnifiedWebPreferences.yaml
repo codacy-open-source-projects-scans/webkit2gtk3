@@ -1070,6 +1070,20 @@ CSSFontFaceSizeAdjustEnabled:
     WebCore:
       default: true
 
+CSSFontVariantEmojiEnabled:
+  type: bool
+  status: testable
+  category: css
+  humanReadableName: "CSS font-variant-emoji property"
+  humanReadableDescription: "Enable the font-variant-emoji CSS property"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 CSSGradientInterpolationColorSpacesEnabled:
   type: bool
   status: stable
@@ -1510,6 +1524,19 @@ CanvasFiltersEnabled:
       default: false
     WebCore:
       default: false
+
+CanvasFingerprintingQuirkEnabled:
+  type: bool
+  status: stable
+  category: dom
+  humanReadableName: "Enable Canvas fingerprinting-related quirk"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: true
+    WebCore:
+      default: true
 
 CanvasUsesAcceleratedDrawing:
   type: bool
@@ -5029,20 +5056,6 @@ PerformanceNavigationTimingAPIEnabled:
     WebCore:
       default: true
 
-PerformanceResourceTimingSensitivePropertiesEnabled:
-  type: bool
-  status: stable
-  category: dom
-  humanReadableName: "PerformanceResourceTiming.transferSize, encodedBodySize, and decodedBodySize"
-  humanReadableDescription: "Enable all properties of PerformanceResourceTiming API"
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
-
 PermissionsAPIEnabled:
   type: bool
   status: stable
@@ -5281,20 +5294,6 @@ ReadableByteStreamAPIEnabled:
       default: false
     WebKit:
       default: false
-
-# FIXME: This is on by default in WebKit2. Perhaps we should consider turning it on for WebKitLegacy as well.
-ReferrerPolicyAttributeEnabled:
-  type: bool
-  status: mature
-  humanReadableName: "Referrer Policy attribute"
-  humanReadableDescription: "Enable Referrer Policy attribute"
-  defaultValue:
-    WebKitLegacy:
-      default: false
-    WebKit:
-      default: true
-    WebCore:
-      default: true
 
 # FIXME: This is on by default in WebKit2. Perhaps we should consider turning it on for WebKitLegacy as well.
 RemotePlaybackEnabled:
@@ -7469,6 +7468,20 @@ WebCryptoSafeCurvesEnabled:
       "PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
 
+WebCryptoX25519Enabled:
+  type: bool
+  status: testable
+  category: dom
+  humanReadableName: "Web Crypto X25519 algorithm"
+  humanReadableDescription: "Enable Web Crypto X25519 algorithm"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 WebGLDraftExtensionsEnabled:
   type: bool
   status: unstable
@@ -7912,6 +7925,20 @@ WebSocketEnabled:
     WebCore:
       "PLATFORM(WATCHOS)": false
       default: true
+
+WebTransportEnabled:
+  type: bool
+  status: testable
+  category: networking
+  humanReadableName: "WebTransport"
+  humanReadableDescription: "Enable WebTransport"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
 
 WebXRAugmentedRealityModuleEnabled:
   type: bool

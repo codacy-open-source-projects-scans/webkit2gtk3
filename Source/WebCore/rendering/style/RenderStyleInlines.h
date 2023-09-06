@@ -282,7 +282,7 @@ inline bool RenderStyle::hasFilter() const { return !filter().operations().isEmp
 inline bool RenderStyle::hasInFlowPosition() const { return position() == PositionType::Relative || position() == PositionType::Sticky; }
 inline bool RenderStyle::hasIsolation() const { return isolation() != Isolation::Auto; }
 inline bool RenderStyle::hasMargin() const { return !m_nonInheritedData->surroundData->margin.isZero(); }
-inline bool RenderStyle::hasMask() const { return maskLayers().hasImage() || maskBoxImage().hasImage(); }
+inline bool RenderStyle::hasMask() const { return maskLayers().hasImage() || maskBorder().hasImage(); }
 inline bool RenderStyle::hasOffset() const { return !m_nonInheritedData->surroundData->offset.isZero(); }
 inline bool RenderStyle::hasOpacity() const { return m_nonInheritedData->miscData->hasOpacity(); }
 inline bool RenderStyle::hasOutOfFlowPosition() const { return position() == PositionType::Absolute || position() == PositionType::Fixed; }
@@ -415,7 +415,7 @@ inline LengthPoint RenderStyle::initialObjectPosition() { return { { 50.0f, Leng
 inline Length RenderStyle::initialOffset() { return LengthType::Auto; }
 inline LengthPoint RenderStyle::initialOffsetAnchor() { return { }; }
 inline Length RenderStyle::initialOffsetDistance() { return zeroLength(); }
-inline LengthPoint RenderStyle::initialOffsetPosition() { return { }; }
+inline LengthPoint RenderStyle::initialOffsetPosition() { return { { LengthType::Normal }, { LengthType::Normal } }; }
 constexpr OffsetRotation RenderStyle::initialOffsetRotate() { return { true }; }
 inline OrderedNamedGridLinesMap RenderStyle::initialOrderedNamedGridColumnLines() { return { }; }
 inline OrderedNamedGridLinesMap RenderStyle::initialOrderedNamedGridRowLines() { return { }; }
@@ -567,9 +567,9 @@ inline MarqueeDirection RenderStyle::marqueeDirection() const { return static_ca
 inline const Length& RenderStyle::marqueeIncrement() const { return m_nonInheritedData->rareData->marquee->increment; }
 inline int RenderStyle::marqueeLoopCount() const { return m_nonInheritedData->rareData->marquee->loops; }
 inline int RenderStyle::marqueeSpeed() const { return m_nonInheritedData->rareData->marquee->speed; }
-inline const NinePieceImage& RenderStyle::maskBoxImage() const { return m_nonInheritedData->rareData->maskBoxImage; }
-inline LayoutBoxExtent RenderStyle::maskBoxImageOutsets() const { return imageOutsets(maskBoxImage()); }
-inline StyleImage* RenderStyle::maskBoxImageSource() const { return maskBoxImage().image(); }
+inline const NinePieceImage& RenderStyle::maskBorder() const { return m_nonInheritedData->rareData->maskBorder; }
+inline LayoutBoxExtent RenderStyle::maskBorderOutsets() const { return imageOutsets(maskBorder()); }
+inline StyleImage* RenderStyle::maskBorderSource() const { return maskBorder().image(); }
 inline FillBox RenderStyle::maskClip() const { return maskLayers().clip(); }
 inline CompositeOperator RenderStyle::maskComposite() const { return maskLayers().composite(); }
 inline StyleImage* RenderStyle::maskImage() const { return maskLayers().image(); }
@@ -786,65 +786,6 @@ inline TextSizeAdjustment RenderStyle::textSizeAdjust() const { return m_rareInh
 #if ENABLE(TOUCH_EVENTS)
 inline StyleColor RenderStyle::tapHighlightColor() const { return m_rareInheritedData->tapHighlightColor; }
 #endif
-
-inline bool RenderStyle::InheritedFlags::operator==(const InheritedFlags& other) const
-{
-    return emptyCells == other.emptyCells
-        && captionSide == other.captionSide
-        && listStylePosition == other.listStylePosition
-        && visibility == other.visibility
-        && textAlign == other.textAlign
-        && textTransform == other.textTransform
-        && textDecorationLines == other.textDecorationLines
-        && cursor == other.cursor
-#if ENABLE(CURSOR_VISIBILITY)
-        && cursorVisibility == other.cursorVisibility
-#endif
-        && direction == other.direction
-        && whiteSpaceCollapse == other.whiteSpaceCollapse
-        && textWrap == other.textWrap
-        && borderCollapse == other.borderCollapse
-        && boxDirection == other.boxDirection
-        && rtlOrdering == other.rtlOrdering
-        && printColorAdjust == other.printColorAdjust
-        && pointerEvents == other.pointerEvents
-        && insideLink == other.insideLink
-        && insideDefaultButton == other.insideDefaultButton
-        && writingMode == other.writingMode
-        && hasExplicitlySetColor == other.hasExplicitlySetColor;
-}
-
-inline bool RenderStyle::NonInheritedFlags::operator==(const NonInheritedFlags& other) const
-{
-    return effectiveDisplay == other.effectiveDisplay
-        && originalDisplay == other.originalDisplay
-        && overflowX == other.overflowX
-        && overflowY == other.overflowY
-        && verticalAlign == other.verticalAlign
-        && clear == other.clear
-        && position == other.position
-        && unicodeBidi == other.unicodeBidi
-        && floating == other.floating
-        && tableLayout == other.tableLayout
-        && textDecorationLine == other.textDecorationLine
-        && hasExplicitlySetDirection == other.hasExplicitlySetDirection
-        && hasExplicitlySetWritingMode == other.hasExplicitlySetWritingMode
-#if ENABLE(DARK_MODE_CSS)
-        && hasExplicitlySetColorScheme == other.hasExplicitlySetColorScheme
-#endif
-        && usesViewportUnits == other.usesViewportUnits
-        && usesContainerUnits == other.usesContainerUnits
-        && hasExplicitlyInheritedProperties == other.hasExplicitlyInheritedProperties
-        && disallowsFastPathInheritance == other.disallowsFastPathInheritance
-        && hasContentNone == other.hasContentNone
-        && isUnique == other.isUnique
-        && emptyState == other.emptyState
-        && firstChildState == other.firstChildState
-        && lastChildState == other.lastChildState
-        && isLink == other.isLink
-        && styleType == other.styleType
-        && pseudoBits == other.pseudoBits;
-}
 
 inline bool RenderStyle::NonInheritedFlags::hasPseudoStyle(PseudoId pseudo) const
 {
