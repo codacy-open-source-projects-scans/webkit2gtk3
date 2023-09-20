@@ -155,9 +155,9 @@ private:
     explicit RemoteRenderingBackendProxy(const RemoteRenderingBackendCreationParameters&, SerialFunctionDispatcher&);
 
     template<typename T, typename U, typename V> auto send(T&& message, ObjectIdentifierGeneric<U, V>);
-    template<typename T> auto send(T&& message) { return send(WTFMove(message), renderingBackendIdentifier()); }
+    template<typename T> auto send(T&& message) { return send(std::forward<T>(message), renderingBackendIdentifier()); }
     template<typename T, typename U, typename V> auto sendSync(T&& message, ObjectIdentifierGeneric<U, V>);
-    template<typename T> auto sendSync(T&& message) { return sendSync(WTFMove(message), renderingBackendIdentifier()); }
+    template<typename T> auto sendSync(T&& message) { return sendSync(std::forward<T>(message), renderingBackendIdentifier()); }
 
     // Connection::Client
     void didClose(IPC::Connection&) final;
@@ -180,9 +180,7 @@ private:
 
     // SerialFunctionDispatcher
     void dispatch(Function<void()>&& function) final { m_dispatcher.dispatch(WTFMove(function)); }
-#if ASSERT_ENABLED
-    void assertIsCurrent() const final { m_dispatcher.assertIsCurrent(); }
-#endif
+    bool isCurrent() const final { return m_dispatcher.isCurrent(); }
     RefPtr<IPC::Connection> m_connection;
     RefPtr<IPC::StreamClientConnection> m_streamConnection;
     RemoteRenderingBackendCreationParameters m_parameters;

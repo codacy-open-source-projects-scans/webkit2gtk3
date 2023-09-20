@@ -168,6 +168,7 @@ public:
     virtual void updateGeometry(const WebCore::IntSize&, CompletionHandler<void()>&&) = 0;
     virtual void didChangeViewportAttributes(WebCore::ViewportAttributes&&) = 0;
     virtual void deviceOrPageScaleFactorChanged() = 0;
+    virtual bool enterAcceleratedCompositingModeIfNeeded() = 0;
 #endif
 
     virtual void adoptLayersFromDrawingArea(DrawingArea&) { }
@@ -190,7 +191,7 @@ protected:
     template<typename T> bool send(T&& message)
     {
         Ref webPage = m_webPage.get();
-        return webPage->send(WTFMove(message), m_identifier.toUInt64(), { });
+        return webPage->send(std::forward<T>(message), m_identifier.toUInt64(), { });
     }
 
     const DrawingAreaType m_type;

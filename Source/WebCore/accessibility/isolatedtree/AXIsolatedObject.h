@@ -181,7 +181,7 @@ private:
     bool isChecked() const override { return boolAttributeValue(AXPropertyName::IsChecked); }
     bool isEnabled() const override { return boolAttributeValue(AXPropertyName::IsEnabled); }
     bool isSelected() const override { return boolAttributeValue(AXPropertyName::IsSelected); }
-    bool isFocused() const override { return boolAttributeValue(AXPropertyName::IsFocused); }
+    bool isFocused() const override { return tree()->focusedNodeID() == objectID(); }
     bool isMultiSelectable() const override { return boolAttributeValue(AXPropertyName::IsMultiSelectable); }
     InsideLink insideLink() const final { return propertyValue<InsideLink>(AXPropertyName::InsideLink); }
     bool isRequired() const override { return boolAttributeValue(AXPropertyName::IsRequired); }
@@ -310,7 +310,6 @@ private:
     AccessibilityChildrenVector selectedChildren() final { return tree()->objectsForIDs(vectorAttributeValue<AXID>(AXPropertyName::SelectedChildren)); }
     void setSelectedChildren(const AccessibilityChildrenVector&) override;
     AccessibilityChildrenVector visibleChildren() override { return tree()->objectsForIDs(vectorAttributeValue<AXID>(AXPropertyName::VisibleChildren)); }
-    AccessibilityChildrenVector selectedCells() override { return tree()->objectsForIDs(vectorAttributeValue<AXID>(AXPropertyName::SelectedCells)); }
     AtomString tagName() const override;
     const AccessibilityChildrenVector& children(bool updateChildrenIfNeeded = true) override;
     void updateChildrenIfNecessary() override;
@@ -507,7 +506,6 @@ private:
     LocalFrameView* documentFrameView() const override;
     ScrollView* scrollView() const override;
     void detachFromParent() override;
-    AXCoreObject* activeDescendant() const override;
 
     OptionSet<AXAncestorFlag> ancestorFlags() const;
 

@@ -238,12 +238,12 @@ void CanvasRenderingContext2DBase::unwindStateStack()
     // Ensure that the state stack in the ImageBuffer's context
     // is cleared before destruction, to avoid assertions in the
     // GraphicsContext dtor.
-    if (size_t stackSize = m_stateStack.size()) {
-        if (auto* context = canvasBase().existingDrawingContext()) {
-            while (--stackSize)
-                context->restore();
-        }
-    }
+    size_t stackSize = m_stateStack.size();
+    if (stackSize <= 1)
+        return;
+    // We need to keep the last state because it is tracked by CanvasBase::m_contextStateSaver.
+    if (auto* context = canvasBase().existingDrawingContext())
+        context->unwindStateStack(stackSize - 1);
 }
 
 CanvasRenderingContext2DBase::~CanvasRenderingContext2DBase()
@@ -266,13 +266,21 @@ bool CanvasRenderingContext2DBase::isAccelerated() const
 void CanvasRenderingContext2DBase::reset()
 {
     unwindStateStack();
+
     m_stateStack.resize(1);
     m_stateStack.first() = State();
+
     m_path.clear();
     m_unrealizedSaveCount = 0;
     m_cachedImageData = std::nullopt;
 
     m_recordingContext = nullptr;
+
+    clearAccumulatedDirtyRect();
+    resetTransform();
+
+    canvasBase().resetGraphicsContextState();
+    clearCanvas();
 }
 
 CanvasRenderingContext2DBase::State::State()
@@ -2462,7 +2470,7 @@ ExceptionOr<Ref<ImageData>> CanvasRenderingContext2DBase::getImageData(int sx, i
 
     ASSERT(pixelBuffer->format().colorSpace == toDestinationColorSpace(computedColorSpace));
 
-    return { { ImageData::create(static_reference_cast<ByteArrayPixelBuffer>(pixelBuffer.releaseNonNull())) } };
+    return { { ImageData::create(downcast<ByteArrayPixelBuffer>(pixelBuffer.releaseNonNull())) } };
 }
 
 void CanvasRenderingContext2DBase::putImageData(ImageData& data, int dx, int dy)
@@ -2866,6 +2874,33 @@ PixelFormat CanvasRenderingContext2DBase::pixelFormat() const
 DestinationColorSpace CanvasRenderingContext2DBase::colorSpace() const
 {
     return toDestinationColorSpace(m_settings.colorSpace);
+}
+
+OptionSet<ImageBufferOptions> CanvasRenderingContext2DBase::adjustImageBufferOptionsForTesting(OptionSet<ImageBufferOptions> bufferOptions)
+{
+    if (!m_settings.renderingModeForTesting)
+        return bufferOptions;
+    switch (*m_settings.renderingModeForTesting) {
+    case CanvasRenderingContext2DSettings::RenderingMode::Unaccelerated:
+        bufferOptions.remove(ImageBufferOptions::Accelerated);
+        bufferOptions.add(ImageBufferOptions::AvoidBackendSizeCheckForTesting);
+        break;
+    case CanvasRenderingContext2DSettings::RenderingMode::Accelerated:
+        bufferOptions.add(ImageBufferOptions::Accelerated);
+        bufferOptions.add(ImageBufferOptions::AvoidBackendSizeCheckForTesting);
+        break;
+    }
+    return bufferOptions;
+}
+
+std::optional<CanvasRenderingContext2DBase::RenderingMode> CanvasRenderingContext2DBase::getEffectiveRenderingModeForTesting()
+{
+    if (auto* buffer = canvasBase().buffer()) {
+        bool success = buffer->ensureBackendCreated(); // FIXME: Ensure we get the response for now, since the backend might change (!).
+        ASSERT_UNUSED(success, success);
+        return buffer->renderingMode();
+    }
+    return std::nullopt;
 }
 
 } // namespace WebCore

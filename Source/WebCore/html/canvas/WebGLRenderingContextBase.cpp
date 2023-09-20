@@ -34,6 +34,7 @@
 #include "DiagnosticLoggingClient.h"
 #include "DiagnosticLoggingKeys.h"
 #include "Document.h"
+#include "EXTBlendFuncExtended.h"
 #include "EXTBlendMinMax.h"
 #include "EXTClipControl.h"
 #include "EXTColorBufferFloat.h"
@@ -572,18 +573,9 @@ std::unique_ptr<WebGLRenderingContextBase> WebGLRenderingContextBase::create(Can
     if (!scriptExecutionContext)
         return nullptr;
 
-    if (type == GraphicsContextGLWebGLVersion::WebGL2 && !scriptExecutionContext->settingsValues().webGLEnabled)
-        return nullptr;
-
-    GraphicsClient* graphicsClient = canvas.graphicsClient();
+    GraphicsClient* graphicsClient = scriptExecutionContext->graphicsClient();
 
     auto* canvasElement = dynamicDowncast<HTMLCanvasElement>(canvas);
-
-    if (!scriptExecutionContext->settingsValues().webGLEnabled) {
-        canvasElement->dispatchEvent(WebGLContextEvent::create(eventNames().webglcontextcreationerrorEvent,
-            Event::CanBubble::No, Event::IsCancelable::Yes, "Web page was not allowed to create a WebGL context."_s));
-        return nullptr;
-    }
 
     if (scriptExecutionContext->settingsValues().forceWebGLUsesLowPower) {
         if (attributes.powerPreference == GraphicsContextGLPowerPreference::HighPerformance)
@@ -644,18 +636,15 @@ WebGLRenderingContextBase::WebGLRenderingContextBase(CanvasBase& canvas, WebGLCo
     : GPUBasedCanvasRenderingContext(canvas)
     , m_generatedImageCache(4)
     , m_attributes(attributes)
-    , m_numGLErrorsToConsoleAllowed(maxGLErrorsAllowedToConsole)
+    , m_numGLErrorsToConsoleAllowed(canvas.scriptExecutionContext()->settingsValues().webGLErrorsToConsoleEnabled ? maxGLErrorsAllowedToConsole : 0)
     , m_checkForContextLossHandlingTimer(*this, &WebGLRenderingContextBase::checkForContextLossHandling)
 #if ENABLE(WEBXR)
     , m_isXRCompatible(attributes.xrCompatible)
 #endif
 {
     registerWithWebGLStateTracker();
-    if (auto* canvas = htmlCanvas()) {
+    if (htmlCanvas())
         m_checkForContextLossHandlingTimer.startOneShot(checkContextLossHandlingDelay);
-        if (Page* page = canvas->document().page())
-            m_synthesizedErrorsToConsole = page->settings().webGLErrorsToConsoleEnabled();
-    }
 }
 
 WebGLCanvas WebGLRenderingContextBase::canvas()
@@ -756,7 +745,6 @@ void WebGLRenderingContextBase::initializeContextState()
     m_stencilFuncMask = 0xFFFFFFFF;
     m_stencilFuncMaskBack = 0xFFFFFFFF;
     m_layerCleared = false;
-    m_numGLErrorsToConsoleAllowed = maxGLErrorsAllowedToConsole;
 
     m_rasterizerDiscardEnabled = false;
 
@@ -1386,15 +1374,14 @@ void WebGLRenderingContextBase::blendEquationSeparate(GCGLenum modeRGB, GCGLenum
 
 void WebGLRenderingContextBase::blendFunc(GCGLenum sfactor, GCGLenum dfactor)
 {
-    if (isContextLost() || !validateBlendFuncFactors("blendFunc", sfactor, dfactor))
+    if (isContextLost())
         return;
     m_context->blendFunc(sfactor, dfactor);
 }
 
 void WebGLRenderingContextBase::blendFuncSeparate(GCGLenum srcRGB, GCGLenum dstRGB, GCGLenum srcAlpha, GCGLenum dstAlpha)
 {
-    // Note: Alpha does not have the same restrictions as RGB.
-    if (isContextLost() || !validateBlendFuncFactors("blendFunc", srcRGB, dstRGB))
+    if (isContextLost())
         return;
     m_context->blendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
 }
@@ -2423,6 +2410,11 @@ WebGLAny WebGLRenderingContextBase::getParameter(GCGLenum pname)
             return getUnsignedIntParameter(pname);
         synthesizeGLError(GraphicsContextGL::INVALID_ENUM, "getParameter", "invalid parameter name, EXT_clip_control not enabled");
         return nullptr;
+    case GraphicsContextGL::MAX_DUAL_SOURCE_DRAW_BUFFERS_EXT: // EXT_blend_func_extended
+        if (m_extBlendFuncExtended)
+            return getUnsignedIntParameter(pname);
+        synthesizeGLError(GraphicsContextGL::INVALID_ENUM, "getParameter", "invalid parameter name, EXT_blend_func_extended not enabled");
+        return nullptr;
     case GraphicsContextGL::MAX_COLOR_ATTACHMENTS_EXT: // EXT_draw_buffers BEGIN
         if (m_webglDrawBuffers || isWebGL2())
             return getMaxColorAttachments();
@@ -2971,6 +2963,7 @@ bool WebGLRenderingContextBase::extensionIsEnabled(const String& name)
         return variable != nullptr;
 
     CHECK_EXTENSION(m_angleInstancedArrays, "ANGLE_instanced_arrays");
+    CHECK_EXTENSION(m_extBlendFuncExtended, "EXT_blend_func_extended");
     CHECK_EXTENSION(m_extBlendMinMax, "EXT_blend_minmax");
     CHECK_EXTENSION(m_extClipControl, "EXT_clip_control");
     CHECK_EXTENSION(m_extColorBufferFloat, "EXT_color_buffer_float");
@@ -5303,13 +5296,17 @@ bool WebGLRenderingContextBase::validateStencilFunc(const char* functionName, GC
 
 bool WebGLRenderingContextBase::shouldPrintToConsole() const
 {
-    return m_synthesizedErrorsToConsole && m_numGLErrorsToConsoleAllowed;
+    return m_numGLErrorsToConsoleAllowed;
 }
 
 // Frequent call sites should use above condition before constructing the message for the printToConsole().
 void WebGLRenderingContextBase::printToConsole(MessageLevel level, String&& message)
 {
     if (!shouldPrintToConsole())
+        return;
+
+    auto* scriptExecutionContext = this->scriptExecutionContext();
+    if (!scriptExecutionContext)
         return;
 
     std::unique_ptr<Inspector::ConsoleMessage> consoleMessage;
@@ -5321,13 +5318,11 @@ void WebGLRenderingContextBase::printToConsole(MessageLevel level, String&& mess
     } else
         consoleMessage = makeUnique<Inspector::ConsoleMessage>(MessageSource::Rendering, MessageType::Log, level, WTFMove(message));
 
-    auto* canvas = htmlCanvas();
-    if (canvas)
-        canvas->document().addConsoleMessage(WTFMove(consoleMessage));
+    scriptExecutionContext->addConsoleMessage(WTFMove(consoleMessage));
 
     --m_numGLErrorsToConsoleAllowed;
-    if (m_numGLErrorsToConsoleAllowed == 1)
-        printToConsole(MessageLevel::Warning, "WebGL: too many errors, no more errors will be reported to the console for this context."_s);
+    if (!m_numGLErrorsToConsoleAllowed)
+        scriptExecutionContext->addConsoleMessage(makeUnique<Inspector::ConsoleMessage>(MessageSource::Rendering, MessageType::Log, MessageLevel::Warning, "WebGL: too many errors, no more errors will be reported to the console for this context."_s));
 }
 
 bool WebGLRenderingContextBase::validateFramebufferTarget(GCGLenum target)
@@ -5367,18 +5362,6 @@ bool WebGLRenderingContextBase::validateFramebufferFuncParameters(const char* fu
         synthesizeGLError(GraphicsContextGL::INVALID_ENUM, functionName, "invalid attachment");
         return false;
     }
-}
-
-bool WebGLRenderingContextBase::validateBlendFuncFactors(const char* functionName, GCGLenum src, GCGLenum dst)
-{
-    if (((src == GraphicsContextGL::CONSTANT_COLOR || src == GraphicsContextGL::ONE_MINUS_CONSTANT_COLOR)
-        && (dst == GraphicsContextGL::CONSTANT_ALPHA || dst == GraphicsContextGL::ONE_MINUS_CONSTANT_ALPHA))
-        || ((dst == GraphicsContextGL::CONSTANT_COLOR || dst == GraphicsContextGL::ONE_MINUS_CONSTANT_COLOR)
-            && (src == GraphicsContextGL::CONSTANT_ALPHA || src == GraphicsContextGL::ONE_MINUS_CONSTANT_ALPHA))) {
-        synthesizeGLError(GraphicsContextGL::INVALID_OPERATION, functionName, "incompatible src and dst");
-        return false;
-    }
-    return true;
 }
 
 bool WebGLRenderingContextBase::validateCapability(const char* functionName, GCGLenum cap)
@@ -5653,7 +5636,7 @@ void WebGLRenderingContextBase::maybeRestoreContext()
     if (!scriptExecutionContext->settingsValues().webGLEnabled)
         return;
 
-    GraphicsClient* graphicsClient = canvasBase().graphicsClient();
+    GraphicsClient* graphicsClient = scriptExecutionContext->graphicsClient();
     if (!graphicsClient)
         return;
 
@@ -5868,6 +5851,7 @@ template<typename T> void loseExtension(RefPtr<T> extension)
 void WebGLRenderingContextBase::loseExtensions(LostContextMode mode)
 {
     loseExtension(WTFMove(m_angleInstancedArrays));
+    loseExtension(WTFMove(m_extBlendFuncExtended));
     loseExtension(WTFMove(m_extBlendMinMax));
     loseExtension(WTFMove(m_extClipControl));
     loseExtension(WTFMove(m_extColorBufferFloat));

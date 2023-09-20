@@ -255,7 +255,7 @@ bool MediaPlayerPrivateWebM::paused() const
     return ![m_synchronizer rate];
 }
 
-void MediaPlayerPrivateWebM::setPageIsVisible(bool visible)
+void MediaPlayerPrivateWebM::setPageIsVisible(bool visible, String&&)
 {
     if (m_visible == visible)
         return;
@@ -287,8 +287,10 @@ void MediaPlayerPrivateWebM::seekToTarget(const SeekTarget& target)
         reenqueueMediaForTime(trackBuffer, trackId, target.time);
     }
     [m_synchronizer setRate:m_rate];
-    if (auto player = m_player.get())
+    if (auto player = m_player.get()) {
+        player->seeked(target.time);
         player->timeChanged();
+    }
 }
 
 void MediaPlayerPrivateWebM::setRateDouble(double rate)
@@ -1286,7 +1288,7 @@ void MediaPlayerPrivateWebM::ensureLayer()
     @try {
         [m_synchronizer addRenderer:m_displayLayer.get()];
     } @catch(NSException *exception) {
-        ERROR_LOG(LOGIDENTIFIER, "-[AVSampleBufferRenderSynchronizer addRenderer:] threw an exception: ", [[exception name] UTF8String], ", reason : ", [[exception reason] UTF8String]);
+        ERROR_LOG(LOGIDENTIFIER, "-[AVSampleBufferRenderSynchronizer addRenderer:] threw an exception: ", exception.name, ", reason : ", exception.reason);
         ASSERT_NOT_REACHED();
 
         setNetworkState(MediaPlayer::NetworkState::DecodeError);
@@ -1367,7 +1369,7 @@ void MediaPlayerPrivateWebM::addAudioRenderer(uint64_t trackId)
     @try {
         [m_synchronizer addRenderer:renderer.get()];
     } @catch(NSException *exception) {
-        ERROR_LOG(LOGIDENTIFIER, "-[AVSampleBufferRenderSynchronizer addRenderer:] threw an exception: ", [[exception name] UTF8String], ", reason : ", [[exception reason] UTF8String]);
+        ERROR_LOG(LOGIDENTIFIER, "-[AVSampleBufferRenderSynchronizer addRenderer:] threw an exception: ", exception.name, ", reason : ", exception.reason);
         ASSERT_NOT_REACHED();
 
         setNetworkState(MediaPlayer::NetworkState::DecodeError);

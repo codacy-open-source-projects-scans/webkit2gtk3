@@ -385,6 +385,8 @@ void InlineDisplayContentBuilder::appendInlineBoxDisplayBox(const Line::Run& lin
         , isLineFullyTruncatedInBlockDirection()
         , isFirstLastBox(inlineBox)
     });
+
+    appendAssociatedRubyAnnotationBoxIfNeeded(layoutBox, inlineBoxBorderBox, boxes);
 }
 
 void InlineDisplayContentBuilder::appendSpanningInlineBoxDisplayBox(const Line::Run& lineRun, const InlineLevelBox& inlineBox, const InlineRect& inlineBoxBorderBox, bool linehasContent, InlineDisplay::Boxes& boxes)
@@ -439,6 +441,34 @@ void InlineDisplayContentBuilder::appendInlineDisplayBoxAtBidiBoundary(const Box
         , isContentful
         , isLineFullyTruncatedInBlockDirection()
     });
+}
+
+void InlineDisplayContentBuilder::appendAssociatedRubyAnnotationBoxIfNeeded(const Box& layoutBox, const InlineRect& inlineBoxBorderBox, InlineDisplay::Boxes& boxes)
+{
+    auto* annotationBox = layoutBox.associatedRubyAnnotationBox();
+    if (!annotationBox)
+        return;
+
+    auto& geometry = formattingState().boxGeometry(*annotationBox);
+
+    auto top = inlineBoxBorderBox.top() - geometry.borderBoxHeight();
+    auto left = inlineBoxBorderBox.left() + ((inlineBoxBorderBox.width() - geometry.borderBoxWidth()) / 2);
+
+    auto annoationBorderBox = InlineRect { top, left, geometry.borderBoxWidth(), geometry.borderBoxHeight() };
+
+    boxes.append({ m_lineIndex
+        , InlineDisplay::Box::Type::AtomicInlineLevelBox
+        , *annotationBox
+        , UBIDI_DEFAULT_LTR
+        , annoationBorderBox
+        , annoationBorderBox
+        , { }
+        , { }
+        , true
+        , isLineFullyTruncatedInBlockDirection()
+    });
+
+    geometry.setLogicalTopLeft(toLayoutPoint(annoationBorderBox.topLeft()));
 }
 
 void InlineDisplayContentBuilder::processNonBidiContent(const LineLayoutResult& lineLayoutResult, const LineBox& lineBox, InlineDisplay::Boxes& boxes)
@@ -698,7 +728,8 @@ void InlineDisplayContentBuilder::processBidiContent(const LineLayoutResult& lin
 
         auto contentRightInInlineDirectionVisualOrder = contentStartInInlineDirectionVisualOrder;
         auto& inlineContent = lineLayoutResult.inlineContent;
-        for (auto visualOrder : lineLayoutResult.directionality.visualOrderList) {
+        for (size_t index = 0; index < lineLayoutResult.directionality.visualOrderList.size(); ++index) {
+            auto visualOrder = lineLayoutResult.directionality.visualOrderList[index];
             ASSERT(inlineContent[visualOrder].bidiLevel() != InlineItem::opaqueBidiLevel);
 
             auto& lineRun = inlineContent[visualOrder];
@@ -781,7 +812,7 @@ void InlineDisplayContentBuilder::processBidiContent(const LineLayoutResult& lin
                     logicalTopLeft.moveBy(lineBox.logicalRect().topLeft());
                     boxGeometry.setLogicalTopLeft(toLayoutPoint(logicalTopLeft));
                 } else
-                    blockLevelOutOfFlowBoxList.append(visualOrder);
+                    blockLevelOutOfFlowBoxList.append(index);
                 continue;
             }
             ASSERT_NOT_REACHED();
@@ -886,20 +917,20 @@ void InlineDisplayContentBuilder::collectInkOverflowForInlineBoxes(InlineDisplay
     }
 }
 
-void InlineDisplayContentBuilder::setGeometryForBlockLevelOutOfFlowBoxes(const Vector<size_t> indexList, const LineBox& lineBox, const Line::RunList& lineRuns, const Vector<int32_t>& visualOrderList)
+void InlineDisplayContentBuilder::setGeometryForBlockLevelOutOfFlowBoxes(const Vector<size_t> indexListOfOutOfFlowBoxes, const LineBox& lineBox, const Line::RunList& lineRuns, const Vector<int32_t>& visualOrderList)
 {
     auto& formattingContext = this->formattingContext();
     auto outOfFlowContentHasPreviousInFlowSiblingWithContentOrDecoration = false;
 
-    for (size_t i = 0; i < indexList.size(); ++i) {
-        auto outOfFlowBoxIndex = indexList[i];
+    for (size_t i = 0; i < indexListOfOutOfFlowBoxes.size(); ++i) {
+        auto outOfFlowBoxIndex = indexListOfOutOfFlowBoxes[i];
         ASSERT(outOfFlowBoxIndex < lineRuns.size());
 
         auto hasPreviousInFlowContent = [&] {
             if (outOfFlowContentHasPreviousInFlowSiblingWithContentOrDecoration)
                 return true;
-            for (size_t runIndex = i ? outOfFlowBoxIndex + 1 : 0; runIndex < outOfFlowBoxIndex; ++runIndex) {
-                auto& previousRun = visualOrderList.isEmpty() ? lineRuns[runIndex] : lineRuns[visualOrderList[runIndex]];
+            for (size_t previousRunIndex = !i ? 0 : indexListOfOutOfFlowBoxes[i - 1] + 1; previousRunIndex < outOfFlowBoxIndex; ++previousRunIndex) {
+                auto& previousRun = visualOrderList.isEmpty() ? lineRuns[previousRunIndex] : lineRuns[visualOrderList[previousRunIndex]];
                 if (Line::Run::isContentfulOrHasDecoration(previousRun, formattingContext)) {
                     outOfFlowContentHasPreviousInFlowSiblingWithContentOrDecoration = true;
                     return true;
@@ -909,7 +940,8 @@ void InlineDisplayContentBuilder::setGeometryForBlockLevelOutOfFlowBoxes(const V
         };
         // Block level boxes are placed either at the start of the line or "under" depending whether they have previous inflow sibling.
         auto logicalTop = hasPreviousInFlowContent() ? lineBox.logicalRect().bottom() : lineBox.logicalRect().top();
-        formattingState().boxGeometry(lineRuns[outOfFlowBoxIndex].layoutBox()).setLogicalTopLeft({ constraints().horizontal().logicalLeft, logicalTop });
+        auto& lineRun = visualOrderList.isEmpty() ? lineRuns[outOfFlowBoxIndex] : lineRuns[visualOrderList[outOfFlowBoxIndex]];
+        formattingState().boxGeometry(lineRun.layoutBox()).setLogicalTopLeft({ constraints().horizontal().logicalLeft, logicalTop });
     }
 }
 
@@ -962,6 +994,7 @@ void InlineDisplayContentBuilder::collectInkOverflowForTextDecorations(InlineDis
                 auto inkOverflowRect = displayBox.inkOverflow();
                 switch (writingModeToBlockFlowDirection(writingMode)) {
                 case BlockFlowDirection::TopToBottom:
+                case BlockFlowDirection::BottomToTop:
                     inkOverflowRect.inflate(decorationOverflow.left, decorationOverflow.top, decorationOverflow.right, decorationOverflow.bottom);
                     break;
                 case BlockFlowDirection::LeftToRight:
@@ -986,6 +1019,10 @@ InlineRect InlineDisplayContentBuilder::flipLogicalRectToVisualForWritingModeWit
     switch (writingModeToBlockFlowDirection(writingMode)) {
     case BlockFlowDirection::TopToBottom:
         return logicalRect;
+    case BlockFlowDirection::BottomToTop: {
+        auto bottomOffset = lineLogicalRect.height() - logicalRect.bottom();
+        return { bottomOffset, logicalRect.left(), logicalRect.width(), logicalRect.height() };
+    }
     case BlockFlowDirection::LeftToRight: {
         // Flip content such that the top (visual left) is now relative to the line bottom instead of the line top.
         auto bottomOffset = lineLogicalRect.height() - logicalRect.bottom();
@@ -1004,7 +1041,8 @@ InlineRect InlineDisplayContentBuilder::flipLogicalRectToVisualForWritingModeWit
 InlineRect InlineDisplayContentBuilder::flipRootInlineBoxRectToVisualForWritingMode(const InlineRect& rootInlineBoxLogicalRect, WritingMode writingMode) const
 {
     switch (writingModeToBlockFlowDirection(writingMode)) {
-    case BlockFlowDirection::TopToBottom: {
+    case BlockFlowDirection::TopToBottom:
+    case BlockFlowDirection::BottomToTop: {
         auto visualRect = rootInlineBoxLogicalRect;
         visualRect.moveBy({ m_displayLine.left(), m_displayLine.top() });
         return visualRect;
@@ -1027,6 +1065,7 @@ void InlineDisplayContentBuilder::setLeftForWritingMode(InlineDisplay::Box& disp
 {
     switch (writingModeToBlockFlowDirection(writingMode)) {
     case BlockFlowDirection::TopToBottom:
+    case BlockFlowDirection::BottomToTop:
         displayBox.setLeft(logicalLeft);
         break;
     case BlockFlowDirection::LeftToRight:
@@ -1043,6 +1082,7 @@ void InlineDisplayContentBuilder::setRightForWritingMode(InlineDisplay::Box& dis
 {
     switch (writingModeToBlockFlowDirection(writingMode)) {
     case BlockFlowDirection::TopToBottom:
+    case BlockFlowDirection::BottomToTop:
         displayBox.setRight(logicalRight);
         break;
     case BlockFlowDirection::LeftToRight:

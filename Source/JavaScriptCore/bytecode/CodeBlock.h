@@ -159,6 +159,8 @@ private:
     void setNumParameters(unsigned newValue, bool allocateArgumentValueProfiles);
 public:
 
+    bool couldBeTainted() const { return m_couldBeTainted; }
+
     unsigned numberOfArgumentsToSkip() const { return m_numberOfArgumentsToSkip; }
 
     unsigned numCalleeLocals() const { return m_numCalleeLocals; }
@@ -932,7 +934,8 @@ private:
     const unsigned m_numCalleeLocals;
     const unsigned m_numVars;
     unsigned m_numParameters;
-    unsigned m_numberOfArgumentsToSkip { 0 };
+    unsigned m_numberOfArgumentsToSkip : 31 { 0 };
+    unsigned m_couldBeTainted : 1 { 0 };
     uint32_t m_osrExitCounter { 0 };
     union {
         unsigned m_debuggerRequests;
@@ -964,6 +967,7 @@ public:
     void* m_jitData { nullptr };
 private:
 #endif
+    RefPtr<MetadataTable> m_metadata;
 #if ENABLE(DFG_JIT)
     // This is relevant to non-DFG code blocks that serve as the profiled code block
     // for DFG code blocks.
@@ -985,8 +989,6 @@ private:
 
     uint16_t m_optimizationDelayCounter { 0 };
     uint16_t m_reoptimizationRetryCounter { 0 };
-
-    RefPtr<MetadataTable> m_metadata;
 
     ApproximateTime m_creationTime;
     double m_previousCounter { 0 };

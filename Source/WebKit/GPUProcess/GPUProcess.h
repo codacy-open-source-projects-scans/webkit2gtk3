@@ -67,6 +67,7 @@ namespace WebKit {
 class GPUConnectionToWebProcess;
 struct GPUProcessConnectionParameters;
 struct GPUProcessCreationParameters;
+struct GPUProcessPreferencesForWebProcess;
 struct GPUProcessSessionParameters;
 class RemoteAudioSessionProxyManager;
 
@@ -126,7 +127,7 @@ public:
 #endif
 
 #if ENABLE(VIDEO)
-    void requestBitmapImageForCurrentTime(WebCore::ProcessIdentifier, WebCore::MediaPlayerIdentifier, CompletionHandler<void(ShareableBitmap::Handle&&)>&&);
+    void requestBitmapImageForCurrentTime(WebCore::ProcessIdentifier, WebCore::MediaPlayerIdentifier, CompletionHandler<void(std::optional<ShareableBitmap::Handle>&&)>&&);
 #endif
 
 private:
@@ -150,9 +151,7 @@ private:
     void platformInitializeGPUProcess(GPUProcessCreationParameters&);
     void updateGPUProcessPreferences(GPUProcessPreferences&&);
     void createGPUConnectionToWebProcess(WebCore::ProcessIdentifier, PAL::SessionID, IPC::Connection::Handle&&, GPUProcessConnectionParameters&&, CompletionHandler<void()>&&);
-    void updateWebGPUEnabled(WebCore::ProcessIdentifier, bool webGPUEnabled);
-    void updateWebGLEnabled(WebCore::ProcessIdentifier, bool webGLEnabled);
-    void updateDOMRenderingEnabled(WebCore::ProcessIdentifier, bool isDOMRenderingEnabled);
+    void updatePreferencesForWebProcess(WebCore::ProcessIdentifier, const GPUProcessPreferencesForWebProcess&);
     void addSession(PAL::SessionID, GPUProcessSessionParameters&&);
     void removeSession(PAL::SessionID);
     void updateSandboxAccess(const Vector<SandboxExtension::Handle>&);

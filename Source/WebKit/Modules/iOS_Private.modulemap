@@ -3061,11 +3061,6 @@ framework module WebKit_Private [system] {
     export *
   }
 
-  explicit module _WKWebExtensionLocalization {
-      header "_WKWebExtensionLocalization.h"
-      export *
-  }
-
   explicit module _WKWebExtensionMatchPattern {
     header "_WKWebExtensionMatchPattern.h"
     export *
@@ -3093,11 +3088,6 @@ framework module WebKit_Private [system] {
 
   explicit module _WKWebExtensionTabCreationOptions {
     header "_WKWebExtensionTabCreationOptions.h"
-    export *
-  }
-
-  explicit module _WKWebExtensionUtilities {
-    header "_WKWebExtensionUtilities.h"
     export *
   }
 

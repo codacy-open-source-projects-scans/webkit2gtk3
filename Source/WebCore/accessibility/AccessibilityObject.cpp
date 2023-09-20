@@ -625,7 +625,9 @@ void AccessibilityObject::insertChild(AXCoreObject* newChild, unsigned index, De
     if (displayContentsParent && displayContentsParent != this) {
         // Make sure the display:contents parent object knows it has a child it needs to add.
         displayContentsParent->setNeedsToUpdateChildren();
-        return;
+        // Don't exit early for certain table components, as they rely on inserting children for which they are not the rightful parent to behave correctly.
+        if (!isTableColumn() && roleValue() != AccessibilityRole::TableHeaderContainer)
+            return;
     }
 
     auto thisAncestorFlags = computeAncestorFlags();
@@ -2711,8 +2713,8 @@ AccessibilityRole AccessibilityObject::ariaRoleToWebCoreRole(const String& value
 {
     if (value.isNull() || value.isEmpty())
         return AccessibilityRole::Unknown;
-
-    for (auto roleName : StringView(value).split(' ')) {
+    auto simplifiedValue = value.simplifyWhiteSpace(isASCIIWhitespace);
+    for (auto roleName : StringView(simplifiedValue).split(' ')) {
         AccessibilityRole role = ariaRoleMap().get<ASCIICaseInsensitiveStringViewHashTranslator>(roleName);
         if (static_cast<int>(role))
             return role;
@@ -3122,25 +3124,6 @@ AXCoreObject* AccessibilityObject::focusedUIElement() const
     auto* page = this->page();
     auto* axObjectCache = this->axObjectCache();
     return page && axObjectCache ? axObjectCache->focusedObjectForPage(page) : nullptr;
-}
-
-AXCoreObject::AccessibilityChildrenVector AccessibilityObject::selectedCells()
-{
-    if (!isTable())
-        return { };
-
-    AXCoreObject::AccessibilityChildrenVector selectedCells;
-    for (auto& cell : cells()) {
-        if (cell->isSelected())
-            selectedCells.append(cell);
-    }
-
-    if (auto* activeDescendant = this->activeDescendant()) {
-        if (activeDescendant->isExposedTableCell() && !selectedCells.contains(activeDescendant))
-            selectedCells.append(activeDescendant);
-    }
-
-    return selectedCells;
 }
 
 void AccessibilityObject::setSelectedRows(AccessibilityChildrenVector&& selectedRows)
@@ -4300,15 +4283,6 @@ bool AccessibilityObject::shouldFocusActiveDescendant() const
     default:
         return false;
     }
-}
-
-AccessibilityObject* AccessibilityObject::activeDescendant() const
-{
-    auto activeDescendants = relatedObjects(AXRelationType::ActiveDescendant);
-    ASSERT(activeDescendants.size() <= 1);
-    if (!activeDescendants.isEmpty())
-        return dynamicDowncast<AccessibilityObject>(activeDescendants[0].get());
-    return nullptr;
 }
 
 bool AccessibilityObject::isActiveDescendantOfFocusedContainer() const

@@ -55,31 +55,10 @@
             }
         }
     },
-    "TestUIClient": {
-        "subtests": {
-            "/webkit/WebKitWebView/geolocation-permission-requests": {
-                "expected": {"all": {"status": ["TIMEOUT", "PASS"], "bug": "webkit.org/b/235955"}}
-            }
-        }
-    },
     "TestPrinting": {
         "subtests": {
             "/webkit/WebKitPrintOperation/custom-widget": {
                 "expected": {"gtk": {"status": ["FAIL", "TIMEOUT", "PASS"], "bug": "webkit.org/b/168196"}}
-            }
-        }
-    },
-    "TestWebViewEditor": {
-        "subtests": {
-            "/webkit/WebKitWebView/editable/editable": {
-                "expected": {"gtk@Debug": {"status": ["FAIL"], "bug": "webkit.org/b/134580"}}
-            }
-        }
-    },
-    "TestWebProcessExtensions": {
-        "subtests": {
-            "/webkit/WebKitWebProcessExtension/form-submission-steps": {
-                "expected": {"all": {"status": ["TIMEOUT", "PASS"], "bug": "webkit.org/b/205333"}}
             }
         }
     },
@@ -150,15 +129,6 @@
             },
             "WebKit.DOMWindowExtensionCrashOnReload": {
                 "expected": {"gtk": {"status": ["TIMEOUT", "PASS"], "bug": "webkit.org/b/254002"}}
-            }
-        }
-    },
-    "TestWebKitUserContentManager": {
-        "subtests": {
-            "WebKit.MouseMoveAfterCrash": {
-                "expected": {
-                    "gtk": {"status": ["FAIL"], "bug": "webkit.org/b/254002"}
-                }
             }
         }
     },

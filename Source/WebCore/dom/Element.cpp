@@ -1242,7 +1242,7 @@ void Element::scrollByUnits(int units, ScrollGranularity granularity)
     if (!renderer->hasNonVisibleOverflow())
         return;
 
-    auto direction = units < 0 ? ScrollUp : ScrollDown;
+    auto direction = units < 0 ? ScrollDirection::ScrollUp : ScrollDirection::ScrollDown;
     auto* stopElement = this;
     downcast<RenderBox>(*renderer).scroll(direction, granularity, std::abs(units), &stopElement);
 }
@@ -3528,7 +3528,7 @@ void Element::focus(const FocusOptions& options)
 
     document->updateContentRelevancyForScrollIfNeeded(*this);
 
-    RefPtr<Element> newTarget = this;
+    RefPtr newTarget { this };
 
     // If we don't have renderer yet, isFocusable will compute it without style update.
     // FIXME: Expand it to avoid style update in all cases.
@@ -3647,7 +3647,7 @@ void Element::dispatchFocusInEventIfNeeded(RefPtr<Element>&& oldFocusedElement)
 {
     if (!document().hasListenerType(Document::ListenerType::FocusIn))
         return;
-    RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(ScriptDisallowedScope::InMainThread::isScriptAllowed() || !isInWebProcess());
+    RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(ScriptDisallowedScope::InMainThread::isScriptAllowed());
     dispatchScopedEvent(FocusEvent::create(eventNames().focusinEvent, Event::CanBubble::Yes, Event::IsCancelable::No, document().windowProxy(), 0, WTFMove(oldFocusedElement)));
 }
 
@@ -3655,7 +3655,7 @@ void Element::dispatchFocusOutEventIfNeeded(RefPtr<Element>&& newFocusedElement)
 {
     if (!document().hasListenerType(Document::ListenerType::FocusOut))
         return;
-    RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(ScriptDisallowedScope::InMainThread::isScriptAllowed() || !isInWebProcess());
+    RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(ScriptDisallowedScope::InMainThread::isScriptAllowed());
     dispatchScopedEvent(FocusEvent::create(eventNames().focusoutEvent, Event::CanBubble::Yes, Event::IsCancelable::No, document().windowProxy(), 0, WTFMove(newFocusedElement)));
 }
 
@@ -3689,7 +3689,7 @@ bool Element::dispatchMouseForceWillBegin()
     if (!frame)
         return false;
 
-    PlatformMouseEvent platformMouseEvent { frame->eventHandler().lastKnownMousePosition(), frame->eventHandler().lastKnownMouseGlobalPosition(), NoButton, PlatformEvent::Type::NoType, 1, { }, WallTime::now(), ForceAtClick, SyntheticClickType::NoTap };
+    PlatformMouseEvent platformMouseEvent { frame->eventHandler().lastKnownMousePosition(), frame->eventHandler().lastKnownMouseGlobalPosition(), MouseButton::None, PlatformEvent::Type::NoType, 1, { }, WallTime::now(), ForceAtClick, SyntheticClickType::NoTap };
     auto mouseForceWillBeginEvent = MouseEvent::create(eventNames().webkitmouseforcewillbeginEvent, document().windowProxy(), platformMouseEvent, 0, nullptr);
     mouseForceWillBeginEvent->setTarget(Ref { *this });
     dispatchEvent(mouseForceWillBeginEvent);
@@ -3965,6 +3965,8 @@ const RenderStyle* Element::resolveComputedStyle(ResolveComputedStyleMode mode)
 {
     ASSERT(isConnected());
 
+    document().styleScope().flushPendingUpdate();
+
     bool isInDisplayNoneTree = false;
 
     // Traverse the ancestor chain to find the rootmost element that has invalid computed style.
@@ -3993,17 +3995,18 @@ const RenderStyle* Element::resolveComputedStyle(ResolveComputedStyleMode mode)
             }
             if (mode == ResolveComputedStyleMode::RenderedOnly && existing->display() == DisplayType::None) {
                 isInDisplayNoneTree = true;
-                return nullptr;
+                // Invalid ancestor style may still affect this display:none style.
+                rootmost = nullptr;
             }
         }
         return rootmost;
     }();
 
-    if (isInDisplayNoneTree)
-        return nullptr;
-
-    if (!rootmostInvalidElement)
+    if (!rootmostInvalidElement) {
+        if (isInDisplayNoneTree)
+            return nullptr;
         return existingComputedStyle();
+    }
 
     auto* ancestorWithValidStyle = rootmostInvalidElement->parentElementInComposedTree();
 
@@ -4020,6 +4023,11 @@ const RenderStyle* Element::resolveComputedStyle(ResolveComputedStyleMode mode)
     // FIXME: This is not as efficient as it could be. For example if an ancestor has a non-inherited style change but
     // the styles are otherwise clean we would not need to re-resolve descendants.
     for (auto& element : makeReversedRange(elementsRequiringComputedStyle)) {
+        if (computedStyle && computedStyle->containerType() != ContainerType::Normal) {
+            // If we find a query container we need to bail out and do full style update to resolve it.
+            if (document().updateStyleIfNeeded())
+                return this->computedStyle();
+        };
         auto style = document().styleForElementIgnoringPendingStylesheets(*element, computedStyle);
         computedStyle = style.get();
         ElementRareData& rareData = element->ensureElementRareData();
@@ -4502,14 +4510,14 @@ const AnimationCollection* Element::animations(PseudoId pseudoId) const
     return nullptr;
 }
 
-bool Element::hasCompletedTransitionForProperty(PseudoId pseudoId, AnimatableProperty property) const
+bool Element::hasCompletedTransitionForProperty(PseudoId pseudoId, const AnimatableProperty& property) const
 {
     if (auto* animationData = animationRareData(pseudoId))
         return animationData->completedTransitionsByProperty().contains(property);
     return false;
 }
 
-bool Element::hasRunningTransitionForProperty(PseudoId pseudoId, AnimatableProperty property) const
+bool Element::hasRunningTransitionForProperty(PseudoId pseudoId, const AnimatableProperty& property) const
 {
     if (auto* animationData = animationRareData(pseudoId))
         return animationData->runningTransitionsByProperty().contains(property);
@@ -5393,12 +5401,6 @@ std::optional<OptionSet<ContentRelevancy>> Element::contentRelevancy() const
 void Element::setContentRelevancy(OptionSet<ContentRelevancy> contentRelevancy)
 {
     ensureElementRareData().setContentRelevancy(contentRelevancy);
-}
-
-void Element::contentVisibilityViewportChange(bool)
-{
-    ASSERT(renderStyle() && renderStyle()->contentVisibility() == ContentVisibility::Auto);
-    document().scheduleContentRelevancyUpdate(ContentRelevancy::OnScreen);
 }
 
 AtomString Element::makeTargetBlankIfHasDanglingMarkup(const AtomString& target)

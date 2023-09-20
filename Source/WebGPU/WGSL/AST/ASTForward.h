@@ -68,6 +68,7 @@ class Identifier;
 class Statement;
 class AssignmentStatement;
 class BreakStatement;
+class CallStatement;
 class CompoundAssignmentStatement;
 class CompoundStatement;
 class ContinueStatement;
@@ -88,11 +89,9 @@ class StructureMember;
 
 class TypeAlias;
 
-class TypeName;
-class ArrayTypeName;
-class NamedTypeName;
-class ParameterizedTypeName;
-class ReferenceTypeName;
+class ArrayTypeExpression;
+class ElaboratedTypeExpression;
+class ReferenceTypeExpression;
 
 class Variable;
 class VariableQualifier;

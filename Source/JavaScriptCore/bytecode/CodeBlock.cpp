@@ -276,6 +276,7 @@ CodeBlock::CodeBlock(VM& vm, Structure* structure, CopyParsedBlockTag, CodeBlock
     , m_numCalleeLocals(other.m_numCalleeLocals)
     , m_numVars(other.m_numVars)
     , m_numberOfArgumentsToSkip(other.m_numberOfArgumentsToSkip)
+    , m_couldBeTainted(other.m_couldBeTainted)
     , m_hasDebuggerStatement(false)
     , m_steppingMode(SteppingModeDisabled)
     , m_numBreakpoints(0)
@@ -286,10 +287,10 @@ CodeBlock::CodeBlock(VM& vm, Structure* structure, CopyParsedBlockTag, CodeBlock
     , m_ownerExecutable(other.vm(), this, other.m_ownerExecutable.get())
     , m_vm(other.m_vm)
     , m_instructionsRawPointer(other.m_instructionsRawPointer)
+    , m_metadata(other.m_metadata)
     , m_constantRegisters(other.m_constantRegisters)
     , m_functionDecls(other.m_functionDecls)
     , m_functionExprs(other.m_functionExprs)
-    , m_metadata(other.m_metadata)
     , m_creationTime(ApproximateTime::now())
 {
     ASSERT(heap()->isDeferred());
@@ -299,6 +300,7 @@ CodeBlock::CodeBlock(VM& vm, Structure* structure, CopyParsedBlockTag, CodeBlock
     constexpr bool allocateArgumentValueProfiles = false;
     setNumParameters(other.numParameters(), allocateArgumentValueProfiles);
 
+    ASSERT(m_couldBeTainted == (taintednessToTriState(source().provider()->sourceTaintedOrigin()) != TriState::False));
     vm.heap.codeBlockSet().add(this);
 }
 
@@ -345,6 +347,7 @@ CodeBlock::CodeBlock(VM& vm, Structure* structure, ScriptExecutable* ownerExecut
     constexpr bool allocateArgumentValueProfiles = true;
     setNumParameters(unlinkedCodeBlock->numParameters(), allocateArgumentValueProfiles);
 
+    m_couldBeTainted = source().provider()->couldBeTainted();
     vm.heap.codeBlockSet().add(this);
 }
 
@@ -757,7 +760,7 @@ void CodeBlock::setupWithUnlinkedBaselineCode(Ref<BaselineJITCode> jitCode)
     {
         ConcurrentJSLocker locker(m_lock);
         ASSERT(!m_jitData);
-        auto baselineJITData = BaselineJITData::create(jitCode->m_constantPool.size());
+        auto baselineJITData = BaselineJITData::create(jitCode->m_constantPool.size(), this);
         baselineJITData->m_stubInfos = FixedVector<StructureStubInfo>(jitCode->m_unlinkedStubInfos.size());
         for (auto& unlinkedCallLinkInfo : jitCode->m_unlinkedCalls) {
             CallLinkInfo* callLinkInfo = getCallLinkInfoForBytecodeIndex(locker, unlinkedCallLinkInfo.bytecodeIndex);
@@ -768,9 +771,6 @@ void CodeBlock::setupWithUnlinkedBaselineCode(Ref<BaselineJITCode> jitCode)
         for (size_t i = 0; i < jitCode->m_constantPool.size(); ++i) {
             auto entry = jitCode->m_constantPool.at(i);
             switch (entry.type()) {
-            case JITConstantPool::Type::GlobalObject:
-                baselineJITData->at(i) = m_globalObject.get();
-                break;
             case JITConstantPool::Type::StructureStubInfo: {
                 unsigned index = bitwise_cast<uintptr_t>(entry.pointer());
                 BaselineUnlinkedStructureStubInfo& unlinkedStubInfo = jitCode->m_unlinkedStubInfos[index];
@@ -2835,6 +2835,8 @@ void CodeBlock::updateAllNonLazyValueProfilePredictionsAndCountLiveness(const Co
     numberOfSamplesInProfiles = 0; // If this divided by ValueProfile::numberOfBuckets equals numberOfValueProfiles() then value profiles are full.
 
     unsigned index = 0;
+    UnlinkedCodeBlock* unlinkedCodeBlock = this->unlinkedCodeBlock();
+    bool isBuiltinFunction = unlinkedCodeBlock->isBuiltinFunction();
     forEachValueProfile([&](ValueProfile& profile, bool isArgument) {
         unsigned numSamples = profile.totalNumberOfSamples();
         static_assert(ValueProfile::numberOfBuckets == 1);
@@ -2843,13 +2845,17 @@ void CodeBlock::updateAllNonLazyValueProfilePredictionsAndCountLiveness(const Co
         numberOfSamplesInProfiles += numSamples;
         if (isArgument) {
             profile.computeUpdatedPrediction(locker);
-            unlinkedCodeBlock()->unlinkedValueProfile(index++).update(profile);
+            if (!isBuiltinFunction)
+                unlinkedCodeBlock->unlinkedValueProfile(index).update(profile);
+            ++index;
             return;
         }
         if (profile.numberOfSamples() || profile.isSampledBefore())
             numberOfLiveNonArgumentValueProfiles++;
         profile.computeUpdatedPrediction(locker);
-        unlinkedCodeBlock()->unlinkedValueProfile(index++).update(profile);
+        if (!isBuiltinFunction)
+            unlinkedCodeBlock->unlinkedValueProfile(index).update(profile);
+        ++index;
     });
 
     if (m_metadata) {
@@ -2886,10 +2892,13 @@ void CodeBlock::updateAllArrayProfilePredictions(const ConcurrentJSLocker& locke
         return;
 
     unsigned index = 0;
-
+    UnlinkedCodeBlock* unlinkedCodeBlock = this->unlinkedCodeBlock();
+    bool isBuiltinFunction = unlinkedCodeBlock->isBuiltinFunction();
     auto process = [&] (ArrayProfile& profile) {
         profile.computeUpdatedPrediction(locker, this);
-        unlinkedCodeBlock()->unlinkedArrayProfile(index++).update(profile);
+        if (!isBuiltinFunction)
+            unlinkedCodeBlock->unlinkedArrayProfile(index).update(profile);
+        ++index;
     };
 
     m_metadata->forEach<OpGetById>([&] (auto& metadata) {

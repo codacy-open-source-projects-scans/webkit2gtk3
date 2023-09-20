@@ -54,6 +54,7 @@ public:
 
     // Statements
     void visit(AST::CompoundStatement&) override;
+    void visit(AST::ForStatement&) override;
 
     // Expressions
     void visit(AST::IdentifierExpression&) override;
@@ -148,6 +149,12 @@ void ConstantRewriter::visit(AST::CompoundStatement& statement)
     AST::Visitor::visit(statement);
 }
 
+void ConstantRewriter::visit(AST::ForStatement& statement)
+{
+    ContextScope forScope(this);
+    AST::Visitor::visit(statement);
+}
+
 // Expressions
 void ConstantRewriter::visit(AST::IdentifierExpression& identifier)
 {
@@ -181,12 +188,12 @@ void ConstantRewriter::visit(AST::CallExpression& call)
     }
 
     auto& target = call.target();
-    bool isNamedType = is<AST::NamedTypeName>(target);
-    bool isParameterizedType = !isNamedType && is<AST::ParameterizedTypeName>(target);
+    bool isNamedType = is<AST::IdentifierExpression>(target);
+    bool isParameterizedType = !isNamedType && is<AST::ElaboratedTypeExpression>(target);
     if (isNamedType || isParameterizedType) {
         AST::Identifier targetName = isParameterizedType
-            ? downcast<AST::ParameterizedTypeName>(target).base()
-            : downcast<AST::NamedTypeName>(target).name();
+            ? downcast<AST::ElaboratedTypeExpression>(target).base()
+            : downcast<AST::IdentifierExpression>(target).identifier();
 
         // FIXME: this implementation of the vector constructors is incorrect, so
         // the ineffient comparison is irrelevant as it will be rewritten soon
@@ -200,7 +207,7 @@ void ConstantRewriter::visit(AST::CallExpression& call)
         }
     }
 
-    if (is<AST::ArrayTypeName>(target)) {
+    if (is<AST::ArrayTypeExpression>(target)) {
         evaluated(call, { call.inferredType(), ConstantArray(WTFMove(arguments)) });
         return;
     }
@@ -274,6 +281,8 @@ void ConstantRewriter::materialize(Node& expression, const ConstantValue& value)
             case Primitive::Void:
             case Primitive::Sampler:
             case Primitive::TextureExternal:
+            case Primitive::AccessMode:
+            case Primitive::TexelFormat:
                 RELEASE_ASSERT_NOT_REACHED();
             }
         },
@@ -296,6 +305,9 @@ void ConstantRewriter::materialize(Node& expression, const ConstantValue& value)
             RELEASE_ASSERT_NOT_REACHED();
         },
         [&](const Texture&) {
+            RELEASE_ASSERT_NOT_REACHED();
+        },
+        [&](const TextureStorage&) {
             RELEASE_ASSERT_NOT_REACHED();
         },
         [&](const TypeConstructor&) {

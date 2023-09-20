@@ -29,8 +29,10 @@
 #if ENABLE(GPU_PROCESS)
 
 #include "GPUConnectionToWebProcessMessages.h"
+#include "IPCEvent.h"
 #include "Logging.h"
 #include "PlatformImageBufferShareableBackend.h"
+#include "RemoteImageBufferMessages.h"
 #include "RemoteImageBufferProxyMessages.h"
 #include "RemoteRenderingBackendProxy.h"
 #include "WebPage.h"
@@ -47,9 +49,9 @@ class RemoteImageBufferProxyFlushFence : public ThreadSafeRefCounted<RemoteImage
     WTF_MAKE_NONCOPYABLE(RemoteImageBufferProxyFlushFence);
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    static Ref<RemoteImageBufferProxyFlushFence> create(IPC::Semaphore semaphore)
+    static Ref<RemoteImageBufferProxyFlushFence> create(IPC::Event event)
     {
-        return adoptRef(*new RemoteImageBufferProxyFlushFence { WTFMove(semaphore) });
+        return adoptRef(*new RemoteImageBufferProxyFlushFence { WTFMove(event) });
     }
 
     ~RemoteImageBufferProxyFlushFence()
@@ -63,29 +65,29 @@ public:
         Locker locker { m_lock };
         if (m_signaled)
             return true;
-        m_signaled = m_semaphore.waitFor(timeout);
+        m_signaled = m_event.waitFor(timeout);
         if (m_signaled)
             tracePoint(FlushRemoteImageBufferEnd, reinterpret_cast<uintptr_t>(this), 0u);
         return m_signaled;
     }
 
-    std::optional<IPC::Semaphore> tryTakeSemaphore()
+    std::optional<IPC::Event> tryTakeEvent()
     {
         if (!m_signaled)
             return std::nullopt;
         Locker locker { m_lock };
-        return WTFMove(m_semaphore);
+        return WTFMove(m_event);
     }
 
 private:
-    RemoteImageBufferProxyFlushFence(IPC::Semaphore semaphore)
-        : m_semaphore(WTFMove(semaphore))
+    RemoteImageBufferProxyFlushFence(IPC::Event event)
+        : m_event(WTFMove(event))
     {
         tracePoint(FlushRemoteImageBufferStart, reinterpret_cast<uintptr_t>(this));
     }
     Lock m_lock;
     std::atomic<bool> m_signaled { false };
-    IPC::Semaphore WTF_GUARDED_BY_LOCK(m_lock) m_semaphore;
+    IPC::Event WTF_GUARDED_BY_LOCK(m_lock) m_event;
 };
 
 namespace {
@@ -134,6 +136,42 @@ void RemoteImageBufferProxy::assertDispatcherIsCurrent() const
 {
     if (m_remoteRenderingBackendProxy)
         assertIsCurrent(m_remoteRenderingBackendProxy->dispatcher());
+}
+
+template<typename T>
+ALWAYS_INLINE void RemoteImageBufferProxy::send(T&& message)
+{
+    if (UNLIKELY(!m_remoteRenderingBackendProxy))
+        return;
+
+    auto result = m_remoteRenderingBackendProxy->streamConnection().send(std::forward<T>(message), renderingResourceIdentifier(), RemoteRenderingBackendProxy::defaultTimeout);
+#if !RELEASE_LOG_DISABLED
+    if (UNLIKELY(result != IPC::Error::NoError)) {
+        auto& parameters = m_remoteRenderingBackendProxy->parameters();
+        RELEASE_LOG(RemoteLayerBuffers, "[pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", renderingBackend=%" PRIu64 "] RemoteImageBufferProxy::send - failed, name:%" PUBLIC_LOG_STRING ", error:%" PUBLIC_LOG_STRING,
+            parameters.pageProxyID.toUInt64(), parameters.pageID.toUInt64(), parameters.identifier.toUInt64(), IPC::description(T::name()), IPC::errorAsString(result));
+    }
+#else
+    UNUSED_VARIABLE(result);
+#endif
+}
+
+template<typename T>
+ALWAYS_INLINE void RemoteImageBufferProxy::sendSync(T&& message)
+{
+    if (UNLIKELY(!m_remoteRenderingBackendProxy))
+        return;
+
+    auto result = m_remoteRenderingBackendProxy->streamConnection().sendSync(std::forward<T>(message), renderingResourceIdentifier(), RemoteRenderingBackendProxy::defaultTimeout);
+#if !RELEASE_LOG_DISABLED
+    if (UNLIKELY(!result.succeeded())) {
+        auto& parameters = m_remoteRenderingBackendProxy->parameters();
+        RELEASE_LOG(RemoteLayerBuffers, "[pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", renderingBackend=%" PRIu64 "] RemoteDisplayListRecorderProxy::sendSync - failed, name:%" PUBLIC_LOG_STRING ", error:%" PUBLIC_LOG_STRING,
+            parameters.pageProxyID.toUInt64(), parameters.pageID.toUInt64(), parameters.identifier.toUInt64(), IPC::description(T::name()), IPC::errorAsString(result.error));
+    }
+#else
+    UNUSED_VARIABLE(result);
+#endif
 }
 
 void RemoteImageBufferProxy::backingStoreWillChange()
@@ -301,12 +339,12 @@ void RemoteImageBufferProxy::putPixelBuffer(const PixelBuffer& pixelBuffer, cons
 
 void RemoteImageBufferProxy::convertToLuminanceMask()
 {
-    m_remoteDisplayList.convertToLuminanceMask();
+    send(Messages::RemoteImageBuffer::ConvertToLuminanceMask());
 }
 
 void RemoteImageBufferProxy::transformToColorSpace(const DestinationColorSpace& colorSpace)
 {
-    m_remoteDisplayList.transformToColorSpace(colorSpace);
+    send(Messages::RemoteImageBuffer::TransformToColorSpace(colorSpace));
 }
 
 void RemoteImageBufferProxy::flushDrawingContext()
@@ -315,7 +353,7 @@ void RemoteImageBufferProxy::flushDrawingContext()
         return;
     if (m_needsFlush) {
         TraceScope tracingScope(FlushRemoteImageBufferStart, FlushRemoteImageBufferEnd);
-        m_remoteDisplayList.flushContextSync();
+        sendSync(Messages::RemoteImageBuffer::FlushContextSync());
         m_pendingFlush = nullptr;
         m_needsFlush = false;
         return;
@@ -336,13 +374,26 @@ bool RemoteImageBufferProxy::flushDrawingContextAsync()
         return m_pendingFlush;
 
     LOG_WITH_STREAM(SharedDisplayLists, stream << "RemoteImageBufferProxy " << m_renderingResourceIdentifier << " flushDrawingContextAsync");
-    std::optional<IPC::Semaphore> flushSemaphore;
+    std::optional<IPC::Event> event;
+    // FIXME: This only recycles the event if the previous flush has been
+    // waited on successfully. It should be possible to have the same semaphore
+    // being used in multiple still-pending flushes, though if one times out,
+    // then the others will be waiting on the wrong signal.
     if (m_pendingFlush)
-        flushSemaphore = m_pendingFlush->tryTakeSemaphore();
-    if (!flushSemaphore)
-        flushSemaphore.emplace();
-    m_remoteDisplayList.flushContext(*flushSemaphore);
-    m_pendingFlush = RemoteImageBufferProxyFlushFence::create(WTFMove(*flushSemaphore));
+        event = m_pendingFlush->tryTakeEvent();
+    if (!event) {
+        auto pair = IPC::createEventSignalPair();
+        if (!pair) {
+            flushDrawingContext();
+            return false;
+        }
+
+        event = WTFMove(pair->event);
+        send(Messages::RemoteImageBuffer::SetFlushSignal(WTFMove(pair->signal)));
+    }
+
+    send(Messages::RemoteImageBuffer::FlushContext());
+    m_pendingFlush = RemoteImageBufferProxyFlushFence::create(WTFMove(*event));
     m_needsFlush = false;
     return true;
 }
@@ -398,7 +449,6 @@ IPC::StreamClientConnection& RemoteImageBufferProxy::streamConnection() const
     ASSERT(m_remoteRenderingBackendProxy);
     return m_remoteRenderingBackendProxy->streamConnection();
 }
-
 
 RemoteSerializedImageBufferProxy::RemoteSerializedImageBufferProxy(const WebCore::ImageBufferBackend::Parameters& parameters, const WebCore::ImageBufferBackend::Info& info, const WebCore::RenderingResourceIdentifier& renderingResourceIdentifier, RemoteRenderingBackendProxy& backend)
     : m_parameters(parameters)

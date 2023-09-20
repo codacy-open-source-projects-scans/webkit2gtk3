@@ -309,6 +309,12 @@ void StringDumper::visit(AssignmentStatement& statement)
     m_out.print(";");
 }
 
+void StringDumper::visit(CallStatement& statement)
+{
+    visit(statement.call());
+    m_out.print(";");
+}
+
 void StringDumper::visit(CompoundAssignmentStatement& statement)
 {
     m_out.print(m_indent);
@@ -396,7 +402,7 @@ void StringDumper::visit(ForStatement& statement)
 }
 
 // Types
-void StringDumper::visit(ArrayTypeName& type)
+void StringDumper::visit(ArrayTypeExpression& type)
 {
     m_out.print("array");
     if (type.maybeElementType()) {
@@ -410,12 +416,7 @@ void StringDumper::visit(ArrayTypeName& type)
     }
 }
 
-void StringDumper::visit(NamedTypeName& type)
-{
-    m_out.print(type.name());
-}
-
-void StringDumper::visit(ParameterizedTypeName& type)
+void StringDumper::visit(ElaboratedTypeExpression& type)
 {
     m_out.print(type.base(), "<");
     bool first = true;
@@ -428,7 +429,7 @@ void StringDumper::visit(ParameterizedTypeName& type)
     m_out.print(">");
 }
 
-void StringDumper::visit(ReferenceTypeName& type)
+void StringDumper::visit(ReferenceTypeExpression& type)
 {
     visit(type.type());
     m_out.print("&");

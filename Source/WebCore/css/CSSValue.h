@@ -122,6 +122,7 @@ public:
     bool isRadialGradientValue() const { return m_classType == RadialGradientClass; }
     bool isRayValue() const { return m_classType == RayClass; }
     bool isRect() const { return m_classType == RectClass; }
+    bool isRectShape() const { return m_classType == RectShapeClass; }
     bool isReflectValue() const { return m_classType == ReflectClass; }
     bool isShadowValue() const { return m_classType == ShadowClass; }
     bool isSpringTimingFunctionValue() const { return m_classType == SpringTimingFunctionClass; }
@@ -131,6 +132,7 @@ public:
     bool isUnicodeRangeValue() const { return m_classType == UnicodeRangeClass; }
     bool isValueList() const { return m_classType == ValueListClass; }
     bool isVariableReferenceValue() const { return m_classType == VariableReferenceClass; }
+    bool isXywhShape() const { return m_classType == XywhShapeClass; }
 
 #if ENABLE(CSS_PAINTING_API)
     bool isPaintImageValue() const { return m_classType == PaintImageClass; }
@@ -250,11 +252,13 @@ protected:
         QuadClass,
         RayClass,
         RectClass,
+        RectShapeClass,
         ReflectClass,
         ShadowClass,
         UnicodeRangeClass,
         ValuePairClass,
         VariableReferenceClass,
+        XywhShapeClass,
 
         // Classes that contain vectors, which derive from CSSValueContainingVector.
         ValueListClass,

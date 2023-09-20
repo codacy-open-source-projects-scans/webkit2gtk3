@@ -57,16 +57,6 @@ RemoteDisplayListRecorderProxy::RemoteDisplayListRecorderProxy(RemoteImageBuffer
 {
 }
 
-void RemoteDisplayListRecorderProxy::convertToLuminanceMask()
-{
-    send(Messages::RemoteDisplayListRecorder::ConvertToLuminanceMask());
-}
-
-void RemoteDisplayListRecorderProxy::transformToColorSpace(const DestinationColorSpace& colorSpace)
-{
-    send(Messages::RemoteDisplayListRecorder::TransformToColorSpace(colorSpace));
-}
-
 template<typename T>
 ALWAYS_INLINE void RemoteDisplayListRecorderProxy::send(T&& message)
 {
@@ -75,32 +65,12 @@ ALWAYS_INLINE void RemoteDisplayListRecorderProxy::send(T&& message)
         return;
 
     imageBuffer->backingStoreWillChange();
-    auto result = m_renderingBackend->streamConnection().send(WTFMove(message), m_destinationBufferIdentifier, RemoteRenderingBackendProxy::defaultTimeout);
+    auto result = m_renderingBackend->streamConnection().send(std::forward<T>(message), m_destinationBufferIdentifier, RemoteRenderingBackendProxy::defaultTimeout);
 #if !RELEASE_LOG_DISABLED
     if (UNLIKELY(result != IPC::Error::NoError)) {
         auto& parameters = m_renderingBackend->parameters();
         RELEASE_LOG(RemoteLayerBuffers, "[pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", renderingBackend=%" PRIu64 "] RemoteDisplayListRecorderProxy::send - failed, name:%" PUBLIC_LOG_STRING ", error:%" PUBLIC_LOG_STRING,
             parameters.pageProxyID.toUInt64(), parameters.pageID.toUInt64(), parameters.identifier.toUInt64(), IPC::description(T::name()), IPC::errorAsString(result));
-    }
-#else
-    UNUSED_VARIABLE(result);
-#endif
-}
-
-template<typename T>
-ALWAYS_INLINE void RemoteDisplayListRecorderProxy::sendSync(T&& message)
-{
-    auto imageBuffer = m_imageBuffer.get();
-    if (UNLIKELY(!(m_renderingBackend && imageBuffer)))
-        return;
-
-    imageBuffer->backingStoreWillChange();
-    auto result = m_renderingBackend->streamConnection().sendSync(WTFMove(message), m_destinationBufferIdentifier, RemoteRenderingBackendProxy::defaultTimeout);
-#if !RELEASE_LOG_DISABLED
-    if (UNLIKELY(!result.succeeded())) {
-        auto& parameters = m_renderingBackend->parameters();
-        RELEASE_LOG(RemoteLayerBuffers, "[pageProxyID=%" PRIu64 ", webPageID=%" PRIu64 ", renderingBackend=%" PRIu64 "] RemoteDisplayListRecorderProxy::sendSync - failed, name:%" PUBLIC_LOG_STRING ", error:%" PUBLIC_LOG_STRING,
-            parameters.pageProxyID.toUInt64(), parameters.pageID.toUInt64(), parameters.identifier.toUInt64(), IPC::description(T::name()), IPC::errorAsString(result.error));
     }
 #else
     UNUSED_VARIABLE(result);
@@ -406,7 +376,7 @@ void RemoteDisplayListRecorderProxy::recordPaintVideoFrame(VideoFrame& frame, co
 #if PLATFORM(COCOA)
     auto sharedVideoFrame = ensureSharedVideoFrameWriter().write(frame, [&](auto& semaphore) {
         send(Messages::RemoteDisplayListRecorder::SetSharedVideoFrameSemaphore { semaphore });
-    }, [&](auto&& handle) {
+    }, [&](SharedMemory::Handle&& handle) {
         send(Messages::RemoteDisplayListRecorder::SetSharedVideoFrameMemory { WTFMove(handle) });
     });
     if (!sharedVideoFrame)
@@ -572,16 +542,6 @@ bool RemoteDisplayListRecorderProxy::recordResourceUse(Filter& filter)
 
     m_renderingBackend->remoteResourceCacheProxy().recordFilterUse(filter);
     return true;
-}
-
-void RemoteDisplayListRecorderProxy::flushContext(const IPC::Semaphore& semaphore)
-{
-    send(Messages::RemoteDisplayListRecorder::FlushContext(semaphore));
-}
-
-void RemoteDisplayListRecorderProxy::flushContextSync()
-{
-    sendSync(Messages::RemoteDisplayListRecorder::FlushContextSync());
 }
 
 RefPtr<ImageBuffer> RemoteDisplayListRecorderProxy::createImageBuffer(const FloatSize& size, float resolutionScale, const DestinationColorSpace& colorSpace, std::optional<RenderingMode> renderingMode, std::optional<RenderingMethod> renderingMethod) const

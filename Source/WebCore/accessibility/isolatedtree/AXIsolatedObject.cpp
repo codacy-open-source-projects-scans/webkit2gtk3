@@ -87,7 +87,6 @@ void AXIsolatedObject::initializeProperties(const Ref<AccessibilityObject>& axOb
     setProperty(AXPropertyName::IsControl, object.isControl());
     setProperty(AXPropertyName::IsEnabled, object.isEnabled());
     setProperty(AXPropertyName::IsExpanded, object.isExpanded());
-    setProperty(AXPropertyName::IsFocused, object.isFocused());
     setProperty(AXPropertyName::IsIndeterminate, object.isIndeterminate());
     setProperty(AXPropertyName::IsInlineText, object.isInlineText());
     setProperty(AXPropertyName::IsInputImage, object.isInputImage());
@@ -248,9 +247,6 @@ void AXIsolatedObject::initializeProperties(const Ref<AccessibilityObject>& axOb
 
     if (object.canHaveSelectedChildren())
         setObjectVectorProperty(AXPropertyName::SelectedChildren, object.selectedChildren());
-
-    if (object.canHaveSelectedCells())
-        setObjectVectorProperty(AXPropertyName::SelectedCells, object.selectedCells());
 
     if (object.isImage())
         setProperty(AXPropertyName::EmbeddedImageDescription, object.embeddedImageDescription().isolatedCopy());
@@ -1816,12 +1812,6 @@ AXCoreObject::AccessibilityChildrenVector AXIsolatedObject::relatedObjects(AXRel
     if (auto relatedObjectIDs = tree()->relatedObjectIDsFor(*this, relationType))
         return tree()->objectsForIDs(*relatedObjectIDs);
     return { };
-}
-
-AXCoreObject* AXIsolatedObject::activeDescendant() const
-{
-    ASSERT_NOT_REACHED();
-    return nullptr;
 }
 
 OptionSet<AXAncestorFlag> AXIsolatedObject::ancestorFlags() const

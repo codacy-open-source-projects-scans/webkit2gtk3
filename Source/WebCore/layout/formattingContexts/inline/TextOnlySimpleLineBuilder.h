@@ -69,12 +69,12 @@ private:
     std::optional<HorizontalConstraints> m_rootHorizontalConstraints;
 
     Line m_line;
-    InlineContentBreaker m_inlineContentBreaker;
     InlineRect m_lineLogicalRect;
     const InlineItems& m_inlineItems;
     Vector<const InlineTextItem*> m_wrapOpportunityList;
     bool m_isWrappingAllowed { false };
     InlineLayoutUnit m_trimmedTrailingWhitespaceWidth { 0.f };
+    std::optional<InlineLayoutUnit> m_overflowContentLogicalWidth { };
 
     std::optional<InlineTextItem> m_partialLeadingTextItem;
 };

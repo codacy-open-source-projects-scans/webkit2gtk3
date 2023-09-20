@@ -1565,7 +1565,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
         if (backingObject->isModel()) {
             auto modelChildren = backingObject->modelElementChildren();
             if (modelChildren.size()) {
-                return createNSArray(modelChildren, [] (auto& child) -> id {
+                return createNSArray(WTFMove(modelChildren), [] (auto&& child) -> id {
                     return child.get();
                 }).autorelease();
             }
@@ -1733,8 +1733,8 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
     if ([attributeName isEqualToString: NSAccessibilityHelpAttribute])
         return [self baseAccessibilityHelpText];
 
-    if ([attributeName isEqualToString: NSAccessibilityFocusedAttribute])
-        return [NSNumber numberWithBool: backingObject->isFocused()];
+    if ([attributeName isEqualToString:NSAccessibilityFocusedAttribute])
+        return @(backingObject->isFocused());
 
     if ([attributeName isEqualToString: NSAccessibilityEnabledAttribute])
         return [NSNumber numberWithBool: backingObject->isEnabled()];
@@ -2873,7 +2873,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
 - (void)showNodeForTextMarker:(AXTextMarkerRef)textMarker
 {
     auto visiblePosition = visiblePositionForTextMarker(self.axBackingObject->axObjectCache(), textMarker);
-    Node* node = visiblePosition.deepEquivalent().deprecatedNode();
+    auto node = visiblePosition.deepEquivalent().protectedDeprecatedNode();
     if (!node)
         return;
     node->showNode();
@@ -2883,7 +2883,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
 - (void)showNodeTreeForTextMarker:(AXTextMarkerRef)textMarker
 {
     auto visiblePosition = visiblePositionForTextMarker(self.axBackingObject->axObjectCache(), textMarker);
-    Node* node = visiblePosition.deepEquivalent().deprecatedNode();
+    auto node = visiblePosition.deepEquivalent().protectedDeprecatedNode();
     if (!node)
         return;
     node->showTreeForThis();
@@ -3121,8 +3121,8 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
             auto ranges = backingObject->findTextRanges(criteria);
             if (ranges.isEmpty())
                 return nil;
-            return createNSArray(ranges, [&] (auto& range) {
-                return (id)textMarkerRangeFromRange(backingObject->axObjectCache(), range);
+            return createNSArray(WTFMove(ranges), [&] (SimpleRange&& range) {
+                return (id)textMarkerRangeFromRange(backingObject->axObjectCache(), WTFMove(range));
             }).autorelease();
         });
     }
@@ -3712,7 +3712,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
             NSArray *children = nil;
 #if ENABLE(MODEL_ELEMENT)
             if (backingObject->isModel()) {
-                children = createNSArray(backingObject->modelElementChildren(), [] (auto& child) -> id {
+                children = createNSArray(backingObject->modelElementChildren(), [] (auto&& child) -> id {
                     return child.get();
                 }).autorelease();
             } else

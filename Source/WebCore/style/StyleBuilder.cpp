@@ -163,16 +163,27 @@ inline void Builder::applyPropertiesImpl(int firstProperty, int lastProperty)
 
 void Builder::applyCustomProperties()
 {
-    for (auto& name : m_cascade.customProperties().keys())
-        applyCustomProperty(name);
+    for (auto& [name, value] : m_cascade.customProperties()) {
+        if (m_state.m_appliedCustomProperties.contains(name))
+            continue;
+        applyCustomPropertyImpl(name, value);
+    }
 }
 
 void Builder::applyCustomProperty(const AtomString& name)
 {
-    if (m_state.m_appliedCustomProperties.contains(name) || !m_cascade.customProperties().contains(name))
+    if (m_state.m_appliedCustomProperties.contains(name))
         return;
 
-    auto& property = m_cascade.customProperty(name);
+    auto iterator = m_cascade.customProperties().find(name);
+    if (iterator == m_cascade.customProperties().end())
+        return;
+
+    applyCustomPropertyImpl(name, iterator->value);
+}
+
+void Builder::applyCustomPropertyImpl(const AtomString& name, const PropertyCascade::Property& property)
+{
     if (!property.cssValue[SelectorChecker::MatchDefault])
         return;
 
@@ -296,10 +307,12 @@ void Builder::applyProperty(CSSPropertyID id, CSSValue& value, SelectorChecker::
             // With the rollback cascade built, we need to obtain the property and apply it. If the property is
             // not present, then we behave like "unset." Otherwise we apply the property instead of our own.
             if (customPropertyValue) {
-                if (registeredCustomProperty && registeredCustomProperty->inherits && rollbackCascade->hasCustomProperty(customPropertyValue->name())) {
-                    auto property = rollbackCascade->customProperty(customPropertyValue->name());
-                    applyRollbackCascadeProperty(property, linkMatchMask);
-                    return;
+                if (registeredCustomProperty && registeredCustomProperty->inherits) {
+                    auto iterator = rollbackCascade->customProperties().find(customPropertyValue->name());
+                    if (iterator != rollbackCascade->customProperties().end()) {
+                        applyRollbackCascadeProperty(iterator->value, linkMatchMask);
+                        return;
+                    }
                 }
             } else if (id < firstDeferredProperty) {
                 if (rollbackCascade->hasNormalProperty(id)) {
@@ -363,30 +376,11 @@ Ref<CSSValue> Builder::resolveVariableReferences(CSSPropertyID propertyID, CSSVa
     auto variableValue = [&]() -> RefPtr<CSSValue> {
         if (is<CSSPendingSubstitutionValue>(value)) {
             auto& substitution = downcast<CSSPendingSubstitutionValue>(value);
-            auto shorthandID = substitution.shorthandPropertyId();
-
-            auto resolvedData = substitution.shorthandValue().resolveVariableReferences(m_state);
-            if (!resolvedData)
-                return nullptr;
-
-            ParsedPropertyVector parsedProperties;
-            if (!CSSPropertyParser::parseValue(shorthandID, false, resolvedData->tokens(), substitution.shorthandValue().context(), parsedProperties, StyleRuleType::Style))
-                return nullptr;
-
-            for (auto& property : parsedProperties) {
-                if (property.id() == propertyID)
-                    return property.value();
-            }
-
-            return nullptr;
+            return substitution.shorthandValue().resolveSubstitutionValue(m_state, propertyID, substitution.shorthandPropertyId());
         }
 
         auto& variableReferenceValue = downcast<CSSVariableReferenceValue>(value);
-        auto resolvedData = variableReferenceValue.resolveVariableReferences(m_state);
-        if (!resolvedData)
-            return nullptr;
-
-        return CSSPropertyParser::parseSingleValue(propertyID, resolvedData->tokens(), variableReferenceValue.context());
+        return variableReferenceValue.resolveSingleValue(m_state, propertyID);
     }();
 
     // https://drafts.csswg.org/css-variables-2/#invalid-variables

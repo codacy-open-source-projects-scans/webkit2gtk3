@@ -629,9 +629,9 @@ void NetworkStorageManager::fetchRegistrableDomainsForPersist()
     if (!m_process)
         return didFetchRegistrableDomainsForPersist({ });
 
-    m_process->registrableDomainsExemptFromWebsiteDataDeletion(m_sessionID, [weakThis = ThreadSafeWeakPtr { *this }](auto&& domains) mutable {
+    m_process->registrableDomainsExemptFromWebsiteDataDeletion(m_sessionID, [weakThis = ThreadSafeWeakPtr { *this }](HashSet<WebCore::RegistrableDomain>&& domains) mutable {
         if (auto strongThis = weakThis.get())
-            strongThis->didFetchRegistrableDomainsForPersist(WTFMove(domains));
+            strongThis->didFetchRegistrableDomainsForPersist(std::forward<decltype(domains)>(domains));
     });
 }
 
@@ -1230,13 +1230,10 @@ void NetworkStorageManager::resetQuotaForTesting(CompletionHandler<void()>&& com
 
 void NetworkStorageManager::resetQuotaUpdatedBasedOnUsageForTesting(WebCore::ClientOrigin&& origin)
 {
-    ASSERT(RunLoop::isMain());
+    assertIsCurrent(workQueue());
 
-    m_queue->dispatch([this, protectedThis = Ref { *this }, origin = crossThreadCopy(WTFMove(origin))]() mutable {
-        assertIsCurrent(workQueue());
-        if (auto manager = m_originStorageManagers.get(origin))
-            manager->quotaManager().resetQuotaUpdatedBasedOnUsageForTesting();
-    });
+    if (auto manager = m_originStorageManagers.get(origin))
+        manager->quotaManager().resetQuotaUpdatedBasedOnUsageForTesting();
 }
 
 #if PLATFORM(IOS_FAMILY)

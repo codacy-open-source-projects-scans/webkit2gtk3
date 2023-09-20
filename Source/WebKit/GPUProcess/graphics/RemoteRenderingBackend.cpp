@@ -173,7 +173,7 @@ void RemoteRenderingBackend::didCreateImageBuffer(Ref<ImageBuffer> imageBuffer)
     auto handle = downcast<ImageBufferBackendHandleSharing>(*sharing).createBackendHandle();
     auto remoteImageBuffer = RemoteImageBuffer::create(WTFMove(imageBuffer), *this);
     m_remoteImageBuffers.add(imageBufferIdentifier, WTFMove(remoteImageBuffer));
-    send(Messages::RemoteImageBufferProxy::DidCreateBackend(WTFMove(handle)), imageBufferIdentifier);
+    send(Messages::RemoteImageBufferProxy::DidCreateBackend(WTFMove(*handle)), imageBufferIdentifier);
 }
 
 void RemoteRenderingBackend::moveToSerializedBuffer(RenderingResourceIdentifier imageBufferIdentifier)
@@ -201,7 +201,7 @@ void RemoteRenderingBackend::moveToImageBuffer(RenderingResourceIdentifier image
 
     ASSERT(imageBufferIdentifier == imageBuffer->renderingResourceIdentifier());
 
-    ImageBufferCreationContext creationContext { nullptr };
+    ImageBufferCreationContext creationContext;
 #if HAVE(IOSURFACE)
     creationContext.surfacePool = &ioSurfacePool();
 #endif
@@ -214,7 +214,7 @@ void RemoteRenderingBackend::createImageBuffer(const FloatSize& logicalSize, Ren
 {
     assertIsCurrent(workQueue());
     RefPtr<ImageBuffer> imageBuffer;
-    ImageBufferCreationContext creationContext { nullptr };
+    ImageBufferCreationContext creationContext;
 #if HAVE(IOSURFACE)
     creationContext.surfacePool = &ioSurfacePool();
 #endif

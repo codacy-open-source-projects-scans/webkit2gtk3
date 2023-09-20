@@ -672,6 +672,7 @@ void Internals::resetToConsistentState(Page& page)
 #if USE(AUDIO_SESSION)
     AudioSession::sharedSession().setCategoryOverride(AudioSessionCategory::None);
     AudioSession::sharedSession().tryToSetActive(false);
+    AudioSession::sharedSession().endInterruptionForTesting();
 #endif
 }
 
@@ -1914,10 +1915,10 @@ ExceptionOr<RenderedDocumentMarker*> Internals::markerAt(Node& node, const Strin
 
     node.document().editor().updateEditorUINowIfScheduled();
 
-    Vector<RenderedDocumentMarker*> markers = node.document().markers().markersFor(node, markerTypes);
+    auto markers = node.document().markers().markersFor(node, markerTypes);
     if (markers.size() <= index)
         return nullptr;
-    return markers[index];
+    return markers[index].get();
 }
 
 ExceptionOr<RefPtr<Range>> Internals::markerRangeForNode(Node& node, const String& markerType, unsigned index)
@@ -2637,7 +2638,7 @@ String Internals::parserMetaData(JSC::JSValue code)
     else
         return String();
 
-    const char* prefix = "";
+    const char* prefix;
     String functionName;
     const char* suffix = "";
 
@@ -2652,7 +2653,7 @@ String Internals::parserMetaData(JSC::JSValue code)
     else if (executable->isProgramExecutable())
         prefix = "program";
     else
-        ASSERT_NOT_REACHED();
+        RELEASE_ASSERT_NOT_REACHED();
 
     return makeString(prefix, functionName, suffix, " { ",
         executable->firstLine(), ':', executable->startColumn(), " - ",
@@ -3372,11 +3373,6 @@ ExceptionOr<void> Internals::setElementUsesDisplayListDrawing(Element& element, 
 
     if (!element.renderer())
         return Exception { InvalidAccessError };
-
-    if (is<HTMLCanvasElement>(element)) {
-        downcast<HTMLCanvasElement>(element).setUsesDisplayListDrawing(usesDisplayListDrawing);
-        return { };
-    }
 
     if (!element.renderer()->hasLayer())
         return Exception { InvalidAccessError };
@@ -4126,7 +4122,7 @@ JSC::JSValue Internals::evaluateInWorldIgnoringException(const String& name, con
     auto* document = contextDocument();
     auto& scriptController = document->frame()->script();
     auto world = ScriptController::createWorld(name);
-    return scriptController.executeScriptInWorldIgnoringException(world, source);
+    return scriptController.executeScriptInWorldIgnoringException(world, source, JSC::SourceTaintedOrigin::Untainted);
 }
 
 #if !PLATFORM(MAC)
@@ -4506,14 +4502,14 @@ void Internals::initializeMockMediaSource()
 
 void Internals::bufferedSamplesForTrackId(SourceBuffer& buffer, const AtomString& trackId, BufferedSamplesPromise&& promise)
 {
-    buffer.bufferedSamplesForTrackId(trackId, [promise = WTFMove(promise)](auto&& samples) mutable {
+    buffer.bufferedSamplesForTrackId(trackId, [promise = WTFMove(promise)](Vector<String>&& samples) mutable {
         promise.resolve(WTFMove(samples));
     });
 }
 
 void Internals::enqueuedSamplesForTrackID(SourceBuffer& buffer, const AtomString& trackID, BufferedSamplesPromise&& promise)
 {
-    return buffer.enqueuedSamplesForTrackID(trackID, [promise = WTFMove(promise)](auto&& samples) mutable {
+    return buffer.enqueuedSamplesForTrackID(trackID, [promise = WTFMove(promise)](Vector<String>&& samples) mutable {
         promise.resolve(WTFMove(samples));
     });
 }
@@ -6757,7 +6753,7 @@ unsigned Internals::numberOfAppHighlights()
         return 0;
     unsigned numHighlights = 0;
     for (auto& highlight : appHighlightRegister->map())
-        numHighlights += highlight.value->rangesData().size();
+        numHighlights += highlight.value->highlightRanges().size();
     return numHighlights;
 }
 #endif
@@ -7114,19 +7110,6 @@ String Internals::modelInlinePreviewUUIDForModelElement(const HTMLModelElement& 
 }
 
 #endif
-
-void Internals::avoidIOSurfaceSizeCheckInWebProcess(HTMLCanvasElement& element)
-{
-    auto* document = contextDocument();
-    if (!document)
-        return;
-    auto* page = document->page();
-    if (!page)
-        return;
-    page->settings().setMaximumAccelerated2dCanvasSize(UINT_MAX);
-    CanvasBase::setMaxCanvasAreaForTesting(UINT_MAX);
-    element.setAvoidIOSurfaceSizeCheckInWebProcessForTesting();
-}
 
 bool Internals::hasSleepDisabler() const
 {

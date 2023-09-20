@@ -138,10 +138,9 @@ def surround_in_condition(string, condition):
 def types_that_must_be_moved():
     return [
         'IPC::Connection::Handle',
+        'IPC::Signal',
         'IPC::StreamServerConnection::Handle',
         'MachSendRight',
-        'std::optional<MachSendRight>',
-        'std::optional<WebKit::SharedVideoFrame::Buffer>',
         'Vector<WebKit::SharedMemory::Handle>',
         'WebCore::GraphicsContextGL::EGLImageSource',
         'WebKit::ConsumerSharedCARingBuffer::Handle',
@@ -155,6 +154,10 @@ def types_that_must_be_moved():
         'WebKit::UpdateInfo',
         'WebKit::WebProcessCreationParameters',
         'Win32Handle',
+        'std::optional<MachSendRight>',
+        'std::optional<WebKit::ShareableBitmap::Handle>',
+        'std::optional<WebKit::ShareableResource::Handle>',
+        'std::optional<WebKit::SharedVideoFrame::Buffer>',
         'std::optional<Win32Handle>'
     ]
 
@@ -266,6 +269,7 @@ def forward_declarations_for_namespace(namespace, kind_and_types):
 # When updating this list, run "make -C Source/WebKit/Scripts/webkit/tests" to keep the webkitpy tests passing.
 def serialized_identifiers():
     return [
+        'IPC::AsyncReplyID',
         'WebCore::BackgroundFetchRecordIdentifier',
         'WebCore::BroadcastChannelIdentifier',
         'WebCore::DOMCacheIdentifier',
@@ -362,6 +366,7 @@ def types_that_cannot_be_forward_declared():
         'CVPixelBufferRef',
         'GCGLint',
         'IPC::AsyncReplyID',
+        'IPC::Signal',
         'IPC::DataReference',
         'IPC::FontReference',
         'IPC::Semaphore',
@@ -423,7 +428,9 @@ def types_that_cannot_be_forward_declared():
         'WebKit::WCContentBufferIdentifier',
         'WebKit::WCLayerTreeHostIdentifier',
         'WebKit::WebExtensionEventListenerType',
+        'WebKit::WebExtensionTab::ImageFormat',
         'WebKit::WebExtensionTabParameters',
+        'WebKit::WebExtensionTabQueryParameters',
         'WebKit::WebExtensionWindowParameters',
         'WebKit::XRDeviceIdentifier',
     ] + serialized_identifiers() + types_that_must_be_moved())
@@ -431,8 +438,9 @@ def types_that_cannot_be_forward_declared():
 
 def conditions_for_header(header):
     conditions = {
-        '"InputMethodState.h"': ["PLATFORM(GTK)", "PLATFORM(WPE)"],
         '"GestureTypes.h"': ["PLATFORM(IOS_FAMILY)"],
+        '"InputMethodState.h"': ["PLATFORM(GTK)", "PLATFORM(WPE)"],
+        '"RemoteAudioSessionIdentifier.h"': ["ENABLE(GPU_PROCESS) && USE(AUDIO_SESSION)"],
         '"RemoteCDMIdentifier.h"': ["ENABLE(GPU_PROCESS) && ENABLE(ENCRYPTED_MEDIA)"],
         '"RemoteCDMInstanceIdentifier.h"': ["ENABLE(GPU_PROCESS) && ENABLE(ENCRYPTED_MEDIA)"],
         '"RemoteCDMInstanceSessionIdentifier.h"': ["ENABLE(GPU_PROCESS) && ENABLE(ENCRYPTED_MEDIA)"],
@@ -444,6 +452,7 @@ def conditions_for_header(header):
         '<WebCore/CVUtilities.h>': ["PLATFORM(COCOA)", ],
         '<WebCore/DataDetectorType.h>': ["ENABLE(DATA_DETECTION)"],
         '<WebCore/MediaPlaybackTargetContext.h>': ["ENABLE(WIRELESS_PLAYBACK_TARGET)"],
+        '<WebCore/PlaybackTargetClientContextIdentifier.h>': ["ENABLE(WIRELESS_PLAYBACK_TARGET)"],
         '<WebCore/VideoFrameCV.h>': ["PLATFORM(COCOA)", ],
     }
     if not header in conditions:
@@ -647,6 +656,7 @@ def argument_coder_headers_for_type(type):
 
     special_cases = {
         'IPC::Connection::Handle': '"Connection.h"',
+        'IPC::Signal': '"IPCEvent.h"',
         'String': '"ArgumentCoders.h"',
         'MachSendRight': '"ArgumentCodersDarwin.h"',
         'WebKit::ScriptMessageHandlerHandle': '"WebScriptMessageHandler.h"',
@@ -680,6 +690,7 @@ def headers_for_type(type):
         'Inspector::FrontendChannel::ConnectionType': ['<JavaScriptCore/InspectorFrontendChannel.h>'],
         'Inspector::InspectorTargetType': ['<JavaScriptCore/InspectorTarget.h>'],
         'IPC::AsyncReplyID': ['"Connection.h"'],
+        'IPC::Signal': ['"IPCEvent.h"'],
         'IPC::Semaphore': ['"IPCSemaphore.h"'],
         'JSC::MessageLevel': ['<JavaScriptCore/ConsoleTypes.h>'],
         'JSC::MessageSource': ['<JavaScriptCore/ConsoleTypes.h>'],
@@ -789,6 +800,7 @@ def headers_for_type(type):
         'WebCore::RouteSharingPolicy': ['<WebCore/AudioSession.h>'],
         'WebCore::SameSiteStrictEnforcementEnabled': ['<WebCore/NetworkStorageSession.h>'],
         'WebCore::ScriptExecutionContextIdentifier': ['<WebCore/ProcessQualified.h>', '<WebCore/ScriptExecutionContextIdentifier.h>', '<wtf/ObjectIdentifier.h>'],
+        'WebCore::ScrollDirection': ['<WebCore/ScrollTypes.h>'],
         'WebCore::ScrollGranularity': ['<WebCore/ScrollTypes.h>'],
         'WebCore::ScrollPinningBehavior': ['<WebCore/ScrollTypes.h>'],
         'WebCore::ScrollbarOrientation': ['<WebCore/ScrollTypes.h>'],
@@ -836,7 +848,7 @@ def headers_for_type(type):
         'WebCore::WebGPU::BufferBindingType': ['<WebCore/WebGPUBufferBindingType.h>'],
         'WebCore::WebGPU::BufferDynamicOffset': ['<WebCore/WebGPUIntegralTypes.h>'],
         'WebCore::WebGPU::BufferUsageFlags': ['<WebCore/WebGPUBufferUsage.h>'],
-        'WebCore::WebGPU::CanvasCompositingAlphaMode': ['<WebCore/WebGPUCanvasCompositingAlphaMode.h>'],
+        'WebCore::WebGPU::CanvasAlphaMode': ['<WebCore/WebGPUCanvasAlphaMode.h>'],
         'WebCore::WebGPU::ColorWriteFlags': ['<WebCore/WebGPUColorWrite.h>'],
         'WebCore::WebGPU::CompareFunction': ['<WebCore/WebGPUCompareFunction.h>'],
         'WebCore::WebGPU::CompilationMessageType': ['<WebCore/WebGPUCompilationMessageType.h>'],
@@ -912,6 +924,7 @@ def headers_for_type(type):
         'WebKit::TapIdentifier': ['"IdentifierTypes.h"'],
         'WebKit::TextCheckerRequestID': ['"IdentifierTypes.h"'],
         'WebKit::WebEventType': ['"WebEvent.h"'],
+        'WebKit::WebExtensionTab::ImageFormat': ['"WebExtensionTab.h"'],
         'WebKit::WebGPU::BindGroupDescriptor': ['"WebGPUBindGroupDescriptor.h"'],
         'WebKit::WebGPU::BindGroupEntry': ['"WebGPUBindGroupEntry.h"'],
         'WebKit::WebGPU::BindGroupLayoutDescriptor': ['"WebGPUBindGroupLayoutDescriptor.h"'],
@@ -982,6 +995,8 @@ def headers_for_type(type):
         'WebKit::WebGPU::VertexBufferLayout': ['"WebGPUVertexBufferLayout.h"'],
         'WebKit::WebGPU::VertexState': ['"WebGPUVertexState.h"'],
         'WebKit::WebGPU::WebCodecsVideoFrameIdentifier': ['"WebGPUExternalTextureDescriptor.h"'],
+        'WebKit::WebPushD::PushMessageForTesting': ['"PushMessageForTesting.h"'],
+        'WebKit::WebPushD::WebPushDaemonConnectionConfiguration': ['"WebPushDaemonConnectionConfiguration.h"'],
         'WebKit::WebScriptMessageHandlerData': ['"WebUserContentControllerDataTypes.h"'],
         'WebKit::WebUserScriptData': ['"WebUserContentControllerDataTypes.h"'],
         'WebKit::WebUserStyleSheetData': ['"WebUserContentControllerDataTypes.h"'],
@@ -1158,10 +1173,11 @@ def generate_message_handler(receiver):
             if not receiver.has_attribute(NOT_USING_IPC_CONNECTION_ATTRIBUTE):
                 result.append('    UNUSED_PARAM(connection);\n')
             result.append('    UNUSED_PARAM(decoder);\n')
-            result.append('#if ENABLE(IPC_TESTING_API)\n')
-            result.append('    if (connection.ignoreInvalidMessageForTesting())\n')
-            result.append('        return;\n')
-            result.append('#endif // ENABLE(IPC_TESTING_API)\n')
+            if not receiver.has_attribute(NOT_USING_IPC_CONNECTION_ATTRIBUTE):
+                result.append('#if ENABLE(IPC_TESTING_API)\n')
+                result.append('    if (connection.ignoreInvalidMessageForTesting())\n')
+                result.append('        return;\n')
+                result.append('#endif // ENABLE(IPC_TESTING_API)\n')
             result.append('    ASSERT_NOT_REACHED_WITH_MESSAGE("Unhandled message %s to %" PRIu64, IPC::description(decoder.messageName()), decoder.destinationID());\n')
         result.append('}\n')
 
@@ -1178,10 +1194,12 @@ def generate_message_handler(receiver):
         result.append('    UNUSED_PARAM(connection);\n')
         result.append('    UNUSED_PARAM(decoder);\n')
         result.append('    UNUSED_PARAM(replyEncoder);\n')
-        result.append('#if ENABLE(IPC_TESTING_API)\n')
-        result.append('    if (connection.ignoreInvalidMessageForTesting())\n')
-        result.append('        return false;\n')
-        result.append('#endif // ENABLE(IPC_TESTING_API)\n')
+
+        if not receiver.has_attribute(NOT_USING_IPC_CONNECTION_ATTRIBUTE):
+            result.append('#if ENABLE(IPC_TESTING_API)\n')
+            result.append('    if (connection.ignoreInvalidMessageForTesting())\n')
+            result.append('        return false;\n')
+            result.append('#endif // ENABLE(IPC_TESTING_API)\n')
         result.append('    ASSERT_NOT_REACHED_WITH_MESSAGE("Unhandled synchronous message %s to %" PRIu64, description(decoder.messageName()), decoder.destinationID());\n')
         result.append('    return false;\n')
         result.append('}\n')
@@ -1256,6 +1274,7 @@ def generate_message_names_header(receivers):
         if condition:
             result.append('#endif\n')
     result.append('    Count,\n')
+    result.append('    Invalid = Count,\n')
     result.append('    Last = Count - 1\n')
     result.append('};\n')
     result.append('\n')
