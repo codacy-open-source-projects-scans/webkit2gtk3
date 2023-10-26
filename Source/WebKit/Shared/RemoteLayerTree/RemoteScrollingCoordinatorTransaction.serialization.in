@@ -26,3 +26,34 @@ class WebKit::RemoteScrollingCoordinatorTransaction {
     std::unique_ptr<WebCore::ScrollingStateTree> scrollingStateTree()
     bool clearScrollLatching()
 }
+
+[CreateUsing=createAfterReconstruction] class WebCore::ScrollingStateTree {
+    bool hasNewRootStateNode()
+    bool hasChangedProperties()
+    RefPtr<WebCore::ScrollingStateFrameScrollingNode> rootStateNode()
+}
+
+header: <WebCore/ScrollingStateFrameScrollingNode.h>
+header: <WebCore/ScrollingStateOverflowScrollingNode.h>
+header: <WebCore/ScrollingStateOverflowScrollProxyNode.h>
+header: <WebCore/ScrollingStateFixedNode.h>
+header: <WebCore/ScrollingStateStickyNode.h>
+header: <WebCore/ScrollingStatePositionedNode.h>
+
+[RefCounted] class WebCore::ScrollingStateNode subclasses {
+    WebCore::ScrollingStateFrameScrollingNode,
+    WebCore::ScrollingStateFrameHostingNode,
+    WebCore::ScrollingStateOverflowScrollingNode,
+    WebCore::ScrollingStateOverflowScrollProxyNode,
+    WebCore::ScrollingStateFixedNode,
+    WebCore::ScrollingStateStickyNode,
+    WebCore::ScrollingStatePositionedNode,
+}
+
+[RefCounted] class WebCore::ScrollingStateFrameHostingNode {
+    WebCore::ScrollingNodeID scrollingNodeID()
+    OptionSet<WebCore::ScrollingStateNodeProperty> changedProperties()
+    std::optional<WebCore::PlatformLayerIdentifier> layer().layerIDForEncoding()
+    Vector<Ref<WebCore::ScrollingStateNode>> children()
+}
+

@@ -41,6 +41,7 @@
 #include "WebSWContextManagerConnectionMessages.h"
 #include "WebSWServerConnection.h"
 #include <WebCore/NotificationData.h>
+#include <WebCore/NotificationPayload.h>
 #include <WebCore/SWServer.h>
 #include <WebCore/ServiceWorkerContextData.h>
 
@@ -69,6 +70,11 @@ WebSWServerToContextConnection::~WebSWServerToContextConnection()
 
     if (auto* server = this->server(); server && server->contextConnectionForRegistrableDomain(registrableDomain()) == this)
         server->removeContextConnection(*this);
+}
+
+NetworkProcess& WebSWServerToContextConnection::networkProcess()
+{
+    return m_connection.networkProcess();
 }
 
 IPC::Connection& WebSWServerToContextConnection::ipcConnection() const
@@ -126,7 +132,7 @@ void WebSWServerToContextConnection::fireActivateEvent(ServiceWorkerIdentifier s
     send(Messages::WebSWContextManagerConnection::FireActivateEvent(serviceWorkerIdentifier));
 }
 
-void WebSWServerToContextConnection::firePushEvent(ServiceWorkerIdentifier serviceWorkerIdentifier, const std::optional<Vector<uint8_t>>& data, CompletionHandler<void(bool)>&& callback)
+void WebSWServerToContextConnection::firePushEvent(ServiceWorkerIdentifier serviceWorkerIdentifier, const std::optional<Vector<uint8_t>>& data, std::optional<NotificationPayload>&& proposedPayload, CompletionHandler<void(bool, std::optional<NotificationPayload>&&)>&& callback)
 {
     if (!m_processingFunctionalEventCount++)
         m_connection.networkProcess().parentProcessConnection()->send(Messages::NetworkProcessProxy::StartServiceWorkerBackgroundProcessing { webProcessIdentifier() }, 0);
@@ -134,11 +140,11 @@ void WebSWServerToContextConnection::firePushEvent(ServiceWorkerIdentifier servi
     std::optional<IPC::DataReference> ipcData;
     if (data)
         ipcData = IPC::DataReference { data->data(), data->size() };
-    sendWithAsyncReply(Messages::WebSWContextManagerConnection::FirePushEvent(serviceWorkerIdentifier, ipcData), [weakThis = WeakPtr { *this }, callback = WTFMove(callback)](bool wasProcessed) mutable {
+    sendWithAsyncReply(Messages::WebSWContextManagerConnection::FirePushEvent(serviceWorkerIdentifier, ipcData, WTFMove(proposedPayload)), [weakThis = WeakPtr { *this }, callback = WTFMove(callback)](bool wasProcessed, std::optional<NotificationPayload>&& resultPayload) mutable {
         if (weakThis && !--weakThis->m_processingFunctionalEventCount)
             weakThis->m_connection.networkProcess().parentProcessConnection()->send(Messages::NetworkProcessProxy::EndServiceWorkerBackgroundProcessing { weakThis->webProcessIdentifier() }, 0);
 
-        callback(wasProcessed);
+        callback(wasProcessed, WTFMove(resultPayload));
     });
 }
 
@@ -154,12 +160,16 @@ void WebSWServerToContextConnection::fireNotificationEvent(ServiceWorkerIdentifi
         if (!--weakThis->m_processingFunctionalEventCount)
             weakThis->m_connection.networkProcess().parentProcessConnection()->send(Messages::NetworkProcessProxy::EndServiceWorkerBackgroundProcessing { weakThis->webProcessIdentifier() }, 0);
 
+#if ENABLE(TRACKING_PREVENTION)
         auto* session = weakThis->m_connection.networkSession();
         if (auto* resourceLoadStatistics = session ? session->resourceLoadStatistics() : nullptr; resourceLoadStatistics && wasProcessed && eventType == NotificationEventType::Click) {
             return resourceLoadStatistics->setMostRecentWebPushInteractionTime(RegistrableDomain(weakThis->registrableDomain()), [callback = WTFMove(callback), wasProcessed] () mutable {
                 callback(wasProcessed);
             });
         }
+#else
+        UNUSED_PARAM(eventType);
+#endif
 
         callback(wasProcessed);
     });

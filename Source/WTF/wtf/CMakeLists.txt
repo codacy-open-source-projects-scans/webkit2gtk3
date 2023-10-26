@@ -24,6 +24,7 @@ set(WTF_PUBLIC_HEADERS
     Brigand.h
     BubbleSort.h
     BumpPointerAllocator.h
+    ButterflyArray.h
     ByteOrder.h
     CPUTime.h
     CagedPtr.h
@@ -201,6 +202,7 @@ set(WTF_PUBLIC_HEADERS
     PlatformCPU.h
     PlatformEnable.h
     PlatformEnableCocoa.h
+    PlatformEnableGlib.h
     PlatformEnablePlayStation.h
     PlatformEnableWinCairo.h
     PlatformHave.h
@@ -380,6 +382,7 @@ set(WTF_PUBLIC_HEADERS
     text/ConversionMode.h
     text/EscapedFormsForJSON.h
     text/ExternalStringImpl.h
+    text/FastCharacterComparison.h
     text/IntegerToStringConversion.h
     text/LChar.h
     text/LineEnding.h

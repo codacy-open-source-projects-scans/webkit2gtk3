@@ -70,6 +70,7 @@ public:
     ~FillLayer();
 
     StyleImage* image() const { return m_image.get(); }
+    RefPtr<StyleImage> protectedImage() const { return m_image; }
     const Length& xPosition() const { return m_xPosition; }
     const Length& yPosition() const { return m_yPosition; }
     Edge backgroundXOrigin() const { return static_cast<Edge>(m_backgroundXOrigin); }
@@ -150,7 +151,7 @@ public:
     bool operator==(const FillLayer&) const;
 
     bool containsImage(StyleImage&) const;
-    bool imagesAreLoaded() const;
+    bool imagesAreLoaded(const RenderElement*) const;
     bool hasImage() const { return m_next ? hasImageInAnyLayer() : m_image; }
     bool hasImageWithAttachment(FillAttachment) const;
     bool hasOpaqueImage(const RenderElement&) const;

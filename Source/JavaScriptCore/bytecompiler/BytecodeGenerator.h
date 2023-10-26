@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2021 Apple Inc. All rights reserved.
+ * Copyright (C) 2008-2023 Apple Inc. All rights reserved.
  * Copyright (C) 2008 Cameron Zwarich <cwzwarich@uwaterloo.ca>
  * Copyright (C) 2012 Igalia, S.L.
  *
@@ -367,6 +367,8 @@ namespace JSC {
         bool needsToUpdateArrowFunctionContext() const { return m_needsToUpdateArrowFunctionContext; }
         bool usesEval() const { return m_scopeNode->usesEval(); }
         bool usesThis() const { return m_scopeNode->usesThis(); }
+        bool isFunctionNode() const { return m_scopeNode->isFunctionNode(); }
+        bool hasShadowsArgumentsCodeFeature() const { return m_scopeNode->hasShadowsArgumentsFeature(); }
         LexicalScopeFeatures lexicalScopeFeatures() const { return m_scopeNode->lexicalScopeFeatures(); }
         PrivateBrandRequirement privateBrandRequirement() const { return m_codeBlock->privateBrandRequirement(); }
         ConstructorKind constructorKind() const { return m_codeBlock->constructorKind(); }
@@ -586,18 +588,18 @@ namespace JSC {
             if (m_isBuiltinFunction)
                 return;
 
-            int sourceOffset = m_scopeNode->source().startOffset();
+            unsigned sourceOffset = m_scopeNode->source().startOffset();
             unsigned firstLine = m_scopeNode->source().firstLine().oneBasedInt();
 
-            int divotOffset = divot.offset - sourceOffset;
-            int startOffset = divot.offset - divotStart.offset;
-            int endOffset = divotEnd.offset - divot.offset;
+            unsigned divotOffset = divot.offset - sourceOffset;
+            unsigned startOffset = divot.offset - divotStart.offset;
+            unsigned endOffset = divotEnd.offset - divot.offset;
 
             unsigned line = divot.line;
             ASSERT(line >= firstLine);
             line -= firstLine;
 
-            int lineStart = divot.lineStartOffset;
+            unsigned lineStart = divot.lineStartOffset;
             if (lineStart > sourceOffset)
                 lineStart -= sourceOffset;
             else
@@ -640,7 +642,7 @@ namespace JSC {
             return emitNodeForProperty(n);
         }
 
-        void hoistSloppyModeFunctionIfNecessary(const Identifier& functionName);
+        void hoistSloppyModeFunctionIfNecessary(FunctionMetadataNode*);
 
         ForInContext* findForInContext(RegisterID* property);
 
@@ -976,7 +978,6 @@ namespace JSC {
         void emitPushCatchScope(VariableEnvironment&, ScopeType);
         void emitPopCatchScope(VariableEnvironment&);
 
-        void emitAwait(RegisterID*);
         void emitGetScope();
         RegisterID* emitPushWithScope(RegisterID* objectScope);
         void emitPopWithScope();
@@ -1021,7 +1022,9 @@ namespace JSC {
 
         void emitGeneratorStateLabel();
         void emitGeneratorStateChange(int32_t state);
-        RegisterID* emitYield(RegisterID* argument, JSAsyncGenerator::AsyncGeneratorSuspendReason = JSAsyncGenerator::AsyncGeneratorSuspendReason::Yield);
+        RegisterID* emitYield(RegisterID* argument);
+        RegisterID* emitAwait(RegisterID* dst, RegisterID* src);
+        RegisterID* emitAwait(RegisterID* srcDst) { return emitAwait(srcDst, srcDst); }
         RegisterID* emitDelegateYield(RegisterID* argument, ThrowableExpressionData*);
         RegisterID* generatorStateRegister() { return &m_parameters[static_cast<int32_t>(JSGenerator::Argument::State)]; }
         RegisterID* generatorValueRegister() { return &m_parameters[static_cast<int32_t>(JSGenerator::Argument::Value)]; }
@@ -1234,6 +1237,16 @@ namespace JSC {
         void pushPrivateAccessNames(const PrivateNameEnvironment*);
         void popPrivateAccessNames();
 
+        bool needsArguments() const { return m_needsArguments; };
+        bool shouldGetArgumentsDotLengthFast(ExpressionNode* node) const
+        {
+            return isFunctionNode()
+                && !needsArguments()
+                && !hasShadowsArgumentsCodeFeature()
+                && node->isArgumentsLengthAccess(vm())
+                && !isArrowFunctionParseMode(parseMode())
+                && !isGeneratorOrAsyncFunctionBodyParseMode(parseMode());
+        }
     private:
         OptionSet<CodeGenerationMode> m_codeGenerationMode;
 
@@ -1315,9 +1328,6 @@ namespace JSC {
         Vector<Ref<Label>> m_optionalChainTargetStack;
 
         int m_nextConstantOffset { 0 };
-
-        typedef HashMap<FunctionMetadataNode*, unsigned> FunctionOffsetMap;
-        FunctionOffsetMap m_functionOffsets;
         
         // Constant pool
         IdentifierMap m_identifierMap;
@@ -1340,6 +1350,7 @@ namespace JSC {
         bool m_allowTailCallOptimization { false };
         bool m_allowCallIgnoreResultOptimization { false };
         bool m_needsToUpdateArrowFunctionContext : 1;
+        bool m_needsArguments : 1 { false };
         ECMAMode m_ecmaMode;
         DerivedContextType m_derivedContextType { DerivedContextType::None };
 

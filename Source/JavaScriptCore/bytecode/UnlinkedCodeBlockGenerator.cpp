@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2021 Apple Inc. All Rights Reserved.
+ * Copyright (C) 2019-2023 Apple Inc. All Rights Reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -53,7 +53,7 @@ inline void UnlinkedCodeBlockGenerator::getLineAndColumn(const ExpressionRangeIn
     } // switch
 }
 
-void UnlinkedCodeBlockGenerator::addExpressionInfo(unsigned instructionOffset, int divot, int startOffset, int endOffset, unsigned line, unsigned column)
+void UnlinkedCodeBlockGenerator::addExpressionInfo(unsigned instructionOffset, unsigned divot, unsigned startOffset, unsigned endOffset, unsigned line, unsigned column)
 {
     if (divot > ExpressionRangeInfo::MaxDivot) {
         // Overflow has occurred, we can only give line number info for errors for this region
@@ -157,7 +157,7 @@ void UnlinkedCodeBlockGenerator::finalize(std::unique_ptr<JSInstructionStream> i
             m_codeBlock->initializeLoopHintExecutionCounter();
     }
     m_vm.writeBarrier(m_codeBlock.get());
-    m_vm.heap.reportExtraMemoryAllocated(m_codeBlock->m_instructions->sizeInBytes() + m_codeBlock->metadataSizeInBytes());
+    m_vm.heap.reportExtraMemoryAllocated(m_codeBlock.get(), m_codeBlock->m_instructions->sizeInBytes() + m_codeBlock->metadataSizeInBytes());
 }
 
 UnlinkedHandlerInfo* UnlinkedCodeBlockGenerator::handlerForBytecodeIndex(BytecodeIndex bytecodeIndex, RequiredHandler requiredHandler)

@@ -113,9 +113,11 @@ ALLOW_NEW_API_WITHOUT_GUARDS_END
     AVSampleBufferDisplayLayer* sampleBufferDisplayLayer() const { return m_sampleBufferDisplayLayer.get(); }
     WebCoreDecompressionSession* decompressionSession() const { return m_decompressionSession.get(); }
 
+#if ENABLE(VIDEO_PRESENTATION_MODE)
     RetainPtr<PlatformLayer> createVideoFullscreenLayer() override;
     void setVideoFullscreenLayer(PlatformLayer*, Function<void()>&& completionHandler) override;
     void setVideoFullscreenFrame(FloatRect) override;
+#endif
 
     bool requiresTextTrackRepresentation() const override;
     void setTextTrackRepresentation(TextTrackRepresentation*) override;
@@ -332,17 +334,18 @@ ALLOW_NEW_API_WITHOUT_GUARDS_END
     MediaTime m_mediaTimeDuration { MediaTime::invalidTime() };
     MediaTime m_lastSeekTime;
     FloatSize m_naturalSize;
-    double m_rate;
-    bool m_playing;
-    bool m_synchronizerSeeking;
+    double m_rate { 1 };
+    bool m_playing { false };
+    bool m_synchronizerSeeking { false };
     SeekState m_seekState { SeekCompleted };
-    mutable bool m_loadingProgressed;
+    mutable bool m_loadingProgressed { false };
 #if !HAVE(AVSAMPLEBUFFERDISPLAYLAYER_COPYDISPLAYEDPIXELBUFFER)
     bool m_hasBeenAskedToPaintGL { false };
 #endif
     bool m_hasAvailableVideoFrame { false };
     bool m_allRenderersHaveAvailableSamples { false };
     bool m_visible { false };
+    bool m_flushingActiveSourceBuffersDueToVisibilityChange { false };
     RetainPtr<CVOpenGLTextureRef> m_lastTexture;
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
     RefPtr<MediaPlaybackTarget> m_playbackTarget;

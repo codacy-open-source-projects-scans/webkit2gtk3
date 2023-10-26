@@ -144,10 +144,6 @@ MediaPlayerPrivateMediaSourceAVFObjC::MediaPlayerPrivateMediaSourceAVFObjC(Media
     , m_seekTimer(*this, &MediaPlayerPrivateMediaSourceAVFObjC::seekInternal)
     , m_networkState(MediaPlayer::NetworkState::Empty)
     , m_readyState(MediaPlayer::ReadyState::HaveNothing)
-    , m_rate(1)
-    , m_playing(0)
-    , m_synchronizerSeeking(false)
-    , m_loadingProgressed(false)
     , m_logger(player->mediaPlayerLogger())
     , m_logIdentifier(player->mediaPlayerLogIdentifier())
     , m_videoLayerManager(makeUnique<VideoLayerManagerObjC>(m_logger, m_logIdentifier))
@@ -339,9 +335,7 @@ void MediaPlayerPrivateMediaSourceAVFObjC::playInternal(std::optional<MonotonicT
     }
 
     ALWAYS_LOG(LOGIDENTIFIER);
-#if PLATFORM(IOS_FAMILY)
     m_mediaSourcePrivate->flushActiveSourceBuffersIfNeeded();
-#endif
     m_playing = true;
     if (!shouldBePlaying())
         return;
@@ -425,8 +419,16 @@ void MediaPlayerPrivateMediaSourceAVFObjC::setPageIsVisible(bool visible, String
 
     ALWAYS_LOG(LOGIDENTIFIER, visible);
     m_visible = visible;
-    if (m_visible)
+    if (m_visible) {
         acceleratedRenderingStateChanged();
+
+        // Rendering may have been interrupted while the page was in a non-visible
+        // state, which would require a flush to resume decoding.
+        if (m_mediaSourcePrivate) {
+            SetForScope(m_flushingActiveSourceBuffersDueToVisibilityChange, true, false);
+            m_mediaSourcePrivate->flushActiveSourceBuffersIfNeeded();
+        }
+    }
 
 #if PLATFORM(VISION)
     NSError *error = nil;
@@ -809,15 +811,7 @@ bool MediaPlayerPrivateMediaSourceAVFObjC::shouldEnsureLayer() const
         }))
             return true;
         auto player = m_player.get();
-        if (player && !player->renderingCanBeAccelerated())
-            return false;
-        if (m_sampleBufferDisplayLayer)
-            return !CGRectIsEmpty([m_sampleBufferDisplayLayer bounds]);
-        if (player && !player->videoLayerSize().isEmpty())
-            return true;
-        if (player && !player->playerContentBoxRect().isEmpty())
-            return true;
-        return false;
+        return player && player->renderingCanBeAccelerated();
     }();
 #else
     return !m_hasBeenAskedToPaintGL && !m_isGatheringVideoFrameMetadata;
@@ -1011,7 +1005,7 @@ void MediaPlayerPrivateMediaSourceAVFObjC::destroyDecompressionSession()
 
 bool MediaPlayerPrivateMediaSourceAVFObjC::shouldBePlaying() const
 {
-    return m_playing && !seeking() && allRenderersHaveAvailableSamples() && m_readyState >= MediaPlayer::ReadyState::HaveFutureData;
+    return m_playing && !seeking() && (m_flushingActiveSourceBuffersDueToVisibilityChange || allRenderersHaveAvailableSamples()) && m_readyState >= MediaPlayer::ReadyState::HaveFutureData;
 }
 
 void MediaPlayerPrivateMediaSourceAVFObjC::setHasAvailableVideoFrame(bool flag)
@@ -1131,7 +1125,7 @@ void MediaPlayerPrivateMediaSourceAVFObjC::durationChanged()
 
 void MediaPlayerPrivateMediaSourceAVFObjC::effectiveRateChanged()
 {
-    m_playing = effectiveRate() != 0;
+    ALWAYS_LOG(LOGIDENTIFIER, effectiveRate());
     if (auto player = m_player.get())
         player->rateChanged();
 }

@@ -30,10 +30,6 @@
 #include "MessageReceiver.h"
 #include "WebExtensionContext.h"
 #include "WebExtensionContextParameters.h"
-#include "WebExtensionEventListenerType.h"
-#include "WebExtensionTabIdentifier.h"
-#include "WebExtensionWindowIdentifier.h"
-#include "WebPageProxyIdentifier.h"
 #include <WebCore/DOMWrapperWorld.h>
 #include <WebCore/FrameIdentifier.h>
 #include <WebCore/PageIdentifier.h>
@@ -79,27 +75,54 @@ public:
 
     _WKWebExtensionLocalization *localization() { return m_localization.get(); }
 
-    static RetainPtr<_WKWebExtensionLocalization> parseLocalization(API::Data&);
-    static RetainPtr<NSDictionary> parseJSON(API::Data&);
+    static _WKWebExtensionLocalization *parseLocalization(API::Data&);
 
     bool inTestingMode() { return m_testingMode; }
 
-    WebCore::DOMWrapperWorld* contentScriptWorld() { return m_contentScriptWorld.get(); }
+    static WebCore::DOMWrapperWorld& mainWorld() { return WebCore::mainThreadNormalWorld(); }
+
+    WebCore::DOMWrapperWorld& contentScriptWorld() { return *m_contentScriptWorld; }
     void setContentScriptWorld(WebCore::DOMWrapperWorld* world) { m_contentScriptWorld = world; }
 
     void addFrameWithExtensionContent(WebFrame&);
 
-    void enumerateNamespaceObjects(const Function<void(WebExtensionAPINamespace&)>&, WebCore::DOMWrapperWorld& = WebCore::mainThreadNormalWorld());
-    void enumerateContentScriptNamespaceObjects(const Function<void(WebExtensionAPINamespace&)>& function) { ASSERT(contentScriptWorld()); enumerateNamespaceObjects(function, *contentScriptWorld()); };
+    void enumerateFramesAndNamespaceObjects(const Function<void(WebFrame&, WebExtensionAPINamespace&)>&, WebCore::DOMWrapperWorld& = mainWorld());
+
+    void enumerateNamespaceObjects(const Function<void(WebExtensionAPINamespace&)>& function, WebCore::DOMWrapperWorld& = mainWorld())
+    {
+        enumerateFramesAndNamespaceObjects([&](WebFrame&, WebExtensionAPINamespace& namespaceObject) {
+            function(namespaceObject);
+        });
+    }
+
+    void enumerateContentScriptFramesAndNamespaceObjects(const Function<void(WebFrame&, WebExtensionAPINamespace&)>& function)
+    {
+        enumerateFramesAndNamespaceObjects(function, contentScriptWorld());
+    }
 
 private:
     explicit WebExtensionContextProxy(const WebExtensionContextParameters&);
+
+    // Action
+    void dispatchActionClickedEvent(const std::optional<WebExtensionTabParameters>&);
 
     // Alarms
     void dispatchAlarmsEvent(const WebExtensionAlarmParameters&);
 
     // Permissions
     void dispatchPermissionsEvent(WebExtensionEventListenerType, HashSet<String> permissions, HashSet<String> origins);
+
+    // Port
+    void dispatchPortMessageEvent(WebExtensionPortChannelIdentifier, const String& messageJSON);
+    void dispatchPortDisconnectEvent(WebExtensionPortChannelIdentifier);
+
+    // Runtime
+    void internalDispatchRuntimeMessageEvent(WebCore::DOMWrapperWorld&, const String& messageJSON, std::optional<WebExtensionFrameIdentifier>, const WebExtensionMessageSenderParameters&, CompletionHandler<void(std::optional<String> replyJSON)>&&);
+    void internalDispatchRuntimeConnectEvent(WebCore::DOMWrapperWorld&, WebExtensionPortChannelIdentifier, const String& name, std::optional<WebExtensionFrameIdentifier>, const WebExtensionMessageSenderParameters&, CompletionHandler<void(size_t firedEventCount)>&&);
+    void dispatchRuntimeMessageEvent(WebExtensionContentWorldType, const String& messageJSON, std::optional<WebExtensionFrameIdentifier>, const WebExtensionMessageSenderParameters&, CompletionHandler<void(std::optional<String> replyJSON)>&&);
+    void dispatchRuntimeConnectEvent(WebExtensionContentWorldType, WebExtensionPortChannelIdentifier, const String& name, std::optional<WebExtensionFrameIdentifier>, const WebExtensionMessageSenderParameters&, CompletionHandler<void(size_t firedEventCount)>&&);
+    void dispatchRuntimeInstalledEvent(WebExtensionContext::InstallReason, String previousVersion);
+    void dispatchRuntimeStartupEvent();
 
     // Tabs
     void dispatchTabsCreatedEvent(const WebExtensionTabParameters&);
@@ -116,7 +139,7 @@ private:
     void dispatchWebNavigationEvent(WebExtensionEventListenerType, WebPageProxyIdentifier, WebCore::FrameIdentifier, URL);
 
     // Windows
-    void dispatchWindowsEvent(WebExtensionEventListenerType, std::optional<WebExtensionWindowParameters>);
+    void dispatchWindowsEvent(WebExtensionEventListenerType, const std::optional<WebExtensionWindowParameters>&);
 
     // IPC::MessageReceiver
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;

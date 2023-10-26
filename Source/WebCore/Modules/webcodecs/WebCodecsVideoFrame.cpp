@@ -42,6 +42,7 @@
 #include "OffscreenCanvas.h"
 #include "PixelBuffer.h"
 #include "SVGImageElement.h"
+#include "SecurityOrigin.h"
 #include "VideoColorSpace.h"
 #include "WebCodecsVideoFrameAlgorithms.h"
 
@@ -213,6 +214,7 @@ ExceptionOr<Ref<WebCodecsVideoFrame>> WebCodecsVideoFrame::create(ScriptExecutio
         if (!canvas->width() || !canvas->height())
             return Exception { InvalidStateError,  "Input canvas has a bad size"_s };
 
+        canvas->makeRenderingResultsAvailable();
         RefPtr imageBuffer = canvas->buffer();
         if (!imageBuffer)
             return Exception { InvalidStateError,  "Input canvas has no image buffer"_s };

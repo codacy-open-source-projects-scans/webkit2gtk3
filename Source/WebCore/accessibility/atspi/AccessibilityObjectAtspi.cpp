@@ -21,9 +21,9 @@
 #include "AccessibilityObjectAtspi.h"
 
 #if USE(ATSPI)
+#include "AXCoreObject.h"
 #include "AXObjectCache.h"
 #include "AccessibilityAtspiInterfaces.h"
-#include "AccessibilityObjectInterface.h"
 #include "AccessibilityRootAtspi.h"
 #include "AccessibilityTableCell.h"
 #include "ElementInlines.h"
@@ -174,7 +174,7 @@ static Atspi::Role atspiRole(AccessibilityRole role)
         return Atspi::Role::ToggleButton;
     case AccessibilityRole::RadioButton:
         return Atspi::Role::RadioButton;
-    case AccessibilityRole::CheckBox:
+    case AccessibilityRole::Checkbox:
         return Atspi::Role::CheckBox;
     case AccessibilityRole::Slider:
         return Atspi::Role::Slider;
@@ -605,13 +605,11 @@ AccessibilityObjectAtspi* AccessibilityObjectAtspi::childAt(unsigned index) cons
 
 Vector<RefPtr<AccessibilityObjectAtspi>> AccessibilityObjectAtspi::wrapperVector(const Vector<RefPtr<AXCoreObject>>& elements) const
 {
-    Vector<RefPtr<AccessibilityObjectAtspi>> wrappers;
-    wrappers.reserveInitialCapacity(elements.size());
-    for (const auto& element : elements) {
-        if (auto* wrapper = element->wrapper())
-            wrappers.uncheckedAppend(wrapper);
-    }
-    return wrappers;
+    return WTF::compactMap(elements, [&](auto& element) -> std::optional<RefPtr<AccessibilityObjectAtspi>> {
+        if (RefPtr wrapper = element->wrapper())
+            return wrapper;
+        return std::nullopt;
+    });
 }
 
 Vector<RefPtr<AccessibilityObjectAtspi>> AccessibilityObjectAtspi::children() const
@@ -790,7 +788,7 @@ OptionSet<Atspi::State> AccessibilityObjectAtspi::states() const
     if (m_coreObject->isRequired())
         states.add(Atspi::State::Required);
 
-    if (m_coreObject->roleValue() == AccessibilityRole::TextArea || m_coreObject->ariaIsMultiline())
+    if (m_coreObject->roleValue() == AccessibilityRole::TextArea || (liveObject && liveObject->ariaIsMultiline()))
         states.add(Atspi::State::MultiLine);
     else if (m_coreObject->roleValue() == AccessibilityRole::TextField || m_coreObject->roleValue() == AccessibilityRole::SearchField)
         states.add(Atspi::State::SingleLine);
@@ -958,7 +956,7 @@ HashMap<String, String> AccessibilityObjectAtspi::attributes() const
         }
     }
 
-    String isReadOnly = m_coreObject->readOnlyValue();
+    String isReadOnly = liveObject ? liveObject->readOnlyValue() : String();
     if (!isReadOnly.isEmpty())
         map.add("readonly"_s, isReadOnly);
 

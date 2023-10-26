@@ -26,6 +26,7 @@
 #include "config.h"
 #include "SuspendedPageProxy.h"
 
+#include "APIPageConfiguration.h"
 #include "DrawingAreaProxy.h"
 #include "HandleMessage.h"
 #include "Logging.h"
@@ -52,12 +53,19 @@ static WeakHashSet<SuspendedPageProxy>& allSuspendedPages()
     return map;
 }
 
-RefPtr<WebProcessProxy> SuspendedPageProxy::findReusableSuspendedPageProcess(WebProcessPool& processPool, const RegistrableDomain& registrableDomain, WebsiteDataStore& dataStore, WebProcessProxy::LockdownMode lockdownMode)
+RefPtr<WebProcessProxy> SuspendedPageProxy::findReusableSuspendedPageProcess(WebProcessPool& processPool, const RegistrableDomain& registrableDomain, WebsiteDataStore& dataStore, WebProcessProxy::LockdownMode lockdownMode, const API::PageConfiguration& pageConfiguration)
 {
     for (auto& suspendedPage : allSuspendedPages()) {
         Ref process = suspendedPage.process();
-        if (&process->processPool() == &processPool && process->registrableDomain() == registrableDomain && process->websiteDataStore() == &dataStore && process->crossOriginMode() != CrossOriginMode::Isolated && process->lockdownMode() == lockdownMode && !process->wasTerminated())
+        if (&process->processPool() == &processPool
+            && process->registrableDomain() == registrableDomain
+            && process->websiteDataStore() == &dataStore
+            && process->crossOriginMode() != CrossOriginMode::Isolated
+            && process->lockdownMode() == lockdownMode
+            && !process->wasTerminated()
+            && process->hasSameGPUProcessPreferencesAs(pageConfiguration)) {
             return process;
+        }
     }
     return nullptr;
 }
@@ -111,11 +119,11 @@ SuspendedPageProxy::SuspendedPageProxy(WebPageProxy& page, Ref<WebProcessProxy>&
     , m_contextIDForVisibilityPropagationInGPUProcess(page.contextIDForVisibilityPropagationInGPUProcess())
 #endif
 #endif
-    , m_remotePageMap(page.takeRemotePageMap())
 {
     allSuspendedPages().add(*this);
     m_process->addSuspendedPageProxy(*this);
     m_messageReceiverRegistration.startReceivingMessages(m_process, m_webPageID, *this);
+    m_mainFrame->removeRemotePagesForSuspension();
     m_suspensionTimeoutTimer.startOneShot(suspensionTimeout);
     send(Messages::WebPage::SetIsSuspended(true));
 }
@@ -142,11 +150,6 @@ SuspendedPageProxy::~SuspendedPageProxy()
 Ref<WebPageProxy> SuspendedPageProxy::protectedPage() const
 {
     return m_page.get();
-}
-
-HashMap<WebCore::RegistrableDomain, WeakPtr<RemotePageProxy>> SuspendedPageProxy::takeRemotePageMap()
-{
-    return std::exchange(m_remotePageMap, { });
 }
 
 void SuspendedPageProxy::didDestroyNavigation(uint64_t navigationID)

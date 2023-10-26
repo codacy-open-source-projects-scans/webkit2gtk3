@@ -120,8 +120,7 @@ namespace GetById {
     static constexpr GPRReg globalObjectGPR { preferredArgumentGPR<SlowOperation, 1>() };
     static constexpr GPRReg stubInfoGPR { preferredArgumentGPR<SlowOperation, 2>() };
     static constexpr GPRReg scratch1GPR { globalObjectGPR };
-    static constexpr JSValueRegs dontClobberJSR { JSRInfo::jsRegT54 };
-    static_assert(noOverlap(baseJSR, stubInfoGPR, globalObjectGPR, dontClobberJSR), "Required for DataIC");
+    static_assert(noOverlap(baseJSR, stubInfoGPR, globalObjectGPR), "Required for DataIC");
     static_assert(noOverlap(resultJSR, stubInfoGPR));
 }
 
@@ -166,13 +165,7 @@ namespace EnumeratorGetByVal {
     using GetByVal::globalObjectGPR;
     using GetByVal::scratch1GPR;
     static constexpr GPRReg scratch2GPR { GPRInfo::regT5 };
-    static constexpr GPRReg scratch3GPR {
-#if CPU(X86_64)
-        GPRInfo::regT0
-#else
-        GPRInfo::regT7
-#endif
-    };
+    static constexpr GPRReg scratch3GPR { GPRInfo::regT7 };
     static_assert(noOverlap(baseJSR, propertyJSR, stubInfoGPR, profileGPR, scratch1GPR, scratch2GPR, scratch3GPR));
     static_assert(noOverlap(resultJSR, stubInfoGPR));
 }
@@ -234,7 +227,7 @@ namespace EnumeratorPutByVal {
     using PutByVal::globalObjectGPR;
     static constexpr GPRReg scratch2GPR {
 #if CPU(X86_64)
-        GPRInfo::regT0
+        GPRInfo::regT5
 #else
         GPRInfo::regT7
 #endif

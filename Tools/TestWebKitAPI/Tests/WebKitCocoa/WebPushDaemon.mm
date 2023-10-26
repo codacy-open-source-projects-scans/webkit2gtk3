@@ -66,13 +66,24 @@
 static bool alertReceived = false;
 @interface PushNotificationDelegate : NSObject<WKUIDelegatePrivate, _WKWebsiteDataStoreDelegate> {
     RetainPtr<_WKNotificationData> _mostRecentNotification;
+    RetainPtr<NSURL> _mostRecentActionURL;
     std::optional<uint64_t> _mostRecentAppBadge;
 }
+-(void)clearMostRecents;
+
 @property (nonatomic, readonly) RetainPtr<_WKNotificationData> mostRecentNotification;
+@property (nonatomic, readonly) RetainPtr<NSURL> mostRecentActionURL;
 @property (nonatomic, readonly) std::optional<uint64_t> mostRecentAppBadge;
 @end
 
 @implementation PushNotificationDelegate
+
+-(void)clearMostRecents
+{
+    _mostRecentNotification = nullptr;
+    _mostRecentActionURL = nullptr;
+    _mostRecentAppBadge = std::nullopt;
+}
 
 - (void)_webView:(WKWebView *)webView requestNotificationPermissionForSecurityOrigin:(WKSecurityOrigin *)securityOrigin decisionHandler:(void (^)(BOOL))decisionHandler
 {
@@ -98,6 +109,11 @@ static bool alertReceived = false;
         _mostRecentAppBadge = std::nullopt;
 }
 
+- (void)websiteDataStore:(WKWebsiteDataStore *)dataStore navigateToNotificationActionURL:(NSURL *)url
+{
+    _mostRecentActionURL = url;
+}
+
 @end
 
 namespace TestWebKitAPI {
@@ -108,6 +124,7 @@ static RetainPtr<NSURL> testWebPushDaemonLocation()
 }
 
 enum LaunchOnlyOnce : BOOL { No, Yes };
+enum class InstallDataStoreDelegate : bool { No, Yes };
 
 static NSDictionary<NSString *, id> *testWebPushDaemonPList(NSURL *storageLocation, LaunchOnlyOnce launchOnlyOnce)
 {
@@ -497,6 +514,47 @@ self.addEventListener("message", (event) => {
     }
 });
 
+self.addEventListener("pushnotification", async (event) => {
+    // If the tag is empty, do nothing
+    if (!event.proposedNotification.tag)
+        return;
+
+    var optionsFromTag = event.proposedNotification.tag.split(" ");
+    var newTitle;
+    var newBadge;
+    var newActionURL;
+    if (optionsFromTag[0] == "titleandbadge") {
+        newTitle = optionsFromTag[1];
+        newBadge = optionsFromTag[2];
+    } else if (optionsFromTag[0] == "title")
+        newTitle = optionsFromTag[1];
+    else if (optionsFromTag[0] == "badge")
+        newBadge = optionsFromTag[1];
+    else if (optionsFromTag[0] == "datatotitle")
+        newTitle = event.proposedNotification.data;
+    else if (optionsFromTag[0] == "defaultactionurl")
+        newActionURL = optionsFromTag[1];
+    else if (optionsFromTag[0] == "emptydefaultactionurl") {
+        self.registration.showNotification("Missing default action").then((value) => {
+            globalPort.postMessage("showNotification succeeded");
+        }, (exception) => {
+            globalPort.postMessage("showNotification failed: " + exception);
+        });
+    }
+
+    if (newTitle || newActionURL) {
+        if (!newTitle)
+            newTitle = event.proposedNotification.title;
+        if (!newActionURL)
+            newActionURL = event.proposedNotification.defaultAction;
+
+        self.registration.showNotification(newTitle, { "defaultAction": newActionURL });
+    }
+
+    if (newBadge)
+        navigator.setAppBadge(newBadge);
+});
+
 self.addEventListener("push", async (event) => {
     try {
         if (showNotifications) {
@@ -521,7 +579,7 @@ self.addEventListener("notificationclick", () => {
 class WebPushDTestWebView {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    WebPushDTestWebView(const String& pushPartition, const std::optional<WTF::UUID>& dataStoreIdentifier, WKProcessPool *processPool, TestNotificationProvider& notificationProvider, ASCIILiteral html)
+    WebPushDTestWebView(const String& pushPartition, const std::optional<WTF::UUID>& dataStoreIdentifier, WKProcessPool *processPool, TestNotificationProvider& notificationProvider, ASCIILiteral html, InstallDataStoreDelegate installDataStoreDelegate)
         : m_pushPartition(pushPartition)
         , m_dataStoreIdentifier(dataStoreIdentifier)
         , m_notificationProvider(notificationProvider)
@@ -561,6 +619,12 @@ public:
         [[NSFileManager defaultManager] removeItemAtURL:[dataStoreConfiguration _resourceLoadStatisticsDirectory] error:nil];
 
         m_dataStore = adoptNS([[WKWebsiteDataStore alloc] _initWithConfiguration:dataStoreConfiguration.get()]);
+
+        if (installDataStoreDelegate == InstallDataStoreDelegate::Yes) {
+            m_delegate = adoptNS([[PushNotificationDelegate alloc] init]);
+            m_dataStore.get()._delegate = m_delegate.get();
+        }
+
         [m_dataStore _setResourceLoadStatisticsEnabled:YES];
         clearWebsiteDataStore(m_dataStore.get());
 
@@ -578,6 +642,7 @@ public:
         auto configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
         [configuration setProcessPool:processPool];
         [configuration setWebsiteDataStore:m_dataStore.get()];
+        configuration.get().preferences._appBadgeEnabled = YES;
 
         auto userContentController = [configuration userContentController];
         [userContentController addScriptMessageHandler:m_testMessageHandler.get() name:@"test"];
@@ -597,8 +662,7 @@ public:
 
         m_webView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration.get()]);
 
-        auto uiDelegate = adoptNS([[PushNotificationDelegate alloc] init]);
-        [m_webView setUIDelegate:uiDelegate.get()];
+        [m_webView setUIDelegate:m_delegate.get()];
 
         auto navigationDelegate = adoptNS([TestNavigationDelegate new]);
         navigationDelegate.get().didReceiveAuthenticationChallenge = ^(WKWebView *, NSURLAuthenticationChallenge *challenge, void (^completionHandler)(NSURLSessionAuthChallengeDisposition, NSURLCredential *)) {
@@ -684,6 +748,48 @@ public:
     void setPermission(bool value)
     {
         m_notificationProvider.setPermission(m_origin, value);
+    }
+
+
+#if ENABLE(DECLARATIVE_WEB_PUSH)
+    void injectDeclarativePushMessage(ASCIILiteral json, ASCIILiteral url = "https://example.com"_s)
+    {
+        WebKit::WebPushD::PushMessageForTesting message;
+        message.targetAppCodeSigningIdentifier = "com.apple.WebKit.TestWebKitAPI"_s;
+        message.registrationURL = URL(url);
+        message.disposition = WebKit::WebPushD::PushMessageDisposition::Notification;
+        message.payload = json;
+
+        auto utilityConnection = createAndConfigureConnectionToService("org.webkit.webpushtestdaemon.service");
+        auto sender = WebPushXPCConnectionMessageSender { utilityConnection.get() };
+        __block bool done = false;
+        sender.sendWithAsyncReplyWithoutUsingIPCConnection(Messages::PushClientConnection::InjectPushMessageForTesting(message), ^(const String& error) {
+            if (!error.isEmpty())
+                NSLog(@"ERROR: %s", error.utf8().data());
+            done = true;
+        });
+        TestWebKitAPI::Util::run(&done);
+    }
+#endif
+
+    void clearMostRecents()
+    {
+        [m_delegate clearMostRecents];
+    }
+
+    _WKNotificationData *mostRecentNotification()
+    {
+        return m_delegate.get().mostRecentNotification.get();
+    }
+
+    NSURL *mostRecentActionURL()
+    {
+        return m_delegate.get().mostRecentActionURL.get();
+    }
+
+    std::optional<uint64_t> mostRecentAppBadge()
+    {
+        return m_delegate.get().mostRecentAppBadge;
     }
 
     void injectPushMessage(NSDictionary *apsUserInfo)
@@ -802,22 +908,46 @@ public:
         ASSERT_EQ([messages count], 0u) << "Unexpected push event injection success after advancing ITP timer by " << daysToAdvance << " days; missing ITP cleanup?";
     }
 
+    void processPushMessage(NSDictionary *pushMessage)
+    {
+        __block bool done = false;
+        [m_dataStore _processPushMessage:pushMessage completionHandler:^(bool result) {
+            done = true;
+        }];
+        TestWebKitAPI::Util::run(&done);
+    }
+
+    void captureAllMessages()
+    {
+        [m_testMessageHandler setWildcardMessageHandler:^(NSString *message){
+            m_mostRecentMessage = message;
+        }];
+    }
+
+    const String& mostRecentMessage() const
+    {
+        return m_mostRecentMessage;
+    }
+
 private:
     String m_pushPartition;
     Markable<WTF::UUID> m_dataStoreIdentifier;
     String m_origin;
     RetainPtr<NSURL> m_url;
     RetainPtr<WKWebsiteDataStore> m_dataStore;
+    RetainPtr<PushNotificationDelegate> m_delegate;
     RetainPtr<TestMessageHandler> m_testMessageHandler;
     std::unique_ptr<TestWebKitAPI::HTTPServer> m_server;
     TestNotificationProvider& m_notificationProvider;
     RetainPtr<WKWebView> m_webView;
+    String m_mostRecentMessage;
 };
 
 class WebPushDTest : public ::testing::Test {
 public:
-    WebPushDTest(LaunchOnlyOnce launchOnlyOnce = LaunchOnlyOnce::Yes, ASCIILiteral html = htmlSource)
+    WebPushDTest(LaunchOnlyOnce launchOnlyOnce = LaunchOnlyOnce::Yes, ASCIILiteral html = htmlSource, InstallDataStoreDelegate installDataStoreDelegate = InstallDataStoreDelegate::No)
         : m_html(html)
+        , m_installDataStoreDelegate(installDataStoreDelegate)
     {
         m_tempDirectory = retainPtr(setUpTestWebPushD(launchOnlyOnce));
     }
@@ -829,19 +959,19 @@ public:
 
         m_notificationProvider = makeUnique<TestWebKitAPI::TestNotificationProvider>(Vector<WKNotificationManagerRef> { [processPool _notificationManagerForTesting], WKNotificationManagerGetSharedServiceWorkerNotificationManager() });
 
-        auto webView = makeUniqueRef<WebPushDTestWebView>(emptyString(), std::nullopt, processPool.get(), *m_notificationProvider, m_html);
+        auto webView = makeUniqueRef<WebPushDTestWebView>(emptyString(), std::nullopt, processPool.get(), *m_notificationProvider, m_html, m_installDataStoreDelegate);
         m_webViews.append(WTFMove(webView));
 
-        auto webViewWithIdentifier1 = makeUniqueRef<WebPushDTestWebView>(emptyString(), WTF::UUID::parse("0bf5053b-164c-4b7d-8179-832e6bf158df"_s), processPool.get(), *m_notificationProvider, m_html);
+        auto webViewWithIdentifier1 = makeUniqueRef<WebPushDTestWebView>(emptyString(), WTF::UUID::parse("0bf5053b-164c-4b7d-8179-832e6bf158df"_s), processPool.get(), *m_notificationProvider, m_html, m_installDataStoreDelegate);
         m_webViews.append(WTFMove(webViewWithIdentifier1));
 
-        auto webViewWithIdentifier2 = makeUniqueRef<WebPushDTestWebView>(emptyString(), WTF::UUID::parse("940e7729-738e-439f-a366-1a8719e23b2d"_s), processPool.get(), *m_notificationProvider, m_html);
+        auto webViewWithIdentifier2 = makeUniqueRef<WebPushDTestWebView>(emptyString(), WTF::UUID::parse("940e7729-738e-439f-a366-1a8719e23b2d"_s), processPool.get(), *m_notificationProvider, m_html, m_installDataStoreDelegate);
         m_webViews.append(WTFMove(webViewWithIdentifier2));
 
-        auto webViewWithPartition = makeUniqueRef<WebPushDTestWebView>("testPartition"_s, std::nullopt, processPool.get(), *m_notificationProvider, m_html);
+        auto webViewWithPartition = makeUniqueRef<WebPushDTestWebView>("testPartition"_s, std::nullopt, processPool.get(), *m_notificationProvider, m_html, m_installDataStoreDelegate);
         m_webViews.append(WTFMove(webViewWithPartition));
 
-        auto webViewWithPartitionAndIdentifier = makeUniqueRef<WebPushDTestWebView>("testPartition"_s, WTF::UUID::parse("940e7729-738e-439f-a366-1a8719e23b2d"_s), processPool.get(), *m_notificationProvider, m_html);
+        auto webViewWithPartitionAndIdentifier = makeUniqueRef<WebPushDTestWebView>("testPartition"_s, WTF::UUID::parse("940e7729-738e-439f-a366-1a8719e23b2d"_s), processPool.get(), *m_notificationProvider, m_html, m_installDataStoreDelegate);
         m_webViews.append(WTFMove(webViewWithPartitionAndIdentifier));
     }
 
@@ -876,6 +1006,7 @@ protected:
     std::unique_ptr<TestWebKitAPI::TestNotificationProvider> m_notificationProvider;
     Vector<UniqueRef<WebPushDTestWebView>> m_webViews;
     ASCIILiteral m_html;
+    InstallDataStoreDelegate m_installDataStoreDelegate { InstallDataStoreDelegate::No };
 };
 
 class WebPushDMultipleLaunchTest : public WebPushDTest {
@@ -1450,153 +1581,119 @@ static constexpr ASCIILiteral json15 = R"JSONRESOURCE(
 {
     "default_action_url": "https://example.com/",
     "title": "Hello world!",
-    "options": {
-        "dir": 0
-    }
+    "dir": 0
 }
 )JSONRESOURCE"_s;
 static constexpr ASCIILiteral json16 = R"JSONRESOURCE(
 {
     "default_action_url": "https://example.com/",
     "title": "Hello world!",
-    "options": {
-        "dir": "auto"
-    }
+    "dir": "auto"
 }
 )JSONRESOURCE"_s;
 static constexpr ASCIILiteral json17 = R"JSONRESOURCE(
 {
     "default_action_url": "https://example.com/",
     "title": "Hello world!",
-    "options": {
-        "dir": "ltr"
-    }
+    "dir": "ltr"
 }
 )JSONRESOURCE"_s;
 static constexpr ASCIILiteral json18 = R"JSONRESOURCE(
 {
     "default_action_url": "https://example.com/",
     "title": "Hello world!",
-    "options": {
-        "dir": "rtl"
-    }
+    "dir": "rtl"
 }
 )JSONRESOURCE"_s;
 static constexpr ASCIILiteral json19 = R"JSONRESOURCE(
 {
     "default_action_url": "https://example.com/",
     "title": "Hello world!",
-    "options": {
-        "dir": "nonsense"
-    }
+    "dir": "nonsense"
 }
 )JSONRESOURCE"_s;
 static constexpr ASCIILiteral json20 = R"JSONRESOURCE(
 {
     "default_action_url": "https://example.com/",
     "title": "Hello world!",
-    "options": {
-        "lang": { }
-    }
+    "lang": { }
 }
 )JSONRESOURCE"_s;
 static constexpr ASCIILiteral json21 = R"JSONRESOURCE(
 {
     "default_action_url": "https://example.com/",
     "title": "Hello world!",
-    "options": {
-        "lang": "language"
-    }
+    "lang": "language"
 }
 )JSONRESOURCE"_s;
 static constexpr ASCIILiteral json22 = R"JSONRESOURCE(
 {
     "default_action_url": "https://example.com/",
     "title": "Hello world!",
-    "options": {
-        "body": { }
-    }
+    "body": { }
 }
 )JSONRESOURCE"_s;
 static constexpr ASCIILiteral json23 = R"JSONRESOURCE(
 {
     "default_action_url": "https://example.com/",
     "title": "Hello world!",
-    "options": {
-        "body": "world"
-    }
+    "body": "world"
 }
 )JSONRESOURCE"_s;
 static constexpr ASCIILiteral json24 = R"JSONRESOURCE(
 {
     "default_action_url": "https://example.com/",
     "title": "Hello world!",
-    "options": {
-        "tag": { }
-    }
+    "tag": { }
 }
 )JSONRESOURCE"_s;
 static constexpr ASCIILiteral json25 = R"JSONRESOURCE(
 {
     "default_action_url": "https://example.com/",
     "title": "Hello world!",
-    "options": {
-        "tag": "world"
-    }
+    "tag": "world"
 }
 )JSONRESOURCE"_s;
 static constexpr ASCIILiteral json26 = R"JSONRESOURCE(
 {
     "default_action_url": "https://example.com/",
     "title": "Hello world!",
-    "options": {
-        "icon": 0
-    }
+    "icon": 0
 }
 )JSONRESOURCE"_s;
 static constexpr ASCIILiteral json27 = R"JSONRESOURCE(
 {
     "default_action_url": "https://example.com/",
     "title": "Hello world!",
-    "options": {
-        "icon": "world"
-    }
+    "icon": "world"
 }
 )JSONRESOURCE"_s;
 static constexpr ASCIILiteral json28 = R"JSONRESOURCE(
 {
     "default_action_url": "https://example.com/",
     "title": "Hello world!",
-    "options": {
-        "icon": "https://example.com/icon.png"
-    }
+    "icon": "https://example.com/icon.png"
 }
 )JSONRESOURCE"_s;
 static constexpr ASCIILiteral json29 = R"JSONRESOURCE(
 {
     "default_action_url": "https://example.com/",
     "title": "Hello world!",
-    "options": {
-        "silent": 0
-    }
+    "silent": 0
 }
 )JSONRESOURCE"_s;
 static constexpr ASCIILiteral json30 = R"JSONRESOURCE(
 {
     "default_action_url": "https://example.com/",
     "title": "Hello world!",
-    "options": {
-        "silent": true
-    }
+    "silent": true
 }
 )JSONRESOURCE"_s;
 static constexpr ASCIILiteral json31 = R"JSONRESOURCE(
 {
     "default_action_url": "https://example.com/",
     "title": "Hello world!",
-    "options": {
-        "silent": false
-    }
+    "silent": false
 }
 )JSONRESOURCE"_s;
 static constexpr ASCIILiteral json32 = R"JSONRESOURCE(
@@ -1648,6 +1745,79 @@ static constexpr ASCIILiteral json38 = R"JSONRESOURCE(
     "mutable": true
 }
 )JSONRESOURCE"_s;
+static constexpr ASCIILiteral json39 = R"JSONRESOURCE(
+{
+    "default_action_url": "https://example.com/",
+    "title": "Hello world!",
+    "mutable": true,
+    "app_badge": "12"
+}
+)JSONRESOURCE"_s;
+static constexpr ASCIILiteral json40 = R"JSONRESOURCE(
+{
+    "default_action_url": "https://example.com/",
+    "title": "Hello world!",
+    "mutable": true,
+    "tag": "title Gotcha!",
+    "app_badge": "12"
+}
+)JSONRESOURCE"_s;
+static constexpr ASCIILiteral json41 = R"JSONRESOURCE(
+{
+    "default_action_url": "https://example.com/",
+    "title": "Hello world!",
+    "mutable": true,
+    "tag": "badge 1024",
+    "app_badge": "12"
+}
+)JSONRESOURCE"_s;
+static constexpr ASCIILiteral json42 = R"JSONRESOURCE(
+{
+    "default_action_url": "https://example.com/",
+    "title": "Hello world!",
+    "mutable": true,
+    "tag": "titleandbadge ThisRules 4096",
+    "app_badge": "12"
+}
+)JSONRESOURCE"_s;
+static constexpr ASCIILiteral json43 = R"JSONRESOURCE(
+{
+    "default_action_url": "https://example.com/",
+    "title": "Test the data object",
+    "mutable": true,
+    "tag": "datatotitle",
+    "data": "Raw string",
+    "app_badge": "12"
+}
+)JSONRESOURCE"_s;
+static constexpr ASCIILiteral json44 = R"JSONRESOURCE(
+{
+    "default_action_url": "https://example.com/",
+    "title": "Test the data object",
+    "mutable": true,
+    "tag": "datatotitle",
+    "data": { "key": "value" },
+    "app_badge": "12"
+}
+)JSONRESOURCE"_s;
+static constexpr ASCIILiteral json45 = R"JSONRESOURCE(
+{
+    "default_action_url": "https://example.com/",
+    "title": "Test a default action URL override",
+    "mutable": true,
+    "tag": "defaultactionurl https://webkit.org/",
+    "app_badge": "12"
+}
+)JSONRESOURCE"_s;
+static constexpr ASCIILiteral json46 = R"JSONRESOURCE(
+{
+    "default_action_url": "https://example.com/",
+    "title": "Test a missing default action URL override",
+    "mutable": true,
+    "tag": "emptydefaultactionurl",
+    "app_badge": "12"
+}
+)JSONRESOURCE"_s;
 
 static constexpr ASCIILiteral errors[] = {
     "does not contain valid JSON"_s,
@@ -1657,16 +1827,16 @@ static constexpr ASCIILiteral errors[] = {
     "'title' member is specified but is not a string"_s,
     "'app_badge' member is specified as a string that did not parse to to an unsigned long long"_s,
     "'app_badge' member is specified as an number but is not a valid unsigned long long"_s,
-    "'options' member is specified but is not an object"_s,
+    "<intentionally left blank>"_s,
     "'app_badge' member is specified but is not a string or a number"_s,
-    "'options' JSON is not valid: 'dir' member is specified but is not a valid NotificationDirection"_s,
-    "'options' JSON is not valid: 'dir' member is specified but is not a string"_s,
-    "'options' JSON is not valid: 'lang' member is specified but is not a string"_s,
-    "'options' JSON is not valid: 'body' member is specified but is not a string"_s,
-    "'options' JSON is not valid: 'tag' member is specified but is not a string"_s,
-    "'options' JSON is not valid: 'icon' member is specified but is not a string"_s,
-    "'options' JSON is not valid: 'icon' member is specified but does not represent a valid URL"_s,
-    "'options' JSON is not valid: 'silent' member is specified but is not a boolean"_s,
+    "'dir' member is specified but is not a valid NotificationDirection"_s,
+    "'dir' member is specified but is not a string"_s,
+    "'lang' member is specified but is not a string"_s,
+    "'body' member is specified but is not a string"_s,
+    "'tag' member is specified but is not a string"_s,
+    "'icon' member is specified but is not a string"_s,
+    "'icon' member is specified but does not represent a valid URL"_s,
+    "'silent' member is specified but is not a boolean"_s,
     "'app_badge' member is specified as a string that did not parse to a valid unsigned long long"_s,
     "'mutable' member is specified but is not a boolean"_s
 };
@@ -1685,7 +1855,7 @@ static std::pair<ASCIILiteral, ASCIILiteral> jsonAndErrors[] = {
     { json10, errors[6] },
     { json11, errors[8] },
     { json12, { " "_s } },
-    { json13, errors[7] },
+    { json13, { " "_s } },
     { json14, { " "_s } },
     { json15, errors[10] },
     { json16, { " "_s } },
@@ -1711,7 +1881,14 @@ static std::pair<ASCIILiteral, ASCIILiteral> jsonAndErrors[] = {
     { json36, errors[18] },
     { json37, errors[18] },
     { json38, { " "_s } },
-
+    { json39, { " "_s } },
+    { json40, { " "_s } },
+    { json41, { " "_s } },
+    { json42, { " "_s } },
+    { json43, { " "_s } },
+    { json44, { " "_s } },
+    { json45, { " "_s } },
+    { json46, { " "_s } },
     { { }, { } }
 };
 
@@ -1824,6 +2001,119 @@ TEST(WebPushD, DeclarativeWebPushHandling)
         }];
     }];
     TestWebKitAPI::Util::run(&done);
+
+
+    // Verify that processing the most recent notification results in its action URL being sent to the data store delegate
+    done = false;
+    [dataStore _processPersistentNotificationClick:delegate.get().mostRecentNotification.get().userInfo completionHandler:^(bool handled) {
+        EXPECT_TRUE(handled);
+        EXPECT_TRUE([delegate.get().mostRecentActionURL.get().absoluteString isEqualToString:@"https://example.com/"]);
+
+        done = true;
+    }];
+    TestWebKitAPI::Util::run(&done);
+}
+
+class WebPushDPushNotificationEventTest : public WebPushDTest {
+public:
+    WebPushDPushNotificationEventTest()
+        : WebPushDTest(LaunchOnlyOnce::Yes, htmlSource, InstallDataStoreDelegate::Yes)
+    {
+    }
+
+    void prep()
+    {
+        webViews().first()->subscribe();
+    }
+
+    void runTest(ASCIILiteral jsonMessage)
+    {
+        webViews().first()->clearMostRecents();
+        webViews().first()->injectDeclarativePushMessage(jsonMessage);
+
+        auto messages = webViews().first()->fetchPushMessages();
+        ASSERT_EQ([messages count], 1u);
+
+        webViews().first()->captureAllMessages();
+        webViews().first()->processPushMessage([messages firstObject]);
+    }
+
+    void waitForMessageAndVerify(NSString *message)
+    {
+        while (webViews().first()->mostRecentMessage().isEmpty())
+            TestWebKitAPI::Util::runFor(0.05_s);
+
+        EXPECT_TRUE([(NSString *)webViews().first()->mostRecentMessage() isEqualToString:message]);
+    }
+
+    void checkLastNotificationTitle(NSString *title)
+    {
+        NSString *recentTitle = webViews().first()->mostRecentNotification().userInfo[@"WebNotificationTitleKey"];
+        EXPECT_TRUE([recentTitle isEqualToString:title]);
+
+        if (![recentTitle isEqualToString:title])
+            NSLog(@"Most recent title: %@\nExpected title: %@", recentTitle, title);
+
+    }
+
+    void checkLastNotificationDefaultActionURL(NSString *actionURL)
+    {
+        NSString *notificationActionURL = webViews().first()->mostRecentNotification().userInfo[@"WebNotificationDefaultActionURLKey"];
+        EXPECT_TRUE([notificationActionURL isEqualToString:actionURL]);
+    }
+
+    void checkLastActionURL(NSString *url)
+    {
+        NSURL *recentActionURL = webViews().first()->mostRecentActionURL();
+        EXPECT_TRUE([url isEqualToString:recentActionURL.absoluteString]);
+
+        if (![url isEqualToString:recentActionURL.absoluteString])
+            NSLog(@"Lact action URL: %@\nExpected URL: %@", recentActionURL, url);
+
+    }
+
+    void checkLastAppBadge(std::optional<uint64_t> badge)
+    {
+        EXPECT_EQ(badge, webViews().first()->mostRecentAppBadge());
+    }
+};
+
+TEST_F(WebPushDPushNotificationEventTest, Basic)
+{
+    prep();
+    runTest(json39);
+    checkLastNotificationTitle(@"Hello world!");
+    checkLastAppBadge(12);
+
+    runTest(json40);
+    checkLastNotificationTitle(@"Gotcha!");
+    checkLastAppBadge(12);
+
+    runTest(json41);
+    checkLastNotificationTitle(@"Hello world!");
+    checkLastAppBadge(1024);
+
+    runTest(json42);
+    checkLastNotificationTitle(@"ThisRules");
+    checkLastAppBadge(4096);
+
+    runTest(json43);
+    checkLastNotificationTitle(@"Raw string");
+    checkLastAppBadge(12);
+
+    runTest(json44);
+    checkLastNotificationTitle(@"[object Object]");
+    checkLastAppBadge(12);
+
+    runTest(json45);
+    checkLastNotificationTitle(@"Test a default action URL override");
+    checkLastNotificationDefaultActionURL(@"https://webkit.org/");
+    checkLastAppBadge(12);
+
+    runTest(json46);
+    checkLastNotificationTitle(@"Test a missing default action URL override");
+    checkLastNotificationDefaultActionURL(@"https://example.com/");
+    waitForMessageAndVerify(@"showNotification failed: TypeError: Call to showNotification() while handling a `pushnotification` event did not include NotificationOptions that specify a valid defaultAction url");
 }
 
 #endif // ENABLE(DECLARATIVE_WEB_PUSH)

@@ -26,6 +26,7 @@
 #pragma once
 
 #include "ASTForward.h"
+#include "ASTInterpolateAttribute.h"
 #include "CompilationMessage.h"
 
 #include <wtf/Expected.h>
@@ -50,11 +51,13 @@ public:
     virtual void visit(AST::BindingAttribute&);
     virtual void visit(AST::BuiltinAttribute&);
     virtual void visit(AST::ConstAttribute&);
+    virtual void visit(AST::DiagnosticAttribute&);
     virtual void visit(AST::GroupAttribute&);
     virtual void visit(AST::IdAttribute&);
     virtual void visit(AST::InterpolateAttribute&);
     virtual void visit(AST::InvariantAttribute&);
     virtual void visit(AST::LocationAttribute&);
+    virtual void visit(AST::MustUseAttribute&);
     virtual void visit(AST::SizeAttribute&);
     virtual void visit(AST::StageAttribute&);
     virtual void visit(AST::WorkgroupSizeAttribute&);
@@ -112,6 +115,8 @@ public:
     virtual void visit(AST::Variable&);
     virtual void visit(AST::VariableQualifier&);
 
+    virtual void visit(AST::SwitchClause&);
+
     bool hasError() const;
     Result<void> result();
 
@@ -137,8 +142,6 @@ protected:
 private:
     Result<void> m_expectedError;
 };
-
-std::optional<unsigned> extractInteger(const AST::Expression&);
 
 } // namespace AST
 } // namespace WGSL

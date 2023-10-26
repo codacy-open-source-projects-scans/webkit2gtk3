@@ -28,6 +28,7 @@
 #if ENABLE(WK_WEB_EXTENSIONS)
 
 #include "CocoaImage.h"
+#include "WebExtensionEventListenerType.h"
 #include "WebExtensionTabIdentifier.h"
 #include "WebPageProxyIdentifier.h"
 #include <wtf/Forward.h>
@@ -42,10 +43,11 @@ namespace WebKit {
 
 class WebExtensionContext;
 class WebExtensionWindow;
+class WebProcessProxy;
 struct WebExtensionTabParameters;
 struct WebExtensionTabQueryParameters;
 
-class WebExtensionTab : public RefCounted<WebExtensionTab> {
+class WebExtensionTab : public RefCounted<WebExtensionTab>, public CanMakeWeakPtr<WebExtensionTab> {
     WTF_MAKE_NONCOPYABLE(WebExtensionTab);
     WTF_MAKE_FAST_ALLOCATED;
 
@@ -79,8 +81,10 @@ public:
 
     enum class AssumeWindowMatches : bool { No, Yes };
     enum class SkipContainsCheck : bool { No, Yes };
+    enum class MainWebViewOnly : bool { No, Yes };
 
     using Error = std::optional<String>;
+    using WebProcessProxySet = HashSet<Ref<WebProcessProxy>>;
 
     WebExtensionTabIdentifier identifier() const { return m_identifier; }
     WebExtensionTabParameters parameters() const;
@@ -93,6 +97,7 @@ public:
     bool matches(const WebExtensionTabQueryParameters&, AssumeWindowMatches = AssumeWindowMatches::No, std::optional<WebPageProxyIdentifier> = std::nullopt) const;
 
     bool extensionHasAccess() const;
+    bool extensionHasPermission() const;
 
     RefPtr<WebExtensionWindow> window(SkipContainsCheck = SkipContainsCheck::No) const;
     size_t index() const;
@@ -154,6 +159,8 @@ public:
 
     void close(CompletionHandler<void(Error)>&&);
 
+    WebProcessProxySet processes(WebExtensionEventListenerType, WebExtensionContentWorldType, MainWebViewOnly = MainWebViewOnly::Yes) const;
+
 #ifdef __OBJC__
     _WKWebExtensionTab *delegate() const { return m_delegate.getAutoreleased(); }
 
@@ -164,6 +171,8 @@ private:
     WebExtensionTabIdentifier m_identifier;
     WeakPtr<WebExtensionContext> m_extensionContext;
     WeakObjCPtr<_WKWebExtensionTab> m_delegate;
+    mutable bool m_private : 1 { false };
+    mutable bool m_cachedPrivate : 1 { false };
     bool m_respondsToWindow : 1 { false };
     bool m_respondsToParentTab : 1 { false };
     bool m_respondsToSetParentTab : 1 { false };

@@ -1470,6 +1470,7 @@ private:
     {
         return property() == CSSPropertyFilter
 #if ENABLE(FILTERS_LEVEL_2)
+            || property() == CSSPropertyBackdropFilter
             || property() == CSSPropertyWebkitBackdropFilter
 #endif
             ;
@@ -2719,7 +2720,7 @@ private:
             auto blendedAdjust = blendFunc(*from.fontSizeAdjust().value, *to.fontSizeAdjust().value, context);
 
             ASSERT(from.fontSizeAdjust().metric == to.fontSizeAdjust().metric);
-            return { to.fontSizeAdjust().metric, false, std::max(blendedAdjust, 0.0f) };
+            return { to.fontSizeAdjust().metric, FontSizeAdjust::ValueType::Number, std::max(blendedAdjust, 0.0f) };
         };
 
         destination.setFontSizeAdjust(blendedFontSizeAdjust());
@@ -3672,6 +3673,7 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
 
         new PropertyWrapperFilter(CSSPropertyFilter, &RenderStyle::filter, &RenderStyle::setFilter),
 #if ENABLE(FILTERS_LEVEL_2)
+        new PropertyWrapperFilter(CSSPropertyBackdropFilter, &RenderStyle::backdropFilter, &RenderStyle::setBackdropFilter),
         new PropertyWrapperFilter(CSSPropertyWebkitBackdropFilter, &RenderStyle::backdropFilter, &RenderStyle::setBackdropFilter),
 #endif
         new PropertyWrapperFilter(CSSPropertyAppleColorFilter, &RenderStyle::appleColorFilter, &RenderStyle::setAppleColorFilter),
@@ -3745,12 +3747,12 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         new ContainIntrinsiclLengthPropertyWrapper(CSSPropertyContainIntrinsicHeight, &RenderStyle::containIntrinsicHeight, &RenderStyle::setContainIntrinsicHeight, &RenderStyle::containIntrinsicHeightType, &RenderStyle::setContainIntrinsicHeightType),
 
         // FIXME: The following properties are currently not animatable but should be:
-        // align-tracks, background-blend-mode, clip-rule, color-interpolation,
+        // background-blend-mode, clip-rule, color-interpolation,
         // color-interpolation-filters, counter-increment, counter-reset, dominant-baseline,
         // fill-rule, font-family, font-feature-settings, font-kerning, font-language-override,
         // font-synthesis, font-variant-alternates, font-variant-caps, font-variant-east-asian,
         // font-variant-ligatures, font-variant-numeric, font-variant-position, grid-template-areas,
-        // ime-mode, justify-tracks, marker-end, marker-mid, marker-start, mask, mask-clip, mask-composite, mask-image,
+        // ime-mode, marker-end, marker-mid, marker-start, mask, mask-clip, mask-composite, mask-image,
         // mask-mode, mask-origin, mask-repeat, mask-type, offset-distance, perspective-origin, quotes,
         // ruby-align, scroll-behavior, shape-rendering, stroke-linecap, stroke-linejoin,
         // text-anchor, text-emphasis-style, text-rendering, vector-effect
@@ -3774,7 +3776,6 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         new DiscretePropertyWrapper<TextBoxTrim>(CSSPropertyTextBoxTrim, &RenderStyle::textBoxTrim, &RenderStyle::setTextBoxTrim),
         new DiscretePropertyWrapper<PrintColorAdjust>(CSSPropertyPrintColorAdjust, &RenderStyle::printColorAdjust, &RenderStyle::setPrintColorAdjust),
         new DiscretePropertyWrapper<ColumnFill>(CSSPropertyColumnFill, &RenderStyle::columnFill, &RenderStyle::setColumnFill),
-        new DiscretePropertyWrapper<BorderStyle>(CSSPropertyColumnRuleStyle, &RenderStyle::columnRuleStyle, &RenderStyle::setColumnRuleStyle),
         new DiscretePropertyWrapper<BorderStyle>(CSSPropertyColumnRuleStyle, &RenderStyle::columnRuleStyle, &RenderStyle::setColumnRuleStyle),
         new DiscretePropertyWrapper<CursorType>(CSSPropertyCursor, &RenderStyle::cursor, &RenderStyle::setCursor),
         new DiscretePropertyWrapper<EmptyCell>(CSSPropertyEmptyCells, &RenderStyle::emptyCells, &RenderStyle::setEmptyCells),
@@ -3826,7 +3827,8 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         new DiscretePropertyWrapper<OptionSet<TouchAction>>(CSSPropertyTouchAction, &RenderStyle::touchActions, &RenderStyle::setTouchActions),
         new DiscretePropertyWrapper<OptionSet<TextTransform>>(CSSPropertyTextTransform, &RenderStyle::textTransform, &RenderStyle::setTextTransform),
         new DiscretePropertyWrapper<WhiteSpaceCollapse>(CSSPropertyWhiteSpaceCollapse, &RenderStyle::whiteSpaceCollapse, &RenderStyle::setWhiteSpaceCollapse),
-        new DiscretePropertyWrapper<TextWrap>(CSSPropertyTextWrap, &RenderStyle::textWrap, &RenderStyle::setTextWrap),
+        new DiscretePropertyWrapper<TextWrapMode>(CSSPropertyTextWrapMode, &RenderStyle::textWrapMode, &RenderStyle::setTextWrapMode),
+        new DiscretePropertyWrapper<TextWrapStyle>(CSSPropertyTextWrapStyle, &RenderStyle::textWrapStyle, &RenderStyle::setTextWrapStyle),
         new DiscretePropertyWrapper<TransformBox>(CSSPropertyTransformBox, &RenderStyle::transformBox, &RenderStyle::setTransformBox),
         new DiscretePropertyWrapper<TransformStyle3D>(CSSPropertyTransformStyle, &RenderStyle::transformStyle3D, &RenderStyle::setTransformStyle3D),
         new DiscretePropertyWrapper<WordBreak>(CSSPropertyWordBreak, &RenderStyle::wordBreak, &RenderStyle::setWordBreak),
@@ -3855,7 +3857,6 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         new OffsetRotateWrapper,
 
         new PropertyWrapperContent,
-        new OffsetRotateWrapper,
         new DiscretePropertyWrapper<TextDecorationSkipInk>(CSSPropertyTextDecorationSkipInk, &RenderStyle::textDecorationSkipInk, &RenderStyle::setTextDecorationSkipInk),
         new DiscreteSVGPropertyWrapper<ColorInterpolation>(CSSPropertyColorInterpolation, &SVGRenderStyle::colorInterpolation, &SVGRenderStyle::setColorInterpolation),
         new DiscreteFontDescriptionTypedWrapper<Kerning>(CSSPropertyFontKerning, &FontCascadeDescription::kerning, &FontCascadeDescription::setKerning),
@@ -3932,6 +3933,7 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         CSSPropertyFontVariant,
         CSSPropertyFontSynthesis,
         CSSPropertyContainIntrinsicSize,
+        CSSPropertyTextWrap,
         CSSPropertyWhiteSpace
     };
     const unsigned animatableShorthandPropertiesCount = std::size(animatableShorthandProperties);
@@ -3945,12 +3947,11 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
 
     // First we put the non-shorthand property wrappers into the map, so the shorthand-building
     // code can find them.
-
-    for (unsigned i = 0; i < animatableLonghandPropertiesCount; ++i) {
-        AnimationPropertyWrapperBase* wrapper = animatableLonghandPropertyWrappers[i];
-        m_propertyWrappers.uncheckedAppend(std::unique_ptr<AnimationPropertyWrapperBase>(wrapper));
-        indexFromPropertyID(wrapper->property()) = i;
-    }
+    unsigned index = 0;
+    m_propertyWrappers.appendContainerWithMapping(animatableLonghandPropertyWrappers, [&](auto* wrapper) {
+        indexFromPropertyID(wrapper->property()) = index++;
+        return std::unique_ptr<AnimationPropertyWrapperBase>(wrapper);
+    });
 
     for (size_t i = 0; i < animatableShorthandPropertiesCount; ++i) {
         CSSPropertyID propertyID = animatableShorthandProperties[i];
@@ -3958,18 +3959,15 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         if (!shorthand.length())
             continue;
 
-        Vector<AnimationPropertyWrapperBase*> longhandWrappers;
-        longhandWrappers.reserveInitialCapacity(shorthand.length());
-        for (auto longhand : shorthand) {
+        auto longhandWrappers = WTF::compactMap(shorthand, [&](auto longhand) -> std::optional<AnimationPropertyWrapperBase*> {
             unsigned wrapperIndex = indexFromPropertyID(longhand);
             if (wrapperIndex == cInvalidPropertyWrapperIndex)
-                continue;
+                return std::nullopt;
             ASSERT(m_propertyWrappers[wrapperIndex]);
-            longhandWrappers.uncheckedAppend(m_propertyWrappers[wrapperIndex].get());
-        }
-        longhandWrappers.shrinkToFit();
+            return m_propertyWrappers[wrapperIndex].get();
+        });
 
-        m_propertyWrappers.uncheckedAppend(makeUnique<ShorthandPropertyWrapper>(propertyID, WTFMove(longhandWrappers)));
+        m_propertyWrappers.append(makeUnique<ShorthandPropertyWrapper>(propertyID, WTFMove(longhandWrappers)));
         indexFromPropertyID(propertyID) = animatableLonghandPropertiesCount + i;
     }
 
@@ -3996,7 +3994,6 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
 #endif
         case CSSPropertyWebkitTextZoom:
         case CSSPropertyAlignmentBaseline:
-        case CSSPropertyAlignTracks:
         case CSSPropertyAlt:
         case CSSPropertyAnimation:
         case CSSPropertyAnimationComposition:
@@ -4049,7 +4046,6 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         case CSSPropertyInsetInline:
         case CSSPropertyInsetInlineEnd:
         case CSSPropertyInsetInlineStart:
-        case CSSPropertyJustifyTracks:
         case CSSPropertyListStyle:
         case CSSPropertyMarginBlock: // logical shorthand
         case CSSPropertyMarginInline: // logical shorthand

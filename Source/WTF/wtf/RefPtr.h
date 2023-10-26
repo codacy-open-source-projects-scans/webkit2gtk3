@@ -77,7 +77,6 @@ public:
     T* get() const { return PtrTraits::unwrap(m_ptr); }
 
     Ref<T> releaseNonNull() { ASSERT(m_ptr); Ref<T> tmp(adoptRef(*m_ptr)); m_ptr = nullptr; return tmp; }
-    Ref<const T> releaseConstNonNull() { ASSERT(m_ptr); Ref<const T> tmp(adoptRef(*m_ptr)); m_ptr = nullptr; return tmp; }
 
     T* leakRef() WARN_UNUSED_RETURN;
 
@@ -257,6 +256,15 @@ template<typename ExpectedType, typename ArgType, typename PtrTraits, typename R
 inline bool is(const RefPtr<ArgType, PtrTraits, RefDerefTraits>& source)
 {
     return is<ExpectedType>(source.get());
+}
+
+template<typename Target, typename Source, typename PtrTraits, typename RefDerefTraits>
+inline RefPtr<Target> checkedDowncast(RefPtr<Source, PtrTraits, RefDerefTraits> source)
+{
+    static_assert(!std::is_same_v<Source, Target>, "Unnecessary cast to same type");
+    static_assert(std::is_base_of_v<Source, Target>, "Should be a downcast");
+    RELEASE_ASSERT(!source || is<Target>(*source));
+    return static_pointer_cast<Target>(WTFMove(source));
 }
 
 template<typename Target, typename Source, typename PtrTraits, typename RefDerefTraits>

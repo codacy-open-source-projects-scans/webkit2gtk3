@@ -145,7 +145,7 @@ static std::optional<WGPUFeatureName> featureRequirementForFormat(WGPUTextureFor
     }
 }
 
-static bool isCompressedFormat(WGPUTextureFormat format)
+bool Texture::isCompressedFormat(WGPUTextureFormat format)
 {
     // https://gpuweb.github.io/gpuweb/#packed-formats
     switch (format) {
@@ -757,6 +757,7 @@ static bool isRenderableFormat(WGPUTextureFormat format)
     case WGPUTextureFormat_RGBA8Sint:
     case WGPUTextureFormat_BGRA8Unorm:
     case WGPUTextureFormat_BGRA8UnormSrgb:
+    case WGPUTextureFormat_RGB10A2Uint:
     case WGPUTextureFormat_RGB10A2Unorm:
     case WGPUTextureFormat_RG32Float:
     case WGPUTextureFormat_RG32Uint:
@@ -779,7 +780,6 @@ static bool isRenderableFormat(WGPUTextureFormat format)
     case WGPUTextureFormat_RG8Snorm:
     case WGPUTextureFormat_RGBA8Snorm:
     case WGPUTextureFormat_RGB9E5Ufloat:
-    case WGPUTextureFormat_RGB10A2Uint:
     case WGPUTextureFormat_BC1RGBAUnorm:
     case WGPUTextureFormat_BC1RGBAUnormSrgb:
     case WGPUTextureFormat_BC2RGBAUnorm:
@@ -1257,7 +1257,7 @@ bool Device::validateCreateTexture(const WGPUTextureDescriptor& descriptor, cons
         if (descriptor.sampleCount != 1)
             return false;
 
-        if (isCompressedFormat(descriptor.format) || Texture::isDepthOrStencilFormat(descriptor.format))
+        if (Texture::isCompressedFormat(descriptor.format) || Texture::isDepthOrStencilFormat(descriptor.format))
             return false;
         break;
     case WGPUTextureDimension_2D:
@@ -1283,7 +1283,7 @@ bool Device::validateCreateTexture(const WGPUTextureDescriptor& descriptor, cons
         if (descriptor.sampleCount != 1)
             return false;
 
-        if (isCompressedFormat(descriptor.format) || Texture::isDepthOrStencilFormat(descriptor.format))
+        if (Texture::isCompressedFormat(descriptor.format) || Texture::isDepthOrStencilFormat(descriptor.format))
             return false;
         break;
     case WGPUTextureDimension_Force32:
@@ -1638,7 +1638,7 @@ uint32_t Texture::texelBlockSize(WGPUTextureFormat format) // Bytes
         return 8;
     case WGPUTextureFormat_BC2RGBAUnorm:
     case WGPUTextureFormat_BC2RGBAUnormSrgb:
-        return 8;
+        return 16;
     case WGPUTextureFormat_BC3RGBAUnorm:
     case WGPUTextureFormat_BC3RGBAUnormSrgb:
         return 16;
@@ -1658,12 +1658,12 @@ uint32_t Texture::texelBlockSize(WGPUTextureFormat format) // Bytes
     case WGPUTextureFormat_ETC2RGB8UnormSrgb:
     case WGPUTextureFormat_ETC2RGB8A1Unorm:
     case WGPUTextureFormat_ETC2RGB8A1UnormSrgb:
-    case WGPUTextureFormat_ETC2RGBA8Unorm:
-    case WGPUTextureFormat_ETC2RGBA8UnormSrgb:
         return 8;
     case WGPUTextureFormat_EACR11Unorm:
     case WGPUTextureFormat_EACR11Snorm:
         return 8;
+    case WGPUTextureFormat_ETC2RGBA8Unorm:
+    case WGPUTextureFormat_ETC2RGBA8UnormSrgb:
     case WGPUTextureFormat_EACRG11Unorm:
     case WGPUTextureFormat_EACRG11Snorm:
         return 16;
@@ -2097,19 +2097,33 @@ std::optional<WGPUTextureViewDescriptor> Texture::resolveTextureViewDescriptorDe
     }
 
     if (resolved.dimension == WGPUTextureViewDimension_Undefined) {
-        switch (m_dimension) {
-        case WGPUTextureDimension_1D:
+        switch (m_texture.textureType) {
+        case MTLTextureType1D:
             resolved.dimension = WGPUTextureViewDimension_1D;
             break;
-        case WGPUTextureDimension_2D:
+        case MTLTextureType1DArray:
+            RELEASE_ASSERT_NOT_REACHED();
+            break;
+        case MTLTextureType2D:
+        case MTLTextureType2DMultisample:
             resolved.dimension = WGPUTextureViewDimension_2D;
             break;
-        case WGPUTextureDimension_3D:
+        case MTLTextureType2DArray:
+        case MTLTextureType2DMultisampleArray:
+            resolved.dimension = WGPUTextureViewDimension_2DArray;
+            break;
+        case MTLTextureTypeCube:
+            resolved.dimension = WGPUTextureViewDimension_Cube;
+            break;
+        case MTLTextureTypeCubeArray:
+            resolved.dimension = WGPUTextureViewDimension_CubeArray;
+            break;
+        case MTLTextureType3D:
             resolved.dimension = WGPUTextureViewDimension_3D;
             break;
-        case WGPUTextureDimension_Force32:
+        case MTLTextureTypeTextureBuffer:
             ASSERT_NOT_REACHED();
-            return resolved;
+            break;
         }
     }
 
@@ -2344,6 +2358,8 @@ Ref<TextureView> Texture::createView(const WGPUTextureViewDescriptor& inputDescr
         return TextureView::createInvalid(m_device);
 
     texture.label = fromAPI(descriptor->label);
+    if (!texture.label.length)
+        texture.label = m_texture.label;
 
     std::optional<WGPUExtent3D> renderExtent;
     if (m_usage & WGPUTextureUsage_RenderAttachment)
@@ -2449,14 +2465,7 @@ bool Texture::validateImageCopyTexture(const WGPUImageCopyTexture& imageCopyText
     if (imageCopyTexture.origin.y % blockHeight)
         return false;
 
-    if (Texture::isDepthOrStencilFormat(fromAPI(imageCopyTexture.texture).format())
-        || fromAPI(imageCopyTexture.texture).sampleCount() > 1) {
-        auto subresourceSize = imageCopyTextureSubresourceSize(imageCopyTexture);
-        if (subresourceSize.width != copySize.width
-            || subresourceSize.height != copySize.height
-            || subresourceSize.depthOrArrayLayers != copySize.depthOrArrayLayers)
-            return false;
-    }
+    UNUSED_PARAM(copySize);
 
     return true;
 }
@@ -2747,14 +2756,17 @@ bool Texture::validateTextureCopyRange(const WGPUImageCopyTexture& imageCopyText
 bool Texture::validateLinearTextureData(const WGPUTextureDataLayout& layout, uint64_t byteSize, WGPUTextureFormat format, WGPUExtent3D copyExtent)
 {
     // https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-linear-texture-data
-
     uint32_t blockWidth = Texture::texelBlockWidth(format);
     uint32_t blockHeight = Texture::texelBlockHeight(format);
     uint32_t blockSize = Texture::texelBlockSize(format);
 
     auto widthInBlocks = copyExtent.width / blockWidth;
+    if (copyExtent.width % blockWidth)
+        return false;
 
     auto heightInBlocks = copyExtent.height / blockHeight;
+    if (copyExtent.height % blockHeight)
+        return false;
 
     auto bytesInLastRow = checkedProduct<uint64_t>(blockSize, widthInBlocks);
     if (bytesInLastRow.hasOverflowed())

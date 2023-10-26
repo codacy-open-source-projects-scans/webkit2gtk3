@@ -27,6 +27,8 @@
 #include "ContentVisibilityDocumentState.h"
 
 #include "ContentVisibilityAutoStateChangeEvent.h"
+#include "DeclarativeAnimation.h"
+#include "DocumentTimeline.h"
 #include "Element.h"
 #include "EventNames.h"
 #include "FrameSelection.h"
@@ -55,7 +57,7 @@ private:
         ASSERT(!entries.isEmpty());
 
         for (auto& entry : entries) {
-            if (auto* element = entry->target())
+            if (RefPtr element = entry->target())
                 element->document().contentVisibilityDocumentState().updateViewportProximity(*element, entry->isIntersecting() ? ViewportProximity::Near : ViewportProximity::Far);
         }
         return { };
@@ -69,15 +71,17 @@ private:
 
 void ContentVisibilityDocumentState::observe(Element& element)
 {
-    auto& state = element.document().contentVisibilityDocumentState();
-    if (auto* intersectionObserver = state.intersectionObserver(element.document()))
+    Ref document = element.document();
+    auto& state = document->contentVisibilityDocumentState();
+    if (RefPtr intersectionObserver = state.intersectionObserver(document))
         intersectionObserver->observe(element);
 }
 
 void ContentVisibilityDocumentState::unobserve(Element& element)
 {
-    auto& state = element.document().contentVisibilityDocumentState();
-    if (auto& intersectionObserver = state.m_observer) {
+    Ref document = element.document();
+    auto& state = document->contentVisibilityDocumentState();
+    if (RefPtr intersectionObserver = state.m_observer) {
         intersectionObserver->unobserve(element);
         state.removeViewportProximity(element);
     }
@@ -92,7 +96,7 @@ IntersectionObserver* ContentVisibilityDocumentState::intersectionObserver(Docum
         auto observer = IntersectionObserver::create(document, WTFMove(callback), WTFMove(options));
         if (observer.hasException())
             return nullptr;
-        m_observer = observer.returnValue().ptr();
+        m_observer = observer.releaseReturnValue();
     }
     return m_observer.get();
 }
@@ -126,7 +130,7 @@ bool ContentVisibilityDocumentState::checkRelevancyOfContentVisibilityElement(El
         setRelevancyValue(ContentRelevancy::Selected, targetContainsSelection(target));
 
     auto hasTopLayerinSubtree = [](const Element& target) {
-        for (auto& element : target.document().topLayerElements()) {
+        for (Ref element : target.document().topLayerElements()) {
             if (element->isDescendantOf(target))
                 return true;
         }
@@ -137,11 +141,15 @@ bool ContentVisibilityDocumentState::checkRelevancyOfContentVisibilityElement(El
 
     if (oldRelevancy && oldRelevancy == newRelevancy)
         return false;
+
+    auto wasSkippedContent = target.isRelevantToUser() ? IsSkippedContent::No : IsSkippedContent::Yes;
     target.setContentRelevancy(newRelevancy);
+    auto isSkippedContent = target.isRelevantToUser() ? IsSkippedContent::No : IsSkippedContent::Yes;
     target.invalidateStyle();
+    updateAnimations(target, wasSkippedContent, isSkippedContent);
     if (target.isConnected()) {
         ContentVisibilityAutoStateChangeEvent::Init init;
-        init.skipped = newRelevancy.isEmpty();
+        init.skipped = isSkippedContent == IsSkippedContent::Yes;
         target.queueTaskToDispatchEvent(TaskSource::DOMManipulation, ContentVisibilityAutoStateChangeEvent::create(eventNames().contentvisibilityautostatechangeEvent, init));
     }
     return true;
@@ -150,8 +158,8 @@ bool ContentVisibilityDocumentState::checkRelevancyOfContentVisibilityElement(El
 DidUpdateAnyContentRelevancy ContentVisibilityDocumentState::updateRelevancyOfContentVisibilityElements(OptionSet<ContentRelevancy> relevancyToCheck) const
 {
     auto didUpdateAnyContentRelevancy = DidUpdateAnyContentRelevancy::No;
-    for (auto target : m_observer->observationTargets()) {
-        if (target) {
+    for (auto& weakTarget : m_observer->observationTargets()) {
+        if (RefPtr target = weakTarget.get()) {
             if (checkRelevancyOfContentVisibilityElement(*target, relevancyToCheck))
                 didUpdateAnyContentRelevancy = DidUpdateAnyContentRelevancy::Yes;
         }
@@ -164,16 +172,16 @@ HadInitialVisibleContentVisibilityDetermination ContentVisibilityDocumentState::
     if (!m_observer)
         return HadInitialVisibleContentVisibilityDetermination::No;
     Vector<Ref<Element>> elementsToCheck;
-    for (auto target : m_observer->observationTargets()) {
-        if (target) {
+    for (auto& weakTarget : m_observer->observationTargets()) {
+        if (RefPtr target = weakTarget.get()) {
             bool checkForInitialDetermination = !m_elementViewportProximities.contains(*target) && !target->isRelevantToUser();
             if (checkForInitialDetermination)
-                elementsToCheck.append(*target);
+                elementsToCheck.append(target.releaseNonNull());
         }
     }
     auto hadInitialVisibleContentVisibilityDetermination = HadInitialVisibleContentVisibilityDetermination::No;
     if (!elementsToCheck.isEmpty()) {
-        elementsToCheck.first()->document().updateIntersectionObservations({ m_observer });
+        elementsToCheck.first()->protectedDocument()->updateIntersectionObservations({ m_observer });
         for (auto& element : elementsToCheck) {
             checkRelevancyOfContentVisibilityElement(element, { ContentRelevancy::OnScreen });
             if (element->isRelevantToUser())
@@ -191,10 +199,10 @@ void ContentVisibilityDocumentState::updateContentRelevancyForScrollIfNeeded(con
 {
     if (!m_observer)
         return;
-    auto findSkippedContentRoot = [](const Element& element) -> const Element* {
-        const Element* found = nullptr;
+    auto findSkippedContentRoot = [](const Element& element) -> RefPtr<const Element> {
+        RefPtr<const Element> found;
         if (element.renderer() && element.renderer()->isSkippedContent()) {
-            for (auto candidate = &element; candidate; candidate = candidate->parentElementInComposedTree()) {
+            for (RefPtr candidate = &element; candidate; candidate = candidate->parentElementInComposedTree()) {
                 if (candidate->renderer() && candidate->renderStyle()->contentVisibility() == ContentVisibility::Auto)
                     found = candidate;
             }
@@ -202,15 +210,15 @@ void ContentVisibilityDocumentState::updateContentRelevancyForScrollIfNeeded(con
         return found;
     };
 
-    if (auto* scrollAnchorRoot = findSkippedContentRoot(scrollAnchor)) {
-        for (auto target : m_observer->observationTargets()) {
-            if (target) {
+    if (RefPtr scrollAnchorRoot = findSkippedContentRoot(scrollAnchor)) {
+        for (auto& weakTarget : m_observer->observationTargets()) {
+            if (RefPtr target = weakTarget.get()) {
                 ASSERT(target->renderer() && target->renderStyle()->contentVisibility() == ContentVisibility::Auto);
                 updateViewportProximity(*target, ViewportProximity::Far);
             }
         }
         updateViewportProximity(*scrollAnchorRoot, ViewportProximity::Near);
-        scrollAnchorRoot->document().updateRelevancyOfContentVisibilityElements();
+        scrollAnchorRoot->protectedDocument()->updateRelevancyOfContentVisibilityElements();
     }
 }
 
@@ -219,7 +227,7 @@ void ContentVisibilityDocumentState::updateViewportProximity(const Element& elem
     // No need to schedule content relevancy update for first time call, since
     // that will be handled by determineInitialVisibleContentVisibility.
     if (m_elementViewportProximities.contains(element))
-        element.document().scheduleContentRelevancyUpdate(ContentRelevancy::OnScreen);
+        element.protectedDocument()->scheduleContentRelevancyUpdate(ContentRelevancy::OnScreen);
     m_elementViewportProximities.ensure(element, [] {
         return ViewportProximity::Far;
     }).iterator->value = viewportProximity;
@@ -228,6 +236,23 @@ void ContentVisibilityDocumentState::updateViewportProximity(const Element& elem
 void ContentVisibilityDocumentState::removeViewportProximity(const Element& element)
 {
     m_elementViewportProximities.remove(element);
+}
+
+void ContentVisibilityDocumentState::updateAnimations(const Element& element, IsSkippedContent wasSkipped, IsSkippedContent becomesSkipped)
+{
+    if (wasSkipped == IsSkippedContent::No || becomesSkipped == IsSkippedContent::Yes)
+        return;
+    for (RefPtr animation : WebAnimation::instances()) {
+        RefPtr declarativeAnimation = dynamicDowncast<DeclarativeAnimation>(animation.releaseNonNull());
+        if (!declarativeAnimation)
+            continue;
+        auto owningElement = declarativeAnimation->owningElement();
+        if (!owningElement || !owningElement->element.isDescendantOrShadowDescendantOf(&element))
+            continue;
+
+        if (RefPtr timeline = declarativeAnimation->timeline())
+            timeline->animationTimingDidChange(*declarativeAnimation);
+    }
 }
 
 }

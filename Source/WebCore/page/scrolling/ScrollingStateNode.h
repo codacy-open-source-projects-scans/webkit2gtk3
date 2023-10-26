@@ -30,6 +30,7 @@
 #include "GraphicsLayer.h"
 #include "ScrollingCoordinator.h"
 #include <stdint.h>
+#include <wtf/CheckedPtr.h>
 #include <wtf/ThreadSafeWeakPtr.h>
 #include <wtf/TypeCasts.h>
 #include <wtf/Vector.h>
@@ -315,6 +316,8 @@ public:
     Vector<Ref<ScrollingStateNode>>& children() { return m_children; }
     const Vector<Ref<ScrollingStateNode>>& children() const { return m_children; }
     Vector<Ref<ScrollingStateNode>> takeChildren() { return std::exchange(m_children, { }); }
+    WEBCORE_EXPORT void setChildren(Vector<Ref<ScrollingStateNode>>&&);
+    void traverse(const Function<void(ScrollingStateNode&)>&);
 
     void appendChild(Ref<ScrollingStateNode>&&);
     void insertChild(Ref<ScrollingStateNode>&&, size_t index);
@@ -326,10 +329,14 @@ public:
     RefPtr<ScrollingStateNode> childAtIndex(size_t) const;
 
     String scrollingStateTreeAsText(OptionSet<ScrollingStateTreeAsTextBehavior> = { }) const;
+#if ASSERT_ENABLED
+    bool parentPointersAreCorrect() const;
+#endif
 
 protected:
     ScrollingStateNode(const ScrollingStateNode&, ScrollingStateTree&);
-    ScrollingStateNode(ScrollingNodeType, ScrollingStateTree&, ScrollingNodeID);
+    ScrollingStateNode(ScrollingNodeType, ScrollingStateTree*, ScrollingNodeID); // FIXME: This ScrollingStateTree* should be ScrollingStateTree& once all subclasses have generated serialization.
+    ScrollingStateNode(ScrollingNodeType, ScrollingNodeID, OptionSet<ScrollingStateNodeProperty>, std::optional<PlatformLayerIdentifier>, Vector<Ref<ScrollingStateNode>>&&);
 
     void setPropertyChangedInternal(Property property) { m_changedProperties.add(property); }
     void setPropertiesChangedInternal(OptionSet<Property> properties) { m_changedProperties.add(properties); }
@@ -344,7 +351,7 @@ private:
     const ScrollingNodeID m_nodeID;
     OptionSet<Property> m_changedProperties;
 
-    ScrollingStateTree* m_scrollingStateTree { nullptr }; // Only null between deserialization and attachAfterDeserialization.
+    CheckedPtr<ScrollingStateTree> m_scrollingStateTree; // Only null between deserialization and attachAfterDeserialization.
 
     ThreadSafeWeakPtr<ScrollingStateNode> m_parent;
     Vector<Ref<ScrollingStateNode>> m_children;

@@ -133,6 +133,7 @@ class WebGLRenderingContextBase : public GraphicsContextGL::Client, public GPUBa
     WTF_MAKE_ISO_ALLOCATED(WebGLRenderingContextBase);
 public:
     using WebGLVersion = GraphicsContextGLWebGLVersion;
+    using SurfaceBuffer = GraphicsContextGL::SurfaceBuffer;
 
     using GPUBasedCanvasRenderingContext::weakPtrFactory;
     using GPUBasedCanvasRenderingContext::WeakValueType;
@@ -400,9 +401,9 @@ public:
 
     void prepareForDisplayWithPaint() final;
     void paintRenderingResultsToCanvas() final;
-    RefPtr<PixelBuffer> paintRenderingResultsToPixelBuffer(GraphicsContextGL::FlipY);
+    RefPtr<PixelBuffer> drawingBufferToPixelBuffer(GraphicsContextGL::FlipY);
 #if ENABLE(MEDIA_STREAM) || ENABLE(WEB_CODECS)
-    RefPtr<VideoFrame> paintCompositedResultsToVideoFrame();
+    RefPtr<VideoFrame> surfaceBufferToVideoFrame(SurfaceBuffer);
 #endif
 
     void removeSharedObject(WebGLObject&);
@@ -534,7 +535,7 @@ protected:
     RefPtr<Image> drawImageIntoBuffer(Image&, int width, int height, int deviceScaleFactor, const char* functionName);
 
 #if ENABLE(VIDEO)
-    RefPtr<Image> videoFrameToImage(HTMLVideoElement&, BackingStoreCopy, const char* functionName);
+    RefPtr<Image> videoFrameToImage(HTMLVideoElement&, const char* functionName);
 #endif
 
     WebGLTexture::TextureExtensionFlag textureExtensionFlags() const;
@@ -621,7 +622,7 @@ protected:
         LRUImageBufferCache(int capacity);
         // Returns pointer to a cleared image buffer that is owned by the cache. The pointer is valid until next call.
         // Using fillOperator == CompositeOperator::Copy can be used to omit the clear of the buffer.
-        ImageBuffer* imageBuffer(const IntSize&, DestinationColorSpace, CompositeOperator fillOperator = CompositeOperator::SourceOver);
+        RefPtr<ImageBuffer> imageBuffer(const IntSize&, DestinationColorSpace, CompositeOperator fillOperator = CompositeOperator::SourceOver);
     private:
         void bubbleToFront(size_t idx);
         Vector<std::optional<std::pair<DestinationColorSpace, Ref<ImageBuffer>>>> m_buffers;

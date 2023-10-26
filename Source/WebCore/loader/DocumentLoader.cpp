@@ -686,13 +686,12 @@ void DocumentLoader::willSendRequest(ResourceRequest&& newRequest, const Resourc
     if (didReceiveRedirectResponse) {
         if (newRequest.url().protocolIsAbout() || newRequest.url().protocolIsData()) {
             DOCUMENTLOADER_RELEASE_LOG("willSendRequest: canceling - redirecting URL scheme is not allowed");
-            if (m_frame && m_frame->document()) {
-                m_frame->document()->enforceSandboxFlags(SandboxOrigin);
+            loadErrorDocument();
+            if (m_frame && m_frame->document())
                 m_frame->document()->addConsoleMessage(MessageSource::Security, MessageLevel::Error, "Not allowed to redirect to " + newRequest.url().stringCenterEllipsizedToLength() + " due to its scheme");
-            }
-            if (auto* ownerElement = m_frame ? m_frame->ownerElement() : nullptr)
-                ownerElement->dispatchEvent(Event::create(eventNames().loadEvent, Event::CanBubble::No, Event::IsCancelable::No));
-            cancelMainResourceLoad(frameLoader()->blockedError(newRequest));
+
+            if (auto* frameLoader = this->frameLoader())
+                cancelMainResourceLoad(frameLoader->blockedError(newRequest));
             return completionHandler(WTFMove(newRequest));
         }
         // If the redirecting url is not allowed to display content from the target origin,
@@ -890,12 +889,11 @@ void DocumentLoader::stopLoadingAfterXFrameOptionsOrContentSecurityPolicyDenied(
 {
     Ref<DocumentLoader> protectedThis { *this };
     InspectorInstrumentation::continueAfterXFrameOptionsDenied(*m_frame, identifier, *this, response);
-    m_frame->document()->enforceSandboxFlags(SandboxOrigin);
-    if (HTMLFrameOwnerElement* ownerElement = m_frame->ownerElement())
-        ownerElement->dispatchEvent(Event::create(eventNames().loadEvent, Event::CanBubble::No, Event::IsCancelable::No));
+
+    loadErrorDocument();
 
     // The load event might have detached this frame. In that case, the load will already have been cancelled during detach.
-    if (FrameLoader* frameLoader = this->frameLoader())
+    if (auto* frameLoader = this->frameLoader())
         cancelMainResourceLoad(frameLoader->cancelledError(m_request));
 }
 
@@ -1162,15 +1160,18 @@ void DocumentLoader::continueAfterContentPolicy(PolicyAction policy)
         if (ResourceLoader* mainResourceLoader = this->mainResourceLoader())
             InspectorInstrumentation::continueWithPolicyDownload(*m_frame, mainResourceLoader->identifier(), *this, m_response);
 
-        // When starting the request, we didn't know that it would result in download and not navigation. Now we know that main document URL didn't change.
-        // Download may use this knowledge for purposes unrelated to cookies, notably for setting file quarantine data.
-        frameLoader()->setOriginalURLForDownloadRequest(m_request);
+        if (!(frameLoader()->effectiveSandboxFlags() & SandboxDownloads)) {
+            // When starting the request, we didn't know that it would result in download and not navigation. Now we know that main document URL didn't change.
+            // Download may use this knowledge for purposes unrelated to cookies, notably for setting file quarantine data.
+            frameLoader()->setOriginalURLForDownloadRequest(m_request);
 
-        if (m_request.url().protocolIsData()) {
-            // We decode data URL internally, there is no resource load to convert.
-            frameLoader()->client().startDownload(m_request);
-        } else
-            frameLoader()->client().convertMainResourceLoadToDownload(this, m_request, m_response);
+            if (m_request.url().protocolIsData()) {
+                // We decode data URL internally, there is no resource load to convert.
+                frameLoader()->client().startDownload(m_request);
+            } else
+                frameLoader()->client().convertMainResourceLoadToDownload(this, m_request, m_response);
+        } else if (m_frame && m_frame->document())
+            m_frame->document()->addConsoleMessage(MessageSource::Security, MessageLevel::Error, "Not allowed to download due to sandboxing"_s);
 
         // The main resource might be loading from the memory cache, or its loader might have gone missing.
         if (mainResourceLoader()) {
@@ -2084,6 +2085,20 @@ bool DocumentLoader::maybeLoadEmpty()
     return true;
 }
 
+void DocumentLoader::loadErrorDocument()
+{
+    m_response = ResourceResponse(m_request.url(), "text/html"_s, 0, "UTF-8"_s);
+    SetForScope isInFinishedLoadingOfEmptyDocument { m_isInFinishedLoadingOfEmptyDocument, true };
+
+    commitIfReady();
+    if (!frameLoader())
+        return;
+
+    commitData(SharedBuffer::create());
+    m_frame->document()->enforceSandboxFlags(SandboxOrigin);
+    m_writer.end();
+}
+
 #if ENABLE(SERVICE_WORKER)
 static bool canUseServiceWorkers(LocalFrame* frame)
 {
@@ -2107,7 +2122,9 @@ void DocumentLoader::startLoadingMainResource()
 
     Ref<DocumentLoader> protectedThis(*this);
 
-    if (m_request.url().protocolIsAbout() && !(m_request.url().isAboutBlank() || m_request.url().isAboutSrcDoc())) {
+    if (m_request.url().protocolIsAbout()
+        && !(m_request.url().isAboutBlank() || m_request.url().isAboutSrcDoc())
+        && m_request.url().hasOpaquePath()) {
         cancelMainResourceLoad(frameLoader()->client().cannotShowURLError(m_request));
         return;
     }
@@ -2596,14 +2613,12 @@ void DocumentLoader::setActiveContentRuleListActionPatterns(const HashMap<String
     MemoryCompactRobinHoodHashMap<String, Vector<UserContentURLPattern>> parsedPatternMap;
 
     for (auto& pair : patterns) {
-        Vector<UserContentURLPattern> patternVector;
-        patternVector.reserveInitialCapacity(pair.value.size());
-        for (auto& patternString : pair.value) {
+        auto patternVector = WTF::compactMap(pair.value, [](auto& patternString) -> std::optional<UserContentURLPattern> {
             UserContentURLPattern parsedPattern(patternString);
             if (parsedPattern.isValid())
-                patternVector.uncheckedAppend(WTFMove(parsedPattern));
-        }
-        patternVector.shrinkToFit();
+                return parsedPattern;
+            return std::nullopt;
+        });
         parsedPatternMap.set(pair.key, WTFMove(patternVector));
     }
 

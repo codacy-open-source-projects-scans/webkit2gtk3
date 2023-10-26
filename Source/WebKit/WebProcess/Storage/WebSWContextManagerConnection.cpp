@@ -278,21 +278,19 @@ void WebSWContextManagerConnection::fireInstallEvent(ServiceWorkerIdentifier ide
 {
     assertIsCurrent(m_queue.get());
 
-    callOnMainRunLoop([identifier] {
-        SWContextManager::singleton().fireInstallEvent(identifier);
-    });
+    if (auto serviceWorkerThreadProxy = SWContextManager::singleton().serviceWorkerThreadProxyFromBackgroundThread(identifier))
+        serviceWorkerThreadProxy->fireInstallEvent();
 }
 
 void WebSWContextManagerConnection::fireActivateEvent(ServiceWorkerIdentifier identifier)
 {
     assertIsCurrent(m_queue.get());
 
-    callOnMainRunLoop([identifier] {
-        SWContextManager::singleton().fireActivateEvent(identifier);
-    });
+    if (auto serviceWorkerThreadProxy = SWContextManager::singleton().serviceWorkerThreadProxyFromBackgroundThread(identifier))
+        serviceWorkerThreadProxy->fireActivateEvent();
 }
 
-void WebSWContextManagerConnection::firePushEvent(ServiceWorkerIdentifier identifier, const std::optional<IPC::DataReference>& ipcData, CompletionHandler<void(bool)>&& callback)
+void WebSWContextManagerConnection::firePushEvent(ServiceWorkerIdentifier identifier, const std::optional<IPC::DataReference>& ipcData, std::optional<NotificationPayload>&& proposedPayload, CompletionHandler<void(bool, std::optional<NotificationPayload>&&)>&& callback)
 {
     assertIsCurrent(m_queue.get());
 
@@ -300,14 +298,14 @@ void WebSWContextManagerConnection::firePushEvent(ServiceWorkerIdentifier identi
     if (ipcData)
         data = Vector<uint8_t> { ipcData->data(), ipcData->size() };
 
-    auto inQueueCallback = [queue = m_queue, callback = WTFMove(callback)](bool result) mutable {
-        queue->dispatch([result, callback = WTFMove(callback)]() mutable {
-            callback(result);
+    auto inQueueCallback = [queue = m_queue, callback = WTFMove(callback)](bool result, std::optional<NotificationPayload>&& resultPayload) mutable {
+        queue->dispatch([result, resultPayload = crossThreadCopy(WTFMove(resultPayload)), callback = WTFMove(callback)]() mutable {
+            callback(result, WTFMove(resultPayload));
         });
     };
 
-    callOnMainRunLoop([identifier, data = WTFMove(data), callback = WTFMove(inQueueCallback)]() mutable {
-        SWContextManager::singleton().firePushEvent(identifier, WTFMove(data), WTFMove(callback));
+    callOnMainRunLoop([identifier, data = WTFMove(data), proposedPayload = crossThreadCopy(WTFMove(proposedPayload)), callback = WTFMove(inQueueCallback)]() mutable {
+        SWContextManager::singleton().firePushEvent(identifier, WTFMove(data), WTFMove(proposedPayload), WTFMove(callback));
     });
 }
 
@@ -394,6 +392,41 @@ void WebSWContextManagerConnection::navigationPreloadFailed(SWServerConnectionId
 
     if (auto serviceWorkerThreadProxy = SWContextManager::singleton().serviceWorkerThreadProxyFromBackgroundThread(serviceWorkerIdentifier))
         serviceWorkerThreadProxy->navigationPreloadFailed(serverConnectionIdentifier, fetchIdentifier, WTFMove(error));
+}
+
+void WebSWContextManagerConnection::updateRegistrationState(WebCore::ServiceWorkerRegistrationIdentifier identifier, WebCore::ServiceWorkerRegistrationState state, const std::optional<WebCore::ServiceWorkerData>& serviceWorkerData)
+{
+    assertIsCurrent(m_queue.get());
+
+    SWContextManager::singleton().updateRegistrationState(identifier, state, serviceWorkerData);
+}
+
+void WebSWContextManagerConnection::updateWorkerState(WebCore::ServiceWorkerIdentifier identifier, WebCore::ServiceWorkerState state)
+{
+    assertIsCurrent(m_queue.get());
+
+    SWContextManager::singleton().updateWorkerState(identifier, state);
+}
+
+void WebSWContextManagerConnection::fireUpdateFoundEvent(WebCore::ServiceWorkerRegistrationIdentifier identifier)
+{
+    assertIsCurrent(m_queue.get());
+
+    SWContextManager::singleton().fireUpdateFoundEvent(identifier);
+}
+
+void WebSWContextManagerConnection::setRegistrationLastUpdateTime(WebCore::ServiceWorkerRegistrationIdentifier identifier, WallTime time)
+{
+    assertIsCurrent(m_queue.get());
+
+    SWContextManager::singleton().setRegistrationLastUpdateTime(identifier, time);
+}
+
+void WebSWContextManagerConnection::setRegistrationUpdateViaCache(WebCore::ServiceWorkerRegistrationIdentifier identifier, WebCore::ServiceWorkerUpdateViaCache value)
+{
+    assertIsCurrent(m_queue.get());
+
+    SWContextManager::singleton().setRegistrationUpdateViaCache(identifier, value);
 }
 
 void WebSWContextManagerConnection::postMessageToServiceWorkerClient(const ScriptExecutionContextIdentifier& destinationIdentifier, const MessageWithMessagePorts& message, ServiceWorkerIdentifier sourceIdentifier, const String& sourceOrigin)

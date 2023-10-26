@@ -328,7 +328,7 @@ class WebEvent;
 class WebFoundTextRangeController;
 class WebHistoryItemClient;
 class PlaybackSessionManager;
-class VideoFullscreenManager;
+class VideoPresentationManager;
 class WebBackForwardListItem;
 class WebFrame;
 class WebFullScreenManager;
@@ -443,10 +443,13 @@ public:
 
     void centerSelectionInVisibleArea();
 
-#if ENABLE(PDFKIT_PLUGIN)
+#if ENABLE(PDF_HUD)
     void createPDFHUD(PDFPlugin&, const WebCore::IntRect&);
     void updatePDFHUDLocation(PDFPlugin&, const WebCore::IntRect&);
     void removePDFHUD(PDFPlugin&);
+#endif
+
+#if ENABLE(PDF_PLUGIN) && PLATFORM(MAC)
     void zoomPDFIn(PDFPluginIdentifier);
     void zoomPDFOut(PDFPluginIdentifier);
     void savePDF(PDFPluginIdentifier, CompletionHandler<void(const String&, const URL&, const IPC::DataReference&)>&&);
@@ -489,7 +492,7 @@ public:
 #endif
 
 #if ENABLE(VIDEO_PRESENTATION_MODE)
-    VideoFullscreenManager& videoFullscreenManager();
+    VideoPresentationManager& videoPresentationManager();
 #endif
 
 #if PLATFORM(IOS_FAMILY)
@@ -521,6 +524,7 @@ public:
     void didReplaceMultipartContent(const WebFrame&);
     void didFinishDocumentLoad(WebFrame&);
     void didFinishLoad(WebFrame&);
+    void didSameDocumentNavigationForFrame(WebFrame&);
     void show();
     String userAgent(const URL&) const;
     String platformUserAgent(const URL&) const;
@@ -608,7 +612,7 @@ public:
 
     void createRemoteSubframe(WebCore::FrameIdentifier parentID, WebCore::FrameIdentifier newChildID);
 
-    void getFrameInfo(WebCore::FrameIdentifier, CompletionHandler<void(FrameInfoData&&)>&&);
+    void getFrameInfo(WebCore::FrameIdentifier, CompletionHandler<void(std::optional<FrameInfoData>&&)>&&);
     void getFrameTree(CompletionHandler<void(FrameTreeNodeData&&)>&&);
     void didCommitLoadInAnotherProcess(WebCore::FrameIdentifier, std::optional<WebCore::LayerHostingContextIdentifier>);
     void didFinishLoadInAnotherProcess(WebCore::FrameIdentifier);
@@ -698,7 +702,7 @@ public:
     void enterAcceleratedCompositingMode(WebCore::Frame&, WebCore::GraphicsLayer*);
     void exitAcceleratedCompositingMode(WebCore::Frame&);
 
-#if ENABLE(PDFKIT_PLUGIN)
+#if ENABLE(PDF_PLUGIN)
     void addPluginView(PluginView&);
     void removePluginView(PluginView&);
 #endif
@@ -769,6 +773,9 @@ public:
     WebCore::IntRect rootViewToScreen(const WebCore::IntRect&);
     WebCore::IntPoint accessibilityScreenToRootView(const WebCore::IntPoint&);
     WebCore::IntRect rootViewToAccessibilityScreen(const WebCore::IntRect&);
+#if PLATFORM(IOS_FAMILY)
+    void relayAccessibilityNotification(const String&, const RetainPtr<NSData>&);
+#endif
 
     RefPtr<WebImage> scaledSnapshotWithOptions(const WebCore::IntRect&, double additionalScaleFactor, SnapshotOptions);
 
@@ -868,7 +875,6 @@ public:
     void updateSelectionWithExtentPoint(const WebCore::IntPoint&, bool isInteractingWithFocusedElement, RespectSelectionAnchor, CompletionHandler<void(bool)>&&);
     void updateSelectionWithExtentPointAndBoundary(const WebCore::IntPoint&, WebCore::TextGranularity, bool isInteractingWithFocusedElement, CompletionHandler<void(bool)>&&);
 
-    void requestDictationContext(CompletionHandler<void(const String&, const String&, const String&)>&&);
 #if ENABLE(REVEAL)
     RetainPtr<RVItem> revealItemForCurrentSelection();
     void requestRVItemInCurrentSelectedRange(CompletionHandler<void(const WebKit::RevealItem&)>&&);
@@ -1185,8 +1191,6 @@ public:
     void gestureEvent(const WebGestureEvent&, CompletionHandler<void(std::optional<WebEventType>, bool)>&&);
 #endif
 
-    void updateVisibilityState(bool isInitialState = false);
-
 #if PLATFORM(IOS_FAMILY)
     void setDeviceOrientation(WebCore::IntDegrees);
     void dynamicViewportSizeUpdate(const DynamicViewportSizeUpdate&);
@@ -1366,7 +1370,7 @@ public:
 
     std::optional<double> cpuLimit() const { return m_cpuLimit; }
 
-#if ENABLE(PDFKIT_PLUGIN)
+#if ENABLE(PDF_PLUGIN)
     static PluginView* pluginViewForFrame(WebCore::LocalFrame*);
     PluginView* mainFramePlugIn() const;
 #endif
@@ -1559,6 +1563,7 @@ public:
 
 #if ENABLE(GPU_PROCESS)
     void gpuProcessConnectionDidBecomeAvailable(GPUProcessConnection&);
+    void gpuProcessConnectionWasDestroyed();
     RemoteRenderingBackendProxy& ensureRemoteRenderingBackendProxy();
 #endif
 
@@ -1576,7 +1581,7 @@ public:
     void dispatchWheelEventWithoutScrolling(WebCore::FrameIdentifier, const WebWheelEvent&, CompletionHandler<void(bool)>&&);
 #endif
 
-#if ENABLE(PDFKIT_PLUGIN)
+#if ENABLE(PDF_PLUGIN)
     bool shouldUsePDFPlugin(const String& contentType, StringView path) const;
 #endif
 
@@ -1652,6 +1657,10 @@ public:
 
     const Logger& logger() const;
     const void* logIdentifier() const;
+
+#if PLATFORM(GTK) && USE(GBM)
+    const Vector<DMABufRendererBufferFormat>& preferredBufferFormats() const { return m_preferredBufferFormats; }
+#endif
 
 private:
     WebPage(WebCore::PageIdentifier, WebPageCreationParameters&&);
@@ -1858,6 +1867,7 @@ private:
     void getSelectionAsWebArchiveData(CompletionHandler<void(const std::optional<IPC::SharedBufferReference>&)>&&);
     void getSourceForFrame(WebCore::FrameIdentifier, CompletionHandler<void(const String&)>&&);
     void getWebArchiveOfFrame(WebCore::FrameIdentifier, CompletionHandler<void(const std::optional<IPC::SharedBufferReference>&)>&&);
+    void getWebArchiveOfFrameWithFileName(WebCore::FrameIdentifier, const String& fileName, CompletionHandler<void(const std::optional<IPC::SharedBufferReference>&)>&&);
     void runJavaScript(WebFrame*, WebCore::RunJavaScriptParameters&&, ContentWorldIdentifier, CompletionHandler<void(const IPC::DataReference&, const std::optional<WebCore::ExceptionDetails>&)>&&);
     void runJavaScriptInFrameInScriptWorld(WebCore::RunJavaScriptParameters&&, std::optional<WebCore::FrameIdentifier>, const std::pair<ContentWorldIdentifier, String>& worldData, CompletionHandler<void(const IPC::DataReference&, const std::optional<WebCore::ExceptionDetails>&)>&&);
     void getAccessibilityTreeData(CompletionHandler<void(const std::optional<IPC::SharedBufferReference>&)>&&);
@@ -1891,7 +1901,7 @@ private:
     void performDictionaryLookupOfCurrentSelection();
     void performDictionaryLookupForRange(WebCore::LocalFrame&, const WebCore::SimpleRange&, NSDictionary *options, WebCore::TextIndicatorPresentationTransition);
     WebCore::DictionaryPopupInfo dictionaryPopupInfoForRange(WebCore::LocalFrame&, const WebCore::SimpleRange&, NSDictionary *options, WebCore::TextIndicatorPresentationTransition);
-#if ENABLE(PDFKIT_PLUGIN)
+#if ENABLE(LEGACY_PDFKIT_PLUGIN)
     WebCore::DictionaryPopupInfo dictionaryPopupInfoForSelectionInPDFPlugin(PDFSelection *, PluginView&, NSDictionary *options, WebCore::TextIndicatorPresentationTransition);
 #endif
 
@@ -2005,7 +2015,7 @@ private:
 
     static bool platformCanHandleRequest(const WebCore::ResourceRequest&);
 
-#if ENABLE(PDFKIT_PLUGIN)
+#if ENABLE(PDF_PLUGIN)
     static PluginView* focusedPluginViewForFrame(WebCore::LocalFrame&);
 #endif
 
@@ -2122,6 +2132,8 @@ private:
 
     void dispatchLoadEventToFrameOwnerElement(WebCore::FrameIdentifier);
 
+    void frameWasFocusedInAnotherProcess(WebCore::FrameIdentifier);
+
     WebCore::PageIdentifier m_identifier;
 
     std::unique_ptr<WebCore::Page> m_page;
@@ -2135,13 +2147,7 @@ private:
     std::unique_ptr<DrawingArea> m_drawingArea;
     DrawingAreaType m_drawingAreaType;
 
-#if ENABLE(PDFKIT_PLUGIN)
-    WeakHashSet<PluginView> m_pluginViews;
-#endif
-
     HashMap<TextCheckerRequestID, RefPtr<WebCore::TextCheckingRequest>> m_pendingTextCheckingRequestMap;
-
-    bool m_useFixedLayout { false };
 
     WebCore::FloatSize m_defaultUnobscuredSize;
     WebCore::FloatSize m_minimumUnobscuredSize;
@@ -2149,11 +2155,17 @@ private:
 
     WebCore::Color m_underlayColor;
 
-#if ENABLE(PDFKIT_PLUGIN)
+#if ENABLE(PDF_PLUGIN)
+    WeakHashSet<PluginView> m_pluginViews;
+#endif
+#if ENABLE(PDF_HUD)
+    // FIXME: Needs to be PDFPluginBase.
     HashMap<PDFPluginIdentifier, WeakPtr<PDFPlugin>> m_pdfPlugInsWithHUD;
 #endif
 
     WTF::Function<void()> m_selectionChangedHandler;
+
+    bool m_useFixedLayout { false };
     bool m_isInRedo { false };
     bool m_isClosed { false };
     bool m_tabToLinks { false };
@@ -2254,7 +2266,7 @@ private:
 
 #if ENABLE(VIDEO_PRESENTATION_MODE)
     RefPtr<PlaybackSessionManager> m_playbackSessionManager;
-    RefPtr<VideoFullscreenManager> m_videoFullscreenManager;
+    RefPtr<VideoPresentationManager> m_videoPresentationManager;
 #endif
 
 #if PLATFORM(IOS_FAMILY)
@@ -2523,7 +2535,7 @@ private:
 #endif
 
     HashMap<String, RefPtr<WebURLSchemeHandlerProxy>> m_schemeToURLSchemeHandlerProxyMap;
-    HashMap<WebURLSchemeHandlerIdentifier, WebURLSchemeHandlerProxy*> m_identifierToURLSchemeHandlerProxyMap;
+    HashMap<WebURLSchemeHandlerIdentifier, CheckedPtr<WebURLSchemeHandlerProxy>> m_identifierToURLSchemeHandlerProxyMap;
 
     HashMap<uint64_t, Function<void(bool granted)>> m_storageAccessResponseCallbackMap;
 
@@ -2555,6 +2567,9 @@ private:
 
 #if PLATFORM(GTK)
     WebCore::Color m_accentColor;
+#if USE(GBM)
+    Vector<DMABufRendererBufferFormat> m_preferredBufferFormats;
+#endif
 #endif
 
 #if ENABLE(APP_BOUND_DOMAINS)

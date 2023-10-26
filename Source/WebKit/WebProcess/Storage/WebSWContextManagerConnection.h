@@ -48,10 +48,13 @@ class FormDataReference;
 }
 
 namespace WebCore {
-struct FetchOptions;
 class ResourceRequest;
-struct ServiceWorkerContextData;
+
 enum class WorkerThreadMode : bool;
+
+struct FetchOptions;
+struct NotificationPayload;
+struct ServiceWorkerContextData;
 }
 
 namespace WebKit {
@@ -108,7 +111,7 @@ private:
     void postMessageToServiceWorker(WebCore::ServiceWorkerIdentifier destinationIdentifier, WebCore::MessageWithMessagePorts&&, WebCore::ServiceWorkerOrClientData&& sourceData);
     void fireInstallEvent(WebCore::ServiceWorkerIdentifier);
     void fireActivateEvent(WebCore::ServiceWorkerIdentifier);
-    void firePushEvent(WebCore::ServiceWorkerIdentifier, const std::optional<IPC::DataReference>&, CompletionHandler<void(bool)>&&);
+    void firePushEvent(WebCore::ServiceWorkerIdentifier, const std::optional<IPC::DataReference>&, std::optional<WebCore::NotificationPayload>&&, CompletionHandler<void(bool, std::optional<WebCore::NotificationPayload>&&)>&&);
     void fireNotificationEvent(WebCore::ServiceWorkerIdentifier, WebCore::NotificationData&&, WebCore::NotificationEventType, CompletionHandler<void(bool)>&&);
     void fireBackgroundFetchEvent(WebCore::ServiceWorkerIdentifier, WebCore::BackgroundFetchInformation&&, CompletionHandler<void(bool)>&&);
     void fireBackgroundFetchClickEvent(WebCore::ServiceWorkerIdentifier, WebCore::BackgroundFetchInformation&&, CompletionHandler<void(bool)>&&);
@@ -126,6 +129,12 @@ private:
     void cancelFetchDownload(WebCore::ServiceWorkerIdentifier, WebCore::FetchIdentifier);
     void navigationPreloadIsReady(WebCore::SWServerConnectionIdentifier, WebCore::ServiceWorkerIdentifier, WebCore::FetchIdentifier, WebCore::ResourceResponse&&);
     void navigationPreloadFailed(WebCore::SWServerConnectionIdentifier, WebCore::ServiceWorkerIdentifier, WebCore::FetchIdentifier, WebCore::ResourceError&&);
+
+    void updateRegistrationState(WebCore::ServiceWorkerRegistrationIdentifier, WebCore::ServiceWorkerRegistrationState, const std::optional<WebCore::ServiceWorkerData>&);
+    void updateWorkerState(WebCore::ServiceWorkerIdentifier, WebCore::ServiceWorkerState);
+    void fireUpdateFoundEvent(WebCore::ServiceWorkerRegistrationIdentifier);
+    void setRegistrationLastUpdateTime(WebCore::ServiceWorkerRegistrationIdentifier, WallTime);
+    void setRegistrationUpdateViaCache(WebCore::ServiceWorkerRegistrationIdentifier, WebCore::ServiceWorkerUpdateViaCache);
 
     Ref<IPC::Connection> m_connectionToNetworkProcess;
     WebCore::RegistrableDomain m_registrableDomain;

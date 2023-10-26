@@ -19,7 +19,7 @@
 
 #pragma once
 
-#include "RenderSVGResourceContainer.h"
+#include "LegacyRenderSVGResourceContainer.h"
 
 namespace WebCore {
 
@@ -27,7 +27,7 @@ class AffineTransform;
 class RenderObject;
 class SVGMarkerElement;
 
-class RenderSVGResourceMarker final : public RenderSVGResourceContainer {
+class RenderSVGResourceMarker final : public LegacyRenderSVGResourceContainer {
     WTF_MAKE_ISO_ALLOCATED(RenderSVGResourceMarker);
 public:
     RenderSVGResourceMarker(SVGMarkerElement&, RenderStyle&&);
@@ -35,13 +35,13 @@ public:
 
     inline SVGMarkerElement& markerElement() const;
 
-    void removeAllClientsFromCache(bool markForInvalidation = true) override;
+    void removeAllClientsFromCacheIfNeeded(bool markForInvalidation, WeakHashSet<RenderObject>* visitedRenderers) override;
     void removeClientFromCache(RenderElement&, bool markForInvalidation = true) override;
 
     void draw(PaintInfo&, const AffineTransform&);
 
     // Calculates marker boundaries, mapped to the target element's coordinate space
-    FloatRect markerBoundaries(const AffineTransform& markerTransformation) const;
+    FloatRect markerBoundaries(RepaintRectCalculation, const AffineTransform& markerTransformation) const;
 
     void applyViewportClip(PaintInfo&) override;
     void layout() override;
@@ -51,7 +51,7 @@ public:
     AffineTransform markerTransformation(const FloatPoint& origin, float angle, float strokeWidth) const;
 
     bool applyResource(RenderElement&, const RenderStyle&, GraphicsContext*&, OptionSet<RenderSVGResourceMode>) override { return false; }
-    FloatRect resourceBoundingBox(const RenderObject&) override { return FloatRect(); }
+    FloatRect resourceBoundingBox(const RenderObject&, RepaintRectCalculation) override { return FloatRect(); }
 
     FloatPoint referencePoint() const;
     std::optional<float> angle() const;
@@ -76,4 +76,4 @@ private:
 
 } // namespace WebCore
 
-SPECIALIZE_TYPE_TRAITS_RENDER_SVG_RESOURCE(RenderSVGResourceMarker, MarkerResourceType)
+SPECIALIZE_TYPE_TRAITS_LEGACY_RENDER_SVG_RESOURCE(RenderSVGResourceMarker, MarkerResourceType)

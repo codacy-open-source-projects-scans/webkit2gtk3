@@ -307,7 +307,7 @@ public:
     }
 
     size_t size() const { return m_sharedMemory->size(); }
-    SharedMemory::Handle createHandle(SharedMemory::Protection);
+    std::optional<SharedMemory::Handle> createHandle(SharedMemory::Protection);
 
     JSObjectRef createJSWrapper(JSContextRef);
     static JSSharedMemory* toWrapped(JSContextRef, JSValueRef);
@@ -411,6 +411,12 @@ private:
     Vector<UniqueRef<JSMessageListener>> m_messageListeners;
     IPCTesterReceiver m_testerProxy;
 };
+
+static JSValueRef createError(JSContextRef context, const String& message)
+{
+    JSC::JSLockHolder lock(toJS(context)->vm());
+    return toRef(JSC::createError(toJS(context), message));
+}
 
 static JSValueRef createTypeError(JSContextRef context, const String& message)
 {
@@ -1351,11 +1357,9 @@ JSValueRef JSIPCSemaphore::waitFor(JSContextRef context, JSObjectRef, JSObjectRe
     return JSValueMakeBoolean(context, result);
 }
 
-SharedMemory::Handle JSSharedMemory::createHandle(SharedMemory::Protection protection)
+std::optional<SharedMemory::Handle> JSSharedMemory::createHandle(SharedMemory::Protection protection)
 {
-    if (auto handle = m_sharedMemory->createHandle(protection))
-        return WTFMove(*handle);
-    return { };
+    return m_sharedMemory->createHandle(protection);
 }
 
 JSObjectRef JSSharedMemory::createJSWrapper(JSContextRef context)
@@ -2002,8 +2006,10 @@ static bool encodeSharedMemory(IPC::Encoder& encoder, JSC::JSGlobalObject* globa
         protection = SharedMemory::Protection::ReadOnly;
     else if (!equalLettersIgnoringASCIICase(protectionValue, "readwrite"_s))
         return false;
-
-    encoder << jsSharedMemory->createHandle(protection);
+    auto handle = jsSharedMemory->createHandle(protection);
+    if (!handle)
+        return false;
+    encoder << WTFMove(*handle);
     return true;
 }
 
@@ -2475,15 +2481,19 @@ JSValueRef JSIPC::createStreamClientConnection(JSContextRef context, JSObjectRef
         return JSValueMakeUndefined(context);
     }
     auto connectionPair = IPC::StreamClientConnection::create(*bufferSizeLog2);
+    if (!connectionPair) {
+        *exception = createError(context, "Failed to create the connection"_s);
+        return JSValueMakeUndefined(context);
+    }
     auto& vm = globalObject->vm();
     auto scope = DECLARE_CATCH_SCOPE(vm);
     JSC::JSObject* connectionPairObject = JSC::constructEmptyArray(globalObject, nullptr);
     RETURN_IF_EXCEPTION(scope, JSValueMakeUndefined(context));
     int index = 0;
-    auto jsValue = toJS(globalObject, JSIPCStreamClientConnection::create(*jsIPC, WTFMove(connectionPair.streamConnection))->createJSWrapper(context));
+    auto jsValue = toJS(globalObject, JSIPCStreamClientConnection::create(*jsIPC, WTFMove(connectionPair->streamConnection))->createJSWrapper(context));
     connectionPairObject->putDirectIndex(globalObject, index++, jsValue);
     RETURN_IF_EXCEPTION(scope, JSValueMakeUndefined(context));
-    jsValue = toJS(globalObject, JSIPCStreamServerConnectionHandle::create(WTFMove(connectionPair.connectionHandle))->createJSWrapper(context));
+    jsValue = toJS(globalObject, JSIPCStreamServerConnectionHandle::create(WTFMove(connectionPair->connectionHandle))->createJSWrapper(context));
     connectionPairObject->putDirectIndex(globalObject, index++, jsValue);
     RETURN_IF_EXCEPTION(scope, JSValueMakeUndefined(context));
     return toRef(vm, connectionPairObject);
@@ -2599,10 +2609,9 @@ JSValueRef JSIPC::serializedEnumInfo(JSContextRef context, JSObjectRef thisObjec
         if (*exception)
             return JSValueMakeUndefined(context);
 
-        Vector<JSValueRef> validValuesArray;
-        validValuesArray.reserveInitialCapacity(enumeration.validValues.size());
-        for (auto& validValue : enumeration.validValues)
-            validValuesArray.uncheckedAppend(JSValueMakeNumber(context, validValue));
+        auto validValuesArray = WTF::map(enumeration.validValues, [&](auto& validValue) -> JSValueRef {
+            return JSValueMakeNumber(context, validValue);
+        });
         JSObjectRef jsValidValues = JSObjectMakeArray(context, enumeration.validValues.size(), validValuesArray.data(), exception);
         if (*exception)
             return JSValueMakeUndefined(context);
@@ -2975,13 +2984,7 @@ template<> JSC::JSValue jsValueForDecodedArgumentValue(JSC::JSGlobalObject* glob
     using SharedMemory = WebKit::SharedMemory;
     using Protection = WebKit::SharedMemory::Protection;
 
-    auto& vm = globalObject->vm();
-    auto scope = DECLARE_THROW_SCOPE(vm);
-    auto* object = JSC::constructEmptyObject(globalObject, globalObject->objectPrototype());
-    RETURN_IF_EXCEPTION(scope, JSC::JSValue());
-    object->putDirect(vm, JSC::Identifier::fromString(vm, "type"_s), JSC::jsNontrivialString(vm, "SharedMemory"_s));
-    RETURN_IF_EXCEPTION(scope, JSC::JSValue());
-
+    auto dataSize = value.size();
     auto protection = Protection::ReadWrite;
     auto sharedMemory = SharedMemory::map(WTFMove(value), protection);
     if (!sharedMemory) {
@@ -2991,11 +2994,18 @@ template<> JSC::JSValue jsValueForDecodedArgumentValue(JSC::JSGlobalObject* glob
             return JSC::JSValue();
     }
 
+    auto& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+    auto* object = JSC::constructEmptyObject(globalObject, globalObject->objectPrototype());
+    RETURN_IF_EXCEPTION(scope, JSC::JSValue());
+    object->putDirect(vm, JSC::Identifier::fromString(vm, "type"_s), JSC::jsNontrivialString(vm, "SharedMemory"_s));
+    RETURN_IF_EXCEPTION(scope, JSC::JSValue());
+
     auto jsValue = toJS(globalObject, WebKit::IPCTestingAPI::JSSharedMemory::create(sharedMemory.releaseNonNull())->createJSWrapper(toRef(globalObject)));
     object->putDirect(vm, JSC::Identifier::fromString(vm, "value"_s), jsValue);
     RETURN_IF_EXCEPTION(scope, JSC::JSValue());
 
-    object->putDirect(vm, JSC::Identifier::fromString(vm, "dataSize"_s), JSC::JSValue(value.size()));
+    object->putDirect(vm, JSC::Identifier::fromString(vm, "dataSize"_s), JSC::JSValue(dataSize));
     RETURN_IF_EXCEPTION(scope, JSC::JSValue());
 
     object->putDirect(vm, JSC::Identifier::fromString(vm, "protection"_s), JSC::jsNontrivialString(vm, protection == Protection::ReadWrite ? "ReadWrite"_s : "ReadOnly"_s));

@@ -41,7 +41,7 @@ using namespace WebCore;
 
 static inline rtc::SocketAddress prepareSocketAddress(const rtc::SocketAddress& address, bool disableNonLocalhostConnections)
 {
-    auto result = RTCNetwork::isolatedCopy(address);
+    auto result = RTC::Network::SocketAddress::isolatedCopy(address);
     if (disableNonLocalhostConnections)
         result.SetIP("127.0.0.1");
     return result;
@@ -142,7 +142,7 @@ void LibWebRTCSocketFactory::removeSocket(LibWebRTCSocket& socket)
 void LibWebRTCSocketFactory::forSocketInGroup(ScriptExecutionContextIdentifier contextIdentifier, const Function<void(LibWebRTCSocket&)>& callback)
 {
     ASSERT(!WTF::isMainRunLoop());
-    for (auto* socket : m_sockets.values()) {
+    for (auto& socket : m_sockets.values()) {
         if (socket->contextIdentifier() == contextIdentifier)
             callback(*socket);
     }

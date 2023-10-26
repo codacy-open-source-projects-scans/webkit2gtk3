@@ -27,9 +27,9 @@
 #include "CSSValueKeywords.h"
 #include "DOMPoint.h"
 #include "FrameSelection.h"
+#include "LegacyRenderSVGResource.h"
 #include "LocalFrame.h"
 #include "RenderObject.h"
-#include "RenderSVGResource.h"
 #include "RenderSVGText.h"
 #include "SVGElementTypeHelpers.h"
 #include "SVGNames.h"
@@ -56,13 +56,13 @@ SVGTextContentElement::SVGTextContentElement(const QualifiedName& tagName, Docum
 
 unsigned SVGTextContentElement::getNumberOfChars()
 {
-    document().updateLayoutIgnorePendingStylesheets();
+    document().updateLayoutIgnorePendingStylesheets({ LayoutOptions::ContentVisibilityForceLayout }, this);
     return SVGTextQuery(renderer()).numberOfCharacters();
 }
 
 float SVGTextContentElement::getComputedTextLength()
 {
-    document().updateLayoutIgnorePendingStylesheets();
+    document().updateLayoutIgnorePendingStylesheets({ LayoutOptions::ContentVisibilityForceLayout }, this);
     return SVGTextQuery(renderer()).textLength();
 }
 
@@ -110,7 +110,7 @@ ExceptionOr<float> SVGTextContentElement::getRotationOfChar(unsigned charnum)
 
 int SVGTextContentElement::getCharNumAtPosition(DOMPointInit&& pointInit)
 {
-    document().updateLayoutIgnorePendingStylesheets();
+    document().updateLayoutIgnorePendingStylesheets({ LayoutOptions::ContentVisibilityForceLayout }, this);
     FloatPoint transformPoint {static_cast<float>(pointInit.x), static_cast<float>(pointInit.y)};
     return SVGTextQuery(renderer()).characterNumberAtPosition(transformPoint);
 }
@@ -156,7 +156,7 @@ void SVGTextContentElement::collectPresentationalHintsForAttribute(const Qualifi
             addPropertyToPresentationalHintStyle(style, CSSPropertyWhiteSpaceCollapse, CSSValuePreserve);
         else
             addPropertyToPresentationalHintStyle(style, CSSPropertyWhiteSpaceCollapse, CSSValueCollapse);
-        addPropertyToPresentationalHintStyle(style, CSSPropertyTextWrap, CSSValueNowrap);
+        addPropertyToPresentationalHintStyle(style, CSSPropertyTextWrapMode, CSSValueNowrap);
         return;
     }
 

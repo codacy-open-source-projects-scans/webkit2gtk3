@@ -114,6 +114,7 @@ public:
     };
 
     enum ResultCondition {
+        Carry = Assembler::ConditionCS,
         Overflow = Assembler::ConditionVS,
         Signed = Assembler::ConditionMI,
         PositiveOrZero = Assembler::ConditionPL,
@@ -904,6 +905,8 @@ public:
 
     void lshift64(RegisterID src, TrustedImm32 imm, RegisterID dest)
     {
+        if (UNLIKELY(!imm.m_value))
+            return move(src, dest);
         m_assembler.lsl<64>(dest, src, imm.m_value & 0x3f);
     }
 
@@ -1229,6 +1232,8 @@ public:
 
     void rotateRight64(RegisterID src, TrustedImm32 imm, RegisterID dest)
     {
+        if (UNLIKELY(!imm.m_value))
+            return move(src, dest);
         m_assembler.ror<64>(dest, src, imm.m_value & 63);
     }
 
@@ -1269,6 +1274,8 @@ public:
     
     void rshift64(RegisterID src, TrustedImm32 imm, RegisterID dest)
     {
+        if (UNLIKELY(!imm.m_value))
+            return move(src, dest);
         m_assembler.asr<64>(dest, src, imm.m_value & 0x3f);
     }
     
@@ -1431,6 +1438,8 @@ public:
     
     void urshift64(RegisterID src, TrustedImm32 imm, RegisterID dest)
     {
+        if (UNLIKELY(!imm.m_value))
+            return move(src, dest);
         m_assembler.lsr<64>(dest, src, imm.m_value & 0x3f);
     }
 

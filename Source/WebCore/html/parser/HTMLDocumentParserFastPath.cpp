@@ -57,8 +57,10 @@
 #include "QualifiedName.h"
 #include "Settings.h"
 #include <span>
+#include <wtf/CheckedRef.h>
 #include <wtf/Vector.h>
 #include <wtf/text/AtomString.h>
+#include <wtf/text/FastCharacterComparison.h>
 #include <wtf/text/StringParsingBuffer.h>
 
 namespace WebCore {
@@ -227,8 +229,8 @@ public:
     HTMLFastPathResult parseResult() const { return m_parseResult; }
 
 private:
-    Document& m_document;
-    ContainerNode& m_destinationParent;
+    CheckedRef<Document> m_document;
+    CheckedRef<ContainerNode> m_destinationParent;
 
     StringParsingBuffer<CharacterType> m_parsingBuffer;
 
@@ -462,7 +464,7 @@ private:
 
     template<typename ParentTag> void parseCompleteInput()
     {
-        parseChildren<ParentTag>(m_destinationParent);
+        parseChildren<ParentTag>(m_destinationParent.get());
         if (m_parsingBuffer.hasCharactersRemaining())
             didFail(HTMLFastPathResult::FailedDidntReachEndOfInput);
     }
@@ -576,13 +578,13 @@ private:
 
         if (attributeName.empty())
             return nullQName();
-        if (attributeName.size() > 2 && attributeName[0] == 'o' && attributeName[1] == 'n') {
+        if (attributeName.size() > 2 && compareCharacters(attributeName.data(), 'o', 'n')) {
             // These attributes likely contain script that may be executed at random
             // points, which could cause problems if parsing via the fast path
             // fails. For example, an image's onload event.
             return nullQName();
         }
-        if (attributeName.size() == 2 && attributeName[0] == 'i' && attributeName[1] == 's')
+        if (attributeName.size() == 2 && compareCharacters(attributeName.data(), 'i', 's'))
             return nullQName();
         return HTMLNameCache::makeAttributeQualifiedName(attributeName);
     }
@@ -685,7 +687,7 @@ private:
                 return;
 
             if (!text.isNull())
-                parent.parserAppendChild(Text::create(m_document, WTFMove(text)));
+                parent.parserAppendChild(Text::create(m_document.get(), WTFMove(text)));
 
             if (m_parsingBuffer.atEnd())
                 return;
@@ -827,9 +829,9 @@ private:
     template<typename Tag> Ref<typename Tag::HTMLElementClass> parseElementAfterTagName()
     {
         if constexpr (Tag::isVoid)
-            return parseVoidElement(Tag::create(m_document));
+            return parseVoidElement(Tag::create(m_document.get()));
         else
-            return parseContainerElement<Tag>(Tag::create(m_document));
+            return parseContainerElement<Tag>(Tag::create(m_document.get()));
     }
 
     template<typename Tag> Ref<typename Tag::HTMLElementClass> parseContainerElement(Ref<typename Tag::HTMLElementClass>&& element)
@@ -893,7 +895,7 @@ static bool tryFastParsingHTMLFragmentImpl(const std::span<const CharacterType>&
     return parser.parse(contextElement);
 }
 
-bool tryFastParsingHTMLFragment(const String& source, Document& document, ContainerNode& destinationParent, Element& contextElement, OptionSet<ParserContentPolicy> policy)
+bool tryFastParsingHTMLFragment(StringView source, Document& document, ContainerNode& destinationParent, Element& contextElement, OptionSet<ParserContentPolicy> policy)
 {
     if (!canUseFastPath(contextElement, policy))
         return false;

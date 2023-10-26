@@ -172,7 +172,7 @@ public:
     ALWAYS_INLINE bool isMetaProperty(ExpressionType type) { return type & MetaPropertyBit; }
     ALWAYS_INLINE bool isNewTarget(ExpressionType type) { return type == NewTargetExpr; }
     ALWAYS_INLINE bool isImportMeta(ExpressionType type) { return type == ImportMetaExpr; }
-    ExpressionType createResolve(const JSTokenLocation&, const Identifier&, int, int) { return ResolveExpr; }
+    ExpressionType createResolve(const JSTokenLocation&, const Identifier&, int, int, const bool = true) { return ResolveExpr; }
     ExpressionType createPrivateIdentifierNode(const JSTokenLocation&, const Identifier&) { return PrivateIdentifier; }
     ExpressionType createObjectLiteral(const JSTokenLocation&) { return ObjectLiteralExpr; }
     ExpressionType createObjectLiteral(const JSTokenLocation&, int) { return ObjectLiteralExpr; }
@@ -264,7 +264,7 @@ public:
     int createExprStatement(const JSTokenLocation&, int, int, int) { return StatementResult; }
     int createIfStatement(const JSTokenLocation&, int, int, int, int) { return StatementResult; }
     int createIfStatement(const JSTokenLocation&, int, int, int, int, int) { return StatementResult; }
-    int createForLoop(const JSTokenLocation&, int, int, int, int, int, int, VariableEnvironment&&) { return StatementResult; }
+    int createForLoop(const JSTokenLocation&, int, int, int, int, int, int, VariableEnvironment&&, bool) { return StatementResult; }
     int createForInLoop(const JSTokenLocation&, int, int, int, const JSTokenLocation&, int, int, int, int, int, VariableEnvironment&&) { return StatementResult; }
     int createForOfLoop(bool, const JSTokenLocation&, int, int, int, const JSTokenLocation&, int, int, int, int, int, VariableEnvironment&&) { return StatementResult; }
     int createEmptyStatement(const JSTokenLocation&) { return StatementResult; }
@@ -447,6 +447,8 @@ public:
     JSTextPosition breakpointLocation(int) { return { }; }
 
     void propagateArgumentsUse() { }
+
+    bool hasArgumentsFeature() const { return true; }
 
 private:
     VM& m_vm;

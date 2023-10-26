@@ -39,7 +39,7 @@
 #import "ScrollingTreeScrollingNodeDelegateIOS.h"
 #import "TapHandlingResult.h"
 #import "UIKitUtilities.h"
-#import "VideoFullscreenManagerProxy.h"
+#import "VideoPresentationManagerProxy.h"
 #import "ViewGestureController.h"
 #import "VisibleContentRectUpdateInfo.h"
 #import "WKBackForwardListItemInternal.h"
@@ -226,10 +226,10 @@ static WebCore::IntDegrees deviceOrientationForUIInterfaceOrientation(UIInterfac
 - (BOOL)_isShowingVideoPictureInPicture
 {
 #if ENABLE(VIDEO_PRESENTATION_MODE)
-    if (!_page || !_page->videoFullscreenManager())
+    if (!_page || !_page->videoPresentationManager())
         return false;
 
-    return _page->videoFullscreenManager()->hasMode(WebCore::HTMLMediaElementEnums::VideoFullscreenModePictureInPicture);
+    return _page->videoPresentationManager()->hasMode(WebCore::HTMLMediaElementEnums::VideoFullscreenModePictureInPicture);
 #else
     return false;
 #endif
@@ -238,10 +238,10 @@ static WebCore::IntDegrees deviceOrientationForUIInterfaceOrientation(UIInterfac
 - (BOOL)_mayAutomaticallyShowVideoPictureInPicture
 {
 #if ENABLE(VIDEO_PRESENTATION_MODE)
-    if (!_page || !_page->videoFullscreenManager())
+    if (!_page || !_page->videoPresentationManager())
         return false;
 
-    return _page->videoFullscreenManager()->mayAutomaticallyShowVideoPictureInPicture();
+    return _page->videoPresentationManager()->mayAutomaticallyShowVideoPictureInPicture();
 #else
     return false;
 #endif
@@ -729,7 +729,7 @@ static WebCore::Color scrollViewBackgroundColor(WKWebView *webView, AllowPageBac
 
 - (UIEdgeInsets)_contentInsetsFromSystemMinimumLayoutMargins
 {
-    if (auto controller = [UIViewController _viewControllerForFullScreenPresentationFromView:self]) {
+    if (auto controller = self._wk_viewControllerForFullScreenPresentation) {
         auto margins = controller.systemMinimumLayoutMargins;
         auto insets = UIEdgeInsetsMake(margins.top, margins.leading, margins.bottom, margins.trailing);
         if (_page && _page->userInterfaceLayoutDirection() == WebCore::UserInterfaceLayoutDirection::RTL)
@@ -859,7 +859,7 @@ static WebCore::Color scrollViewBackgroundColor(WKWebView *webView, AllowPageBac
     _perProcessState.needsResetViewStateAfterCommitLoadForMainFrame = YES;
 
     if (![self _scrollViewIsRubberBandingForRefreshControl])
-        [_scrollView _stopScrollingAndZoomingAnimations];
+        [_scrollView _wk_stopScrollingAndZooming];
 
 #if HAVE(UIFINDINTERACTION)
     if (_findInteractionEnabled) {
@@ -978,8 +978,7 @@ static void changeContentOffsetBoundedInValidRange(UIScrollView *scrollView, Web
     // FIXME: <rdar://99001670> Get the default list of allowed touch types from UIKit instead of caching the returned value.
     [_scrollView panGestureRecognizer].allowedTouchTypes = scrollingEnabled ? _scrollViewDefaultAllowedTouchTypes.get() : @[ ];
     [_scrollView _setScrollEnabledInternal:YES];
-
-    if (!layerTreeTransaction.scaleWasSetByUIProcess() && ![_scrollView isZooming] && ![_scrollView isZoomBouncing] && ![_scrollView _isAnimatingZoom] && !WebKit::scalesAreEssentiallyEqual([_scrollView zoomScale], layerTreeTransaction.pageScaleFactor())) {
+    if (!layerTreeTransaction.scaleWasSetByUIProcess() && ![_scrollView isZooming] && ![_scrollView isZoomBouncing] && ![_scrollView _wk_isZoomAnimating] && !WebKit::scalesAreEssentiallyEqual([_scrollView zoomScale], layerTreeTransaction.pageScaleFactor())) {
         LOG_WITH_STREAM(VisibleRects, stream << " updating scroll view with pageScaleFactor " << layerTreeTransaction.pageScaleFactor());
 
         // When web-process-originated scale changes occur, pin the
@@ -1357,9 +1356,7 @@ static WebCore::FloatPoint constrainContentOffset(WebCore::FloatPoint contentOff
 
     CGPoint contentOffsetInScrollViewCoordinates = [self _contentOffsetAdjustedForObscuredInset:scaledOffset];
     contentOffsetInScrollViewCoordinates = contentOffsetBoundedInValidRange(_scrollView.get(), contentOffsetInScrollViewCoordinates);
-
-    [_scrollView _stopScrollingAndZoomingAnimations];
-
+    [_scrollView _wk_stopScrollingAndZooming];
     CGPoint scrollViewContentOffset = [_scrollView contentOffset];
 
     if (!CGPointEqualToPoint(contentOffsetInScrollViewCoordinates, scrollViewContentOffset)) {
@@ -1422,6 +1419,10 @@ static WebCore::FloatPoint constrainContentOffset(WebCore::FloatPoint contentOff
 
     auto scrollViewInsets = [_scrollView adjustedContentInset];
     WebCore::FloatPoint minimumContentOffset(-scrollViewInsets.left, -scrollViewInsets.top);
+    if (_haveSetObscuredInsets) {
+        minimumContentOffset.move(_obscuredInsets.left, _obscuredInsets.top);
+        minimumContentOffset = minimumContentOffset.constrainedBetween(minimumContentOffset, WebCore::FloatPoint());
+    }
 
     // Center the target rect in the scroll view.
     // If the target doesn't fit in the scroll view, center on the gesture location instead.
@@ -2038,6 +2039,9 @@ static WebCore::FloatPoint constrainContentOffset(WebCore::FloatPoint contentOff
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView
 {
+    if (scrollView == _scrollView)
+        [_scrollView updateInteractiveScrollVelocity];
+
     if (![self usesStandardContentView] && [_customContentView respondsToSelector:@selector(web_scrollViewDidScroll:)])
         [_customContentView web_scrollViewDidScroll:(UIScrollView *)scrollView];
 
@@ -2361,6 +2365,11 @@ static WebCore::FloatPoint constrainContentOffset(WebCore::FloatPoint contentOff
     return [self convertRect:unobscuredRect toView:self._currentContentView];
 }
 
+- (WKVelocityTrackingScrollView *)_scrollViewInternal
+{
+    return _scrollView.get();
+}
+
 // Ideally UIScrollView would expose this for us: <rdar://problem/21394567>.
 - (BOOL)_scrollViewIsRubberBanding:(UIScrollView *)scrollView
 {
@@ -2410,8 +2419,7 @@ static WebCore::FloatPoint constrainContentOffset(WebCore::FloatPoint contentOff
 
     if (scrollView.isDragging || scrollView.isZooming)
         stabilityFlags.add(WebKit::ViewStabilityFlag::ScrollViewInteracting);
-
-    if (scrollView.isDecelerating || scrollView._isAnimatingZoom || scrollView._isScrollingToTop || scrollView.isZoomBouncing)
+    if (scrollView.isDecelerating || scrollView._wk_isZoomAnimating || scrollView._wk_isScrollAnimating || scrollView.isZoomBouncing)
         stabilityFlags.add(WebKit::ViewStabilityFlag::ScrollViewAnimatedScrollOrZoom);
 
     if (scrollView == _scrollView.get() && _isChangingObscuredInsetsInteractively)
@@ -2546,38 +2554,6 @@ static bool scrollViewCanScroll(UIScrollView *scrollView)
 - (BOOL)_shouldDeferGeometryUpdates
 {
     return _perProcessState.liveResizeParameters || _perProcessState.dynamicViewportUpdateMode != WebKit::DynamicViewportUpdateMode::NotResizing;
-}
-
-- (std::optional<WebKit::VisibleContentRectUpdateInfo>)_createVisibleContentRectUpdateInfo
-{
-    auto viewStability = _viewStabilityWhenVisibleContentRectUpdateScheduled;
-
-    CGRect visibleRectInContentCoordinates = [self _visibleContentRect];
-
-    UIEdgeInsets computedContentInsetUnadjustedForKeyboard = [self _computedObscuredInset];
-    if (!_haveSetObscuredInsets)
-        computedContentInsetUnadjustedForKeyboard.bottom -= _totalScrollViewBottomInsetAdjustmentForKeyboard;
-
-    CGFloat scaleFactor = contentZoomScale(self);
-    CGRect unobscuredRect = UIEdgeInsetsInsetRect(self.bounds, computedContentInsetUnadjustedForKeyboard);
-    WebCore::FloatRect unobscuredRectInContentCoordinates = WebCore::FloatRect(_perProcessState.frozenUnobscuredContentRect ? _perProcessState.frozenUnobscuredContentRect.value() : [self convertRect:unobscuredRect toView:_contentView.get()]);
-    if (![_contentView sizeChangedSinceLastVisibleContentRectUpdate])
-        unobscuredRectInContentCoordinates.intersect([self _contentBoundsExtendedForRubberbandingWithScale:scaleFactor]);
-
-    auto contentInsets = [self currentlyVisibleContentInsetsWithScale:scaleFactor obscuredInsets:computedContentInsetUnadjustedForKeyboard];
-
-    return [_contentView createVisibleContentRectUpdateInfoFromVisibleRect:visibleRectInContentCoordinates
-        unobscuredRect:unobscuredRectInContentCoordinates
-        contentInsets:contentInsets
-        unobscuredRectInScrollViewCoordinates:unobscuredRect
-        obscuredInsets:_obscuredInsets
-        unobscuredSafeAreaInsets:[self _computedUnobscuredSafeAreaInset]
-        inputViewBounds:_inputViewBoundsInWindow
-        scale:scaleFactor
-        minimumScale:[_scrollView minimumZoomScale]
-        viewStability:viewStability
-        enclosedInScrollableAncestorView:scrollViewCanScroll([self _scroller])
-        sendEvenIfUnchanged:_alwaysSendNextVisibleContentRectUpdate];
 }
 
 - (void)_updateVisibleContentRects
@@ -2808,9 +2784,6 @@ static WebCore::IntDegrees activeOrientation(WKWebView *webView)
 - (void)_didStopDeferringGeometryUpdates
 {
     [self _scheduleVisibleContentRectUpdate];
-
-    // This should do at least all the things that had been skipped in `-[WKWebView _frameOrBoundsMayHaveChanged]`,
-    // since geometry updates were deferred then.
 
     CGRect newBounds = self.bounds;
     auto newViewLayoutSize = [self activeViewLayoutSize:newBounds];
@@ -3350,7 +3323,7 @@ static bool isLockdownModeWarningNeeded()
 
             [alert addAction:[UIAlertAction actionWithTitle:WEB_UI_NSSTRING(@"OK", "Lockdown Mode alert OK button") style:UIAlertActionStyleDefault handler:nil]];
 
-            UIViewController *presentationViewController = [UIViewController _viewControllerForFullScreenPresentationFromView:protectedSelf.get()];
+            auto presentationViewController = [protectedSelf _wk_viewControllerForFullScreenPresentation];
             [presentationViewController presentViewController:alert.get() animated:YES completion:nil];
             [[NSUserDefaults standardUserDefaults] setBool:YES forKey:WebKitLockdownModeAlertShownKey];
         });
@@ -4128,7 +4101,7 @@ static std::optional<WebCore::ViewportArguments> viewportArgumentsFromDictionary
     if (!viewportArgumentPairs)
         return std::nullopt;
 
-    WebCore::ViewportArguments viewportArguments(WebCore::ViewportArguments::ViewportMeta);
+    WebCore::ViewportArguments viewportArguments(WebCore::ViewportArguments::Type::ViewportMeta);
 
     [viewportArgumentPairs enumerateKeysAndObjectsUsingBlock:makeBlockPtr([&] (NSString *key, NSString *value, BOOL* stop) {
         if (![key isKindOfClass:[NSString class]] || ![value isKindOfClass:[NSString class]])
@@ -4455,7 +4428,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
             return;
         }
 
-        UIAction *dimmingAction = [UIAction actionWithTitle:WEB_UI_STRING("Auto Dimming", "Menu item label to toggle automatic scene dimming in fullscreen") image:[UIImage _systemImageNamed:@"circle.lefthalf.dotted.inset.half.filled"] identifier:nil handler:[weakSelf] (UIAction *) {
+        UIAction *dimmingAction = [UIAction actionWithTitle:WEB_UI_STRING("Auto Dimming", "Menu item label to toggle automatic scene dimming in fullscreen (visionOS only)") image:[UIImage _systemImageNamed:@"circle.lefthalf.dotted.inset.half.filled"] identifier:nil handler:[weakSelf] (UIAction *) {
             auto strongSelf = weakSelf.get();
             if (!strongSelf)
                 return;

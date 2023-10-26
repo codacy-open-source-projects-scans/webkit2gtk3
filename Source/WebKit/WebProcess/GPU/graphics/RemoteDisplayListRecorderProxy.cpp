@@ -50,7 +50,7 @@ namespace WebKit {
 using namespace WebCore;
 
 RemoteDisplayListRecorderProxy::RemoteDisplayListRecorderProxy(RemoteImageBufferProxy& imageBuffer, RemoteRenderingBackendProxy& renderingBackend, const FloatRect& initialClip, const AffineTransform& initialCTM)
-    : DisplayList::Recorder({ }, initialClip, initialCTM, imageBuffer.colorSpace(), DrawGlyphsMode::DeconstructUsingDrawGlyphsCommands)
+    : DisplayList::Recorder(IsDeferred::No, { }, initialClip, initialCTM, imageBuffer.colorSpace(), DrawGlyphsMode::DeconstructUsingDrawGlyphsCommands)
     , m_destinationBufferIdentifier(imageBuffer.renderingResourceIdentifier())
     , m_imageBuffer(imageBuffer)
     , m_renderingBackend(renderingBackend)
@@ -118,19 +118,14 @@ void RemoteDisplayListRecorderProxy::recordConcatenateCTM(const AffineTransform&
     send(Messages::RemoteDisplayListRecorder::ConcatenateCTM(transform));
 }
 
-void RemoteDisplayListRecorderProxy::recordSetInlineFillColor(SRGBA<uint8_t> color)
+void RemoteDisplayListRecorderProxy::recordSetInlineFillColor(PackedColor::RGBA color)
 {
     send(Messages::RemoteDisplayListRecorder::SetInlineFillColor(DisplayList::SetInlineFillColor { color }));
 }
 
-void RemoteDisplayListRecorderProxy::recordSetInlineStrokeColor(SRGBA<uint8_t> color)
+void RemoteDisplayListRecorderProxy::recordSetInlineStroke(DisplayList::SetInlineStroke&& strokeItem)
 {
-    send(Messages::RemoteDisplayListRecorder::SetInlineStrokeColor(DisplayList::SetInlineStrokeColor { color }));
-}
-
-void RemoteDisplayListRecorderProxy::recordSetStrokeThickness(float thickness)
-{
-    send(Messages::RemoteDisplayListRecorder::SetStrokeThickness(thickness));
+    send(Messages::RemoteDisplayListRecorder::SetInlineStroke(strokeItem));
 }
 
 void RemoteDisplayListRecorderProxy::recordSetState(const GraphicsContextState& state)
@@ -226,12 +221,12 @@ void RemoteDisplayListRecorderProxy::recordDrawDecomposedGlyphs(const Font& font
     send(Messages::RemoteDisplayListRecorder::DrawDecomposedGlyphs(font.renderingResourceIdentifier(), decomposedGlyphs.renderingResourceIdentifier()));
 }
 
-void RemoteDisplayListRecorderProxy::recordDrawImageBuffer(ImageBuffer& imageBuffer, const FloatRect& destRect, const FloatRect& srcRect, const ImagePaintingOptions& options)
+void RemoteDisplayListRecorderProxy::recordDrawImageBuffer(ImageBuffer& imageBuffer, const FloatRect& destRect, const FloatRect& srcRect, ImagePaintingOptions options)
 {
     send(Messages::RemoteDisplayListRecorder::DrawImageBuffer(imageBuffer.renderingResourceIdentifier(), destRect, srcRect, options));
 }
 
-void RemoteDisplayListRecorderProxy::recordDrawNativeImage(RenderingResourceIdentifier imageIdentifier, const FloatSize& imageSize, const FloatRect& destRect, const FloatRect& srcRect, const ImagePaintingOptions& options)
+void RemoteDisplayListRecorderProxy::recordDrawNativeImage(RenderingResourceIdentifier imageIdentifier, const FloatSize& imageSize, const FloatRect& destRect, const FloatRect& srcRect, ImagePaintingOptions options)
 {
     send(Messages::RemoteDisplayListRecorder::DrawNativeImage(imageIdentifier, imageSize, destRect, srcRect, options));
 }
@@ -241,7 +236,7 @@ void RemoteDisplayListRecorderProxy::recordDrawSystemImage(SystemImage& systemIm
     send(Messages::RemoteDisplayListRecorder::DrawSystemImage(systemImage, destinationRect));
 }
 
-void RemoteDisplayListRecorderProxy::recordDrawPattern(RenderingResourceIdentifier imageIdentifier, const FloatRect& destRect, const FloatRect& tileRect, const AffineTransform& transform, const FloatPoint& phase, const FloatSize& spacing, const ImagePaintingOptions& options)
+void RemoteDisplayListRecorderProxy::recordDrawPattern(RenderingResourceIdentifier imageIdentifier, const FloatRect& destRect, const FloatRect& tileRect, const AffineTransform& transform, const FloatPoint& phase, const FloatSize& spacing, ImagePaintingOptions options)
 {
     send(Messages::RemoteDisplayListRecorder::DrawPattern(imageIdentifier, destRect, tileRect, transform, phase, spacing, options));
 }
@@ -398,9 +393,9 @@ void RemoteDisplayListRecorderProxy::recordStrokeLine(const PathDataLine& line)
     send(Messages::RemoteDisplayListRecorder::StrokeLine(line));
 }
 
-void RemoteDisplayListRecorderProxy::recordStrokeLineWithColorAndThickness(const PathDataLine& line, SRGBA<uint8_t> color, float thickness)
+void RemoteDisplayListRecorderProxy::recordStrokeLineWithColorAndThickness(const PathDataLine& line, DisplayList::SetInlineStroke&& strokeItem)
 {
-    send(Messages::RemoteDisplayListRecorder::StrokeLineWithColorAndThickness(line, color, thickness));
+    send(Messages::RemoteDisplayListRecorder::StrokeLineWithColorAndThickness(line, strokeItem));
 }
 
 void RemoteDisplayListRecorderProxy::recordStrokeArc(const PathArc& arc)
@@ -556,7 +551,11 @@ RefPtr<ImageBuffer> RemoteDisplayListRecorderProxy::createImageBuffer(const Floa
 
     // FIXME: Ideally we'd plumb the purpose through for callers of GraphicsContext::createImageBuffer().
     RenderingPurpose purpose = RenderingPurpose::Unspecified;
-    return m_renderingBackend->createImageBuffer(size, renderingMode.value_or(this->renderingMode()), purpose, resolutionScale, colorSpace, PixelFormat::BGRA8);
+    // FIXME: Use purpose to decide the acceleration status and remove this.
+    OptionSet<ImageBufferOptions> options;
+    if (renderingMode.value_or(this->renderingMode()) == RenderingMode::Accelerated)
+        options.add(ImageBufferOptions::Accelerated);
+    return m_renderingBackend->createImageBuffer(size, purpose, resolutionScale, colorSpace, PixelFormat::BGRA8, options);
 }
 
 RefPtr<ImageBuffer> RemoteDisplayListRecorderProxy::createAlignedImageBuffer(const FloatSize& size, const DestinationColorSpace& colorSpace, std::optional<RenderingMethod> renderingMethod) const

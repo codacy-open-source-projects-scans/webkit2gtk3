@@ -37,6 +37,7 @@ class AutosizeStatus;
 class BorderData;
 class BorderValue;
 class CSSCustomPropertyValue;
+struct CSSPropertiesBitSet;
 class Color;
 class ContentData;
 class CounterContent;
@@ -91,7 +92,6 @@ class TextSizeAdjustment;
 class TextUnderlineOffset;
 class TransformOperations;
 class TransformationMatrix;
-class TransformOperationData;
 class TranslateTransformOperation;
 class WillChangeData;
 
@@ -213,7 +213,8 @@ enum class TextOverflow : bool;
 enum class TextSecurity : uint8_t;
 enum class TextTransform : uint8_t;
 enum class TextUnderlinePosition : uint8_t;
-enum class TextWrap : uint8_t;
+enum class TextWrapMode : bool;
+enum class TextWrapStyle : uint8_t;
 enum class TextZoom : bool;
 enum class TouchAction : uint8_t;
 enum class TransformBox : uint8_t;
@@ -257,6 +258,7 @@ struct TabSize;
 struct TextAutospace;
 struct TextBoxEdge;
 struct TextSpacingTrim;
+struct TransformOperationData;
 
 template<typename> class FontTaggedSettings;
 template<typename> class RectEdges;
@@ -586,7 +588,8 @@ public:
     inline bool breakWords() const;
 
     WhiteSpaceCollapse whiteSpaceCollapse() const { return static_cast<WhiteSpaceCollapse>(m_inheritedFlags.whiteSpaceCollapse); }
-    TextWrap textWrap() const { return static_cast<TextWrap>(m_inheritedFlags.textWrap); }
+    TextWrapMode textWrapMode() const { return static_cast<TextWrapMode>(m_inheritedFlags.textWrapMode); }
+    TextWrapStyle textWrapStyle() const { return static_cast<TextWrapStyle>(m_inheritedFlags.textWrapStyle); }
 
     inline FillRepeatXY backgroundRepeat() const;
     inline FillAttachment backgroundAttachment() const;
@@ -597,7 +600,8 @@ public:
     inline FillSizeType backgroundSizeType() const;
     inline const LengthSize& backgroundSizeLength() const;
     inline FillLayer& ensureBackgroundLayers();
-    inline const FillLayer& backgroundLayers() const;
+    inline const FillLayer& backgroundLayers() const; // Defined in RenderStyleInlines.h.
+    inline Ref<const FillLayer> protectedBackgroundLayers() const; // Defined in RenderStyleInlines.h.
     inline BlendMode backgroundBlendMode() const;
 
     inline StyleImage* maskImage() const;
@@ -610,7 +614,8 @@ public:
     inline FillSizeType maskSizeType() const;
     inline const LengthSize& maskSizeLength() const;
     inline FillLayer& ensureMaskLayers();
-    inline const FillLayer& maskLayers() const;
+    inline const FillLayer& maskLayers() const; // Defined in RenderStyleInlines.h.
+    inline Ref<const FillLayer> protectedMaskLayers() const; // Defined in RenderStyleInlines.h.
     inline const NinePieceImage& maskBorder() const;
     inline StyleImage* maskBorderSource() const;
 
@@ -769,8 +774,6 @@ public:
     inline size_t namedGridAreaRowCount() const;
     inline size_t namedGridAreaColumnCount() const;
     inline GridAutoFlow gridAutoFlow() const;
-    inline const Vector<StyleContentAlignmentData>& alignTracks() const;
-    inline const Vector<StyleContentAlignmentData>& justifyTracks() const;
     inline MasonryAutoFlow masonryAutoFlow() const;
     inline bool gridSubgridRows() const;
     inline bool gridSubgridColumns() const;
@@ -1237,7 +1240,9 @@ public:
     inline void setImageRendering(ImageRendering);
 
     void setWhiteSpaceCollapse(WhiteSpaceCollapse v) { m_inheritedFlags.whiteSpaceCollapse = static_cast<unsigned>(v); }
-    void setTextWrap(TextWrap v) { m_inheritedFlags.textWrap = static_cast<unsigned>(v); }
+
+    void setTextWrapMode(TextWrapMode v) { m_inheritedFlags.textWrapMode = static_cast<unsigned>(v); }
+    void setTextWrapStyle(TextWrapStyle v) { m_inheritedFlags.textWrapStyle = static_cast<unsigned>(v); }
 
     void setWordSpacing(Length&&);
 
@@ -1397,8 +1402,6 @@ public:
     inline void setGridItemRowStart(const GridPosition&);
     inline void setGridItemRowEnd(const GridPosition&);
 
-    inline void setAlignTracks(Vector<StyleContentAlignmentData>);
-    inline void setJustifyTracks(Vector<StyleContentAlignmentData>);
     inline void setMasonryAutoFlow(MasonryAutoFlow);
 
     inline void setMarqueeIncrement(Length&&);
@@ -1654,7 +1657,8 @@ public:
     inline void setKerning(SVGLengthValue);
 
     inline void setShapeOutside(RefPtr<ShapeValue>&&);
-    inline ShapeValue* shapeOutside() const;
+    inline ShapeValue* shapeOutside() const; // Defined in RenderStyleInlines.h.
+    inline RefPtr<ShapeValue> protectedShapeOutside() const; // Defined in RenderStyleInlines.h.
     static ShapeValue* initialShapeOutside() { return nullptr; }
 
     inline const Length& shapeMargin() const;
@@ -1712,6 +1716,7 @@ public:
 
     StyleDifference diff(const RenderStyle&, OptionSet<StyleDifferenceContextSensitiveProperty>& changedContextSensitiveProperties) const;
     bool diffRequiresLayerRepaint(const RenderStyle&, bool isComposited) const;
+    void conservativelyCollectChangedAnimatableProperties(const RenderStyle&, CSSPropertiesBitSet&) const;
 
     constexpr bool isDisplayInlineType() const;
     constexpr bool isOriginalDisplayInlineType() const;
@@ -1869,7 +1874,8 @@ public:
     static constexpr UserDrag initialUserDrag();
     static constexpr UserSelect initialUserSelect();
     static constexpr TextOverflow initialTextOverflow();
-    static constexpr TextWrap initialTextWrap();
+    static constexpr TextWrapMode initialTextWrapMode();
+    static constexpr TextWrapStyle initialTextWrapStyle();
     static constexpr WordBreak initialWordBreak();
     static constexpr OverflowWrap initialOverflowWrap();
     static constexpr NBSPMode initialNBSPMode();
@@ -1982,8 +1988,6 @@ public:
     static constexpr AutoRepeatType initialGridAutoRepeatType();
 
     static constexpr GridAutoFlow initialGridAutoFlow();
-    static inline Vector<StyleContentAlignmentData> initialAlignTracks();
-    static inline Vector<StyleContentAlignmentData> initialJustifyTracks();
     static constexpr MasonryAutoFlow initialMasonryAutoFlow();
 
     static inline Vector<GridTrackSize> initialGridAutoColumns();
@@ -2195,7 +2199,8 @@ private:
 #endif
         unsigned direction : 1; // TextDirection
         unsigned whiteSpaceCollapse : 3; // WhiteSpaceCollapse
-        unsigned textWrap : 3; // TextWrap
+        unsigned textWrapMode : 1; // TextWrapMode
+        unsigned textWrapStyle : 2; // TextWrapStyle
         // 33 bits
         unsigned borderCollapse : 1; // BorderCollapse
         unsigned boxDirection : 1; // BoxDirection

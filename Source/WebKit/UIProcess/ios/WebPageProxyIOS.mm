@@ -47,7 +47,6 @@
 #import "PaymentAuthorizationViewController.h"
 #import "PrintInfo.h"
 #import "ProvisionalPageProxy.h"
-#import "RemoteLayerTreeDrawingAreaProxy.h"
 #import "RemoteLayerTreeHost.h"
 #import "RemoteLayerTreeNode.h"
 #import "RemoteLayerTreeTransaction.h"
@@ -57,7 +56,7 @@
 #import "TapHandlingResult.h"
 #import "UIKitSPI.h"
 #import "UserData.h"
-#import "VideoFullscreenManagerProxy.h"
+#import "VideoPresentationManagerProxy.h"
 #import "ViewUpdateDispatcherMessages.h"
 #import "WKBrowsingContextControllerInternal.h"
 #import "WebAutocorrectionContext.h"
@@ -503,14 +502,6 @@ void WebPageProxy::updateSelectionWithExtentPointAndBoundary(const WebCore::IntP
     sendWithAsyncReply(Messages::WebPage::UpdateSelectionWithExtentPointAndBoundary(point, granularity, isInteractingWithFocusedElement), WTFMove(callback));
 }
 
-void WebPageProxy::requestDictationContext(CompletionHandler<void(const String&, const String&, const String&)>&& callbackFunction)
-{
-    if (!hasRunningProcess())
-        return callbackFunction({ }, { }, { });
-
-    sendWithAsyncReply(Messages::WebPage::RequestDictationContext(), WTFMove(callbackFunction));
-}
-
 #if ENABLE(REVEAL)
 void WebPageProxy::requestRVItemInCurrentSelectedRange(CompletionHandler<void(const WebKit::RevealItem&)>&& callbackFunction)
 {
@@ -613,7 +604,6 @@ void WebPageProxy::performActionOnElements(uint32_t action, Vector<WebCore::Elem
 
 void WebPageProxy::saveImageToLibrary(SharedMemory::Handle&& imageHandle, const String& authorizationToken)
 {
-    MESSAGE_CHECK(!imageHandle.isNull());
     MESSAGE_CHECK(isValidPerformActionOnElementAuthorizationToken(authorizationToken));
 
     auto sharedMemoryBuffer = SharedMemory::map(WTFMove(imageHandle), SharedMemory::Protection::ReadOnly);
@@ -628,7 +618,7 @@ void WebPageProxy::applicationDidEnterBackground()
 {
     m_lastObservedStateWasBackground = true;
 
-    bool isSuspendedUnderLock = [UIApp isSuspendedUnderLock];
+    bool isSuspendedUnderLock = UIApplication.sharedApplication.isSuspendedUnderLock;
     
     WEBPAGEPROXY_RELEASE_LOG(ViewState, "applicationDidEnterBackground: isSuspendedUnderLock? %d", isSuspendedUnderLock);
 
@@ -661,7 +651,7 @@ void WebPageProxy::applicationWillEnterForeground()
 {
     m_lastObservedStateWasBackground = false;
 
-    bool isSuspendedUnderLock = [UIApp isSuspendedUnderLock];
+    bool isSuspendedUnderLock = UIApplication.sharedApplication.isSuspendedUnderLock;
     WEBPAGEPROXY_RELEASE_LOG(ViewState, "applicationWillEnterForeground: isSuspendedUnderLock? %d", isSuspendedUnderLock);
 
     m_process->send(Messages::WebPage::ApplicationWillEnterForeground(isSuspendedUnderLock), webPageID());
@@ -675,7 +665,7 @@ void WebPageProxy::applicationWillResignActive()
 
 void WebPageProxy::applicationDidEnterBackgroundForMedia()
 {
-    bool isSuspendedUnderLock = [UIApp isSuspendedUnderLock];
+    bool isSuspendedUnderLock = UIApplication.sharedApplication.isSuspendedUnderLock;
     WEBPAGEPROXY_RELEASE_LOG(ViewState, "applicationWillEnterForegroundForMedia: isSuspendedUnderLock? %d", isSuspendedUnderLock);
 
     m_process->send(Messages::WebPage::ApplicationDidEnterBackgroundForMedia(isSuspendedUnderLock), webPageID());
@@ -683,7 +673,7 @@ void WebPageProxy::applicationDidEnterBackgroundForMedia()
 
 void WebPageProxy::applicationWillEnterForegroundForMedia()
 {
-    bool isSuspendedUnderLock = [UIApp isSuspendedUnderLock];
+    bool isSuspendedUnderLock = UIApplication.sharedApplication.isSuspendedUnderLock;
     WEBPAGEPROXY_RELEASE_LOG(ViewState, "applicationWillEnterForegroundForMedia: isSuspendedUnderLock? %d", isSuspendedUnderLock);
 
     m_process->send(Messages::WebPage::ApplicationWillEnterForegroundForMedia(isSuspendedUnderLock), webPageID());
@@ -692,8 +682,8 @@ void WebPageProxy::applicationWillEnterForegroundForMedia()
 void WebPageProxy::applicationDidBecomeActive()
 {
 #if ENABLE(VIDEO_PRESENTATION_MODE)
-    if (m_videoFullscreenManager)
-        m_videoFullscreenManager->applicationDidBecomeActive();
+    if (m_videoPresentationManager)
+        m_videoPresentationManager->applicationDidBecomeActive();
 #endif
     m_process->send(Messages::WebPage::ApplicationDidBecomeActive(), webPageID());
 }
@@ -777,6 +767,13 @@ void WebPageProxy::registerWebProcessAccessibilityToken(const IPC::DataReference
 {
     pageClient().accessibilityWebProcessTokenReceived(data);
 }    
+
+
+void WebPageProxy::relayAccessibilityNotification(const String& notificationName, const IPC::DataReference& data)
+{
+    NSData *notificationData = [NSData dataWithBytes:data.data() length:data.size()];
+    pageClient().relayAccessibilityNotification(notificationName, notificationData);
+}
 
 void WebPageProxy::assistiveTechnologyMakeFirstResponder()
 {

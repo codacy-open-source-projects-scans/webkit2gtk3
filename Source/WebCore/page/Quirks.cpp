@@ -356,6 +356,20 @@ bool Quirks::shouldAvoidUsingIOS13ForGmail() const
 #endif
 }
 
+bool Quirks::shouldAvoidUsingIOS17UserAgentForFacebook() const
+{
+#if PLATFORM(IOS_FAMILY)
+    if (!needsQuirks())
+        return false;
+
+    if (!m_shouldAvoidUsingIOS17UserAgentForFacebook)
+        m_shouldAvoidUsingIOS17UserAgentForFacebook = isDomain("facebook.com"_s);
+    return m_shouldAvoidUsingIOS17UserAgentForFacebook.value();
+#else
+    return false;
+#endif
+}
+
 #if ENABLE(TOUCH_EVENTS)
 bool Quirks::isAmazon() const
 {
@@ -502,9 +516,9 @@ std::optional<Event::IsCancelable> Quirks::simulatedMouseEventTypeForTarget(Even
     if (isDomain("airtable.com"_s)) {
         // We want to limit simulated mouse events to elements under <div id="paneContainer"> to allow for column re-ordering and multiple cell selection.
         if (is<Node>(target)) {
-            auto* node = downcast<Node>(target);
-            if (auto* paneContainer = node->treeScope().getElementById(AtomString("paneContainer"_s))) {
-                if (paneContainer->contains(node))
+            RefPtr node = downcast<Node>(target);
+            if (RefPtr paneContainer = node->treeScope().getElementById(AtomString("paneContainer"_s))) {
+                if (paneContainer->contains(node.get()))
                     return Event::IsCancelable::Yes;
             }
         }
@@ -1096,12 +1110,6 @@ bool Quirks::hasStorageAccessForAllLoginDomains(const HashSet<RegistrableDomain>
     return true;
 }
 
-const String& Quirks::staticRadioPlayerURLString()
-{
-    static NeverDestroyed<String> staticRadioPlayerURLString = "https://static.radioplayer.co.uk/"_s;
-    return staticRadioPlayerURLString;
-}
-
 Quirks::StorageAccessResult Quirks::requestStorageAccessAndHandleClick(CompletionHandler<void(ShouldDispatchClick)>&& completionHandler) const
 {
     auto firstPartyDomain = RegistrableDomain(m_document->topDocument().url());
@@ -1232,6 +1240,7 @@ Quirks::StorageAccessResult Quirks::triggerOptionalStorageAccessQuirk(Element& e
     UNUSED_PARAM(eventType);
     UNUSED_PARAM(detail);
     UNUSED_PARAM(relatedTarget);
+    UNUSED_PARAM(isSyntheticClick);
 #endif
     return Quirks::StorageAccessResult::ShouldNotCancelEvent;
 }
@@ -1577,6 +1586,26 @@ bool Quirks::shouldDisableDataURLPaddingValidation() const
     if (!m_shouldDisableDataURLPaddingValidation)
         m_shouldDisableDataURLPaddingValidation = m_document->url().host().endsWith("officeapps.live.com"_s) || m_document->url().host().endsWith("onedrive.live.com"_s);
     return *m_shouldDisableDataURLPaddingValidation;
+}
+
+bool Quirks::needsDisableDOMPasteAccessQuirk() const
+{
+    if (!needsQuirks())
+        return false;
+
+    if (m_needsDisableDOMPasteAccessQuirk)
+        return *m_needsDisableDOMPasteAccessQuirk;
+
+    m_needsDisableDOMPasteAccessQuirk = [&] {
+        if (!m_document)
+            return false;
+        auto* globalObject = m_document->globalObject();
+        if (!globalObject)
+            return false;
+        auto tableauPrepProperty = JSC::Identifier::fromString(globalObject->vm(), "tableauPrep"_s);
+        return globalObject->hasProperty(globalObject, tableauPrepProperty);
+    }();
+    return *m_needsDisableDOMPasteAccessQuirk;
 }
 
 }

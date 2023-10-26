@@ -24,12 +24,12 @@
  */
 
 #import "config.h"
-
-#if ENABLE(VIDEO_PRESENTATION_MODE)
 #import "TextTrackRepresentationCocoa.h"
 
-#import "VideoFullscreenManager.h"
-#import "VideoFullscreenManagerProxyMessages.h"
+#if ENABLE(VIDEO_PRESENTATION_MODE)
+
+#import "VideoPresentationManager.h"
+#import "VideoPresentationManagerProxyMessages.h"
 #import "WebPage.h"
 #import <WebCore/GraphicsContext.h>
 #import <WebCore/HTMLVideoElement.h>
@@ -50,14 +50,11 @@ void WebTextTrackRepresentationCocoa::update()
 {
     if (!m_page)
         return;
-    Ref fullscreenManager = m_page->videoFullscreenManager();
+    Ref fullscreenManager = m_page->videoPresentationManager();
     if (!m_mediaElement || !is<WebCore::HTMLVideoElement>(m_mediaElement))
         return;
     
-    auto representation = m_client.createTextTrackRepresentationImage();
-    if (!representation)
-        return;
-    auto image = representation->nativeImage();
+    auto image = m_client.createTextTrackRepresentationImage();
     if (!image)
         return;
     auto imageSize = image->size();
@@ -80,7 +77,7 @@ void WebTextTrackRepresentationCocoa::setContentScale(float scale)
     WebCore::TextTrackRepresentationCocoa::setContentScale(scale);
     if (!m_page)
         return;
-    Ref fullscreenManager = m_page->videoFullscreenManager();
+    Ref fullscreenManager = m_page->videoPresentationManager();
     if (!m_mediaElement || !is<WebCore::HTMLVideoElement>(m_mediaElement))
         return;
     Ref videoElement = downcast<WebCore::HTMLVideoElement>(*m_mediaElement);
@@ -92,7 +89,7 @@ void WebTextTrackRepresentationCocoa::setHidden(bool hidden) const
     WebCore::TextTrackRepresentationCocoa::setHidden(hidden);
     if (!m_page)
         return;
-    Ref fullscreenManager = m_page->videoFullscreenManager();
+    Ref fullscreenManager = m_page->videoPresentationManager();
     if (!m_mediaElement || !is<WebCore::HTMLVideoElement>(m_mediaElement))
         return;
     Ref videoElement = downcast<WebCore::HTMLVideoElement>(*m_mediaElement);
@@ -101,5 +98,4 @@ void WebTextTrackRepresentationCocoa::setHidden(bool hidden) const
 
 } // namespace WebKit
 
-#endif
-
+#endif // ENABLE(VIDEO_PRESENTATION_MODE)

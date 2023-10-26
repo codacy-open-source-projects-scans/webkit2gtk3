@@ -840,7 +840,7 @@ JSC_DEFINE_JIT_OPERATION(operationWasmStructNewEmpty, EncodedJSValue, (Instance*
     JSWebAssemblyInstance* jsInstance = instance->owner();
     JSGlobalObject* globalObject = instance->globalObject();
     auto structRTT = instance->module().moduleInformation().rtts[typeIndex];
-    return JSValue::encode(JSWebAssemblyStruct::tryCreate(globalObject, globalObject->webAssemblyStructStructure(), jsInstance, typeIndex, structRTT));
+    return JSValue::encode(JSWebAssemblyStruct::create(globalObject, globalObject->webAssemblyStructStructure(), jsInstance, typeIndex, structRTT));
 }
 
 JSC_DEFINE_JIT_OPERATION(operationWasmStructGet, EncodedJSValue, (EncodedJSValue encodedStructReference, uint32_t fieldIndex))
@@ -853,7 +853,7 @@ JSC_DEFINE_JIT_OPERATION(operationWasmStructSet, void, (Instance* instance, Enco
     CallFrame* callFrame = DECLARE_WASM_CALL_FRAME(instance);
     VM& vm = instance->vm();
     NativeCallFrameTracer tracer(vm, callFrame);
-    return structSet(instance, encodedStructReference, fieldIndex, argument);
+    return structSet(encodedStructReference, fieldIndex, argument);
 }
 
 JSC_DEFINE_JIT_OPERATION(operationGetWasmTableSize, int32_t, (Instance* instance, unsigned tableIndex))
@@ -1092,7 +1092,7 @@ JSC_DEFINE_JIT_OPERATION(operationWasmIsSubRTT, bool, (RTT* maybeSubRTT, RTT* ta
     return maybeSubRTT->isSubRTT(*targetRTT);
 }
 
-JSC_DEFINE_JIT_OPERATION(operationWasmExternInternalize, EncodedJSValue, (EncodedJSValue reference))
+JSC_DEFINE_JIT_OPERATION(operationWasmAnyConvertExtern, EncodedJSValue, (EncodedJSValue reference))
 {
     return externInternalize(reference);
 }

@@ -38,8 +38,19 @@ Ref<ScrollingStateFrameHostingNode> ScrollingStateFrameHostingNode::create(Scrol
     return adoptRef(*new ScrollingStateFrameHostingNode(stateTree, nodeID));
 }
 
+Ref<ScrollingStateFrameHostingNode> ScrollingStateFrameHostingNode::create(ScrollingNodeID nodeID, OptionSet<ScrollingStateNodeProperty> changedProperties, std::optional<PlatformLayerIdentifier> layerID, Vector<Ref<ScrollingStateNode>>&& children)
+{
+    return adoptRef(*new ScrollingStateFrameHostingNode(nodeID, changedProperties, layerID, WTFMove(children)));
+}
+
+ScrollingStateFrameHostingNode::ScrollingStateFrameHostingNode(ScrollingNodeID nodeID, OptionSet<ScrollingStateNodeProperty> changedProperties, std::optional<PlatformLayerIdentifier> layerID, Vector<Ref<ScrollingStateNode>>&& children)
+    : ScrollingStateNode(ScrollingNodeType::FrameHosting, nodeID, changedProperties, layerID, WTFMove(children))
+{
+    ASSERT(isFrameHostingNode());
+}
+
 ScrollingStateFrameHostingNode::ScrollingStateFrameHostingNode(ScrollingStateTree& stateTree, ScrollingNodeID nodeID)
-    : ScrollingStateNode(ScrollingNodeType::FrameHosting, stateTree, nodeID)
+    : ScrollingStateNode(ScrollingNodeType::FrameHosting, &stateTree, nodeID)
 {
     ASSERT(isFrameHostingNode());
 }

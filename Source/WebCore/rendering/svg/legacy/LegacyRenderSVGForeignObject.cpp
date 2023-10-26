@@ -25,10 +25,10 @@
 #include "GraphicsContext.h"
 #include "HitTestResult.h"
 #include "LayoutRepainter.h"
+#include "LegacyRenderSVGResource.h"
 #include "RenderBoxModelObjectInlines.h"
 #include "RenderObject.h"
 #include "RenderSVGBlockInlines.h"
-#include "RenderSVGResource.h"
 #include "RenderView.h"
 #include "SVGElementTypeHelpers.h"
 #include "SVGForeignObjectElement.h"
@@ -44,7 +44,7 @@ namespace WebCore {
 WTF_MAKE_ISO_ALLOCATED_IMPL(LegacyRenderSVGForeignObject);
 
 LegacyRenderSVGForeignObject::LegacyRenderSVGForeignObject(SVGForeignObjectElement& element, RenderStyle&& style)
-    : RenderSVGBlock(element, WTFMove(style))
+    : RenderSVGBlock(Type::LegacySVGForeignObject, element, WTFMove(style))
 {
 }
 

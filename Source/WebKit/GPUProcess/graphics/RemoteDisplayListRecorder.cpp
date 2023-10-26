@@ -126,19 +126,14 @@ void RemoteDisplayListRecorder::concatenateCTM(const AffineTransform& ctm)
     handleItem(DisplayList::ConcatenateCTM(ctm));
 }
 
-void RemoteDisplayListRecorder::setInlineFillColor(DisplayList::SetInlineFillColor&& item)
+void RemoteDisplayListRecorder::setInlineFillColor(DisplayList::SetInlineFillColor&& fillColorItem)
 {
-    handleItem(WTFMove(item));
+    handleItem(WTFMove(fillColorItem));
 }
 
-void RemoteDisplayListRecorder::setInlineStrokeColor(DisplayList::SetInlineStrokeColor&& item)
+void RemoteDisplayListRecorder::setInlineStroke(DisplayList::SetInlineStroke&& strokeItem)
 {
-    handleItem(WTFMove(item));
-}
-
-void RemoteDisplayListRecorder::setStrokeThickness(float thickness)
-{
-    handleItem(DisplayList::SetStrokeThickness(thickness));
+    handleItem(WTFMove(strokeItem));
 }
 
 void RemoteDisplayListRecorder::setState(DisplayList::SetState&& item)
@@ -277,7 +272,7 @@ void RemoteDisplayListRecorder::drawFilteredImageBufferInternal(std::optional<Re
 
 void RemoteDisplayListRecorder::drawFilteredImageBuffer(std::optional<RenderingResourceIdentifier> sourceImageIdentifier, const FloatRect& sourceImageRect, Ref<Filter> filter)
 {
-    auto* svgFilter = dynamicDowncast<SVGFilter>(filter.get());
+    RefPtr svgFilter = dynamicDowncast<SVGFilter>(filter);
 
     if (!svgFilter || !svgFilter->hasValidRenderingResourceIdentifier()) {
         FilterResults results(makeUnique<ImageBufferShareableAllocator>(m_renderingBackend->resourceOwner()));
@@ -286,7 +281,7 @@ void RemoteDisplayListRecorder::drawFilteredImageBuffer(std::optional<RenderingR
     }
 
     RefPtr cachedFilter = resourceCache().cachedFilter(filter->renderingResourceIdentifier());
-    auto* cachedSVGFilter = dynamicDowncast<SVGFilter>(cachedFilter.get());
+    RefPtr cachedSVGFilter = dynamicDowncast<SVGFilter>(WTFMove(cachedFilter));
     if (!cachedSVGFilter) {
         ASSERT_NOT_REACHED();
         return;
@@ -331,7 +326,7 @@ void RemoteDisplayListRecorder::drawDecomposedGlyphs(RenderingResourceIdentifier
     handleItem(DisplayList::DrawDecomposedGlyphs(fontIdentifier, decomposedGlyphsIdentifier), *font, *decomposedGlyphs);
 }
 
-void RemoteDisplayListRecorder::drawImageBuffer(RenderingResourceIdentifier imageBufferIdentifier, const FloatRect& destinationRect, const FloatRect& srcRect, const ImagePaintingOptions& options)
+void RemoteDisplayListRecorder::drawImageBuffer(RenderingResourceIdentifier imageBufferIdentifier, const FloatRect& destinationRect, const FloatRect& srcRect, ImagePaintingOptions options)
 {
     RefPtr sourceImage = imageBuffer(imageBufferIdentifier);
     if (!sourceImage) {
@@ -342,7 +337,7 @@ void RemoteDisplayListRecorder::drawImageBuffer(RenderingResourceIdentifier imag
     handleItem(DisplayList::DrawImageBuffer(imageBufferIdentifier, destinationRect, srcRect, options), *sourceImage);
 }
 
-void RemoteDisplayListRecorder::drawNativeImage(RenderingResourceIdentifier imageIdentifier, const FloatSize& imageSize, const FloatRect& destRect, const FloatRect& srcRect, const ImagePaintingOptions& options)
+void RemoteDisplayListRecorder::drawNativeImage(RenderingResourceIdentifier imageIdentifier, const FloatSize& imageSize, const FloatRect& destRect, const FloatRect& srcRect, ImagePaintingOptions options)
 {
     RefPtr image = resourceCache().cachedNativeImage(imageIdentifier);
     if (!image) {
@@ -369,7 +364,7 @@ void RemoteDisplayListRecorder::drawSystemImage(Ref<SystemImage> systemImage, co
     handleItem(DisplayList::DrawSystemImage(systemImage, destinationRect));
 }
 
-void RemoteDisplayListRecorder::drawPattern(RenderingResourceIdentifier imageIdentifier, const FloatRect& destRect, const FloatRect& tileRect, const AffineTransform& transform, const FloatPoint& phase, const FloatSize& spacing, const ImagePaintingOptions& options)
+void RemoteDisplayListRecorder::drawPattern(RenderingResourceIdentifier imageIdentifier, const FloatRect& destRect, const FloatRect& tileRect, const AffineTransform& transform, const FloatPoint& phase, const FloatSize& spacing, ImagePaintingOptions options)
 {
     auto patternImage = sourceImage(imageIdentifier);
     if (!patternImage) {
@@ -539,10 +534,9 @@ void RemoteDisplayListRecorder::strokeLine(const PathDataLine& line)
     handleItem(DisplayList::StrokeLine(line));
 }
 
-void RemoteDisplayListRecorder::strokeLineWithColorAndThickness(const PathDataLine& line, DisplayList::SetInlineStrokeColor&& color, float thickness)
+void RemoteDisplayListRecorder::strokeLineWithColorAndThickness(const PathDataLine& line, DisplayList::SetInlineStroke&& strokeItem)
 {
-    handleItem(WTFMove(color));
-    handleItem(DisplayList::SetStrokeThickness(thickness));
+    handleItem(WTFMove(strokeItem));
     handleItem(DisplayList::StrokeLine(line));
 }
 

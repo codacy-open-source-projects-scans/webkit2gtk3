@@ -101,20 +101,10 @@ void StructureStubInfo::deref()
 
 void StructureStubInfo::aboutToDie()
 {
-    switch (m_cacheType) {
-    case CacheType::Stub:
-        m_stub->aboutToDie();
+    if (m_cacheType != CacheType::Stub)
         return;
-    case CacheType::Unset:
-    case CacheType::GetByIdSelf:
-    case CacheType::PutByIdReplace:
-    case CacheType::InByIdSelf:
-    case CacheType::ArrayLength:
-    case CacheType::StringLength:
-        return;
-    }
-
-    RELEASE_ASSERT_NOT_REACHED();
+    if (m_handler)
+        m_handler->aboutToDie();
 }
 
 AccessGenerationResult StructureStubInfo::addAccessCase(
@@ -197,7 +187,7 @@ AccessGenerationResult StructureStubInfo::addAccessCase(
         // PolymorphicAccess.
         clearBufferedStructures();
         
-        InlineCacheCompiler compiler(vm, globalObject, ecmaMode, *this);
+        InlineCacheCompiler compiler(codeBlock->jitType(), vm, globalObject, ecmaMode, *this);
         result = compiler.regenerate(locker, *m_stub, codeBlock);
         
         if (StructureStubInfoInternal::verbose)
@@ -220,6 +210,8 @@ AccessGenerationResult StructureStubInfo::addAccessCase(
         // If we generated some code then we don't want to attempt to repatch in the future until we
         // gather enough cases.
         bufferingCountdown = Options::repatchBufferingCountdown();
+        m_handler = result.handler();
+        m_codePtr = m_handler->callTarget();
         return result;
     })();
     vm.writeBarrier(codeBlock);
@@ -382,8 +374,12 @@ void StructureStubInfo::visitWeakReferences(const ConcurrentJSLockerBase& locker
     bool isValid = true;
     if (Structure* structure = inlineAccessBaseStructure())
         isValid &= vm.heap.isMarked(structure);
-    if (m_cacheType == CacheType::Stub)
-        isValid &= m_stub->visitWeak(vm);
+    if (m_cacheType == CacheType::Stub) {
+        if (m_stub)
+            isValid &= m_stub->visitWeak(vm);
+        if (m_handler)
+            isValid &= m_handler->visitWeak(vm);
+    }
 
     if (isValid)
         return;
@@ -453,7 +449,9 @@ bool StructureStubInfo::containsPC(void* pc) const
 {
     if (m_cacheType != CacheType::Stub)
         return false;
-    return m_stub->containsPC(pc);
+    if (!m_handler)
+        return false;
+    return m_handler->containsPC(pc);
 }
 
 ALWAYS_INLINE void StructureStubInfo::setCacheType(const ConcurrentJSLockerBase&, CacheType newCacheType)
@@ -530,15 +528,22 @@ static CodePtr<OperationPtrTag> slowOperationFromUnlinkedStructureStubInfo(const
     return { };
 }
 
-void StructureStubInfo::initializeFromUnlinkedStructureStubInfo(const BaselineUnlinkedStructureStubInfo& unlinkedStubInfo)
+void StructureStubInfo::initializeFromUnlinkedStructureStubInfo(VM& vm, const BaselineUnlinkedStructureStubInfo& unlinkedStubInfo)
 {
+    ASSERT(!isCompilationThread());
     accessType = unlinkedStubInfo.accessType;
     doneLocation = unlinkedStubInfo.doneLocation;
-    slowPathStartLocation = unlinkedStubInfo.slowPathStartLocation;
     m_identifier = unlinkedStubInfo.m_identifier;
     callSiteIndex = CallSiteIndex(BytecodeIndex(unlinkedStubInfo.bytecodeIndex.offset()));
     codeOrigin = CodeOrigin(unlinkedStubInfo.bytecodeIndex);
-    m_codePtr = slowPathStartLocation;
+    if (Options::useHandlerIC()) {
+        m_handler = InlineCacheCompiler::generateSlowPathHandler(vm, accessType);
+        m_codePtr = m_handler->callTarget();
+    } else {
+        m_handler = InlineCacheHandler::createNonHandlerSlowPath(unlinkedStubInfo.slowPathStartLocation);
+        m_codePtr = m_handler->callTarget();
+        slowPathStartLocation = unlinkedStubInfo.slowPathStartLocation;
+    }
     propertyIsInt32 = unlinkedStubInfo.propertyIsInt32;
     canBeMegamorphic = unlinkedStubInfo.canBeMegamorphic;
     isEnumerator = unlinkedStubInfo.isEnumerator;
@@ -547,12 +552,7 @@ void StructureStubInfo::initializeFromUnlinkedStructureStubInfo(const BaselineUn
     if (unlinkedStubInfo.canBeMegamorphic)
         bufferingCountdown = 1;
 
-    auto usedJSRs = RegisterSetBuilder::stubUnavailableRegisters();
-    if (accessType == AccessType::GetById && unlinkedStubInfo.bytecodeIndex.checkpoint()) {
-        // For iterator_next, we can't clobber the "dontClobberJSR" register either.
-        usedJSRs.add(BaselineJITRegisters::GetById::dontClobberJSR, IgnoreVectors);
-    }
-    usedRegisters = usedJSRs.buildScalarRegisterSet();
+    usedRegisters = RegisterSetBuilder::stubUnavailableRegisters().buildScalarRegisterSet();
 
     m_slowOperation = slowOperationFromUnlinkedStructureStubInfo(unlinkedStubInfo);
 
@@ -735,13 +735,15 @@ void StructureStubInfo::initializeFromUnlinkedStructureStubInfo(const BaselineUn
 #if ENABLE(DFG_JIT)
 void StructureStubInfo::initializeFromDFGUnlinkedStructureStubInfo(const DFG::UnlinkedStructureStubInfo& unlinkedStubInfo)
 {
+    ASSERT(!isCompilationThread());
     accessType = unlinkedStubInfo.accessType;
     doneLocation = unlinkedStubInfo.doneLocation;
-    slowPathStartLocation = unlinkedStubInfo.slowPathStartLocation;
     m_identifier = unlinkedStubInfo.m_identifier;
     callSiteIndex = unlinkedStubInfo.callSiteIndex;
     codeOrigin = unlinkedStubInfo.codeOrigin;
-    m_codePtr = slowPathStartLocation;
+    m_handler = InlineCacheHandler::createNonHandlerSlowPath(unlinkedStubInfo.slowPathStartLocation);
+    m_codePtr = m_handler->callTarget();
+    slowPathStartLocation = unlinkedStubInfo.slowPathStartLocation;
 
     propertyIsInt32 = unlinkedStubInfo.propertyIsInt32;
     propertyIsSymbol = unlinkedStubInfo.propertyIsSymbol;
@@ -783,6 +785,49 @@ void StructureStubInfo::checkConsistency()
     }
 }
 #endif // ASSERT_ENABLED
+
+RefPtr<PolymorphicAccessJITStubRoutine> SharedJITStubSet::getMegamorphic(AccessType type) const
+{
+    switch (type) {
+    case AccessType::GetByVal:
+        return m_getByValMegamorphic;
+    case AccessType::GetByValWithThis:
+        return m_getByValWithThisMegamorphic;
+    case AccessType::PutByValStrict:
+    case AccessType::PutByValSloppy:
+        return m_putByValMegamorphic;
+    default:
+        return nullptr;
+    }
+}
+
+void SharedJITStubSet::setMegamorphic(AccessType type, Ref<PolymorphicAccessJITStubRoutine> stub)
+{
+    switch (type) {
+    case AccessType::GetByVal:
+        m_getByValMegamorphic = WTFMove(stub);
+        break;
+    case AccessType::GetByValWithThis:
+        m_getByValWithThisMegamorphic = WTFMove(stub);
+        break;
+    case AccessType::PutByValStrict:
+    case AccessType::PutByValSloppy:
+        m_putByValMegamorphic = WTFMove(stub);
+        break;
+    default:
+        break;
+    }
+}
+
+RefPtr<InlineCacheHandler> SharedJITStubSet::getSlowPathHandler(AccessType type) const
+{
+    return m_slowPathHandlers[static_cast<unsigned>(type)];
+}
+
+void SharedJITStubSet::setSlowPathHandler(AccessType type, Ref<InlineCacheHandler> handler)
+{
+    m_slowPathHandlers[static_cast<unsigned>(type)] = WTFMove(handler);
+}
 
 #endif // ENABLE(JIT)
 

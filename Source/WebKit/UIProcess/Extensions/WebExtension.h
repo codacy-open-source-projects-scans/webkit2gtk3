@@ -28,14 +28,13 @@
 #if ENABLE(WK_WEB_EXTENSIONS)
 
 #include "APIObject.h"
+#include "CocoaImage.h"
 #include "WebExtensionMatchPattern.h"
 #include <wtf/Forward.h>
 #include <wtf/HashSet.h>
 #include <wtf/RetainPtr.h>
 #include <wtf/Vector.h>
 #include <wtf/WeakPtr.h>
-
-#import "CocoaImage.h"
 
 OBJC_CLASS NSArray;
 OBJC_CLASS NSBundle;
@@ -47,6 +46,7 @@ OBJC_CLASS NSMutableArray;
 OBJC_CLASS NSMutableDictionary;
 OBJC_CLASS NSString;
 OBJC_CLASS NSURL;
+OBJC_CLASS UTType;
 OBJC_CLASS _WKWebExtension;
 OBJC_CLASS _WKWebExtensionLocalization;
 OBJC_CLASS _WKWebExtensionMatchPattern;
@@ -147,7 +147,7 @@ public:
     Ref<API::Data> serializeManifest();
 
     double manifestVersion();
-    bool supportsManifestVersion(double version) { return manifestVersion() >= version; }
+    bool supportsManifestVersion(double version) { ASSERT(version > 2); return manifestVersion() >= version; }
 
     Ref<API::Data> serializeLocalization();
 
@@ -160,10 +160,10 @@ public:
 
     NSURL *resourceFileURLForPath(NSString *);
 
+    UTType *resourceTypeForPath(NSString *);
+
     NSString *resourceStringForPath(NSString *, CacheResult = CacheResult::No);
     NSData *resourceDataForPath(NSString *, CacheResult = CacheResult::No);
-
-    NSString *webProcessDisplayName();
 
     _WKWebExtensionLocalization *localization();
     NSLocale *defaultLocale();

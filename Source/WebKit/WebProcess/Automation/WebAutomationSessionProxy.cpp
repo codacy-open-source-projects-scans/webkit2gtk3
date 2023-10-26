@@ -80,14 +80,11 @@ static JSObjectRef toJSArray(JSContextRef context, const Vector<T>& data, JSValu
     if (data.isEmpty())
         return JSObjectMakeArray(context, 0, nullptr, exception);
 
-    Vector<JSValueRef, 8> convertedData;
-    convertedData.reserveCapacity(data.size());
-
-    for (auto& originalValue : data) {
+    auto convertedData = WTF::map<8>(data, [&](auto& originalValue) {
         JSValueRef convertedValue = converter(context, originalValue);
         JSValueProtect(context, convertedValue);
-        convertedData.uncheckedAppend(convertedValue);
-    }
+        return convertedValue;
+    });
 
     JSObjectRef array = JSObjectMakeArray(context, convertedData.size(), convertedData.data(), exception);
 
@@ -424,10 +421,7 @@ void WebAutomationSessionProxy::evaluateJavaScriptFunction(WebCore::PageIdentifi
         JSValueMakeNumber(context, callbackTimeout.value_or(-1))
     };
 
-    {
-        WebCore::UserGestureIndicator gestureIndicator(WebCore::ProcessingUserGesture, frame->coreLocalFrame()->document());
-        callPropertyFunction(context, scriptObject, "evaluateJavaScriptFunction"_s, std::size(functionArguments), functionArguments, &exception);
-    }
+    callPropertyFunction(context, scriptObject, "evaluateJavaScriptFunction"_s, std::size(functionArguments), functionArguments, &exception);
 
     if (!exception)
         return;
@@ -883,9 +877,9 @@ void WebAutomationSessionProxy::setFilesForInputFileUpload(WebCore::PageIdentifi
         if (auto* files = inputElement.files())
             fileObjects.appendVector(files->files());
     }
-    fileObjects.reserveCapacity(fileObjects.size() + filenames.size());
-    for (const auto& path : filenames)
-        fileObjects.uncheckedAppend(WebCore::File::create(&inputElement.document(), path));
+    fileObjects.appendContainerWithMapping(filenames, [&](auto& path) {
+        return WebCore::File::create(&inputElement.document(), path);
+    });
     inputElement.setFiles(WebCore::FileList::create(WTFMove(fileObjects)));
 
     completionHandler(std::nullopt);

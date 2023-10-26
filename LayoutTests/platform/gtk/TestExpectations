@@ -53,6 +53,10 @@ fast/events/keyboardevent-modifier.html [ Pass ]
 # PointerEvents not enabled globally, but enabled for GTK (EXPERIMENTAL_FEATURES)
 pointerevents/mouse [ Pass ]
 imported/w3c/web-platform-tests/pointerevents [ Pass ]
+# These tests crash because UIScriptController.sendEventStream is not implemented on GTK
+webkit.org/b/263473 imported/w3c/web-platform-tests/pointerevents/pointerevent_hit_test_scroll.html [ Skip ]
+webkit.org/b/263473 imported/w3c/web-platform-tests/pointerevents/pointerevent_hit_test_scroll_visible_descendant.html [ Skip ]
+webkit.org/b/263473 imported/w3c/web-platform-tests/pointerevents/pointerevent_touch-action-mouse.html [ Skip ]
 # PointerEvents currently only supports mouse on GTK (no Touch/Pen support)
 webkit.org/b/204115 imported/w3c/web-platform-tests/pointerevents/pointerevent_change-touch-action-onpointerdown_touch.html [ Skip ]
 webkit.org/b/204115 imported/w3c/web-platform-tests/pointerevents/pointerevent_pointercancel_touch.html [ Skip ]
@@ -66,6 +70,7 @@ webkit.org/b/204115 imported/w3c/web-platform-tests/pointerevents/pointerevent_p
 imported/w3c/web-platform-tests/pointerevents/capturing_boundary_event_handler_at_ua_shadowdom.html?touch [ Skip ]
 imported/w3c/web-platform-tests/pointerevents/coalesced_events_attributes.html?touch [ Skip ]
 imported/w3c/web-platform-tests/pointerevents/coalesced_events_attributes_under_load.html?touch [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/pointerevent_after_target_appended.html?touch [ Skip ]
 imported/w3c/web-platform-tests/pointerevents/pointerevent_after_target_removed.html?touch [ Skip ]
 imported/w3c/web-platform-tests/pointerevents/pointerevent_attributes_hoverable_pointers.html?pen [ Skip ]
 imported/w3c/web-platform-tests/pointerevents/pointerevent_attributes_hoverable_rightbutton.html?mouse [ Skip ]
@@ -311,6 +316,8 @@ fast/history/page-cache-notification-suspendable.html
 # UI pickers are not implemented for date and time inputs.
 webkit.org/b/224924 fast/forms/date/date-show-hide-picker.html [ Skip ]
 webkit.org/b/224924 fast/forms/datetimelocal/datetimelocal-show-hide-picker.html [ Skip ]
+webkit.org/b/224924 fast/forms/date/date-show-picker.html [ Skip ]
+webkit.org/b/224924 fast/forms/datetimelocal/datetimelocal-show-picker.html [ Skip ]
 
 # Requires WebP support.
 webkit.org/b/98939 fast/canvas/canvas-toDataURL-webp.html [ Skip ]
@@ -1351,9 +1358,7 @@ webkit.org/b/128255 compositing/columns/composited-rl-paginated-repaint.html [ P
 
 webkit.org/b/194382 mathml/presentation/stretchy-depth-height-symmetric.html [ Failure ]
 imported/w3c/web-platform-tests/mathml/presentation-markup/tables/table-002.html [ Pass ]
-imported/w3c/web-platform-tests/mathml/relations/css-styling/ignored-properties-001.html [ Pass ]
 imported/w3c/web-platform-tests/mathml/relations/css-styling/not-participating-to-parent-layout.html [ Pass ]
-imported/w3c/web-platform-tests/mathml/relations/css-styling/padding-border-margin/margin-003.html [ Pass ]
 imported/w3c/web-platform-tests/mathml/relations/css-styling/padding-border-margin/padding-002.html [ Pass ]
 
 webkit.org/b/195466 imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/ready-states/autoplay.html [ Failure ]
@@ -1419,7 +1424,6 @@ webkit.org/b/259653 imported/w3c/web-platform-tests/html/cross-origin-opener-pol
 imported/w3c/web-platform-tests/html/cross-origin-opener-policy/javascript-url.https.html [ Failure ]
 imported/w3c/web-platform-tests/html/cross-origin-opener-policy/tentative/restrict-properties/iframe-popup-to-so.https.html [ Failure ]
 imported/w3c/web-platform-tests/html/cross-origin-opener-policy/tentative/restrict-properties/iframe-popup-to-soap.https.html [ Failure ]
-imported/w3c/web-platform-tests/html/cross-origin-opener-policy/tentative/restrict-properties/named_targeting.https.html [ Failure ]
 imported/w3c/web-platform-tests/html/dom/render-blocking/remove-element-unblocks-rendering.optional.html [ Failure ]
 
 # Flaky tests detected from 29Jan2023 to 23Feb2023
@@ -1968,7 +1972,6 @@ Bug(GTK) fast/backgrounds/background-position-parsing.html [ Failure ]
 Bug(GTK) fast/css/sticky/sticky-top-zoomed.html [ ImageOnlyFailure ]
 
 # There is no network load scheduling or prioritization with NetworkProcess.
-webkit.org/b/123431 http/tests/css/link-css-disabled-value-with-slow-loading-sheet-in-error.html [ Failure Pass ]
 webkit.org/b/123431 http/tests/local/link-stylesheet-load-order-preload.html [ Failure ]
 webkit.org/b/123431 http/tests/local/link-stylesheet-load-order.html [ Failure ]
 
@@ -2208,9 +2211,6 @@ webkit.org/b/182763 accessibility/gtk/aria-activedescendant-changed-notification
 
 webkit.org/b/183902 fast/dom/frame-loading-via-document-write.html [ Failure ]
 
-webkit.org/b/185254 http/tests/xmlhttprequest/state-after-network-error.html [ Failure ]
-webkit.org/b/185254 http/tests/cache/network-error-during-revalidation.html [ Failure ]
-
 # Imported css-text test suite from WPT
 webkit.org/b/183258 imported/w3c/web-platform-tests/css/css-text/letter-spacing/letter-spacing-control-chars-001.html [ ImageOnlyFailure ]
 webkit.org/b/183258 imported/w3c/web-platform-tests/css/css-text/word-break/word-break-break-all-007.html [ ImageOnlyFailure ]
@@ -2413,9 +2413,6 @@ webkit.org/b/257752 imported/w3c/web-platform-tests/html/rendering/the-details-e
 # Ftp code is disabled in gtk port
 http/tests/misc/ftp-eplf-directory.py [ Skip ]
 
-# These tests hit an assertion in JSUIScriptController::sendEventStream() since their import.
-imported/w3c/web-platform-tests/dom/events/non-cancelable-when-passive [ Skip ]
-
 webkit.org/b/238885 imported/w3c/web-platform-tests/WebCryptoAPI/derive_bits_keys/pbkdf2.https.any.html?1001-2000 [ Failure Timeout ]
 webkit.org/b/238885 imported/w3c/web-platform-tests/WebCryptoAPI/derive_bits_keys/pbkdf2.https.any.html?2001-3000 [ Failure Timeout ]
 webkit.org/b/238885 imported/w3c/web-platform-tests/WebCryptoAPI/derive_bits_keys/pbkdf2.https.any.html?3001-4000 [ Failure Timeout ]
@@ -2535,7 +2532,6 @@ webkit.org/b/261024 compositing/transforms/3d-transformed-fixed.html [ ImageOnly
 webkit.org/b/261024 fast/animation/animation-mixed-transform-crash.html [ ImageOnlyFailure Pass Timeout ]
 webkit.org/b/261024 fast/animation/css-animation-resuming-when-visible-with-style-change.html [ Pass Timeout ]
 webkit.org/b/261024 fast/animation/request-animation-frame-throttling-outside-viewport.html [ Pass Timeout ]
-webkit.org/b/261024 fast/canvas/offscreen-toggle-display.html [ ImageOnlyFailure Pass Timeout ]
 webkit.org/b/261024 fast/images/animated-gif-iframe-webkit-transform.html [ Pass Timeout ]
 webkit.org/b/261024 http/wpt/mediarecorder/MediaRecorder-video-bitrate.html [ Crash Failure Pass ]
 webkit.org/b/261024 imported/blink/compositing/layer-creation/incremental-destruction.html [ Pass Timeout ]
@@ -2654,4 +2650,7 @@ webkit.org/b/261024 webgl/2.0.y/conformance/offscreencanvas/context-attribute-pr
 webkit.org/b/261024 webgl/2.0.y/conformance/renderbuffers/framebuffer-state-restoration.html [ Pass Timeout ]
 webkit.org/b/261024 webgl/2.0.y/conformance/rendering/color-mask-preserved-during-implicit-clears.html [ Pass Timeout ]
 webkit.org/b/261024 webrtc/utf8-sdp.html [ Pass Timeout ]
-webkit.org/b/261024 webrtc/video-disabled-black.html [ Crash Pass ]
+
+imported/w3c/web-platform-tests/css/filter-effects/backdrop-filter-plus-filter.html [ ImageOnlyFailure ]
+
+fast/line-grid [ Skip ]

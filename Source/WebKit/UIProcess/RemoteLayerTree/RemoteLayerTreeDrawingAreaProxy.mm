@@ -31,7 +31,6 @@
 #import "LayerProperties.h"
 #import "Logging.h"
 #import "MessageSenderInlines.h"
-#import "PageClient.h"
 #import "RemoteLayerTreeDrawingAreaProxyMessages.h"
 #import "RemotePageDrawingAreaProxy.h"
 #import "RemotePageProxy.h"
@@ -145,13 +144,7 @@ void RemoteLayerTreeDrawingAreaProxy::sendUpdateGeometry()
     m_lastSentSizeToContentAutoSizeMaximumSize = webPageProxy->sizeToContentAutoSizeMaximumSize();
     m_lastSentSize = m_size;
     m_isWaitingForDidUpdateGeometry = true;
-
-    std::optional<VisibleContentRectUpdateInfo> visibleRectUpdateInfo;
-#if PLATFORM(IOS_FAMILY)
-    visibleRectUpdateInfo = m_webPageProxy->pageClient().createVisibleContentRectUpdateInfo();
-#endif
-
-    protectedWebPageProxy()->sendWithAsyncReply(Messages::DrawingArea::UpdateGeometry(m_size, visibleRectUpdateInfo, false /* flushSynchronously */, MachSendRight()), [weakThis = WeakPtr { this }] {
+    protectedWebPageProxy()->sendWithAsyncReply(Messages::DrawingArea::UpdateGeometry(m_size, false /* flushSynchronously */, MachSendRight()), [weakThis = WeakPtr { this }] {
         if (!weakThis)
             return;
         weakThis->didUpdateGeometry();
@@ -257,7 +250,7 @@ void RemoteLayerTreeDrawingAreaProxy::commitLayerTreeTransaction(IPC::Connection
             ++m_countOfTransactionsWithNonEmptyLayerChanges;
 
         if (m_remoteLayerTreeHost->updateLayerTree(layerTreeTransaction)) {
-            if (layerTreeTransaction.transactionID() >= state.transactionIDForUnhidingContent)
+            if (!m_replyForUnhidingContent)
                 webPageProxy->setRemoteLayerTreeRootNode(m_remoteLayerTreeHost->rootNode());
             else
                 m_remoteLayerTreeHost->detachRootLayer();
@@ -525,7 +518,7 @@ void RemoteLayerTreeDrawingAreaProxy::waitForDidUpdateActivityState(ActivityStat
 {
     ASSERT(activityStateChangeID != ActivityStateChangeAsynchronous);
 
-    if (!process.hasConnection())
+    if (!process.hasConnection() || activityStateChangeID == ActivityStateChangeAsynchronous)
         return;
 
     ProcessState& state = processStateForConnection(*process.connection());
@@ -544,14 +537,27 @@ void RemoteLayerTreeDrawingAreaProxy::waitForDidUpdateActivityState(ActivityStat
     WeakPtr weakThis { *this };
     auto startTime = MonotonicTime::now();
     while (process.connection()->waitForAndDispatchImmediately<Messages::RemoteLayerTreeDrawingAreaProxy::CommitLayerTree>(m_identifier, activityStateUpdateTimeout - (MonotonicTime::now() - startTime), IPC::WaitForOption::InterruptWaitingIfSyncMessageArrives) == IPC::Error::NoError) {
-        if (!weakThis || activityStateChangeID == ActivityStateChangeAsynchronous || activityStateChangeID <= state.activityStateChangeID)
+        if (!weakThis || activityStateChangeID <= state.activityStateChangeID)
             return;
+
+        if (state.commitLayerTreeMessageState == NeedsDisplayDidRefresh)
+            didRefreshDisplay(process.connection());
     }
 }
 
 void RemoteLayerTreeDrawingAreaProxy::hideContentUntilPendingUpdate()
 {
-    m_webPageProxyProcessState.transactionIDForUnhidingContent = nextLayerTreeTransactionID();
+    if (m_replyForUnhidingContent && protectedWebPageProxy()->process().hasConnection()) {
+        if (auto replyHandlerToCancel = protectedWebPageProxy()->process().connection()->takeAsyncReplyHandler(m_replyForUnhidingContent))
+            replyHandlerToCancel(nullptr);
+    }
+
+    m_replyForUnhidingContent = protectedWebPageProxy()->sendWithAsyncReply(Messages::DrawingArea::DispatchAfterEnsuringDrawing(), [weakThis = WeakPtr { this }] {
+        if (weakThis) {
+            weakThis->protectedWebPageProxy()->setRemoteLayerTreeRootNode(weakThis->m_remoteLayerTreeHost->rootNode());
+            weakThis->m_replyForUnhidingContent = AsyncReplyID { };
+        }
+    }, identifier());
     m_remoteLayerTreeHost->detachRootLayer();
 }
 

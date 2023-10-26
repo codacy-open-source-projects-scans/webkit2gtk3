@@ -7179,8 +7179,7 @@ window.onload = function() {
 
 static const char* openedPage = "Hello World";
 
-// FIXME: Get this working.
-TEST(ProcessSwap, DISABLED_SameSiteWindowWithOpenerNavigateToFile)
+TEST(ProcessSwap, SameSiteWindowWithOpenerNavigateToFile)
 {
     auto processPoolConfiguration = psonProcessPoolConfiguration();
     auto processPool = adoptNS([[WKProcessPool alloc] _initWithConfiguration:processPoolConfiguration.get()]);
@@ -7995,12 +7994,10 @@ static void checkSettingsControlledByLockdownMode(WKWebView *webView, ShouldBeEn
     String embedElementCheck = makeString("document.createElement('embed').__proto__ == ", shouldBeEnabled == ShouldBeEnabled::Yes ? "HTMLEmbedElement" : "HTMLUnknownElement", ".prototype");
     EXPECT_EQ(runJSCheck(embedElementCheck), true); // Embed Element.
 
-    EXPECT_EQ(runJSCheck("CSS.supports('content-visibility: visible')"_s), shouldBeEnabled == ShouldBeEnabled::Yes);
     EXPECT_EQ(runJSCheck("CSS.supports('overflow-anchor:none')"_s), shouldBeEnabled == ShouldBeEnabled::Yes);
     EXPECT_EQ(runJSCheck("CSS.supports('text-justify: auto')"_s), shouldBeEnabled == ShouldBeEnabled::Yes);
     EXPECT_EQ(runJSCheck("!!navigator.contacts"_s), isShowingInitialEmptyDocument != IsShowingInitialEmptyDocument::Yes && shouldBeEnabled == ShouldBeEnabled::Yes);
     EXPECT_EQ(runJSCheck("!!window.DeprecationReportBody"_s), shouldBeEnabled == ShouldBeEnabled::Yes);
-    EXPECT_EQ(runJSCheck("!!window.Highlight"_s), shouldBeEnabled == ShouldBeEnabled::Yes);
 
     // Confirm unstable settings are always off in Lockdown Mode.
     EXPECT_EQ(runJSCheck("!!navigator.requestCookieConsent"_s), false);
@@ -8981,3 +8978,34 @@ TEST(WebProcessCache, ReusedCrashedBackForwardSuspendedWebProcess)
 
     EXPECT_EQ(crashCount, 1u);
 }
+
+#if PLATFORM(MAC)
+TEST(ProcessSwap, MouseEventDuringCrossSiteProvisionalNavigation)
+{
+    auto processPoolConfiguration = psonProcessPoolConfiguration();
+    auto processPool = adoptNS([[WKProcessPool alloc] _initWithConfiguration:processPoolConfiguration.get()]);
+
+    auto webViewConfiguration = adoptNS([WKWebViewConfiguration new]);
+    [webViewConfiguration setProcessPool:processPool.get()];
+
+    auto handler = adoptNS([PSONScheme new]);
+    [webViewConfiguration setURLSchemeHandler:handler.get() forURLScheme:@"PSON"];
+
+    auto webView = adoptNS([[TestWKWebView alloc] initWithFrame:CGRectMake(0, 0, 800, 800) configuration:webViewConfiguration.get()]);
+    auto navigationDelegate = adoptNS([PSONNavigationDelegate new]);
+    [webView setNavigationDelegate:navigationDelegate.get()];
+
+    [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"pson://www.webkit.org/source.html"]]];
+    TestWebKitAPI::Util::run(&done);
+    done = false;
+
+    navigationDelegate->didStartProvisionalNavigationHandler = ^{
+        for (unsigned i = 0; i < 5; ++i)
+            [webView mouseMoveToPoint:CGPointMake(50 + i, 50 + i) withFlags:0];
+    };
+
+    [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"pson://www.apple.com/destination.html"]]];
+    TestWebKitAPI::Util::run(&done);
+    done = false;
+}
+#endif

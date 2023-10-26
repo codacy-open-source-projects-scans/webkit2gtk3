@@ -339,6 +339,17 @@ _PATH_RULES_SPECIFIER = [
      ["-runtime/wtf_make_unique",
       "-runtime/wtf_move"]),
 
+    ([  # Ignore formatting and whitespace issues in gmock.
+     os.path.join('Source', 'ThirdParty', 'gmock')],
+     ["-build",
+      "-legal/copyright",
+      "-list",
+      "-pep8",
+      "-readability",
+      "-runtime/unsigned",
+      "-runtime/wtf_move",
+      "-whitespace"]),
+
 ]
 
 
@@ -435,6 +446,7 @@ _SKIPPED_FILES_WITH_WARNING = [
 
     os.path.join('Source', 'JavaScriptCore', 'API', 'glib', 'jsc.h'),
     os.path.join('Source', 'WebCore', 'platform', 'gtk', 'GtkVersioning.h'),
+    os.path.join('Source', 'WebCore', 'platform', 'graphics', 'gbm', 'GBMVersioning.h'),
     os.path.join('Source', 'WebKit', 'UIProcess', 'API', 'gtk', 'webkit2.h'),
     os.path.join('Source', 'WebKit', 'UIProcess', 'API', 'gtk', 'webkit.h'),
     os.path.join('Source', 'WebKit', 'UIProcess', 'API', 'wpe', 'webkit.h'),
@@ -486,6 +498,7 @@ def _all_categories():
     """Return the set of all categories used by check-webkit-style."""
     # Take the union across all checkers.
     categories = CommonCategories.union(CppChecker.categories)
+    categories = categories.union(CMakeChecker.categories)
     categories = categories.union(JSChecker.categories)
     categories = categories.union(JSONChecker.categories)
     categories = categories.union(JSTestChecker.categories)

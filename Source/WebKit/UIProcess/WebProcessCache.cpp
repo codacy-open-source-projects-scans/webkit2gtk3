@@ -26,6 +26,7 @@
 #include "config.h"
 #include "WebProcessCache.h"
 
+#include "APIPageConfiguration.h"
 #include "LegacyGlobalSettings.h"
 #include "Logging.h"
 #include "WebProcessPool.h"
@@ -146,7 +147,7 @@ bool WebProcessCache::addProcess(std::unique_ptr<CachedProcess>&& cachedProcess)
     return true;
 }
 
-RefPtr<WebProcessProxy> WebProcessCache::takeProcess(const WebCore::RegistrableDomain& registrableDomain, WebsiteDataStore& dataStore, WebProcessProxy::LockdownMode lockdownMode)
+RefPtr<WebProcessProxy> WebProcessCache::takeProcess(const WebCore::RegistrableDomain& registrableDomain, WebsiteDataStore& dataStore, WebProcessProxy::LockdownMode lockdownMode, const API::PageConfiguration& pageConfiguration)
 {
     auto it = m_processesPerRegistrableDomain.find(registrableDomain);
     if (it == m_processesPerRegistrableDomain.end())
@@ -156,6 +157,9 @@ RefPtr<WebProcessProxy> WebProcessCache::takeProcess(const WebCore::RegistrableD
         return nullptr;
 
     if (it->value->process().lockdownMode() != lockdownMode)
+        return nullptr;
+
+    if (!it->value->process().hasSameGPUProcessPreferencesAs(pageConfiguration))
         return nullptr;
 
     auto process = it->value->takeProcess();
@@ -174,6 +178,7 @@ RefPtr<WebProcessProxy> WebProcessCache::takeProcess(const WebCore::RegistrableD
 
 void WebProcessCache::updateCapacity(WebProcessPool& processPool)
 {
+#if ENABLE(WEBPROCESS_CACHE)
     if (!processPool.configuration().processSwapsOnNavigation() || !processPool.configuration().usesWebProcessCache() || LegacyGlobalSettings::singleton().cacheModel() != CacheModel::PrimaryWebBrowser || processPool.configuration().usesSingleWebProcess()) {
         if (!processPool.configuration().processSwapsOnNavigation())
             WEBPROCESSCACHE_RELEASE_LOG("updateCapacity: Cache is disabled because process swap on navigation is disabled", 0);
@@ -205,6 +210,7 @@ void WebProcessCache::updateCapacity(WebProcessPool& processPool)
 
     if (!m_capacity)
         clear();
+#endif
 }
 
 void WebProcessCache::clear()

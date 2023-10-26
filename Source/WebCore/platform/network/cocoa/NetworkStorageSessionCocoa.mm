@@ -100,7 +100,7 @@ static Vector<Cookie> nsCookiesToCookieVector(NSArray<NSHTTPCookie *> *nsCookies
     cookies.reserveInitialCapacity(nsCookies.count);
     for (NSHTTPCookie *nsCookie in nsCookies) {
         if (!filter || filter(nsCookie))
-            cookies.uncheckedAppend(nsCookie);
+            cookies.append(nsCookie);
     }
     if (filter)
         cookies.shrinkToFit();
@@ -513,7 +513,7 @@ void NetworkStorageSession::setCookiesFromDOM(const URL& firstParty, const SameS
     END_BLOCK_OBJC_EXCEPTIONS
 }
 
-bool NetworkStorageSession::setCookieFromDOM(const URL& firstParty, const SameSiteInfo& sameSiteInfo, const URL& url, std::optional<FrameIdentifier> frameID, std::optional<PageIdentifier> pageID, ApplyTrackingPrevention applyTrackingPrevention, ShouldRelaxThirdPartyCookieBlocking shouldRelaxThirdPartyCookieBlocking, Cookie&& cookie) const
+bool NetworkStorageSession::setCookieFromDOM(const URL& firstParty, const SameSiteInfo& sameSiteInfo, const URL& url, std::optional<FrameIdentifier> frameID, std::optional<PageIdentifier> pageID, ApplyTrackingPrevention applyTrackingPrevention, const Cookie& cookie, ShouldRelaxThirdPartyCookieBlocking shouldRelaxThirdPartyCookieBlocking) const
 {
     ASSERT(hasProcessPrivilege(ProcessPrivilege::CanAccessRawCookies) || m_isInMemoryCookieStore);
 
@@ -561,16 +561,13 @@ HTTPCookieAcceptPolicy NetworkStorageSession::cookieAcceptPolicy() const
 
 bool NetworkStorageSession::getRawCookies(const URL& firstParty, const SameSiteInfo& sameSiteInfo, const URL& url, std::optional<FrameIdentifier> frameID, std::optional<PageIdentifier> pageID, ApplyTrackingPrevention applyTrackingPrevention, ShouldRelaxThirdPartyCookieBlocking shouldRelaxThirdPartyCookieBlocking, Vector<Cookie>& rawCookies) const
 {
-    rawCookies.clear();
     BEGIN_BLOCK_OBJC_EXCEPTIONS
 
     RetainPtr<NSArray> cookies = cookiesForURL(firstParty, sameSiteInfo, url, frameID, pageID, applyTrackingPrevention, shouldRelaxThirdPartyCookieBlocking);
     NSUInteger count = [cookies count];
-    rawCookies.reserveCapacity(count);
-    for (NSUInteger i = 0; i < count; ++i) {
-        NSHTTPCookie *cookie = (NSHTTPCookie *)[cookies objectAtIndex:i];
-        rawCookies.uncheckedAppend({ cookie });
-    }
+    rawCookies = Vector<Cookie>(count, [cookies](size_t i) {
+        return Cookie { (NSHTTPCookie *)[cookies objectAtIndex:i] };
+    });
 
     END_BLOCK_OBJC_EXCEPTIONS
     return true;
@@ -736,7 +733,7 @@ void NetworkStorageSession::registerCookieChangeListenersIfNecessary()
         if (cookies.isEmpty())
             return;
         for (auto& observer : it->value)
-            observer.get()->cookiesAdded(host, cookies);
+            observer->cookiesAdded(host, cookies);
     }).get() onQueue:dispatch_get_main_queue()];
 
     [nsCookieStorage() _setCookiesRemovedHandler:makeBlockPtr([this, weakThis = WeakPtr { *this }](NSArray<NSHTTPCookie *> *removedCookies, NSString *domainForRemovedCookies, bool removeAllCookies) {
@@ -745,7 +742,7 @@ void NetworkStorageSession::registerCookieChangeListenersIfNecessary()
         if (removeAllCookies) {
             for (auto& observers : m_cookieChangeObservers.values()) {
                 for (auto& observer : observers)
-                    observer.get()->allCookiesDeleted();
+                    observer->allCookiesDeleted();
             }
             return;
         }
@@ -759,7 +756,7 @@ void NetworkStorageSession::registerCookieChangeListenersIfNecessary()
         if (cookies.isEmpty())
             return;
         for (auto& observer : it->value)
-            observer.get()->cookiesDeleted(host, cookies);
+            observer->cookiesDeleted(host, cookies);
     }).get() onQueue:dispatch_get_main_queue()];
 }
 

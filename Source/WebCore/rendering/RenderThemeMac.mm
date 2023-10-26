@@ -43,7 +43,6 @@
 #import "Icon.h"
 #import "Image.h"
 #import "ImageControlsButtonMac.h"
-#import "LocalCurrentGraphicsContext.h"
 #import "LocalDefaultSystemAppearance.h"
 #import "LocalFrame.h"
 #import "LocalFrameView.h"
@@ -504,7 +503,11 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 
     ASSERT(!forVisitedLink);
 
-    return cache.systemStyleColors.ensure(cssValueID, [this, cssValueID, options, useDarkAppearance] () -> Color {
+    auto it = cache.systemStyleColors.find(cssValueID);
+    if (it != cache.systemStyleColors.end())
+        return it->value;
+
+    auto color = [this, cssValueID, options, useDarkAppearance]() -> Color {
         LocalDefaultSystemAppearance localAppearance(useDarkAppearance);
 
         auto selectCocoaColor = [cssValueID] () -> SEL {
@@ -735,7 +738,10 @@ ALLOW_DEPRECATED_DECLARATIONS_END
         default:
             return RenderTheme::systemColor(cssValueID, options);
         }
-    }).iterator->value;
+    }();
+
+    cache.systemStyleColors.add(cssValueID, color);
+    return color;
 }
 
 bool RenderThemeMac::usesTestModeFocusRingColor() const
@@ -1091,7 +1097,7 @@ void RenderThemeMac::adjustMenuListStyle(RenderStyle& style, const Element* e) c
 
     // White-space is locked to pre
     style.setWhiteSpaceCollapse(WhiteSpaceCollapse::Preserve);
-    style.setTextWrap(TextWrap::NoWrap);
+    style.setTextWrapMode(TextWrapMode::NoWrap);
 
     // Set the button's vertical size.
     setSizeFromFont(style, menuListButtonSizes());
@@ -1614,7 +1620,6 @@ bool RenderThemeMac::paintAttachment(const RenderObject& renderer, const PaintIn
         progress = progressString.toFloat(&validProgress);
 
     GraphicsContext& context = paintInfo.context();
-    LocalCurrentGraphicsContext localContext(context);
     GraphicsContextStateSaver saver(context);
 
     context.translate(toFloatSize(paintRect.location()));

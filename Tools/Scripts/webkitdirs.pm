@@ -159,7 +159,6 @@ BEGIN {
        &prependToEnvironmentVariableList
        &printHelpAndExitForRunAndDebugWebKitAppIfNeeded
        &productDir
-       &productDirForCMake
        &prohibitUnknownPort
        &relativeScriptsDir
        &removeCMakeCache
@@ -1035,7 +1034,7 @@ sub determineConfigurationProductDir
         if (usesPerConfigurationBuildDirectory()) {
             $configurationProductDir = "$baseProductDir";
         } else {
-            if (shouldUseFlatpak() or shouldBuildForCrossTarget() or inCrossTargetEnvironment()) {
+            if (isGtk() or isWPE() or isJSCOnly() or shouldUseFlatpak() or shouldBuildForCrossTarget() or inCrossTargetEnvironment()) {
                 $configurationProductDir = "$baseProductDir/$portName/$configuration";
             } else {
                 $configurationProductDir = "$baseProductDir/$configuration";
@@ -2268,11 +2267,11 @@ sub getMSBuildPlatformArgument()
 
 sub getCMakeWindowsToolsetArgument()
 {
+    my @args;
     my $toolset = getVisualStudioToolset();
-    if (defined($toolset) && length($toolset)) {
-        return "-A $toolset";
-    }
-    return "";
+    push(@args, '-A', $toolset) if defined($toolset) && length($toolset);
+    push(@args, '-T', 'ClangCL') if defined($ENV{CC}) && $ENV{CC} =~ 'clang-cl';
+    return @args;
 }
 
 sub buildVisualStudioProject
@@ -2526,7 +2525,7 @@ sub shouldUseFlatpak()
 
 sub cmakeCachePath()
 {
-    return File::Spec->catdir(productDirForCMake(), "CMakeCache.txt");
+    return File::Spec->catdir(productDir(), "CMakeCache.txt");
 }
 
 sub shouldRemoveCMakeCache(@)
@@ -2537,7 +2536,7 @@ sub shouldRemoveCMakeCache(@)
     my (@buildArgs) = grep(/^-/, sort(@_, @originalArgv));
 
     # We check this first, because we always want to create this file for a fresh build.
-    my $productDir = productDirForCMake();
+    my $productDir = productDir();
     my $optionsCache = File::Spec->catdir($productDir, "build-webkit-options.txt");
     my $joinedBuildArgs = join(" ", @buildArgs);
     if (isCachedArgumentfileOutOfDate($optionsCache, $joinedBuildArgs)) {
@@ -2562,6 +2561,11 @@ sub shouldRemoveCMakeCache(@)
 
     my $globalConfiguration = File::Spec->catdir(sourceDir(), "Source", "cmake", "OptionsCommon.cmake");
     if ($cacheFileModifiedTime < stat($globalConfiguration)->mtime) {
+        return 1;
+    }
+
+    my $compilerFlagsCMake = File::Spec->catdir(sourceDir(), "Source", "cmake", "WebKitCompilerFlags.cmake");
+    if ($cacheFileModifiedTime < stat($compilerFlagsCMake)->mtime) {
         return 1;
     }
 
@@ -2638,11 +2642,11 @@ sub cmakeGeneratedBuildfile(@)
 {
     my ($willUseNinja) = @_;
     if ($willUseNinja) {
-        return File::Spec->catfile(productDirForCMake(), "build.ninja")
+        return File::Spec->catfile(productDir(), "build.ninja")
     } elsif (isAnyWindows()) {
-        return File::Spec->catfile(productDirForCMake(), "WebKit.sln")
+        return File::Spec->catfile(productDir(), "WebKit.sln")
     } else {
-        return File::Spec->catfile(productDirForCMake(), "Makefile")
+        return File::Spec->catfile(productDir(), "Makefile")
     }
 }
 
@@ -2651,7 +2655,7 @@ sub generateBuildSystemFromCMakeProject
     my ($prefixPath, @cmakeArgs) = @_;
     my $config = configuration();
     my $port = cmakeBasedPortName();
-    my $buildPath = productDirForCMake();
+    my $buildPath = productDir();
     File::Path::mkpath($buildPath) unless -d $buildPath;
     my $originalWorkingDirectory = getcwd();
     chdir($buildPath) or die;
@@ -2731,18 +2735,11 @@ sub generateBuildSystemFromCMakeProject
     return $returnCode;
 }
 
-sub productDirForCMake() {
-    if (shouldBuildForCrossTarget() or inCrossTargetEnvironment()) {
-        return productDir();
-    }
-    return File::Spec->catdir(baseProductDir(), configuration());
-}
-
 sub buildCMakeGeneratedProject($)
 {
     my (@makeArgs) = @_;
     my $config = configuration();
-    my $buildPath = productDirForCMake();
+    my $buildPath = productDir();
     if (! -d $buildPath) {
         die "Must call generateBuildSystemFromCMakeProject() before building CMake project.";
     }
@@ -2772,7 +2769,7 @@ sub buildCMakeGeneratedProject($)
 sub cleanCMakeGeneratedProject()
 {
     my $config = configuration();
-    my $buildPath = productDirForCMake();
+    my $buildPath = productDir();
     if (-d $buildPath) {
         return systemVerbose("cmake", "--build", $buildPath, "--config", $config, "--target", "clean");
     }

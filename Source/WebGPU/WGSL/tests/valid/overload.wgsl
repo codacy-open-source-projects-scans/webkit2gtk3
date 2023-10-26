@@ -63,6 +63,9 @@ fn testMultiply() {
   _ = 1 * vec2(1, 1);
   _ = vec2(1, 1) * vec2(1, 1);
 
+  _ = m * 2;
+  _ = 2 * m;
+
   _ = mat2x2(0, 0, 0, 0) * mat2x2(0, 0, 0, 0);
   _ = mat2x2(0, 0, 0, 0) * mat3x2(0, 0, 0, 0, 0, 0);
   _ = mat2x2(0, 0, 0, 0) * mat4x2(0, 0, 0, 0, 0, 0, 0, 0);
@@ -184,6 +187,23 @@ fn testComparison() {
     _ = vec2(0.0) <= vec2(1.0);
     _ = vec2(0.0f) <= vec2(1.0f);
   }
+}
+
+fn testAddressOf()
+{
+    var x = 1;
+    testPointerDeference(&x);
+
+    let y: ptr<function, i32> = &x;
+    testPointerDeference(y);
+
+    let z = &x;
+    testPointerDeference(z);
+}
+
+fn testPointerDeference(x: ptr<function, i32>) -> i32
+{
+    return *x;
 }
 
 // 8.6. Logical Expressions (https://gpuweb.github.io/gpuweb/wgsl/#logical-expr)
@@ -501,6 +521,71 @@ fn testVec4() {
   _ = vec4(0, vec3(0, 0, 0));
 }
 
+// 16.2. Bit Reinterpretation Built-in Functions (https://www.w3.org/TR/WGSL/#bitcast-builtin)
+// RUN: %metal-compile testBitcast
+@compute @workgroup_size(1)
+fn testBitcast()
+{
+    let u = 0u;
+    let i = 0i;
+    let f = 0f;
+
+    // [T < Concrete32BitNumber, S < Concrete32BitNumber].(S) => T
+    { let x: u32 = bitcast<u32>(u); }
+    { let x: u32 = bitcast<u32>(i); }
+    { let x: u32 = bitcast<u32>(f); }
+
+    { let x: i32 = bitcast<i32>(u); }
+    { let x: i32 = bitcast<i32>(i); }
+    { let x: i32 = bitcast<i32>(f); }
+
+    { let x: f32 = bitcast<f32>(u); }
+    { let x: f32 = bitcast<f32>(i); }
+    { let x: f32 = bitcast<f32>(f); }
+
+    // [T < Concrete32BitNumber, S < Concrete32BitNumber, N].(vec[N][S]) => vec[N][T]
+    // vec2
+    { let x: vec2<u32> = bitcast<vec2<u32>>(vec2(u)); }
+    { let x: vec2<u32> = bitcast<vec2<u32>>(vec2(i)); }
+    { let x: vec2<u32> = bitcast<vec2<u32>>(vec2(f)); }
+
+    { let x: vec2<i32> = bitcast<vec2<i32>>(vec2(u)); }
+    { let x: vec2<i32> = bitcast<vec2<i32>>(vec2(i)); }
+    { let x: vec2<i32> = bitcast<vec2<i32>>(vec2(f)); }
+
+    { let x: vec2<f32> = bitcast<vec2<f32>>(vec2(u)); }
+    { let x: vec2<f32> = bitcast<vec2<f32>>(vec2(i)); }
+    { let x: vec2<f32> = bitcast<vec2<f32>>(vec2(f)); }
+
+    // vec3
+    { let x: vec3<u32> = bitcast<vec3<u32>>(vec3(u)); }
+    { let x: vec3<u32> = bitcast<vec3<u32>>(vec3(i)); }
+    { let x: vec3<u32> = bitcast<vec3<u32>>(vec3(f)); }
+
+    { let x: vec3<i32> = bitcast<vec3<i32>>(vec3(u)); }
+    { let x: vec3<i32> = bitcast<vec3<i32>>(vec3(i)); }
+    { let x: vec3<i32> = bitcast<vec3<i32>>(vec3(f)); }
+
+    { let x: vec3<f32> = bitcast<vec3<f32>>(vec3(u)); }
+    { let x: vec3<f32> = bitcast<vec3<f32>>(vec3(i)); }
+    { let x: vec3<f32> = bitcast<vec3<f32>>(vec3(f)); }
+
+    // vec4
+    { let x: vec4<u32> = bitcast<vec4<u32>>(vec4(u)); }
+    { let x: vec4<u32> = bitcast<vec4<u32>>(vec4(i)); }
+    { let x: vec4<u32> = bitcast<vec4<u32>>(vec4(f)); }
+
+    { let x: vec4<i32> = bitcast<vec4<i32>>(vec4(u)); }
+    { let x: vec4<i32> = bitcast<vec4<i32>>(vec4(i)); }
+    { let x: vec4<i32> = bitcast<vec4<i32>>(vec4(f)); }
+
+    { let x: vec4<f32> = bitcast<vec4<f32>>(vec4(u)); }
+    { let x: vec4<f32> = bitcast<vec4<f32>>(vec4(i)); }
+    { let x: vec4<f32> = bitcast<vec4<f32>>(vec4(f)); }
+
+    // FIXME: add f16 overloads
+}
+
 // 17.3. Logical Built-in Functions (https://www.w3.org/TR/WGSL/#logical-builtin-functions)
 
 // 17.3.1
@@ -586,6 +671,21 @@ fn testSelect()
         _ = select(vec4(13), vec4(42f),  vec4(true));
         _ = select(vec4(13), vec4(42.0), vec4(true));
     }
+}
+
+// 16.4. Array Built-in Functions
+
+var<storage, read> a1: array<i32>;
+var<storage, read_write> a2: array<i32>;
+
+// 16.4.1.
+fn testArrayLength()
+{
+    // [T].(Ptr[Storage, Array[T], Read]) => U32,
+    _ = arrayLength(&a1);
+
+    // [T].(Ptr[Storage, Array[T], ReadWrite]) => U32,
+    _ = arrayLength(&a2);
 }
 
 // 17.5. Numeric Built-in Functions (https://www.w3.org/TR/WGSL/#numeric-builtin-functions)
@@ -1610,27 +1710,38 @@ fn testPow()
 // 17.5.45
 fn testQuantizeToF16() {
     // [].(F32) => F32,
+    // FIXME: we don't support this as constant yet, since there's no f16 implementation.
+    // In order to avoid constant evaluation we use a non-const argument. We
+    // should re-enable the commented-out tests below once we implement f16.
     {
-        _ = quantizeToF16(0);
-        _ = quantizeToF16(0.0);
-        _ = quantizeToF16(0f);
+        let x = 0f;
+        _ = quantizeToF16(x);
+        // _ = quantizeToF16(0);
+        // _ = quantizeToF16(0.0);
+        // _ = quantizeToF16(0f);
     }
 
     // [N].(Vector[F32, N]) => Vector[F32, N],
     {
-        _ = quantizeToF16(vec2(0));
-        _ = quantizeToF16(vec2(0.0));
-        _ = quantizeToF16(vec2(0f));
+        let x = vec2(0f);
+        _ = quantizeToF16(x);
+        // _ = quantizeToF16(vec2(0));
+        // _ = quantizeToF16(vec2(0.0));
+        // _ = quantizeToF16(vec2(0f));
     }
     {
-        _ = quantizeToF16(vec3(0));
-        _ = quantizeToF16(vec3(0.0));
-        _ = quantizeToF16(vec3(0f));
+        let x = vec3(0f);
+        _ = quantizeToF16(x);
+        // _ = quantizeToF16(vec3(0));
+        // _ = quantizeToF16(vec3(0.0));
+        // _ = quantizeToF16(vec3(0f));
     }
     {
-        _ = quantizeToF16(vec4(0));
-        _ = quantizeToF16(vec4(0.0));
-        _ = quantizeToF16(vec4(0f));
+        let x = vec4(0f);
+        _ = quantizeToF16(x);
+        // _ = quantizeToF16(vec4(0));
+        // _ = quantizeToF16(vec4(0.0));
+        // _ = quantizeToF16(vec4(0f));
     }
 }
 
@@ -1988,46 +2099,119 @@ fn testTrunc()
     }
 }
 
+// 16.6. Derivative Built-in Functions (https://www.w3.org/TR/WGSL/#derivative-builtin-functions)
+// RUN: %metal-compile testDerivativeFunctions
+@fragment
+fn testDerivativeFunctions()
+{
+    // All have the same signatures:
+    //   [].(f32) => f32,
+    //   [N].(vec[N][f32]) => vec[N][f32],
+
+    // 16.6.1 dpdx
+    _ = dpdx(2.0);
+    _ = dpdx(vec2(2.0));
+    _ = dpdx(vec3(2.0));
+    _ = dpdx(vec4(2.0));
+
+    // 16.6.2 dpdxCoarse
+    _ = dpdxCoarse(2.0);
+    _ = dpdxCoarse(vec2(2.0));
+    _ = dpdxCoarse(vec3(2.0));
+    _ = dpdxCoarse(vec4(2.0));
+
+    // 16.6.3 dpdxFine
+    _ = dpdxFine(2.0);
+    _ = dpdxFine(vec2(2.0));
+    _ = dpdxFine(vec3(2.0));
+    _ = dpdxFine(vec4(2.0));
+
+    // 16.6.4 dpdy
+    _ = dpdy(2.0);
+    _ = dpdy(vec2(2.0));
+    _ = dpdy(vec3(2.0));
+    _ = dpdy(vec4(2.0));
+
+    // 16.6.5 dpdyCoarse
+    _ = dpdyCoarse(2.0);
+    _ = dpdyCoarse(vec2(2.0));
+    _ = dpdyCoarse(vec3(2.0));
+    _ = dpdyCoarse(vec4(2.0));
+
+    // 16.6.6 dpdyFine
+    _ = dpdyFine(2.0);
+    _ = dpdyFine(vec2(2.0));
+    _ = dpdyFine(vec3(2.0));
+    _ = dpdyFine(vec4(2.0));
+
+    // 16.6.7 fwidth
+    _ = fwidth(2.0);
+    _ = fwidth(vec2(2.0));
+    _ = fwidth(vec3(2.0));
+    _ = fwidth(vec4(2.0));
+
+    // 16.6.8 fwidthCoarse
+    _ = fwidthCoarse(2.0);
+    _ = fwidthCoarse(vec2(2.0));
+    _ = fwidthCoarse(vec3(2.0));
+    _ = fwidthCoarse(vec4(2.0));
+
+    // 16.6.9 fwidthFine
+    _ = fwidthFine(2.0);
+    _ = fwidthFine(vec2(2.0));
+    _ = fwidthFine(vec3(2.0));
+    _ = fwidthFine(vec4(2.0));
+}
+
 // 16.7. Texture Built-in Functions (https://gpuweb.github.io/gpuweb/wgsl/#texture-builtin-functions)
 
-var s: sampler;
+@group(0) @binding( 0) var s: sampler;
+@group(0) @binding(31) var sc: sampler_comparison;
 
-var t1d: texture_1d<f32>;
-var t1di: texture_1d<i32>;
-var t1du: texture_1d<u32>;
+@group(0) @binding( 1) var t1d: texture_1d<f32>;
+@group(0) @binding( 2) var t1di: texture_1d<i32>;
+@group(0) @binding( 3) var t1du: texture_1d<u32>;
 
-var t2d: texture_2d<f32>;
-var t2di: texture_2d<i32>;
-var t2du: texture_2d<u32>;
+@group(0) @binding( 4) var t2d: texture_2d<f32>;
+@group(0) @binding( 5) var t2di: texture_2d<i32>;
+@group(0) @binding( 6) var t2du: texture_2d<u32>;
 
-var t2da: texture_2d_array<f32>;
-var t2dai: texture_2d_array<i32>;
-var t2dau: texture_2d_array<u32>;
+@group(0) @binding( 7) var t2da: texture_2d_array<f32>;
+@group(0) @binding( 8) var t2dai: texture_2d_array<i32>;
+@group(0) @binding( 9) var t2dau: texture_2d_array<u32>;
 
-var t3d: texture_3d<f32>;
-var t3di: texture_3d<i32>;
-var t3du: texture_3d<u32>;
+@group(0) @binding(10) var t3d: texture_3d<f32>;
+@group(0) @binding(11) var t3di: texture_3d<i32>;
+@group(0) @binding(12) var t3du: texture_3d<u32>;
 
-var tm2d: texture_multisampled_2d<f32>;
-var tm2di: texture_multisampled_2d<i32>;
-var tm2du: texture_multisampled_2d<u32>;
+@group(0) @binding(13) var tm2d: texture_multisampled_2d<f32>;
+@group(0) @binding(14) var tm2di: texture_multisampled_2d<i32>;
+@group(0) @binding(15) var tm2du: texture_multisampled_2d<u32>;
 
-var te: texture_external;
-var tc: texture_cube<f32>;
-var tca: texture_cube_array<f32>;
+@group(0) @binding(16) var tc: texture_cube<f32>;
+@group(0) @binding(17) var tca: texture_cube_array<f32>;
 
-var ts1d: texture_storage_2d<rgba8unorm, read>;
-var ts2d: texture_storage_2d<rgba16uint, write>;
-var ts2da: texture_storage_2d<r32sint, read_write>;
-var ts3d: texture_storage_2d<rgba32float, write>;
+@group(0) @binding(18) var ts1d: texture_storage_1d<rgba8unorm, write>;
+@group(0) @binding(19) var ts2d: texture_storage_2d<rgba16uint, write>;
+@group(0) @binding(20) var ts2da: texture_storage_2d_array<r32sint, write>;
+@group(0) @binding(21) var ts3d: texture_storage_3d<rgba32float, write>;
+@group(0) @binding(22) var te: texture_external;
+
+var td2d: texture_depth_2d;
+var td2da: texture_depth_2d_array;
+var tdc: texture_depth_cube;
+var tdca: texture_depth_cube_array;
+var tdms2d: texture_depth_multisampled_2d;
 
 // 16.7.1
+// RUN: %metal-compile testTextureDimensions
+@compute @workgroup_size(1)
 fn testTextureDimensions()
 {
-    // FIXME: add declarations for texture storage and texture depth
-
     // [S < Concrete32BitNumber].(Texture[S, Texture1d]) => U32,
     _ = textureDimensions(t1d);
+    // [F, AM].(texture_storage_1d[F, AM]) => u32,
+    _ = textureDimensions(ts1d);
 
     // [S < Concrete32BitNumber, T < ConcreteInteger].(Texture[S, Texture1d], T) => U32,
     _ = textureDimensions(t1d, 0);
@@ -2042,6 +2226,23 @@ fn testTextureDimensions()
     _ = textureDimensions(tca);
     // [S < Concrete32BitNumber].(Texture[S, TextureMultisampled2d]) => Vector[U32, 2],
     _ = textureDimensions(tm2d);
+
+    // [].(texture_depth_2d) => Vector[U32, 2],
+    _ = textureDimensions(td2d);
+    // [].(texture_depth_2d_array) => Vector[U32, 2],
+    _ = textureDimensions(td2da);
+    // [].(texture_depth_cube) => Vector[U32, 2],
+    _ = textureDimensions(tdc);
+    // [].(texture_depth_cube_array) => Vector[U32, 2],
+    _ = textureDimensions(tdca);
+    // [].(texture_depth_multisampled_2d) => Vector[U32, 2],
+    _ = textureDimensions(tdms2d);
+
+    // [F, AM].(texture_storage_2d[F, AM]) => vec2[u32],
+    _ = textureDimensions(ts2d);
+    // [F, AM].(texture_storage_2d_array[F, AM]) => vec2[u32],
+    _ = textureDimensions(ts2da);
+
     // [].(TextureExternal) => Vector[U32, 2],
     _ = textureDimensions(te);
 
@@ -2053,9 +2254,19 @@ fn testTextureDimensions()
     _ = textureDimensions(tc, 0);
     // [S < Concrete32BitNumber, T < ConcreteInteger].(Texture[S, TextureCubeArray], T) => Vector[U32, 2],
     _ = textureDimensions(tca, 0);
+    // [T < ConcreteInteger].(texture_depth_2d, T) => Vector[U32, 2],
+    _ = textureDimensions(td2d, 0);
+    // [T < ConcreteInteger].(texture_depth_2d_array, T) => Vector[U32, 2],
+    _ = textureDimensions(td2da, 0);
+    // [T < ConcreteInteger].(texture_depth_cube, T) => Vector[U32, 2],
+    _ = textureDimensions(tdc, 0);
+    // [T < ConcreteInteger].(texture_depth_cube_array, T) => Vector[U32, 2],
+    _ = textureDimensions(tdca, 0);
 
     // [S < Concrete32BitNumber].(Texture[S, Texture3d]) => Vector[U32, 3],
     _ = textureDimensions(t3d);
+    // [F, AM].(texture_storage_3d[F, AM]) => vec3[u32],
+    _ = textureDimensions(ts3d);
 
     // [S < Concrete32BitNumber, T < ConcreteInteger].(Texture[S, Texture3d], T) => Vector[U32, 3],
     _ = textureDimensions(t3d, 0);
@@ -2064,8 +2275,6 @@ fn testTextureDimensions()
 // 16.7.2
 fn testTextureGather()
 {
-    // FIXME: add declarations for texture depth
-
     // [T < ConcreteInteger, S < Concrete32BitNumber].(T, Texture[S, Texture2d], Sampler, Vector[F32, 2]) => Vector[S, 4],
     _ = textureGather(0, t2d, s, vec2f(0));
 
@@ -2083,12 +2292,51 @@ fn testTextureGather()
 
     // [T < ConcreteInteger, S < Concrete32BitNumber, U < ConcreteInteger].(T, Texture[S, TextureCubeArray], Sampler, Vector[F32, 3], U) => Vector[S, 4],
     _ = textureGather(0, tca, s, vec3f(0), 0);
+
+    // [].(texture_depth_2d, Sampler, Vector[F32, 2]) => Vector[F32, 4],
+    _ = textureGather(td2d, s, vec2f(0));
+
+    // [].(texture_depth_2d, Sampler, Vector[F32, 2], Vector[I32, 2]) => Vector[F32, 4],
+    _ = textureGather(td2d, s, vec2f(0), vec2i(0));
+
+    // [].(texture_depth_cube, Sampler, Vector[F32, 3]) => Vector[F32, 4],
+    _ = textureGather(tdc, s, vec3f(0));
+
+    // [U < ConcreteInteger].(texture_depth_2d_array, Sampler, Vector[F32, 2], U) => Vector[F32, 4],
+    _ = textureGather(td2da, s, vec2f(0), 0);
+
+    // [U < ConcreteInteger].(texture_depth_2d_array, Sampler, Vector[F32, 2], U, Vector[I32, 2]) => Vector[F32, 4],
+    _ = textureGather(td2da, s, vec2f(0), 0, vec2i(0));
+
+    // [U < ConcreteInteger].(texture_depth_cube_array, Sampler, Vector[F32, 3], U) => Vector[F32, 4],
+    _ = textureGather(tdca, s, vec3f(0), 0);
 }
 
 // 16.7.3 textureGatherCompare
-// FIXME: this only applies to texture_depth, implement
+fn testTextureGatherCompare()
+{
+    // [].(texture_depth_2d, sampler_comparison, vec2[f32], f32) => vec4[f32],
+    _ = textureGatherCompare(td2d, sc, vec2f(0), 0f);
+
+    // [].(texture_depth_2d, sampler_comparison, vec2[f32], f32, vec2[i32]) => vec4[f32],
+    _ = textureGatherCompare(td2d, sc, vec2f(0), 0f, vec2i(0));
+
+    // [T < ConcreteInteger].(texture_depth_2d_array, sampler_comparison, vec2[f32], T, f32) => vec4[f32],
+    _ = textureGatherCompare(td2da, sc, vec2f(0), 0i, 0f);
+
+    // [T < ConcreteInteger].(texture_depth_2d_array, sampler_comparison, vec2[f32], T, f32, vec2[i32]) => vec4[f32],
+    _ = textureGatherCompare(td2da, sc, vec2f(0), 0i, 0f, vec2i(0));
+
+    // [].(texture_depth_cube, sampler_comparison, vec3[f32], f32) => vec4[f32],
+    _ = textureGatherCompare(tdc, sc, vec3f(0), 0f);
+
+    // [T < ConcreteInteger].(texture_depth_cube_array, sampler_comparison, vec3[f32], T, f32) => vec4[f32],
+    _ = textureGatherCompare(tdca, sc, vec3f(0), 0i, 0f);
+}
 
 // 16.7.4
+// RUN: %metal-compile testTextureLoad
+@compute @workgroup_size(1)
 fn testTextureLoad()
 {
     // [T < ConcreteInteger, U < ConcreteInteger, S < Concrete32BitNumber].(Texture[S, Texture1d], T, U) => Vector[S, 4],
@@ -2192,25 +2440,53 @@ fn testTextureLoad()
         _ = textureLoad(te, vec2(0i));
         _ = textureLoad(te, vec2(0u));
     }
+
+    // [T < ConcreteInteger, U < ConcreteInteger].(texture_depth_2d, Vector[T, 2], U) => F32,
+    {
+        _ = textureLoad(td2d, vec2(0), 0);
+        _ = textureLoad(td2d, vec2(0i), 0i);
+        _ = textureLoad(td2d, vec2(0u), 0u);
+    }
+
+    // [T < ConcreteInteger, S < ConcreteInteger, U < ConcreteInteger].(texture_depth_2d_array, Vector[T, 2], S, U) => F32,
+    {
+        _ = textureLoad(td2da, vec2(0), 0, 0);
+        _ = textureLoad(td2da, vec2(0i), 0i, 0i);
+        _ = textureLoad(td2da, vec2(0u), 0u, 0u);
+    }
+
+    // [T < ConcreteInteger, U < ConcreteInteger].(texture_depth_multisampled_2d, Vector[T, 2], U) => F32,
+    {
+        _ = textureLoad(tdms2d, vec2(0), 0);
+        _ = textureLoad(tdms2d, vec2(0i), 0i);
+        _ = textureLoad(tdms2d, vec2(0u), 0u);
+    }
 }
 
 // 16.7.5
 fn testTextureNumLayers()
 {
-    // FIXME: add declarations for texture storage and texture depth
-
     // [S < Concrete32BitNumber].(Texture[S, Texture2dArray]) => U32,
     _ = textureNumLayers(t2da);
 
     // [S < Concrete32BitNumber].(Texture[S, TextureCubeArray]) => U32,
     _ = textureNumLayers(tca);
+
+    // [].(texture_depth_2d_array) => U32,
+    _ = textureNumLayers(td2da);
+
+    // [].(texture_depth_cube_array) => U32,
+    _ = textureNumLayers(tdca);
+
+    // [F, AM].(texture_storage_2d_array[F, AM]) => u32,
+    _ = textureNumLayers(ts2da);
 }
 
 // 16.7.6
+// RUN: %metal-compile testTextureNumLevels
+@compute @workgroup_size(1)
 fn testTextureNumLevels()
 {
-    // FIXME: add declarations for texture depth
-
     // [S < Concrete32BitNumber].(Texture[S, Texture1d]) => U32,
     _ = textureNumLevels(t1d);
 
@@ -2228,22 +2504,33 @@ fn testTextureNumLevels()
 
     // [S < Concrete32BitNumber].(Texture[S, TextureCubeArray]) => U32,
     _ = textureNumLevels(tca);
+
+    // [].(texture_depth_2d) => U32,
+    _ = textureNumLevels(td2d);
+
+    // [].(texture_depth_2d_array) => U32,
+    _ = textureNumLevels(td2da);
+
+    // [].(texture_depth_cube) => U32,
+    _ = textureNumLevels(tdc);
+
+    // [].(texture_depth_cube_array) => U32,
+    _ = textureNumLevels(tdca);
 }
 
 // 16.7.7
 fn testTextureNumSamples()
 {
-    // FIXME: add declarations for texture depth
-
     // [S < Concrete32BitNumber].(Texture[S, TextureMultisampled2d]) => U32,
     _ = textureNumSamples(tm2d);
+
+    // [].(texture_depth_multisampled_2d) => U32,
+    _ = textureNumSamples(tdms2d);
 }
 
 // 16.7.8
-fn testTextureSample() {
-    // FIXME: add overloads for texture_depth
-    // https://bugs.webkit.org/show_bug.cgi?id=254515
-
+fn testTextureSample()
+{
     // [].(Texture[F32, Texture1d], Sampler, F32) => Vector[F32, 4],
     _ = textureSample(t1d, s, 1);
 
@@ -2270,6 +2557,24 @@ fn testTextureSample() {
 
     // [T < ConcreteInteger].(Texture[F32, TextureCubeArray], Sampler, Vector[F32, 3], T) => Vector[F32, 4],
     _ = textureSample(tca, s, vec3<f32>(0, 0, 0), 0);
+
+    // [].(texture_depth_2d, Sampler, Vector[F32, 2]) => F32,
+    _ = textureSample(td2d, s, vec2f(0));
+
+    // [].(texture_depth_2d, Sampler, Vector[F32, 2], Vector[I32, 2]) => F32,
+    _ = textureSample(td2d, s, vec2f(0), vec2i(0));
+
+    // [T < ConcreteInteger].(texture_depth_2d_array, Sampler, Vector[F32, 2], T) => F32,
+    _ = textureSample(td2da, s, vec2f(0), 0);
+
+    // [T < ConcreteInteger].(texture_depth_2d_array, Sampler, Vector[F32, 2], T, Vector[I32, 2]) => F32,
+    _ = textureSample(td2da, s, vec2f(0), 0, vec2i(0));
+
+    // [].(texture_depth_cube, Sampler, Vector[F32, 3]) => F32,
+    _ = textureSample(tdc, s, vec3f(0));
+
+    // [T < ConcreteInteger].(texture_depth_cube_array, Sampler, Vector[F32, 3], T) => F32,
+    _ = textureSample(tdca, s, vec3f(0), 0);
 }
 
 
@@ -2301,11 +2606,51 @@ fn testTextureSampleBias()
     _ = textureSampleBias(tca, s, vec3f(0), 0, 0);
 }
 
-// 16.7.10 textureSampleCompare
-// FIXME: this only applies to texture_depth, implement
+// 16.7.10
+// RUN: %metal-compile testTextureSampleCompare
+@compute @workgroup_size(1)
+fn testTextureSampleCompare()
+{
+    // [].(texture_depth_2d, sampler_comparison, vec2[f32], f32) => f32,
+    _ = textureSampleCompare(td2d, sc, vec2f(0), 0);
 
-// 16.7.11 textureSampleCompareLevel
-// FIXME: this only applies to texture_depth, implement
+    // [].(texture_depth_2d, sampler_comparison, vec2[f32], f32, vec2[i32]) => f32,
+    _ = textureSampleCompare(td2d, sc, vec2f(0), 0, vec2i(0));
+
+    // [T < ConcreteInteger].(texture_depth_2d_array, sampler_comparison, vec2[f32], T, f32) => f32,
+    _ = textureSampleCompare(td2da, sc, vec2f(0), 0i, 0f);
+
+    // [T < ConcreteInteger].(texture_depth_2d_array, sampler_comparison, vec2[f32], T, f32, vec2[i32]) => f32,
+    _ = textureSampleCompare(td2da, sc, vec2f(0), 0i, 0f, vec2i(0));
+
+    // [].(texture_depth_cube, sampler_comparison, vec3[f32], f32) => f32,
+    _ = textureSampleCompare(tdc, sc, vec3f(0), 0);
+
+    // [T < ConcreteInteger].(texture_depth_cube_array, sampler_comparison, vec3[f32], T, f32) => f32,
+    _ = textureSampleCompare(tdca, sc, vec3f(0), 0i, 0f);
+}
+
+// 16.7.11
+fn testTextureSampleCompareLevel()
+{
+    // [].(texture_depth_2d, sampler_comparison, vec2[f32], f32) => f32,
+    _ = textureSampleCompareLevel(td2d, sc, vec2f(0), 0);
+
+    // [].(texture_depth_2d, sampler_comparison, vec2[f32], f32, vec2[i32]) => f32,
+    _ = textureSampleCompareLevel(td2d, sc, vec2f(0), 0, vec2i(0));
+
+    // [T < ConcreteInteger].(texture_depth_2d_array, sampler_comparison, vec2[f32], T, f32) => f32,
+    _ = textureSampleCompareLevel(td2da, sc, vec2f(0), 0i, 0f);
+
+    // [T < ConcreteInteger].(texture_depth_2d_array, sampler_comparison, vec2[f32], T, f32, vec2[i32]) => f32,
+    _ = textureSampleCompareLevel(td2da, sc, vec2f(0), 0i, 0f, vec2i(0));
+
+    // [].(texture_depth_cube, sampler_comparison, vec3[f32], f32) => f32,
+    _ = textureSampleCompareLevel(tdc, sc, vec3f(0), 0);
+
+    // [T < ConcreteInteger].(texture_depth_cube_array, sampler_comparison, vec3[f32], T, f32) => f32,
+    _ = textureSampleCompareLevel(tdca, sc, vec3f(0), 0i, 0f);
+}
 
 // 16.7.12
 fn testTextureSampleGrad()
@@ -2336,10 +2681,10 @@ fn testTextureSampleGrad()
 }
 
 // 16.7.13
+// RUN: %metal-compile testTexureSampleLevel
+@compute @workgroup_size(1)
 fn testTextureSampleLevel()
 {
-    // FIXME: add declarations for texture depth
-
     // [].(Texture[F32, Texture2d], Sampler, Vector[F32, 2], F32) => Vector[F32, 4],
     _ = textureSampleLevel(t2d, s, vec2f(0), 0);
 
@@ -2363,6 +2708,24 @@ fn testTextureSampleLevel()
 
     // [T < ConcreteInteger].(Texture[F32, TextureCubeArray], Sampler, Vector[F32, 3], T, F32) => Vector[F32, 4],
     _ = textureSampleLevel(tca, s, vec3f(0), 0i, 0f);
+
+    // [T < ConcreteInteger].(texture_depth_2d, Sampler, Vector[F32, 2], T) => F32,
+    _ = textureSampleLevel(td2d, s, vec2f(0), 0i);
+
+    // [T < ConcreteInteger].(texture_depth_2d, Sampler, Vector[F32, 2], T, Vector[I32, 2]) => F32,
+    _ = textureSampleLevel(td2d, s, vec2f(0), 0i, vec2i(0));
+
+    // [S < ConcreteInteger, T < ConcreteInteger].(texture_depth_2d_array, Sampler, Vector[F32, 2], S, T) => F32,
+    _ = textureSampleLevel(td2da, s, vec2f(0), 0i, 0u);
+
+    // [S < ConcreteInteger, T < ConcreteInteger].(texture_depth_2d_array, Sampler, Vector[F32, 2], S, T, Vector[I32, 2]) => F32,
+    _ = textureSampleLevel(td2da, s, vec2f(0), 0i, 0u, vec2i(0));
+
+    // [T < ConcreteInteger].(texture_depth_cube, Sampler, Vector[F32, 3], T) => F32,
+    _ = textureSampleLevel(tdc, s, vec3f(0), 0u);
+
+    // [S < ConcreteInteger, T < ConcreteInteger].(texture_depth_cube_array, Sampler, Vector[F32, 3], S, T) => F32,
+    _ = textureSampleLevel(tdca, s, vec3f(0), 0i, 0u);
 }
 
 // 16.7.14
@@ -2374,5 +2737,91 @@ fn testTextureSampleBaseClampToEdge() {
     _ = textureSampleBaseClampToEdge(t2d, s, vec2f(0));
 }
 
-// 16.7.15 textureStore
-// FIXME: this only applies to texture_storage, implement
+// 16.7.15
+// RUN: %metal-compile testTextureStore
+@compute @workgroup_size(1)
+fn testTextureStore()
+{
+    // [F, T < ConcreteInteger].(texture_storage_1d[F, write], T, vec4[ChannelFormat[F]]) => void,
+    textureStore(ts1d, 0, vec4f(0));
+
+    // [F, T < ConcreteInteger].(texture_storage_2d[F, write], vec2[T], vec4[ChannelFormat[F]]) => void,
+    textureStore(ts2d, vec2(0), vec4u(0));
+
+    // [F, T < ConcreteInteger, S < ConcreteInteger].(texture_storage_2d_array[F, write], vec2[T], S, vec4[ChannelFormat[F]]) => void,
+    textureStore(ts2da, vec2(0), 0, vec4i(0));
+
+    // [F, T < ConcreteInteger].(texture_storage_3d[F, write], vec3[T], vec4[ChannelFormat[F]]) => void,
+    textureStore(ts3d, vec3(0), vec4f(0));
+}
+
+// 16.8. Atomic Built-in Functions (https://www.w3.org/TR/WGSL/#atomic-builtin-functions)
+var<workgroup> x: atomic<i32>;
+
+// RUN: %metal-compile testAtomicFunctions
+@compute @workgroup_size(1)
+fn testAtomicFunctions()
+{
+    testAtomicLoad();
+    testAtomicStore();
+    testAtomicReadWriteModify();
+}
+
+// 16.8.1
+fn testAtomicLoad()
+{
+    // [AS, T].(ptr[AS, atomic[T], read_write]) => T,
+    _ = atomicLoad(&x);
+}
+
+// 16.8.2
+fn testAtomicStore()
+{
+    /*[AS, T].(ptr[AS, atomic[T], read_write], T) => void,*/
+    atomicStore(&x, 42);
+}
+
+// 16.8.3. Atomic Read-modify-write (this spec entry contains several functions)
+fn testAtomicReadWriteModify()
+{
+    // [AS, T].(ptr[AS, atomic[T], read_write], T) => T,
+    _ = atomicAdd(&x, 42);
+    _ = atomicSub(&x, 42);
+    _ = atomicMax(&x, 42);
+    _ = atomicMin(&x, 42);
+    _ = atomicOr(&x, 42);
+    _ = atomicXor(&x, 42);
+    _ = atomicExchange(&x, 42);
+}
+
+// FIXME: Implement atomicCompareExchangeWeak (which depends on the result struct that is not currently supported)
+
+// 16.11. Synchronization Built-in Functions (https://www.w3.org/TR/WGSL/#sync-builtin-functions)
+
+// 16.11.1.
+// RUN: %metal-compile testStorageBarrier
+@compute @workgroup_size(1)
+fn testStorageBarrier()
+{
+    // [].() => void,
+    storageBarrier();
+}
+
+// 16.11.2.
+// RUN: %metal-compile testWorkgroupBarrier
+@compute @workgroup_size(1)
+fn testWorkgroupBarrier()
+{
+    // fn workgroupBarrier()
+    workgroupBarrier();
+}
+
+// 16.11.3.
+var<workgroup> testWorkgroupUniformLoadHelper: i32;
+// RUN: %metal-compile testWorkgroupUniformLoad
+@compute @workgroup_size(1)
+fn testWorkgroupUniformLoad()
+{
+    // [T].(ptr[workgroup, T]) => void,
+    _ = workgroupUniformLoad(&testWorkgroupUniformLoadHelper);
+}

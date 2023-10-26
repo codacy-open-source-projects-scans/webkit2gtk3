@@ -294,10 +294,12 @@ public:
     // to know if there is non-affine content, e.g. for drawing into an image.
     bool has3DContent() const;
     
-    static bool isCompositedSubframeRenderer(const RenderObject&);
+    static bool hasCompositedWidgetContents(const RenderObject&);
+    static bool isCompositedPlugin(const RenderObject&);
+
     static RenderLayerCompositor* frameContentsCompositor(RenderWidget&);
-    // Return true if the layers changed.
-    bool parentFrameContentLayers(RenderWidget&);
+    // Returns true the widget contents layer was parented.
+    bool attachWidgetContentLayers(RenderWidget&);
 
     // Update the geometry of the layers used for clipping and scrolling in frames.
     void frameViewDidChangeLocation(const IntPoint& contentsOffset);
@@ -324,7 +326,6 @@ public:
     void layerTiledBackingUsageChanged(const GraphicsLayer*, bool /*usingTiledBacking*/);
     
     bool acceleratedDrawingEnabled() const { return m_acceleratedDrawingEnabled; }
-    bool displayListDrawingEnabled() const { return m_displayListDrawingEnabled; }
 
     void deviceOrPageScaleFactorChanged();
 
@@ -422,6 +423,7 @@ private:
     bool layerRepaintTargetsBackingSharingLayer(RenderLayer&, BackingSharingState&) const;
 
     void computeExtent(const LayerOverlapMap&, const RenderLayer&, OverlapExtent&) const;
+    void computeClippingScopes(const RenderLayer&, OverlapExtent&) const;
     void addToOverlapMap(LayerOverlapMap&, const RenderLayer&, OverlapExtent&) const;
     void addDescendantsToOverlapMapRecursive(LayerOverlapMap&, const RenderLayer&, const RenderLayer* ancestorLayer = nullptr) const;
     void updateOverlapMap(LayerOverlapMap&, const RenderLayer&, OverlapExtent&, bool didPushContainer, bool addLayerToOverlap, bool addDescendantsToOverlap = false) const;
@@ -583,7 +585,6 @@ private:
     bool m_showDebugBorders { false };
     bool m_showRepaintCounter { false };
     bool m_acceleratedDrawingEnabled { false };
-    bool m_displayListDrawingEnabled { false };
 
     bool m_compositing { false };
     bool m_flushingLayers { false };

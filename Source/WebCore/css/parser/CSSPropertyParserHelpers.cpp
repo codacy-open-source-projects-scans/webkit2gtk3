@@ -66,6 +66,7 @@
 #include "CSSPaintImageValue.h"
 #include "CSSParser.h"
 #include "CSSParserIdioms.h"
+#include "CSSPrimitiveValue.h"
 #include "CSSPrimitiveValueMappings.h"
 #include "CSSQuadValue.h"
 #include "CSSRayValue.h"
@@ -1700,9 +1701,10 @@ static std::optional<CSSValueID> consumeIdentRangeRaw(CSSParserTokenRange& range
 
 RefPtr<CSSPrimitiveValue> consumeIdentRange(CSSParserTokenRange& range, CSSValueID lower, CSSValueID upper)
 {
-    if (range.peek().id() < lower || range.peek().id() > upper)
+    auto value = consumeIdentRangeRaw(range, lower, upper);
+    if (!value)
         return nullptr;
-    return consumeIdent(range);
+    return CSSPrimitiveValue::create(*value);
 }
 
 static String consumeCustomIdentRaw(CSSParserTokenRange& range, bool shouldLowercase = false)
@@ -3518,7 +3520,7 @@ std::optional<PositionCoordinates> consumePositionCoordinates(CSSParserTokenRang
 RefPtr<CSSValue> consumePosition(CSSParserTokenRange& range, CSSParserMode parserMode, UnitlessQuirk unitless, PositionSyntax positionSyntax)
 {
     if (auto coordinates = consumePositionCoordinates(range, parserMode, unitless, positionSyntax))
-        return CSSValuePair::create(WTFMove(coordinates->x), WTFMove(coordinates->y));
+        return CSSValuePair::createNoncoalescing(WTFMove(coordinates->x), WTFMove(coordinates->y));
     return nullptr;
 }
 
@@ -4877,7 +4879,8 @@ AtomString concatenateFamilyName(CSSParserTokenRange& range)
         }
         builder.append(range.consumeIncludingWhitespace().value());
     }
-    if (!addedSpace && !isValidCustomIdentifier(firstToken.id()))
+    // <family-name> can't contain unquoted generic families
+    if (!addedSpace && (!isValidCustomIdentifier(firstToken.id()) || !genericFontFamily(firstToken.id()).isNull()))
         return nullAtom();
     return builder.toAtomString();
 }
@@ -4904,11 +4907,27 @@ Vector<AtomString> consumeFamilyNameListRaw(CSSParserTokenRange& range)
     return result;
 }
 
+static std::optional<CSSValueID> consumeGenericFamilyRaw(CSSParserTokenRange& range)
+{
+    return consumeIdentRaw<CSSValueSerif, CSSValueSansSerif, CSSValueCursive, CSSValueFantasy, CSSValueMonospace, CSSValueWebkitBody, CSSValueWebkitPictograph, CSSValueSystemUi>(range);
+}
+
+static RefPtr<CSSValue> consumeGenericFamily(CSSParserTokenRange& range)
+{
+    if (auto familyName = consumeGenericFamilyRaw(range)) {
+        // FIXME: Remove special case for system-ui.
+        if (*familyName == CSSValueSystemUi)
+            return CSSValuePool::singleton().createFontFamilyValue(nameString(*familyName));
+        return CSSPrimitiveValue::create(*familyName);
+    }
+    return nullptr;
+}
+
 static std::optional<Vector<FontFamilyRaw>> consumeFontFamilyRaw(CSSParserTokenRange& range)
 {
     Vector<FontFamilyRaw> list;
     do {
-        if (auto ident = consumeIdentRangeRaw(range, CSSValueSerif, CSSValueWebkitBody))
+        if (auto ident = consumeGenericFamilyRaw(range))
             list.append({ *ident });
         else {
             auto familyName = consumeFamilyNameRaw(range);
@@ -5039,7 +5058,7 @@ const AtomString& genericFontFamily(CSSValueID ident)
     case CSSValueSystemUi:
         return WebKitFontFamilyNames::systemUiFamily.get();
     default:
-        return emptyAtom();
+        return nullAtom();
     }
 }
 
@@ -5555,11 +5574,6 @@ RefPtr<CSSValue> consumeFamilyNameList(CSSParserTokenRange& range)
     });
 }
 
-static RefPtr<CSSValue> consumeGenericFamily(CSSParserTokenRange& range)
-{
-    return consumeIdentRange(range, CSSValueSerif, CSSValueWebkitBody);
-}
-
 RefPtr<CSSValue> consumeFontFamily(CSSParserTokenRange& range)
 {
     return consumeCommaSeparatedListWithoutSingleValueOptimization(range, [] (auto& range) -> RefPtr<CSSValue> {
@@ -6014,13 +6028,13 @@ static RefPtr<CSSValue> consumeLinear(CSSParserTokenRange& range)
             double inputHigh = i < steps.size() ? *steps[i].input : std::max(1.0, largestInput);
             double inputAverage = (inputLow + inputHigh) / (i - *missingInputRunStart + 1);
             for (size_t j = *missingInputRunStart; j < i; ++j)
-                points.uncheckedAppend({ steps[j].output, inputAverage * (j - *missingInputRunStart + 1) });
+                points.append({ steps[j].output, inputAverage * (j - *missingInputRunStart + 1) });
 
             missingInputRunStart = std::nullopt;
         }
 
         if (i < steps.size() && steps[i].input)
-            points.uncheckedAppend({ steps[i].output, *steps[i].input });
+            points.append({ steps[i].output, *steps[i].input });
     }
     ASSERT(!missingInputRunStart);
     ASSERT(points.size() == steps.size());
@@ -7109,7 +7123,7 @@ static RefPtr<CSSRayValue> consumeRayShape(CSSParserTokenRange& range, const CSS
     if (range.peek().type() != FunctionToken || range.peek().functionId() != CSSValueRay)
         return nullptr;
 
-    CSSParserTokenRange args = consumeFunction(range);
+    auto args = consumeFunction(range);
 
     RefPtr<CSSPrimitiveValue> angle;
     std::optional<CSSValueID> size;
@@ -7147,33 +7161,38 @@ static RefPtr<CSSRayValue> consumeRayShape(CSSParserTokenRange& range, const CSS
 static RefPtr<CSSValue> consumeBasicShapeRayOrBox(CSSParserTokenRange& range, const CSSParserContext& context, ConsumeRay consumeRay)
 {
     CSSValueListBuilder list;
-    bool funcFound = false;
-    bool boxFound = false;
-    while (!range.atEnd() && !(funcFound && boxFound)) {
-        RefPtr<CSSValue> componentValue;
-        if (range.peek().type() == FunctionToken && !funcFound) {
-            if (consumeRay == ConsumeRay::Include) {
-                componentValue = consumeRayShape(range, context);
-                if (componentValue) {
-                    funcFound = true;
-                    list.append(componentValue.releaseNonNull());
-                    continue;
-                }
-            }
-            componentValue = consumeBasicShape(range, context);
-            funcFound = true;
-        } else if (range.peek().type() == IdentToken && !boxFound) {
-            // FIXME: The current Motion Path spec calls for this to be a <coord-box>, not a <geometry-box>, the difference being that the former does not contain "margin-box" as a valid term.
-            // However, the spec also has a few examples using "margin-box", so there seems to be some abiguity to be resolved. Tracked at https://github.com/w3c/fxtf-drafts/issues/481.
-            componentValue = CSSPropertyParsing::consumeGeometryBox(range);
-            boxFound = true;
-        }
-        if (!componentValue)
-            break;
-        list.append(componentValue.releaseNonNull());
+    RefPtr<CSSValue> shape;
+    RefPtr<CSSValue> box;
+
+    auto consumeShapeOrRay = [&](CSSParserTokenRange& subrange) -> RefPtr<CSSValue> {
+        RefPtr<CSSValue> ray;
+        if (consumeRay == ConsumeRay::Include && (ray = consumeRayShape(subrange, context)))
+            return ray;
+        return consumeBasicShape(subrange, context);
+    };
+
+    while (!range.atEnd()) {
+        if (!shape && (shape = consumeShapeOrRay(range)))
+            continue;
+
+        // FIXME: The Motion Path spec calls for this to be a <coord-box>, not a <geometry-box>, the difference being that the former does not contain "margin-box" as a valid term.
+        // However, the spec also has a few examples using "margin-box", so there seems to be some abiguity to be resolved. See: https://github.com/w3c/fxtf-drafts/issues/481.
+        if (!box && (box = CSSPropertyParsing::consumeGeometryBox(range)))
+            continue;
+
+        break;
     }
+
+    bool hasShape = !!shape;
+    if (shape)
+        list.append(shape.releaseNonNull());
+    // Default value is border-box.
+    if (box && (box->valueID() != CSSValueBorderBox || !hasShape))
+        list.append(box.releaseNonNull());
+
     if (list.isEmpty())
         return nullptr;
+
     return CSSValueList::createSpaceSeparated(WTFMove(list));
 }
 
@@ -7208,17 +7227,19 @@ RefPtr<CSSValue> consumeShapeOutside(CSSParserTokenRange& range, const CSSParser
     if (auto imageValue = consumeImageOrNone(range, context))
         return imageValue;
     CSSValueListBuilder list;
-    if (auto boxValue = consumeIdent<CSSValueContentBox, CSSValuePaddingBox, CSSValueBorderBox, CSSValueMarginBox>(range))
-        list.append(boxValue.releaseNonNull());
+    auto boxValue = CSSPropertyParsing::consumeShapeBox(range);
+    bool hasShapeValue = false;
     if (auto shapeValue = consumeBasicShape(range, context)) {
         if (shapeValue->isPath())
             return nullptr;
         list.append(shapeValue.releaseNonNull());
-        if (list.size() < 2) {
-            if (auto boxValue = consumeIdent<CSSValueContentBox, CSSValuePaddingBox, CSSValueBorderBox, CSSValueMarginBox>(range))
-                list.append(boxValue.releaseNonNull());
-        }
+        hasShapeValue = true;
     }
+    if (!boxValue)
+        boxValue = CSSPropertyParsing::consumeShapeBox(range);
+    // margin-box is the default.
+    if (boxValue && (boxValue->valueID() != CSSValueMarginBox || !hasShapeValue))
+        list.append(boxValue.releaseNonNull());
     if (list.isEmpty())
         return nullptr;
     return CSSValueList::createSpaceSeparated(WTFMove(list));
@@ -7518,37 +7539,6 @@ template<CSSPropertyID property> RefPtr<CSSValue> consumeBackgroundSize(CSSParse
     if (shouldCoalesce)
         return CSSValuePair::create(horizontal.releaseNonNull(), vertical.releaseNonNull());
     return CSSValuePair::createNoncoalescing(horizontal.releaseNonNull(), vertical.releaseNonNull());
-}
-
-RefPtr<CSSValueList> consumeAlignTracks(CSSParserTokenRange& range)
-{
-    CSSValueListBuilder parsedValues;
-    do {
-        if (range.atEnd())
-            break;
-        auto value = consumeContentDistributionOverflowPosition(range, isContentPositionKeyword);
-        if (!value)
-            return nullptr;
-        parsedValues.append(value.releaseNonNull());
-    } while (consumeCommaIncludingWhitespace(range));
-    return CSSValueList::createCommaSeparated(WTFMove(parsedValues));
-}
-
-RefPtr<CSSValueList> consumeJustifyTracks(CSSParserTokenRange& range)
-{
-    CSSValueListBuilder parsedValues;
-    do {
-        if (range.atEnd())
-            break;
-        // justify-tracks property does not allow the <baseline-position> values.
-        if (isBaselineKeyword(range.peek().id()))
-            return nullptr;
-        auto value = consumeContentDistributionOverflowPosition(range, isContentPositionOrLeftOrRightKeyword);
-        if (!value)
-            return nullptr;
-        parsedValues.append(value.releaseNonNull());
-    } while (consumeCommaIncludingWhitespace(range));
-    return CSSValueList::createCommaSeparated(WTFMove(parsedValues));
 }
 
 RefPtr<CSSValue> consumeGridAutoFlow(CSSParserTokenRange& range)

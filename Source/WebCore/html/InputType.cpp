@@ -669,7 +669,7 @@ void InputType::createShadowSubtree()
 {
 }
 
-void InputType::destroyShadowSubtree()
+void InputType::removeShadowSubtree()
 {
     ASSERT(element());
     RefPtr<ShadowRoot> root = element()->userAgentShadowRoot();
@@ -1002,6 +1002,11 @@ bool InputType::isPresentingAttachedView() const
 }
 
 bool InputType::supportsSelectionAPI() const
+{
+    return false;
+}
+
+bool InputType::dirAutoUsesValue() const
 {
     return false;
 }

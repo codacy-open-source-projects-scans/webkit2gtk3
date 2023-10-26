@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 Apple Inc. All rights reserved.
+ * Copyright (C) 2022-2023 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -66,6 +66,12 @@ namespace WebCore { class MoveOnlyDerivedClass; }
 namespace WebKit { class PlatformClass; }
 namespace WebKit { class CustomEncoded; }
 namespace WebKit { class LayerProperties; }
+namespace WebKit { class Fabulous; }
+namespace WebCore { struct Amazing; }
+namespace JSC { enum class Incredible; }
+namespace Testing { enum class StorageSize : uint8_t; }
+namespace WebCore { class ScrollingStateFrameHostingNode; }
+namespace WebCore { class ScrollingStateFrameHostingNodeWithStuffAfterTuple; }
 
 namespace IPC {
 
@@ -182,6 +188,36 @@ template<> struct ArgumentCoder<WebKit::CustomEncoded> {
 template<> struct ArgumentCoder<WebKit::LayerProperties> {
     static void encode(Encoder&, const WebKit::LayerProperties&);
     static std::optional<WebKit::LayerProperties> decode(Decoder&);
+};
+
+template<> struct ArgumentCoder<WebKit::TemplateTest<WebKit::Fabulous>> {
+    static void encode(Encoder&, const WebKit::TemplateTest<WebKit::Fabulous>&);
+    static std::optional<WebKit::TemplateTest<WebKit::Fabulous>> decode(Decoder&);
+};
+
+template<> struct ArgumentCoder<WebKit::TemplateTest<WebCore::Amazing>> {
+    static void encode(Encoder&, const WebKit::TemplateTest<WebCore::Amazing>&);
+    static std::optional<WebKit::TemplateTest<WebCore::Amazing>> decode(Decoder&);
+};
+
+template<> struct ArgumentCoder<WebKit::TemplateTest<JSC::Incredible>> {
+    static void encode(Encoder&, const WebKit::TemplateTest<JSC::Incredible>&);
+    static std::optional<WebKit::TemplateTest<JSC::Incredible>> decode(Decoder&);
+};
+
+template<> struct ArgumentCoder<WebKit::TemplateTest<Testing::StorageSize>> {
+    static void encode(Encoder&, const WebKit::TemplateTest<Testing::StorageSize>&);
+    static std::optional<WebKit::TemplateTest<Testing::StorageSize>> decode(Decoder&);
+};
+
+template<> struct ArgumentCoder<WebCore::ScrollingStateFrameHostingNode> {
+    static void encode(Encoder&, const WebCore::ScrollingStateFrameHostingNode&);
+    static std::optional<Ref<WebCore::ScrollingStateFrameHostingNode>> decode(Decoder&);
+};
+
+template<> struct ArgumentCoder<WebCore::ScrollingStateFrameHostingNodeWithStuffAfterTuple> {
+    static void encode(Encoder&, const WebCore::ScrollingStateFrameHostingNodeWithStuffAfterTuple&);
+    static std::optional<Ref<WebCore::ScrollingStateFrameHostingNodeWithStuffAfterTuple>> decode(Decoder&);
 };
 
 } // namespace IPC

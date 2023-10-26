@@ -343,7 +343,7 @@ static const AtomString& hideAtom()
 }
 
 // https://html.spec.whatwg.org/#popover-target-element
-HTMLElement* HTMLFormControlElement::popoverTargetElement() const
+RefPtr<HTMLElement> HTMLFormControlElement::popoverTargetElement() const
 {
     auto canInvokePopovers = [](const HTMLFormControlElement& element) -> bool {
         if (!element.document().settings().popoverAttributeEnabled() || element.document().quirks().shouldDisablePopoverAttributeQuirk())
@@ -362,7 +362,7 @@ HTMLElement* HTMLFormControlElement::popoverTargetElement() const
     if (form() && isSubmitButton())
         return nullptr;
 
-    auto* element = dynamicDowncast<HTMLElement>(getElementAttribute(popovertargetAttr));
+    RefPtr element = dynamicDowncast<HTMLElement>(getElementAttribute(popovertargetAttr));
     if (element && element->popoverState() != PopoverState::None)
         return element;
     return nullptr;
@@ -404,12 +404,6 @@ void HTMLFormControlElement::handlePopoverTargetAction() const
         target->hidePopover();
     else if (shouldShow)
         target->showPopover(this);
-
-    if (shouldHide || shouldShow) {
-        // Accessibility needs to know that the invoker (this) toggled popover visibility state.
-        if (auto* cache = document().existingAXObjectCache())
-            cache->onPopoverTargetToggle(*this);
-    }
 }
 
 // FIXME: We should remove the quirk once <rdar://problem/47334655> is fixed.

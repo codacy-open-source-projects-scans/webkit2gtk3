@@ -28,6 +28,7 @@
 #include "config.h"
 #include "HTMLCanvasElement.h"
 
+#include "BitmapImage.h"
 #include "Blob.h"
 #include "BlobCallback.h"
 #include "CanvasGradient.h"
@@ -656,7 +657,7 @@ void HTMLCanvasElement::paint(GraphicsContext& context, const LayoutRect& r)
         if (shouldPaint) {
             if (hasCreatedImageBuffer()) {
                 if (ImageBuffer* imageBuffer = buffer())
-                    context.drawImageBuffer(*imageBuffer, snappedIntRect(r), context.compositeOperation());
+                    context.drawImageBuffer(*imageBuffer, snappedIntRect(r), { context.compositeOperation() });
             }
         }
     }
@@ -798,7 +799,7 @@ RefPtr<ImageData> HTMLCanvasElement::getImageData()
     if (document().settings().webAPIStatisticsEnabled())
         ResourceLoadObserver::shared().logCanvasRead(document());
 
-    auto pixelBuffer = downcast<WebGLRenderingContextBase>(*m_context).paintRenderingResultsToPixelBuffer(GraphicsContextGL::FlipY::Yes);
+    auto pixelBuffer = downcast<WebGLRenderingContextBase>(*m_context).drawingBufferToPixelBuffer(GraphicsContextGL::FlipY::Yes);
     if (!is<ByteArrayPixelBuffer>(pixelBuffer))
         return nullptr;
 
@@ -820,10 +821,11 @@ RefPtr<VideoFrame> HTMLCanvasElement::toVideoFrame()
     if (is<WebGLRenderingContextBase>(m_context.get())) {
         if (document().settings().webAPIStatisticsEnabled())
             ResourceLoadObserver::shared().logCanvasRead(document());
-        return downcast<WebGLRenderingContextBase>(*m_context).paintCompositedResultsToVideoFrame();
+        return downcast<WebGLRenderingContextBase>(*m_context).surfaceBufferToVideoFrame(WebGLRenderingContextBase::SurfaceBuffer::DrawingBuffer);
     }
 #endif
-    auto* imageBuffer = buffer();
+
+    RefPtr imageBuffer = buffer();
     if (!imageBuffer)
         return nullptr;
     if (document().settings().webAPIStatisticsEnabled())
@@ -923,7 +925,7 @@ Image* HTMLCanvasElement::copiedImage() const
     if (!m_copiedImage && buffer()) {
         if (m_context)
             m_context->paintRenderingResultsToCanvas();
-        m_copiedImage = buffer()->copyImage(CopyBackingStore, PreserveResolution::Yes);
+        m_copiedImage = BitmapImage::create(buffer()->copyNativeImage());
     }
     return m_copiedImage.get();
 }

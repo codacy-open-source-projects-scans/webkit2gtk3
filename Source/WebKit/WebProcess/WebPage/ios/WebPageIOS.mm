@@ -256,6 +256,14 @@ RetainPtr<NSData> WebPage::accessibilityRemoteTokenData() const
     return newAccessibilityRemoteToken([NSUUID UUID]);
 }
 
+void WebPage::relayAccessibilityNotification(const String& notificationName, const RetainPtr<NSData>& notificationData)
+{
+    IPC::DataReference dataToken = { };
+    if ([notificationData length])
+        dataToken = IPC::DataReference(reinterpret_cast<const uint8_t*>([notificationData bytes]), [notificationData length]);
+    send(Messages::WebPageProxy::RelayAccessibilityNotification(notificationName, dataToken));
+}
+
 static void computeEditableRootHasContentAndPlainText(const VisibleSelection& selection, EditorState::PostLayoutData& data)
 {
     data.hasContent = false;
@@ -396,7 +404,9 @@ void WebPage::getPlatformEditorState(LocalFrame& frame, EditorState& result) con
             // rather than the focused element. This causes caret colors in editable children to be
             // ignored in favor of the editing host's caret color. See: <https://webkit.org/b/229809>.
             if (RefPtr editableRoot = selection.rootEditableElement(); editableRoot && editableRoot->renderer()) {
-                postLayoutData.caretColor = CaretBase::computeCaretColor(editableRoot->renderer()->style(), editableRoot.get());
+                auto& style = editableRoot->renderer()->style();
+                postLayoutData.caretColor = CaretBase::computeCaretColor(style, editableRoot.get());
+                postLayoutData.hasCaretColorAuto = style.hasAutoCaretColor();
                 postLayoutData.hasGrammarDocumentMarkers = editableRoot->document().markers().hasMarkers(makeRangeSelectingNodeContents(*editableRoot), DocumentMarker::Grammar);
             }
         }
@@ -517,6 +527,7 @@ void WebPage::restorePageState(const HistoryItem& historyItem)
             scrollPosition = FloatPoint(historyItem.scrollPosition());
         }
 
+        RELEASE_LOG(Scrolling, "WebPage::restorePageState with matching minimumLayoutSize; historyItem.shouldRestoreScrollPosition %d, scrollPosition.y %d", historyItem.shouldRestoreScrollPosition(), historyItem.scrollPosition().y());
         send(Messages::WebPageProxy::RestorePageState(scrollPosition, frameView.scrollOrigin(), historyItem.obscuredInsets(), boundedScale));
     } else {
         IntSize oldContentSize = historyItem.contentSize();
@@ -533,6 +544,7 @@ void WebPage::restorePageState(const HistoryItem& historyItem)
                 newCenter = FloatRect(historyItem.unobscuredContentRect()).center();
         }
 
+        RELEASE_LOG(Scrolling, "WebPage::restorePageState with mismatched minimumLayoutSize; historyItem.shouldRestoreScrollPosition %d, unobscured rect top %d, scale %.2f", historyItem.shouldRestoreScrollPosition(), historyItem.unobscuredContentRect().y(), newScale);
         scalePage(newScale, IntPoint());
         send(Messages::WebPageProxy::RestorePageCenterAndScale(newCenter, newScale));
     }
@@ -877,7 +889,7 @@ void WebPage::completeSyntheticClick(Node& nodeRespondingToClick, const WebCore:
     if (!localMainFrame)
         return;
 
-    RefPtr oldFocusedFrame = CheckedRef(m_page->focusController())->focusedFrame();
+    RefPtr oldFocusedFrame = CheckedRef(m_page->focusController())->focusedLocalFrame();
     RefPtr<Element> oldFocusedElement = oldFocusedFrame ? oldFocusedFrame->document()->focusedElement() : nullptr;
 
     SetForScope userIsInteractingChange { m_userIsInteracting, true };
@@ -900,7 +912,7 @@ void WebPage::completeSyntheticClick(Node& nodeRespondingToClick, const WebCore:
     if (m_isClosed)
         return;
 
-    RefPtr newFocusedFrame = CheckedRef(m_page->focusController())->focusedFrame();
+    RefPtr newFocusedFrame = CheckedRef(m_page->focusController())->focusedLocalFrame();
     RefPtr<Element> newFocusedElement = newFocusedFrame ? newFocusedFrame->document()->focusedElement() : nullptr;
 
     if (nodeRespondingToClick.document().settings().contentChangeObserverEnabled() && !nodeRespondingToClick.document().quirks().shouldDisableContentChangeObserver()) {
@@ -1109,7 +1121,7 @@ void WebPage::sendTapHighlightForNodeIfNecessary(WebKit::TapIdentifier requestID
     }
 
     if (is<HTMLAreaElement>(node)) {
-        node = downcast<HTMLAreaElement>(node)->imageElement();
+        node = downcast<HTMLAreaElement>(node)->imageElement().get();
         if (!node)
             return;
     }
@@ -1366,7 +1378,7 @@ void WebPage::setForceAlwaysUserScalable(bool userScalable)
 
 static IntRect elementBoundsInFrame(const LocalFrame& frame, const Element& focusedElement)
 {
-    frame.document()->updateLayoutIgnorePendingStylesheets();
+    frame.document()->updateLayout(LayoutOptions::IgnorePendingStylesheets);
     
     if (focusedElement.hasTagName(HTMLNames::textareaTag) || focusedElement.hasTagName(HTMLNames::inputTag) || focusedElement.hasTagName(HTMLNames::selectTag))
         return WebPage::absoluteInteractionBounds(focusedElement);
@@ -2421,43 +2433,6 @@ void WebPage::updateSelectionWithExtentPoint(const WebCore::IntPoint& point, boo
     callback(m_selectionAnchor == Start);
 }
 
-void WebPage::requestDictationContext(CompletionHandler<void(const String&, const String&, const String&)>&& completionHandler)
-{
-    Ref frame = CheckedRef(m_page->focusController())->focusedOrMainFrame();
-    VisiblePosition startPosition = frame->selection().selection().start();
-    VisiblePosition endPosition = frame->selection().selection().end();
-    const unsigned dictationContextWordCount = 5;
-
-    String selectedText = plainTextForContext(frame->selection().selection().toNormalizedRange());
-
-    String contextBefore;
-    if (startPosition != startOfEditableContent(startPosition)) {
-        VisiblePosition currentPosition = startPosition;
-        VisiblePosition lastPosition = startPosition;
-        for (unsigned i = 0; i < dictationContextWordCount; ++i) {
-            currentPosition = startOfWord(positionOfNextBoundaryOfGranularity(lastPosition, TextGranularity::WordGranularity, SelectionDirection::Backward));
-            if (currentPosition.isNull())
-                break;
-            lastPosition = currentPosition;
-        }
-        contextBefore = plainTextForContext(makeSimpleRange(lastPosition, startPosition));
-    }
-
-    String contextAfter;
-    if (endPosition != endOfEditableContent(endPosition)) {
-        VisiblePosition currentPosition = endPosition;
-        VisiblePosition lastPosition = endPosition;
-        for (unsigned i = 0; i < dictationContextWordCount; ++i) {
-            currentPosition = endOfWord(positionOfNextBoundaryOfGranularity(lastPosition, TextGranularity::WordGranularity, SelectionDirection::Forward));
-            if (currentPosition.isNull())
-                break;
-            lastPosition = currentPosition;
-        }
-        contextAfter = plainTextForContext(makeSimpleRange(endPosition, lastPosition));
-    }
-
-    completionHandler(selectedText, contextBefore, contextAfter);
-}
 #if ENABLE(REVEAL)
 RetainPtr<RVItem> WebPage::revealItemForCurrentSelection()
 {
@@ -3505,15 +3480,16 @@ void WebPage::performActionOnElement(uint32_t action, const String& authorizatio
         RefPtr<FragmentedSharedBuffer> buffer = cachedImage->resourceBuffer();
         if (!buffer)
             return;
-        SharedMemory::Handle handle;
+        std::optional<SharedMemory::Handle> handle;
         {
             auto sharedMemoryBuffer = SharedMemory::copyBuffer(*buffer);
             if (!sharedMemoryBuffer)
                 return;
-            if (auto memoryHandle = sharedMemoryBuffer->createHandle(SharedMemory::Protection::ReadOnly))
-                handle = WTFMove(*memoryHandle);
+            handle = sharedMemoryBuffer->createHandle(SharedMemory::Protection::ReadOnly);
         }
-        send(Messages::WebPageProxy::SaveImageToLibrary(WTFMove(handle), authorizationToken));
+        if (!handle)
+            return;
+        send(Messages::WebPageProxy::SaveImageToLibrary(WTFMove(*handle), authorizationToken));
     }
 
     handleAnimationActions(element, action);
@@ -4209,7 +4185,7 @@ void WebPage::viewportConfigurationChanged(ZoomToInitialScale zoomToInitialScale
 
     auto* mainFrameView = this->localMainFrameView();
     if (!mainFrameView) {
-        // FIXME: This is hit in some site isolation tests on iOS. Investigate and fix.
+        // FIXME: This is hit in some site isolation tests on iOS. Investigate and fix. <rdar://116201382>
         return;
     }
 
@@ -4652,7 +4628,7 @@ String WebPage::platformUserAgent(const URL&) const
 
     auto* mainFrame = m_mainFrame->coreLocalFrame();
     if (!mainFrame) {
-        // FIXME: Add a user agent for loads from iframe processes.
+        // FIXME: Add a user agent for loads from iframe processes. <rdar://116201535>
         return { };
     }
 
@@ -4660,9 +4636,13 @@ String WebPage::platformUserAgent(const URL&) const
     if (!document)
         return String();
 
-    if (document->quirks().shouldAvoidUsingIOS13ForGmail() && osNameForUserAgent() == "iPhone OS"_s)
-        return standardUserAgentWithApplicationName({ }, "12_1_3"_s);
+    if (osNameForUserAgent() == "iPhone OS"_s) {
+        if (document->quirks().shouldAvoidUsingIOS13ForGmail())
+            return standardUserAgentWithApplicationName({ }, "12_1_3"_s);
 
+        if (document->quirks().shouldAvoidUsingIOS17UserAgentForFacebook())
+            return standardUserAgentWithApplicationName({ }, "16_6_1"_s);
+    }
     return String();
 }
 
@@ -4727,7 +4707,7 @@ void WebPage::hardwareKeyboardAvailabilityChanged(bool keyboardIsAttached)
 {
     m_keyboardIsAttached = keyboardIsAttached;
 
-    if (RefPtr focusedFrame = CheckedRef(m_page->focusController())->focusedFrame())
+    if (RefPtr focusedFrame = CheckedRef(m_page->focusController())->focusedLocalFrame())
         focusedFrame->eventHandler().capsLockStateMayHaveChanged();
 }
 
@@ -4848,7 +4828,7 @@ void WebPage::requestDocumentEditingContext(DocumentEditingContextRequest reques
     }
 
     Ref frame = CheckedRef(m_page->focusController())->focusedOrMainFrame();
-    RefPtr { frame->document() }->updateLayoutIgnorePendingStylesheets();
+    RefPtr { frame->document() }->updateLayout(LayoutOptions::IgnorePendingStylesheets);
 
     VisibleSelection selection = frame->selection().selection();
 
@@ -5096,7 +5076,7 @@ void WebPage::focusTextInputContextAndPlaceCaret(const ElementContext& elementCo
     ASSERT(target->document().frame());
     Ref targetFrame = *target->document().frame();
 
-    targetFrame->document()->updateLayoutIgnorePendingStylesheets();
+    targetFrame->document()->updateLayout(LayoutOptions::IgnorePendingStylesheets);
 
     // Performing layout could have could torn down the element's renderer. Check that we still
     // have one. Otherwise, bail out as this function only focuses elements that have a visual

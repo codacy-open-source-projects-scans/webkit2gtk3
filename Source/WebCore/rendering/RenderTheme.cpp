@@ -231,6 +231,17 @@ void RenderTheme::adjustStyle(RenderStyle& style, const Element* element, const 
         // Border
         LengthBox borderBox(style.borderTopWidth(), style.borderRightWidth(), style.borderBottomWidth(), style.borderLeftWidth());
         borderBox = Theme::singleton().controlBorder(appearance, style.fontCascade(), borderBox, style.effectiveZoom());
+
+        auto supportsVerticalWritingMode = [](StyleAppearance appearance) {
+            return appearance == StyleAppearance::Button
+                || appearance == StyleAppearance::DefaultButton
+                || appearance == StyleAppearance::SquareButton
+                || appearance == StyleAppearance::PushButton;
+        };
+        // Transpose for vertical writing mode:
+        if (!style.isHorizontalWritingMode() && supportsVerticalWritingMode(appearance))
+            borderBox = LengthBox(borderBox.left().value(), borderBox.top().value(), borderBox.right().value(), borderBox.bottom().value());
+
         if (borderBox.top().value() != static_cast<int>(style.borderTopWidth())) {
             if (borderBox.top().value())
                 style.setBorderTopWidth(borderBox.top().value());
@@ -266,7 +277,7 @@ void RenderTheme::adjustStyle(RenderStyle& style, const Element* element, const 
         // Whitespace
         if (Theme::singleton().controlRequiresPreWhiteSpace(appearance)) {
             style.setWhiteSpaceCollapse(WhiteSpaceCollapse::Preserve);
-            style.setTextWrap(TextWrap::NoWrap);
+            style.setTextWrapMode(TextWrapMode::NoWrap);
         }
 
         // Width / Height
@@ -381,6 +392,9 @@ StyleAppearance RenderTheme::autoAppearanceForElement(RenderStyle& style, const 
 
         if (input.isTextButton() || input.isUploadButton())
             return StyleAppearance::Button;
+
+        if (input.isSwitch())
+            return StyleAppearance::Switch;
 
         if (input.isCheckbox())
             return StyleAppearance::Checkbox;
@@ -660,6 +674,9 @@ RefPtr<ControlPart> RenderTheme::createControlPart(const RenderObject& renderer)
     case StyleAppearance::SliderThumbHorizontal:
     case StyleAppearance::SliderThumbVertical:
         return SliderThumbPart::create(appearance);
+
+    case StyleAppearance::Switch:
+        break;
     }
 
     ASSERT_NOT_REACHED();

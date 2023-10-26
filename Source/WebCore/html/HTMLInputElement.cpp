@@ -532,17 +532,19 @@ void HTMLInputElement::updateType(const AtomString& typeAttributeValue)
             setAttributeWithoutSynchronization(valueAttr, AtomString { WTFMove(dirtyValue) });
     }
 
-    m_inputType->destroyShadowSubtree();
+    m_inputType->removeShadowSubtree();
     m_inputType->detachFromElement();
     auto oldType = m_inputType->type();
 
+    bool didDirAutoUseValue = m_inputType->dirAutoUsesValue();
     bool previouslySelectable = m_inputType->supportsSelectionAPI();
 
     m_inputType = WTFMove(newType);
     m_inputType->createShadowSubtreeIfNeeded();
 
-    if (oldType == InputType::Type::Telephone || m_inputType->type() == InputType::Type::Telephone)
-        updateTextDirectionalityAfterTelephoneInputTypeChange();
+    // https://html.spec.whatwg.org/multipage/dom.html#auto-directionality
+    if (oldType == InputType::Type::Telephone || m_inputType->type() == InputType::Type::Telephone || (hasDirectionAuto() && didDirAutoUseValue != m_inputType->dirAutoUsesValue()))
+        updateTextDirectionalityAfterInputTypeChange();
 
     if (UNLIKELY(didSupportReadOnly != willSupportReadOnly && hasAttributeWithoutSynchronization(readonlyAttr))) {
         emplace(readWriteInvalidation, *this, { { CSSSelector::PseudoClassType::ReadWrite, !willSupportReadOnly }, { CSSSelector::PseudoClassType::ReadOnly, willSupportReadOnly } });
@@ -1851,6 +1853,11 @@ bool HTMLInputElement::isCheckbox() const
     return m_inputType->isCheckbox();
 }
 
+bool HTMLInputElement::isSwitch() const
+{
+    return document().settings().switchControlEnabled() && isCheckbox() && hasAttributeWithoutSynchronization(switchAttr);
+}
+
 bool HTMLInputElement::isRangeControl() const
 {
     return m_inputType->isRangeControl();
@@ -2230,7 +2237,7 @@ RenderStyle HTMLInputElement::createInnerTextStyle(const RenderStyle& style)
     adjustInnerTextStyle(style, textBlockStyle);
 
     textBlockStyle.setWhiteSpaceCollapse(WhiteSpaceCollapse::Preserve);
-    textBlockStyle.setTextWrap(TextWrap::NoWrap);
+    textBlockStyle.setTextWrapMode(TextWrapMode::NoWrap);
     textBlockStyle.setOverflowWrap(OverflowWrap::Normal);
     textBlockStyle.setOverflowX(Overflow::Hidden);
     textBlockStyle.setOverflowY(Overflow::Hidden);
@@ -2253,7 +2260,7 @@ RenderStyle HTMLInputElement::createInnerTextStyle(const RenderStyle& style)
         // Do not allow line-height to be smaller than our default.
         if (textBlockStyle.metricsOfPrimaryFont().lineSpacing() > style.computedLineHeight())
             return true;
-        return isText() && !style.logicalHeight().isAuto();
+        return isText() && !style.logicalHeight().isAuto() && !hasAutoFillStrongPasswordButton();
     };
     if (shouldUseInitialLineHeight())
         textBlockStyle.setLineHeight(RenderStyle::initialLineHeight());
@@ -2279,6 +2286,11 @@ String HTMLInputElement::placeholder() const
     return attributeValue.removeCharacters([](UChar c) {
         return c == newlineCharacter || c == carriageReturn;
     });
+}
+
+bool HTMLInputElement::dirAutoUsesValue() const
+{
+    return m_inputType->dirAutoUsesValue();
 }
 
 } // namespace

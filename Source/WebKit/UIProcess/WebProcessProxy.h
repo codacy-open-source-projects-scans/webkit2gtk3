@@ -65,7 +65,7 @@
 #include <WebCore/CaptionUserPreferences.h>
 #endif
 
-#if HAVE(CVDISPLAYLINK)
+#if HAVE(DISPLAY_LINK)
 #include "DisplayLinkObserverID.h"
 #include "DisplayLinkProcessProxyClient.h"
 #endif
@@ -98,8 +98,8 @@ namespace WebKit {
 class AudioSessionRoutingArbitratorProxy;
 class ObjCObjectGraph;
 class PageClient;
-class ProvisionalFrameProxy;
 class ProvisionalPageProxy;
+class RemotePageProxy;
 class SuspendedPageProxy;
 class UserMediaCaptureManagerProxy;
 class VisitedLinkStore;
@@ -142,11 +142,10 @@ using WebProcessWithMediaStreamingCounter = RefCounter<WebProcessWithMediaStream
 using WebProcessWithMediaStreamingToken = WebProcessWithMediaStreamingCounter::Token;
 enum class CheckBackForwardList : bool { No, Yes };
 
-class WebProcessProxy : public AuxiliaryProcessProxy, private ProcessThrottlerClient {
+class WebProcessProxy : public AuxiliaryProcessProxy {
 public:
     using WebPageProxyMap = HashMap<WebPageProxyIdentifier, WeakPtr<WebPageProxy>>;
     using UserInitiatedActionByAuthorizationTokenMap = HashMap<WTF::UUID, RefPtr<API::UserInitiatedAction>>;
-    typedef HashMap<WebCore::FrameIdentifier, WeakPtr<WebFrameProxy>> WebFrameProxyMap;
     typedef HashMap<uint64_t, RefPtr<API::UserInitiatedAction>> UserInitiatedActionMap;
 
     enum class IsPrewarmed : bool { No, Yes };
@@ -156,10 +155,6 @@ public:
 
     static Ref<WebProcessProxy> create(WebProcessPool&, WebsiteDataStore*, LockdownMode, IsPrewarmed, WebCore::CrossOriginMode = WebCore::CrossOriginMode::Shared, ShouldLaunchProcess = ShouldLaunchProcess::Yes);
     static Ref<WebProcessProxy> createForRemoteWorkers(RemoteWorkerType, WebProcessPool&, WebCore::RegistrableDomain&&, WebsiteDataStore&);
-
-#if ENABLE(WEBCONTENT_CRASH_TESTING)
-    static Ref<WebProcessProxy> createForWebContentCrashy(WebProcessPool&);
-#endif
 
     ~WebProcessProxy();
 
@@ -174,6 +169,10 @@ public:
 
     WebProcessPool* processPoolIfExists() const;
     WebProcessPool& processPool() const;
+
+#if ENABLE(GPU_PROCESS)
+    const std::optional<GPUProcessPreferencesForWebProcess>& preferencesForGPUProcess() const { return m_preferencesForGPUProcess; }
+#endif
 
     bool isMatchingRegistrableDomain(const WebCore::RegistrableDomain& domain) const { return m_registrableDomain ? *m_registrableDomain == domain : false; }
     WebCore::RegistrableDomain registrableDomain() const { return valueOrDefault(m_registrableDomain); }
@@ -210,10 +209,8 @@ public:
 
     void addProvisionalPageProxy(ProvisionalPageProxy&);
     void removeProvisionalPageProxy(ProvisionalPageProxy&);
-    void addProvisionalFrameProxy(ProvisionalFrameProxy&);
-    void removeProvisionalFrameProxy(ProvisionalFrameProxy&);
-    void provisionalFrameCommitted(WebFrameProxy&);
-    void removeFrameWithRemoteFrameProcess(WebFrameProxy&);
+    void addRemotePageProxy(RemotePageProxy&);
+    void removeRemotePageProxy(RemotePageProxy&);
 
     Vector<RefPtr<WebPageProxy>> pages() const;
     unsigned pageCount() const { return m_pageMap.size(); }
@@ -229,10 +226,6 @@ public:
     bool isRunningWorkers() const { return m_sharedWorkerInformation || m_serviceWorkerInformation; }
 
     bool isDummyProcessProxy() const;
-
-#if ENABLE(WEBCONTENT_CRASH_TESTING)
-    bool isCrashyProcess() const { return m_isWebContentCrashyProcess; }
-#endif
 
     void didCreateWebPageInProcess(WebCore::PageIdentifier);
 
@@ -345,7 +338,7 @@ public:
     void releaseHighPerformanceGPU();
 #endif
 
-#if HAVE(CVDISPLAYLINK)
+#if HAVE(DISPLAY_LINK)
     DisplayLink::Client& displayLinkClient() { return m_displayLinkClient; }
     std::optional<unsigned> nominalFramesPerSecondForDisplay(WebCore::PlatformDisplayID);
 
@@ -393,6 +386,8 @@ public:
 
     void sendAudioComponentRegistrations();
 #endif
+
+    bool hasSameGPUProcessPreferencesAs(const API::PageConfiguration&) const;
 
 #if ENABLE(REMOTE_INSPECTOR) && PLATFORM(COCOA)
     void enableRemoteInspectorIfNeeded();
@@ -524,16 +519,14 @@ protected:
 
     void validateFreezerStatus();
 
-#if ENABLE(WEBCONTENT_CRASH_TESTING)
-    void setIsCrashyProcess() { m_isWebContentCrashyProcess = true; }
-#endif
-
 private:
     using WebProcessProxyMap = HashMap<WebCore::ProcessIdentifier, WeakPtr<WebProcessProxy>>;
     static WebProcessProxyMap& allProcessMap();
     static Vector<RefPtr<WebProcessProxy>> allProcesses();
     static WebPageProxyMap& globalPageMap();
     static Vector<RefPtr<WebPageProxy>> globalPages();
+
+    void initializePreferencesForGPUProcess(const WebPageProxy&);
 
     void reportProcessDisassociatedWithPageIfNecessary(WebPageProxyIdentifier);
     bool isAssociatedWithPage(WebPageProxyIdentifier) const;
@@ -546,6 +539,7 @@ private:
     void didDestroyFrame(WebCore::FrameIdentifier, WebPageProxyIdentifier);
     void didDestroyUserGestureToken(uint64_t);
     void postMessageToRemote(WebCore::FrameIdentifier, std::optional<WebCore::SecurityOriginData>, const WebCore::MessageWithMessagePorts&);
+    void closeRemoteFrame(WebCore::FrameIdentifier);
     void renderTreeAsText(WebCore::FrameIdentifier, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag>, CompletionHandler<void(String&&)>&&);
 
     bool canBeAddedToWebProcessCache() const;
@@ -567,11 +561,6 @@ private:
     void updateBackgroundResponsivenessTimer();
 
     void updateBlobRegistryPartitioningState() const;
-
-#if ENABLE(GPU_PROCESS)
-    GPUProcessPreferencesForWebProcess computePreferencesForGPUProcess() const;
-#endif
-    void updatePreferencesForGPUProcess();
 
     void processDidTerminateOrFailedToLaunch(ProcessTerminationReason);
 
@@ -665,9 +654,8 @@ private:
     HashSet<String> m_previouslyApprovedFilePaths;
 
     WebPageProxyMap m_pageMap;
-    WebFrameProxyMap m_frameMap;
+    WeakHashSet<RemotePageProxy> m_remotePages;
     WeakHashSet<ProvisionalPageProxy> m_provisionalPages;
-    WeakHashSet<ProvisionalFrameProxy> m_provisionalFrames;
     WeakHashSet<SuspendedPageProxy> m_suspendedPages;
     UserInitiatedActionMap m_userInitiatedActionMap;
     UserInitiatedActionByAuthorizationTokenMap m_userInitiatedActionByAuthorizationTokenMap;
@@ -682,7 +670,7 @@ private:
     BackgroundWebProcessToken m_backgroundToken;
     bool m_areThrottleStateChangesEnabled { true };
 
-#if HAVE(CVDISPLAYLINK)
+#if HAVE(DISPLAY_LINK)
     DisplayLinkProcessProxyClient m_displayLinkClient;
 #endif
 
@@ -717,10 +705,6 @@ private:
     WebCore::CrossOriginMode m_crossOriginMode { WebCore::CrossOriginMode::Shared };
 #if PLATFORM(COCOA)
     bool m_hasNetworkExtensionSandboxAccess { false };
-#endif
-
-#if ENABLE(WEBCONTENT_CRASH_TESTING)
-    bool m_isWebContentCrashyProcess { false };
 #endif
 
 #if PLATFORM(WATCHOS)
@@ -775,7 +759,7 @@ private:
 #endif
     mutable String m_environmentIdentifier;
 #if ENABLE(GPU_PROCESS)
-    std::optional<GPUProcessPreferencesForWebProcess> m_preferencesForGPUProcess;
+    mutable std::optional<GPUProcessPreferencesForWebProcess> m_preferencesForGPUProcess;
 #endif
 };
 

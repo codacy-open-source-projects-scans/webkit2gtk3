@@ -46,9 +46,9 @@ public:
         IgnoreMailBlockquote = 1 << 6,
     };
 
-    static Ref<ReplaceSelectionCommand> create(Document& document, RefPtr<DocumentFragment>&& fragment, OptionSet<CommandOption> options, EditAction editingAction = EditAction::Insert)
+    static Ref<ReplaceSelectionCommand> create(Ref<Document>&& document, RefPtr<DocumentFragment>&& fragment, OptionSet<CommandOption> options, EditAction editingAction = EditAction::Insert)
     {
-        return adoptRef(*new ReplaceSelectionCommand(document, WTFMove(fragment), options, editingAction));
+        return adoptRef(*new ReplaceSelectionCommand(WTFMove(document), WTFMove(fragment), options, editingAction));
     }
 
     VisibleSelection visibleSelectionForInsertedText() const { return m_visibleSelectionForInsertedText; }
@@ -57,7 +57,7 @@ public:
     std::optional<SimpleRange> insertedContentRange() const;
 
 private:
-    ReplaceSelectionCommand(Document&, RefPtr<DocumentFragment>&&, OptionSet<CommandOption>, EditAction);
+    ReplaceSelectionCommand(Ref<Document>&&, RefPtr<DocumentFragment>&&, OptionSet<CommandOption>, EditAction);
 
     String inputEventData() const final;
     RefPtr<DataTransfer> inputEventDataTransfer() const final;
@@ -92,7 +92,7 @@ private:
         RefPtr<Node> m_lastNodeInserted;
     };
 
-    Node* insertAsListItems(HTMLElement& listElement, Node* insertionNode, const Position&, InsertedNodes&);
+    RefPtr<Node> insertAsListItems(HTMLElement& listElement, Node* insertionNode, const Position&, InsertedNodes&);
 
     void updateNodesInserted(Node*);
     bool shouldRemoveEndBR(Node*, const VisiblePosition&);
@@ -124,6 +124,8 @@ private:
 
     ReplacementFragment* ensureReplacementFragment();
     bool performTrivialReplace(const ReplacementFragment&);
+
+    RefPtr<DocumentFragment> protectedDocumentFragment() const { return m_documentFragment; }
 
     VisibleSelection m_visibleSelectionForInsertedText;
     Position m_startOfInsertedContent;

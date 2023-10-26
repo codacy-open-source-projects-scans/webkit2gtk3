@@ -607,7 +607,6 @@ static inline void disableAllJITOptions()
 
     Options::dumpDisassembly() = false;
     Options::asyncDisassembly() = false;
-    Options::dumpBaselineDisassembly() = false;
     Options::dumpDFGDisassembly() = false;
     Options::dumpFTLDisassembly() = false;
     Options::dumpRegExpDisassembly() = false;
@@ -707,7 +706,6 @@ void Options::notifyOptionsChanged()
 
         if (Options::dumpDisassembly()
             || Options::asyncDisassembly()
-            || Options::dumpBaselineDisassembly()
             || Options::dumpDFGDisassembly()
             || Options::dumpFTLDisassembly()
             || Options::dumpRegExpDisassembly()
@@ -1343,6 +1341,23 @@ SUPPRESS_ASAN bool canUseJITCage()
 #else
 bool canUseJITCage() { return false; }
 #endif
+
+bool canUseHandlerIC()
+{
+#if CPU(X86_64)
+#if OS(WINDOWS)
+    return false;
+#else
+    return true;
+#endif
+#elif CPU(ARM64)
+    return !isIOS();
+#elif CPU(RISCV64)
+    return true;
+#else
+    return false;
+#endif
+}
 
 bool canUseWebAssemblyFastMemory()
 {

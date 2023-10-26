@@ -34,11 +34,13 @@ class AlignAttribute;
 class BindingAttribute;
 class BuiltinAttribute;
 class ConstAttribute;
+class DiagnosticAttribute;
 class GroupAttribute;
 class IdAttribute;
 class InterpolateAttribute;
 class InvariantAttribute;
 class LocationAttribute;
+class MustUseAttribute;
 class SizeAttribute;
 class StageAttribute;
 class WorkgroupSizeAttribute;
@@ -96,10 +98,10 @@ class ReferenceTypeExpression;
 class Variable;
 class VariableQualifier;
 
-enum class AccessMode : uint8_t;
+struct SwitchClause;
+
 enum class BinaryOperation : uint8_t;
 enum class ParameterRole : uint8_t;
-enum class StorageClass : uint8_t;
 enum class StructureRole : uint8_t;
 enum class UnaryOperation : uint8_t;
 enum class VariableFlavor : uint8_t;

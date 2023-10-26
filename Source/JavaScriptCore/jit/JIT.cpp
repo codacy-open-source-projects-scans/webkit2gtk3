@@ -84,12 +84,11 @@ JITConstantPool::Constant JIT::addToConstantPool(JITConstantPool::Type type, voi
     return result;
 }
 
-std::tuple<BaselineUnlinkedStructureStubInfo*, JITConstantPool::Constant> JIT::addUnlinkedStructureStubInfo()
+std::tuple<BaselineUnlinkedStructureStubInfo*, StructureStubInfoIndex> JIT::addUnlinkedStructureStubInfo()
 {
-    void* unlinkedStubInfoIndex = bitwise_cast<void*>(static_cast<uintptr_t>(m_unlinkedStubInfos.size()));
+    unsigned stubInfoIndex = m_unlinkedStubInfos.size();
     BaselineUnlinkedStructureStubInfo* stubInfo = &m_unlinkedStubInfos.alloc();
-    JITConstantPool::Constant stubInfoIndex = addToConstantPool(JITConstantPool::Type::StructureStubInfo, unlinkedStubInfoIndex);
-    return std::tuple { stubInfo, stubInfoIndex };
+    return std::tuple { stubInfo, StructureStubInfoIndex { stubInfoIndex } };
 }
 
 BaselineUnlinkedCallLinkInfo* JIT::addUnlinkedCallLinkInfo()
@@ -268,7 +267,6 @@ void JIT::privateCompileMainPass()
         DEFINE_SLOW_OP(is_constructor)
         DEFINE_SLOW_OP(typeof)
         DEFINE_SLOW_OP(typeof_is_object)
-        DEFINE_SLOW_OP(typeof_is_function)
         DEFINE_SLOW_OP(strcat)
         DEFINE_SLOW_OP(push_with_scope)
         DEFINE_SLOW_OP(create_lexical_environment)
@@ -350,6 +348,7 @@ void JIT::privateCompileMainPass()
         DEFINE_OP(op_instanceof)
         DEFINE_OP(op_is_empty)
         DEFINE_OP(op_typeof_is_undefined)
+        DEFINE_OP(op_typeof_is_function)
         DEFINE_OP(op_is_undefined_or_null)
         DEFINE_OP(op_is_boolean)
         DEFINE_OP(op_is_number)
@@ -626,6 +625,7 @@ void JIT::privateCompileSlowCases()
         DEFINE_SLOWCASE_SLOW_OP(get_prototype_of)
         DEFINE_SLOWCASE_SLOW_OP(check_tdz)
         DEFINE_SLOWCASE_SLOW_OP(to_property_key)
+        DEFINE_SLOWCASE_SLOW_OP(typeof_is_function)
         default:
             RELEASE_ASSERT_NOT_REACHED();
         }
@@ -760,7 +760,7 @@ std::tuple<std::unique_ptr<LinkBuffer>, RefPtr<BaselineJITCode>> JIT::compileAnd
             m_stringSwitchJumpTables = FixedVector<StringJumpTable>(m_unlinkedCodeBlock->numberOfUnlinkedStringSwitchJumpTables());
     }
 
-    if (UNLIKELY(Options::dumpDisassembly() || Options::dumpBaselineDisassembly() || (m_vm->m_perBytecodeProfiler && Options::disassembleBaselineForProfiler()))) {
+    if (UNLIKELY(Options::dumpDisassembly() || (m_vm->m_perBytecodeProfiler && Options::disassembleBaselineForProfiler()))) {
         // FIXME: build a disassembler off of UnlinkedCodeBlock.
         m_disassembler = makeUnique<JITDisassembler>(m_profiledCodeBlock);
     }
@@ -812,7 +812,7 @@ std::tuple<std::unique_ptr<LinkBuffer>, RefPtr<BaselineJITCode>> JIT::compileAnd
         ASSERT(!m_bytecodeIndex);
         if (shouldEmitProfiling() && (!m_unlinkedCodeBlock->isConstructor() || m_unlinkedCodeBlock->numParameters() > 1)) {
             emitGetFromCallFrameHeaderPtr(CallFrameSlot::codeBlock, regT2);
-            loadPtr(Address(regT2, CodeBlock::offsetOfArgumentValueProfiles() + FixedVector<ValueProfile>::offsetOfStorage()), regT2);
+            loadPtr(Address(regT2, CodeBlock::offsetOfArgumentValueProfiles() + FixedVector<ArgumentValueProfile>::offsetOfStorage()), regT2);
 
             for (unsigned argument = 0; argument < m_unlinkedCodeBlock->numParameters(); ++argument) {
                 // If this is a constructor, then we want to put in a dummy profiling site (to
@@ -821,7 +821,7 @@ std::tuple<std::unique_ptr<LinkBuffer>, RefPtr<BaselineJITCode>> JIT::compileAnd
                     continue;
                 int offset = CallFrame::argumentOffsetIncludingThis(argument) * static_cast<int>(sizeof(Register));
                 loadValue(Address(callFrameRegister, offset), jsRegT10);
-                storeValue(jsRegT10, Address(regT2, FixedVector<ValueProfile>::Storage::offsetOfData() + argument * sizeof(ValueProfile) + ValueProfile::offsetOfFirstBucket()));
+                storeValue(jsRegT10, Address(regT2, FixedVector<ArgumentValueProfile>::Storage::offsetOfData() + argument * sizeof(ArgumentValueProfile) + ArgumentValueProfile::offsetOfFirstBucket()));
             }
         }
     }
@@ -988,7 +988,7 @@ RefPtr<BaselineJITCode> JIT::link(LinkBuffer& patchBuffer)
             jitCodeMapBuilder.append(BytecodeIndex(bytecodeOffset), patchBuffer.locationOf<JSEntryPtrTag>(m_labels[bytecodeOffset]));
     }
 
-    if (UNLIKELY(Options::dumpDisassembly() || Options::dumpBaselineDisassembly())) {
+    if (UNLIKELY(Options::dumpDisassembly())) {
         m_disassembler->dump(patchBuffer);
         patchBuffer.didAlreadyDisassemble();
     }
@@ -1005,7 +1005,7 @@ RefPtr<BaselineJITCode> JIT::link(LinkBuffer& patchBuffer)
         pcToCodeOriginMap = makeUnique<PCToCodeOriginMap>(WTFMove(m_pcToCodeOriginMapBuilder), patchBuffer);
     
     // FIXME: Make a version of CodeBlockWithJITType that knows about UnlinkedCodeBlock.
-    CodeRef<JSEntryPtrTag> result = FINALIZE_BASELINE_CODE(
+    CodeRef<JSEntryPtrTag> result = FINALIZE_CODE(
         patchBuffer, JSEntryPtrTag,
         "Baseline JIT code for %s", toCString(CodeBlockWithJITType(m_profiledCodeBlock, JITType::BaselineJIT)).data());
     

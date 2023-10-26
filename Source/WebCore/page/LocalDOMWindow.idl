@@ -50,7 +50,6 @@
     [Replaceable, DoNotCheckSecurityOnGetter, CustomGetter] readonly attribute WindowProxy self;
     [LegacyUnforgeable] readonly attribute Document document;
     attribute [AtomString] DOMString name;
-    [DoNotCheckSecurity, PutForwards=href, LegacyUnforgeable] readonly attribute Location location;
     readonly attribute History history;
     [ImplementedAs=ensureCustomElementRegistry] readonly attribute CustomElementRegistry customElements;
     [Replaceable] readonly attribute BarProp locationbar;
@@ -60,7 +59,6 @@
     [Replaceable] readonly attribute BarProp statusbar;
     [Replaceable] readonly attribute BarProp toolbar;
     attribute DOMString status;
-    [DoNotCheckSecurity, CallWith=IncumbentDocument] undefined close();
     [DoNotCheckSecurity] readonly attribute boolean closed;
     undefined stop();
     [DoNotCheckSecurity, CallWith=IncumbentWindow] undefined focus();

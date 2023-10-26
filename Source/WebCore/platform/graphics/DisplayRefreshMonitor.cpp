@@ -36,8 +36,6 @@
 #include "DisplayRefreshMonitorIOS.h"
 #elif PLATFORM(MAC)
 #include "LegacyDisplayRefreshMonitorMac.h"
-#elif PLATFORM(GTK)
-#include "DisplayRefreshMonitorGtk.h"
 #elif PLATFORM(WIN)
 #include "DisplayRefreshMonitorWin.h"
 #endif
@@ -51,9 +49,6 @@ RefPtr<DisplayRefreshMonitor> DisplayRefreshMonitor::createDefaultDisplayRefresh
 #endif
 #if PLATFORM(IOS_FAMILY)
     return DisplayRefreshMonitorIOS::create(displayID);
-#endif
-#if PLATFORM(GTK) && !USE(GTK4)
-    return DisplayRefreshMonitorGtk::create(displayID);
 #endif
 #if PLATFORM(WIN)
     return DisplayRefreshMonitorWin::create(displayID);
@@ -115,7 +110,7 @@ std::optional<FramesPerSecond> DisplayRefreshMonitor::maximumClientPreferredFram
 {
     std::optional<FramesPerSecond> maxFramesPerSecond;
     for (auto& client : m_clients)
-        maxFramesPerSecond = std::max<FramesPerSecond>(maxFramesPerSecond.value_or(0), client.get()->preferredFramesPerSecond());
+        maxFramesPerSecond = std::max<FramesPerSecond>(maxFramesPerSecond.value_or(0), client->preferredFramesPerSecond());
 
     return maxFramesPerSecond;
 }
@@ -139,7 +134,7 @@ void DisplayRefreshMonitor::clientPreferredFramesPerSecondChanged(DisplayRefresh
 bool DisplayRefreshMonitor::requestRefreshCallback()
 {
     Locker locker { m_lock };
-    
+
     if (isScheduled())
         return true;
 
@@ -207,7 +202,7 @@ void DisplayRefreshMonitor::displayDidRefresh(const DisplayUpdate& displayUpdate
     m_clientsToBeNotified = &clientsToBeNotified;
     while (!clientsToBeNotified.isEmpty()) {
         auto client = clientsToBeNotified.takeAny();
-        client.get()->fireDisplayRefreshIfNeeded(displayUpdate);
+        client->fireDisplayRefreshIfNeeded(displayUpdate);
 
         // This checks if this function was reentered. In that case, stop iterating
         // since it's not safe to use the set any more.

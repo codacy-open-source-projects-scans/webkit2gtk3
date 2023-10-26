@@ -72,13 +72,14 @@ class SharedBuffer;
 class ProtectionSpace;
 class ResourceRequest;
 class SecurityOrigin;
+class SecurityOriginData;
 enum class ShouldSample : bool;
 enum class StorageAccessPromptWasShown : bool;
 enum class StorageAccessWasGranted : bool;
 enum class StoredCredentialsPolicy : uint8_t;
 struct ClientOrigin;
 struct NotificationData;
-class SecurityOriginData;
+struct NotificationPayload;
 }
 
 namespace WebKit {
@@ -103,7 +104,7 @@ struct WebPushMessage;
 struct WebsiteData;
 struct WebsiteDataStoreParameters;
 
-class NetworkProcessProxy final : public AuxiliaryProcessProxy, private ProcessThrottlerClient {
+class NetworkProcessProxy final : public AuxiliaryProcessProxy {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     using RegistrableDomain = WebCore::RegistrableDomain;
@@ -291,7 +292,7 @@ public:
 
 #if ENABLE(SERVICE_WORKER)
     void getPendingPushMessages(PAL::SessionID, CompletionHandler<void(const Vector<WebPushMessage>&)>&&);
-    void processPushMessage(PAL::SessionID, const WebPushMessage&, CompletionHandler<void(bool wasProcessed)>&&);
+    void processPushMessage(PAL::SessionID, const WebPushMessage&, CompletionHandler<void(bool wasProcessed, std::optional<WebCore::NotificationPayload>&&)>&&);
     void processNotificationEvent(const WebCore::NotificationData&, WebCore::NotificationEventType, CompletionHandler<void(bool wasProcessed)>&&);
 
     void getAllBackgroundFetchIdentifiers(PAL::SessionID, CompletionHandler<void(Vector<String>&&)>&&);

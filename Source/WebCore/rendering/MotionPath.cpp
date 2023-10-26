@@ -29,6 +29,10 @@
 #include "GeometryUtilities.h"
 #include "PathOperation.h"
 #include "PathTraversalState.h"
+#include "RenderBlock.h"
+#include "RenderStyleInlines.h"
+#include "TransformOperationData.h"
+#include "TransformationMatrix.h"
 
 namespace WebCore {
 
@@ -65,7 +69,7 @@ std::optional<MotionPathData> MotionPath::motionPathDataForRenderer(const Render
         if (offsetPosition.x().isNormal())
             return normalPositionForOffsetPath(pathOperation, referenceRect);
         // If offset-position is auto, use top / left corner of the box.
-        if (offsetPosition.x().isAuto() && offsetPosition.y().isAuto())
+        if (offsetPosition.x().isAuto())
             return offsetFromContainer(renderer, container, referenceRect);
         return floatPointForLengthPoint(offsetPosition, referenceRect.size());
     };
@@ -113,7 +117,7 @@ void MotionPath::applyMotionPathTransform(const RenderStyle& style, const Transf
     if (!style.offsetPath())
         return;
 
-    auto& boundingBox = transformData.boundingBox();
+    auto& boundingBox = transformData.boundingBox;
     auto transformOrigin = style.computeTransformOrigin(boundingBox).xy();
     auto anchor = transformOrigin;
     if (!style.offsetAnchor().x().isAuto())
@@ -126,10 +130,15 @@ void MotionPath::applyMotionPathTransform(const RenderStyle& style, const Transf
     auto traversalState = traversalStateAtDistance(*path, style.offsetDistance());
     transform.translate(traversalState.current().x(), traversalState.current().y());
 
+    auto shiftToOrigin = anchor - transformOrigin;
+
+    // Adjust anchor for SVG.
+    if (transformData.isSVGRenderer && style.transformBox() != TransformBox::ViewBox)
+        anchor += boundingBox.location();
+
     // Shift element to the anchor specified by offset-anchor.
     transform.translate(-anchor.x(), -anchor.y());
 
-    auto shiftToOrigin = anchor - transformOrigin;
     transform.translate(shiftToOrigin.width(), shiftToOrigin.height());
 
     // Apply rotation.
@@ -179,8 +188,8 @@ static FloatPoint currentOffsetForData(const MotionPathData& data)
 
 std::optional<Path> MotionPath::computePathForRay(const RayPathOperation& rayPathOperation, const TransformOperationData& data)
 {
-    auto motionPathData = data.motionPathData();
-    auto elementBoundingBox = data.boundingBox();
+    auto motionPathData = data.motionPathData;
+    auto elementBoundingBox = data.boundingBox;
     if (!motionPathData || motionPathData->containingBlockBoundingRect.rect().isZero())
         return std::nullopt;
 
@@ -208,7 +217,7 @@ static FloatRoundedRect offsetRectForData(const MotionPathData& data)
 
 std::optional<Path> MotionPath::computePathForBox(const BoxPathOperation&, const TransformOperationData& data)
 {
-    if (auto motionPathData = data.motionPathData()) {
+    if (auto motionPathData = data.motionPathData) {
         Path path;
         path.addRoundedRect(offsetRectForData(*motionPathData), PathRoundedRect::Strategy::PreferBezier);
         return path;
@@ -218,17 +227,17 @@ std::optional<Path> MotionPath::computePathForBox(const BoxPathOperation&, const
 
 std::optional<Path> MotionPath::computePathForShape(const ShapePathOperation& pathOperation, const TransformOperationData& data)
 {
-    if (auto motionPathData = data.motionPathData()) {
+    if (auto motionPathData = data.motionPathData) {
         auto& shape = pathOperation.basicShape();
         auto containingBlockRect = offsetRectForData(*motionPathData).rect();
         if (is<BasicShapeCircleOrEllipse>(shape)) {
             auto& centerCoordShape = downcast<BasicShapeCircleOrEllipse>(shape);
             if (centerCoordShape.positionWasOmitted())
-                return centerCoordShape.pathForCenterCoordinate(containingBlockRect, currentOffsetForData(*motionPathData));
+                return centerCoordShape.pathForCenterCoordinate(containingBlockRect, motionPathData->usedStartingPosition);
         }
         return pathOperation.pathForReferenceRect(containingBlockRect);
     }
-    return pathOperation.pathForReferenceRect(data.boundingBox());
+    return pathOperation.pathForReferenceRect(data.boundingBox);
 
 }
 

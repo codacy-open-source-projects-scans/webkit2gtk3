@@ -1424,7 +1424,7 @@ void SpeculativeJIT::compileDeleteById(Node* node)
 #if USE(JSVALUE64)
         std::unique_ptr<SlowPathGenerator> slowPath;
         if (m_graph.m_plan.isUnlinked()) {
-            gen.generateDFGDataICFastPath(*this, stubInfoConstant.index(), stubInfoGPR);
+            gen.generateDFGDataICFastPath(*this, stubInfoConstant, stubInfoGPR);
             ASSERT(!gen.stubInfo());
             slowPath = slowPathICCall(
                 slowCases, this, stubInfoConstant, stubInfoGPR, Address(stubInfoGPR, StructureStubInfo::offsetOfSlowOperation()), operation,
@@ -1506,7 +1506,7 @@ void SpeculativeJIT::compileDeleteByVal(Node* node)
 #if USE(JSVALUE64)
         std::unique_ptr<SlowPathGenerator> slowPath;
         if (m_graph.m_plan.isUnlinked()) {
-            gen.generateDFGDataICFastPath(*this, stubInfoConstant.index(), stubInfoGPR);
+            gen.generateDFGDataICFastPath(*this, stubInfoConstant, stubInfoGPR);
             ASSERT(!gen.stubInfo());
             slowPath = slowPathICCall(
                 slowCases, this, stubInfoConstant, stubInfoGPR, Address(stubInfoGPR, StructureStubInfo::offsetOfSlowOperation()), operation,
@@ -1582,14 +1582,14 @@ void SpeculativeJIT::compileInById(Node* node)
 
     std::unique_ptr<SlowPathGenerator> slowPath;
     if (m_graph.m_plan.isUnlinked()) {
-        gen.generateDFGDataICFastPath(*this, stubInfoConstant.index(), JSValueRegs::payloadOnly(baseGPR), resultRegs, stubInfoGPR, scratchGPR);
+        gen.generateDFGDataICFastPath(*this, stubInfoConstant, JSValueRegs::payloadOnly(baseGPR), resultRegs, stubInfoGPR, scratchGPR);
         ASSERT(!gen.stubInfo());
         slowPath = slowPathICCall(
             slowCases, this, stubInfoConstant, stubInfoGPR, Address(stubInfoGPR, StructureStubInfo::offsetOfSlowOperation()), operationInByIdOptimize,
             NeedToSpill, ExceptionCheckRequirement::CheckNeeded,
             resultRegs, CellValue(baseGPR), LinkableConstant::globalObject(*this, node), stubInfoGPR);
     } else {
-        gen.generateFastPath(*this, scratchGPR);
+        gen.generateFastPath(*this);
         slowCases.append(gen.slowPathJump());
         slowPath = slowPathCall(
             slowCases, this, operationInByIdOptimize,
@@ -1634,7 +1634,7 @@ void SpeculativeJIT::compileInByVal(Node* node)
 
     std::unique_ptr<SlowPathGenerator> slowPath;
     if (m_graph.m_plan.isUnlinked()) {
-        gen.generateDFGDataICFastPath(*this, stubInfoConstant.index(), stubInfoGPR);
+        gen.generateDFGDataICFastPath(*this, stubInfoConstant, stubInfoGPR);
         ASSERT(!gen.stubInfo());
         slowPath = slowPathICCall(
             slowCases, this, stubInfoConstant, stubInfoGPR, Address(stubInfoGPR, StructureStubInfo::offsetOfSlowOperation()), operationInByValOptimize,
@@ -1692,7 +1692,7 @@ void SpeculativeJIT::compileHasPrivate(Node* node, AccessType type)
 
     std::unique_ptr<SlowPathGenerator> slowPath;
     if (m_graph.m_plan.isUnlinked()) {
-        gen.generateDFGDataICFastPath(*this, stubInfoConstant.index(), stubInfoGPR);
+        gen.generateDFGDataICFastPath(*this, stubInfoConstant, stubInfoGPR);
         ASSERT(!gen.stubInfo());
         slowPath = slowPathICCall(
             slowCases, this, stubInfoConstant, stubInfoGPR, Address(stubInfoGPR, StructureStubInfo::offsetOfSlowOperation()), type == AccessType::HasPrivateName ? operationHasPrivateNameOptimize : operationHasPrivateBrandOptimize,
@@ -2723,16 +2723,14 @@ void SpeculativeJIT::linkOSREntries(LinkBuffer& linkBuffer)
             continue;
         if (block->isCatchEntrypoint) {
             auto& argumentsVector = m_graph.m_rootToArguments.find(block)->value;
-            Vector<FlushFormat> argumentFormats;
-            argumentFormats.reserveInitialCapacity(argumentsVector.size());
-            for (Node* setArgument : argumentsVector) {
+            auto argumentFormats = argumentsVector.map([](auto* setArgument) {
                 if (setArgument) {
                     FlushFormat flushFormat = setArgument->variableAccessData()->flushFormat();
                     ASSERT(flushFormat == FlushedInt32 || flushFormat == FlushedCell || flushFormat == FlushedBoolean || flushFormat == FlushedJSValue);
-                    argumentFormats.uncheckedAppend(flushFormat);
-                } else
-                    argumentFormats.uncheckedAppend(DeadFlush);
-            }
+                    return flushFormat;
+                }
+                return DeadFlush;
+            });
             noticeCatchEntrypoint(*block, m_osrEntryHeads[osrEntryIndex++], linkBuffer, WTFMove(argumentFormats));
         } else {
             ASSERT(block->isOSRTarget);
@@ -3015,7 +3013,7 @@ void SpeculativeJIT::compilePutByVal(Node* node)
         std::unique_ptr<SlowPathGenerator> slowPath;
         auto operation = isDirect ? (ecmaMode.isStrict() ? operationDirectPutByValStrictOptimize : operationDirectPutByValSloppyOptimize) : (ecmaMode.isStrict() ? operationPutByValStrictOptimize : operationPutByValSloppyOptimize);
         if (m_graph.m_plan.isUnlinked()) {
-            gen.generateDFGDataICFastPath(*this, stubInfoConstant.index(), stubInfoGPR);
+            gen.generateDFGDataICFastPath(*this, stubInfoConstant, stubInfoGPR);
             ASSERT(!gen.stubInfo());
             slowPath = slowPathICCall(
                 slowCases, this, stubInfoConstant, stubInfoGPR, Address(stubInfoGPR, StructureStubInfo::offsetOfSlowOperation()), operation,
@@ -4475,7 +4473,7 @@ void SpeculativeJIT::compileGetPrivateNameByVal(Node* node, JSValueRegs baseRegs
 
     auto makeSlowPathICCall = [&](auto base, auto stubInfoConstant) {
         if (m_graph.m_plan.isUnlinked()) {
-            gen.generateDFGDataICFastPath(*this, stubInfoConstant.index(), stubInfoGPR);
+            gen.generateDFGDataICFastPath(*this, stubInfoConstant, stubInfoGPR);
             return slowPathICCall(
                 slowCases, this, stubInfoConstant, stubInfoGPR, Address(stubInfoGPR, StructureStubInfo::offsetOfSlowOperation()), operationGetPrivateNameOptimize,
                 result.regs(), base, CellValue(propertyRegs.payloadGPR()), LinkableConstant::globalObject(*this, node), stubInfoGPR);
@@ -4662,7 +4660,7 @@ void SpeculativeJIT::compilePutPrivateName(Node* node)
     std::unique_ptr<SlowPathGenerator> slowPath;
     auto operation = node->privateFieldPutKind().isDefine() ? operationPutByValDefinePrivateFieldOptimize : operationPutByValSetPrivateFieldOptimize;
     if (m_graph.m_plan.isUnlinked()) {
-        gen.generateDFGDataICFastPath(*this, stubInfoConstant.index(), stubInfoGPR);
+        gen.generateDFGDataICFastPath(*this, stubInfoConstant, stubInfoGPR);
         ASSERT(!gen.stubInfo());
         slowPath = slowPathICCall(
             slowCases, this, stubInfoConstant, stubInfoGPR, Address(stubInfoGPR, StructureStubInfo::offsetOfSlowOperation()), operation,
@@ -4743,7 +4741,7 @@ void SpeculativeJIT::compileCheckPrivateBrand(Node* node)
 
     std::unique_ptr<SlowPathGenerator> slowPath;
     if (m_graph.m_plan.isUnlinked()) {
-        gen.generateDFGDataICFastPath(*this, stubInfoConstant.index(), stubInfoGPR);
+        gen.generateDFGDataICFastPath(*this, stubInfoConstant, stubInfoGPR);
         ASSERT(!gen.stubInfo());
         slowPath = slowPathICCall(
             slowCases, this, stubInfoConstant, stubInfoGPR, Address(stubInfoGPR, StructureStubInfo::offsetOfSlowOperation()), operationCheckPrivateBrandOptimize, NoResult,
@@ -4795,7 +4793,7 @@ void SpeculativeJIT::compileSetPrivateBrand(Node* node)
 
     std::unique_ptr<SlowPathGenerator> slowPath;
     if (m_graph.m_plan.isUnlinked()) {
-        gen.generateDFGDataICFastPath(*this, stubInfoConstant.index(), stubInfoGPR);
+        gen.generateDFGDataICFastPath(*this, stubInfoConstant, stubInfoGPR);
         ASSERT(!gen.stubInfo());
         slowPath = slowPathICCall(
             slowCases, this, stubInfoConstant, stubInfoGPR, Address(stubInfoGPR, StructureStubInfo::offsetOfSlowOperation()), operationSetPrivateBrandOptimize, NoResult,
@@ -4999,7 +4997,7 @@ void SpeculativeJIT::compileInstanceOfForCells(Node* node, JSValueRegs valueRegs
 
     std::unique_ptr<SlowPathGenerator> slowPath;
     if (m_graph.m_plan.isUnlinked()) {
-        gen.generateDFGDataICFastPath(*this, stubInfoConstant.index(), stubInfoGPR);
+        gen.generateDFGDataICFastPath(*this, stubInfoConstant, stubInfoGPR);
         ASSERT(!gen.stubInfo());
         slowPath = slowPathICCall(slowCases, this, stubInfoConstant, stubInfoGPR, Address(stubInfoGPR, StructureStubInfo::offsetOfSlowOperation()), operationInstanceOfOptimize, resultGPR, valueRegs, prototypeRegs, LinkableConstant::globalObject(*this, node), stubInfoGPR);
     } else {
@@ -11933,10 +11931,10 @@ void SpeculativeJIT::compileNewMap(Node* node)
     Allocator allocatorValue = allocatorForConcurrently<JSMap::BucketType>(vm(), sizeof(JSMap::BucketType), AllocatorForMode::AllocatorIfExists);
     emitAllocateJSCell(headGPR, JITAllocator::constant(allocatorValue), scratch1GPR, TrustedImmPtr(m_graph.registerStructure(vm().hashMapBucketMapStructure.get())), scratch2GPR, slowPath, SlowAllocationResult::UndefinedBehavior);
 
-    ASSERT(JSMap::BucketType::offsetOfNext() + 8 == JSMap::BucketType::offsetOfPrev());
-    ASSERT(JSMap::BucketType::offsetOfKey() + 8 == JSMap::BucketType::offsetOfValue());
 #if CPU(ARM64)
     ASSERT(JSValue::encode(JSValue()) == 0);
+    ASSERT(JSMap::BucketType::offsetOfNext() + 8 == JSMap::BucketType::offsetOfPrev());
+    ASSERT(JSMap::BucketType::offsetOfKey() + 8 == JSMap::BucketType::offsetOfValue());
     storePairPtr(ARM64Registers::zr, ARM64Registers::zr, Address(headGPR, JSMap::BucketType::offsetOfNext()));
     storePairPtr(ARM64Registers::zr, ARM64Registers::zr, Address(headGPR, JSMap::BucketType::offsetOfKey()));
 #else
@@ -11990,8 +11988,8 @@ void SpeculativeJIT::compileNewSet(Node* node)
     Allocator allocatorValue = allocatorForConcurrently<JSSet::BucketType>(vm(), sizeof(JSSet::BucketType), AllocatorForMode::AllocatorIfExists);
     emitAllocateJSCell(headGPR, JITAllocator::constant(allocatorValue), scratch1GPR, TrustedImmPtr(m_graph.registerStructure(vm().hashMapBucketSetStructure.get())), scratch2GPR, slowPath, SlowAllocationResult::UndefinedBehavior);
 
-    ASSERT(JSSet::BucketType::offsetOfNext() + 8 == JSSet::BucketType::offsetOfPrev());
 #if CPU(ARM64)
+    ASSERT(JSSet::BucketType::offsetOfNext() + 8 == JSSet::BucketType::offsetOfPrev());
     storePairPtr(ARM64Registers::zr, ARM64Registers::zr, Address(headGPR, JSSet::BucketType::offsetOfNext()));
 #else
     storePtr(TrustedImmPtr(nullptr), Address(headGPR, JSSet::BucketType::offsetOfNext()));
@@ -16654,11 +16652,11 @@ void SpeculativeJIT::cachedPutById(Node* node, CodeOrigin codeOrigin, GPRReg bas
     std::unique_ptr<SlowPathGenerator> slowPath;
     auto* operation = appropriatePutByIdOptimizeFunction(accessType);
     if (m_graph.m_plan.isUnlinked()) {
-        gen.generateDFGDataICFastPath(*this, stubInfoConstant.index(), JSValueRegs::payloadOnly(baseGPR), valueRegs, stubInfoGPR, scratchGPR, scratch2GPR);
+        gen.generateDFGDataICFastPath(*this, stubInfoConstant, JSValueRegs::payloadOnly(baseGPR), valueRegs, stubInfoGPR, scratchGPR, scratch2GPR);
         ASSERT(!gen.stubInfo());
         slowPath = slowPathICCall(slowCases, this, stubInfoConstant, stubInfoGPR, Address(stubInfoGPR, StructureStubInfo::offsetOfSlowOperation()), operation, NoResult, valueRegs, CellValue(baseGPR), LinkableConstant::globalObject(*this, node), stubInfoGPR);
     } else {
-        gen.generateFastPath(*this, scratchGPR, scratch2GPR);
+        gen.generateFastPath(*this);
         slowCases.append(gen.slowPathJump());
         slowPath = slowPathCall(slowCases, this, operation, NoResult, valueRegs, CellValue(baseGPR), LinkableConstant::globalObject(*this, node), TrustedImmPtr(gen.stubInfo()));
     }

@@ -63,7 +63,6 @@ inline bool RenderStyle::affectsTransform() const { return hasTransform() || off
 inline const StyleContentAlignmentData& RenderStyle::alignContent() const { return m_nonInheritedData->miscData->alignContent; }
 inline const StyleSelfAlignmentData& RenderStyle::alignItems() const { return m_nonInheritedData->miscData->alignItems; }
 inline const StyleSelfAlignmentData& RenderStyle::alignSelf() const { return m_nonInheritedData->miscData->alignSelf; }
-inline const Vector<StyleContentAlignmentData>& RenderStyle::alignTracks() const { return m_nonInheritedData->rareData->grid->alignTracks; }
 constexpr auto RenderStyle::allTransformOperations() -> OptionSet<TransformOperationOption> { return { TransformOperationOption::TransformOrigin, TransformOperationOption::Translate, TransformOperationOption::Rotate, TransformOperationOption::Scale, TransformOperationOption::Offset }; }
 inline const AnimationList* RenderStyle::animations() const { return m_nonInheritedData->miscData->animations.get(); }
 inline AnimationList* RenderStyle::animations() { return m_nonInheritedData->miscData->animations.get(); }
@@ -85,6 +84,7 @@ inline BlendMode RenderStyle::backgroundBlendMode() const { return backgroundLay
 inline FillBox RenderStyle::backgroundClip() const { return backgroundLayers().clip(); }
 inline const StyleColor& RenderStyle::backgroundColor() const { return m_nonInheritedData->backgroundData->color; }
 inline const FillLayer& RenderStyle::backgroundLayers() const { return m_nonInheritedData->backgroundData->background; }
+inline Ref<const FillLayer> RenderStyle::protectedBackgroundLayers() const { return backgroundLayers(); }
 inline FillBox RenderStyle::backgroundOrigin() const { return backgroundLayers().origin(); }
 inline FillRepeatXY RenderStyle::backgroundRepeat() const { return backgroundLayers().repeat(); }
 inline const LengthSize& RenderStyle::backgroundSizeLength() const { return backgroundLayers().sizeLength(); }
@@ -315,7 +315,6 @@ inline const NamedGridLinesMap& RenderStyle::implicitNamedGridColumnLines() cons
 inline const NamedGridLinesMap& RenderStyle::implicitNamedGridRowLines() const { return m_nonInheritedData->rareData->grid->implicitNamedGridRowLines; }
 constexpr auto RenderStyle::individualTransformOperations() -> OptionSet<TransformOperationOption> { return { TransformOperationOption::Translate, TransformOperationOption::Rotate, TransformOperationOption::Scale, TransformOperationOption::Offset }; }
 inline const StyleCustomPropertyData& RenderStyle::inheritedCustomProperties() const { return m_rareInheritedData->customProperties.get(); }
-inline Vector<StyleContentAlignmentData> RenderStyle::initialAlignTracks() { return { initialContentAlignment() }; }
 constexpr StyleAppearance RenderStyle::initialAppearance() { return StyleAppearance::None; }
 inline FilterOperations RenderStyle::initialAppleColorFilter() { return { }; }
 constexpr AspectRatioType RenderStyle::initialAspectRatioType() { return AspectRatioType::Auto; }
@@ -386,7 +385,6 @@ constexpr IntSize RenderStyle::initialInitialLetter() { return { }; }
 constexpr InputSecurity RenderStyle::initialInputSecurity() { return InputSecurity::Auto; }
 constexpr LineJoin RenderStyle::initialJoinStyle() { return LineJoin::Miter; }
 constexpr StyleSelfAlignmentData RenderStyle::initialJustifyItems() { return { ItemPosition::Legacy }; }
-inline Vector<StyleContentAlignmentData> RenderStyle::initialJustifyTracks() { return { initialContentAlignment() }; }
 inline const IntSize& RenderStyle::initialLetter() const { return m_nonInheritedData->rareData->initialLetter; }
 inline int RenderStyle::initialLetterDrop() const { return initialLetter().width(); }
 inline int RenderStyle::initialLetterHeight() const { return initialLetter().height(); }
@@ -479,7 +477,8 @@ inline StyleColor RenderStyle::initialTextStrokeColor() { return StyleColor::cur
 constexpr OptionSet<TextTransform> RenderStyle::initialTextTransform() { return { }; }
 constexpr TextUnderlineOffset RenderStyle::initialTextUnderlineOffset() { return TextUnderlineOffset::createWithAuto(); }
 constexpr TextUnderlinePosition RenderStyle::initialTextUnderlinePosition() { return TextUnderlinePosition::Auto; }
-constexpr TextWrap RenderStyle::initialTextWrap() { return TextWrap::Wrap; }
+constexpr TextWrapMode RenderStyle::initialTextWrapMode() { return TextWrapMode::Wrap; }
+constexpr TextWrapStyle RenderStyle::initialTextWrapStyle() { return TextWrapStyle::Auto; }
 constexpr TextZoom RenderStyle::initialTextZoom() { return TextZoom::Normal; }
 constexpr TouchAction RenderStyle::initialTouchActions() { return TouchAction::Auto; }
 inline TransformOperations RenderStyle::initialTransform() { return { }; }
@@ -531,7 +530,6 @@ inline LineJoin RenderStyle::joinStyle() const { return static_cast<LineJoin>(m_
 inline const StyleContentAlignmentData& RenderStyle::justifyContent() const { return m_nonInheritedData->miscData->justifyContent; }
 inline const StyleSelfAlignmentData& RenderStyle::justifyItems() const { return m_nonInheritedData->miscData->justifyItems; }
 inline const StyleSelfAlignmentData& RenderStyle::justifySelf() const { return m_nonInheritedData->miscData->justifySelf; }
-inline const Vector<StyleContentAlignmentData>& RenderStyle::justifyTracks() const { return m_nonInheritedData->rareData->grid->justifyTracks; }
 inline const Length& RenderStyle::left() const { return m_nonInheritedData->surroundData->offset.left(); }
 inline LineAlign RenderStyle::lineAlign() const { return static_cast<LineAlign>(m_rareInheritedData->lineAlign); }
 inline OptionSet<LineBoxContain> RenderStyle::lineBoxContain() const { return OptionSet<LineBoxContain>::fromRaw(m_rareInheritedData->lineBoxContain); }
@@ -575,6 +573,7 @@ inline FillBox RenderStyle::maskClip() const { return maskLayers().clip(); }
 inline CompositeOperator RenderStyle::maskComposite() const { return maskLayers().composite(); }
 inline StyleImage* RenderStyle::maskImage() const { return maskLayers().image(); }
 inline const FillLayer& RenderStyle::maskLayers() const { return m_nonInheritedData->miscData->mask; }
+inline Ref<const FillLayer> RenderStyle::protectedMaskLayers() const { return maskLayers(); }
 inline FillBox RenderStyle::maskOrigin() const { return maskLayers().origin(); }
 inline FillRepeatXY RenderStyle::maskRepeat() const { return maskLayers().repeat(); }
 inline const LengthSize& RenderStyle::maskSizeLength() const { return maskLayers().sizeLength(); }
@@ -645,6 +644,7 @@ inline const StyleColor& RenderStyle::scrollbarTrackColor() const { return m_rar
 inline float RenderStyle::shapeImageThreshold() const { return m_nonInheritedData->rareData->shapeImageThreshold; }
 inline const Length& RenderStyle::shapeMargin() const { return m_nonInheritedData->rareData->shapeMargin; }
 inline ShapeValue* RenderStyle::shapeOutside() const { return m_nonInheritedData->rareData->shapeOutside.get(); }
+inline RefPtr<ShapeValue> RenderStyle::protectedShapeOutside() const { return shapeOutside(); }
 inline std::optional<ContentVisibility> RenderStyle::skippedContentReason() const
 {
     auto reason = static_cast<ContentVisibility>(m_rareInheritedData->effectiveSkippedContent);

@@ -30,8 +30,6 @@
 
 namespace WGSL {
 
-struct Type;
-
 // A constant value might be:
 // - a scalar
 // - a vector
@@ -68,42 +66,80 @@ struct ConstantVector {
     FixedVector<ConstantValue> elements;
 };
 
-using BaseValue = std::variant<double, int64_t, bool, ConstantArray, ConstantVector>;
+struct ConstantMatrix {
+    ConstantMatrix(uint32_t columns, uint32_t rows)
+        : columns(columns)
+        , rows(rows)
+        , elements(columns * rows)
+    {
+    }
+
+    ConstantMatrix(uint32_t columns, uint32_t rows, const FixedVector<ConstantValue>& elements)
+        : columns(columns)
+        , rows(rows)
+        , elements(elements)
+    {
+        RELEASE_ASSERT(elements.size() == columns * rows);
+    }
+
+    uint32_t columns;
+    uint32_t rows;
+    FixedVector<ConstantValue> elements;
+};
+
+using BaseValue = std::variant<double, int64_t, bool, ConstantArray, ConstantVector, ConstantMatrix>;
 struct ConstantValue : BaseValue {
     ConstantValue() = default;
 
-    template<typename T>
-    ConstantValue(const Type* type, T&& value)
-        : BaseValue(std::forward<T>(value))
-        , type(type)
-    {
-    }
-
-    static void constructDeletedValue(ConstantValue& slot)
-    {
-        slot.type = bitwise_cast<Type*>(static_cast<intptr_t>(-1));
-    }
-    static bool isDeletedValue(const ConstantValue& value)
-    {
-        return value.type == bitwise_cast<Type*>(static_cast<intptr_t>(-1));
-    }
+    using BaseValue::BaseValue;
 
     void dump(PrintStream&) const;
 
-    bool isNumber() const
-    {
-        return std::holds_alternative<int64_t>(*this) || std::holds_alternative<double>(*this);
-    }
+    bool isBool() const { return std::holds_alternative<bool>(*this); }
+    bool isInt() const { return std::holds_alternative<int64_t>(*this); }
+    bool isNumber() const { return isInt() || std::holds_alternative<double>(*this); }
+    bool isVector() const { return std::holds_alternative<ConstantVector>(*this); }
+    bool isMatrix() const { return std::holds_alternative<ConstantMatrix>(*this); }
+    bool isArray() const { return std::holds_alternative<ConstantArray>(*this); }
 
+    bool toBool() const { return std::get<bool>(*this); }
+    int64_t toInt() const
+    {
+        ASSERT(isNumber());
+        if (auto* i = std::get_if<int64_t>(this))
+            return *i;
+        return static_cast<int64_t>(std::get<double>(*this));
+    }
     double toDouble() const
     {
         ASSERT(isNumber());
-        if (std::holds_alternative<double>(*this))
-            return std::get<double>(*this);
+        if (auto* d = std::get_if<double>(this))
+            return *d;
         return static_cast<double>(std::get<int64_t>(*this));
     }
-
-    const Type* type;
+    const ConstantVector& toVector() const
+    {
+        return std::get<ConstantVector>(*this);
+    }
 };
+
+template<typename To, typename From>
+std::optional<To> convertInteger(From value)
+{
+    auto result = Checked<To, RecordOverflow>(value);
+    if (UNLIKELY(result.hasOverflowed()))
+        return std::nullopt;
+    return { result.value() };
+}
+
+template<typename To, typename From>
+std::optional<To> convertFloat(From value)
+{
+    if (value > std::numeric_limits<To>::max())
+        return std::nullopt;
+    if (value < std::numeric_limits<To>::min())
+        return { 0 };
+    return { value };
+}
 
 } // namespace WGSL

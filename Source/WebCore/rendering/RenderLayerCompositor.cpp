@@ -123,9 +123,12 @@ struct ScrollingTreeState {
 
 struct RenderLayerCompositor::OverlapExtent {
     LayoutRect bounds;
+    Vector<LayerOverlapMap::LayerAndBounds> clippingScopes;
+
     bool extentComputed { false };
     bool hasTransformAnimation { false };
     bool animationCausesExtentUncertainty { false };
+    bool clippingScopesComputed { false };
 
     bool knownToBeHaveExtentUncertainty() const { return extentComputed && animationCausesExtentUncertainty; }
 };
@@ -504,7 +507,6 @@ void RenderLayerCompositor::cacheAcceleratedCompositingFlags()
     bool showDebugBorders = settings.showDebugBorders();
     bool showRepaintCounter = settings.showRepaintCounter();
     bool acceleratedDrawingEnabled = settings.acceleratedDrawingEnabled();
-    bool displayListDrawingEnabled = settings.displayListDrawingEnabled();
 
     // forceCompositingMode for subframes can only be computed after layout.
     bool forceCompositingMode = m_forceCompositingMode;
@@ -524,7 +526,6 @@ void RenderLayerCompositor::cacheAcceleratedCompositingFlags()
     m_showDebugBorders = showDebugBorders;
     m_showRepaintCounter = showRepaintCounter;
     m_acceleratedDrawingEnabled = acceleratedDrawingEnabled;
-    m_displayListDrawingEnabled = displayListDrawingEnabled;
     
     if (debugBordersChanged) {
         if (m_layerForHorizontalScrollbar)
@@ -1510,11 +1511,11 @@ void RenderLayerCompositor::updateBackingAndHierarchy(RenderLayer& layer, Vector
 
     if (layerBacking) {
         if (requireDescendantTraversal || requiresChildRebuild) {
-            bool parented = false;
-            if (is<RenderWidget>(layer.renderer()))
-                parented = parentFrameContentLayers(downcast<RenderWidget>(layer.renderer()));
+            bool attachedWidgetContents = false;
+            if (auto* renderWidget = dynamicDowncast<RenderWidget>(layer.renderer()))
+                attachedWidgetContents = attachWidgetContentLayers(*renderWidget);
 
-            if (!parented) {
+            if (!attachedWidgetContents) {
                 // If the layer has a clipping layer the overflow controls layers will be siblings of the clipping layer.
                 // Otherwise, the overflow control layers are normal children.
                 if (!layerBacking->hasClippingLayer() && !layerBacking->hasScrollingLayer()) {
@@ -2106,11 +2107,11 @@ void RenderLayerCompositor::repaintOnCompositingChange(RenderLayer& layer)
     if (&layer.renderer() != &m_renderView && !layer.renderer().parent())
         return;
 
-    auto* repaintContainer = layer.renderer().containerForRepaint().renderer;
+    CheckedPtr repaintContainer = layer.renderer().containerForRepaint().renderer;
     if (!repaintContainer)
         repaintContainer = &m_renderView;
 
-    layer.repaintIncludingNonCompositingDescendants(repaintContainer);
+    layer.repaintIncludingNonCompositingDescendants(repaintContainer.get());
     if (repaintContainer == &m_renderView) {
         // The contents of this layer may be moving between the window
         // and a GraphicsLayer, so we need to make sure the window system
@@ -2234,35 +2235,44 @@ static AncestorTraversal traverseAncestorLayers(const RenderLayer& layer, Functi
     return AncestorTraversal::Continue;
 }
 
-static bool createsClippingScope(const RenderLayer& layer)
+void RenderLayerCompositor::computeClippingScopes(const RenderLayer& layer, OverlapExtent& extent) const
 {
-    return layer.hasCompositedScrollableOverflow();
-}
+    if (extent.clippingScopesComputed)
+        return;
 
-static Vector<LayerOverlapMap::LayerAndBounds> enclosingClippingScopes(const RenderLayer& layer, const RenderLayer& rootLayer)
-{
-    Vector<LayerOverlapMap::LayerAndBounds> clippingScopes;
-    clippingScopes.append({ const_cast<RenderLayer&>(rootLayer), { } });
+    // FIXME: constrain the scopes (by composited stacking context ancestor I think).
+    auto enclosingClippingScopes = [] (const RenderLayer& layer, const RenderLayer& rootLayer) {
 
-    if (!layer.hasCompositedScrollingAncestor())
-        return clippingScopes;
+        auto createsClippingScope = [](const RenderLayer& layer) {
+            return layer.hasCompositedScrollableOverflow();
+        };
 
-    traverseAncestorLayers(layer, [&](const RenderLayer& ancestorLayer, bool inContainingBlockChain, bool) {
-        if (inContainingBlockChain && createsClippingScope(ancestorLayer)) {
-            LayoutRect clipRect;
-            if (is<RenderBox>(ancestorLayer.renderer())) {
-                // FIXME: This is expensive. Broken with transforms.
-                LayoutPoint offsetFromRoot = ancestorLayer.convertToLayerCoords(&rootLayer, { });
-                clipRect = downcast<RenderBox>(ancestorLayer.renderer()).overflowClipRect(offsetFromRoot);
+        Vector<LayerOverlapMap::LayerAndBounds> clippingScopes;
+        clippingScopes.append({ const_cast<RenderLayer&>(rootLayer), { } });
+
+        if (!layer.hasCompositedScrollingAncestor())
+            return clippingScopes;
+
+        traverseAncestorLayers(layer, [&](const RenderLayer& ancestorLayer, bool inContainingBlockChain, bool) {
+            if (inContainingBlockChain && createsClippingScope(ancestorLayer)) {
+                LayoutRect clipRect;
+                if (is<RenderBox>(ancestorLayer.renderer())) {
+                    // FIXME: This is expensive. Broken with transforms.
+                    LayoutPoint offsetFromRoot = ancestorLayer.convertToLayerCoords(&rootLayer, { });
+                    clipRect = downcast<RenderBox>(ancestorLayer.renderer()).overflowClipRect(offsetFromRoot);
+                }
+
+                LayerOverlapMap::LayerAndBounds layerAndBounds { const_cast<RenderLayer&>(ancestorLayer), clipRect };
+                clippingScopes.insert(1, layerAndBounds); // Order is roots to leaves.
             }
+            return AncestorTraversal::Continue;
+        });
 
-            LayerOverlapMap::LayerAndBounds layerAndBounds { const_cast<RenderLayer&>(ancestorLayer), clipRect };
-            clippingScopes.insert(1, layerAndBounds); // Order is roots to leaves.
-        }
-        return AncestorTraversal::Continue;
-    });
+        return clippingScopes;
+    };
 
-    return clippingScopes;
+    extent.clippingScopes = enclosingClippingScopes(layer, rootRenderLayer());
+    extent.clippingScopesComputed = true;
 }
 
 void RenderLayerCompositor::addToOverlapMap(LayerOverlapMap& overlapMap, const RenderLayer& layer, OverlapExtent& extent) const
@@ -2271,14 +2281,12 @@ void RenderLayerCompositor::addToOverlapMap(LayerOverlapMap& overlapMap, const R
         return;
 
     computeExtent(overlapMap, layer, extent);
-
-    // FIXME: constrain the scopes (by composited stacking context ancestor I think).
-    auto clippingScopes = enclosingClippingScopes(layer, rootRenderLayer());
+    computeClippingScopes(layer, extent);
 
     LayoutRect clipRect;
     if (layer.hasCompositedScrollingAncestor()) {
         // Compute a clip up to the composited scrolling ancestor, then convert it to absolute coordinates.
-        auto& scrollingScope = clippingScopes.last();
+        auto& scrollingScope = extent.clippingScopes.last();
         auto& scopeLayer = scrollingScope.layer;
         clipRect = layer.backgroundClipRect(RenderLayer::ClipRectsContext(&scopeLayer, TemporaryClipRects, { })).rect();
         if (!clipRect.isInfinite())
@@ -2295,7 +2303,7 @@ void RenderLayerCompositor::addToOverlapMap(LayerOverlapMap& overlapMap, const R
         clippedBounds.intersect(clipRect);
     }
 
-    overlapMap.add(layer, clippedBounds, clippingScopes);
+    overlapMap.add(layer, clippedBounds, extent.clippingScopes);
 }
 
 void RenderLayerCompositor::addDescendantsToOverlapMapRecursive(LayerOverlapMap& overlapMap, const RenderLayer& layer, const RenderLayer* ancestorLayer) const
@@ -2345,12 +2353,12 @@ void RenderLayerCompositor::updateOverlapMap(LayerOverlapMap& overlapMap, const 
     }
 }
 
-bool RenderLayerCompositor::layerOverlaps(const LayerOverlapMap& overlapMap, const RenderLayer& layer, OverlapExtent& layerExtent) const
+bool RenderLayerCompositor::layerOverlaps(const LayerOverlapMap& overlapMap, const RenderLayer& layer, OverlapExtent& extent) const
 {
-    computeExtent(overlapMap, layer, layerExtent);
+    computeExtent(overlapMap, layer, extent);
+    computeClippingScopes(layer, extent);
 
-    auto clippingScopes = enclosingClippingScopes(layer, rootRenderLayer());
-    return overlapMap.overlapsLayers(layer, layerExtent.bounds, clippingScopes);
+    return overlapMap.overlapsLayers(layer, extent.bounds, extent.clippingScopes);
 }
 
 #if ENABLE(VIDEO)
@@ -2580,23 +2588,36 @@ RenderLayerCompositor* RenderLayerCompositor::frameContentsCompositor(RenderWidg
     return nullptr;
 }
 
-bool RenderLayerCompositor::parentFrameContentLayers(RenderWidget& renderer)
+bool RenderLayerCompositor::attachWidgetContentLayers(RenderWidget& renderer)
 {
-    auto* innerCompositor = frameContentsCompositor(renderer);
-    if (!innerCompositor || !innerCompositor->usesCompositing() || innerCompositor->rootLayerAttachment() != RootLayerAttachedViaEnclosingFrame)
-        return false;
-    
     auto* layer = renderer.layer();
     if (!layer->isComposited())
         return false;
 
     auto* backing = layer->backing();
-    auto* hostingLayer = backing->parentForSublayers();
-    auto* rootLayer = innerCompositor->rootGraphicsLayer();
-    if (hostingLayer->children().size() != 1 || hostingLayer->children()[0].ptr() != rootLayer) {
+    RefPtr hostingLayer = backing->parentForSublayers();
+
+    auto addContentsLayerChildIfNecessary = [&](GraphicsLayer& contentsLayer) {
+        if (hostingLayer->children().size() == 1 && hostingLayer->children()[0].ptr() == &contentsLayer)
+            return;
+
         hostingLayer->removeAllChildren();
-        hostingLayer->addChild(*rootLayer);
+        hostingLayer->addChild(contentsLayer);
+    };
+
+    if (isCompositedPlugin(renderer)) {
+        if (auto* contentsLayer = backing->layerForContents()) {
+            addContentsLayerChildIfNecessary(*contentsLayer);
+            return true;
+        }
     }
+
+    auto* innerCompositor = frameContentsCompositor(renderer);
+    if (!innerCompositor || !innerCompositor->usesCompositing() || innerCompositor->rootLayerAttachment() != RootLayerAttachedViaEnclosingFrame)
+        return false;
+
+    if (auto* iframeRootLayer = innerCompositor->rootGraphicsLayer())
+        addContentsLayerChildIfNecessary(*iframeRootLayer);
 
     if (auto frameHostingNodeID = backing->scrollingNodeIDForRole(ScrollCoordinationRole::FrameHosting)) {
         auto* contentsRenderView = frameContentsRenderView(renderer);
@@ -2606,7 +2627,6 @@ bool RenderLayerCompositor::parentFrameContentLayers(RenderWidget& renderer)
         }
     }
 
-    // FIXME: Why always return true and not just when the layers changed?
     return true;
 }
 
@@ -3252,12 +3272,22 @@ ScrollingNodeID RenderLayerCompositor::asyncScrollableContainerNodeID(const Rend
     return containerScrollingNodeID;
 }
 
-bool RenderLayerCompositor::isCompositedSubframeRenderer(const RenderObject& renderer)
+bool RenderLayerCompositor::hasCompositedWidgetContents(const RenderObject& renderer)
 {
-    if (!is<RenderWidget>(renderer))
+    auto* renderWidget = dynamicDowncast<RenderWidget>(renderer);
+    if (!renderWidget)
         return false;
 
-    return downcast<RenderWidget>(renderer).requiresAcceleratedCompositing();
+    return renderWidget->requiresAcceleratedCompositing();
+}
+
+bool RenderLayerCompositor::isCompositedPlugin(const RenderObject& renderer)
+{
+    auto* renderEmbeddedObject = dynamicDowncast<RenderEmbeddedObject>(renderer);
+    if (!renderEmbeddedObject)
+        return false;
+
+    return renderEmbeddedObject->requiresAcceleratedCompositing();
 }
 
 // Return true if the given layer is a stacking context and has compositing child
@@ -3285,6 +3315,7 @@ bool RenderLayerCompositor::requiresCompositingForAnimation(RenderLayerModelObje
                 && (usesCompositing() || (m_compositingTriggers & ChromeClient::AnimatedOpacityTrigger)))
                 || effectsStack->isCurrentlyAffectingProperty(CSSPropertyFilter)
 #if ENABLE(FILTERS_LEVEL_2)
+                || effectsStack->isCurrentlyAffectingProperty(CSSPropertyBackdropFilter)
                 || effectsStack->isCurrentlyAffectingProperty(CSSPropertyWebkitBackdropFilter)
 #endif
                 || effectsStack->isCurrentlyAffectingProperty(CSSPropertyTranslate)
@@ -3465,8 +3496,7 @@ bool RenderLayerCompositor::requiresCompositingForPlugin(RenderLayerModelObject&
     if (!(m_compositingTriggers & ChromeClient::PluginTrigger))
         return false;
 
-    bool isCompositedPlugin = is<RenderEmbeddedObject>(renderer) && downcast<RenderEmbeddedObject>(renderer).allowsAcceleratedCompositing();
-    if (!isCompositedPlugin)
+    if (!isCompositedPlugin(renderer))
         return false;
 
     auto& pluginRenderer = downcast<RenderWidget>(renderer);

@@ -30,10 +30,10 @@
 #include "GraphicsContext.h"
 #include "HitTestResult.h"
 #include "LayoutRepainter.h"
+#include "LegacyRenderSVGResource.h"
 #include "PointerEventsHitRules.h"
 #include "RenderImageResource.h"
 #include "RenderLayer.h"
-#include "RenderSVGResource.h"
 #include "RenderSVGResourceFilter.h"
 #include "SVGElementTypeHelpers.h"
 #include "SVGImageElement.h"
@@ -49,7 +49,7 @@ namespace WebCore {
 WTF_MAKE_ISO_ALLOCATED_IMPL(LegacyRenderSVGImage);
 
 LegacyRenderSVGImage::LegacyRenderSVGImage(SVGImageElement& element, RenderStyle&& style)
-    : LegacyRenderSVGModelObject(element, WTFMove(style))
+    : LegacyRenderSVGModelObject(Type::LegacySVGImage, element, WTFMove(style))
     , m_needsBoundariesUpdate(true)
     , m_needsTransformUpdate(true)
     , m_imageResource(makeUnique<RenderImageResource>())
@@ -247,7 +247,7 @@ void LegacyRenderSVGImage::imageChanged(WrappedImagePtr, const IntRect*)
         resources->removeClientFromCache(*this);
 
     // Eventually notify parent resources, that we've changed.
-    RenderSVGResource::markForLayoutAndParentResourceInvalidation(*this, false);
+    LegacyRenderSVGResource::markForLayoutAndParentResourceInvalidation(*this, false);
 
     // Update the SVGImageCache sizeAndScales entry in case image loading finished after layout.
     // (https://bugs.webkit.org/show_bug.cgi?id=99489)

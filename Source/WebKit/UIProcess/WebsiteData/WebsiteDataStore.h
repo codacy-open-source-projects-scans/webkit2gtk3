@@ -39,6 +39,7 @@
 #include <WebCore/SecurityOriginData.h>
 #include <WebCore/SecurityOriginHash.h>
 #include <pal/SessionID.h>
+#include <wtf/CheckedRef.h>
 #include <wtf/Function.h>
 #include <wtf/HashSet.h>
 #include <wtf/Identified.h>
@@ -117,7 +118,7 @@ enum class StorageAccessStatus : uint8_t;
 enum class StorageAccessPromptStatus;
 #endif
 
-class WebsiteDataStore : public API::ObjectImpl<API::Object::Type::WebsiteDataStore>, public Identified<WebsiteDataStore>, public CanMakeWeakPtr<WebsiteDataStore>  {
+class WebsiteDataStore : public API::ObjectImpl<API::Object::Type::WebsiteDataStore>, public Identified<WebsiteDataStore>, public CanMakeWeakPtr<WebsiteDataStore>, public CanMakeCheckedPtr {
 public:
     static Ref<WebsiteDataStore> defaultDataStore();
     static bool defaultDataStoreExists();
@@ -289,6 +290,7 @@ public:
 #if ENABLE(ARKIT_INLINE_PREVIEW)
     const String& resolvedModelElementCacheDirectory() const { return m_resolvedConfiguration->modelElementCacheDirectory(); }
 #endif
+    FileSystem::Salt mediaKeysStorageSalt() const;
 
     static void setCachedProcessSuspensionDelayForTesting(Seconds);
 
@@ -476,7 +478,11 @@ public:
 #endif
     void setCompletionHandlerForRemovalFromNetworkProcess(CompletionHandler<void(String&&)>&&);
 
+#if ENABLE(SERVICE_WORKER)
     void processPushMessage(WebPushMessage&&, CompletionHandler<void(bool)>&&);
+#endif
+
+    void setOriginQuotaRatioEnabledForTesting(bool enabled, CompletionHandler<void()>&&);
 
 private:
     enum class ForceReinitialization : bool { No, Yes };
@@ -508,9 +514,9 @@ private:
     // Will create a temporary process pool is none exists yet.
     HashSet<RefPtr<WebProcessPool>> ensureProcessPools() const;
 
-    static Vector<WebCore::SecurityOriginData> mediaKeyOrigins(const String& mediaKeysStorageDirectory);
-    static void removeMediaKeys(const String& mediaKeysStorageDirectory, WallTime modifiedSince);
-    static void removeMediaKeys(const String& mediaKeysStorageDirectory, const HashSet<WebCore::SecurityOriginData>&);
+    static Vector<WebCore::SecurityOriginData> mediaKeysStorageOrigins(const String& mediaKeysStorageDirectory);
+    static void removeMediaKeysStorage(const String& mediaKeysStorageDirectory, WallTime modifiedSince);
+    static void removeMediaKeysStorage(const String& mediaKeysStorageDirectory, const HashSet<WebCore::SecurityOriginData>&, const FileSystem::Salt&);
 
     void registerWithSessionIDMap();
     bool hasActivePages();
@@ -532,6 +538,8 @@ private:
     String resolvedContainerCachesNetworkingDirectory();
     String parentBundleDirectory() const;
 #endif
+
+    String migrateMediaKeysStorageIfNecessary(const String& directory);
 
     const PAL::SessionID m_sessionID;
 
@@ -606,6 +614,7 @@ private:
     CompletionHandler<void(String&&)> m_completionHandlerForRemovalFromNetworkProcess;
 
     bool m_inspectionForServiceWorkersAllowed { true };
+    FileSystem::Salt m_mediaKeysStorageSalt;
 };
 
 }

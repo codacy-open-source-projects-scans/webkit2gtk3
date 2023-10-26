@@ -235,13 +235,15 @@ namespace JSC {
 
     public:
         void loadConstant(unsigned constantIndex, GPRReg);
+        void loadStructureStubInfo(StructureStubInfoIndex, GPRReg);
+        static void emitMaterializeMetadataAndConstantPoolRegisters(CCallHelpers&);
     private:
         void loadGlobalObject(GPRReg);
 
         // Assuming s_constantsGPR is available.
         static void loadGlobalObject(CCallHelpers&, GPRReg);
         static void loadConstant(CCallHelpers&, unsigned constantIndex, GPRReg);
-        static void emitMaterializeMetadataAndConstantPoolRegisters(CCallHelpers&);
+        static void loadStructureStubInfo(CCallHelpers&, StructureStubInfoIndex, GPRReg);
 
         void loadCodeBlockConstant(VirtualRegister, JSValueRegs);
         void loadCodeBlockConstantPayload(VirtualRegister, RegisterID);
@@ -339,7 +341,6 @@ namespace JSC {
         ECMAMode ecmaMode(Op);
 
         void emitGetVirtualRegister(VirtualRegister src, JSValueRegs dst);
-        void emitGetVirtualRegisters(std::initializer_list<std::tuple<VirtualRegister, JSValueRegs>>);
         void emitGetVirtualRegisterPayload(VirtualRegister src, RegisterID dst);
         void emitPutVirtualRegister(VirtualRegister dst, JSValueRegs src);
 
@@ -434,6 +435,7 @@ namespace JSC {
         void emit_op_instanceof(const JSInstruction*);
         void emit_op_is_empty(const JSInstruction*);
         void emit_op_typeof_is_undefined(const JSInstruction*);
+        void emit_op_typeof_is_function(const JSInstruction*);
         void emit_op_is_undefined_or_null(const JSInstruction*);
         void emit_op_is_boolean(const JSInstruction*);
         void emit_op_is_number(const JSInstruction*);
@@ -629,7 +631,7 @@ namespace JSC {
         void emitSlow_op_iterator_next(const JSInstruction*, Vector<SlowCaseEntry>::iterator&);
 
         void emitHasPrivate(VirtualRegister dst, VirtualRegister base, VirtualRegister propertyOrBrand, AccessType);
-        void emitHasPrivateSlow(AccessType);
+        void emitHasPrivateSlow(AccessType, Vector<SlowCaseEntry>::iterator&);
 
         template<typename Op>
         void emitNewFuncCommon(const JSInstruction*);
@@ -667,24 +669,11 @@ namespace JSC {
         static MacroAssemblerCodeRef<JITThunkPtrTag> returnFromBaselineGenerator(VM&);
 
     private:
-        static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_get_by_id_with_this_callSlowOperationThenCheckExceptionGenerator(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_del_by_id_callSlowOperationThenCheckExceptionGenerator(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_del_by_val_callSlowOperationThenCheckExceptionGenerator(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_put_by_val_callSlowOperationThenCheckExceptionGenerator(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_put_private_name_callSlowOperationThenCheckExceptionGenerator(VM&);
-
         static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_put_to_scopeGenerator(VM&);
         static MacroAssemblerCodeRef<JITThunkPtrTag> op_throw_handlerGenerator(VM&);
         static MacroAssemblerCodeRef<JITThunkPtrTag> op_check_traps_handlerGenerator(VM&);
-
-        static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_get_by_id_callSlowOperationThenCheckExceptionGenerator(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_put_by_id_callSlowOperationThenCheckExceptionGenerator(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_get_by_val_callSlowOperationThenCheckExceptionGenerator(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_get_by_val_with_this_callSlowOperationThenCheckExceptionGenerator(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_get_private_name_callSlowOperationThenCheckExceptionGenerator(VM&);
         static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_get_from_scopeGenerator(VM&);
         static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_resolve_scopeGenerator(VM&);
-        static MacroAssemblerCodeRef<JITThunkPtrTag> slow_op_instanceof_callSlowOperationThenCheckExceptionGenerator(VM&);
         template <ResolveType>
         static MacroAssemblerCodeRef<JITThunkPtrTag> generateOpGetFromScopeThunk(VM&);
         template <ResolveType>
@@ -908,7 +897,7 @@ namespace JSC {
         void resetSP();
 
         JITConstantPool::Constant addToConstantPool(JITConstantPool::Type, void* payload = nullptr);
-        std::tuple<BaselineUnlinkedStructureStubInfo*, JITConstantPool::Constant> addUnlinkedStructureStubInfo();
+        std::tuple<BaselineUnlinkedStructureStubInfo*, StructureStubInfoIndex> addUnlinkedStructureStubInfo();
         BaselineUnlinkedCallLinkInfo* addUnlinkedCallLinkInfo();
 
         Vector<FarCallRecord> m_farCalls;

@@ -76,6 +76,9 @@ void Visitor::visit(Attribute& attribute)
     case AST::NodeKind::ConstAttribute:
         checkErrorAndVisit(downcast<AST::ConstAttribute>(attribute));
         break;
+    case AST::NodeKind::DiagnosticAttribute:
+        checkErrorAndVisit(downcast<AST::DiagnosticAttribute>(attribute));
+        break;
     case AST::NodeKind::GroupAttribute:
         checkErrorAndVisit(downcast<AST::GroupAttribute>(attribute));
         break;
@@ -90,6 +93,9 @@ void Visitor::visit(Attribute& attribute)
         break;
     case AST::NodeKind::LocationAttribute:
         checkErrorAndVisit(downcast<AST::LocationAttribute>(attribute));
+        break;
+    case AST::NodeKind::MustUseAttribute:
+        checkErrorAndVisit(downcast<AST::MustUseAttribute>(attribute));
         break;
     case AST::NodeKind::SizeAttribute:
         checkErrorAndVisit(downcast<AST::SizeAttribute>(attribute));
@@ -119,6 +125,10 @@ void Visitor::visit(AST::ConstAttribute&)
 {
 }
 
+void Visitor::visit(AST::DiagnosticAttribute&)
+{
+}
+
 void Visitor::visit(AST::BuiltinAttribute&)
 {
 }
@@ -145,6 +155,11 @@ void Visitor::visit(AST::LocationAttribute& attribute)
 {
     visit(attribute.location());
 }
+
+void Visitor::visit(AST::MustUseAttribute&)
+{
+}
+
 
 void Visitor::visit(AST::SizeAttribute& attribute)
 {
@@ -461,8 +476,21 @@ void Visitor::visit(AST::StaticAssertStatement& staticAssertStatement)
     checkErrorAndVisit(staticAssertStatement.expression());
 }
 
-void Visitor::visit(AST::SwitchStatement&)
+void Visitor::visit(AST::SwitchStatement& statement)
 {
+    checkErrorAndVisit(statement.value());
+    for (auto& attribute : statement.valueAttributes())
+        checkErrorAndVisit(attribute);
+    for (auto& clause : statement.clauses())
+        checkErrorAndVisit(clause);
+    checkErrorAndVisit(statement.defaultClause());
+}
+
+void Visitor::visit(AST::SwitchClause& clause)
+{
+    for (auto& selector : clause.selectors)
+        checkErrorAndVisit(selector);
+    checkErrorAndVisit(clause.body);
 }
 
 void Visitor::visit(AST::VariableStatement& varStatement)
@@ -525,21 +553,6 @@ void Visitor::visit(AST::Variable& variable)
 
 void Visitor::visit(VariableQualifier&)
 {
-}
-
-std::optional<unsigned> extractInteger(const AST::Expression& expression)
-{
-    switch (expression.kind()) {
-    case AST::NodeKind::AbstractIntegerLiteral:
-        return { static_cast<unsigned>(downcast<AST::AbstractIntegerLiteral>(expression).value()) };
-    case AST::NodeKind::Unsigned32Literal:
-        return { static_cast<unsigned>(downcast<AST::Unsigned32Literal>(expression).value()) };
-    case AST::NodeKind::Signed32Literal:
-        return { static_cast<unsigned>(downcast<AST::Signed32Literal>(expression).value()) };
-    default:
-        // FIXME: handle constants and overrides
-        return std::nullopt;
-    }
 }
 
 } // namespace WGSL::AST

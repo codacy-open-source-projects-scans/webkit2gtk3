@@ -91,13 +91,13 @@ static inline void updateLogicalHeightForCell(RenderTableSection::RowStruct& row
 }
 
 RenderTableSection::RenderTableSection(Element& element, RenderStyle&& style)
-    : RenderBox(element, WTFMove(style), 0)
+    : RenderBox(Type::TableSection, element, WTFMove(style), 0)
 {
     setInline(false);
 }
 
 RenderTableSection::RenderTableSection(Document& document, RenderStyle&& style)
-    : RenderBox(document, WTFMove(style), 0)
+    : RenderBox(Type::TableSection, document, WTFMove(style), 0)
 {
     setInline(false);
 }
@@ -514,8 +514,8 @@ void RenderTableSection::relayoutCellIfFlexed(RenderTableCell& cell, int rowInde
 
     if (!cellChildrenFlex) {
         if (TrackedRendererListHashSet* percentHeightDescendants = cell.percentHeightDescendants()) {
-            for (auto* descendant : *percentHeightDescendants) {
-                if (flexAllChildren || shouldFlexCellChild(cell, *descendant)) {
+            for (auto& descendant : *percentHeightDescendants) {
+                if (flexAllChildren || shouldFlexCellChild(cell, descendant)) {
                     cellChildrenFlex = true;
                     break;
                 }
@@ -1287,7 +1287,7 @@ void RenderTableSection::paintObject(PaintInfo& paintInfo, const LayoutPoint& pa
             // To make sure we properly repaint the section, we repaint all the overflowing cells that we collected.
             auto cells = copyToVector(m_overflowingCells);
 
-            HashSet<RenderTableCell*> spanningCells;
+            HashSet<CheckedPtr<RenderTableCell>> spanningCells;
 
             for (unsigned r = dirtiedRows.start; r < dirtiedRows.end; r++) {
                 RenderTableRow* row = m_grid[r].rowRenderer;

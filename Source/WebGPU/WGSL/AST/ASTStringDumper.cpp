@@ -103,7 +103,7 @@ void StringDumper::visit(BindingAttribute& binding)
 
 void StringDumper::visit(BuiltinAttribute& builtin)
 {
-    m_out.print("@builtin(", builtin.name(), ")");
+    m_out.print("@builtin(", builtin.builtin(), ")");
 }
 
 void StringDumper::visit(GroupAttribute& group)
@@ -122,17 +122,7 @@ void StringDumper::visit(LocationAttribute& location)
 
 void StringDumper::visit(StageAttribute& stage)
 {
-    switch (stage.stage()) {
-    case StageAttribute::Stage::Compute:
-        m_out.print("@compute");
-        break;
-    case StageAttribute::Stage::Fragment:
-        m_out.print("@fragment");
-        break;
-    case StageAttribute::Stage::Vertex:
-        m_out.print("@vertex");
-        break;
-    }
+    m_out.print("@", stage.stage());
 }
 
 void StringDumper::visit(WorkgroupSizeAttribute& workgroupSize)
@@ -459,11 +449,7 @@ void StringDumper::visit(StructureMember& member)
 
 void StringDumper::visit(VariableQualifier& qualifier)
 {
-    constexpr ASCIILiteral accessMode[]= { "read"_s, "write"_s, "read_write"_s };
-    constexpr ASCIILiteral storageClass[] = { "function"_s, "private"_s, "workgroup"_s, "uniform"_s, "storage"_s };
-    auto sc = WTF::enumToUnderlyingType(qualifier.storageClass());
-    auto am = WTF::enumToUnderlyingType(qualifier.accessMode());
-    m_out.print("<", storageClass[sc], ",", accessMode[am], ">");
+    m_out.print("<", qualifier.addressSpace(), ",", qualifier.accessMode(), ">");
 }
 
 void dumpAST(ShaderModule& shaderModule)

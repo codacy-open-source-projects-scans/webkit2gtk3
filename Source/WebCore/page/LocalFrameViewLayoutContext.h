@@ -28,6 +28,7 @@
 #include "LayoutUnit.h"
 #include "RenderLayerModelObject.h"
 #include "Timer.h"
+#include <wtf/CheckedRef.h>
 #include <wtf/WeakHashSet.h>
 #include <wtf/WeakPtr.h>
 
@@ -60,7 +61,7 @@ struct UpdateScrollInfoAfterLayoutTransaction {
     WeakHashSet<RenderBlock> blocks;
 };
 
-class LocalFrameViewLayoutContext {
+class LocalFrameViewLayoutContext : public CanMakeCheckedPtr {
 public:
     LocalFrameViewLayoutContext(LocalFrameView&);
     ~LocalFrameViewLayoutContext();
@@ -92,6 +93,9 @@ public:
     bool isInLayout() const { return layoutPhase() != LayoutPhase::OutsideLayout; }
     bool isInRenderTreeLayout() const { return layoutPhase() == LayoutPhase::InRenderTreeLayout; }
     bool inPaintableState() const { return layoutPhase() != LayoutPhase::InRenderTreeLayout && layoutPhase() != LayoutPhase::InViewSizeAdjust && (layoutPhase() != LayoutPhase::InPostLayout || inAsynchronousTasks()); }
+
+    bool needsSkippedContentLayout() const { return m_needsSkippedContentLayout; }
+    void setNeedsSkippedContentLayout(bool needsSkippedContentLayout) { m_needsSkippedContentLayout = needsSkippedContentLayout; }
 
     unsigned layoutCount() const { return m_layoutCount; }
 
@@ -182,6 +186,7 @@ private:
     bool m_needsFullRepaint { true };
     bool m_inAsynchronousTasks { false };
     bool m_setNeedsLayoutWasDeferred { false };
+    bool m_needsSkippedContentLayout { false };
     LayoutPhase m_layoutPhase { LayoutPhase::OutsideLayout };
     enum class LayoutNestedState : uint8_t  { NotInLayout, NotNested, Nested };
     LayoutNestedState m_layoutNestedState { LayoutNestedState::NotInLayout };

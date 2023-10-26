@@ -166,6 +166,7 @@ public:
     };
 
     enum ResultCondition {
+        Carry = ARMv7Assembler::ConditionCS,
         Overflow = ARMv7Assembler::ConditionVS,
         Signed = ARMv7Assembler::ConditionMI,
         PositiveOrZero = ARMv7Assembler::ConditionPL,
@@ -2679,7 +2680,7 @@ public:
 
     void breakpoint(uint8_t imm = 0)
     {
-        m_assembler.bkpt(imm);
+        m_assembler.udf(imm);
     }
 
     static bool isBreakpoint(void* address) { return ARMv7Assembler::isBkpt(address); }

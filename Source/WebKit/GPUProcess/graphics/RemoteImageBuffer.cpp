@@ -24,13 +24,13 @@
  */
 
 #include "config.h"
-
 #include "RemoteImageBuffer.h"
 
 #if ENABLE(GPU_PROCESS)
 
 #include "IPCSemaphore.h"
 #include "RemoteImageBufferMessages.h"
+#include "RemoteRenderingBackend.h"
 #include "StreamConnectionWorkQueue.h"
 #include <WebCore/GraphicsContext.h>
 
@@ -86,7 +86,7 @@ void RemoteImageBuffer::getPixelBuffer(WebCore::PixelBufferFormat destinationFor
     assertIsCurrent(workQueue());
     auto memory = m_backend->sharedMemoryForGetPixelBuffer();
     MESSAGE_CHECK(memory, "No shared memory for getPixelBufferForImageBuffer"_s);
-    MESSAGE_CHECK(PixelBuffer::supportedPixelFormat(destinationFormat.pixelFormat), "Pixel format not supported"_s);
+    MESSAGE_CHECK(WebCore::PixelBuffer::supportedPixelFormat(destinationFormat.pixelFormat), "Pixel format not supported"_s);
     auto pixelBuffer = m_imageBuffer->getPixelBuffer(destinationFormat, srcRect);
     if (pixelBuffer) {
         MESSAGE_CHECK(pixelBuffer->sizeInBytes() <= memory->size(), "Shmem for return of getPixelBuffer is too small"_s);
@@ -119,35 +119,35 @@ void RemoteImageBuffer::getShareableBitmap(WebCore::PreserveResolution preserveR
     [&]() {
         auto backendSize = m_imageBuffer->backendSize();
         auto logicalSize = m_imageBuffer->logicalSize();
-        auto resultSize = preserveResolution == PreserveResolution::Yes ? backendSize : m_imageBuffer->truncatedLogicalSize();
+        auto resultSize = preserveResolution == WebCore::PreserveResolution::Yes ? backendSize : m_imageBuffer->truncatedLogicalSize();
         auto bitmap = ShareableBitmap::create({ resultSize, m_imageBuffer->colorSpace() });
         if (!bitmap)
             return;
         auto context = bitmap->createGraphicsContext();
         if (!context)
             return;
-        context->drawImageBuffer(m_imageBuffer.get(), WebCore::FloatRect { { }, resultSize }, FloatRect { { }, logicalSize }, { CompositeOperator::Copy });
+        context->drawImageBuffer(m_imageBuffer.get(), WebCore::FloatRect { { }, resultSize }, WebCore::FloatRect { { }, logicalSize }, { WebCore::CompositeOperator::Copy });
         handle = bitmap->createHandle();
     }();
     completionHandler(WTFMove(handle));
 }
 
-void RemoteImageBuffer::getFilteredImage(Ref<WebCore::Filter> filter, CompletionHandler<void(std::optional<ShareableBitmap::Handle>&&)>&& completionHandler)
+void RemoteImageBuffer::filteredNativeImage(Ref<WebCore::Filter> filter, CompletionHandler<void(std::optional<ShareableBitmap::Handle>&&)>&& completionHandler)
 {
     assertIsCurrent(workQueue());
     std::optional<ShareableBitmap::Handle> handle;
     [&]() {
-        auto image = m_imageBuffer->filteredImage(filter);
+        auto image = m_imageBuffer->filteredNativeImage(filter);
         if (!image)
             return;
         auto imageSize = image->size();
-        auto bitmap = ShareableBitmap::create({ IntSize(imageSize), m_imageBuffer->colorSpace() });
+        auto bitmap = ShareableBitmap::create({ imageSize, m_imageBuffer->colorSpace() });
         if (!bitmap)
             return;
         auto context = bitmap->createGraphicsContext();
         if (!context)
             return;
-        context->drawImage(*image, FloatPoint());
+        context->drawNativeImage(*image, imageSize, WebCore::FloatRect { { }, imageSize }, WebCore::FloatRect { { }, imageSize });
         handle = bitmap->createHandle();
     }();
     completionHandler(WTFMove(handle));

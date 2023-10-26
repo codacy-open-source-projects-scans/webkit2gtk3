@@ -52,7 +52,7 @@
 #include <wtf/text/TextStream.h>
 
 #if ENABLE(VIDEO_PRESENTATION_MODE)
-#include "VideoFullscreenModel.h"
+#include "VideoPresentationModel.h"
 #endif
 
 #if ENABLE(PICTURE_IN_PICTURE_API)
@@ -289,12 +289,7 @@ std::optional<DestinationColorSpace> HTMLVideoElement::colorSpace() const
 RefPtr<ImageBuffer> HTMLVideoElement::createBufferForPainting(const FloatSize& size, RenderingMode renderingMode, const DestinationColorSpace& colorSpace, PixelFormat pixelFormat) const
 {
     auto* hostWindow = document().view() && document().view()->root() ? document().view()->root()->hostWindow() : nullptr;
-
-    auto bufferOptions = bufferOptionsForRendingMode(renderingMode);
-    if (document().settings().displayListDrawingEnabled())
-        bufferOptions.add(ImageBufferOptions::UseDisplayList);
-
-    return ImageBuffer::create(size, RenderingPurpose::MediaPainting, 1, colorSpace, pixelFormat, bufferOptions, hostWindow);
+    return ImageBuffer::create(size, RenderingPurpose::MediaPainting, 1, colorSpace, pixelFormat, bufferOptionsForRendingMode(renderingMode), hostWindow);
 }
 
 void HTMLVideoElement::paintCurrentFrameInContext(GraphicsContext& context, const FloatRect& destRect)
@@ -673,6 +668,6 @@ void HTMLVideoElement::mediaPlayerEngineUpdated()
         player()->startVideoFrameMetadataGathering();
 }
 
-}
+} // namespace WebCore
 
-#endif
+#endif // ENABLE(VIDEO)

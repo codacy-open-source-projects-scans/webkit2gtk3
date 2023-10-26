@@ -133,13 +133,17 @@ public:
     inline RefPtr<ContainerNode> protectedParentNode() const; // Defined in ContainerNode.h.
     static ptrdiff_t parentNodeMemoryOffset() { return OBJECT_OFFSETOF(Node, m_parentNode); }
     inline Element* parentElement() const;
-    Node* previousSibling() const { return m_previous; }
+    Node* previousSibling() const { return m_previous.get(); }
+    RefPtr<Node> protectedPreviousSibling() const { return m_previous.get(); }
     static ptrdiff_t previousSiblingMemoryOffset() { return OBJECT_OFFSETOF(Node, m_previous); }
-    Node* nextSibling() const { return m_next; }
+    Node* nextSibling() const { return m_next.get(); }
+    RefPtr<Node> protectedNextSibling() const { return m_next.get(); }
     static ptrdiff_t nextSiblingMemoryOffset() { return OBJECT_OFFSETOF(Node, m_next); }
     WEBCORE_EXPORT RefPtr<NodeList> childNodes();
     Node* firstChild() const;
+    RefPtr<Node> protectedFirstChild() const { return firstChild(); }
     Node* lastChild() const;
+    RefPtr<Node> protectedLastChild() const { return lastChild(); }
     inline bool hasAttributes() const;
     inline NamedNodeMap* attributes() const;
     Node* pseudoAwareNextSibling() const;
@@ -150,8 +154,9 @@ public:
     WEBCORE_EXPORT const URL& baseURI() const;
     
     void getSubresourceURLs(ListHashSet<URL>&) const;
+    void getCandidateSubresourceURLs(ListHashSet<URL>&) const;
 
-    WEBCORE_EXPORT ExceptionOr<void> insertBefore(Node& newChild, Node* refChild);
+    WEBCORE_EXPORT ExceptionOr<void> insertBefore(Node& newChild, RefPtr<Node>&& refChild);
     WEBCORE_EXPORT ExceptionOr<void> replaceChild(Node& newChild, Node& oldChild);
     WEBCORE_EXPORT ExceptionOr<void> removeChild(Node& child);
     WEBCORE_EXPORT ExceptionOr<void> appendChild(Node& newChild);
@@ -216,6 +221,8 @@ public:
 
 #if ENABLE(VIDEO)
     virtual bool isWebVTTElement() const { return false; }
+    virtual bool isWebVTTRubyElement() const { return false; }
+    virtual bool isWebVTTRubyTextElement() const { return false; }
 #endif
     bool isStyledElement() const { return hasNodeFlag(NodeFlag::IsHTMLElement) || hasNodeFlag(NodeFlag::IsSVGElement) || hasNodeFlag(NodeFlag::IsMathMLElement); }
     virtual bool isAttributeNode() const { return false; }
@@ -266,11 +273,12 @@ public:
     Node* nonBoundaryShadowTreeRootNode();
 
     // Node's parent or shadow tree host.
-    ContainerNode* parentOrShadowHostNode() const; // Defined in ShadowRoot.h
+    inline ContainerNode* parentOrShadowHostNode() const; // Defined in ShadowRoot.h
+    inline RefPtr<ContainerNode> protectedParentOrShadowHostNode() const; // Defined in ShadowRoot.h
     ContainerNode* parentInComposedTree() const;
     Element* parentElementInComposedTree() const;
     Element* parentOrShadowHostElement() const;
-    void setParentNode(ContainerNode*);
+    inline void setParentNode(ContainerNode*); // Defined in ContainerNode.h.
     Node& rootNode() const;
     WEBCORE_EXPORT Node& traverseToRootNode() const;
     Node& shadowIncludingRoot() const;
@@ -382,6 +390,7 @@ public:
 
     // Returns the document associated with this node. A document node returns itself.
     Document& document() const { return treeScope().documentScope(); }
+    inline Ref<Document> protectedDocument() const; // Defined in DocumentInlines.h.
 
     TreeScope& treeScope() const
     {
@@ -522,6 +531,15 @@ public:
     mutable bool m_inRemovedLastRefFunction { false };
     bool m_adoptionIsRequired { true };
 #endif
+
+    void relaxAdoptionRequirement()
+    {
+#if ASSERT_ENABLED
+        ASSERT_WITH_SECURITY_IMPLICATION(!m_deletionHasBegun);
+        ASSERT(m_adoptionIsRequired);
+        m_adoptionIsRequired = false;
+#endif
+    }
 
     HashMap<Ref<MutationObserver>, MutationRecordDeliveryOptions> registeredMutationObservers(MutationObserverOptionType, const QualifiedName* attributeName);
     void registerMutationObserver(MutationObserver&, MutationObserverOptions, const MemoryCompactLookupOnlyRobinHoodHashSet<AtomString>& attributeFilter);
@@ -699,6 +717,7 @@ protected:
     ALWAYS_INLINE void clearStyleFlags(OptionSet<NodeStyleFlag>);
 
     virtual void addSubresourceAttributeURLs(ListHashSet<URL>&) const { }
+    virtual void addCandidateSubresourceURLs(ListHashSet<URL>&) const { }
 
     bool hasRareData() const { return !!m_rareDataWithBitfields.pointer(); }
     NodeRareData* rareData() const { return m_rareDataWithBitfields.pointer(); }
@@ -742,10 +761,10 @@ private:
     mutable uint32_t m_refCountAndParentBit { s_refCountIncrement };
     mutable OptionSet<NodeFlag> m_nodeFlags;
 
-    ContainerNode* m_parentNode { nullptr };
-    TreeScope* m_treeScope { nullptr };
-    Node* m_previous { nullptr };
-    Node* m_next { nullptr };
+    CheckedPtr<ContainerNode> m_parentNode;
+    CheckedPtr<TreeScope> m_treeScope;
+    CheckedPtr<Node> m_previous;
+    CheckedPtr<Node> m_next;
     CompactPointerTuple<RenderObject*, uint16_t> m_rendererWithStyleFlags;
     CompactUniquePtrTuple<NodeRareData, uint16_t> m_rareDataWithBitfields;
 };
@@ -825,17 +844,10 @@ inline void addSubresourceURL(ListHashSet<URL>& urls, const URL& url)
         urls.add(url);
 }
 
-inline void Node::setParentNode(ContainerNode* parent)
-{
-    ASSERT(isMainThread());
-    m_parentNode = parent;
-    m_refCountAndParentBit = (m_refCountAndParentBit & s_refCountMask) | !!parent;
-}
-
 inline ContainerNode* Node::parentNode() const
 {
     ASSERT(isMainThreadOrGCThread());
-    return m_parentNode;
+    return m_parentNode.get();
 }
 
 inline ContainerNode* Node::parentNodeGuaranteedHostFree() const

@@ -157,6 +157,8 @@ void HTMLLinkElement::setDisabledState(bool disabled)
     else {
         ASSERT(m_styleScope);
         m_styleScope->didChangeActiveStyleSheetCandidates();
+        if (m_sheet)
+            clearSheet();
     }
 }
 
@@ -426,6 +428,11 @@ void HTMLLinkElement::initializeStyleSheet(Ref<StyleSheetContents>&& styleSheet,
     std::optional<bool> originClean;
     if (cachedStyleSheet.options().mode == FetchOptions::Mode::Cors)
         originClean = cachedStyleSheet.isCORSSameOrigin();
+
+    if (m_sheet) {
+        ASSERT(m_sheet->ownerNode() == this);
+        m_sheet->clearOwnerNode();
+    }
 
     m_sheet = CSSStyleSheet::create(WTFMove(styleSheet), *this, originClean);
     m_sheet->setMediaQueries(MQ::MediaQueryParser::parse(m_media, context));

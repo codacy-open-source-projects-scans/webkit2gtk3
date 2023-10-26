@@ -100,6 +100,7 @@ public:
     WEBCORE_EXPORT bool needsYouTubeMouseOutQuirk() const;
 
     WEBCORE_EXPORT bool shouldAvoidUsingIOS13ForGmail() const;
+    WEBCORE_EXPORT bool shouldAvoidUsingIOS17UserAgentForFacebook() const;
 
     bool needsGMailOverflowScrollQuirk() const;
     bool needsYouTubeOverflowScrollQuirk() const;
@@ -140,7 +141,6 @@ public:
 #if ENABLE(TRACKING_PREVENTION)
     static bool isMicrosoftTeamsRedirectURL(const URL&);
     static bool hasStorageAccessForAllLoginDomains(const HashSet<RegistrableDomain>&, const RegistrableDomain&);
-    WEBCORE_EXPORT static const String& staticRadioPlayerURLString();
     StorageAccessResult requestStorageAccessAndHandleClick(CompletionHandler<void(ShouldDispatchClick)>&&) const;
 #endif
 
@@ -174,6 +174,8 @@ public:
 
     bool shouldStarBeFeaturePolicyDefaultValue() const;
     bool shouldDisableDataURLPaddingValidation() const;
+
+    bool needsDisableDOMPasteAccessQuirk() const;
 
 private:
     bool needsQuirks() const;
@@ -237,6 +239,8 @@ private:
     bool m_needsToCopyUserSelectNoneQuirk { false };
     mutable std::optional<bool> m_shouldStarBeFeaturePolicyDefaultValueQuirk;
     mutable std::optional<bool> m_shouldDisableDataURLPaddingValidation;
+    mutable std::optional<bool> m_needsDisableDOMPasteAccessQuirk;
+    mutable std::optional<bool> m_shouldAvoidUsingIOS17UserAgentForFacebook;
 };
 
 } // namespace WebCore

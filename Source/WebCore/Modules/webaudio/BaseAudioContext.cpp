@@ -83,6 +83,7 @@
 #include <wtf/Atomics.h>
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/MainThread.h>
+#include <wtf/NativePromise.h>
 #include <wtf/Ref.h>
 #include <wtf/Scope.h>
 #include <wtf/text/WTFString.h>
@@ -283,33 +284,27 @@ ExceptionOr<Ref<AudioBuffer>> BaseAudioContext::createBuffer(unsigned numberOfCh
     return AudioBuffer::create(AudioBufferOptions {numberOfChannels, length, sampleRate});
 }
 
-void BaseAudioContext::decodeAudioData(Ref<ArrayBuffer>&& audioData, RefPtr<AudioBufferCallback>&& successCallback, RefPtr<AudioBufferCallback>&& errorCallback)
+void BaseAudioContext::decodeAudioData(Ref<ArrayBuffer>&& audioData, RefPtr<AudioBufferCallback>&& successCallback, RefPtr<AudioBufferCallback>&& errorCallback, Ref<DeferredPromise>&& promise)
 {
-    decodeAudioData(WTFMove(audioData), WTFMove(successCallback), WTFMove(errorCallback), std::nullopt);
-}
-
-void BaseAudioContext::decodeAudioData(Ref<ArrayBuffer>&& audioData, RefPtr<AudioBufferCallback>&& successCallback, RefPtr<AudioBufferCallback>&& errorCallback, std::optional<Ref<DeferredPromise>>&& promise)
-{
-    if (promise && (!document() || !document()->isFullyActive())) {
-        promise.value()->reject(Exception { InvalidStateError, "Document is not fully active"_s });
+    if (!document() || !document()->isFullyActive()) {
+        promise->reject(Exception { InvalidStateError, "Document is not fully active"_s });
         return;
     }
 
     if (!m_audioDecoder)
         m_audioDecoder = makeUnique<AsyncAudioDecoder>();
 
-    m_audioDecoder->decodeAsync(WTFMove(audioData), sampleRate(), [this, activity = makePendingActivity(*this), successCallback = WTFMove(successCallback), errorCallback = WTFMove(errorCallback), promise = WTFMove(promise)](ExceptionOr<Ref<AudioBuffer>>&& result) mutable {
+    auto p = m_audioDecoder->decodeAsync(WTFMove(audioData), sampleRate());
+    p->whenSettled(RunLoop::main(), [this, activity = makePendingActivity(*this), successCallback = WTFMove(successCallback), errorCallback = WTFMove(errorCallback), promise = WTFMove(promise)] (DecodingTaskPromise::Result&& result) mutable {
         queueTaskKeepingObjectAlive(*this, TaskSource::InternalAsyncTask, [successCallback = WTFMove(successCallback), errorCallback = WTFMove(errorCallback), promise = WTFMove(promise), result = WTFMove(result)]() mutable {
-            if (result.hasException()) {
-                if (promise)
-                    promise.value()->reject(result.releaseException());
+            if (!result) {
+                promise->reject(WTFMove(result.error()));
                 if (errorCallback)
                     errorCallback->handleEvent(nullptr);
                 return;
             }
-            auto audioBuffer = result.releaseReturnValue();
-            if (promise)
-                promise.value()->resolve<IDLInterface<AudioBuffer>>(audioBuffer.get());
+            auto audioBuffer = WTFMove(result.value());
+            promise->resolve<IDLInterface<AudioBuffer>>(audioBuffer.get());
             if (successCallback)
                 successCallback->handleEvent(audioBuffer.ptr());
         });

@@ -534,6 +534,12 @@ angle::Result UploadTextureContents(const gl::Context *context,
         PreferStagedTextureUploads(context, texture, mtlFormat, mtl::StagingPurpose::Upload);
     if (texture->isCPUAccessible() && !preferGPUInitialization)
     {
+        if (mtlFormat.isPVRTC())
+        {
+            // Replace Region Validation: rowBytes must be 0
+            bytesPerRow = 0;
+        }
+
         // If texture is CPU accessible, just call replaceRegion() directly.
         texture->replaceRegion(contextMtl, region, mipmapLevel, slice, data, bytesPerRow,
                                bytesPer2DImage);
@@ -763,6 +769,7 @@ angle::Result TextureMtl::createNativeTexture(const gl::Context *context,
             // format.
             gl::Extents actualMipSize = mNativeTexture->size(actualMip);
             if (imageToTransfer && imageToTransfer->sizeAt0() == actualMipSize &&
+                imageToTransfer->arrayLength() == mNativeTexture->arrayLength() &&
                 imageToTransfer->pixelFormat() == mNativeTexture->pixelFormat())
             {
                 if (!encoder)
@@ -1798,18 +1805,6 @@ angle::Result TextureMtl::setSubImageImpl(const gl::Context *context,
                         formatInfo.computeSkipBytes(type, sourceRowPitch, sourceDepthPitch, unpack,
                                                     index.usesTex3D(), &sourceSkipBytes));
 
-    // Check if partial image update is supported for this format
-    if (!formatInfo.supportSubImage())
-    {
-        // area must be the whole mip level
-        sourceRowPitch   = 0;
-        gl::Extents size = image->sizeAt0();
-        if (area.x != 0 || area.y != 0 || area.width != size.width || area.height != size.height)
-        {
-            ANGLE_MTL_CHECK(contextMtl, false, GL_INVALID_OPERATION);
-        }
-    }
-
     // Get corresponding source data's ANGLE format
     angle::FormatID srcAngleFormatId;
     if (formatInfo.sizedInternalFormat == GL_DEPTH_COMPONENT24)
@@ -1886,10 +1881,12 @@ angle::Result TextureMtl::setPerSliceSubImage(const gl::Context *context,
         ANGLE_CHECK_GL_MATH(contextMtl, internalFormat.computeRowPitch(
                                             type, static_cast<GLint>(mtlArea.size.width),
                                             /** aligment */ 1, /** rowLength */ 0, &minRowPitch));
-        if (offset % mFormat.actualAngleFormat().pixelBytes || pixelsRowPitch < minRowPitch)
+        if (offset % mFormat.actualAngleFormat().pixelBytes || pixelsRowPitch < minRowPitch ||
+            mFormat.isPVRTC())
         {
             // offset is not divisible by pixelByte or the source row pitch is smaller than minimum
             // row pitch, use convertAndSetPerSliceSubImage() function.
+            // Enforce CPU path for PVRTC formats until GPU block linearization is implemented.
             return convertAndSetPerSliceSubImage(context, slice, mtlArea, internalFormat, type,
                                                  pixelsAngleFormat, pixelsRowPitch,
                                                  pixelsDepthPitch, unpackBuffer, pixels, image);
@@ -2394,6 +2391,7 @@ angle::Result TextureMtl::copySubTextureWithDraw(const gl::Context *context,
     blitParams.unpackFlipY            = unpackFlipY;
     blitParams.unpackPremultiplyAlpha = unpackPremultiplyAlpha;
     blitParams.unpackUnmultiplyAlpha  = unpackUnmultiplyAlpha;
+    blitParams.transformLinearToSrgb  = sourceAngleFormat.isSRGB;
 
     return displayMtl->getUtils().copyTextureWithDraw(context, cmdEncoder, sourceAngleFormat,
                                                       mFormat.actualAngleFormat(), blitParams);

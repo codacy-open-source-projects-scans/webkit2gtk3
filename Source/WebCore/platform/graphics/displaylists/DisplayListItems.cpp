@@ -109,24 +109,20 @@ void SetInlineFillColor::dump(TextStream& ts, OptionSet<AsTextFlag>) const
     ts.dumpProperty("color", color());
 }
 
-void SetInlineStrokeColor::apply(GraphicsContext& context) const
+void SetInlineStroke::apply(GraphicsContext& context) const
 {
-    context.setStrokeColor(color());
+    if (auto color = this->color())
+        context.setStrokeColor(*color);
+    if (auto thickness = this->thickness())
+        context.setStrokeThickness(*thickness);
 }
 
-void SetInlineStrokeColor::dump(TextStream& ts, OptionSet<AsTextFlag>) const
+void SetInlineStroke::dump(TextStream& ts, OptionSet<AsTextFlag>) const
 {
-    ts.dumpProperty("color", color());
-}
-
-void SetStrokeThickness::apply(GraphicsContext& context) const
-{
-    context.setStrokeThickness(m_thickness);
-}
-
-void SetStrokeThickness::dump(TextStream& ts, OptionSet<AsTextFlag>) const
-{
-    ts.dumpProperty("thickness", thickness());
+    if (auto color = this->color())
+        ts.dumpProperty("color", *color);
+    if (auto thickness = this->thickness())
+        ts.dumpProperty("thickness", *thickness);
 }
 
 SetState::SetState(const GraphicsContextState& state)
@@ -368,7 +364,7 @@ void DrawSystemImage::dump(TextStream& ts, OptionSet<AsTextFlag>) const
     ts.dumpProperty("destination", destinationRect());
 }
 
-DrawPattern::DrawPattern(RenderingResourceIdentifier imageIdentifier, const FloatRect& destRect, const FloatRect& tileRect, const AffineTransform& patternTransform, const FloatPoint& phase, const FloatSize& spacing, const ImagePaintingOptions& options)
+DrawPattern::DrawPattern(RenderingResourceIdentifier imageIdentifier, const FloatRect& destRect, const FloatRect& tileRect, const AffineTransform& patternTransform, const FloatPoint& phase, const FloatSize& spacing, ImagePaintingOptions options)
     : m_imageIdentifier(imageIdentifier)
     , m_destination(destRect)
     , m_tileRect(tileRect)
