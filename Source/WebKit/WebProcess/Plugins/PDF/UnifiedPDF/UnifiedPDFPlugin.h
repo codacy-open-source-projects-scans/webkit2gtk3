@@ -53,9 +53,17 @@ private:
 
     CGFloat scaleFactor() const override;
 
+    WebCore::IntSize contentsSize() const override;
+    unsigned firstPageHeight() const override;
+
+    bool isLocked() const override;
+
     RetainPtr<PDFDocument> pdfDocumentForPrinting() const override;
     WebCore::FloatSize pdfDocumentSizeForPrinting() const override;
 
+    void scheduleRenderingUpdate();
+
+    void updateLayout();
     void geometryDidChange(const WebCore::IntSize&, const WebCore::AffineTransform&) override;
 
     RefPtr<WebCore::FragmentedSharedBuffer> liveResourceData() const override;
@@ -84,10 +92,17 @@ private:
     id accessibilityAssociatedPluginParentForElement(WebCore::Element*) const override;
 
     // GraphicsLayerClient
+    void notifyFlushRequired(const GraphicsLayer*) override;
     void paintContents(const WebCore::GraphicsLayer*, WebCore::GraphicsContext&, const WebCore::FloatRect&, OptionSet<WebCore::GraphicsLayerPaintBehavior>) override;
     float deviceScaleFactor() const override;
 
     void updateLayerHierarchy();
+
+    void didChangeScrollOffset() override;
+    void didChangeIsInWindow();
+
+    void invalidateScrollbarRect(WebCore::Scrollbar&, const WebCore::IntRect&) override;
+    void invalidateScrollCornerRect(const WebCore::IntRect&) override;
 
     RefPtr<WebCore::GraphicsLayer> createGraphicsLayer(const String& name, GraphicsLayer::Type);
 

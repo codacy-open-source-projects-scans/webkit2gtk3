@@ -21,7 +21,9 @@
 #include "config.h"
 #include "RenderSVGResourceContainer.h"
 
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
 #include "RenderLayer.h"
+#include "RenderSVGModelObjectInlines.h"
 #include "RenderSVGRoot.h"
 #include "SVGElementTypeHelpers.h"
 #include "SVGResourcesCache.h"
@@ -37,6 +39,7 @@ RenderSVGResourceContainer::RenderSVGResourceContainer(Type type, SVGElement& el
     : RenderSVGHiddenContainer(type, element, WTFMove(style))
     , m_id(element.getIdAttribute())
 {
+    ASSERT(isRenderSVGResourceContainer());
 }
 
 RenderSVGResourceContainer::~RenderSVGResourceContainer() = default;
@@ -84,3 +87,5 @@ void RenderSVGResourceContainer::registerResource()
 }
 
 }
+
+#endif // ENABLE(LAYER_BASED_SVG_ENGINE)

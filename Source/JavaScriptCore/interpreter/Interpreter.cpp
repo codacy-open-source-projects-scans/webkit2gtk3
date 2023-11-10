@@ -423,7 +423,7 @@ public:
                 auto* nativeCallee = visitor->callee().asNativeCallee();
                 switch (nativeCallee->category()) {
                 case NativeCallee::Category::Wasm: {
-                    m_results.append(StackFrame(visitor->wasmFunctionIndexOrName()));
+                    m_results.unsafeAppendWithoutCapacityCheck(StackFrame(visitor->wasmFunctionIndexOrName()));
                     break;
                 }
                 case NativeCallee::Category::InlineCache: {
@@ -431,10 +431,10 @@ public:
                 }
                 }
             } else if (!!visitor->codeBlock() && !visitor->codeBlock()->unlinkedCodeBlock()->isBuiltinFunction()) {
-                m_results.append(
+                m_results.unsafeAppendWithoutCapacityCheck(
                     StackFrame(m_vm, m_owner, visitor->callee().asCell(), visitor->codeBlock(), visitor->bytecodeIndex()));
             } else {
-                m_results.append(
+                m_results.unsafeAppendWithoutCapacityCheck(
                     StackFrame(m_vm, m_owner, visitor->callee().asCell()));
             }
             return IterationStatus::Continue;
@@ -1261,7 +1261,7 @@ JSObject* Interpreter::executeConstruct(JSObject* constructor, const CallData& c
     return asObject(JSValue::decode(result));
 }
 
-void Interpreter::prepareForCachedCall(CachedCall& cachedCall, JSFunction* function, int argumentCountIncludingThis, const ArgList& args)
+CodeBlock* Interpreter::prepareForCachedCall(CachedCall& cachedCall, JSFunction* function)
 {
     VM& vm = this->vm();
     auto throwScope = DECLARE_THROW_SCOPE(vm);
@@ -1270,13 +1270,14 @@ void Interpreter::prepareForCachedCall(CachedCall& cachedCall, JSFunction* funct
     // Compile the callee:
     CodeBlock* newCodeBlock;
     cachedCall.functionExecutable()->prepareForExecution<FunctionExecutable>(vm, function, cachedCall.scope(), CodeForCall, newCodeBlock);
-    RETURN_IF_EXCEPTION(throwScope, void());
+    RETURN_IF_EXCEPTION(throwScope, { });
 
     ASSERT(newCodeBlock);
     newCodeBlock->m_shouldAlwaysBeInlined = false;
 
     cachedCall.m_addressForCall = newCodeBlock->jitCode()->addressForCall();
-    cachedCall.m_protoCallFrame.init(newCodeBlock, function->globalObject(), function, jsUndefined(), argumentCountIncludingThis, args.data());
+    newCodeBlock->linkIncomingCall(nullptr, &cachedCall);
+    return newCodeBlock;
 }
 
 JSValue Interpreter::executeEval(EvalExecutable* eval, JSValue thisValue, JSScope* scope)

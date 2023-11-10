@@ -1141,7 +1141,12 @@ $(PROJECT_DIR)/animation/KeyframeEffect.idl
 $(PROJECT_DIR)/animation/KeyframeEffectOptions.idl
 $(PROJECT_DIR)/animation/OptionalEffectTiming.idl
 $(PROJECT_DIR)/animation/PlaybackDirection.idl
+$(PROJECT_DIR)/animation/ScrollAxis.idl
+$(PROJECT_DIR)/animation/ScrollTimeline.idl
+$(PROJECT_DIR)/animation/ScrollTimelineOptions.idl
 $(PROJECT_DIR)/animation/TransitionEvent.idl
+$(PROJECT_DIR)/animation/ViewTimeline.idl
+$(PROJECT_DIR)/animation/ViewTimelineOptions.idl
 $(PROJECT_DIR)/animation/WebAnimation.idl
 $(PROJECT_DIR)/bindings/js/JSDOMBindingInternals.js
 $(PROJECT_DIR)/bindings/scripts/CodeGenerator.pm
@@ -1746,6 +1751,14 @@ $(PROJECT_DIR)/page/LocalDOMWindow.idl
 $(PROJECT_DIR)/page/Location.idl
 $(PROJECT_DIR)/page/Navigator+IsLoggedIn.idl
 $(PROJECT_DIR)/page/Navigator+UserActivation.idl
+$(PROJECT_DIR)/page/NavigateEvent.idl
+$(PROJECT_DIR)/page/Navigation.idl
+$(PROJECT_DIR)/page/NavigationCurrentEntryChangeEvent.idl
+$(PROJECT_DIR)/page/NavigationDestination.idl
+$(PROJECT_DIR)/page/NavigationHistoryEntry.idl
+$(PROJECT_DIR)/page/NavigationInterceptHandler.idl
+$(PROJECT_DIR)/page/NavigationNavigationType.idl
+$(PROJECT_DIR)/page/NavigationTransition.idl
 $(PROJECT_DIR)/page/Navigator.idl
 $(PROJECT_DIR)/page/NavigatorCookies.idl
 $(PROJECT_DIR)/page/NavigatorID.idl
@@ -2026,7 +2039,6 @@ $(PROJECT_DIR)/worklets/WorkletGlobalScope.idl
 $(PROJECT_DIR)/worklets/WorkletOptions.idl
 $(PROJECT_DIR)/xml/CustomXPathNSResolver.idl
 $(PROJECT_DIR)/xml/DOMParser.idl
-$(PROJECT_DIR)/xml/ParseFromStringOptions.idl
 $(PROJECT_DIR)/xml/XMLHttpRequest.idl
 $(PROJECT_DIR)/xml/XMLHttpRequestEventTarget.idl
 $(PROJECT_DIR)/xml/XMLHttpRequestProgressEvent.idl

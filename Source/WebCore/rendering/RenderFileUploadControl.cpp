@@ -31,6 +31,7 @@
 #include "InlineIteratorInlineBox.h"
 #include "LocalizedStrings.h"
 #include "PaintInfo.h"
+#include "RenderBlockInlines.h"
 #include "RenderBoxInlines.h"
 #include "RenderBoxModelObjectInlines.h"
 #include "RenderButton.h"
@@ -71,6 +72,7 @@ RenderFileUploadControl::RenderFileUploadControl(HTMLInputElement& input, Render
     : RenderBlockFlow(Type::FileUploadControl, input, WTFMove(style))
     , m_canReceiveDroppedFiles(input.canReceiveDroppedFiles())
 {
+    ASSERT(isRenderFileUploadControl());
 }
 
 RenderFileUploadControl::~RenderFileUploadControl() = default;

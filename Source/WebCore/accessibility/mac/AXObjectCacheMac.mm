@@ -459,6 +459,22 @@ void AXObjectCache::postPlatformNotification(AXCoreObject* object, AXNotificatio
     AXPostNotificationWithUserInfo(object->wrapper(), macNotification, nil, skipSystemNotification);
 }
 
+void AXObjectCache::postPlatformAnnouncementNotification(const String& message)
+{
+    ASSERT(isMainThread());
+
+    NSDictionary *userInfo = @{ NSAccessibilityPriorityKey: @(NSAccessibilityPriorityHigh),
+        NSAccessibilityAnnouncementKey: message,
+    };
+    NSAccessibilityPostNotificationWithUserInfo(NSApp, NSAccessibilityAnnouncementRequestedNotification, userInfo);
+
+    // To simplify monitoring of notifications in tests, repost as a simple NSNotification instead of forcing test infrastucture to setup an IPC client and do all the translation between WebCore types and platform specific IPC types and back.
+    if (UNLIKELY(axShouldRepostNotificationsForTests)) {
+        if (RefPtr root = getOrCreate(m_document->view()))
+            [root->wrapper() accessibilityPostedNotification:NSAccessibilityAnnouncementRequestedNotification userInfo:userInfo];
+    }
+}
+
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
 static void createIsolatedObjectIfNeeded(AccessibilityObject& object, std::optional<PageIdentifier> pageID)
 {
@@ -725,6 +741,10 @@ void AXObjectCache::initializeAXThreadIfNeeded()
 
 bool AXObjectCache::shouldSpellCheck()
 {
+    // This method can be called from non-accessibility contexts, so we need to allow spellchecking if accessibility is disabled.
+    if (!accessibilityEnabled())
+        return true;
+
     if (UNLIKELY(forceDeferredSpellChecking()))
         return false;
 
@@ -741,6 +761,13 @@ bool AXObjectCache::shouldSpellCheck()
     return true;
 #endif
 }
+
+#if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
+Seconds AXObjectCache::platformSelectedTextRangeDebounceInterval() const
+{
+    return 100_ms;
+}
+#endif
 
 // TextMarker and TextMarkerRange funcstions.
 // FIXME: TextMarker and TextMarkerRange should become classes wrapping the system objects.

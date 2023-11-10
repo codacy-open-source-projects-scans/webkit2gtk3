@@ -71,6 +71,12 @@ public:
     // For CheckedPtr / CheckedRef use.
     void incrementPtrCount() const;
     void decrementPtrCount() const;
+#if CHECKED_POINTER_DEBUG
+    void registerCheckedPtr(const void*) const;
+    void copyCheckedPtr(const void* source, const void* destination) const;
+    void moveCheckedPtr(const void* source, const void* destination) const;
+    void unregisterCheckedPtr(const void*) const;
+#endif // CHECKED_POINTER_DEBUG
 
     Element* focusedElementInScope();
     Element* pointerLockElement() const;
@@ -126,6 +132,7 @@ public:
     RefPtr<Element> findAnchor(StringView name);
 
     ContainerNode& rootNode() const { return m_rootNode; }
+    Ref<ContainerNode> protectedRootNode() const;
 
     IdTargetObserverRegistry& idTargetObserverRegistry() { return m_idTargetObserverRegistry.get(); }
     const IdTargetObserverRegistry& idTargetObserverRegistry() const { return m_idTargetObserverRegistry.get(); }

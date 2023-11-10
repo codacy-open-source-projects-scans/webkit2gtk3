@@ -84,7 +84,6 @@ public:
     bool shouldExposeShowModalDialog() const;
     bool shouldNavigatorPluginsBeEmpty() const;
 
-    WEBCORE_EXPORT bool shouldDisableContentChangeObserver() const;
     WEBCORE_EXPORT bool shouldDispatchSyntheticMouseEventsWhenModifyingSelection() const;
     WEBCORE_EXPORT bool shouldSuppressAutocorrectionAndAutocapitalizationInHiddenEditableAreas() const;
     WEBCORE_EXPORT bool isTouchBarUpdateSupressedForHiddenContentEditable() const;
@@ -177,6 +176,8 @@ public:
 
     bool needsDisableDOMPasteAccessQuirk() const;
 
+    bool shouldDisableElementFullscreenQuirk() const;
+
 private:
     bool needsQuirks() const;
     bool isDomain(const String&) const;
@@ -241,6 +242,7 @@ private:
     mutable std::optional<bool> m_shouldDisableDataURLPaddingValidation;
     mutable std::optional<bool> m_needsDisableDOMPasteAccessQuirk;
     mutable std::optional<bool> m_shouldAvoidUsingIOS17UserAgentForFacebook;
+    mutable std::optional<bool> m_shouldDisableElementFullscreen;
 };
 
 } // namespace WebCore

@@ -129,8 +129,10 @@ class LibWebRTCNetwork;
 class NetworkProcessConnection;
 class ObjCObjectGraph;
 class RemoteCDMFactory;
+class RemoteImageDecoderAVFManager;
 class RemoteLegacyCDMFactory;
 class RemoteMediaEngineConfigurationFactory;
+class RemoteMediaPlayerManager;
 class StorageAreaMap;
 class UserData;
 class WebAutomationSessionProxy;
@@ -339,6 +341,12 @@ public:
 
     WebCacheStorageProvider& cacheStorageProvider() { return m_cacheStorageProvider.get(); }
     WebBadgeClient& badgeClient() { return m_badgeClient.get(); }
+#if ENABLE(GPU_PROCESS) && ENABLE(VIDEO)
+    RemoteMediaPlayerManager& remoteMediaPlayerManager() { return m_remoteMediaPlayerManager.get(); }
+#endif
+#if ENABLE(GPU_PROCESS) && HAVE(AVASSETREADER)
+    RemoteImageDecoderAVFManager& remoteImageDecoderAVFManager() { return m_remoteImageDecoderAVFManager.get(); }
+#endif
     WebBroadcastChannelRegistry& broadcastChannelRegistry() { return m_broadcastChannelRegistry.get(); }
     WebCookieJar& cookieJar() { return m_cookieJar.get(); }
     WebSocketChannelManager& webSocketChannelManager() { return m_webSocketChannelManager; }
@@ -362,6 +370,11 @@ public:
 
 #if PLATFORM(MAC)
     void openDirectoryCacheInvalidated(SandboxExtension::Handle&&, SandboxExtension::Handle&&);
+#endif
+
+#if ENABLE(NOTIFYD_BLOCKING_IN_WEBCONTENT)
+    void postNotification(const String& message);
+    void postObserverNotification(const String& message);
 #endif
 
     bool areAllPagesThrottleable() const;
@@ -644,6 +657,8 @@ private:
 #if ENABLE(CFPREFS_DIRECT_MODE)
     void handlePreferenceChange(const String& domain, const String& key, id value) final;
     void dispatchSimulatedNotificationsForPreferenceChange(const String& key) final;
+
+    void accessibilitySettingsDidChange() final;
 #endif
 
     void setNetworkProcessConnectionID(IPC::Connection::UniqueID);
@@ -706,6 +721,12 @@ private:
 #endif
     Ref<WebCacheStorageProvider> m_cacheStorageProvider;
     Ref<WebBadgeClient> m_badgeClient;
+#if ENABLE(GPU_PROCESS) && ENABLE(VIDEO)
+    Ref<RemoteMediaPlayerManager> m_remoteMediaPlayerManager;
+#endif
+#if ENABLE(GPU_PROCESS) && HAVE(AVASSETREADER)
+    Ref<RemoteImageDecoderAVFManager> m_remoteImageDecoderAVFManager;
+#endif
     Ref<WebBroadcastChannelRegistry> m_broadcastChannelRegistry;
     Ref<WebCookieJar> m_cookieJar;
     WebSocketChannelManager m_webSocketChannelManager;

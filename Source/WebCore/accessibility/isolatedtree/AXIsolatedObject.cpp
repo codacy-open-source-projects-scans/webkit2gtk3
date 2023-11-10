@@ -96,7 +96,6 @@ void AXIsolatedObject::initializeProperties(const Ref<AccessibilityObject>& axOb
     setProperty(AXPropertyName::IsLink, object.isLink());
     setProperty(AXPropertyName::IsList, object.isList());
     setProperty(AXPropertyName::IsMultiSelectable, object.isMultiSelectable());
-    setProperty(AXPropertyName::IsPressed, object.isPressed());
     setProperty(AXPropertyName::IsRequired, object.isRequired());
     setProperty(AXPropertyName::IsSecureField, object.isSecureField());
     setProperty(AXPropertyName::IsSelected, object.isSelected());
@@ -247,10 +246,8 @@ void AXIsolatedObject::initializeProperties(const Ref<AccessibilityObject>& axOb
         setObjectVectorProperty(AXPropertyName::ARIATreeRows, ariaTreeRows);
     }
 
-    if (object.isRadioButton()) {
-        if (auto nameAttribute = object.attributeValue("name"_s))
-            setProperty(AXPropertyName::NameAttribute, nameAttribute->isolatedCopy());
-    }
+    if (object.isRadioButton())
+        setProperty(AXPropertyName::NameAttribute, object.nameAttribute().isolatedCopy());
 
     if (object.canHaveSelectedChildren())
         setObjectVectorProperty(AXPropertyName::SelectedChildren, object.selectedChildren());
@@ -338,11 +335,15 @@ void AXIsolatedObject::initializeProperties(const Ref<AccessibilityObject>& axOb
     if (descriptor.length())
         setProperty(AXPropertyName::ExtendedDescription, descriptor.isolatedCopy());
 
+    if (object.isTextControl())
+        setProperty(AXPropertyName::SelectedTextRange, object.selectedTextRange());
+
     // These properties are only needed on the AXCoreObject interface due to their use in ATSPI,
     // so only cache them for ATSPI.
 #if PLATFORM(ATSPI)
     setProperty(AXPropertyName::ActionVerb, object.actionVerb().isolatedCopy());
     setProperty(AXPropertyName::IsFieldset, object.isFieldset());
+    setProperty(AXPropertyName::IsPressed, object.isPressed());
     setProperty(AXPropertyName::IsSelectedOptionActive, object.isSelectedOptionActive());
     setProperty(AXPropertyName::IsVisible, object.isVisible());
     setProperty(AXPropertyName::LocalizedActionVerb, object.localizedActionVerb().isolatedCopy());
@@ -406,6 +407,8 @@ void AXIsolatedObject::setProperty(AXPropertyName propertyName, AXPropertyValueV
         [](LayoutRect& typedValue) { return typedValue == LayoutRect(); },
         [](IntPoint& typedValue) { return typedValue == IntPoint(); },
         [](IntRect& typedValue) { return typedValue == IntRect(); },
+        [](FloatPoint& typedValue) { return typedValue == FloatPoint(); },
+        [](FloatRect& typedValue) { return typedValue == FloatRect(); },
         [](std::pair<unsigned, unsigned>& typedValue) {
             // (0, 1) is the default for an index range.
             return typedValue == std::pair<unsigned, unsigned>(0, 1);
@@ -1261,18 +1264,6 @@ bool AXIsolatedObject::isNativeTextControl() const
     return false;
 }
 
-CharacterRange AXIsolatedObject::selectedTextRange() const
-{
-    if (shouldReturnEmptySelectedText())
-        return { };
-
-    return Accessibility::retrieveValueFromMainThread<CharacterRange>([this] () -> CharacterRange {
-        if (auto* object = associatedAXObject())
-            return object->selectedTextRange();
-        return { };
-    });
-}
-
 int AXIsolatedObject::insertionPointLineNumber() const
 {
     return Accessibility::retrieveValueFromMainThread<int>([this] () -> int {
@@ -1553,8 +1544,10 @@ bool AXIsolatedObject::isOffScreen() const
 
 bool AXIsolatedObject::isPressed() const
 {
+#if PLATFORM(MAC)
     ASSERT_NOT_REACHED();
-    return false;
+#endif
+    return boolAttributeValue(AXPropertyName::IsPressed);
 }
 
 bool AXIsolatedObject::isSelectedOptionActive() const
@@ -1816,15 +1809,6 @@ OptionSet<AXAncestorFlag> AXIsolatedObject::ancestorFlags() const
         [] (OptionSet<AXAncestorFlag>& typedValue) -> OptionSet<AXAncestorFlag> { return typedValue; },
         [] (auto&) { return OptionSet<AXAncestorFlag>(); }
     );
-}
-
-std::optional<String> AXIsolatedObject::attributeValue(const String& attributeName) const
-{
-    if (attributeName == "name"_s) {
-        if (m_propertyMap.contains(AXPropertyName::NameAttribute))
-            return stringAttributeValue(AXPropertyName::NameAttribute);
-    }
-    return std::nullopt;
 }
 
 AXCoreObject::AccessibilityChildrenVector AXIsolatedObject::columnHeaders()

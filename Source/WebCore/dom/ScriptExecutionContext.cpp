@@ -201,6 +201,8 @@ ScriptExecutionContext::~ScriptExecutionContext()
     while (auto* destructionObserver = m_destructionObservers.takeAny())
         destructionObserver->contextDestroyed();
 
+    setContentSecurityPolicy(nullptr);
+
 #if ASSERT_ENABLED
     m_inScriptExecutionContextDestructor = false;
 #endif
@@ -840,6 +842,11 @@ void ScriptExecutionContext::addDeferredPromise(Ref<DeferredPromise>&& promise)
 RefPtr<DeferredPromise> ScriptExecutionContext::takeDeferredPromise(DeferredPromise* promise)
 {
     return m_deferredPromises.take(promise);
+}
+
+CheckedRef<EventLoopTaskGroup> ScriptExecutionContext::checkedEventLoop()
+{
+    return eventLoop();
 }
 
 WebCoreOpaqueRoot root(ScriptExecutionContext* context)

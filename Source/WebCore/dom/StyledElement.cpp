@@ -144,13 +144,14 @@ void StyledElement::setInlineStyleFromString(const AtomString& newStyleString)
 
 void StyledElement::styleAttributeChanged(const AtomString& newStyleString, AttributeModificationReason reason)
 {
+    Ref document = this->document();
     auto startLineNumber = OrdinalNumber::beforeFirst();
-    if (document().scriptableDocumentParser() && !document().isInDocumentWrite())
-        startLineNumber = document().scriptableDocumentParser()->textPosition().m_line;
+    if (document->scriptableDocumentParser() && !document->isInDocumentWrite())
+        startLineNumber = document->scriptableDocumentParser()->textPosition().m_line;
 
     if (newStyleString.isNull())
         ensureMutableInlineStyle().clear();
-    else if (reason == AttributeModificationReason::ByCloning || document().contentSecurityPolicy()->allowInlineStyle(document().url().string(), startLineNumber, newStyleString.string(), CheckUnsafeHashes::Yes, *this, nonce(), isInUserAgentShadowTree()))
+    else if (reason == AttributeModificationReason::ByCloning || document->checkedContentSecurityPolicy()->allowInlineStyle(document->url().string(), startLineNumber, newStyleString.string(), CheckUnsafeHashes::Yes, *this, nonce(), isInUserAgentShadowTree()))
         setInlineStyleFromString(newStyleString);
 
     elementData()->setStyleAttributeIsDirty(false);
@@ -274,6 +275,25 @@ void StyledElement::addSubresourceAttributeURLs(ListHashSet<URL>& urls) const
         urls.add(resource.url());
         return false;
     });
+}
+
+Attribute StyledElement::replaceURLsInAttributeValue(const Attribute& attribute, const HashMap<String, String>& replacementURLStrings) const
+{
+    if (replacementURLStrings.isEmpty())
+        return attribute;
+
+    if (attribute.name() != styleAttr)
+        return attribute;
+
+    RefPtr properties = this->inlineStyle();
+    if (!properties)
+        return attribute;
+
+    auto mutableProperties = properties->mutableCopy();
+    mutableProperties->setReplacementURLForSubresources(replacementURLStrings);
+    auto inlineStyleString = mutableProperties->asText();
+    mutableProperties->clearReplacementURLForSubresources();
+    return Attribute { styleAttr, AtomString { inlineStyleString } };
 }
 
 const ImmutableStyleProperties* StyledElement::presentationalHintStyle() const

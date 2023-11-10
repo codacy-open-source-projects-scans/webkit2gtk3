@@ -806,6 +806,8 @@ static void registerLogHook()
             free(messageString);
         }, qos);
     });
+
+    WTFSignpostIndirectLoggingEnabled = true;
 }
 #endif
 
@@ -1294,12 +1296,6 @@ static const WTF::String& userHighlightColorPreferenceKey()
     static NeverDestroyed<WTF::String> userHighlightColorPreferenceKey(MAKE_STATIC_STRING_IMPL("AppleHighlightColor"));
     return userHighlightColorPreferenceKey;
 }
-
-static const WTF::String& invertColorsPreferenceKey()
-{
-    static NeverDestroyed<WTF::String> key(MAKE_STATIC_STRING_IMPL("whiteOnBlack"));
-    return key;
-}
 #endif
 
 static const WTF::String& captionProfilePreferenceKey()
@@ -1344,21 +1340,18 @@ void WebProcess::handlePreferenceChange(const String& domain, const String& key,
         WTF::languageDidChange();
     }
 
-#if USE(APPKIT)
-    auto cfKey = key.createCFString();
-    if (CFEqual(cfKey.get(), kAXInterfaceReduceMotionKey) || CFEqual(cfKey.get(), kAXInterfaceIncreaseContrastKey) || key == invertColorsPreferenceKey()) {
-        [NSWorkspace _invalidateAccessibilityDisplayValues];
-        for (auto& page : m_pageMap.values())
-            page->accessibilitySettingsDidChange();
-    }
-#endif
-
     AuxiliaryProcess::handlePreferenceChange(domain, key, value);
 }
 
 void WebProcess::notifyPreferencesChanged(const String& domain, const String& key, const std::optional<String>& encodedValue)
 {
     preferenceDidUpdate(domain, key, encodedValue);
+}
+
+void WebProcess::accessibilitySettingsDidChange()
+{
+    for (auto& page : m_pageMap.values())
+        page->accessibilitySettingsDidChange();
 }
 #endif
 
@@ -1501,6 +1494,19 @@ void WebProcess::revokeLaunchServicesSandboxExtension()
         m_launchServicesExtension = nullptr;
     }
 }
+#endif
+
+#if ENABLE(NOTIFYD_BLOCKING_IN_WEBCONTENT)
+void WebProcess::postNotification(const String& message)
+{
+    notify_post(message.ascii().data());
+}
+
+void WebProcess::postObserverNotification(const String& message)
+{
+    [[NSNotificationCenter defaultCenter] postNotificationName:message object:nil];
+}
+
 #endif
 
 } // namespace WebKit

@@ -80,7 +80,6 @@ public:
 
     const LayerTreeContext& layerTreeContext() const { return m_layerTreeContext; }
     void setLayerFlushSchedulingEnabled(bool);
-    void setShouldNotifyAfterNextScheduledLayerFlush(bool);
 
     void scheduleLayerFlush();
     void cancelPendingLayerFlush();
@@ -102,6 +101,8 @@ public:
 
     void deviceOrPageScaleFactorChanged();
 
+    void didCompleteRenderingUpdateDisplay();
+
 #if !HAVE(DISPLAY_LINK)
     RefPtr<WebCore::DisplayRefreshMonitor> createDisplayRefreshMonitor(WebCore::PlatformDisplayID);
     WebCore::PlatformDisplayID displayID() const { return m_displayID; }
@@ -115,10 +116,9 @@ private:
 #if USE(COORDINATED_GRAPHICS)
     void layerFlushTimerFired();
     void didChangeViewport();
-#if HAVE(DISPLAY_LINK)
-    void didRenderFrameTimerFired();
-#endif
+#if !HAVE(DISPLAY_LINK)
     void renderNextFrame(bool);
+#endif
 
     // CompositingCoordinator::Client
     void didFlushRootLayer(const WebCore::FloatRect& visibleContentRect) override;
@@ -156,10 +156,11 @@ private:
     LayerTreeContext m_layerTreeContext;
 #if USE(COORDINATED_GRAPHICS)
     bool m_layerFlushSchedulingEnabled { true };
-    bool m_notifyAfterScheduledLayerFlush { false };
     bool m_isSuspended { false };
+#if !HAVE(DISPLAY_LINK)
     bool m_isWaitingForRenderer { false };
     bool m_scheduledWhileWaitingForRenderer { false };
+#endif
     float m_lastPageScaleFactor { 1 };
     WebCore::IntPoint m_lastScrollPosition;
     WebCore::GraphicsLayer* m_viewOverlayRootLayer { nullptr };
@@ -168,12 +169,11 @@ private:
     SimpleViewportController m_viewportController;
     struct {
         CompletionHandler<void()> callback;
+#if !HAVE(DISPLAY_LINK)
         bool needsFreshFlush { false };
+#endif
     } m_forceRepaintAsync;
     RunLoop::Timer m_layerFlushTimer;
-#if HAVE(DISPLAY_LINK)
-    RunLoop::Timer m_didRenderFrameTimer;
-#endif
     CompositingCoordinator m_coordinator;
 #endif // USE(COORDINATED_GRAPHICS)
 #if !HAVE(DISPLAY_LINK)
@@ -195,7 +195,6 @@ inline LayerTreeHost::LayerTreeHost(WebPage& webPage, WebCore::PlatformDisplayID
 #endif
 inline LayerTreeHost::~LayerTreeHost() { }
 inline void LayerTreeHost::setLayerFlushSchedulingEnabled(bool) { }
-inline void LayerTreeHost::setShouldNotifyAfterNextScheduledLayerFlush(bool) { }
 inline void LayerTreeHost::scheduleLayerFlush() { }
 inline void LayerTreeHost::cancelPendingLayerFlush() { }
 inline void LayerTreeHost::setRootCompositingLayer(WebCore::GraphicsLayer*) { }

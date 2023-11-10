@@ -45,7 +45,6 @@
 #include "WebGLQuery.h"
 #include "WebGLRenderbuffer.h"
 #include "WebGLSampler.h"
-#include "WebGLStateTracker.h"
 #include "WebGLTexture.h"
 #include "WebGLTimerQueryEXT.h"
 #include "WebGLTransformFeedback.h"
@@ -54,6 +53,7 @@
 #include <JavaScriptCore/ConsoleTypes.h>
 #include <JavaScriptCore/GenericTypedArrayView.h>
 #include <JavaScriptCore/TypedArrayAdaptors.h>
+#include <array>
 #include <limits>
 #include <memory>
 #include <wtf/CheckedArithmetic.h>
@@ -82,6 +82,7 @@ class IntSize;
 class WebCodecsVideoFrame;
 class WebCoreOpaqueRoot;
 class WebGLActiveInfo;
+class WebGLDefaultFramebuffer;
 class WebGLObject;
 class WebGLPolygonMode;
 class WebGLShader;
@@ -133,7 +134,6 @@ class WebGLRenderingContextBase : public GraphicsContextGL::Client, public GPUBa
     WTF_MAKE_ISO_ALLOCATED(WebGLRenderingContextBase);
 public:
     using WebGLVersion = GraphicsContextGLWebGLVersion;
-    using SurfaceBuffer = GraphicsContextGL::SurfaceBuffer;
 
     using GPUBasedCanvasRenderingContext::weakPtrFactory;
     using GPUBasedCanvasRenderingContext::WeakValueType;
@@ -243,9 +243,6 @@ public:
     bool extensionIsEnabled(const String&);
 
     bool isPreservingDrawingBuffer() const { return m_attributes.preserveDrawingBuffer; }
-
-    bool preventBufferClearForInspector() const { return m_preventBufferClearForInspector; }
-    void setPreventBufferClearForInspector(bool value) { m_preventBufferClearForInspector = value; }
 
     void hint(GCGLenum target, GCGLenum mode);
     GCGLboolean isBuffer(WebGLBuffer*);
@@ -381,6 +378,11 @@ public:
 
     void viewport(GCGLint x, GCGLint y, GCGLsizei width, GCGLsizei height);
 
+    virtual GCGLint maxDrawBuffers() = 0;
+    virtual GCGLint maxColorAttachments() = 0;
+    size_t maxVertexAttribs() const { return m_vertexAttribValue.size(); }
+    GCGLint maxSamples() const { return m_maxSamples; }
+
     // WEBKIT_lose_context support
     enum LostContextMode {
         // Lost context occurred at the graphics system level.
@@ -399,8 +401,8 @@ public:
 
     void reshape(int width, int height) override;
 
-    void prepareForDisplayWithPaint() final;
-    void paintRenderingResultsToCanvas() final;
+    void drawBufferToCanvas(SurfaceBuffer) final;
+
     RefPtr<PixelBuffer> drawingBufferToPixelBuffer(GraphicsContextGL::FlipY);
 #if ENABLE(MEDIA_STREAM) || ENABLE(WEB_CODECS)
     RefPtr<VideoFrame> surfaceBufferToVideoFrame(SurfaceBuffer);
@@ -408,8 +410,6 @@ public:
 
     void removeSharedObject(WebGLObject&);
     void removeContextObject(WebGLObject&);
-
-    unsigned getMaxVertexAttribs() const { return m_maxVertexAttribs; }
 
     bool isContextUnrecoverablyLost() const;
 
@@ -468,6 +468,7 @@ protected:
     friend class WebGLDrawInstancedBaseVertexBaseInstance;
     friend class WebGLMultiDraw;
     friend class WebGLMultiDrawInstancedBaseVertexBaseInstance;
+    friend class WebGLPolygonMode;
 
     friend class WebGLFramebuffer;
     friend class WebGLObject;
@@ -479,10 +480,13 @@ protected:
 
     // Implementation helpers.
     friend class InspectorScopedShaderProgramHighlight;
+    friend class ScopedDisableRasterizerDiscard;
+    friend class ScopedEnableBackbuffer;
+    friend class ScopedDisableScissorTest;
 
     void initializeNewContext(Ref<GraphicsContextGL>);
     virtual void initializeContextState();
-    virtual void initializeVertexArrayObjects() = 0;
+    virtual void initializeDefaultObjects();
 
     // ActiveDOMObject
     void stop() override;
@@ -501,7 +505,6 @@ protected:
         CallerTypeOther,
     };
 
-    void markContextChanged();
     void markContextChangedAndNotifyCanvasObserver(CallerType = CallerTypeDrawOrClear);
 
     void addActivityStateChangeObserverIfNecessary();
@@ -565,12 +568,11 @@ protected:
 
     EventLoopTimerHandle m_restoreTimer;
     GCGLErrorCodeSet m_errors;
-    bool m_needsUpdate;
-    bool m_markedCanvasDirty;
 
     // List of bound VBO's. Used to maintain info about sizes for ARRAY_BUFFER and stored values for ELEMENT_ARRAY_BUFFER
     WebGLBindingPoint<WebGLBuffer, GraphicsContextGL::ARRAY_BUFFER> m_boundArrayBuffer;
 
+    std::unique_ptr<WebGLDefaultFramebuffer> m_defaultFramebuffer;
     RefPtr<WebGLVertexArrayObjectBase> m_defaultVertexArrayObject;
     WebGLBindingPoint<WebGLVertexArrayObjectBase> m_boundVertexArrayObject;
 
@@ -600,7 +602,6 @@ protected:
         };
     };
     Vector<VertexAttribValue> m_vertexAttribValue;
-    unsigned m_maxVertexAttribs;
 
     RefPtr<WebGLProgram> m_currentProgram;
     WebGLBindingPoint<WebGLFramebuffer> m_framebufferBinding;
@@ -632,9 +633,10 @@ protected:
     GCGLint m_maxTextureSize;
     GCGLint m_maxCubeMapTextureSize;
     GCGLint m_maxRenderbufferSize;
-    GCGLint m_maxViewportDims[2] { 0, 0 };
+    std::array<GCGLint, 2> m_maxViewportDims { 0, 0 };
     GCGLint m_maxTextureLevel;
     GCGLint m_maxCubeMapTextureLevel;
+    GCGLint m_maxSamples { 0 };
 
     GCGLint m_maxDrawBuffers;
     GCGLint m_maxColorAttachments;
@@ -653,7 +655,6 @@ protected:
 
     PredefinedColorSpace m_drawingBufferColorSpace { PredefinedColorSpace::SRGB };
 
-    bool m_layerCleared;
     GCGLfloat m_clearColor[4];
     bool m_scissorEnabled;
     GCGLfloat m_clearDepth;
@@ -673,10 +674,8 @@ protected:
 
     int m_numGLErrorsToConsoleAllowed;
 
-    bool m_preventBufferClearForInspector { false };
-
     bool m_compositingResultsNeedUpdating { false };
-    bool m_isDisplayingWithPaint { false };
+    std::optional<SurfaceBuffer> m_canvasBufferContents;
 
     // Enabled extension objects.
     // FIXME: Move some of these to WebGLRenderingContext, the ones not needed for WebGL2
@@ -758,9 +757,6 @@ protected:
     // clearMask is set to the bitfield of any clear that would happen anyway at this time
     // and the function returns true if that clear is now unnecessary.
     bool clearIfComposited(CallerType, GCGLbitfield clearMask = 0);
-
-    // Helper to restore state that clearing the framebuffer may destroy.
-    void restoreStateAfterClear();
 
     enum class TexImageFunctionType {
         TexImage,
@@ -993,9 +989,6 @@ protected:
     // Clamp the width and height to GL_MAX_VIEWPORT_DIMS.
     IntSize clampedCanvasSize();
 
-    virtual GCGLint getMaxDrawBuffers() = 0;
-    virtual GCGLint getMaxColorAttachments() = 0;
-
     void setBackDrawBuffer(GCGLenum);
     void setFramebuffer(const AbstractLocker&, GCGLenum, WebGLFramebuffer*);
 
@@ -1019,9 +1012,6 @@ private:
     void maybeRestoreContextSoon(Seconds timeout = 0_s);
     void maybeRestoreContext();
 
-    void registerWithWebGLStateTracker();
-    void checkForContextLossHandling();
-
     void activityStateDidChange(OptionSet<ActivityState> oldActivityState, OptionSet<ActivityState> newActivityState) override;
 
     ExceptionOr<void> texImageSource(TexImageFunctionID, GCGLenum target, GCGLint level, GCGLint internalformat, GCGLint border, GCGLenum format, GCGLenum type, GCGLint xoffset, GCGLint yoffset, GCGLint zoffset, const IntRect& inputSourceImageRect, GCGLsizei depth, GCGLint unpackImageHeight, ImageBitmap& source);
@@ -1038,8 +1028,6 @@ private:
     ExceptionOr<void> texImageSource(TexImageFunctionID, GCGLenum target, GCGLint level, GCGLint internalformat, GCGLint border, GCGLenum format, GCGLenum type, GCGLint xoffset, GCGLint yoffset, GCGLint zoffset, const IntRect& inputSourceImageRect, GCGLsizei depth, GCGLint unpackImageHeight, WebCodecsVideoFrame& source);
 #endif
 
-    WebGLStateTracker::Token m_trackerToken;
-    Timer m_checkForContextLossHandlingTimer;
     bool m_isSuspended { false };
 
 #if ENABLE(WEBXR)

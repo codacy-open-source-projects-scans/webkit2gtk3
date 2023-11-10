@@ -146,6 +146,32 @@ TEST(AutocorrectionTests, AutocorrectionContextDoesNotIncludeNewlineInTextField)
     EXPECT_EQ(0U, [contextAfterTyping contextAfterSelection].length);
 }
 
+TEST(AutocorrectionTests, DoNotLearnCorrectionsAfterChangingInputTypeFromPassword)
+{
+    auto webView = adoptNS([[TestWKWebView alloc] initWithFrame:CGRectMake(0, 0, 320, 568)]);
+    auto inputDelegate = adoptNS([TestInputDelegate new]);
+
+    bool startedInputSession = false;
+    [inputDelegate setFocusStartsInputSessionPolicyHandler:[&] (WKWebView *, id<_WKFocusedElementInfo>) -> _WKFocusStartsInputSessionPolicy {
+        startedInputSession = true;
+        return _WKFocusStartsInputSessionPolicyAllow;
+    }];
+    [webView _setInputDelegate:inputDelegate.get()];
+    [webView synchronouslyLoadHTMLString:@"<input id='first' type='password'></input><input id='second'></input>"];
+    [webView stringByEvaluatingJavaScript:@"let first = document.querySelector('#first'); first.type = 'text'; first.focus();"];
+    TestWebKitAPI::Util::run(&startedInputSession);
+
+    auto learnsCorrections = [&] {
+        return static_cast<id<UITextInputTraits_Private>>([webView textInputContentView].textInputTraits).learnsCorrections;
+    };
+    EXPECT_FALSE(learnsCorrections());
+
+    startedInputSession = false;
+    [webView stringByEvaluatingJavaScript:@"document.querySelector('#second').focus()"];
+    TestWebKitAPI::Util::run(&startedInputSession);
+    EXPECT_TRUE(learnsCorrections());
+}
+
 #if HAVE(AUTOCORRECTION_ENHANCEMENTS)
 
 TEST(AutocorrectionTests, AutocorrectionIndicatorsDismissAfterNextWord)
@@ -170,7 +196,7 @@ TEST(AutocorrectionTests, AutocorrectionIndicatorsDismissAfterNextWord)
 
     __block bool done = false;
 
-    [webView applyAutocorrection:@"different" toString:@"diferent" isCandidate:YES withCompletionHandler:^{
+    [[webView textInputContentView] applyAutocorrection:@"different" toString:@"diferent" shouldUnderline:YES withCompletionHandler:^(UIWKAutocorrectionRects *) {
         NSString *hasCorrectionIndicatorMarker = [webView stringByEvaluatingJavaScript:hasCorrectionIndicatorMarkerJavaScript];
         EXPECT_WK_STREQ("1", hasCorrectionIndicatorMarker);
         done = true;
@@ -212,7 +238,7 @@ TEST(AutocorrectionTests, AutocorrectionIndicatorsMultiWord)
 
     __block bool done = false;
 
-    [webView applyAutocorrection:@"tomorrow night" toString:@"tomorrownight" isCandidate:YES withCompletionHandler:^{
+    [[webView textInputContentView] applyAutocorrection:@"tomorrow night" toString:@"tomorrownight" shouldUnderline:YES withCompletionHandler:^(UIWKAutocorrectionRects *) {
         NSString *hasCorrectionIndicatorMarker = [webView stringByEvaluatingJavaScript:hasCorrectionIndicatorMarkerJavaScript];
         EXPECT_WK_STREQ("1", hasCorrectionIndicatorMarker);
         done = true;

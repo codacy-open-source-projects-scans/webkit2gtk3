@@ -145,6 +145,8 @@ public:
 
     Editor& editor() { return document()->editor(); }
     const Editor& editor() const { return document()->editor(); }
+    CheckedRef<Editor> checkedEditor();
+    CheckedRef<const Editor> checkedEditor() const;
 
     EventHandler& eventHandler() { return m_eventHandler; }
     const EventHandler& eventHandler() const { return m_eventHandler; }
@@ -155,6 +157,7 @@ public:
     FrameLoader& loader() { return m_loader.get(); }
     CheckedRef<const FrameLoader> checkedLoader() const;
     CheckedRef<FrameLoader> checkedLoader();
+
     FrameSelection& selection() { return document()->selection(); }
     const FrameSelection& selection() const { return document()->selection(); }
     ScriptController& script() { return m_script; }
@@ -297,6 +300,11 @@ public:
     void selfOnlyDeref();
 
     WEBCORE_EXPORT bool arePluginsEnabled();
+
+    void documentURLDidChange(const URL&);
+
+protected:
+    void frameWasDisconnectedFromOwner() const final;
 
 private:
     friend class NavigationDisabler;

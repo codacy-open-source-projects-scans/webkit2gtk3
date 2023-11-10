@@ -556,6 +556,7 @@ accessibility/isolatedtree/AXIsolatedObject.cpp
 accessibility/isolatedtree/AXIsolatedTree.cpp
 animation/AcceleratedTimeline.cpp
 animation/AnimationEffect.cpp
+animation/AnimationEffectTiming.cpp
 animation/AnimationEventBase.cpp
 animation/AnimationPlaybackEvent.cpp
 animation/AnimationTimeline.cpp
@@ -574,6 +575,8 @@ animation/ElementAnimationRareData.cpp
 animation/FrameRateAligner.cpp
 animation/KeyframeEffect.cpp
 animation/KeyframeEffectStack.cpp
+animation/ScrollTimeline.cpp
+animation/ViewTimeline.cpp
 animation/WebAnimation.cpp
 animation/WebAnimationUtilities.cpp
 bindings/js/CachedModuleScriptLoader.cpp
@@ -859,6 +862,7 @@ css/CSSNamespaceRule.cpp
 css/CSSOffsetRotateValue.cpp
 css/CSSPageRule.cpp
 css/CSSPaintImageValue.cpp
+css/CSSPendingSubstitutionValue.cpp
 css/CSSPrimitiveValue.cpp
 css/CSSProperty.cpp
 css/CSSPropertyRule.cpp
@@ -1546,6 +1550,7 @@ html/canvas/WebGLCompressedTextureS3TCsRGB.cpp
 html/canvas/WebGLContextEvent.cpp
 html/canvas/WebGLDebugRendererInfo.cpp
 html/canvas/WebGLDebugShaders.cpp
+html/canvas/WebGLDefaultFramebuffer.cpp
 html/canvas/WebGLDepthTexture.cpp
 html/canvas/WebGLDrawBuffers.cpp
 html/canvas/WebGLDrawInstancedBaseVertexBaseInstance.cpp
@@ -1565,7 +1570,6 @@ html/canvas/WebGLRenderingContextBase.cpp
 html/canvas/WebGLSampler.cpp
 html/canvas/WebGLShader.cpp
 html/canvas/WebGLShaderPrecisionFormat.cpp
-html/canvas/WebGLStateTracker.cpp
 html/canvas/WebGLStencilTexturing.cpp
 html/canvas/WebGLSync.cpp
 html/canvas/WebGLTexture.cpp
@@ -1609,6 +1613,8 @@ html/shadow/ProgressShadowElement.cpp
 html/shadow/ShadowPseudoIds.cpp
 html/shadow/SliderThumbElement.cpp
 html/shadow/SpinButtonElement.cpp
+html/shadow/SwitchThumbElement.cpp
+html/shadow/SwitchTrackElement.cpp
 html/shadow/TextControlInnerElements.cpp
 html/shadow/TextPlaceholderElement.cpp
 html/track/AudioTrack.cpp
@@ -1933,6 +1939,12 @@ page/Location.cpp
 page/LoggedInStatus.cpp
 page/MemoryRelease.cpp
 page/MouseEventWithHitTestResults.cpp
+page/NavigateEvent.cpp
+page/Navigation.cpp
+page/NavigationCurrentEntryChangeEvent.cpp
+page/NavigationDestination.cpp
+page/NavigationHistoryEntry.cpp
+page/NavigationTransition.cpp
 page/Navigator.cpp
 page/NavigatorBase.cpp
 page/NavigatorIsLoggedIn.cpp
@@ -2754,6 +2766,8 @@ rendering/svg/legacy/LegacyRenderSVGRect.cpp
 rendering/svg/legacy/LegacyRenderSVGResource.cpp
 rendering/svg/legacy/LegacyRenderSVGResourceClipper.cpp
 rendering/svg/legacy/LegacyRenderSVGResourceContainer.cpp
+rendering/svg/legacy/LegacyRenderSVGResourceMarker.cpp
+rendering/svg/legacy/LegacyRenderSVGResourceMasker.cpp
 rendering/svg/legacy/LegacyRenderSVGRoot.cpp
 rendering/svg/legacy/LegacyRenderSVGShape.cpp
 rendering/svg/legacy/LegacyRenderSVGTransformableContainer.cpp
@@ -2776,8 +2790,6 @@ rendering/svg/RenderSVGResourceFilter.cpp
 rendering/svg/RenderSVGResourceFilterPrimitive.cpp
 rendering/svg/RenderSVGResourceGradient.cpp
 rendering/svg/RenderSVGResourceLinearGradient.cpp
-rendering/svg/RenderSVGResourceMarker.cpp
-rendering/svg/RenderSVGResourceMasker.cpp
 rendering/svg/RenderSVGResourcePattern.cpp
 rendering/svg/RenderSVGResourceRadialGradient.cpp
 rendering/svg/RenderSVGResourceSolidColor.cpp
@@ -3874,6 +3886,14 @@ JSMutationEvent.cpp
 JSMutationObserver.cpp
 JSMutationRecord.cpp
 JSNamedNodeMap.cpp
+JSNavigateEvent.cpp
+JSNavigation.cpp
+JSNavigationCurrentEntryChangeEvent.cpp
+JSNavigationDestination.cpp
+JSNavigationHistoryEntry.cpp
+JSNavigationInterceptHandler.cpp
+JSNavigationTransition.cpp
+JSNavigationNavigationType.cpp
 JSNavigator.cpp
 JSNavigatorGPU.cpp
 JSNode.cpp
@@ -3925,7 +3945,6 @@ JSPannerNode.cpp
 JSPannerOptions.cpp
 JSPanningModelType.cpp
 JSParentNode.cpp
-JSParseFromStringOptions.cpp
 JSPath2D.cpp
 JSPayerErrorFields.cpp
 JSPaymentAddress.cpp
@@ -4242,10 +4261,13 @@ JSSVGZoomAndPan.cpp
 JSScreen.cpp
 JSScreenOrientation.cpp
 JSScriptProcessorNode.cpp
+JSScrollAxis.cpp
 JSScrollBehavior.cpp
 JSScrollIntoViewOptions.cpp
 JSScrollLogicalPosition.cpp
 JSScrollOptions.cpp
+JSScrollTimeline.cpp
+JSScrollTimelineOptions.cpp
 JSScrollToOptions.cpp
 JSSecurityPolicyViolationEvent.cpp
 JSSecurityPolicyViolationEventDisposition.cpp
@@ -4385,6 +4407,8 @@ JSVideoTrack.cpp
 JSVideoTrackConfiguration.cpp
 JSVideoTrackList.cpp
 JSVideoTransferCharacteristics.cpp
+JSViewTimeline.cpp
+JSViewTimelineOptions.cpp
 JSVisibilityState.cpp
 JSVisualViewport.cpp
 JSVoidCallback.cpp

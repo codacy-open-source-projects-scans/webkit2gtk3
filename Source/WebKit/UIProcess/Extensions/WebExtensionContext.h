@@ -34,6 +34,7 @@
 #include "WebExtension.h"
 #include "WebExtensionAction.h"
 #include "WebExtensionAlarm.h"
+#include "WebExtensionCommand.h"
 #include "WebExtensionContextIdentifier.h"
 #include "WebExtensionController.h"
 #include "WebExtensionDynamicScripts.h"
@@ -135,6 +136,10 @@ public:
     using PortQueuedMessageMap = HashMap<PortWorldPair, Vector<String>>;
     using NativePortMap = HashMap<WebExtensionPortChannelIdentifier, Ref<WebExtensionMessagePort>>;
 
+    using PageIdentifierTuple = std::tuple<WebCore::PageIdentifier, std::optional<WebExtensionTabIdentifier>, std::optional<WebExtensionWindowIdentifier>>;
+
+    using CommandsVector = Vector<Ref<WebExtensionCommand>>;
+
     enum class EqualityOnly : bool { No, Yes };
     enum class WindowIsClosing : bool { No, Yes };
     enum class ReloadFromOrigin : bool { No, Yes };
@@ -188,6 +193,7 @@ public:
 
     bool load(WebExtensionController&, String storageDirectory, NSError ** = nullptr);
     bool unload(NSError ** = nullptr);
+    bool reload(NSError ** = nullptr);
 
     bool isLoaded() const { return !!m_extensionController; }
 
@@ -209,6 +215,9 @@ public:
 
     const InjectedContentVector& injectedContents();
     bool hasInjectedContentForURL(NSURL *);
+
+    URL optionsPageURL() const;
+    URL overrideNewTabPageURL() const;
 
     const PermissionsMap& grantedPermissions();
     void setGrantedPermissions(PermissionsMap&&);
@@ -294,6 +303,9 @@ public:
     Ref<WebExtensionAction> getOrCreateAction(WebExtensionTab*);
     void performAction(WebExtensionTab*, UserTriggered = UserTriggered::No);
 
+    const CommandsVector& commands();
+    void performCommand(WebExtensionCommand&, UserTriggered = UserTriggered::No);
+
     void userGesturePerformed(WebExtensionTab&);
     bool hasActiveUserGesture(WebExtensionTab&) const;
     void clearUserGesture(WebExtensionTab&);
@@ -314,11 +326,16 @@ public:
 
     UserStyleSheetVector& dynamicallyInjectedUserStyleSheets() { return m_dynamicallyInjectedUserStyleSheets; };
 
+    std::optional<WebCore::PageIdentifier> backgroundPageIdentifier() const;
+    Vector<PageIdentifierTuple> popupPageIdentifiers() const;
+    Vector<PageIdentifierTuple> tabPageIdentifiers() const;
+
     WKWebView *relatedWebView();
-    NSString *processDisplayName(WebViewPurpose = WebViewPurpose::Any);
+    NSString *processDisplayName();
     NSArray *corsDisablingPatterns();
     WKWebViewConfiguration *webViewConfiguration(WebViewPurpose = WebViewPurpose::Any);
 
+    void wakeUpBackgroundContentIfNecessary(CompletionHandler<void()>&&);
     void wakeUpBackgroundContentIfNecessaryToFireEvents(EventListenerTypeSet, CompletionHandler<void()>&&);
 
     HashSet<Ref<WebProcessProxy>> processes(WebExtensionEventListenerType, WebExtensionContentWorldType) const;
@@ -338,6 +355,7 @@ public:
 #endif
 
 private:
+    friend class WebExtensionCommand;
     friend class WebExtensionMessagePort;
 
     explicit WebExtensionContext();
@@ -363,7 +381,6 @@ private:
     void loadBackgroundWebViewDuringLoad();
     void loadBackgroundWebView();
     void unloadBackgroundWebView();
-    void wakeUpBackgroundContentIfNecessary(CompletionHandler<void()>&&);
     void queueStartupAndInstallEventsForExtensionIfNecessary();
     void scheduleBackgroundContentToUnload();
 
@@ -406,6 +423,11 @@ private:
     void alarmsClearAll(CompletionHandler<void()>&&);
     void fireAlarmsEventIfNeeded(const WebExtensionAlarm&);
 
+    // Commands APIs
+    void commandsGetAll(CompletionHandler<void(Vector<WebExtensionCommandParameters>)>&&);
+    void fireCommandEventIfNeeded(WebExtensionCommand&, WebExtensionTab*);
+    void fireCommandChangedEventIfNeeded(WebExtensionCommand&, const String& oldShortcut);
+
     // Event APIs
     void addListener(WebPageProxyIdentifier, WebExtensionEventListenerType, WebExtensionContentWorldType);
     void removeListener(WebPageProxyIdentifier, WebExtensionEventListenerType, WebExtensionContentWorldType, size_t removedCount);
@@ -434,6 +456,9 @@ private:
     void firePortDisconnectEventIfNeeded(WebExtensionContentWorldType sourceContentWorldType, WebExtensionContentWorldType targetContentWorldType, WebExtensionPortChannelIdentifier);
 
     // Runtime APIs
+    void runtimeGetBackgroundPage(CompletionHandler<void(std::optional<WebCore::PageIdentifier>, std::optional<String> error)>&&);
+    void runtimeOpenOptionsPage(CompletionHandler<void(std::optional<String> error)>&&);
+    void runtimeReload();
     void runtimeSendMessage(const String& extensionID, const String& messageJSON, const WebExtensionMessageSenderParameters&, CompletionHandler<void(std::optional<String> replyJSON, std::optional<String> error)>&&);
     void runtimeConnect(const String& extensionID, WebExtensionPortChannelIdentifier, const String& name, const WebExtensionMessageSenderParameters&, CompletionHandler<void(std::optional<String> error)>&&);
     void runtimeSendNativeMessage(const String& applicationID, const String& messageJSON, CompletionHandler<void(std::optional<String> replyJSON, std::optional<String> error)>&&);
@@ -570,6 +595,9 @@ private:
     std::optional<WebExtensionWindowIdentifier> m_focusedWindowIdentifier;
 
     TabIdentifierMap m_tabMap;
+
+    CommandsVector m_commands;
+    bool m_populatedCommands { false };
 };
 
 template<typename T>

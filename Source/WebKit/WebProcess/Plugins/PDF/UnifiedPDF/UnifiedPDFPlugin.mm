@@ -33,12 +33,17 @@
 #include <WebCore/AffineTransform.h>
 #include <WebCore/Chrome.h>
 #include <WebCore/ChromeClient.h>
+#include <WebCore/ColorCocoa.h>
 #include <WebCore/GraphicsContext.h>
 #include <WebCore/HTMLNames.h>
 #include <WebCore/HTMLPlugInElement.h>
 #include <WebCore/ImageBuffer.h>
 #include <WebCore/LocalFrame.h>
 #include <WebCore/Page.h>
+
+#if PLATFORM(IOS_FAMILY)
+#import <UIKit/UIColor.h>
+#endif
 
 namespace WebKit {
 using namespace WebCore;
@@ -85,8 +90,7 @@ void UnifiedPDFPlugin::installPDFDocument()
     if (!m_view)
         return;
 
-    m_documentLayout.updateLayout(size());
-    updateLayerHierarchy();
+    updateLayout();
 
     if (m_view)
         m_view->layerHostingStrategyDidChange();
@@ -94,15 +98,23 @@ void UnifiedPDFPlugin::installPDFDocument()
 
 RefPtr<GraphicsLayer> UnifiedPDFPlugin::createGraphicsLayer(const String& name, GraphicsLayer::Type layerType)
 {
-    RefPtr frame = m_view->frame();
-    auto* page = frame->page();
+    CheckedPtr page = this->page();
     if (!page)
         return nullptr;
 
     auto* graphicsLayerFactory = page->chrome().client().graphicsLayerFactory();
-    auto graphicsLayer = GraphicsLayer::create(graphicsLayerFactory, *this, layerType);
+    Ref graphicsLayer = GraphicsLayer::create(graphicsLayerFactory, *this, layerType);
     graphicsLayer->setName(name);
     return graphicsLayer;
+}
+
+void UnifiedPDFPlugin::scheduleRenderingUpdate()
+{
+    CheckedPtr page = this->page();
+    if (!page)
+        return;
+
+    page->scheduleRenderingUpdate(RenderingUpdateStep::LayerFlush);
 }
 
 void UnifiedPDFPlugin::updateLayerHierarchy()
@@ -114,15 +126,29 @@ void UnifiedPDFPlugin::updateLayerHierarchy()
     }
 
     if (!m_contentsLayer) {
-        auto contentsLayer = createGraphicsLayer("UnifiedPDFPlugin contents"_s, GraphicsLayer::Type::Normal);
+        auto contentsLayer = createGraphicsLayer("UnifiedPDFPlugin contents"_s, GraphicsLayer::Type::TiledBacking);
         m_contentsLayer = contentsLayer.copyRef();
         contentsLayer->setAnchorPoint({ });
         contentsLayer->setDrawsContent(true);
+        didChangeIsInWindow();
         m_rootLayer->addChild(*contentsLayer);
     }
 
-    m_contentsLayer->setSize(size());
+    m_contentsLayer->setSize(contentsSize());
     m_contentsLayer->setNeedsDisplay();
+}
+
+void UnifiedPDFPlugin::notifyFlushRequired(const GraphicsLayer*)
+{
+    scheduleRenderingUpdate();
+}
+
+void UnifiedPDFPlugin::didChangeIsInWindow()
+{
+    CheckedPtr page = this->page();
+    if (!page || !m_contentsLayer)
+        return;
+    m_contentsLayer->tiledBacking()->setIsInWindow(page->isInWindow());
 }
 
 void UnifiedPDFPlugin::paintContents(const GraphicsLayer* layer, GraphicsContext& context, const FloatRect& clipRect, OptionSet<GraphicsLayerPaintBehavior>)
@@ -130,10 +156,10 @@ void UnifiedPDFPlugin::paintContents(const GraphicsLayer* layer, GraphicsContext
     if (layer != m_contentsLayer.get())
         return;
 
-    if (m_size.isEmpty())
+    if (m_size.isEmpty() || contentsSize().isEmpty())
         return;
 
-    auto drawingRect = IntRect { { }, m_size };
+    auto drawingRect = IntRect { { }, contentsSize() };
     drawingRect.intersect(enclosingIntRect(clipRect));
 
     auto imageBuffer = ImageBuffer::create(drawingRect.size(), RenderingPurpose::Unspecified, context.scaleFactor().width(), DestinationColorSpace::SRGB(), PixelFormat::BGRA8);
@@ -176,9 +202,10 @@ void UnifiedPDFPlugin::paintContents(const GraphicsLayer* layer, GraphicsContext
         auto transform = CGPDFPageGetDrawingTransform(page.get(), kCGPDFCropBox, destinationRect, 0, preserveAspectRatio);
         bufferContext.concatCTM(transform);
 
-        CGContextDrawPDFPage(imageBuffer->context().platformContext(), page.get());
+        CGContextDrawPDFPage(bufferContext.platformContext(), page.get());
     }
 
+    context.fillRect(clipRect, WebCore::roundAndClampToSRGBALossy([WebCore::CocoaColor grayColor].CGColor));
     context.drawImageBuffer(*imageBuffer, drawingRect.location());
 }
 
@@ -189,12 +216,7 @@ CGFloat UnifiedPDFPlugin::scaleFactor() const
 
 float UnifiedPDFPlugin::deviceScaleFactor() const
 {
-    RefPtr frame = m_view->frame();
-    auto* page = frame->page();
-    if (!page)
-        return 1;
-
-    return page->deviceScaleFactor();
+    return PDFPluginBase::deviceScaleFactor();
 }
 
 void UnifiedPDFPlugin::geometryDidChange(const IntSize& pluginSize, const AffineTransform& pluginToRootViewTransform)
@@ -204,8 +226,33 @@ void UnifiedPDFPlugin::geometryDidChange(const IntSize& pluginSize, const Affine
 
     PDFPluginBase::geometryDidChange(pluginSize, pluginToRootViewTransform);
 
+    updateLayout();
+}
+
+void UnifiedPDFPlugin::updateLayout()
+{
     m_documentLayout.updateLayout(size());
     updateLayerHierarchy();
+    updateScrollbars();
+}
+
+bool UnifiedPDFPlugin::isLocked() const
+{
+    return !CGPDFDocumentIsUnlocked(m_documentLayout.pdfDocument());
+}
+
+IntSize UnifiedPDFPlugin::contentsSize() const
+{
+    if (isLocked())
+        return { 0, 0 };
+    return expandedIntSize(m_documentLayout.scaledContentsSize());
+}
+
+unsigned UnifiedPDFPlugin::firstPageHeight() const
+{
+    if (isLocked() || !m_documentLayout.pageCount())
+        return 0;
+    return static_cast<unsigned>(CGCeiling(m_documentLayout.boundsForPageAtIndex(0).height()));
 }
 
 RetainPtr<PDFDocument> UnifiedPDFPlugin::pdfDocumentForPrinting() const
@@ -223,14 +270,30 @@ RefPtr<FragmentedSharedBuffer> UnifiedPDFPlugin::liveResourceData() const
     return nullptr;
 }
 
+void UnifiedPDFPlugin::didChangeScrollOffset()
+{
+    // FIXME: Build up a layer hierarchy more like that of the root of web content
+    // instead of randomly moving the contents layer around.
+    m_contentsLayer->setPosition({ -static_cast<float>(m_scrollOffset.width()), -static_cast<float>(m_scrollOffset.height()) });
+    scheduleRenderingUpdate();
+}
+
+void UnifiedPDFPlugin::invalidateScrollbarRect(WebCore::Scrollbar&, const WebCore::IntRect&)
+{
+}
+
+void UnifiedPDFPlugin::invalidateScrollCornerRect(const WebCore::IntRect&)
+{
+}
+
 bool UnifiedPDFPlugin::handleMouseEvent(const WebMouseEvent&)
 {
     return false;
 }
 
-bool UnifiedPDFPlugin::handleWheelEvent(const WebWheelEvent&)
+bool UnifiedPDFPlugin::handleWheelEvent(const WebWheelEvent& event)
 {
-    return false;
+    return ScrollableArea::handleWheelEventForScrolling(platform(event), { });
 }
 
 bool UnifiedPDFPlugin::handleMouseEnterEvent(const WebMouseEvent&)

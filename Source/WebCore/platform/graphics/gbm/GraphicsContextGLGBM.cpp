@@ -99,12 +99,11 @@ void GraphicsContextGLGBM::setContextVisibility(bool)
 
 void GraphicsContextGLGBM::prepareForDisplay()
 {
-    if (m_layerComposited || !makeContextCurrent())
+    if (!makeContextCurrent())
         return;
 
     prepareTexture();
     GL_Flush();
-    markLayerComposited();
 
     m_swapchain.displayBO = WTFMove(m_swapchain.drawBO);
     allocateDrawBufferObject();

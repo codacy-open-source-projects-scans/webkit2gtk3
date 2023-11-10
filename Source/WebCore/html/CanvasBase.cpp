@@ -107,7 +107,7 @@ AffineTransform CanvasBase::baseTransform() const
 void CanvasBase::makeRenderingResultsAvailable()
 {
     if (auto* context = renderingContext()) {
-        context->paintRenderingResultsToCanvas();
+        context->drawBufferToCanvas(CanvasRenderingContext::SurfaceBuffer::DrawingBuffer);
         if (m_canvasNoiseHashSalt)
             m_canvasNoiseInjection.postProcessDirtyCanvasBuffer(buffer(), *m_canvasNoiseHashSalt);
     }
@@ -185,11 +185,14 @@ void CanvasBase::notifyObserversCanvasChanged(const std::optional<FloatRect>& re
 void CanvasBase::didDraw(const std::optional<FloatRect>& rect, ShouldApplyPostProcessingToDirtyRect shouldApplyPostProcessingToDirtyRect)
 {
     // FIXME: We should exclude rects with ShouldApplyPostProcessingToDirtyRect::No
-    if (shouldInjectNoiseBeforeReadback() && shouldApplyPostProcessingToDirtyRect == ShouldApplyPostProcessingToDirtyRect::Yes) {
-        if (rect)
-            m_canvasNoiseInjection.updateDirtyRect(intersection(enclosingIntRect(*rect), { { }, size() }));
-        else
-            m_canvasNoiseInjection.updateDirtyRect({ { }, size() });
+    if (shouldInjectNoiseBeforeReadback()) {
+        if (shouldApplyPostProcessingToDirtyRect == ShouldApplyPostProcessingToDirtyRect::Yes) {
+            if (rect)
+                m_canvasNoiseInjection.updateDirtyRect(intersection(enclosingIntRect(*rect), { { }, size() }));
+            else
+                m_canvasNoiseInjection.updateDirtyRect({ { }, size() });
+        } else if (!rect)
+            m_canvasNoiseInjection.clearDirtyRect();
     }
 }
 

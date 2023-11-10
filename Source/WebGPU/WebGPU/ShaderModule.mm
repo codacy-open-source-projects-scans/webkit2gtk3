@@ -167,7 +167,7 @@ struct Messages {
 };
 
 struct CompilationMessageData {
-    CompilationMessageData(Vector<WGPUCompilationMessage>&& compilationMessages, Vector<CString>&& messages)
+    CompilationMessageData(Vector<WGPUCompilationMessage>&& compilationMessages, Vector<String>&& messages)
         : compilationMessages(WTFMove(compilationMessages))
         , messages(WTFMove(messages))
     {
@@ -177,17 +177,17 @@ struct CompilationMessageData {
     CompilationMessageData(CompilationMessageData&&) = default;
 
     Vector<WGPUCompilationMessage> compilationMessages;
-    Vector<CString> messages;
+    Vector<String> messages;
 };
 
 static CompilationMessageData convertMessages(const Messages& messages1, const std::optional<Messages>& messages2 = std::nullopt)
 {
     Vector<WGPUCompilationMessage> flattenedCompilationMessages;
-    Vector<CString> flattenedMessages;
+    Vector<String> flattenedMessages;
 
     auto populateMessages = [&](const Messages& compilationMessages) {
         for (const auto& compilationMessage : compilationMessages.messages)
-            flattenedMessages.append(compilationMessage.message().utf8());
+            flattenedMessages.append(compilationMessage.message());
     };
 
     populateMessages(messages1);
@@ -199,7 +199,7 @@ static CompilationMessageData convertMessages(const Messages& messages1, const s
             const auto& compilationMessage = compilationMessages.messages[i];
             flattenedCompilationMessages.append({
                 .nextInChain = nullptr,
-                .message = flattenedMessages[i + base].data(),
+                .message = flattenedMessages[i + base],
                 .type = compilationMessages.type,
                 .lineNum = compilationMessage.lineNumber(),
                 .linePos = compilationMessage.lineOffset(),
@@ -228,9 +228,7 @@ void ShaderModule::getCompilationInfo(CompletionHandler<void(WGPUCompilationInfo
             static_cast<uint32_t>(compilationMessageData.compilationMessages.size()),
             compilationMessageData.compilationMessages.data(),
         };
-        m_device->instance().scheduleWork([compilationInfo = WTFMove(compilationInfo), callback = WTFMove(callback)]() mutable {
-            callback(WGPUCompilationInfoRequestStatus_Success, compilationInfo);
-        });
+        callback(WGPUCompilationInfoRequestStatus_Success, compilationInfo);
     }, [&](const WGSL::FailedCheck& failedCheck) {
         auto compilationMessageData(convertMessages(
             { failedCheck.errors, WGPUCompilationMessageType_Error },
@@ -240,9 +238,7 @@ void ShaderModule::getCompilationInfo(CompletionHandler<void(WGPUCompilationInfo
             static_cast<uint32_t>(compilationMessageData.compilationMessages.size()),
             compilationMessageData.compilationMessages.data(),
         };
-        m_device->instance().scheduleWork([compilationInfo = WTFMove(compilationInfo), callback = WTFMove(callback)]() mutable {
-            callback(WGPUCompilationInfoRequestStatus_Error, compilationInfo);
-        });
+        callback(WGPUCompilationInfoRequestStatus_Error, compilationInfo);
     }, [](std::monostate) {
         ASSERT_NOT_REACHED();
     });
@@ -372,7 +368,8 @@ WGSL::PipelineLayout ShaderModule::convertPipelineLayout(const PipelineLayout& p
             wgslEntry.vertexBufferDynamicOffset = entry.value.vertexDynamicOffset;
             wgslEntry.fragmentArgumentBufferIndex = entry.value.argumentBufferIndices[WebGPU::ShaderStage::Fragment];
             wgslEntry.fragmentArgumentBufferSizeIndex = entry.value.bufferSizeArgumentBufferIndices[WebGPU::ShaderStage::Fragment];
-            wgslEntry.fragmentBufferDynamicOffset = entry.value.fragmentDynamicOffset;
+            if (entry.value.fragmentDynamicOffset)
+                wgslEntry.fragmentBufferDynamicOffset = *entry.value.fragmentDynamicOffset + 2;
             wgslEntry.computeArgumentBufferIndex = entry.value.argumentBufferIndices[WebGPU::ShaderStage::Compute];
             wgslEntry.computeArgumentBufferSizeIndex = entry.value.bufferSizeArgumentBufferIndices[WebGPU::ShaderStage::Compute];
             wgslEntry.computeBufferDynamicOffset = entry.value.computeDynamicOffset;

@@ -29,8 +29,9 @@
 
 #include "ElementAncestorIteratorInlines.h"
 #include "LegacyRenderSVGResourceClipper.h"
+#include "LegacyRenderSVGResourceMarker.h"
+#include "LegacyRenderSVGResourceMasker.h"
 #include "LegacyRenderSVGRoot.h"
-#include "LegacyRenderSVGShape.h"
 #include "LegacyRenderSVGShapeInlines.h"
 #include "LegacyRenderSVGTransformableContainer.h"
 #include "LegacyRenderSVGViewportContainer.h"
@@ -42,10 +43,8 @@
 #include "RenderLayer.h"
 #include "RenderSVGResourceClipper.h"
 #include "RenderSVGResourceFilter.h"
-#include "RenderSVGResourceMarker.h"
-#include "RenderSVGResourceMasker.h"
 #include "RenderSVGRoot.h"
-#include "RenderSVGShape.h"
+#include "RenderSVGShapeInlines.h"
 #include "RenderSVGText.h"
 #include "SVGElementTypeHelpers.h"
 #include "SVGGeometryElement.h"
@@ -154,7 +153,7 @@ void SVGRenderSupport::computeContainerBoundingBoxes(const RenderElement& contai
     objectBoundingBoxValid = false;
     repaintBoundingBox = FloatRect();
     for (auto& current : childrenOfType<RenderObject>(container)) {
-        if (current.isLegacySVGHiddenContainer())
+        if (current.isLegacyRenderSVGHiddenContainer())
             continue;
 
         // Don't include elements in the union that do not render.
@@ -174,10 +173,10 @@ void SVGRenderSupport::computeContainerBoundingBoxes(const RenderElement& contai
 
 FloatRect SVGRenderSupport::computeContainerStrokeBoundingBox(const RenderElement& container)
 {
-    ASSERT(container.isLegacySVGRoot() || container.isLegacySVGContainer());
+    ASSERT(container.isLegacyRenderSVGRoot() || container.isLegacyRenderSVGContainer());
     FloatRect strokeBoundingBox = FloatRect();
     for (auto& current : childrenOfType<RenderObject>(container)) {
-        if (current.isLegacySVGHiddenContainer())
+        if (current.isLegacyRenderSVGHiddenContainer())
             continue;
 
         // Don't include elements in the union that do not render.
@@ -239,7 +238,7 @@ static inline bool layoutSizeOfNearestViewportChanged(const RenderElement& rende
 
 bool SVGRenderSupport::transformToRootChanged(RenderElement* ancestor)
 {
-    while (ancestor && !ancestor->isSVGRootOrLegacySVGRoot()) {
+    while (ancestor && !ancestor->isRenderOrLegacyRenderSVGRoot()) {
         if (is<LegacyRenderSVGTransformableContainer>(*ancestor))
             return downcast<LegacyRenderSVGTransformableContainer>(*ancestor).didTransformToRootUpdate();
         if (is<LegacyRenderSVGViewportContainer>(*ancestor))
@@ -341,7 +340,7 @@ void SVGRenderSupport::intersectRepaintRectWithResources(const RenderElement& re
     if (LegacyRenderSVGResourceClipper* clipper = resources->clipper())
         repaintRect.intersect(clipper->resourceBoundingBox(renderer, repaintRectCalculation));
 
-    if (RenderSVGResourceMasker* masker = resources->masker())
+    if (auto* masker = resources->masker())
         repaintRect.intersect(masker->resourceBoundingBox(renderer, repaintRectCalculation));
 }
 
@@ -475,7 +474,7 @@ void SVGRenderSupport::applyStrokeStyleToContext(GraphicsContext& context, const
         float scaleFactor = 1;
 
         if (is<SVGGeometryElement>(element)) {
-            ASSERT(renderer.isSVGShapeOrLegacySVGShape());
+            ASSERT(renderer.isRenderOrLegacyRenderSVGShape());
             // FIXME: A value of zero is valid. Need to differentiate this case from being unspecified.
             if (float pathLength = downcast<SVGGeometryElement>(element)->pathLength()) {
                 if (is<LegacyRenderSVGShape>(renderer))
@@ -668,6 +667,7 @@ void SVGRenderSupport::paintSVGClippingMask(const RenderLayerModelObject& render
         return;
 
     ASSERT(renderer.isSVGLayerAwareRenderer());
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
     const auto& referenceClipPathOperation = downcast<ReferencePathOperation>(*renderer.style().clipPath());
     auto* renderResource = renderer.document().lookupSVGResourceById(referenceClipPathOperation.fragment());
     if (!renderResource)
@@ -675,6 +675,7 @@ void SVGRenderSupport::paintSVGClippingMask(const RenderLayerModelObject& render
 
     if (auto clipper = dynamicDowncast<RenderSVGResourceClipper>(renderResource))
         clipper->applyMaskClipping(paintInfo, renderer, renderer.objectBoundingBox());
+#endif // ENABLE(LAYER_BASED_SVG_ENGINE)
 }
 
 }

@@ -61,8 +61,7 @@ private:
     void appendInlineBoxDisplayBox(const Line::Run&, const InlineLevelBox&, const InlineRect&, bool linehasContent, InlineDisplay::Boxes&);
     void appendSpanningInlineBoxDisplayBox(const Line::Run&, const InlineLevelBox&, const InlineRect&, bool linehasContent, InlineDisplay::Boxes&);
     void appendInlineDisplayBoxAtBidiBoundary(const Box&, InlineDisplay::Boxes&);
-    void appendInterlinearRubyAnnotationBox(const Box&, InlineDisplay::Boxes&);
-    void appendIntercharacterRubyAnnotationBox(const Line::Run&, InlineDisplay::Boxes&);
+    void appendRubyAnnotationBox(const Box& rubyBaseLayoutBox, InlineDisplay::Boxes&);
     void handleInlineBoxEnd(const Line::Run&, const InlineDisplay::Boxes&);
     void applyRubyOverhang(InlineDisplay::Boxes&);
 
@@ -72,11 +71,12 @@ private:
 
     InlineRect flipLogicalRectToVisualForWritingModeWithinLine(const InlineRect& logicalRect, const InlineRect& lineLogicalRect, WritingMode) const;
     InlineRect flipRootInlineBoxRectToVisualForWritingMode(const InlineRect& rootInlineBoxLogicalRect, WritingMode) const;
-    void setLeftForWritingMode(InlineDisplay::Box&, InlineLayoutUnit logicalRight, WritingMode) const;
+    template <typename BoxType, typename LayoutUnitType>
+    void setLeftForWritingMode(BoxType&, LayoutUnitType logicalLeft, WritingMode) const;
     void setRightForWritingMode(InlineDisplay::Box&, InlineLayoutUnit logicalRight, WritingMode) const;
     InlineLayoutPoint movePointHorizontallyForWritingMode(const InlineLayoutPoint& topLeft, InlineLayoutUnit horizontalOffset, WritingMode) const;
     InlineLayoutUnit outsideListMarkerVisualPosition(const ElementBox&) const;
-    void setGeometryForBlockLevelOutOfFlowBoxes(const Vector<size_t> indexList, const LineBox&, const Line::RunList&, const Vector<int32_t>& visualOrderList = { });
+    void setGeometryForBlockLevelOutOfFlowBoxes(const Vector<size_t>& indexList, const LineBox&, const Line::RunList&, const Vector<int32_t>& visualOrderList = { });
 
     bool isLineFullyTruncatedInBlockDirection() const { return m_lineIsFullyTruncatedInBlockDirection; }
 
@@ -96,7 +96,6 @@ private:
     bool m_lineIsFullyTruncatedInBlockDirection { false };
     bool m_contentHasInkOverflow { false };
     Vector<WTF::Range<size_t>> m_interlinearRubyColumnRangeList;
-    CheckedPtr<const Box> m_interCharacterRubyBase;
 };
 
 }

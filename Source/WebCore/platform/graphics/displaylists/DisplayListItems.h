@@ -201,7 +201,7 @@ public:
     }
 
     SetInlineStroke(SRGBA<uint8_t> colorData)
-        : m_colorData(*Color(colorData).tryGetAsPackedInline())
+        : m_colorData(PackedColor::RGBA(colorData))
     {
     }
 
@@ -308,9 +308,9 @@ private:
     float m_miterLimit;
 };
 
-class ClearShadow {
+class ClearDropShadow {
 public:
-    static constexpr char name[] = "set-clear-shadow";
+    static constexpr char name[] = "clear-drop-shadow";
 
     WEBCORE_EXPORT void apply(GraphicsContext&) const;
     void dump(TextStream&, OptionSet<AsTextFlag>) const { }

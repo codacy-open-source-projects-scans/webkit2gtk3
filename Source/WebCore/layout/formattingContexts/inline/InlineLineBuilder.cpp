@@ -236,7 +236,7 @@ LineBuilder::LineBuilder(InlineFormattingContext& inlineFormattingContext, Horiz
 
 LineLayoutResult LineBuilder::layoutInlineContent(const LineInput& lineInput, const std::optional<PreviousLine>& previousLine)
 {
-    auto previousLineEndsWithLineBreak = !previousLine ? std::nullopt : std::make_optional(previousLine->endsWithLineBreak);
+    auto previousLineEndsWithLineBreak = !previousLine || !previousLine->hasInlineContent ? std::nullopt : std::make_optional(previousLine->endsWithLineBreak);
     initialize(lineInput.initialLogicalRect, initialConstraintsForLine(lineInput.initialLogicalRect, previousLineEndsWithLineBreak), lineInput.needsLayoutRange, previousLine);
     auto lineContent = placeInlineAndFloatContent(lineInput.needsLayoutRange);
     auto result = m_line.close();
@@ -466,7 +466,7 @@ LineContent LineBuilder::placeInlineAndFloatContent(const InlineItemRange& needs
         auto handleTrailingContent = [&] {
             auto& quirks = formattingContext().quirks();
             auto lineHasOverflow = [&] {
-                return horizontalAvailableSpace < m_line.contentLogicalWidth();
+                return horizontalAvailableSpace < m_line.contentLogicalWidth() && m_line.hasContentOrListMarker();
             };
             auto isLineBreakAfterWhitespace = [&] {
                 return rootStyle.lineBreak() == LineBreak::AfterWhiteSpace && intrinsicWidthMode() != IntrinsicWidthMode::Minimum && (!isLastLine || lineHasOverflow());
@@ -503,18 +503,23 @@ LineContent LineBuilder::placeInlineAndFloatContent(const InlineItemRange& needs
         // to the paragraph embedding level
         m_line.resetBidiLevelForTrailingWhitespace(rootStyle.isLeftToRightDirection() ? UBIDI_LTR : UBIDI_RTL);
 
-        auto runsExpandHorizontally = [&] {
-            if (isInIntrinsicWidthMode())
-                return false;
-            if (root().isRubyAnnotationBox()) {
-                // FIXME: This is a workaround until after we generate inline boxes for annotation content.
-                return true;
-            }
-            return isLastLine ? rootStyle.textAlignLast() == TextAlignLast::Justify : rootStyle.textAlign() == TextAlignMode::Justify;
-        };
-        if (runsExpandHorizontally())
-            m_line.applyRunExpansion(horizontalAvailableSpace);
         if (m_line.hasContent()) {
+            auto runsExpandHorizontally = [&] {
+                if (isInIntrinsicWidthMode())
+                    return false;
+                if (root().isRubyAnnotationBox() && rootStyle.textAlign() == RenderStyle::initialTextAlign()) {
+                    // FIXME: This is a workaround until after we generate inline boxes for annotation content.
+                    return true;
+                }
+                // Text is justified according to the method specified by the text-justify property,
+                // in order to exactly fill the line box. Unless otherwise specified by text-align-last,
+                // the last line before a forced break or the end of the block is start-aligned.
+                if (isLastLine || m_line.runs().last().isLineBreak())
+                    return rootStyle.textAlignLast() == TextAlignLast::Justify;
+                return rootStyle.textAlign() == TextAlignMode::Justify;
+            };
+            if (runsExpandHorizontally())
+                m_line.applyRunExpansion(horizontalAvailableSpace);
             auto& lastTextContent = m_line.runs().last().textContent();
             lineContent.endsWithHyphen = lastTextContent && lastTextContent->needsHyphen;
         }
@@ -622,7 +627,7 @@ void LineBuilder::candidateContentForLine(LineCandidate& lineCandidate, size_t c
     }
 
     auto appendRubyContainerIfApplicable = [&] {
-        auto isRubyContent = currentInlineItemIndex < layoutRange.endIndex() && (m_inlineItemList[currentInlineItemIndex].layoutBox().isRuby() || m_inlineItemList[currentInlineItemIndex].layoutBox().isRubyBase());
+        auto isRubyContent = currentInlineItemIndex < layoutRange.endIndex() && (m_inlineItemList[currentInlineItemIndex].layoutBox().isRuby() || m_inlineItemList[currentInlineItemIndex].layoutBox().isRenderRubyBase());
         if (!isRubyContent)
             return false;
         // We must be at a ruby container/base and we should let the ruby formatting context handle the rest of the ruby content.

@@ -67,6 +67,13 @@ public:
     NSURL *getURL(NSString *resourcePath, NSString **outExceptionString);
     NSDictionary *getManifest();
     void getPlatformInfo(Ref<WebExtensionCallbackHandler>&&);
+    void getBackgroundPage(Ref<WebExtensionCallbackHandler>&&);
+    double getFrameId(JSValue *);
+
+    void setUninstallURL(URL, Ref<WebExtensionCallbackHandler>&&);
+
+    void openOptionsPage(Ref<WebExtensionCallbackHandler>&&);
+    void reload();
 
     NSString *runtimeIdentifier();
 

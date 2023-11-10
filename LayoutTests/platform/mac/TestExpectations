@@ -112,6 +112,11 @@ media/media-source/remoteplayback-from-source-element.html [ Pass ]
 fast/images/animated-heics-draw.html [ Pass ]
 fast/images/heic-as-background-image.html [ Pass ]
 
+# On open source builds, JPEG XL images are only supported on macOS post Sonoma
+[ Sonoma+ ] fast/images/jpegxl-image-decoding.html [ Pass ]
+[ Sonoma+ ] fast/images/jpegxl-as-image.html [ Pass ]
+[ Sonoma+ ] fast/images/jpegxl-with-color-profile.html [ Pass ]
+
 # Enabled in rdar://102830993
 fast/images/mac/play-all-pause-all-animations-context-menu-items.html [ Skip ]
 
@@ -768,10 +773,6 @@ mathml/presentation/fenced-mi.html [ Pass ImageOnlyFailure ]
 media/accessiblity-describes-video.html [ Timeout ]
 
 # rdar://92286809 ([ Ventura ] 4x editing/spelling (layout-tests) Are constant timeouts)
-editing/spelling/inline-spelling-markers-hidpi.html [ Timeout ]
-editing/spelling/grammar-markers-hidpi.html [ Timeout ]
-editing/spelling/grammar-markers.html [ Timeout ]
-editing/spelling/inline-spelling-markers.html [ Timeout ]
 
 #rdar://92833592 ([ Ventura ] 4x imported/w3c/web-platform-tests/webrtc-encoded-transform/ are flaky text failures)
 imported/w3c/web-platform-tests/webrtc-encoded-transform/script-metadata-transform.https.html [ Pass Failure ]
@@ -800,7 +801,6 @@ editing/secure-input/removed-password-input.html [ Pass Failure ]
 editing/secure-input/reset-state-on-navigation.html [ Pass Failure ]
 
 #rdar://96912160 (REGRESSION): [ Ventura ] 3* imported/w3c/web-platform-tests/cookies* tests are constant text failures)
-imported/w3c/web-platform-tests/cookies/attributes/path.html [ Failure ]
 imported/w3c/web-platform-tests/cookies/value/value.html [ Failure ]
 imported/w3c/web-platform-tests/cookies/encoding/charset.html [ Failure ]
 
@@ -908,7 +908,6 @@ fast/canvas/canvas-fillRect-gradient-shadow.html [ Pass Failure ]
 webkit.org/b/230313 [ Monterey+ ] fast/canvas/canvas-draw-canvas-on-canvas-flushing-order.html [ Pass ImageOnlyFailure ]
 
 # Underlines' starting and ending positions need to be pixel-snapped
-webkit.org/b/142087 fast/css3-text/css3-text-decoration/no-gap-between-two-rounded-textboxes.html [ ImageOnlyFailure ]
 
 # Tests that fail with the SVG -> OTF font converter, but are lower priority than live-on
 webkit.org/b/140588 svg/W3C-SVG-1.1/fonts-desc-02-t.svg [ Failure ]
@@ -1329,7 +1328,6 @@ media/modern-media-controls/time-labels-support/elapsed-time.html [ Skip ]
 # Tests which pass on Ventura.
 webkit.org/b/247588 [ BigSur Monterey ] imported/w3c/web-platform-tests/fetch/api/redirect/redirect-count.any.serviceworker.html [ Failure ]
 webkit.org/b/247588 [ BigSur Monterey ] imported/w3c/web-platform-tests/fetch/api/redirect/redirect-count.any.sharedworker.html [ Failure ]
-webkit.org/b/247705 [ BigSur Monterey ] imported/w3c/web-platform-tests/fetch/connection-pool/network-partition-key.html [ Failure ]
 
 # Tests timing out on BigSur but not timing out on Ventura
 webkit.org/b/247632 imported/w3c/web-platform-tests/fetch/metadata/generated/element-a.sub.html [ Skip ]
@@ -1435,7 +1433,6 @@ webkit.org/b/189686 webgl/2.0.0/conformance/textures/misc/tex-image-and-sub-imag
 
 webkit.org/b/190724 [ Debug ] http/tests/misc/large-js-program.py [ Pass Timeout ]
 
-webkit.org/b/191565 [ Debug ] imported/w3c/web-platform-tests/css/mediaqueries/test_media_queries.html [ Slow ]
 
 webkit.org/b/239405 fast/css/counters/element-removal-crash.xhtml [ Pass Failure ]
 
@@ -1457,8 +1454,8 @@ webkit.org/b/19650 accessibility/mac/press-not-work-for-disabled-menu-list.html 
 
 # Skip iOS-specific Pointer Events WPT tests and some that are timing out.
 imported/w3c/web-platform-tests/pointerevents/capturing_boundary_event_handler_at_ua_shadowdom.html?touch [ Skip ]
-imported/w3c/web-platform-tests/pointerevents/coalesced_events_attributes.html?touch [ Skip ]
-imported/w3c/web-platform-tests/pointerevents/coalesced_events_attributes_under_load.html?touch [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/coalesced_events_attributes.https.html?touch [ Skip ]
+imported/w3c/web-platform-tests/pointerevents/coalesced_events_attributes_under_load.https.html?touch [ Skip ]
 imported/w3c/web-platform-tests/pointerevents/compat/pointerevent_mouseevent_key_pressed.html [ Skip ]
 imported/w3c/web-platform-tests/pointerevents/compat/pointerevent_touch-action_two-finger_interaction.html [ Skip ]
 imported/w3c/web-platform-tests/pointerevents/pointerevent_after_target_appended.html?touch [ Skip ]
@@ -2314,7 +2311,7 @@ svg/transforms/layout-tiny-elements-in-scaled-group.svg [ ImageOnlyFailure ]
 svg/transforms/rotation-origin-in-small-units.svg [ ImageOnlyFailure ]
 svg/transforms/rotation-tiny-element-in-group.svg [ ImageOnlyFailure ]
 svg/transforms/transform-origin-and-box-getCTM.html [ Failure ]
-svg/transforms/transformed-child-in-container.svg [ ImageOnlyFailure ]
+svg/transforms/transformed-child-in-container.svg [ Pass ImageOnlyFailure ]
 svg/transforms/translation-tiny-element.svg [ ImageOnlyFailure ]
 
 # Timing out since its import.
@@ -2390,7 +2387,6 @@ webkit.org/b/237415 webgl/1.0.x/conformance/rendering/clipping-wide-points.html 
 
 # webkit.org/b/255178 [ Ventura iOS arm64 ] 3X imported/w3c/web-platform-tests/css/css-color/parsing (layout-tests) are constant text failures
 [ Ventura x86_64 ] imported/w3c/web-platform-tests/css/css-color/parsing/color-computed-color-mix-function.html [ Failure ]
-[ Ventura x86_64 ] imported/w3c/web-platform-tests/css/css-color/parsing/color-computed-relative-color.html [ Failure ]
 [ Ventura x86_64 ] imported/w3c/web-platform-tests/css/css-color/parsing/color-valid-relative-color.html [ Failure ]
 
 # webkit.org/b/255427 [ Ventura ] 4/13 batch mark expectations and branch bugs
@@ -2456,8 +2452,6 @@ webkit.org/b/260529 [ Ventura+ x86_64 ] animations/suspend-resume-animation-even
 # rdar://102494267 ([ New Test ] (248203@main): [ Sonoma ] http/tests/media/hls/track-in-band-hls-metadata-cue-duration.html is a consistent failure)
 [ Ventura+ ] http/tests/media/hls/track-in-band-hls-metadata-cue-duration.html [ Failure ]
 
-# rdar://103047570 (REGRESSION (Sonoma): fast/speechsynthesis/speech-synthesis-real-client-version.html is a consistent timeout)
-fast/speechsynthesis/speech-synthesis-real-client-version.html [ Timeout ]
 
 # rdar://100422705 ([ macOS iOS16 ] fast/text/system-font-fallb ack.html is a constant failure (245686))
 fast/text/system-font-fallback.html [ ImageOnlyFailure ]
@@ -2471,7 +2465,6 @@ svg/custom/hidpi-masking-clipping.svg [ Pass ImageOnlyFailure ]
 # rdar://111077813 (REGRESSION ( Sonoma ): [ Sonoma ] css3/color-filters/color-filter-caret-color.html is a consistent image failure)
 css3/color-filters/color-filter-caret-color.html [ ImageOnlyFailure ]
 fast/css/caret-color-fallback-to-color.html [ ImageOnlyFailure ]
-fast/history/visited-link-caret-color.html [ ImageOnlyFailure ]
 fast/css/caret-color-span-inside-editable-parent.html [ ImageOnlyFailure ]
 
 # rdar://111079967 (REGRESSION ( Sonoma ): [ Sonoma ] Two editing/caret/color-span-inside-editabl tests are constant image failures)
@@ -2544,17 +2537,9 @@ webkit.org/b/261958 [ Release ] inspector/console/timestamp.html [ Pass Failure 
 # Results changed with Sonoma
 [ Monterey Ventura ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/mime-types/canPlayType.html [ Failure ]
 
-webkit.org/b/261306 imported/w3c/web-platform-tests/content-security-policy/reporting-api/report-to-directive-allowed-in-meta.https.sub.html [ Failure ]
-
 # webkit.org/b/262595 (REGRESSION(Sonoma): [ Sonoma ] 2 lookup menu-related tests are constant text failures.)
 [ Sonoma ] editing/mac/dictionary-lookup/dictionary-lookup.html [ Failure ]
 [ Sonoma ] editing/selection/context-menu-text-selection-lookup.html [ Failure ]
-
-# rdar://113991102 (REGRESSION ( Sonoma ): [ Sonoma ] 10 fast/text/canvas-color-fonts/..COLR tests are a consistent image failure)
-[ Sonoma+ ] fast/text/canvas-color-fonts/linedash-COLR.html [ ImageOnlyFailure ]
-[ Sonoma+ ] fast/text/canvas-color-fonts/stroke-color-COLR.html [ ImageOnlyFailure ]
-[ Sonoma+ ] fast/text/canvas-color-fonts/stroke-color-shadow-COLR.html [ ImageOnlyFailure ]
-[ Sonoma+ ] fast/text/canvas-color-fonts/stroke-color-shadow-ctm-COLR.html [ ImageOnlyFailure ]
 
 # rdar://114294654 (REGRESSION (265615@main): [ Sonoma ] fast/attachment/cocoa/wide-attachment-rendering.html is a constant failure)
 [ Sonoma+ ] fast/attachment/cocoa/wide-attachment-rendering.html [ Failure ]
@@ -2568,8 +2553,6 @@ webkit.org/b/261306 imported/w3c/web-platform-tests/content-security-policy/repo
 [ Sonoma ] imported/w3c/web-platform-tests/WebCryptoAPI/import_export/okp_importKey.https.any.worker.html [ Crash ]
 [ Sonoma ] imported/w3c/web-platform-tests/WebCryptoAPI/import_export/okp_importKey_failures_X25519.https.any.html [ Crash ]
 [ Sonoma ] imported/w3c/web-platform-tests/WebCryptoAPI/import_export/okp_importKey_failures_X25519.https.any.worker.html [ Crash ]
-
-webkit.org/b/262732 [ Sonoma+ ] fast/css/text-overflow-input.html [ Failure ]
 
 # webkit.org/b/263226 (REGRESSION(268692@main?): [ macOS ] 7 tests under imported/w3c/web-platform-tests/media-source/mediasource-* are flaky failures.)
 imported/w3c/web-platform-tests/media-source/mediasource-config-change-mp4-av-audio-bitrate.html [ Pass Failure ]
@@ -2619,3 +2602,15 @@ webkit.org/b/245347 imported/w3c/web-platform-tests/css/css-color/deprecated-sam
 webkit.org/b/245347 imported/w3c/web-platform-tests/css/css-color/deprecated-sameas-021.html [ ImageOnlyFailure ]
 webkit.org/b/245347 imported/w3c/web-platform-tests/css/css-color/deprecated-sameas-022.html [ ImageOnlyFailure ]
 webkit.org/b/245347 imported/w3c/web-platform-tests/css/css-color/deprecated-sameas-023.html [ ImageOnlyFailure ]
+
+webkit.org/b/264001 [ Debug ] imported/w3c/web-platform-tests/requestidlecallback/callback-multiple-calls.html [ Pass Failure ]
+
+# webkit.org/b/264419 ([ Sonoma 14.1+ ] Multiple tests are constantly failing following update from 14.0.)
+webkit.org/b/264544 [ Sonoma+ ] css3/filters/effect-opacity-hw.html [ ImageOnlyFailure ]
+webkit.org/b/263783 [ Sonoma+ ] fast/scrolling/scroll-snap-crash.html [ Skip ]
+
+webkit.org/b/264177 requestidlecallback/requestidlecallback-deadline-shortened-by-rendering-update.html [ Pass Failure ]
+
+webkit.org/b/264349 http/tests/site-isolation/frame-access-after-window-open.html [ Timeout ]
+
+webkit.org/b/264527 imported/w3c/web-platform-tests/css/css-cascade/idlharness.html [ Pass Failure ]

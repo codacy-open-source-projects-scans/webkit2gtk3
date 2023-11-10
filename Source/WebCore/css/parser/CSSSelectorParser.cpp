@@ -764,10 +764,11 @@ static bool isOnlyPseudoClassFunction(CSSSelector::PseudoClassType pseudoClassTy
     
 static bool isOnlyPseudoElementFunction(CSSSelector::PseudoElementType pseudoElementType)
 {
-    // Note that we omit cue since it can be either an ident or a function.
+    // Note that we omit ::cue since it can be either an ident or a function.
     switch (pseudoElementType) {
     case CSSSelector::PseudoElementPart:
     case CSSSelector::PseudoElementSlotted:
+    case CSSSelector::PseudoElementHighlight:
         return true;
     default:
         break;
@@ -811,7 +812,7 @@ std::unique_ptr<CSSParserSelector> CSSSelectorParser::consumePseudo(CSSParserTok
 #endif
         }
     } else {
-        selector = CSSParserSelector::parsePseudoElementSelector(token.value());
+        selector = CSSParserSelector::parsePseudoElementSelector(token.value(), m_context.mode);
 #if ENABLE(VIDEO)
         // Treat the ident version of cue as PseudoElementWebkitCustom.
         if (token.type() == IdentToken && selector && selector->match() == CSSSelector::Match::PseudoElement && selector->pseudoElementType() == CSSSelector::PseudoElementCue)

@@ -364,7 +364,7 @@ void FontCascade::drawGlyphs(GraphicsContext& context, const Font& font, const G
     bool hasSimpleShadow = context.textDrawingMode() == TextDrawingMode::Fill && shadow && shadow->color.isValid() && !shadow->radius && !platformData.isColorBitmapFont() && (!context.shadowsIgnoreTransforms() || contextCTM.isIdentityOrTranslationOrFlipped()) && !context.isInTransparencyLayer();
     if (hasSimpleShadow) {
         // Paint simple shadows ourselves instead of relying on CG shadows, to avoid losing subpixel antialiasing.
-        context.clearShadow();
+        context.clearDropShadow();
         Color fillColor = context.fillColor();
         Color shadowFillColor = shadow->color.colorWithAlphaMultipliedBy(fillColor.alphaAsFloat());
         context.setFillColor(shadowFillColor);
@@ -416,7 +416,7 @@ const Font* FontCascade::fontForCombiningCharacterSequence(StringView stringView
         return nullptr;
 
     if (isOnlySingleCodePoint)
-        return baseCharacterGlyphData.font;
+        return baseCharacterGlyphData.font.get();
 
     bool triedBaseCharacterFont = false;
 
@@ -456,7 +456,7 @@ const Font* FontCascade::fontForCombiningCharacterSequence(StringView stringView
     }
 
     if (!triedBaseCharacterFont && baseCharacterGlyphData.font && baseCharacterGlyphData.font->canRenderCombiningCharacterSequence(stringView))
-        return baseCharacterGlyphData.font;
+        return baseCharacterGlyphData.font.get();
 
     return Font::systemFallback();
 }

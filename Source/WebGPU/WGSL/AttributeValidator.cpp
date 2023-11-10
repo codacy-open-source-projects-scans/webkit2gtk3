@@ -42,6 +42,7 @@ public:
     void visit(AST::Function&) override;
     void visit(AST::Parameter&) override;
     void visit(AST::Variable&) override;
+    void visit(AST::Structure&) override;
     void visit(AST::StructureMember&) override;
 
 private:
@@ -63,6 +64,7 @@ private:
     AST::Function* m_currentFunction { nullptr };
     ShaderModule& m_shaderModule;
     Vector<Error> m_errors;
+    bool m_hasSizeOrAlignmentAttributes { false };
 };
 
 AttributeValidator::AttributeValidator(ShaderModule& shaderModule)
@@ -102,7 +104,7 @@ void AttributeValidator::visit(AST::Function& function)
                 auto value = dimension->constantValue();
                 if (!value.has_value())
                     return;
-                if (value->toInt() < 1)
+                if (value->integerValue() < 1)
                     error(dimension->span(), "@workgroup_size argument must be at least 1");
             };
             check(workgroupSize.x);
@@ -187,7 +189,7 @@ void AttributeValidator::visit(AST::Variable& variable)
         if (is<AST::BindingAttribute>(attribute)) {
             if (!isResource)
                 error(attribute.span(), "@binding attribute must only be applied to resource variables");
-            auto bindingValue = downcast<AST::BindingAttribute>(attribute).binding().constantValue()->toInt();
+            auto bindingValue = downcast<AST::BindingAttribute>(attribute).binding().constantValue()->integerValue();
             if (bindingValue < 0)
                 error(attribute.span(), "@binding value must be non-negative");
             else
@@ -198,7 +200,7 @@ void AttributeValidator::visit(AST::Variable& variable)
         if (is<AST::GroupAttribute>(attribute)) {
             if (!isResource)
                 error(attribute.span(), "@group attribute must only be applied to resource variables");
-            auto groupValue = downcast<AST::GroupAttribute>(attribute).group().constantValue()->toInt();
+            auto groupValue = downcast<AST::GroupAttribute>(attribute).group().constantValue()->integerValue();
             if (groupValue < 0)
                 error(attribute.span(), "@group value must be non-negative");
             else
@@ -210,7 +212,7 @@ void AttributeValidator::visit(AST::Variable& variable)
             auto& idExpression = downcast<AST::IdAttribute>(attribute).value();
             if (variable.flavor() != AST::VariableFlavor::Override || !satisfies(variable.storeType(), Constraints::Scalar))
                 error(attribute.span(), "@id attribute must only be applied to override variables of scalar type");
-            auto idValue = idExpression.constantValue()->toInt();
+            auto idValue = idExpression.constantValue()->integerValue();
             if (idValue < 0)
                 error(attribute.span(), "@id value must be non-negative");
             else
@@ -220,6 +222,55 @@ void AttributeValidator::visit(AST::Variable& variable)
 
         error(attribute.span(), "invalid attribute for variable declaration");
     }
+}
+
+void AttributeValidator::visit(AST::Structure& structure)
+{
+    AST::Visitor::visit(structure);
+
+    // Bail as we will stop the compilation after this pass, so the computed
+    // properties of the struct will never be read, and the size and alignment
+    // for the struct members might be invalid.
+    if (m_errors.size())
+        return;
+
+    structure.m_hasSizeOrAlignmentAttributes = std::exchange(m_hasSizeOrAlignmentAttributes, false);
+
+    unsigned previousSize = 0;
+    unsigned alignment = 0;
+    unsigned size = 0;
+    AST::StructureMember* previousMember = nullptr;
+    for (auto& member : structure.members()) {
+        auto* type = member.type().inferredType();
+        auto fieldAlignment = member.m_alignment;
+        if (!fieldAlignment) {
+            fieldAlignment = type->alignment();
+            member.m_alignment = fieldAlignment;
+        }
+
+        auto typeSize = type->size();
+        auto fieldSize = member.m_size;
+        if (!fieldSize) {
+            fieldSize = typeSize;
+            member.m_size = fieldSize;
+        }
+
+        auto offset = WTF::roundUpToMultipleOf(*fieldAlignment, size);
+        member.m_offset = offset;
+
+        alignment = std::max(alignment, *fieldAlignment);
+        size = offset + *fieldSize;
+
+        if (previousMember)
+            previousMember->m_padding = offset - previousSize;
+
+        previousMember = &member;
+        previousSize = offset + typeSize;
+    }
+    auto finalSize = WTF::roundUpToMultipleOf(alignment, size);
+    previousMember->m_padding = finalSize - previousSize;
+    structure.m_alignment = alignment;
+    structure.m_size = finalSize;
 }
 
 void AttributeValidator::visit(AST::StructureMember& member)
@@ -239,7 +290,8 @@ void AttributeValidator::visit(AST::StructureMember& member)
 
         if (is<AST::SizeAttribute>(attribute)) {
             // FIXME: check that the member type must have creation-fixed footprint.
-            auto sizeValue = downcast<AST::SizeAttribute>(attribute).size().constantValue()->toInt();
+            m_hasSizeOrAlignmentAttributes = true;
+            auto sizeValue = downcast<AST::SizeAttribute>(attribute).size().constantValue()->integerValue();
             if (sizeValue < 0)
                 error(attribute.span(), "@size value must be non-negative");
             else if (sizeValue < member.type().inferredType()->size())
@@ -249,7 +301,8 @@ void AttributeValidator::visit(AST::StructureMember& member)
         }
 
         if (is<AST::AlignAttribute>(attribute)) {
-            auto alignmentValue = downcast<AST::AlignAttribute>(attribute).alignment().constantValue()->toInt();
+            m_hasSizeOrAlignmentAttributes = true;
+            auto alignmentValue = downcast<AST::AlignAttribute>(attribute).alignment().constantValue()->integerValue();
             auto isPowerOf2 = !(alignmentValue & (alignmentValue - 1));
             if (alignmentValue < 0)
                 error(attribute.span(), "@align value must be non-negative");
@@ -313,7 +366,7 @@ bool AttributeValidator::parseLocation(AST::Function* function, std::optional<un
     if (!isNumeric && !isNumericVector)
         error(attribute.span(), "@location must only be applied to declarations of numeric scalar or numeric vector type");
 
-    auto locationValue = downcast<AST::LocationAttribute>(attribute).location().constantValue()->toInt();
+    auto locationValue = downcast<AST::LocationAttribute>(attribute).location().constantValue()->integerValue();
     if (locationValue < 0)
         error(attribute.span(), "@location value must be non-negative");
     else

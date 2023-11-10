@@ -215,7 +215,6 @@ void FunctionDefinitionWriter::emitNecessaryHelpers()
     }
 
     if (m_callGraph.ast().usesWorkgroupUniformLoad()) {
-        m_callGraph.ast().clearUsesWorkgroupUniformLoad();
         m_stringBuilder.append(m_indent, "template<typename T>\n");
         m_stringBuilder.append(m_indent, "T __workgroup_uniform_load(threadgroup T* const ptr)\n");
         m_stringBuilder.append(m_indent, "{\n");
@@ -224,6 +223,46 @@ void FunctionDefinitionWriter::emitNecessaryHelpers()
             m_stringBuilder.append(m_indent, "threadgroup_barrier(mem_flags::mem_threadgroup);\n");
             m_stringBuilder.append(m_indent, "auto result = *ptr;\n");
             m_stringBuilder.append(m_indent, "threadgroup_barrier(mem_flags::mem_threadgroup);\n");
+            m_stringBuilder.append(m_indent, "return result;\n");
+        }
+        m_stringBuilder.append(m_indent, "}\n\n");
+    }
+
+    if (m_callGraph.ast().usesDivision()) {
+        m_stringBuilder.append(m_indent, "template<typename T, typename U, typename V = conditional_t<is_scalar_v<U>, T, U>>\n");
+        m_stringBuilder.append(m_indent, "V __wgslDiv(T lhs, U rhs)\n");
+        m_stringBuilder.append(m_indent, "{\n");
+        {
+            IndentationScope scope(m_indent);
+            m_stringBuilder.append(m_indent, "auto predicate = V(rhs) == V(0);\n");
+            m_stringBuilder.append(m_indent, "if constexpr (is_signed_v<U>)\n");
+            {
+                IndentationScope scope(m_indent);
+                m_stringBuilder.append(m_indent, "predicate = predicate || (V(lhs) == V(numeric_limits<T>::lowest()) && V(rhs) == V(-1));\n");
+            }
+            m_stringBuilder.append(m_indent, "return lhs / select(V(rhs), V(1), predicate);\n");
+        }
+        m_stringBuilder.append(m_indent, "}\n\n");
+    }
+
+
+    if (m_callGraph.ast().usesFrexp()) {
+        m_stringBuilder.append(m_indent, "template<typename T, typename U>\n");
+        m_stringBuilder.append(m_indent, "struct __frexp_result {\n");
+        {
+            IndentationScope scope(m_indent);
+            m_stringBuilder.append(m_indent, "T fract;\n");
+            m_stringBuilder.append(m_indent, "U exp;\n");
+        }
+        m_stringBuilder.append(m_indent, "};\n\n");
+
+        m_stringBuilder.append(m_indent, "template<typename T, typename U = conditional_t<is_vector_v<T>, vec<int, vec_elements<T>::value ?: 2>, int>>\n");
+        m_stringBuilder.append(m_indent, "__frexp_result<T, U> __wgslFrexp(T value)\n");
+        m_stringBuilder.append(m_indent, "{\n");
+        {
+            IndentationScope scope(m_indent);
+            m_stringBuilder.append(m_indent, "__frexp_result<T, U> result;\n");
+            m_stringBuilder.append(m_indent, "result.fract = frexp(value, result.exp);\n");
             m_stringBuilder.append(m_indent, "return result;\n");
         }
         m_stringBuilder.append(m_indent, "}\n\n");
@@ -305,8 +344,6 @@ void FunctionDefinitionWriter::visit(AST::Structure& structDecl)
     m_stringBuilder.append(m_indent, "struct ", structDecl.name(), " {\n");
     {
         IndentationScope scope(m_indent);
-        unsigned alignment = 0;
-        unsigned size = 0;
         unsigned paddingID = 0;
         bool shouldPack = structDecl.role() == AST::StructureRole::PackedResource;
         const auto& addPadding = [&](unsigned paddingSize) {
@@ -330,19 +367,6 @@ void FunctionDefinitionWriter::visit(AST::Structure& structDecl)
                 continue;
             }
 
-            unsigned fieldSize = 0;
-            unsigned explicitSize = 0;
-            unsigned fieldAlignment = 0;
-            unsigned offset = 0;
-            if (shouldPack) {
-                fieldSize = type->size();
-                fieldAlignment = member.alignment().value_or(type->alignment());
-                explicitSize = member.size().value_or(fieldSize);
-                offset = WTF::roundUpToMultipleOf(fieldAlignment, size);
-                if (offset != size)
-                    addPadding(offset - size);
-            }
-
             m_stringBuilder.append(m_indent);
             visit(member.type().inferredType());
             m_stringBuilder.append(" ", name);
@@ -352,19 +376,8 @@ void FunctionDefinitionWriter::visit(AST::Structure& structDecl)
             }
             m_stringBuilder.append(";\n");
 
-            if (shouldPack) {
-                if (explicitSize != fieldSize)
-                    addPadding(explicitSize - fieldSize);
-
-                alignment = std::max(alignment, fieldAlignment);
-                size = offset + explicitSize;
-            }
-        }
-
-        if (shouldPack) {
-            auto finalSize = WTF::roundUpToMultipleOf(alignment, size);
-            if (finalSize != size)
-                addPadding(finalSize - size);
+            if (shouldPack && member.padding())
+                addPadding(member.padding());
         }
 
         if (structDecl.role() == AST::StructureRole::VertexOutput || structDecl.role() == AST::StructureRole::FragmentOutput) {
@@ -379,6 +392,18 @@ void FunctionDefinitionWriter::visit(AST::Structure& structDecl)
                     m_stringBuilder.append(m_indent, prefix, " ", name, "(other.", name, ")\n");
                     prefix = ',';
                 }
+            }
+            m_stringBuilder.append(m_indent, "{ }\n");
+        } else if (structDecl.role() == AST::StructureRole::FragmentOutputWrapper) {
+            ASSERT(structDecl.members().size() == 1);
+            auto& member = structDecl.members()[0];
+
+            m_stringBuilder.append("\n");
+            m_stringBuilder.append(m_indent, "template<typename T>\n");
+            m_stringBuilder.append(m_indent, structDecl.name(), "(T value)\n");
+            {
+                IndentationScope scope(m_indent);
+                m_stringBuilder.append(m_indent, ": ", member.name(), "(value)\n");
             }
             m_stringBuilder.append(m_indent, "{ }\n");
         }
@@ -531,10 +556,9 @@ void FunctionDefinitionWriter::visit(AST::BuiltinAttribute& builtin)
     // Built-in attributes are only valid for parameters. If a struct member originally
     // had a built-in attribute it must have already been hoisted into a parameter, but
     // we keep the original struct so we can reconstruct it.
-    if (m_structRole.has_value() && *m_structRole != AST::StructureRole::VertexOutput)
+    if (m_structRole.has_value() && *m_structRole != AST::StructureRole::VertexOutput && *m_structRole != AST::StructureRole::FragmentOutput && *m_structRole != AST::StructureRole::FragmentOutputWrapper)
         return;
 
-    // FIXME: we should replace this with something more efficient, like a trie
     switch (builtin.builtin()) {
     case Builtin::FragDepth:
         m_stringBuilder.append("[[depth(any)]]");
@@ -593,7 +617,7 @@ void FunctionDefinitionWriter::visit(AST::StageAttribute& stage)
 
 void FunctionDefinitionWriter::visit(AST::GroupAttribute& group)
 {
-    unsigned bufferIndex = group.group().constantValue()->toInt();
+    unsigned bufferIndex = group.group().constantValue()->integerValue();
     if (m_entryPointStage.has_value() && *m_entryPointStage == ShaderStage::Vertex) {
         ASSERT(m_callGraph.ast().configuration().maxBuffersPlusVertexBuffersForVertexStage > 0);
         auto max = m_callGraph.ast().configuration().maxBuffersPlusVertexBuffersForVertexStage - 1;
@@ -604,7 +628,7 @@ void FunctionDefinitionWriter::visit(AST::GroupAttribute& group)
 
 void FunctionDefinitionWriter::visit(AST::BindingAttribute& binding)
 {
-    m_stringBuilder.append("[[id(", binding.binding().constantValue()->toInt(), ")]]");
+    m_stringBuilder.append("[[id(", binding.binding().constantValue()->integerValue(), ")]]");
 }
 
 void FunctionDefinitionWriter::visit(AST::LocationAttribute& location)
@@ -614,7 +638,7 @@ void FunctionDefinitionWriter::visit(AST::LocationAttribute& location)
         switch (role) {
         case AST::StructureRole::VertexOutput:
         case AST::StructureRole::FragmentInput:
-            m_stringBuilder.append("[[user(loc", location.location().constantValue()->toInt(), ")]]");
+            m_stringBuilder.append("[[user(loc", location.location().constantValue()->integerValue(), ")]]");
             return;
         case AST::StructureRole::BindGroup:
         case AST::StructureRole::UserDefined:
@@ -622,11 +646,13 @@ void FunctionDefinitionWriter::visit(AST::LocationAttribute& location)
         case AST::StructureRole::UserDefinedResource:
         case AST::StructureRole::PackedResource:
             return;
+        case AST::StructureRole::FragmentOutputWrapper:
+            RELEASE_ASSERT_NOT_REACHED();
         case AST::StructureRole::FragmentOutput:
-            m_stringBuilder.append("[[color(", location.location().constantValue()->toInt(), ")]]");
+            m_stringBuilder.append("[[color(", location.location().constantValue()->integerValue(), ")]]");
             return;
         case AST::StructureRole::VertexInput:
-            m_stringBuilder.append("[[attribute(", location.location().constantValue()->toInt(), ")]]");
+            m_stringBuilder.append("[[attribute(", location.location().constantValue()->integerValue(), ")]]");
             break;
         }
     }
@@ -738,8 +764,19 @@ void FunctionDefinitionWriter::visit(const Type* type)
         },
         [&](const Struct& structure) {
             m_stringBuilder.append(structure.structure.name());
-            if (m_structRole.has_value() && *m_structRole == AST::StructureRole::PackedResource)
+            if (m_structRole.has_value() && *m_structRole == AST::StructureRole::PackedResource && structure.structure.role() == AST::StructureRole::UserDefinedResource)
                 m_stringBuilder.append("::PackedType");
+        },
+        [&](const PrimitiveStruct& structure) {
+            m_stringBuilder.append(structure.name, "<");
+            bool first = true;
+            for (auto& value : structure.values) {
+                if (!first)
+                    m_stringBuilder.append(", ");
+                first = false;
+                visit(value);
+            }
+            m_stringBuilder.append(">");
         },
         [&](const Texture& texture) {
             const char* type;
@@ -960,10 +997,11 @@ static void emitTextureLoad(FunctionDefinitionWriter* writer, AST::CallExpressio
     if (!isExternalTexture) {
         writer->visit(call.arguments()[0]);
         writer->stringBuilder().append(".read");
-        bool first = true;
         writer->stringBuilder().append("(");
+        bool is1d = true;
         const char* cast = "uint";
         if (const auto* vector = std::get_if<Types::Vector>(call.arguments()[1].inferredType())) {
+            is1d = false;
             switch (vector->size) {
             case 2:
                 cast = "uint2";
@@ -975,11 +1013,17 @@ static void emitTextureLoad(FunctionDefinitionWriter* writer, AST::CallExpressio
                 RELEASE_ASSERT_NOT_REACHED();
             }
         }
-        for (unsigned i = 1; i < call.arguments().size(); ++i) {
+        bool first = true;
+        auto argumentCount = call.arguments().size();
+        for (unsigned i = 1; i < argumentCount; ++i) {
             if (first) {
                 writer->stringBuilder().append(cast, "(");
                 writer->visit(call.arguments()[i]);
                 writer->stringBuilder().append(")");
+            } else if (is1d && i == argumentCount - 1) {
+                // From the MSL spec for texture1d::read:
+                // > Since mipmaps are not supported for 1D textures, lod must be 0.
+                continue;
             } else {
                 writer->stringBuilder().append(", ");
                 writer->visit(call.arguments()[i]);
@@ -1037,6 +1081,61 @@ static void emitTextureSampleCompare(FunctionDefinitionWriter* writer, AST::Call
     visitArguments(writer, call, 1);
 }
 
+static void emitTextureSampleGrad(FunctionDefinitionWriter* writer, AST::CallExpression& call)
+{
+
+    ASSERT(call.arguments().size() > 1);
+    auto& texture = call.arguments()[0];
+    auto& textureType = std::get<Types::Texture>(*texture.inferredType());
+
+    unsigned gradientIndex;
+    const char* gradientFunction;
+    switch (textureType.kind) {
+    case Types::Texture::Kind::Texture1d:
+    case Types::Texture::Kind::Texture2d:
+    case Types::Texture::Kind::TextureMultisampled2d:
+        gradientIndex = 3;
+        gradientFunction = "gradient2d";
+        break;
+
+    case Types::Texture::Kind::Texture3d:
+        gradientIndex = 3;
+        gradientFunction = "gradient3d";
+        break;
+
+    case Types::Texture::Kind::TextureCube:
+        gradientIndex = 3;
+        gradientFunction = "gradientcube";
+        break;
+
+    case Types::Texture::Kind::Texture2dArray:
+        gradientIndex = 4;
+        gradientFunction = "gradient2d";
+        break;
+
+    case Types::Texture::Kind::TextureCubeArray:
+        gradientIndex = 4;
+        gradientFunction = "gradientcube";
+        break;
+    }
+    writer->visit(texture);
+    writer->stringBuilder().append(".sample(");
+    for (unsigned i = 1; i < gradientIndex; ++i) {
+        if (i != 1)
+            writer->stringBuilder().append(", ");
+        writer->visit(call.arguments()[i]);
+    }
+    writer->stringBuilder().append(", ", gradientFunction, "(");
+    writer->visit(call.arguments()[gradientIndex]);
+    writer->stringBuilder().append(", ");
+    writer->visit(call.arguments()[gradientIndex + 1]);
+    writer->stringBuilder().append(")");
+    for (unsigned i = gradientIndex + 2; i < call.arguments().size(); ++i) {
+        writer->stringBuilder().append(", ");
+        writer->visit(call.arguments()[i]);
+    }
+    writer->stringBuilder().append(")");
+}
 
 static void emitTextureSampleLevel(FunctionDefinitionWriter* writer, AST::CallExpression& call)
 {
@@ -1264,6 +1363,22 @@ static void emitArrayLength(FunctionDefinitionWriter* writer, AST::CallExpressio
     writer->stringBuilder().append(".size()");
 }
 
+static void emitDistance(FunctionDefinitionWriter* writer, AST::CallExpression& call)
+{
+    auto* argumentType = call.arguments()[0].inferredType();
+    if (std::holds_alternative<Types::Primitive>(*argumentType)) {
+        writer->stringBuilder().append("abs(");
+        writer->visit(call.arguments()[0]);
+        writer->stringBuilder().append(" - ");
+        writer->visit(call.arguments()[1]);
+        writer->stringBuilder().append(")");
+        return;
+    }
+    writer->visit(call.target());
+    visitArguments(writer, call);
+}
+
+
 static void emitDynamicOffset(FunctionDefinitionWriter* writer, AST::CallExpression& call)
 {
     auto* targetType = call.target().inferredType();
@@ -1338,6 +1453,7 @@ void FunctionDefinitionWriter::visit(const Type* type, AST::CallExpression& call
             { "atomicStore", emitAtomicStore },
             { "atomicSub", emitAtomicSub },
             { "atomicXor", emitAtomicXor },
+            { "distance", emitDistance },
             { "storageBarrier", emitStorageBarrier },
             { "textureDimensions", emitTextureDimensions },
             { "textureLoad", emitTextureLoad },
@@ -1345,6 +1461,8 @@ void FunctionDefinitionWriter::visit(const Type* type, AST::CallExpression& call
             { "textureSample", emitTextureSample },
             { "textureSampleBaseClampToEdge", emitTextureSampleClampToEdge },
             { "textureSampleCompare", emitTextureSampleCompare },
+            { "textureSampleCompareLevel", emitTextureSampleCompare },
+            { "textureSampleGrad", emitTextureSampleGrad },
             { "textureSampleLevel", emitTextureSampleLevel },
             { "textureStore", emitTextureStore },
             { "workgroupBarrier", emitWorkgroupBarrier },
@@ -1358,14 +1476,23 @@ void FunctionDefinitionWriter::visit(const Type* type, AST::CallExpression& call
         }
 
         static constexpr std::pair<ComparableASCIILiteral, ASCIILiteral> directMappings[] {
+            { "countLeadingZeros", "clz"_s },
+            { "countOneBits", "popcount"_s },
+            { "countTrailingZeros", "ctz"_s },
             { "dpdx", "dfdx"_s },
             { "dpdxCoarse", "dfdx"_s },
             { "dpdxFine", "dfdx"_s },
             { "dpdy", "dfdy"_s },
             { "dpdyCoarse", "dfdy"_s },
             { "dpdyFine", "dfdy"_s },
+            { "extractBits", "extract_bits"_s },
+            { "faceForward", "faceforward"_s },
+            { "frexp", "__wgslFrexp"_s },
             { "fwidthCoarse", "fwidth"_s },
             { "fwidthFine", "fwidth"_s },
+            { "insertBits", "insert_bits"_s },
+            { "inverseSqrt", "rsqrt"_s },
+            { "reverseBits", "reverse_bits"_s },
         };
         static constexpr SortedArrayMap mappedNames { directMappings };
         if (call.isConstructor()) {
@@ -1413,6 +1540,20 @@ void FunctionDefinitionWriter::visit(AST::BinaryExpression& binary)
         auto* rightType = binary.rightExpression().inferredType();
         if (satisfies(leftType, Constraints::Float) || satisfies(rightType, Constraints::Float)) {
             m_stringBuilder.append("fmod(");
+            visit(binary.leftExpression());
+            m_stringBuilder.append(", ");
+            visit(binary.rightExpression());
+            m_stringBuilder.append(")");
+            return;
+        }
+    }
+
+    if (binary.operation() == AST::BinaryOperation::Divide) {
+        auto* resultType = binary.inferredType();
+        if (auto* vectorType = std::get_if<Types::Vector>(resultType))
+            resultType = vectorType->element;
+        if (satisfies(resultType, Constraints::Integer)) {
+            m_stringBuilder.append("__wgslDiv(");
             visit(binary.leftExpression());
             m_stringBuilder.append(", ");
             visit(binary.rightExpression());
@@ -1578,6 +1719,21 @@ void FunctionDefinitionWriter::visit(AST::CallStatement& statement)
 
 void FunctionDefinitionWriter::visit(AST::CompoundAssignmentStatement& statement)
 {
+    if (statement.operation() == AST::BinaryOperation::Divide) {
+        auto* rightType = statement.rightExpression().inferredType();
+        if (auto* vectorType = std::get_if<Types::Vector>(rightType))
+            rightType = vectorType->element;
+        if (satisfies(rightType, Constraints::Integer)) {
+            visit(statement.leftExpression());
+            m_stringBuilder.append(" = __wgslDiv(");
+            visit(statement.leftExpression());
+            m_stringBuilder.append(", ");
+            visit(statement.rightExpression());
+            m_stringBuilder.append(")");
+            return;
+        }
+    }
+
     visit(statement.leftExpression());
     m_stringBuilder.append(" ", toASCIILiteral(statement.operation()), "= ");
     visit(statement.rightExpression());
@@ -1689,26 +1845,26 @@ void FunctionDefinitionWriter::visit(AST::WhileStatement& statement)
 void FunctionDefinitionWriter::visit(AST::SwitchStatement& statement)
 {
     const auto& visitClause = [&](AST::SwitchClause& clause, bool isDefault = false) {
-        bool first = true;
         for (auto& selector : clause.selectors) {
-            if (!first)
-                m_stringBuilder.append("\n");
-            first = false;
+            m_stringBuilder.append("\n");
             m_stringBuilder.append(m_indent, "case ");
             visit(selector);
             m_stringBuilder.append(":");
         }
         if (isDefault) {
-            if (!first)
-                m_stringBuilder.append("\n");
+            m_stringBuilder.append("\n");
             m_stringBuilder.append(m_indent, "default:");
         }
+        m_stringBuilder.append(" ");
         visit(clause.body);
+
+        IndentationScope scope(m_indent);
+        m_stringBuilder.append("\n", m_indent, "break;");
     };
 
     m_stringBuilder.append("switch (");
     visit(statement.value());
-    m_stringBuilder.append(") {\n");
+    m_stringBuilder.append(") {");
     for (auto& clause : statement.clauses())
         visitClause(clause);
     visitClause(statement.defaultClause(), true);
@@ -1733,16 +1889,23 @@ void FunctionDefinitionWriter::serializeConstant(const Type* type, ConstantValue
         [&](const Primitive& primitive) {
             switch (primitive.kind) {
             case Primitive::AbstractInt:
+                m_stringBuilder.append(std::get<int64_t>(value));
+                break;
             case Primitive::I32:
-                m_stringBuilder.append(value.toInt());
+                m_stringBuilder.append(std::get<int32_t>(value));
                 break;
             case Primitive::U32:
-                m_stringBuilder.append(value.toInt(), "u");
+                m_stringBuilder.append(std::get<uint32_t>(value), "u");
                 break;
-            case Primitive::AbstractFloat:
+            case Primitive::AbstractFloat: {
+                NumberToStringBuffer buffer;
+                WTF::numberToStringWithTrailingPoint(std::get<double>(value), buffer);
+                m_stringBuilder.append(&buffer[0]);
+                break;
+            }
             case Primitive::F32: {
                 NumberToStringBuffer buffer;
-                WTF::numberToStringWithTrailingPoint(value.toDouble(), buffer);
+                WTF::numberToStringWithTrailingPoint(std::get<float>(value), buffer);
                 m_stringBuilder.append(&buffer[0]);
                 break;
             }
@@ -1805,6 +1968,32 @@ void FunctionDefinitionWriter::serializeConstant(const Type* type, ConstantValue
         [&](const Struct&) {
             // Not supported yet
             RELEASE_ASSERT_NOT_REACHED();
+        },
+        [&](const PrimitiveStruct& primitiveStruct) {
+            auto& constantStruct = std::get<ConstantStruct>(value);
+            const auto& keys = Types::PrimitiveStruct::keys[primitiveStruct.kind];
+
+            m_stringBuilder.append(primitiveStruct.name, "<");
+            bool first = true;
+            for (auto& value : primitiveStruct.values) {
+                if (!first)
+                    m_stringBuilder.append(", ");
+                first = false;
+                visit(value);
+            }
+            m_stringBuilder.append("> {");
+            first = true;
+            for (auto& entry : constantStruct.fields) {
+                if (!first)
+                    m_stringBuilder.append(", ");
+                first = false;
+                m_stringBuilder.append(".", entry.key, " = ");
+                auto* key = keys.tryGet(entry.key);
+                RELEASE_ASSERT(key);
+                auto* type = primitiveStruct.values[*key];
+                serializeConstant(type, entry.value);
+            }
+            m_stringBuilder.append("}");
         },
         [&](const Pointer&) {
             RELEASE_ASSERT_NOT_REACHED();

@@ -173,6 +173,7 @@
 #include "NodeWithIndex.h"
 #include "NoiseInjectionPolicy.h"
 #include "NotificationController.h"
+#include "OpportunisticTaskScheduler.h"
 #include "OverflowEvent.h"
 #include "PageConsoleClient.h"
 #include "PageGroup.h"
@@ -783,6 +784,9 @@ Document::~Document()
 
     for (unsigned count : m_nodeListAndCollectionCounts)
         ASSERT_UNUSED(count, !count);
+
+    // End the loading signpost here in case loadEventEnd never fired.
+    WTFEndSignpost(this, NavigationAndPaintTiming);
 }
 
 void Document::removedLastRef()
@@ -1027,7 +1031,7 @@ void Document::resetActiveLinkColor()
 DOMImplementation& Document::implementation()
 {
     if (!m_implementation)
-        m_implementation = makeUnique<DOMImplementation>(*this);
+        m_implementation = makeUniqueWithoutRefCountedCheck<DOMImplementation>(*this);
     return *m_implementation;
 }
 
@@ -1451,6 +1455,10 @@ void Document::setReadyState(ReadyState readyState)
             m_eventTiming.domLoading = now;
             if (auto* eventTiming = documentEventTimingFromNavigationTiming())
                 eventTiming->domLoading = now;
+            // We do this here instead of in the Document constructor because monotonicTimestamp() is 0 when the Document constructor is running.
+            if (!url().isEmpty())
+                WTFBeginSignpostWithTimeDelta(this, NavigationAndPaintTiming, -Seconds(monotonicTimestamp()), "Loading %{public}s | isMainFrame: %d", url().string().utf8().data(), frame() && frame()->isMainFrame());
+            WTFEmitSignpost(this, NavigationAndPaintTiming, "domLoading");
         }
         break;
     case ReadyState::Complete:
@@ -1459,6 +1467,7 @@ void Document::setReadyState(ReadyState readyState)
             m_eventTiming.domComplete = now;
             if (auto* eventTiming = documentEventTimingFromNavigationTiming())
                 eventTiming->domComplete = now;
+            WTFEmitSignpost(this, NavigationAndPaintTiming, "domComplete");
         }
         FALLTHROUGH;
     case ReadyState::Interactive:
@@ -1467,6 +1476,7 @@ void Document::setReadyState(ReadyState readyState)
             m_eventTiming.domInteractive = now;
             if (auto* eventTiming = documentEventTimingFromNavigationTiming())
                 eventTiming->domInteractive = now;
+            WTFEmitSignpost(this, NavigationAndPaintTiming, "domInteractive");
         }
         break;
     }
@@ -3528,8 +3538,7 @@ void Document::enqueuePaintTimingEntryIfNeeded()
     if (!ContentfulPaintChecker::qualifiesForContentfulPaint(*view()))
         return;
 
-    if (frame() && frame()->isMainFrame())
-        WTFEmitSignpost(this, "Page Load: First Contentful Paint");
+    WTFEmitSignpost(this, NavigationAndPaintTiming, "firstContentfulPaint");
 
     protectedWindow()->performance().reportFirstContentfulPaint();
     m_didEnqueueFirstContentfulPaint = true;
@@ -3656,6 +3665,8 @@ void Document::setURL(const URL& url)
     // SecurityContext::securityOrigin may not be initialized at this time if setURL() is called in the constructor, therefore calling topOrigin() is not always safe.
     auto topOrigin = isTopDocument() && !SecurityContext::securityOrigin() ? SecurityOrigin::create(url)->data() : this->topOrigin().data();
     m_url = { WTFMove(newURL), topOrigin };
+    if (m_frame)
+        m_frame->documentURLDidChange(m_url);
 
     m_documentURI = m_url.url().string();
     m_adjustedURL = adjustedURL();
@@ -3679,6 +3690,7 @@ const URL& Document::urlForBindings() const
         if (preNavigationURL.isEmpty() || RegistrableDomain { preNavigationURL }.matches(securityOrigin().data()))
             return false;
 
+#if ENABLE(PUBLIC_SUFFIX_LIST)
         auto areSameSiteIgnoringPublicSuffix = [](StringView domain, StringView otherDomain) {
             auto domainString = topPrivatelyControlledDomain(domain.toStringWithoutCopying());
             auto otherDomainString = topPrivatelyControlledDomain(otherDomain.toStringWithoutCopying());
@@ -3695,6 +3707,7 @@ const URL& Document::urlForBindings() const
         auto currentHost = securityOrigin().data().host();
         if (areSameSiteIgnoringPublicSuffix(preNavigationURL.host(), currentHost))
             return false;
+#endif // ENABLE(PUBLIC_SUFFIX_LIST)
 
         if (!m_hasLoadedThirdPartyScript)
             return false;
@@ -3703,8 +3716,10 @@ const URL& Document::urlForBindings() const
             if (RegistrableDomain { sourceURL }.matches(securityOrigin().data()))
                 return false;
 
+#if ENABLE(PUBLIC_SUFFIX_LIST)
             if (areSameSiteIgnoringPublicSuffix(sourceURL.host(), currentHost))
                 return false;
+#endif // ENABLE(PUBLIC_SUFFIX_LIST)
         }
 
         return true;
@@ -3769,13 +3784,22 @@ void Document::setBaseURLOverride(const URL& url)
     updateBaseURL();
 }
 
+HTMLBaseElement* Document::firstBaseElement() const
+{
+    return m_firstBaseElement.get();
+}
+
 void Document::processBaseElement()
 {
     // Find the first href attribute in a base element and the first target attribute in a base element.
     AtomString href;
     AtomString target;
+    RefPtr<HTMLBaseElement> baseElement;
     auto baseDescendants = descendantsOfType<HTMLBaseElement>(*this);
     for (auto& base : baseDescendants) {
+        if (!baseElement)
+            baseElement = &base;
+
         if (href.isNull()) {
             auto& value = base.attributeWithoutSynchronization(hrefAttr);
             if (!value.isNull()) {
@@ -3798,7 +3822,7 @@ void Document::processBaseElement()
     if (!href.isNull())
         baseElementURL = completeURL(href, fallbackBaseURL());
     if (m_baseElementURL != baseElementURL) {
-        if (!contentSecurityPolicy()->allowBaseURI(baseElementURL))
+        if (!checkedContentSecurityPolicy()->allowBaseURI(baseElementURL))
             m_baseElementURL = { };
         else if (settings().shouldRestrictBaseURLSchemes() && !SecurityPolicy::isBaseURLSchemeAllowed(baseElementURL)) {
             m_baseElementURL = { };
@@ -3809,6 +3833,7 @@ void Document::processBaseElement()
     }
 
     m_baseTarget = WTFMove(target);
+    m_firstBaseElement = WTFMove(baseElement);
 }
 
 String Document::userAgent(const URL& url) const
@@ -4148,7 +4173,7 @@ void Document::processMetaHttpEquiv(const String& equiv, const AtomString& conte
 
     case HTTPHeaderName::ContentSecurityPolicy:
         if (isInDocumentHead)
-            contentSecurityPolicy()->didReceiveHeader(content, ContentSecurityPolicyHeaderType::Enforce, ContentSecurityPolicy::PolicyFrom::HTTPEquivMeta, referrer(), httpStatusCode);
+            checkedContentSecurityPolicy()->didReceiveHeader(content, ContentSecurityPolicyHeaderType::Enforce, ContentSecurityPolicy::PolicyFrom::HTTPEquivMeta, referrer(), httpStatusCode);
         break;
 
     case HTTPHeaderName::ReportingEndpoints:
@@ -4213,13 +4238,24 @@ ViewportArguments Document::viewportArguments() const
 void Document::updateViewportArguments()
 {
     CheckedPtr page = this->page();
-    if (page && frame()->isMainFrame()) {
-#if ASSERT_ENABLED
-        m_didDispatchViewportPropertiesChanged = true;
+    if (!page)
+        return;
+
+    bool isViewportDocument = [&] {
+#if ENABLE(FULLSCREEN_API)
+        if (auto* outermostFullscreenDocument = page->outermostFullscreenDocument())
+            return outermostFullscreenDocument == this;
 #endif
-        page->chrome().dispatchViewportPropertiesDidChange(viewportArguments());
-        page->chrome().didReceiveDocType(protectedFrame().releaseNonNull());
-    }
+        return frame()->isMainFrame();
+    }();
+    if (!isViewportDocument)
+        return;
+
+#if ASSERT_ENABLED
+    m_didDispatchViewportPropertiesChanged = true;
+#endif
+    page->chrome().dispatchViewportPropertiesDidChange(viewportArguments());
+    page->chrome().didReceiveDocType(protectedFrame().releaseNonNull());
 }
 
 void Document::metaElementThemeColorChanged(HTMLMetaElement& metaElement)
@@ -6603,6 +6639,7 @@ void Document::finishedParsing()
         m_eventTiming.domContentLoadedEventStart = now;
         if (auto* eventTiming = documentEventTimingFromNavigationTiming())
             eventTiming->domContentLoadedEventStart = now;
+        WTFEmitSignpost(this, NavigationAndPaintTiming, "domContentLoadedEventBegin");
     }
 
     // FIXME: Schedule a task to fire DOMContentLoaded event instead. See webkit.org/b/82931
@@ -6611,20 +6648,14 @@ void Document::finishedParsing()
     if (!isInMiddleOfInitializingIframe)
         eventLoop().performMicrotaskCheckpoint();
 
-    bool isMainFrame = m_frame && m_frame->isMainFrame();
-    if (isMainFrame)
-        WTFBeginSignpost(this, "Page Load: DOM Content Loaded");
-
     dispatchEvent(Event::create(eventNames().DOMContentLoadedEvent, Event::CanBubble::Yes, Event::IsCancelable::No));
-
-    if (isMainFrame)
-        WTFEndSignpost(this, "Page Load: DOM Content Loaded");
 
     if (!m_eventTiming.domContentLoadedEventEnd) {
         auto now = MonotonicTime::now();
         m_eventTiming.domContentLoadedEventEnd = now;
         if (auto* eventTiming = documentEventTimingFromNavigationTiming())
             eventTiming->domContentLoadedEventEnd = now;
+        WTFEmitSignpost(this, NavigationAndPaintTiming, "domContentLoadedEventEnd");
     }
 
     if (RefPtr frame = this->frame()) {
@@ -6757,7 +6788,7 @@ void Document::initSecurityContext()
 
     String overrideContentSecurityPolicy = m_frame->loader().client().overrideContentSecurityPolicy();
     if (!overrideContentSecurityPolicy.isNull())
-        contentSecurityPolicy()->didReceiveHeader(overrideContentSecurityPolicy, ContentSecurityPolicyHeaderType::Enforce, ContentSecurityPolicy::PolicyFrom::API, referrer(), documentLoader ? documentLoader->response().httpStatusCode() : 0);
+        checkedContentSecurityPolicy()->didReceiveHeader(overrideContentSecurityPolicy, ContentSecurityPolicyHeaderType::Enforce, ContentSecurityPolicy::PolicyFrom::API, referrer(), documentLoader ? documentLoader->response().httpStatusCode() : 0);
 
 #if USE(QUICK_LOOK)
     if (shouldEnforceQuickLookSandbox())
@@ -6813,8 +6844,9 @@ void Document::initSecurityContext()
         return;
     }
 
-    contentSecurityPolicy()->copyStateFrom(ownerFrame->document()->contentSecurityPolicy());
-    contentSecurityPolicy()->updateSourceSelf(ownerFrame->document()->securityOrigin());
+    CheckedPtr contentSecurityPolicy = this->contentSecurityPolicy();
+    contentSecurityPolicy->copyStateFrom(ownerFrame->protectedDocument()->checkedContentSecurityPolicy().get());
+    contentSecurityPolicy->updateSourceSelf(ownerFrame->document()->protectedSecurityOrigin());
 
     setCrossOriginEmbedderPolicy(ownerFrame->document()->crossOriginEmbedderPolicy());
 
@@ -6828,7 +6860,7 @@ void Document::initSecurityContext()
     // ongoing set of upgraded requests. When opening a new browsing context, we need to capture its
     // existing upgrade request. Nested browsing contexts are handled during DocumentWriter::begin.
     if (RefPtr openerDocument = openerFrame ? openerFrame->document() : nullptr)
-        contentSecurityPolicy()->inheritInsecureNavigationRequestsToUpgradeFromOpener(*openerDocument->contentSecurityPolicy());
+        contentSecurityPolicy->inheritInsecureNavigationRequestsToUpgradeFromOpener(*openerDocument->checkedContentSecurityPolicy());
 
     if (isSandboxed(SandboxOrigin)) {
         // If we're supposed to inherit our security origin from our owner,
@@ -6852,7 +6884,7 @@ void Document::initContentSecurityPolicy()
         return;
     RefPtr parentFrame = dynamicDowncast<LocalFrame>(m_frame->tree().parent());
     if (parentFrame)
-        contentSecurityPolicy()->copyUpgradeInsecureRequestStateFrom(*parentFrame->document()->contentSecurityPolicy());
+        checkedContentSecurityPolicy()->copyUpgradeInsecureRequestStateFrom(*parentFrame->protectedDocument()->checkedContentSecurityPolicy());
 
     // FIXME: Remove this special plugin document logic. We are stricter than the CSP 3 spec. with regards to plugins: we prefer to
     // inherit the full policy unless the plugin document is opened in a new window. The CSP 3 spec. implies that only plugin documents
@@ -6865,9 +6897,9 @@ void Document::initContentSecurityPolicy()
         return;
     setContentSecurityPolicy(makeUnique<ContentSecurityPolicy>(URL { m_url }, *this));
     if (openerFrame)
-        contentSecurityPolicy()->createPolicyForPluginDocumentFrom(*openerFrame->document()->contentSecurityPolicy());
+        checkedContentSecurityPolicy()->createPolicyForPluginDocumentFrom(*openerFrame->protectedDocument()->checkedContentSecurityPolicy());
     else
-        contentSecurityPolicy()->copyStateFrom(parentFrame->document()->contentSecurityPolicy());
+        checkedContentSecurityPolicy()->copyStateFrom(parentFrame->protectedDocument()->checkedContentSecurityPolicy().get());
 }
 
 void Document::inheritPolicyContainerFrom(const PolicyContainer& policyContainer)
@@ -7452,6 +7484,8 @@ int Document::requestIdleCallback(Ref<IdleRequestCallback>&& callback, Seconds t
 {
     if (!m_idleCallbackController)
         m_idleCallbackController = makeUnique<IdleCallbackController>(*this);
+    if (auto page = checkedPage())
+        page->opportunisticTaskScheduler().willQueueIdleCallback();
     return m_idleCallbackController->queueIdleCallback(WTFMove(callback), timeout);
 }
 
@@ -7925,7 +7959,7 @@ void Document::updateHoverActiveState(const HitTestRequest& request, Element* in
             // will need to reference this chain.
             for (CheckedPtr curr = newActiveElement->renderer(); curr; curr = curr->parent()) {
                 RefPtr element = curr->element();
-                if (!element || curr->isTextOrLineBreak())
+                if (!element || curr->isRenderTextOrLineBreak())
                     continue;
                 m_userActionElements.setInActiveChain(*element, true);
             }
@@ -8396,7 +8430,7 @@ void Document::applyQuickLookSandbox()
     static NeverDestroyed<String> quickLookCSP = makeString("default-src ", QLPreviewProtocol, ": 'unsafe-inline'; base-uri 'none'; sandbox allow-same-origin allow-scripts");
     RELEASE_ASSERT(contentSecurityPolicy());
     // The sandbox directive is only allowed if the policy is from an HTTP header.
-    contentSecurityPolicy()->didReceiveHeader(quickLookCSP, ContentSecurityPolicyHeaderType::Enforce, ContentSecurityPolicy::PolicyFrom::HTTPHeader, referrer());
+    checkedContentSecurityPolicy()->didReceiveHeader(quickLookCSP, ContentSecurityPolicyHeaderType::Enforce, ContentSecurityPolicy::PolicyFrom::HTTPHeader, referrer());
 
     disableSandboxFlags(SandboxNavigation);
 
@@ -9306,17 +9340,6 @@ void Document::detachFromFrame()
     observeFrame(nullptr);
 }
 
-void Document::frameWasDisconnectedFromOwner()
-{
-    if (!frame())
-        return;
-
-    if (RefPtr window = domWindow())
-        window->willDetachDocumentFromFrame();
-
-    detachFromFrame();
-}
-
 bool Document::hitTest(const HitTestRequest& request, HitTestResult& result)
 {
     return hitTest(request, result.hitTestLocation(), result);
@@ -9462,7 +9485,7 @@ void Document::dispatchSystemPreviewActionEvent(const SystemPreviewInfo& systemP
         return;
 
     auto event = MessageEvent::create(message, securityOrigin().toString());
-    UserGestureIndicator gestureIndicator(ProcessingUserGesture, this);
+    UserGestureIndicator gestureIndicator(IsProcessingUserGesture::Yes, this);
     element->dispatchEvent(event);
 }
 #endif

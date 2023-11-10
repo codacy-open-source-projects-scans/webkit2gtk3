@@ -27,21 +27,9 @@
 
 #if ENABLE(UI_SIDE_COMPOSITING)
 
-#include <wtf/ArgumentCoder.h>
 #include <wtf/text/WTFString.h>
 
-namespace IPC {
-class Decoder;
-class Encoder;
-}
-
 namespace WebCore {
-class ScrollingStateFrameScrollingNode;
-class ScrollingStateOverflowScrollingNode;
-class ScrollingStateOverflowScrollProxyNode;
-class ScrollingStateFixedNode;
-class ScrollingStateStickyNode;
-class ScrollingStatePositionedNode;
 class ScrollingStateTree;
 }
 
@@ -75,32 +63,5 @@ private:
 };
 
 } // namespace WebKit
-
-namespace IPC {
-template<> struct ArgumentCoder<WebCore::ScrollingStateFrameScrollingNode> {
-    static void encode(Encoder&, const WebCore::ScrollingStateFrameScrollingNode&);
-    static std::optional<Ref<WebCore::ScrollingStateFrameScrollingNode>> decode(Decoder&);
-};
-template<> struct ArgumentCoder<WebCore::ScrollingStateOverflowScrollingNode> {
-    static void encode(Encoder&, const WebCore::ScrollingStateOverflowScrollingNode&);
-    static std::optional<Ref<WebCore::ScrollingStateOverflowScrollingNode>> decode(Decoder&);
-};
-template<> struct ArgumentCoder<WebCore::ScrollingStateOverflowScrollProxyNode> {
-    static void encode(Encoder&, const WebCore::ScrollingStateOverflowScrollProxyNode&);
-    static std::optional<Ref<WebCore::ScrollingStateOverflowScrollProxyNode>> decode(Decoder&);
-};
-template<> struct ArgumentCoder<WebCore::ScrollingStateFixedNode> {
-    static void encode(Encoder&, const WebCore::ScrollingStateFixedNode&);
-    static std::optional<Ref<WebCore::ScrollingStateFixedNode>> decode(Decoder&);
-};
-template<> struct ArgumentCoder<WebCore::ScrollingStateStickyNode> {
-    static void encode(Encoder&, const WebCore::ScrollingStateStickyNode&);
-    static std::optional<Ref<WebCore::ScrollingStateStickyNode>> decode(Decoder&);
-};
-template<> struct ArgumentCoder<WebCore::ScrollingStatePositionedNode> {
-    static void encode(Encoder&, const WebCore::ScrollingStatePositionedNode&);
-    static std::optional<Ref<WebCore::ScrollingStatePositionedNode>> decode(Decoder&);
-};
-}
 
 #endif // ENABLE(UI_SIDE_COMPOSITING)

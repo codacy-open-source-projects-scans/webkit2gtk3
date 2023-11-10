@@ -133,7 +133,8 @@ WTF_EXTERN_C_END
 @protocol UITextInputTraits_Private <NSObject, UITextInputTraits>
 @property (nonatomic, readonly) UIColor *insertionPointColor;
 @property (nonatomic, readonly) UIColor *selectionBarColor;
-@property (nonatomic, readwrite) BOOL isSingleLineDocument;
+@property (nonatomic) BOOL isSingleLineDocument;
+@property (nonatomic) BOOL learnsCorrections;
 @end
 
 @interface UITextInputTraits : NSObject <UITextInputTraits, UITextInputTraits_Private, NSCopying>
@@ -242,6 +243,15 @@ typedef NS_ENUM(NSInteger, UIWKGestureType) {
 - (BOOL)textInteractionGesture:(UIWKGestureType)gesture shouldBeginAtPoint:(CGPoint)point;
 - (void)replaceDictatedText:(NSString *)oldText withText:(NSString *)newText;
 - (NSArray<NSTextAlternatives *> *)alternativesForSelectedText;
+
+- (void)applyAutocorrection:(NSString *)correction toString:(NSString *)input shouldUnderline:(BOOL)shouldUnderline withCompletionHandler:(void (^)(UIWKAutocorrectionRects *rectsForCorrection))completionHandler;
+
+#if HAVE(UI_WK_DOCUMENT_CONTEXT)
+- (void)requestDocumentContext:(UIWKDocumentRequest *)request completionHandler:(void (^)(UIWKDocumentContext *))completionHandler;
+- (void)adjustSelectionWithDelta:(NSRange)deltaRange completionHandler:(void (^)(void))completionHandler;
+- (void)selectPositionAtPoint:(CGPoint)point withContextRequest:(UIWKDocumentRequest *)request completionHandler:(void (^)(UIWKDocumentContext *))completionHandler;
+#endif
+
 @property (nonatomic, readonly) NSString *selectedText;
 
 @optional
@@ -483,10 +493,6 @@ typedef enum {
 #endif // USE(APPLE_INTERNAL_SDK)
 
 // Start of UIKit IPI
-
-@interface UITextInteractionAssistant (IPI)
-@property (nonatomic, readonly) UIView *selectionView;
-@end
 
 @interface UITextAutofillSuggestion ()
 + (instancetype)autofillSuggestionWithUsername:(NSString *)username password:(NSString *)password;

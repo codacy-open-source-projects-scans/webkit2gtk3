@@ -99,6 +99,7 @@
 #import <WebCore/HTMLElement.h>
 #import <WebCore/HTMLElementTypeHelpers.h>
 #import <WebCore/HTMLFormElement.h>
+#import <WebCore/HTMLHRElement.h>
 #import <WebCore/HTMLIFrameElement.h>
 #import <WebCore/HTMLImageElement.h>
 #import <WebCore/HTMLInputElement.h>
@@ -781,7 +782,7 @@ void WebPage::handleSyntheticClick(Node& nodeRespondingToClick, const WebCore::F
     auto& respondingDocument = nodeRespondingToClick.document();
     m_hasHandledSyntheticClick = true;
 
-    if (!respondingDocument.settings().contentChangeObserverEnabled() || respondingDocument.quirks().shouldDisableContentChangeObserver()) {
+    if (!respondingDocument.settings().contentChangeObserverEnabled()) {
         completeSyntheticClick(nodeRespondingToClick, location, modifiers, WebCore::SyntheticClickType::OneFingerTap, pointerId);
         return;
     }
@@ -915,7 +916,7 @@ void WebPage::completeSyntheticClick(Node& nodeRespondingToClick, const WebCore:
     RefPtr newFocusedFrame = CheckedRef(m_page->focusController())->focusedLocalFrame();
     RefPtr<Element> newFocusedElement = newFocusedFrame ? newFocusedFrame->document()->focusedElement() : nullptr;
 
-    if (nodeRespondingToClick.document().settings().contentChangeObserverEnabled() && !nodeRespondingToClick.document().quirks().shouldDisableContentChangeObserver()) {
+    if (nodeRespondingToClick.document().settings().contentChangeObserverEnabled()) {
         auto& document = nodeRespondingToClick.document();
         // Dispatch mouseOut to dismiss tooltip content when tapping on the control bar buttons (cc, settings).
         if (document.quirks().needsYouTubeMouseOutQuirk()) {
@@ -2434,11 +2435,10 @@ void WebPage::updateSelectionWithExtentPoint(const WebCore::IntPoint& point, boo
 }
 
 #if ENABLE(REVEAL)
-RetainPtr<RVItem> WebPage::revealItemForCurrentSelection()
+RevealItem WebPage::revealItemForCurrentSelection()
 {
     Ref frame = CheckedRef(m_page->focusController())->focusedOrMainFrame();
     auto selection = frame->selection().selection();
-    RetainPtr<RVItem> item;
     if (!selection.isNone()) {
         std::optional<SimpleRange> fullCharacterRange;
         if (selection.isRange()) {
@@ -2453,11 +2453,11 @@ RetainPtr<RVItem> WebPage::revealItemForCurrentSelection()
             if (fullCharacterRange) {
                 auto selectionRange = NSMakeRange(characterCount(*makeSimpleRange(fullCharacterRange->start, selectionStart)), characterCount(*makeSimpleRange(selectionStart, selectionEnd)));
                 String itemString = plainText(*fullCharacterRange);
-                item = adoptNS([PAL::allocRVItemInstance() initWithText:itemString selectedRange:selectionRange]);
+                return { itemString, selectionRange };
             }
         }
     }
-    return item;
+    return { };
 }
 
 void WebPage::requestRVItemInCurrentSelectedRange(CompletionHandler<void(const WebKit::RevealItem&)>&& completionHandler)
@@ -3216,7 +3216,7 @@ static bool canForceCaretForPosition(const VisiblePosition& position)
     if (!renderer)
         return false;
 
-    return renderer->isText() && node->canStartSelection();
+    return renderer->isRenderText() && node->canStartSelection();
 }
 
 static void populateCaretContext(const HitTestResult& hitTestResult, const InteractionInformationRequest& request, InteractionInformationAtPosition& info)
@@ -3333,9 +3333,6 @@ InteractionInformationAtPosition WebPage::positionInformation(const InteractionI
         HitTestRequest::Type::AllowFrameScrollbars,
         HitTestRequest::Type::AllowVisibleChildFrameContentOnly,
     };
-
-    if (request.disallowUserAgentShadowContent)
-        hitTestRequestTypes.add(HitTestRequest::Type::DisallowUserAgentShadowContent);
 
 #if ENABLE(ACCESSIBILITY_ANIMATION_CONTROL)
     if (request.gatherAnimations) {
@@ -3608,19 +3605,36 @@ std::optional<FocusedElementInformation> WebPage::focusedElementInformation()
     information.ariaLabel = focusedElement->attributeWithoutSynchronization(HTMLNames::aria_labelAttr);
 
     if (is<HTMLSelectElement>(*focusedElement)) {
+#if USE(UICONTEXTMENU)
+        static bool selectPickerUsesMenu = linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::HasUIContextMenuInteraction);
+#else
+        bool selectPickerUsesMenu = false;
+#endif
+
         HTMLSelectElement& element = downcast<HTMLSelectElement>(*focusedElement);
         information.elementType = InputType::Select;
 
+        RefPtr<ContainerNode> parentGroup;
         int parentGroupID = 0;
-        // The parent group ID indicates the group the option belongs to and is 0 for group elements.
-        // If there are option elements in between groups, they are given it's own group identifier.
-        // If a select does not have groups, all the option elements have group ID 0.
         for (auto& item : element.listItems()) {
-            if (auto* optionElement = dynamicDowncast<HTMLOptionElement>(item.get()))
+            if (auto* optionElement = dynamicDowncast<HTMLOptionElement>(item.get())) {
+                if (parentGroup && optionElement->parentNode() != parentGroup) {
+                    parentGroupID++;
+                    parentGroup = nullptr;
+                    information.selectOptions.append(OptionItem(emptyString(), true, false, false, parentGroupID));
+                }
+
                 information.selectOptions.append(OptionItem(optionElement->displayLabel(), false, optionElement->selected(), optionElement->hasAttributeWithoutSynchronization(WebCore::HTMLNames::disabledAttr), parentGroupID));
-            else if (auto* optGroupElement = dynamicDowncast<HTMLOptGroupElement>(item.get())) {
+            } else if (auto* optGroupElement = dynamicDowncast<HTMLOptGroupElement>(item.get())) {
+                if (selectPickerUsesMenu)
+                    parentGroup = optGroupElement;
+
                 parentGroupID++;
-                information.selectOptions.append(OptionItem(optGroupElement->groupLabelText(), true, false, optGroupElement->hasAttributeWithoutSynchronization(WebCore::HTMLNames::disabledAttr), 0));
+                information.selectOptions.append(OptionItem(optGroupElement->groupLabelText(), true, false, optGroupElement->hasAttributeWithoutSynchronization(WebCore::HTMLNames::disabledAttr), parentGroupID));
+            } else if (selectPickerUsesMenu && is<HTMLHRElement>(item.get())) {
+                parentGroupID++;
+                parentGroup = nullptr;
+                information.selectOptions.append(OptionItem(emptyString(), true, false, false, parentGroupID));
             }
         }
         information.selectedIndex = element.selectedIndex();
@@ -3650,6 +3664,7 @@ std::optional<FocusedElementInformation> WebPage::focusedElementInformation()
         information.autocapitalizeType = element.autocapitalizeType();
         information.isAutocorrect = element.shouldAutocorrect();
         information.placeholder = element.attributeWithoutSynchronization(HTMLNames::placeholderAttr);
+        information.hasEverBeenPasswordField = element.hasEverBeenPasswordField();
         if (element.isPasswordField())
             information.elementType = InputType::Password;
         else if (element.isSearchField())
@@ -5088,7 +5103,7 @@ void WebPage::focusTextInputContextAndPlaceCaret(const ElementContext& elementCo
 
     // FIXME: Do not focus an element if it moved or the caret point is outside its bounds
     // because we only want to do so if the caret can be placed.
-    UserGestureIndicator gestureIndicator { ProcessingUserGesture, &target->document() };
+    UserGestureIndicator gestureIndicator { IsProcessingUserGesture::Yes, &target->document() };
     SetForScope userIsInteractingChange { m_userIsInteracting, true };
     CheckedRef(m_page->focusController())->setFocusedElement(target.get(), targetFrame);
 

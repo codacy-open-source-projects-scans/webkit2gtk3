@@ -6361,7 +6361,6 @@
             ],
             "codegen-properties": {
                 "custom": "All",
-                "settings-flag": "aspectRatioEnabled",
                 "parser-function": "consumeAspectRatio",
                 "parser-grammar-unused": "auto || <ratio>",
                 "parser-grammar-unused-reason": "Needs support for '||' groups."
@@ -8319,7 +8318,7 @@
         "text-decoration-thickness": {
             "codegen-properties": {
                 "converter": "TextDecorationThickness",
-                "parser-grammar": "auto | from-font | <length>",
+                "parser-grammar": "auto | from-font | <length-percentage>",
                 "parser-grammar-comment": "The current specification has a <length-percentage>, not just <length>"
             },
             "specification": {

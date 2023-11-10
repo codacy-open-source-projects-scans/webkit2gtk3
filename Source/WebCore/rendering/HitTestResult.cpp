@@ -183,6 +183,14 @@ LocalFrame* HitTestResult::innerNodeFrame() const
     return 0;
 }
 
+LocalFrame* HitTestResult::frame() const
+{
+    if (m_innerNonSharedNode)
+        return m_innerNonSharedNode->document().frame();
+
+    return nullptr;
+}
+
 LocalFrame* HitTestResult::targetFrame() const
 {
     if (!m_innerURLElement)
@@ -460,7 +468,7 @@ HTMLMediaElement* HitTestResult::mediaElement() const
     if (!m_innerNonSharedNode)
         return nullptr;
 
-    if (!(m_innerNonSharedNode->renderer() && m_innerNonSharedNode->renderer()->isMedia()))
+    if (!(m_innerNonSharedNode->renderer() && m_innerNonSharedNode->renderer()->isRenderMedia()))
         return nullptr;
 
     if (is<HTMLMediaElement>(*m_innerNonSharedNode))
@@ -516,7 +524,7 @@ void HitTestResult::toggleMediaFullscreenState() const
 #if ENABLE(VIDEO)
     if (HTMLMediaElement* mediaElement = this->mediaElement()) {
         if (mediaElement->isVideo() && mediaElement->supportsFullscreen(HTMLMediaElementEnums::VideoFullscreenModeStandard)) {
-            UserGestureIndicator indicator(ProcessingUserGesture, &mediaElement->document());
+            UserGestureIndicator indicator(IsProcessingUserGesture::Yes, &mediaElement->document());
             mediaElement->toggleStandardFullscreenState();
         }
     }
@@ -530,7 +538,7 @@ void HitTestResult::enterFullscreenForVideo() const
     if (is<HTMLVideoElement>(mediaElement)) {
         HTMLVideoElement& videoElement = downcast<HTMLVideoElement>(*mediaElement);
         if (!videoElement.isFullscreen() && mediaElement->supportsFullscreen(HTMLMediaElementEnums::VideoFullscreenModeStandard)) {
-            UserGestureIndicator indicator(ProcessingUserGesture, &mediaElement->document());
+            UserGestureIndicator indicator(IsProcessingUserGesture::Yes, &mediaElement->document());
             videoElement.webkitEnterFullscreen();
         }
     }
@@ -855,7 +863,7 @@ void HitTestResult::toggleEnhancedFullscreenForVideo() const
         return;
 
     HTMLVideoElement& videoElement = downcast<HTMLVideoElement>(*mediaElement);
-    UserGestureIndicator indicator(ProcessingUserGesture, &mediaElement->document());
+    UserGestureIndicator indicator(IsProcessingUserGesture::Yes, &mediaElement->document());
     if (videoElement.webkitPresentationMode() == HTMLVideoElement::VideoPresentationMode::PictureInPicture)
         videoElement.webkitSetPresentationMode(HTMLVideoElement::VideoPresentationMode::Inline);
     else

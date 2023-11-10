@@ -577,7 +577,6 @@ public:
     int computeLineHeight(const Length&) const;
 
     WhiteSpace whiteSpace() const;
-    static constexpr bool autoWrap(WhiteSpace);
     inline bool autoWrap() const;
     static constexpr bool preserveNewline(WhiteSpace);
     inline bool preserveNewline() const;
@@ -1097,6 +1096,11 @@ public:
     inline void setMinHeight(Length&&);
     inline void setMaxHeight(Length&&);
 
+    inline void setLogicalMinWidth(Length&&);
+    inline void setLogicalMaxWidth(Length&&);
+    inline void setLogicalMinHeight(Length&&);
+    inline void setLogicalMaxHeight(Length&&);
+
     inline void resetBorder();
     inline void resetBorderExceptRadius();
     inline void resetBorderTop();
@@ -1302,6 +1306,8 @@ public:
     inline void setMarginRight(Length&&);
     void setMarginStart(Length&&);
     void setMarginEnd(Length&&);
+    void setMarginBefore(Length&&);
+    void setMarginAfter(Length&&);
 
     inline void resetPadding();
     inline void setPaddingBox(LengthBox&&);
@@ -1800,7 +1806,6 @@ public:
     static inline ListStyleType initialListStyleType();
     static constexpr OptionSet<TextTransform> initialTextTransform();
     static constexpr Visibility initialVisibility();
-    static constexpr WhiteSpace initialWhiteSpace();
     static constexpr WhiteSpaceCollapse initialWhiteSpaceCollapse();
     static float initialHorizontalBorderSpacing() { return 0; }
     static float initialVerticalBorderSpacing() { return 0; }
@@ -1839,7 +1844,7 @@ public:
     static constexpr TextDecorationSkipInk initialTextDecorationSkipInk();
     static constexpr TextUnderlinePosition initialTextUnderlinePosition();
     static constexpr TextUnderlineOffset initialTextUnderlineOffset();
-    static constexpr TextDecorationThickness initialTextDecorationThickness();
+    static inline TextDecorationThickness initialTextDecorationThickness();
     static float initialZoom() { return 1.0f; }
     static constexpr TextZoom initialTextZoom();
     static float initialOutlineOffset() { return 0; }
@@ -2137,6 +2142,8 @@ public:
     static constexpr BlockStepInsert initialBlockStepInsert();
     inline BlockStepInsert blockStepInsert() const;
     inline void setBlockStepInsert(BlockStepInsert);
+    bool scrollAnchoringSuppressionStyleDidChange(const RenderStyle*) const;
+    bool outOfFlowPositionStyleDidChange(const RenderStyle*) const;
 
 private:
     struct NonInheritedFlags {

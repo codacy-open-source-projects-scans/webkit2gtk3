@@ -35,6 +35,7 @@
 #include "DataReference.h"
 #include "Download.h"
 #include "DownloadProxyMessages.h"
+#include "ITPThirdPartyData.h"
 #if ENABLE(LEGACY_CUSTOM_PROTOCOL_MANAGER)
 #include "LegacyCustomProtocolManager.h"
 #endif
@@ -388,7 +389,7 @@ void NetworkProcess::createNetworkConnectionToWebProcess(ProcessIdentifier ident
     }
 
     auto newConnection = NetworkConnectionToWebProcess::create(*this, identifier, sessionID, WTFMove(parameters), connectionIdentifiers->server);
-    auto& connection = newConnection.get();
+    Ref connection = newConnection;
 
     ASSERT(!m_webProcessConnections.contains(identifier));
     m_webProcessConnections.add(identifier, WTFMove(newConnection));
@@ -396,10 +397,10 @@ void NetworkProcess::createNetworkConnectionToWebProcess(ProcessIdentifier ident
     auto* storage = storageSession(sessionID);
     completionHandler(WTFMove(connectionIdentifiers->client), storage ? storage->cookieAcceptPolicy() : HTTPCookieAcceptPolicy::Never);
 
-    connection.setOnLineState(NetworkStateNotifier::singleton().onLine());
+    connection->setOnLineState(NetworkStateNotifier::singleton().onLine());
 
     if (auto* session = networkSession(sessionID))
-        session->storageManager().startReceivingMessageFromConnection(Ref { connection.connection() });
+        session->storageManager().startReceivingMessageFromConnection(Ref { connection->connection() });
 }
 
 void NetworkProcess::addAllowedFirstPartyForCookies(WebCore::ProcessIdentifier processIdentifier, WebCore::RegistrableDomain&& firstPartyForCookies, LoadedWebArchive loadedWebArchive, CompletionHandler<void()>&& completionHandler)
@@ -780,7 +781,7 @@ void NetworkProcess::scheduleClearInMemoryAndPersistent(PAL::SessionID sessionID
     }
 }
 
-void NetworkProcess::getResourceLoadStatisticsDataSummary(PAL::SessionID sessionID, CompletionHandler<void(Vector<WebResourceLoadStatisticsStore::ThirdPartyData>&&)>&& completionHandler)
+void NetworkProcess::getResourceLoadStatisticsDataSummary(PAL::SessionID sessionID, CompletionHandler<void(Vector<ITPThirdPartyData>&&)>&& completionHandler)
 {
     if (auto* session = networkSession(sessionID)) {
         if (auto* resourceLoadStatistics = session->resourceLoadStatistics())
@@ -2178,13 +2179,6 @@ void NetworkProcess::setCacheModel(CacheModel cacheModel)
         if (auto* cache = session.cache())
             cache->updateCapacity();
     });
-}
-
-void NetworkProcess::setAllowsAnySSLCertificateForWebSocket(bool allows, CompletionHandler<void()>&& completionHandler)
-{
-    // FIXME: Stop using this when HAVE(NSURLSESSION_WEBSOCKET) is true.
-    DeprecatedGlobalSettings::setAllowsAnySSLCertificate(allows);
-    completionHandler();
 }
 
 void NetworkProcess::allowTLSCertificateChainForLocalPCMTesting(PAL::SessionID sessionID, const WebCore::CertificateInfo& certificateInfo)

@@ -347,12 +347,11 @@ bool GraphicsContextGLTextureMapperANGLE::reshapeDrawingBuffer()
 
 void GraphicsContextGLTextureMapperANGLE::prepareForDisplay()
 {
-    if (m_layerComposited || !makeContextCurrent())
+    if (!makeContextCurrent())
         return;
 
     prepareTexture();
     swapCompositorTexture();
-    markLayerComposited();
 }
 
 } // namespace WebCore

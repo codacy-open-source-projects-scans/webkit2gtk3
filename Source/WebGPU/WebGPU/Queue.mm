@@ -40,6 +40,7 @@ Queue::Queue(id<MTLCommandQueue> commandQueue, Device& device)
     : m_commandQueue(commandQueue)
     , m_device(device)
 {
+    m_pendingCommandBuffers = [NSMutableSet set];
 }
 
 Queue::Queue(Device& device)
@@ -120,7 +121,7 @@ void Queue::onSubmittedWorkScheduled(CompletionHandler<void()>&& completionHandl
     callbacks.append(WTFMove(completionHandler));
 }
 
-bool Queue::validateSubmit(const Vector<std::reference_wrapper<const CommandBuffer>>& commands) const
+bool Queue::validateSubmit(const Vector<std::reference_wrapper<CommandBuffer>>& commands) const
 {
     for (auto command : commands) {
         if (!isValidToUseWith(command.get(), *this))
@@ -139,6 +140,9 @@ bool Queue::validateSubmit(const Vector<std::reference_wrapper<const CommandBuff
 
 void Queue::commitMTLCommandBuffer(id<MTLCommandBuffer> commandBuffer)
 {
+    if (!commandBuffer || commandBuffer.status >= MTLCommandBufferStatusCommitted)
+        return;
+
     ASSERT(commandBuffer.commandQueue == m_commandQueue);
     [commandBuffer addScheduledHandler:[protectedThis = Ref { *this }](id<MTLCommandBuffer>) {
         protectedThis->scheduleWork(CompletionHandler<void(void)>([protectedThis = protectedThis.copyRef()]() {
@@ -147,19 +151,21 @@ void Queue::commitMTLCommandBuffer(id<MTLCommandBuffer> commandBuffer)
                 callback();
         }, CompletionHandlerCallThread::AnyThread));
     }];
-    [commandBuffer addCompletedHandler:[protectedThis = Ref { *this }](id<MTLCommandBuffer>) {
-        protectedThis->scheduleWork(CompletionHandler<void(void)>([protectedThis = protectedThis.copyRef()]() {
+    [commandBuffer addCompletedHandler:[protectedThis = Ref { *this }](id<MTLCommandBuffer> commandBuffer) {
+        protectedThis->scheduleWork(CompletionHandler<void(void)>([commandBuffer, protectedThis = protectedThis.copyRef()]() {
             ++(protectedThis->m_completedCommandBufferCount);
+            [protectedThis->m_pendingCommandBuffers removeObject:commandBuffer];
             for (auto& callback : protectedThis->m_onSubmittedWorkDoneCallbacks.take(protectedThis->m_completedCommandBufferCount))
                 callback(WGPUQueueWorkDoneStatus_Success);
         }, CompletionHandlerCallThread::AnyThread));
     }];
 
+    [m_pendingCommandBuffers addObject:commandBuffer];
     [commandBuffer commit];
     ++m_submittedCommandBufferCount;
 }
 
-void Queue::submit(Vector<std::reference_wrapper<const CommandBuffer>>&& commands)
+void Queue::submit(Vector<std::reference_wrapper<CommandBuffer>>&& commands)
 {
     // https://gpuweb.github.io/gpuweb/#dom-gpuqueue-submit
 
@@ -170,8 +176,20 @@ void Queue::submit(Vector<std::reference_wrapper<const CommandBuffer>>&& command
 
     finalizeBlitCommandEncoder();
 
-    for (auto commandBuffer : commands)
-        commitMTLCommandBuffer(commandBuffer.get().commandBuffer());
+    NSMutableArray<id<MTLCommandBuffer>> *commandBuffersToSubmit = [NSMutableArray arrayWithCapacity:commands.size()];
+    for (auto commandBuffer : commands) {
+        auto& command = commandBuffer.get();
+        if (id<MTLCommandBuffer> mtlBuffer = command.commandBuffer())
+            [commandBuffersToSubmit addObject:mtlBuffer];
+        else {
+            m_device.generateAValidationError("Command buffer appears twice."_s);
+            return;
+        }
+        command.makeInvalid();
+    }
+
+    for (id<MTLCommandBuffer> commandBuffer in commandBuffersToSubmit)
+        commitMTLCommandBuffer(commandBuffer);
 
     if ([MTLCaptureManager sharedCaptureManager].isCapturing)
         [[MTLCaptureManager sharedCaptureManager] stopCapture];
@@ -205,6 +223,13 @@ bool Queue::validateWriteBuffer(const Buffer& buffer, uint64_t bufferOffset, siz
         return false;
 
     return true;
+}
+
+void Queue::waitUntilIdle()
+{
+    finalizeBlitCommandEncoder();
+    for (id<MTLCommandBuffer> commandBuffer in m_pendingCommandBuffers)
+        [commandBuffer waitUntilCompleted];
 }
 
 void Queue::writeBuffer(const Buffer& buffer, uint64_t bufferOffset, const void* data, size_t size)
@@ -246,6 +271,11 @@ void Queue::writeBuffer(const Buffer& buffer, uint64_t bufferOffset, const void*
         }
     }
 
+    writeBuffer(buffer.buffer(), bufferOffset, data, size);
+}
+
+void Queue::writeBuffer(id<MTLBuffer> buffer, uint64_t bufferOffset, const void* data, size_t size)
+{
     ensureBlitCommandEncoder();
     // FIXME(PERFORMANCE): Suballocate, so the common case doesn't need to hit the kernel.
     // FIXME(PERFORMANCE): Should this temporary buffer really be shared?
@@ -258,7 +288,7 @@ void Queue::writeBuffer(const Buffer& buffer, uint64_t bufferOffset, const void*
     [m_blitCommandEncoder
         copyFromBuffer:temporaryBuffer
         sourceOffset:0
-        toBuffer:buffer.buffer()
+        toBuffer:buffer
         destinationOffset:static_cast<NSUInteger>(bufferOffset)
         size:static_cast<NSUInteger>(size)];
 }
@@ -606,7 +636,7 @@ void wgpuQueueOnSubmittedWorkDoneWithBlock(WGPUQueue queue, WGPUQueueWorkDoneBlo
 
 void wgpuQueueSubmit(WGPUQueue queue, size_t commandCount, const WGPUCommandBuffer* commands)
 {
-    Vector<std::reference_wrapper<const WebGPU::CommandBuffer>> commandsToForward;
+    Vector<std::reference_wrapper<WebGPU::CommandBuffer>> commandsToForward;
     for (uint32_t i = 0; i < commandCount; ++i)
         commandsToForward.append(WebGPU::fromAPI(commands[i]));
     WebGPU::fromAPI(queue).submit(WTFMove(commandsToForward));

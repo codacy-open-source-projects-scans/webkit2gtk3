@@ -345,6 +345,7 @@ set(WebKit_MESSAGES_IN_FILES
 
 set(WebKit_SERIALIZATION_IN_FILES
     GPUProcess/GPUProcessCreationParameters.serialization.in
+    GPUProcess/GPUProcessPreferences.serialization.in
     GPUProcess/GPUProcessSessionParameters.serialization.in
 
     GPUProcess/graphics/PathSegment.serialization.in
@@ -363,6 +364,14 @@ set(WebKit_SERIALIZATION_IN_FILES
 
     NetworkProcess/NetworkProcessCreationParameters.serialization.in
     NetworkProcess/NetworkResourceLoadParameters.serialization.in
+
+    NetworkProcess/Classifier/ITPThirdPartyData.serialization.in
+    NetworkProcess/Classifier/ITPThirdPartyDataForSpecificFirstParty.serialization.in
+    NetworkProcess/Classifier/StorageAccessStatus.serialization.in
+
+    NetworkProcess/PrivateClickMeasurement/PrivateClickMeasurementManagerInterface.serialization.in
+
+    NetworkProcess/storage/FileSystemStorageError.serialization.in
 
     Platform/IPC/StreamServerConnection.serialization.in
 
@@ -395,12 +404,14 @@ set(WebKit_SERIALIZATION_IN_FILES
     Shared/Pasteboard.serialization.in
     Shared/PlatformPopupMenuData.serialization.in
     Shared/PolicyDecision.serialization.in
+    Shared/PrintInfo.serialization.in
     Shared/RTCNetwork.serialization.in
     Shared/RemoteWorkerInitializationData.serialization.in
     Shared/RemoteWorkerType.serialization.in
     Shared/ResourceLoadInfo.serialization.in
     Shared/ResourceLoadStatisticsParameters.serialization.in
     Shared/SameDocumentNavigationType.serialization.in
+    Shared/ScrollingAccelerationCurve.serialization.in
     Shared/SessionState.serialization.in
     Shared/ShareableBitmap.serialization.in
     Shared/ShareableResource.serialization.in
@@ -412,6 +423,7 @@ set(WebKit_SERIALIZATION_IN_FILES
     Shared/WTFArgumentCoders.serialization.in
     Shared/WebBackForwardListCounts.serialization.in
     Shared/WebCoreArgumentCoders.serialization.in
+    Shared/WebCompiledContentRuleListData.serialization.in
     Shared/WebEvent.serialization.in
     Shared/WebFoundTextRange.serialization.in
     Shared/WebHitTestResultData.serialization.in

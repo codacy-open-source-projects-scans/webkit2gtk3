@@ -180,12 +180,12 @@ GPUProcessProxy::GPUProcessProxy()
 
     platformInitializeGPUProcessParameters(parameters);
 
-    // Initialize the GPU process.
-    send(Messages::GPUProcess::InitializeGPUProcess(parameters), 0);
-
 #if PLATFORM(COCOA)
     m_hasSentGPUToolsSandboxExtensions = !parameters.gpuToolsExtensionHandles.isEmpty();
 #endif
+
+    // Initialize the GPU process.
+    send(Messages::GPUProcess::InitializeGPUProcess(WTFMove(parameters)), 0);
 
 #if HAVE(AUDIO_COMPONENT_SERVER_REGISTRATIONS) && ENABLE(AUDIO_COMPONENT_SERVER_REGISTRATIONS_IN_GPU_PROCESS)
     auto registrations = fetchAudioComponentServerRegistrations();
@@ -368,7 +368,7 @@ void GPUProcessProxy::updateSandboxAccess(bool allowAudioCapture, bool allowVide
 #endif // PLATFORM(IOS) || PLATFORM(VISION)
 
     if (!extensions.isEmpty())
-        send(Messages::GPUProcess::UpdateSandboxAccess { extensions }, 0);
+        send(Messages::GPUProcess::UpdateSandboxAccess { WTFMove(extensions) }, 0);
 #endif // PLATFORM(COCOA)
 }
 
@@ -542,12 +542,7 @@ void GPUProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Connect
     }
     
 #if USE(RUNNINGBOARD)
-#if USE(EXTENSIONKIT_ASSERTIONS)
-    m_throttler.didConnectToProcess(extensionProcess());
-#else
-    if (xpc_connection_t connection = this->connection()->xpcConnection())
-        m_throttler.didConnectToProcess(xpc_connection_get_pid(connection));
-#endif
+    m_throttler.didConnectToProcess(*this);
 #endif
 
 #if PLATFORM(COCOA)
@@ -709,7 +704,7 @@ void GPUProcessProxy::updatePreferences(WebProcessProxy& webProcess)
     // For the time being, each of the below features are enabled in the GPU Process if it is enabled by at least one web page's preferences.
     // In practice, all web pages' preferences should agree on these feature flag values.
     GPUProcessPreferences gpuPreferences;
-    for (auto page : webProcess.pages()) {
+    for (Ref page : webProcess.pages()) {
         Ref webPreferences = page->preferences();
         if (!webPreferences->useGPUProcessForMediaEnabled())
             continue;

@@ -59,7 +59,6 @@ InternalSettings::Backup::Backup(Settings& settings)
     , m_forcedPrefersContrastAccessibilityValue(settings.forcedPrefersContrastAccessibilityValue())
     , m_forcedPrefersReducedMotionAccessibilityValue(settings.forcedPrefersReducedMotionAccessibilityValue())
     , m_fontLoadTimingOverride(settings.fontLoadTimingOverride())
-    , m_fetchAPIKeepAliveAPIEnabled(DeprecatedGlobalSettings::fetchAPIKeepAliveEnabled())
     , m_customPasteboardDataEnabled(DeprecatedGlobalSettings::customPasteboardDataEnabled())
     , m_originalMockScrollbarsEnabled(DeprecatedGlobalSettings::mockScrollbarsEnabled())
 #if USE(AUDIO_SESSION)
@@ -113,7 +112,6 @@ void InternalSettings::Backup::restoreTo(Settings& settings)
     settings.setForcedPrefersReducedMotionAccessibilityValue(m_forcedPrefersReducedMotionAccessibilityValue);
     settings.setFontLoadTimingOverride(m_fontLoadTimingOverride);
 
-    DeprecatedGlobalSettings::setFetchAPIKeepAliveEnabled(m_fetchAPIKeepAliveAPIEnabled);
     DeprecatedGlobalSettings::setCustomPasteboardDataEnabled(m_customPasteboardDataEnabled);
 
 #if USE(AUDIO_SESSION)
@@ -407,14 +405,6 @@ void InternalSettings::setForcedSupportsHighDynamicRangeValue(InternalSettings::
     settings().setForcedSupportsHighDynamicRangeValue(value);
 }
 
-ExceptionOr<void> InternalSettings::setFetchAPIKeepAliveEnabled(bool enabled)
-{
-    if (!m_page)
-        return Exception { InvalidAccessError };
-    DeprecatedGlobalSettings::setFetchAPIKeepAliveEnabled(enabled);
-    return { };
-}
-
 bool InternalSettings::vp9DecoderEnabled() const
 {
 #if ENABLE(VP9)
@@ -548,6 +538,8 @@ ExceptionOr<void>  InternalSettings::setShouldDeactivateAudioSession(bool should
         return Exception { InvalidAccessError };
 #if ENABLE(VIDEO) || ENABLE(WEB_AUDIO)
     PlatformMediaSessionManager::setShouldDeactivateAudioSession(should);
+#else
+    UNUSED_PARAM(should);
 #endif
     return { };
 }

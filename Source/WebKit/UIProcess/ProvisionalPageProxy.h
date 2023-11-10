@@ -86,6 +86,8 @@ public:
 
     WebPageProxy& page() { return m_page.get(); }
     const WebPageProxy& page() const { return m_page.get(); }
+    Ref<WebPageProxy> protectedPage() const;
+
     WebCore::PageIdentifier webPageID() const { return m_webPageID; }
     WebFrameProxy* mainFrame() const { return m_mainFrame.get(); }
     WebProcessProxy& process() { return m_process.get(); }
@@ -123,8 +125,9 @@ public:
 
     void processDidTerminate();
 
+    bool needsCookieAccessAddedInNetworkProcess() const { return m_needsCookieAccessAddedInNetworkProcess; }
+
 private:
-    Ref<WebPageProxy> protectedPage() const;
     RefPtr<WebFrameProxy> protectedMainFrame() const;
 
     // IPC::MessageReceiver
@@ -188,6 +191,7 @@ private:
     ProcessSwapRequestedByClient m_processSwapRequestedByClient;
     bool m_wasCommitted { false };
     bool m_isProcessSwappingOnNavigationResponse { false };
+    bool m_needsCookieAccessAddedInNetworkProcess { false };
     URL m_provisionalLoadURL;
     WebPageProxyMessageReceiverRegistration m_messageReceiverRegistration;
 

@@ -118,8 +118,10 @@
 #import <UIKit/_UITextDragCaretView.h>
 #endif
 
-#if HAVE(UI_ASYNC_TEXT_INPUT)
+#if HAVE(UI_ASYNC_TEXT_INTERACTION)
 #import <UIKit/UIAsyncTextInput.h>
+#import <UIKit/UIAsyncTextInputClient.h>
+#import <UIKit/UIAsyncTextInteraction.h>
 #import <UIKit/UIKeyEventContext.h>
 #endif
 
@@ -505,7 +507,8 @@ typedef enum {
 @property (nonatomic, retain) UIColor *insertionPointColor;
 @property (nonatomic, retain) UIColor *selectionBarColor;
 @property (nonatomic, retain) UIColor *selectionHighlightColor;
-@property (nonatomic, readwrite) BOOL isSingleLineDocument;
+@property (nonatomic) BOOL isSingleLineDocument;
+@property (nonatomic) BOOL learnsCorrections;
 @end
 
 @protocol UITextInputDelegatePrivate
@@ -542,6 +545,7 @@ typedef enum {
 @end
 
 @interface UITextInteractionAssistant : NSObject
+- (instancetype)initWithView:(UIResponder <UITextInput> *)view;
 @end
 
 @interface UITextInteractionAssistant ()
@@ -713,11 +717,6 @@ typedef NS_ENUM(NSInteger, UIWKGestureType) {
 @class UIWKDocumentContext;
 
 @protocol UIWKInteractionViewProtocol
-#if HAVE(UI_WK_DOCUMENT_CONTEXT)
-- (void)adjustSelectionWithDelta:(NSRange)deltaRange completionHandler:(void (^)(void))completionHandler;
-- (void)requestDocumentContext:(UIWKDocumentRequest *)request completionHandler:(void (^)(UIWKDocumentContext *))completionHandler;
-- (void)selectPositionAtPoint:(CGPoint)point withContextRequest:(UIWKDocumentRequest *)request completionHandler:(void (^)(UIWKDocumentContext *))completionHandler;
-#endif
 
 - (void)changeSelectionWithGestureAt:(CGPoint)point withGesture:(UIWKGestureType)gestureType withState:(UIGestureRecognizerState)state;
 - (void)changeSelectionWithTouchAt:(CGPoint)point withSelectionTouch:(UIWKSelectionTouch)touch baseIsStart:(BOOL)baseIsStart withFlags:(UIWKSelectionFlags)flags;
@@ -728,8 +727,6 @@ typedef NS_ENUM(NSInteger, UIWKGestureType) {
 - (void)requestAutocorrectionContextWithCompletionHandler:(void (^)(UIWKAutocorrectionContext *autocorrectionContext))completionHandler;
 
 - (void)requestAutocorrectionRectsForString:(NSString *)input withCompletionHandler:(void (^)(UIWKAutocorrectionRects *rectsForInput))completionHandler;
-
-- (void)applyAutocorrection:(NSString *)correction toString:(NSString *)input withCompletionHandler:(void (^)(UIWKAutocorrectionRects *rectsForCorrection))completionHandler;
 
 - (NSString *)markedText;
 - (BOOL)hasMarkedText;
@@ -981,24 +978,6 @@ typedef NS_OPTIONS(NSInteger, UIWKDocumentRequestFlags) {
 @property (nonatomic, strong) UIImage *image;
 @end
 
-typedef NS_ENUM(NSUInteger, _UIContextMenuLayout) {
-    _UIContextMenuLayoutCompactMenu = 3,
-};
-
-@interface _UIContextMenuStyle : NSObject <NSCopying>
-@property (nonatomic) _UIContextMenuLayout preferredLayout;
-@property (nonatomic) UIEdgeInsets preferredEdgeInsets;
-+ (instancetype)defaultStyle;
-@end
-
-#if USE(UICONTEXTMENU)
-
-@interface UIContextMenuInteraction ()
-- (void)_presentMenuAtLocation:(CGPoint)location;
-@end
-
-#endif // USE(UICONTEXTMENU)
-
 #if HAVE(LINK_PREVIEW) && USE(UICONTEXTMENU)
 @interface _UIClickInteraction : NSObject <UIInteraction>
 @end
@@ -1070,6 +1049,7 @@ typedef NS_ENUM(NSUInteger, _UIScrollDeviceCategory) {
 @interface UITextInteractionAssistant (IPI)
 - (void)willStartScrollingOrZooming;
 - (void)didEndScrollingOrZooming;
+- (void)selectWord;
 @end
 
 #if USE(UICONTEXTMENU)
@@ -1171,6 +1151,7 @@ typedef NS_ENUM(NSUInteger, _UIScrollDeviceCategory) {
 - (void)pasteAndMatchStyle:(id)sender;
 - (void)makeTextWritingDirectionNatural:(id)sender;
 @property (nonatomic, setter=_setSuppressSoftwareKeyboard:) BOOL _suppressSoftwareKeyboard;
+@property (nonatomic, readonly) UITextInteractionAssistant *interactionAssistant;
 @end
 
 @interface _UINavigationInteractiveTransitionBase ()
@@ -1196,6 +1177,10 @@ typedef NS_ENUM(NSUInteger, _UIScrollDeviceCategory) {
 @protocol UITextInputInternal <UITextInputPrivate>
 @optional
 @property (nonatomic, readonly) CGRect _selectionClipRect;
+@end
+
+@interface UIDragItem (Staging_117702233)
+- (void)_setNeedsDropPreviewUpdate;
 @end
 
 @interface UIDevice ()
@@ -1224,6 +1209,27 @@ typedef NS_ENUM(NSUInteger, _UIScrollDeviceCategory) {
 @property (nonatomic, copy) NSArray<NSValue *> *autocorrectedRanges;
 @end
 #endif
+
+#if HAVE(UI_ASYNC_TEXT_INTERACTION)
+
+@interface UIAsyncTextInteraction (Staging_117831560)
+
+- (void)presentEditMenuForSelection;
+- (void)dismissEditMenuForSelection;
+
+- (void)selectionChanged;
+- (void)editabilityChanged;
+
+@property (nonatomic, readonly) UITextSelectionDisplayInteraction *textSelectionDisplayInteraction;
+
+#if USE(UICONTEXTMENU)
+@property (nonatomic, weak) id<UIContextMenuInteractionDelegate> contextMenuInteractionDelegate;
+@property (nonatomic, readonly) UIContextMenuInteraction *contextMenuInteraction;
+#endif
+
+@end
+
+#endif // HAVE(UI_ASYNC_TEXT_INTERACTION)
 
 WTF_EXTERN_C_BEGIN
 

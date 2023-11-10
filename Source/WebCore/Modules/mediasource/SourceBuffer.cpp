@@ -430,12 +430,6 @@ MediaTime SourceBuffer::highestPresentationTimestamp() const
     return m_highestPresentationTimestamp;
 }
 
-void SourceBuffer::readyStateChanged()
-{
-    if (!isRemoved())
-        m_private->clientReadyStateChanged(m_source->isEnded());
-}
-
 void SourceBuffer::removedFromMediaSource()
 {
     if (isRemoved())
@@ -511,7 +505,7 @@ ExceptionOr<void> SourceBuffer::appendBufferInternal(const unsigned char* data, 
     m_source->openIfInEndedState();
 
     // 4. Run the coded frame eviction algorithm.
-    m_private->evictCodedFrames(size, maximumBufferSize(), m_source->currentTime(), m_source->isEnded());
+    m_private->evictCodedFrames(size, maximumBufferSize(), m_source->currentTime());
 
     // 5. If the buffer full flag equals true, then throw a QuotaExceededError exception and abort these step.
     if (m_private->isBufferFullFor(size, maximumBufferSize())) {
@@ -630,7 +624,7 @@ void SourceBuffer::removeTimerFired()
 
     // 6. Run the coded frame removal algorithm with start and end as the start and end of the removal range.
 
-    m_private->removeCodedFrames(m_pendingRemoveStart, m_pendingRemoveEnd, m_source->currentTime(), m_source->isEnded(), [this, protectedThis = Ref { *this }] {
+    m_private->removeCodedFrames(m_pendingRemoveStart, m_pendingRemoveEnd, m_source->currentTime(), [this, protectedThis = Ref { *this }] {
         if (isRemoved())
             return;
 
@@ -1370,13 +1364,12 @@ void SourceBuffer::sourceBufferPrivateBufferedChanged(const PlatformTimeRanges& 
     if (isManaged()) {
         auto addedRanges = ranges;
         addedRanges -= m_buffered->ranges();
-        auto addedTimeRanges = addedRanges.length() ? RefPtr { TimeRanges::create(WTFMove(addedRanges)) } : nullptr;
+        auto addedTimeRanges = TimeRanges::create(WTFMove(addedRanges));
 
         auto removedRanges = m_buffered->ranges();
         removedRanges -= ranges;
-        auto removedTimeRanges = removedRanges.length() ? RefPtr { TimeRanges::create(WTFMove(removedRanges)) } : nullptr;
+        auto removedTimeRanges = TimeRanges::create(WTFMove(removedRanges));
 
-        ASSERT(addedTimeRanges || removedTimeRanges, "Can't generate an empty dictionary");
         queueTaskToDispatchEvent(*this, TaskSource::MediaElement, BufferedChangeEvent::create(WTFMove(addedTimeRanges), WTFMove(removedTimeRanges)));
     }
 #endif
@@ -1419,7 +1412,7 @@ void SourceBuffer::memoryPressure()
 {
     if (!isManaged())
         return;
-    m_private->memoryPressure(maximumBufferSize(), m_source->currentTime(), m_source->isEnded());
+    m_private->memoryPressure(maximumBufferSize(), m_source->currentTime());
 }
 #endif
 

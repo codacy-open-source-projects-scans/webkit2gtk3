@@ -44,6 +44,7 @@
 #import "WKWebpagePreferencesPrivate.h"
 #import "WKWebsiteDataStorePrivate.h"
 #import "WebExtensionAction.h"
+#import "WebExtensionContextProxyMessages.h"
 #import "WebExtensionTab.h"
 #import "WebExtensionURLSchemeHandler.h"
 #import "WebExtensionWindow.h"
@@ -74,7 +75,7 @@ static NSString * const lastSeenBaseURLStateKey = @"LastSeenBaseURL";
 static NSString * const lastSeenVersionStateKey = @"LastSeenVersion";
 
 // Update this value when any changes are made to the WebExtensionEventListenerType enum.
-static constexpr NSInteger currentBackgroundContentListenerStateVersion = 1;
+static constexpr NSInteger currentBackgroundContentListenerStateVersion = 2;
 
 @interface _WKWebExtensionContextDelegate : NSObject <WKNavigationDelegate, WKUIDelegate> {
     WeakPtr<WebKit::WebExtensionContext> _webExtensionContext;
@@ -252,6 +253,28 @@ bool WebExtensionContext::unload(NSError **outError)
     return true;
 }
 
+bool WebExtensionContext::reload(NSError **outError)
+{
+    if (outError)
+        *outError = nil;
+
+    if (!isLoaded()) {
+        RELEASE_LOG_ERROR(Extensions, "Extension context not loaded");
+        if (outError)
+            *outError = createError(Error::NotLoaded);
+        return false;
+    }
+
+    Ref controller = *m_extensionController;
+    if (!controller->unload(*this, outError))
+        return false;
+
+    if (!controller->load(*this, outError))
+        return false;
+
+    return true;
+}
+
 String WebExtensionContext::stateFilePath() const
 {
     if (!storageIsPersistent())
@@ -397,6 +420,20 @@ bool WebExtensionContext::hasInjectedContentForURL(NSURL *url)
     }
 
     return false;
+}
+
+URL WebExtensionContext::optionsPageURL() const
+{
+    if (!extension().hasOptionsPage())
+        return { };
+    return { m_baseURL, extension().optionsPagePath() };
+}
+
+URL WebExtensionContext::overrideNewTabPageURL() const
+{
+    if (!extension().hasOverrideNewTabPage())
+        return { };
+    return { m_baseURL, extension().overrideNewTabPagePath() };
 }
 
 void WebExtensionContext::setHasAccessInPrivateBrowsing(bool hasAccess)
@@ -1303,6 +1340,9 @@ RefPtr<WebExtensionTab> WebExtensionContext::getTab(WebPageProxyIdentifier webPa
     if (identifier)
         return getTab(identifier.value());
 
+    if (m_backgroundWebView && webPageProxyIdentifier == m_backgroundWebView.get()._page->identifier())
+        return nullptr;
+
     RefPtr<WebExtensionTab> result;
 
     for (auto& tab : openTabs()) {
@@ -1653,12 +1693,42 @@ void WebExtensionContext::performAction(WebExtensionTab* tab, UserTriggered user
         userGesturePerformed(*tab);
 
     auto action = getOrCreateAction(tab);
-    if (action->hasPopup()) {
+    if (action->presentsPopup()) {
         action->presentPopupWhenReady();
         return;
     }
 
     fireActionClickedEventIfNeeded(tab);
+}
+
+const WebExtensionContext::CommandsVector& WebExtensionContext::commands()
+{
+    if (m_populatedCommands)
+        return m_commands;
+
+    m_commands = WTF::map(extension().commands(), [&](auto& data) {
+        return WebExtensionCommand::create(*this, data);
+    });
+
+    m_populatedCommands = true;
+
+    return m_commands;
+}
+
+void WebExtensionContext::performCommand(WebExtensionCommand& command, UserTriggered userTriggered)
+{
+    auto currentWindow = frontmostWindow();
+    auto activeTab = currentWindow ? currentWindow->activeTab() : nullptr;
+
+    if (command.isActionCommand()) {
+        performAction(activeTab.get(), userTriggered);
+        return;
+    }
+
+    if (activeTab && userTriggered == UserTriggered::Yes)
+        userGesturePerformed(*activeTab);
+
+    fireCommandEventIfNeeded(command, activeTab.get());
 }
 
 void WebExtensionContext::userGesturePerformed(WebExtensionTab& tab)
@@ -1715,13 +1785,57 @@ void WebExtensionContext::setTestingMode(bool testingMode)
     m_testingMode = testingMode;
 }
 
+std::optional<WebCore::PageIdentifier> WebExtensionContext::backgroundPageIdentifier() const
+{
+    if (!m_backgroundWebView || extension().backgroundContentIsServiceWorker())
+        return std::nullopt;
+
+    return m_backgroundWebView.get()._page->webPageID();
+}
+
+Vector<WebExtensionContext::PageIdentifierTuple> WebExtensionContext::popupPageIdentifiers() const
+{
+    Vector<PageIdentifierTuple> result;
+
+    auto addWebViewPageIdentifier = [&](auto& action) {
+        auto *webView = action->popupWebView(WebExtensionAction::LoadOnFirstAccess::No);
+        if (!webView)
+            return;
+
+        RefPtr tab = action->tab();
+        RefPtr window = tab ? tab->window() : action->window();
+
+        result.append({ webView._page->webPageID(), tab ? std::optional(tab->identifier()) : std::nullopt, window ? std::optional(window->identifier()) : std::nullopt });
+    };
+
+    for (auto entry : m_actionWindowMap)
+        addWebViewPageIdentifier(entry.value);
+
+    for (auto entry : m_actionTabMap)
+        addWebViewPageIdentifier(entry.value);
+
+    if (m_defaultAction)
+        addWebViewPageIdentifier(m_defaultAction);
+
+    return result;
+}
+
+Vector<WebExtensionContext::PageIdentifierTuple> WebExtensionContext::tabPageIdentifiers() const
+{
+    Vector<PageIdentifierTuple> result;
+
+    for (auto& tab : openTabs()) {
+        auto window = tab->window();
+        for (WKWebView *webView in tab->webViews())
+            result.append({ webView._page->webPageID(), tab->identifier(), window ? std::optional(window->identifier()) : std::nullopt });
+    }
+
+    return result;
+}
+
 WKWebView *WebExtensionContext::relatedWebView()
 {
     ASSERT(isLoaded());
-
-    // When using manifest v3 the web views don't need to use the same process.
-    if (extension().supportsManifestVersion(3))
-        return nil;
 
     if (m_backgroundWebView)
         return m_backgroundWebView.get();
@@ -1736,25 +1850,10 @@ WKWebView *WebExtensionContext::relatedWebView()
     return nil;
 }
 
-NSString *WebExtensionContext::processDisplayName(WebViewPurpose purpose)
+NSString *WebExtensionContext::processDisplayName()
 {
 ALLOW_NONLITERAL_FORMAT_BEGIN
-    // When not using manifest v3 the web views need to use the same process, so use a generic name.
-    if (!extension().supportsManifestVersion(3) || purpose == WebViewPurpose::Any)
-        return [NSString localizedStringWithFormat:WEB_UI_STRING("%@ Web Extension", "Extension's process name that appears in Activity Monitor where the parameter is the name of the extension"), extension().displayShortName()];
-
-    switch (purpose) {
-    case WebViewPurpose::Any:
-        // Handled above.
-        ASSERT_NOT_REACHED();
-        return nil;
-    case WebViewPurpose::Background:
-        return [NSString localizedStringWithFormat:WEB_UI_STRING("%@ Web Extension Background Content", "Extension's process name for background content that appears in Activity Monitor where the parameter is the name of the extension"), extension().displayShortName()];
-    case WebViewPurpose::Popup:
-        return [NSString localizedStringWithFormat:WEB_UI_STRING("%@ Web Extension Popup", "Extension's process name for popups that appears in Activity Monitor where the parameter is the name of the extension"), extension().displayShortName()];
-    case WebViewPurpose::Tab:
-        return [NSString localizedStringWithFormat:WEB_UI_STRING("%@ Web Extension Tab", "Extension's process name for tabs that appears in Activity Monitor where the parameter is the name of the extension"), extension().displayShortName()];
-    }
+    return [NSString localizedStringWithFormat:WEB_UI_STRING("%@ Web Extension", "Extension's process name that appears in Activity Monitor where the parameter is the name of the extension"), extension().displayShortName()];
 ALLOW_NONLITERAL_FORMAT_END
 }
 
@@ -1781,10 +1880,13 @@ WKWebViewConfiguration *WebExtensionContext::webViewConfiguration(WebViewPurpose
     if (!isLoaded())
         return nil;
 
+    bool isManifestVersion3 = extension().supportsManifestVersion(3);
+
     WKWebViewConfiguration *configuration = [extensionController()->configuration().webViewConfiguration() copy];
+    configuration._contentSecurityPolicyModeForExtension = isManifestVersion3 ? _WKContentSecurityPolicyModeForExtensionManifestV3 : _WKContentSecurityPolicyModeForExtensionManifestV2;
     configuration._corsDisablingPatterns = corsDisablingPatterns();
     configuration._crossOriginAccessControlCheckEnabled = NO;
-    configuration._processDisplayName = processDisplayName(purpose);
+    configuration._processDisplayName = processDisplayName();
     configuration._relatedWebView = relatedWebView();
     configuration._requiredWebExtensionBaseURL = baseURL();
     configuration._shouldRelaxThirdPartyCookieBlocking = YES;
@@ -1863,6 +1965,9 @@ void WebExtensionContext::loadBackgroundWebView()
     extension().removeError(WebExtension::Error::BackgroundContentFailedToLoad);
 
     if (!extension().backgroundContentIsServiceWorker()) {
+        auto backgroundPage = m_backgroundWebView.get()._page;
+        backgroundPage->process().send(Messages::WebExtensionContextProxy::SetBackgroundPageIdentifier(backgroundPage->webPageID()), identifier());
+
         [m_backgroundWebView loadRequest:[NSURLRequest requestWithURL:backgroundContentURL()]];
         return;
     }
@@ -2282,7 +2387,7 @@ void WebExtensionContext::addInjectedContent(const InjectedContentVector& inject
             if (!styleSheetString)
                 continue;
 
-            auto userStyleSheet = API::UserStyleSheet::create(WebCore::UserStyleSheet { styleSheetString, URL { m_baseURL, styleSheetPath }, makeVector<String>(includeMatchPatterns), makeVector<String>(excludeMatchPatterns), injectedFrames, WebCore::UserStyleUserLevel, std::nullopt }, executionWorld);
+            auto userStyleSheet = API::UserStyleSheet::create(WebCore::UserStyleSheet { styleSheetString, URL { m_baseURL, styleSheetPath }, makeVector<String>(includeMatchPatterns), makeVector<String>(excludeMatchPatterns), injectedFrames, WebCore::UserStyleLevel::User, std::nullopt }, executionWorld);
             originInjectedStyleSheets.append(userStyleSheet);
 
             for (auto& userContentController : userContentControllers)

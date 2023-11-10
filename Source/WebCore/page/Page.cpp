@@ -200,10 +200,6 @@
 #include "ServicesOverlayController.h"
 #endif
 
-#if ENABLE(WEBGL)
-#include "WebGLStateTracker.h"
-#endif
-
 #include "DisplayView.h"
 
 #if ENABLE(MEDIA_SESSION_COORDINATOR)
@@ -308,9 +304,6 @@ Page::Page(PageConfiguration&& pageConfiguration)
     , m_validationMessageClient(WTFMove(pageConfiguration.validationMessageClient))
     , m_diagnosticLoggingClient(WTFMove(pageConfiguration.diagnosticLoggingClient))
     , m_performanceLoggingClient(WTFMove(pageConfiguration.performanceLoggingClient))
-#if ENABLE(WEBGL)
-    , m_webGLStateTracker(WTFMove(pageConfiguration.webGLStateTracker))
-#endif
 #if ENABLE(SPEECH_SYNTHESIS)
     , m_speechSynthesisClient(WTFMove(pageConfiguration.speechSynthesisClient))
 #endif
@@ -511,10 +504,31 @@ OptionSet<DisabledAdaptations> Page::disabledAdaptations() const
     return { };
 }
 
+static Document* viewportDocumentForFrame(const Frame& frame)
+{
+    auto* localFrame = dynamicDowncast<LocalFrame>(frame);
+    if (!localFrame)
+        return nullptr;
+
+    auto* document = localFrame->document();
+    if (!document)
+        return nullptr;
+
+    Page* page = localFrame->page();
+    if (!page)
+        return nullptr;
+
+    if (auto* fullscreenDocument = page->outermostFullscreenDocument())
+        return fullscreenDocument;
+
+    return document;
+}
+
 ViewportArguments Page::viewportArguments() const
 {
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
-    return localMainFrame && localMainFrame->document() ? localMainFrame->document()->viewportArguments() : ViewportArguments();
+    if (auto* document = viewportDocumentForFrame(mainFrame()))
+        return document->viewportArguments();
+    return ViewportArguments();
 }
 
 void Page::setOverrideViewportArguments(const std::optional<ViewportArguments>& viewportArguments)
@@ -539,6 +553,11 @@ ScrollingCoordinator* Page::scrollingCoordinator()
     }
 
     return m_scrollingCoordinator.get();
+}
+
+RefPtr<ScrollingCoordinator> Page::protectedScrollingCoordinator()
+{
+    return scrollingCoordinator();
 }
 
 String Page::scrollingStateTreeAsText()
@@ -678,6 +697,11 @@ void Page::progressFinished(LocalFrame& frameWithCompletedProgress) const
 void Page::setMainFrame(Ref<Frame>&& frame)
 {
     m_mainFrame = WTFMove(frame);
+}
+
+void Page::setMainFrameURL(const URL& url)
+{
+    m_mainFrameURL = url;
 }
 
 bool Page::openedByDOM() const
@@ -2051,7 +2075,7 @@ void Page::renderingUpdateCompleted()
 
     if (!isUtilityPage()) {
         auto nextRenderingUpdate = m_lastRenderingUpdateTimestamp + preferredRenderingUpdateInterval();
-        m_opportunisticTaskScheduler->reschedule(nextRenderingUpdate);
+        m_opportunisticTaskScheduler->rescheduleIfNeeded(nextRenderingUpdate);
     }
 }
 
@@ -2178,7 +2202,12 @@ void Page::setImageAnimationEnabled(bool enabled)
     updatePlayStateForAllAnimations();
     chrome().client().isAnyAnimationAllowedToPlayDidChange(enabled);
 }
-#endif
+
+void Page::setSystemAllowsAnimationControls(bool isAllowed)
+{
+    m_systemAllowsAnimationControls = isAllowed;
+}
+#endif // ENABLE(ACCESSIBILITY_ANIMATION_CONTROL)
 
 void Page::suspendScriptedAnimations()
 {
@@ -3060,6 +3089,18 @@ Color Page::sampledPageTopColor() const
     return valueOrDefault(m_sampledPageTopColor);
 }
 
+#if HAVE(APP_ACCENT_COLORS) && PLATFORM(MAC)
+void Page::setAppUsesCustomAccentColor(bool appUsesCustomAccentColor)
+{
+    m_appUsesCustomAccentColor = appUsesCustomAccentColor;
+}
+
+bool Page::appUsesCustomAccentColor() const
+{
+    return m_appUsesCustomAccentColor;
+}
+#endif
+
 void Page::setUnderPageBackgroundColorOverride(Color&& underPageBackgroundColorOverride)
 {
     if (underPageBackgroundColorOverride == m_underPageBackgroundColorOverride)
@@ -3381,6 +3422,11 @@ PluginInfoProvider& Page::pluginInfoProvider()
 }
 
 UserContentProvider& Page::userContentProvider()
+{
+    return m_userContentProvider;
+}
+
+Ref<UserContentProvider> Page::protectedUserContentProvider()
 {
     return m_userContentProvider;
 }
@@ -3781,6 +3827,33 @@ void Page::setFullscreenControlsHidden(bool hidden)
     });
 #else
     UNUSED_PARAM(hidden);
+#endif
+}
+
+Document* Page::outermostFullscreenDocument() const
+{
+#if ENABLE(FULLSCREEN_API)
+    CheckedPtr localMainFrame = dynamicDowncast<LocalFrame>(m_mainFrame.get());
+    if (!localMainFrame)
+        return nullptr;
+
+    CheckedPtr<Document> outermostFullscreenDocument = nullptr;
+    CheckedPtr currentDocument = localMainFrame->document();
+    while (currentDocument) {
+        auto* fullscreenElement = currentDocument->fullscreenManager().fullscreenElement();
+        if (!fullscreenElement)
+            break;
+
+        outermostFullscreenDocument = currentDocument;
+        auto* fullscreenFrame = dynamicDowncast<HTMLFrameOwnerElement>(fullscreenElement);
+        if (!fullscreenFrame)
+            break;
+
+        currentDocument = fullscreenFrame->contentDocument();
+    }
+    return outermostFullscreenDocument.get();
+#else
+    return nullptr;
 #endif
 }
 
@@ -4397,6 +4470,7 @@ void Page::setupForRemoteWorker(const URL& scriptURL, const SecurityOriginData& 
     auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
     if (!localMainFrame)
         return;
+    // FIXME: <rdar://117922051> Investigate if the correct origins are set here with site isolation enabled.
     localMainFrame->loader().initForSynthesizedDocument({ });
     auto document = Document::createNonRenderedPlaceholder(*localMainFrame, scriptURL);
     document->createDOMWindow();
@@ -4551,7 +4625,7 @@ void Page::opportunisticallyRunIdleCallbacks()
 
 void Page::willChangeLocationInCompletelyLoadedSubframe()
 {
-    commonVM().heap.scheduleOpportunisticFullCollectionIfNeeded();
+    commonVM().heap.scheduleOpportunisticFullCollection();
 }
 
 void Page::performOpportunisticallyScheduledTasks(MonotonicTime deadline)
@@ -4560,6 +4634,16 @@ void Page::performOpportunisticallyScheduledTasks(MonotonicTime deadline)
     if (m_opportunisticTaskScheduler->hasImminentlyScheduledWork())
         options.add(JSC::VM::SchedulerOptions::HasImminentlyScheduledWork);
     commonVM().performOpportunisticallyScheduledTasks(deadline, options);
+}
+
+CheckedRef<ProgressTracker> Page::checkedProgress()
+{
+    return m_progress.get();
+}
+
+CheckedRef<const ProgressTracker> Page::checkedProgress() const
+{
+    return m_progress.get();
 }
 
 String Page::sceneIdentifier() const

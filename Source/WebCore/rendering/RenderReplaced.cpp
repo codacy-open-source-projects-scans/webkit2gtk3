@@ -1,8 +1,7 @@
 /*
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  * Copyright (C) 2000 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2004-2023 Apple Inc. All rights reserved.
- * Copyright (C) 2015 Google Inc. All rights reserved.
+ * Copyright (C) 2004, 2006, 2007 Apple Inc. All rights reserved.
  * Copyright (C) Research In Motion Limited 2011-2012. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
@@ -27,6 +26,7 @@
 
 #include "BackgroundPainter.h"
 #include "DeprecatedGlobalSettings.h"
+#include "DocumentInlines.h"
 #include "DocumentMarkerController.h"
 #include "ElementRuleCollector.h"
 #include "FloatRoundedRect.h"
@@ -70,6 +70,7 @@ RenderReplaced::RenderReplaced(Type type, Element& element, RenderStyle&& style)
     , m_intrinsicSize(cDefaultWidth, cDefaultHeight)
 {
     setReplacedOrInlineBlock(true);
+    ASSERT(isRenderReplaced());
 }
 
 RenderReplaced::RenderReplaced(Type type, Element& element, RenderStyle&& style, const LayoutSize& intrinsicSize)
@@ -77,6 +78,7 @@ RenderReplaced::RenderReplaced(Type type, Element& element, RenderStyle&& style,
     , m_intrinsicSize(intrinsicSize)
 {
     setReplacedOrInlineBlock(true);
+    ASSERT(isRenderReplaced());
 }
 
 RenderReplaced::RenderReplaced(Type type, Document& document, RenderStyle&& style, const LayoutSize& intrinsicSize)
@@ -84,6 +86,7 @@ RenderReplaced::RenderReplaced(Type type, Document& document, RenderStyle&& styl
     , m_intrinsicSize(intrinsicSize)
 {
     setReplacedOrInlineBlock(true);
+    ASSERT(isRenderReplaced());
 }
 
 RenderReplaced::~RenderReplaced() = default;
@@ -402,6 +405,8 @@ static bool isVideoWithDefaultObjectSize(const RenderReplaced* maybeVideo)
 #if ENABLE(VIDEO)
     if (auto* video = dynamicDowncast<RenderVideo>(maybeVideo))
         return video->hasDefaultObjectSize();
+#else
+    UNUSED_PARAM(maybeVideo);
 #endif
     return false;
 } 
@@ -528,7 +533,7 @@ void RenderReplaced::computeIntrinsicRatioInformation(FloatSize& intrinsicSize, 
             return;
     }
     // Figure out if we need to compute an intrinsic ratio.
-    if (!RenderObject::hasIntrinsicAspectRatio() && !isSVGRootOrLegacySVGRoot())
+    if (!RenderObject::hasIntrinsicAspectRatio() && !isRenderOrLegacyRenderSVGRoot())
         return;
 
     // After supporting contain-intrinsic-size, the intrinsicSize of size containment is not always empty.
@@ -571,7 +576,7 @@ static inline bool hasIntrinsicSize(RenderBox*contentRenderer, bool hasIntrinsic
     if (hasIntrinsicWidth && hasIntrinsicHeight)
         return true;
     if (hasIntrinsicWidth || hasIntrinsicHeight)
-        return contentRenderer && contentRenderer->isSVGRootOrLegacySVGRoot();
+        return contentRenderer && contentRenderer->isRenderOrLegacyRenderSVGRoot();
     return false;
 }
 
@@ -700,10 +705,9 @@ void RenderReplaced::computePreferredLogicalWidths()
 {
     ASSERT(preferredLogicalWidthsDirty());
 
-    // We cannot resolve some logical width here (i.e. percent, fill-available or fit-content)
-    // as the available logical width may not be set on our containing block.
-    const auto& logicalWidth = style().logicalWidth();
-    if (logicalWidth.isPercentOrCalculated() || logicalWidth.isFillAvailable() || logicalWidth.isFitContent())
+    // We cannot resolve any percent logical width here as the available logical
+    // width may not be set on our containing block.
+    if (style().logicalWidth().isPercentOrCalculated())
         computeIntrinsicLogicalWidths(m_minPreferredLogicalWidth, m_maxPreferredLogicalWidth);
     else
         m_minPreferredLogicalWidth = m_maxPreferredLogicalWidth = computeReplacedLogicalWidth(ComputePreferred);

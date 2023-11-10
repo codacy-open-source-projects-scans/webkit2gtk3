@@ -28,6 +28,11 @@
 namespace WebCore {
 
 struct CheckVisibilityOptions {
+    bool opacityProperty { false };
+    bool visibilityProperty { false };
+    bool contentVisibilityAuto { false };
+
+    // Historical aliases.
     bool checkOpacity { false };
     bool checkVisibilityCSS { false };
 };

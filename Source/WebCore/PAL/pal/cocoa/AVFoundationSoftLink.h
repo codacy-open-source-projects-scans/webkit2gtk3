@@ -46,6 +46,7 @@ SOFT_LINK_CLASS_FOR_HEADER(PAL, AVAssetReaderSampleReferenceOutput)
 SOFT_LINK_CLASS_FOR_HEADER(PAL, AVAssetResourceLoadingRequest)
 SOFT_LINK_CLASS_FOR_HEADER(PAL, AVAssetWriter)
 SOFT_LINK_CLASS_FOR_HEADER(PAL, AVAssetWriterInput)
+SOFT_LINK_CLASS_FOR_HEADER(PAL, AVContentKey)
 SOFT_LINK_CLASS_FOR_HEADER(PAL, AVContentKeyReportGroup)
 SOFT_LINK_CLASS_FOR_HEADER(PAL, AVContentKeyResponse)
 SOFT_LINK_CLASS_FOR_HEADER(PAL, AVContentKeySession)
@@ -387,5 +388,10 @@ SOFT_LINK_CONSTANT_FOR_HEADER(PAL, AVFoundation, AVSpeechSynthesisAvailableVoice
 
 SOFT_LINK_CONSTANT_FOR_HEADER(PAL, AVFoundation, AVCaptureMaxAvailableTorchLevel, float)
 #define AVCaptureMaxAvailableTorchLevel PAL::get_AVFoundation_AVCaptureMaxAvailableTorchLevel()
+
+#if HAVE(AVSAMPLEBUFFERDISPLAYLAYER_READYFORDISPLAY)
+SOFT_LINK_CONSTANT_MAY_FAIL_FOR_HEADER(PAL, AVFoundation, AVSampleBufferDisplayLayerReadyForDisplayDidChangeNotification, NSNotificationName)
+#define AVSampleBufferDisplayLayerReadyForDisplayDidChangeNotification PAL::get_AVFoundation_AVSampleBufferDisplayLayerReadyForDisplayDidChangeNotification()
+#endif
 
 #endif // USE(AVFOUNDATION)

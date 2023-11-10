@@ -196,7 +196,7 @@ NSArray *toWebAPI(Vector<WebExtensionScriptInjectionResultParameters>& parameter
             [results addObject:NSNull.null];
     }
 
-    return results;
+    return [results copy];
 }
 
 bool WebExtensionAPITabs::parseTabCreateOptions(NSDictionary *options, WebExtensionTabParameters& parameters, NSString *sourceKey, NSString **outExceptionString)
@@ -462,9 +462,9 @@ bool WebExtensionAPITabs::parseSendMessageOptions(NSDictionary *options, std::op
     if (!validateDictionary(options, sourceKey, nil, types, outExceptionString))
         return false;
 
-    if (NSNumber *frameNumber = objectForKey<NSNumber>(options, frameIdKey)) {
-        auto identifier = toWebExtensionFrameIdentifier(frameNumber.doubleValue);
-        if (!identifier) {
+    if (NSNumber *frameID = objectForKey<NSNumber>(options, frameIdKey)) {
+        auto identifier = toWebExtensionFrameIdentifier(frameID.doubleValue);
+        if (!isValid(identifier)) {
             *outExceptionString = toErrorString(nil, frameIdKey, @"it is not a frame identifier");
             return false;
         }
@@ -511,8 +511,13 @@ bool WebExtensionAPITabs::parseScriptOptions(NSDictionary *options, WebExtension
         return false;
     }
 
-    if (options[frameIdKey] && options[allFramesKey]) {
-        *outExceptionString = toErrorString(nil, @"details", @"it cannot specify both 'frameId' and 'allFrames");
+    if (!options[fileKey] && !options[codeKey]) {
+        *outExceptionString = toErrorString(nil, @"details", @"it must specify either 'file' or 'code'");
+        return false;
+    }
+
+    if (options[allFramesKey] && options[frameIdKey]) {
+        *outExceptionString = toErrorString(nil, @"details", @"it cannot specify both 'allFrames' and 'frameId'");
         return false;
     }
 
@@ -524,7 +529,7 @@ bool WebExtensionAPITabs::parseScriptOptions(NSDictionary *options, WebExtension
 
     if (NSNumber *frameID = options[frameIdKey]) {
         auto frameIdentifier = toWebExtensionFrameIdentifier(frameID.doubleValue);
-        if (!frameIdentifier) {
+        if (!isValid(frameIdentifier)) {
             *outExceptionString = toErrorString(nil, frameIdKey, @"it is not a frame identifier");
             return false;
         }
@@ -542,11 +547,11 @@ bool isValid(std::optional<WebExtensionTabIdentifier> identifier, NSString **out
 {
     if (UNLIKELY(!isValid(identifier))) {
         if (isNone(identifier))
-            *outExceptionString = toErrorString(nil, @"tabID", @"'tabs.TAB_ID_NONE' is not allowed");
+            *outExceptionString = toErrorString(nil, @"tabId", @"'tabs.TAB_ID_NONE' is not allowed");
         else if (identifier)
-            *outExceptionString = toErrorString(nil, @"tabID", @"'%llu' is not a tab identifier", identifier.value().toUInt64());
+            *outExceptionString = toErrorString(nil, @"tabId", @"'%llu' is not a tab identifier", identifier.value().toUInt64());
         else
-            *outExceptionString = toErrorString(nil, @"tabID", @"it is not a tab identifier");
+            *outExceptionString = toErrorString(nil, @"tabId", @"it is not a tab identifier");
         return false;
     }
 
@@ -1218,6 +1223,15 @@ void WebExtensionContextProxy::dispatchTabsDetachedEvent(WebExtensionTabIdentifi
 {
     // Documentation: https://developer.mozilla.org/docs/Mozilla/Add-ons/WebExtensions/API/tabs/onDetached
 
+    for (auto entry : m_tabPageMap) {
+        if (!entry.value.first || entry.value.first.value() != tabIdentifier)
+            continue;
+
+        // Clear the window id until it is reattached.
+        entry.value.second = std::nullopt;
+        break;
+    }
+
     auto *detachInfo = @{ oldWindowIdKey: @(toWebAPI(oldWindowIdentifier)), oldPositionKey: toWebAPI(oldIndex) };
 
     enumerateNamespaceObjects([&](auto& namespaceObject) {
@@ -1239,6 +1253,14 @@ void WebExtensionContextProxy::dispatchTabsMovedEvent(WebExtensionTabIdentifier 
 void WebExtensionContextProxy::dispatchTabsAttachedEvent(WebExtensionTabIdentifier tabIdentifier, WebExtensionWindowIdentifier newWindowIdentifier, size_t newIndex)
 {
     // Documentation: https://developer.mozilla.org/docs/Mozilla/Add-ons/WebExtensions/API/tabs/onAttached
+
+    for (auto entry : m_tabPageMap) {
+        if (!entry.value.first || entry.value.first.value() != tabIdentifier)
+            continue;
+
+        entry.value.second = newWindowIdentifier;
+        break;
+    }
 
     auto *attachInfo = @{ newWindowIdKey: @(toWebAPI(newWindowIdentifier)), newPositionKey: toWebAPI(newIndex) };
 

@@ -24,6 +24,7 @@
 #include "config.h"
 #include "RenderSVGResourceClipper.h"
 
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
 #include "ElementIterator.h"
 #include "Frame.h"
 #include "FrameView.h"
@@ -31,6 +32,7 @@
 #include "HitTestResult.h"
 #include "IntRect.h"
 #include "Logging.h"
+#include "ReferencedSVGResources.h"
 #include "RenderElementInlines.h"
 #include "RenderLayer.h"
 #include "RenderLayerInlines.h"
@@ -43,6 +45,7 @@
 #include "SVGElementTypeHelpers.h"
 #include "SVGNames.h"
 #include "SVGPathData.h"
+#include "SVGRenderStyle.h"
 #include "SVGRenderingContext.h"
 #include "SVGResources.h"
 #include "SVGResourcesCache.h"
@@ -58,6 +61,7 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(RenderSVGResourceClipper);
 RenderSVGResourceClipper::RenderSVGResourceClipper(SVGClipPathElement& element, RenderStyle&& style)
     : RenderSVGResourceContainer(Type::SVGResourceClipper, element, WTFMove(style))
 {
+    ASSERT(isRenderSVGResourceClipper());
 }
 
 RenderSVGResourceClipper::~RenderSVGResourceClipper() = default;
@@ -139,14 +143,14 @@ void RenderSVGResourceClipper::applyMaskClipping(PaintInfo& paintInfo, const Ren
     auto& context = paintInfo.context();
     GraphicsContextStateSaver stateSaver(context);
 
-    // FIXME: [LBSE] Fix clip paths referencing another clip path.
-#if 0
     if (style().clipPath()) {
-        auto* resources = SVGResourcesCache::cachedResourcesForRenderer(*this);
-        if (auto* clipper = resources ? resources->clipper() : nullptr)
-            clipper->applyMaskClipping(paintInfo, targetRenderer, objectBoundingBox);
+        auto& referenceClipPathOperation = downcast<ReferencePathOperation>(*style().clipPath());
+
+        if (RefPtr referencedClipPathElement = ReferencedSVGResources::referencedClipPathElement(treeScopeForSVGReferences(), referenceClipPathOperation)) {
+            if (auto* referencedClipperRenderer = dynamicDowncast<RenderSVGResourceClipper>(referencedClipPathElement->renderer()))
+                referencedClipperRenderer->applyMaskClipping(paintInfo, targetRenderer, objectBoundingBox);
+        }
     }
-#endif
 
     AffineTransform contentTransform;
 
@@ -231,3 +235,5 @@ FloatRect RenderSVGResourceClipper::resourceBoundingBox(const RenderObject& obje
 }
 
 }
+
+#endif // ENABLE(LAYER_BASED_SVG_ENGINE)

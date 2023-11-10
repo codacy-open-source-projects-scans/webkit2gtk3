@@ -575,40 +575,6 @@ void GraphicsContextGL::setDrawingBufferColorSpace(const DestinationColorSpace&)
 {
 }
 
-void GraphicsContextGL::markContextChanged()
-{
-    m_layerComposited = false;
-}
-
-bool GraphicsContextGL::layerComposited() const
-{
-    return m_layerComposited;
-}
-
-void GraphicsContextGL::setBuffersToAutoClear(GCGLbitfield buffers)
-{
-    if (!contextAttributes().preserveDrawingBuffer)
-        m_buffersToAutoClear = buffers;
-}
-
-GCGLbitfield GraphicsContextGL::getBuffersToAutoClear() const
-{
-    return m_buffersToAutoClear;
-}
-
-void GraphicsContextGL::markLayerComposited()
-{
-    m_layerComposited = true;
-    auto attrs = contextAttributes();
-    if (!attrs.preserveDrawingBuffer) {
-        m_buffersToAutoClear = GraphicsContextGL::COLOR_BUFFER_BIT;
-        if (attrs.depth)
-            m_buffersToAutoClear |= GraphicsContextGL::DEPTH_BUFFER_BIT;
-        if (attrs.stencil)
-            m_buffersToAutoClear |= GraphicsContextGL::STENCIL_BUFFER_BIT;
-    }
-}
-
 void GraphicsContextGL::paintToCanvas(NativeImage& image, const IntSize& canvasSize, GraphicsContext& context)
 {
     if (canvasSize.isEmpty())

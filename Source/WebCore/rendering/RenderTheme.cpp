@@ -68,6 +68,8 @@
 #include "SliderTrackPart.h"
 #include "SpinButtonElement.h"
 #include "StringTruncator.h"
+#include "SwitchThumbPart.h"
+#include "SwitchTrackPart.h"
 #include "TextAreaPart.h"
 #include "TextControlInnerElements.h"
 #include "TextFieldPart.h"
@@ -204,6 +206,11 @@ void RenderTheme::adjustStyle(RenderStyle& style, const Element* element, const 
         style.setEffectiveAppearance(appearance);
     }
 
+    if (appearance == StyleAppearance::SearchField && searchFieldShouldAppearAsTextField(style)) {
+        appearance = StyleAppearance::TextField;
+        style.setEffectiveAppearance(appearance);
+    }
+
     if (!isAppearanceAllowedForAllElements(appearance)
         && !userAgentAppearanceStyle
         && autoAppearance == StyleAppearance::None
@@ -223,6 +230,7 @@ void RenderTheme::adjustStyle(RenderStyle& style, const Element* element, const 
     case StyleAppearance::Radio:
     case StyleAppearance::PushButton:
     case StyleAppearance::SquareButton:
+    case StyleAppearance::Switch:
 #if ENABLE(INPUT_TYPE_COLOR)
     case StyleAppearance::ColorWell:
 #endif
@@ -234,6 +242,9 @@ void RenderTheme::adjustStyle(RenderStyle& style, const Element* element, const 
 
         auto supportsVerticalWritingMode = [](StyleAppearance appearance) {
             return appearance == StyleAppearance::Button
+#if ENABLE(INPUT_TYPE_COLOR)
+                || appearance == StyleAppearance::ColorWell
+#endif
                 || appearance == StyleAppearance::DefaultButton
                 || appearance == StyleAppearance::SquareButton
                 || appearance == StyleAppearance::PushButton;
@@ -493,6 +504,12 @@ StyleAppearance RenderTheme::autoAppearanceForElement(RenderStyle& style, const 
 
         if (pseudo == ShadowPseudoIds::webkitInnerSpinButton())
             return StyleAppearance::InnerSpinButton;
+
+        if (pseudo == ShadowPseudoIds::thumb())
+            return StyleAppearance::SwitchThumb;
+
+        if (pseudo == ShadowPseudoIds::track())
+            return StyleAppearance::SwitchTrack;
     }
 
     return StyleAppearance::None;
@@ -677,6 +694,12 @@ RefPtr<ControlPart> RenderTheme::createControlPart(const RenderObject& renderer)
 
     case StyleAppearance::Switch:
         break;
+
+    case StyleAppearance::SwitchThumb:
+        return SwitchThumbPart::create();
+
+    case StyleAppearance::SwitchTrack:
+        return SwitchTrackPart::create();
     }
 
     ASSERT_NOT_REACHED();
@@ -1284,7 +1307,13 @@ bool RenderTheme::isWindowActive(const RenderObject& renderer) const
 
 bool RenderTheme::isChecked(const RenderObject& o) const
 {
-    return is<HTMLInputElement>(o.node()) && downcast<HTMLInputElement>(*o.node()).shouldAppearChecked();
+    if (!o.node())
+        return false;
+    if (auto* element = dynamicDowncast<HTMLInputElement>(*o.node()))
+        return element->shouldAppearChecked();
+    if (auto* host = dynamicDowncast<HTMLInputElement>(o.node()->shadowHost()))
+        return host->shouldAppearChecked();
+    return false;
 }
 
 bool RenderTheme::isIndeterminate(const RenderObject& o) const
@@ -1295,7 +1324,8 @@ bool RenderTheme::isIndeterminate(const RenderObject& o) const
 bool RenderTheme::isEnabled(const RenderObject& renderer) const
 {
     if (auto* element = dynamicDowncast<Element>(renderer.node()))
-        return !element->isDisabledFormControl();
+        return !(element->isDisabledFormControl()
+            || (element->shadowHost() && element->shadowHost()->isDisabledFormControl()));
     return true;
 }
 
@@ -1317,7 +1347,8 @@ bool RenderTheme::isFocused(const RenderObject& renderer) const
 bool RenderTheme::isPressed(const RenderObject& renderer) const
 {
     if (auto* element = dynamicDowncast<Element>(renderer.node()))
-        return element->active();
+        return element->active()
+            || (element->shadowHost() && element->shadowHost()->active());
     return false;
 }
 

@@ -215,3 +215,16 @@ class WebKit::TemplateTest {
     [OptionalTupleBit=WebCore::ScrollingStateNode::Property::Other] bool otherMember
     int memberAfterTuple
 }
+
+CFFooRef wrapped by WebKit::FooWrapper {
+}
+
+#if USE(CFBAR)
+additional_forward_declaration: typedef struct __CFBar * CFBarRef
+[CustomHeader, AdditionalEncoder=StreamConnectionEncoder, FromCFMethod=WebKit::BarWrapper::createFromCF, ToCFMethod=createCFBar(*result)] CFBarRef wrapped by WebKit::BarWrapper {
+}
+#endif
+
+[RValue] class WebKit::RValueWithFunctionCalls {
+    SandboxExtensionHandle callFunction()
+}

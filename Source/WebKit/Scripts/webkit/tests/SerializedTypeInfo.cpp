@@ -33,9 +33,11 @@
 #if ENABLE(TEST_FEATURE)
 #include "FirstMemberType.h"
 #endif
+#include "FooWrapper.h"
 #include "HeaderWithoutCondition"
 #include "LayerProperties.h"
 #include "PlatformClass.h"
+#include "RValueWithFunctionCalls.h"
 #if ENABLE(TEST_FEATURE)
 #include "SecondMemberType.h"
 #endif
@@ -295,6 +297,12 @@ Vector<SerializedTypeInfo> allSerializedTypes()
             {
                 "int"_s,
                 "memberAfterTuple"_s
+            },
+        } },
+        { "WebKit::RValueWithFunctionCalls"_s, {
+            {
+                "SandboxExtensionHandle"_s,
+                "callFunction()"_s
             },
         } },
         { "WebCore::SharedStringHash"_s, {

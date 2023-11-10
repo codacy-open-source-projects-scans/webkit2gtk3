@@ -111,6 +111,10 @@
 #include "IPCTesterMessages.h"
 #endif
 
+#if HAVE(OS_SIGNPOST)
+#include <wtf/SystemTracing.h>
+#endif
+
 #define CONNECTION_RELEASE_LOG(channel, fmt, ...) RELEASE_LOG(channel, "%p - [webProcessIdentifier=%" PRIu64 "] NetworkConnectionToWebProcess::" fmt, this, webProcessIdentifier().toUInt64(), ##__VA_ARGS__)
 #define CONNECTION_RELEASE_LOG_ERROR(channel, fmt, ...) RELEASE_LOG_ERROR(channel, "%p - [webProcessIdentifier=%" PRIu64 "] NetworkConnectionToWebProcess::" fmt, this, webProcessIdentifier().toUInt64(), ##__VA_ARGS__)
 
@@ -362,7 +366,7 @@ void NetworkConnectionToWebProcess::createRTCProvider(CompletionHandler<void()>&
 #if ENABLE(WEB_RTC)
 void NetworkConnectionToWebProcess::connectToRTCDataChannelRemoteSource(WebCore::RTCDataChannelIdentifier localIdentifier, WebCore::RTCDataChannelIdentifier remoteIdentifier, CompletionHandler<void(std::optional<bool>)>&& callback)
 {
-    auto* connectionToWebProcess = m_networkProcess->webProcessConnection(remoteIdentifier.processIdentifier);
+    RefPtr connectionToWebProcess = m_networkProcess->webProcessConnection(remoteIdentifier.processIdentifier);
     if (!connectionToWebProcess) {
         callback(false);
         return;
@@ -1360,7 +1364,7 @@ void NetworkConnectionToWebProcess::entangleLocalPortInThisProcessToRemote(const
     m_processEntangledPorts.add(local);
     networkProcess().messagePortChannelRegistry().didEntangleLocalToRemote(local, remote, m_webProcessIdentifier);
 
-    auto* channel = networkProcess().messagePortChannelRegistry().existingChannelContainingPort(local);
+    RefPtr channel = networkProcess().messagePortChannelRegistry().existingChannelContainingPort(local);
     if (channel && channel->hasAnyMessagesPendingOrInFlight())
         connection().send(Messages::NetworkProcessConnection::MessagesAvailableForPort(local), 0);
 }
@@ -1404,7 +1408,7 @@ void NetworkConnectionToWebProcess::postMessageToRemote(MessageWithMessagePorts&
 {
     if (networkProcess().messagePortChannelRegistry().didPostMessageToRemote(WTFMove(message), port)) {
         // Look up the process for that port
-        auto* channel = networkProcess().messagePortChannelRegistry().existingChannelContainingPort(port);
+        RefPtr channel = networkProcess().messagePortChannelRegistry().existingChannelContainingPort(port);
         ASSERT(channel);
         auto processIdentifier = channel->processForPort(port);
         if (processIdentifier) {
@@ -1465,19 +1469,34 @@ void NetworkConnectionToWebProcess::installMockContentFilter(WebCore::MockConten
 #endif
 
 #if ENABLE(LOGD_BLOCKING_IN_WEBCONTENT)
-void NetworkConnectionToWebProcess::logOnBehalfOfWebContent(IPC::DataReference&& logChannel, IPC::DataReference&& logCategory, IPC::DataReference&& logString, uint8_t logType, int32_t pid)
+void NetworkConnectionToWebProcess::logOnBehalfOfWebContent(IPC::DataReference&& logSubsystem, IPC::DataReference&& logCategory, IPC::DataReference&& logString, uint8_t logType, int32_t pid)
 {
-    OSObjectPtr<os_log_t> osLogChannel;
-    if (logChannel.data() && logCategory.data()) {
-        auto channel = reinterpret_cast<const char*>(logChannel.data());
+    auto isNullTerminated = [](std::span<const uint8_t> view) {
+        return view.data() && !view.empty() && view.back() == '\0';
+    };
+
+    bool isValidLogType = logType == OS_LOG_TYPE_DEFAULT || logType == OS_LOG_TYPE_INFO || logType == OS_LOG_TYPE_DEBUG || logType == OS_LOG_TYPE_ERROR || logType == OS_LOG_TYPE_FAULT;
+    NETWORK_PROCESS_MESSAGE_CHECK(isNullTerminated(logString) && isValidLogType);
+
+    // os_log_hook on sender side sends a null category and subsystem when logging to OS_LOG_DEFAULT.
+    auto osLog = OSObjectPtr<os_log_t>();
+    if (isNullTerminated(logSubsystem) && isNullTerminated(logCategory)) {
+        auto subsystem = reinterpret_cast<const char*>(logSubsystem.data());
         auto category = reinterpret_cast<const char*>(logCategory.data());
-        osLogChannel = adoptOSObject(os_log_create(channel, category));
+        osLog = adoptOSObject(os_log_create(subsystem, category));
     }
-    RELEASE_ASSERT(logType == OS_LOG_TYPE_DEFAULT || logType == OS_LOG_TYPE_INFO || logType == OS_LOG_TYPE_DEBUG || logType == OS_LOG_TYPE_ERROR || logType == OS_LOG_TYPE_FAULT);
+
+    auto osLogPointer = osLog.get() ? osLog.get() : OS_LOG_DEFAULT;
+    auto logData = reinterpret_cast<const char*>(logString.data());
+
+#if HAVE(OS_SIGNPOST)
+    if (WTFSignpostHandleIndirectLog(osLogPointer, pid, logData))
+        return;
+#endif
 
     // Use '%{public}s' in the format string for the preprocessed string from the WebContent process.
     // This should not reveal any redacted information in the string, since it has already been composed in the WebContent process.
-    os_log_with_type(osLogChannel.get() ? osLogChannel.get() : OS_LOG_DEFAULT, static_cast<os_log_type_t>(logType), "WebContent[%d]: %{public}s", pid, logString.data());
+    os_log_with_type(osLogPointer, static_cast<os_log_type_t>(logType), "WebContent[%d]: %{public}s", pid, logData);
 }
 #endif
 

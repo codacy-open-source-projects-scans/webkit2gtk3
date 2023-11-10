@@ -42,6 +42,7 @@
 #include "HTMLFrameElement.h"
 #include "HTMLFrameOwnerElement.h"
 #include "HTMLIFrameElement.h"
+#include "HTMLLinkElement.h"
 #include "HTMLNames.h"
 #include "HTMLObjectElement.h"
 #include "Image.h"
@@ -459,7 +460,7 @@ RefPtr<LegacyWebArchive> LegacyWebArchive::create(Node& node, Function<bool(Loca
     }
 
     Vector<Ref<Node>> nodeList;
-    String markupString = serializeFragment(node, SerializedNodes::SubtreeIncludingNode, &nodeList, ResolveURLs::No, tagNamesToFilter.get());
+    String markupString = serializeFragment(node, SerializedNodes::SubtreeIncludingNode, &nodeList, ResolveURLs::No, tagNamesToFilter.get(), std::nullopt, { }, ShouldIncludeShadowDOM::Yes);
     auto nodeType = node.nodeType();
     if (nodeType != Node::DOCUMENT_NODE && nodeType != Node::DOCUMENT_TYPE_NODE)
         markupString = documentTypeString(node.document()) + markupString;
@@ -616,6 +617,34 @@ RefPtr<LegacyWebArchive> LegacyWebArchive::create(const String& markupString, Lo
 
                 subresources.append(resource.releaseNonNull());
             }
+
+            if (!subresourcesDirectoryName.isNull() && is<HTMLLinkElement>(node)) {
+                auto& element = downcast<HTMLLinkElement>(node.get());
+                if (!element.sheet())
+                    continue;
+                auto index = subresources.findIf([&](auto& resource) {
+                    return resource->url() == element.href();
+                });
+                if (index == notFound)
+                    continue;
+
+                HashMap<String, String> uniqueSubresourcesInElement;
+                for (auto [urlString, path] : uniqueSubresources) {
+                    if (subresourceURLs.contains(URL { urlString })) {
+                        // The linked file is placed in subresource directory as other subresource files.
+                        uniqueSubresourcesInElement.add(urlString, FileSystem::lastComponentOfPathIgnoringTrailingSlash(path));
+                    }
+                }
+
+                auto contentString = element.styleSheetContentWithReplacementURLs(uniqueSubresourcesInElement);
+                if (contentString.isEmpty())
+                    continue;
+
+                if (auto newResource = ArchiveResource::create(utf8Buffer(contentString), subresources[index]->url(), subresources[index]->mimeType(), subresources[index]->textEncoding(), subresources[index]->frameName(), ResourceResponse(), subresources[index]->relativeFilePath())) {
+                    subresources.remove(index);
+                    subresources.append(newResource.releaseNonNull());
+                }
+            }
         }
     }
 
@@ -646,7 +675,7 @@ RefPtr<LegacyWebArchive> LegacyWebArchive::create(const String& markupString, Lo
             extension = makeString(".", extension);
         auto mainFrameFilePathWithExtension = mainFrameFilePath.endsWith(extension) ? mainFrameFilePath : makeString(mainFrameFilePath, extension);
         auto filePathWithExtension = frame.isMainFrame() ? mainFrameFilePathWithExtension : makeString(subresourcesDirectoryName, "/frame_"_s, frame.frameID().toString(), extension);
-        String updatedMarkupString = serializeFragment(*document, SerializedNodes::SubtreeIncludingNode, nullptr, ResolveURLs::No, nullptr, std::nullopt, WTFMove(uniqueSubresources));
+        String updatedMarkupString = serializeFragment(*document, SerializedNodes::SubtreeIncludingNode, nullptr, ResolveURLs::No, nullptr, std::nullopt, WTFMove(uniqueSubresources), ShouldIncludeShadowDOM::Yes);
         mainResource = ArchiveResource::create(utf8Buffer(updatedMarkupString), responseURL, response.mimeType(), "UTF-8"_s, frame.tree().uniqueName(), ResourceResponse(), filePathWithExtension);
     }
 

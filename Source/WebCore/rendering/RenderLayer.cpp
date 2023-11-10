@@ -312,7 +312,7 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(RenderLayer);
 
 RenderLayer::RenderLayer(RenderLayerModelObject& renderer)
     : m_isRenderViewLayer(renderer.isRenderView())
-    , m_forcedStackingContext(renderer.isMedia())
+    , m_forcedStackingContext(renderer.isRenderMedia())
     , m_isNormalFlowOnly(false)
     , m_isCSSStackingContext(false)
     , m_canBeBackdropRoot(false)
@@ -326,7 +326,6 @@ RenderLayer::RenderLayer(RenderLayerModelObject& renderer)
     , m_hasSelfPaintingLayerDescendantDirty(false)
     , m_usedTransparency(false)
     , m_paintingInsideReflection(false)
-    , m_repaintStatus(NeedsNormalRepaint)
     , m_visibleContentStatusDirty(true)
     , m_hasVisibleContent(false)
     , m_visibleDescendantStatusDirty(false)
@@ -563,7 +562,7 @@ void RenderLayer::removeOnlyThisLayer(LayerChangeTiming timing)
         RenderLayer* next = current->nextSibling();
         removeChild(*current);
         m_parent->addChild(*current, nextSib);
-        current->setRepaintStatus(NeedsFullRepaint);
+        current->setRepaintStatus(RepaintStatus::NeedsFullRepaint);
         current = next;
     }
 
@@ -599,9 +598,9 @@ bool RenderLayer::shouldBeNormalFlowOnly() const
         return false;
 
     return renderer().hasNonVisibleOverflow()
-        || renderer().isCanvas()
-        || renderer().isVideo()
-        || renderer().isEmbeddedObject()
+        || renderer().isRenderHTMLCanvas()
+        || renderer().isRenderVideo()
+        || renderer().isRenderEmbeddedObject()
         || renderer().isRenderIFrame()
         || (renderer().style().specifiesColumns() && !isRenderViewLayer())
         || renderer().isRenderFragmentedFlow();
@@ -1028,7 +1027,12 @@ void RenderLayer::recursiveUpdateLayerPositions(RenderGeometryMap* geometryMap, 
     else
         m_enclosingPaginationLayer = nullptr;
 
-    if (m_hasVisibleContent) {
+    auto repaintIfNecessary = [&](bool checkForRepaint) {
+        if (!m_hasVisibleContent || !isSelfPaintingLayer()) {
+            clearRepaintRects();
+            return;
+        }
+
         // FIXME: Paint offset cache does not work with RenderLayers as there is not a 1-to-1
         // mapping between them and the RenderObjects. It would be neat to enable
         // LayoutState outside the layout() phase and use it here.
@@ -1038,33 +1042,18 @@ void RenderLayer::recursiveUpdateLayerPositions(RenderGeometryMap* geometryMap, 
         
         auto oldRects = repaintRects();
         computeRepaintRects(repaintContainer.get(), geometryMap);
-        
         auto newRects = repaintRects();
 
-        // FIXME: Should ASSERT that value calculated for m_outlineBox using the cached offset is the same
-        // as the value not using the cached offset, but we can't due to https://bugs.webkit.org/show_bug.cgi?id=37048
-        if ((flags & CheckForRepaint) && newRects) {
-            if (!renderer().view().printing()) {
-                if (m_repaintStatus & NeedsFullRepaint) {
-                    if (oldRects)
-                        renderer().repaintUsingContainer(repaintContainer.get(), oldRects->clippedOverflowRect);
-
-                    if (!oldRects || newRects->clippedOverflowRect != oldRects->clippedOverflowRect)
-                        renderer().repaintUsingContainer(repaintContainer.get(), newRects->clippedOverflowRect);
-
-                } else if (shouldRepaintAfterLayout()) {
-                    // FIXME: We will convert this to just take the old and new RepaintLayoutRects once
-                    // we change other callers to use RepaintLayoutRects.
-                    auto resolvedOldRects = valueOrDefault(oldRects);
-                    renderer().repaintAfterLayoutIfNeeded(repaintContainer.get(), resolvedOldRects.clippedOverflowRect, resolvedOldRects.outlineBoundsRect,
-                        &newRects->clippedOverflowRect, &newRects->outlineBoundsRect);
-                }
-            }
+        if (checkForRepaint && shouldRepaintAfterLayout() && newRects) {
+            auto needsFullRepaint = m_repaintStatus == RepaintStatus::NeedsFullRepaint ? RenderElement::RequiresFullRepaint::Yes : RenderElement::RequiresFullRepaint::No;
+            auto resolvedOldRects = valueOrDefault(oldRects);
+            renderer().repaintAfterLayoutIfNeeded(repaintContainer.get(), needsFullRepaint, resolvedOldRects.clippedOverflowRect, resolvedOldRects.outlineBoundsRect, &newRects->clippedOverflowRect, &newRects->outlineBoundsRect);
         }
-    } else
-        clearRepaintRects();
+    };
 
-    m_repaintStatus = NeedsNormalRepaint;
+    repaintIfNecessary(flags.contains(CheckForRepaint));
+
+    m_repaintStatus = RepaintStatus::NeedsNormalRepaint;
     m_hasFixedContainingBlockAncestor = flags.contains(SeenFixedContainingBlockLayer);
     m_hasTransformedAncestor = flags.contains(SeenTransformedLayer);
     m_has3DTransformedAncestor = flags.contains(Seen3DTransformedLayer);
@@ -1351,7 +1340,7 @@ FloatRect RenderLayer::referenceBoxRectForClipPath(CSSBoxType boxType, const Lay
 
     // FIXME: Support different reference boxes for inline content.
     // https://bugs.webkit.org/show_bug.cgi?id=129047
-    if (!renderer().isBox())
+    if (!renderer().isRenderBox())
         return rootRelativeBounds;
 
     auto referenceBoxRect = renderer().referenceBoxRect(boxType);
@@ -1594,16 +1583,11 @@ void RenderLayer::setAncestorChainHasVisibleDescendant()
 void RenderLayer::updateAncestorDependentState()
 {
 #if ENABLE(LAYER_BASED_SVG_ENGINE)
-    m_enclosingSVGResourceContainer = nullptr;
-    m_enclosingSVGHiddenContainer = nullptr;
+    m_enclosingSVGHiddenOrResourceContainer = nullptr;
     auto determineSVGAncestors = [&] (const RenderElement& renderer) {
         for (auto* ancestor = renderer.parent(); ancestor; ancestor = ancestor->parent()) {
-            if (auto* container = dynamicDowncast<RenderSVGResourceContainer>(ancestor)) {
-                m_enclosingSVGResourceContainer = container;
-                return;
-            }
             if (auto* container = dynamicDowncast<RenderSVGHiddenContainer>(ancestor)) {
-                m_enclosingSVGHiddenContainer = container;
+                m_enclosingSVGHiddenOrResourceContainer = container;
                 return;
             }
         }
@@ -2053,12 +2037,12 @@ inline bool RenderLayer::shouldRepaintAfterLayout() const
         return false;
 #endif
 
-    if (m_repaintStatus == NeedsNormalRepaint)
+    if (m_repaintStatus == RepaintStatus::NeedsNormalRepaint || m_repaintStatus == RepaintStatus::NeedsFullRepaint)
         return true;
 
     // Composited layers that were moved during a positioned movement only
     // layout, don't need to be repainted. They just need to be recomposited.
-    ASSERT(m_repaintStatus == NeedsFullRepaintForPositionedMovementLayout);
+    ASSERT(m_repaintStatus == RepaintStatus::NeedsFullRepaintForPositionedMovementLayout);
     return !isComposited() || backing()->paintsIntoCompositedAncestor();
 }
 
@@ -2289,7 +2273,7 @@ static void expandClipRectForDescendantsAndReflection(LayoutRect& clipRect, cons
     // current transparencyClipBox to catch all child layers.
     // FIXME: Accelerated compositing will eventually want to do something smart here to avoid incorporating this
     // size into the parent layer.
-    if (layer.renderer().isBox() && layer.renderer().hasReflection()) {
+    if (layer.renderer().isRenderBox() && layer.renderer().hasReflection()) {
         LayoutSize delta = layer.offsetFromAncestor(rootLayer);
         clipRect.move(-delta);
         clipRect.unite(layer.renderBox()->reflectedRect(clipRect));
@@ -2373,7 +2357,7 @@ void RenderLayer::beginTransparencyLayers(GraphicsContext& context, const LayerP
         context.clip(snappedClipRect);
 
 #if ENABLE(CSS_COMPOSITING)
-        bool usesCompositeOperation = hasBlendMode() && !(renderer().isLegacySVGRoot() && parent() && parent()->isRenderViewLayer());
+        bool usesCompositeOperation = hasBlendMode() && !(renderer().isLegacyRenderSVGRoot() && parent() && parent()->isRenderViewLayer());
         if (usesCompositeOperation)
             context.setCompositeOperation(context.compositeOperation(), blendMode());
 #endif
@@ -2391,14 +2375,6 @@ void RenderLayer::beginTransparencyLayers(GraphicsContext& context, const LayerP
 #endif
     }
 }
-
-#if PLATFORM(IOS_FAMILY)
-void RenderLayer::willBeDestroyed()
-{
-    if (RenderLayerBacking* layerBacking = backing())
-        layerBacking->layerWillBeDestroyed();
-}
-#endif
 
 bool RenderLayer::isDescendantOf(const RenderLayer& layer) const
 {
@@ -2569,7 +2545,7 @@ LayoutPoint RenderLayer::convertToLayerCoords(const RenderLayer* ancestorLayer, 
 
 #if ENABLE(LAYER_BASED_SVG_ENGINE)
     // Pixel snap the whole SVG subtree as one "block" -- not individual layers down the SVG render tree.
-    if (renderer().isSVGRoot())
+    if (renderer().isRenderSVGRoot())
         return LayoutPoint(roundPointToDevicePixels(locationInLayerCoords, renderer().document().deviceScaleFactor()));
 #endif
 
@@ -2583,7 +2559,7 @@ LayoutSize RenderLayer::offsetFromAncestor(const RenderLayer* ancestorLayer, Col
 
 bool RenderLayer::shouldTryToScrollForScrollIntoView() const
 {
-    if (!renderer().isBox() || !renderer().hasNonVisibleOverflow())
+    if (!renderer().isRenderBox() || !renderer().hasNonVisibleOverflow())
         return false;
 
     // Don't scroll to reveal an overflow layer that is restricted by the -webkit-line-clamp property.
@@ -2931,6 +2907,7 @@ static inline bool shouldSuppressPaintingLayer(RenderLayer* layer)
 
 void RenderLayer::paintSVGResourceLayer(GraphicsContext& context, GraphicsContextStateSaver&, const AffineTransform& layerContentTransform)
 {
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
     bool wasPaintingSVGResourceLayer = m_isPaintingSVGResourceLayer;
     m_isPaintingSVGResourceLayer = true;
     context.concatCTM(layerContentTransform);
@@ -2950,6 +2927,10 @@ void RenderLayer::paintSVGResourceLayer(GraphicsContext& context, GraphicsContex
     paintLayer(context, paintingInfo, flags);
 
     m_isPaintingSVGResourceLayer = wasPaintingSVGResourceLayer;
+#else
+    UNUSED_PARAM(context);
+    UNUSED_PARAM(layerContentTransform);
+#endif // ENABLE(LAYER_BASED_SVG_ENGINE)
 }
 
 static inline bool paintForFixedRootBackground(const RenderLayer* layer, OptionSet<RenderLayer::PaintLayerFlag> paintFlags)
@@ -3149,7 +3130,7 @@ void RenderLayer::setupClipPath(GraphicsContext& context, GraphicsContextStateSa
 #if ENABLE(LAYER_BASED_SVG_ENGINE)
     // Applying clip-path on <clipPath> enforces us to use mask based clipping, so return false here to disable path based clipping.
     // Furthermore if we're the child of a resource container (<clipPath> / <mask> / ...) disabled path based clipping.
-    if (m_enclosingSVGResourceContainer && is<RenderSVGResourceClipper>(m_enclosingSVGResourceContainer)) {
+    if (is<RenderSVGResourceClipper>(m_enclosingSVGHiddenOrResourceContainer)) {
         // If m_isPaintingSVGResourceLayer is true, this function was invoked via paintSVGResourceLayer() -- clipping on <clipPath> is already
         // handled in RenderSVGResourceClipper::applyMaskClipping(), so do not set paintSVGClippingMask to true here.
         paintFlags.set(PaintLayerFlag::PaintingSVGClippingMask, !m_isPaintingSVGResourceLayer);
@@ -3178,6 +3159,7 @@ void RenderLayer::setupClipPath(GraphicsContext& context, GraphicsContextStateSa
 
     if (is<ReferencePathOperation>(style.clipPath())) {
         auto& referenceClipPathOperation = downcast<ReferencePathOperation>(*style.clipPath());
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
         if (auto* svgClipper = svgClipperFromStyle()) {
             auto* graphicsElement = svgClipper->shouldApplyPathClipping();
             if (!graphicsElement) {
@@ -3207,6 +3189,7 @@ void RenderLayer::setupClipPath(GraphicsContext& context, GraphicsContextStateSa
                 context.translate(-coordinateSystemOriginTranslation);
             return;
         }
+#endif // ENABLE(LAYER_BASED_SVG_ENGINE)
 
         if (auto* clipperRenderer = ReferencedSVGResources::referencedClipperRenderer(renderer().treeScopeForSVGReferences(), referenceClipPathOperation)) {
             // Use the border box as the reference box, even though this is not clearly specified: https://github.com/w3c/csswg-drafts/issues/5786.
@@ -3325,14 +3308,16 @@ void RenderLayer::paintLayerContents(GraphicsContext& context, const LayerPainti
             return false;
 
 #if ENABLE(LAYER_BASED_SVG_ENGINE)
-        // SVG resource layers and their children are only painted indirectly, via paintSVGResourceLayer().
-        if (m_enclosingSVGResourceContainer) {
-            ASSERT(m_enclosingSVGResourceContainer->hasLayer());
-            return m_enclosingSVGResourceContainer->layer()->isPaintingSVGResourceLayer();
-        }
+        if (!m_enclosingSVGHiddenOrResourceContainer)
+            return true;
 
         // Hidden SVG containers (<defs> / <symbol> ...) and their children are never painted directly.
-        return !m_enclosingSVGHiddenContainer;
+        if (!is<RenderSVGResourceContainer>(m_enclosingSVGHiddenOrResourceContainer))
+            return false;
+
+        // SVG resource layers and their children are only painted indirectly, via paintSVGResourceLayer().
+        ASSERT(m_enclosingSVGHiddenOrResourceContainer->hasLayer());
+        return m_enclosingSVGHiddenOrResourceContainer->layer()->isPaintingSVGResourceLayer();
 #else
         return true;
 #endif
@@ -3571,7 +3556,7 @@ void RenderLayer::paintLayerByApplyingTransform(GraphicsContext& context, const 
     // of a SVG subtree, where no pixel snapping is applied -- only the outermost <svg> layer
     // is pixel-snapped "as whole", if it's part of a compound document, e.g. inline SVG in HTML.
     LayoutSize adjustedSubpixelOffset;
-    if (rendererNeedsPixelSnapping(renderer()) && !renderer().isSVGRoot())
+    if (rendererNeedsPixelSnapping(renderer()) && !renderer().isRenderSVGRoot())
         adjustedSubpixelOffset = offsetForThisLayer - LayoutSize(alignedOffsetForThisLayer);
 
     // Now do a paint with the root layer shifted to be us.
@@ -4127,7 +4112,7 @@ RenderLayer* RenderLayer::enclosingFragmentedFlowAncestor() const
 RenderLayer* RenderLayer::enclosingSVGRootLayer() const
 {
     auto* curr = parent();
-    while (curr && !curr->renderer().isSVGRoot())
+    while (curr && !curr->renderer().isRenderSVGRoot())
         curr = curr->parent();
     return curr;
 }
@@ -4239,7 +4224,7 @@ RenderLayer::HitLayer RenderLayer::hitTestLayer(RenderLayer* rootLayer, RenderLa
     // If we're hit testing 'SVG clip content' (aka. RenderSVGResourceClipper) do not early exit.
     if (!request.svgClipContent()) {
         // SVG resource layers and their children are never hit tested.
-        if (m_enclosingSVGResourceContainer)
+        if (is<RenderSVGResourceContainer>(m_enclosingSVGHiddenOrResourceContainer))
             return { nullptr };
 
         // Hidden SVG containers (<defs> / <symbol> ...) are never hit tested directly.
@@ -4849,7 +4834,7 @@ void RenderLayer::calculateRects(const ClipRectsContext& clipRectsContext, const
             // FIXME: Does not do the right thing with CSS regions yet, since we don't yet factor in the
             // individual region boxes as overflow.
             LayoutRect layerBoundsWithVisualOverflow = rendererVisualOverflowRect();
-            if (renderer().isBox())
+            if (renderer().isRenderBox())
                 renderBox()->flipForWritingMode(layerBoundsWithVisualOverflow); // Layers are in physical coordinates, so the overflow has to be flipped.
             layerBoundsWithVisualOverflow.move(offsetFromRootLocal);
             if (this != clipRectsContext.rootLayer || clipRectsContext.respectOverflowClip())
@@ -5035,7 +5020,7 @@ LayoutRect RenderLayer::boundingBox(const RenderLayer* ancestorLayer, const Layo
 {    
     LayoutRect result = localBoundingBox(flags);
     if (renderer().view().frameView().hasFlippedBlockRenderers()) {
-        if (renderer().isBox())
+        if (renderer().isRenderBox())
             renderBox()->flipForWritingMode(result);
         else
             renderer().containingBlock()->flipForWritingMode(result);
@@ -5408,10 +5393,10 @@ bool RenderLayer::shouldBeSelfPaintingLayer() const
 
     return hasOverlayScrollbars()
         || hasCompositedScrollableOverflow()
-        || renderer().isTableRow()
-        || renderer().isCanvas()
-        || renderer().isVideo()
-        || renderer().isEmbeddedObject()
+        || renderer().isRenderTableRow()
+        || renderer().isRenderHTMLCanvas()
+        || renderer().isRenderVideo()
+        || renderer().isRenderEmbeddedObject()
         || renderer().isRenderIFrame()
         || renderer().isRenderFragmentedFlow();
 }
