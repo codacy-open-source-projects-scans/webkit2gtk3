@@ -205,7 +205,7 @@
 #include <WebCore/PlatformEvent.h>
 #include <WebCore/PublicSuffix.h>
 #include <WebCore/RealtimeMediaSourceCenter.h>
-#include <WebCore/RemoteMouseEventData.h>
+#include <WebCore/RemoteUserInputEventData.h>
 #include <WebCore/RenderEmbeddedObject.h>
 #include <WebCore/ResourceLoadStatistics.h>
 #include <WebCore/RunJavaScriptParameters.h>
@@ -761,9 +761,6 @@ WebPageProxy::~WebPageProxy()
     if (preferences->mediaSessionCoordinatorEnabled())
         GroupActivitiesSessionNotifier::sharedNotifier().removeWebPage(*this);
 #endif
-
-    internals().remotePageProxyInOpenerProcess = nullptr;
-    internals().openedRemotePageProxies.clear();
 }
 
 void WebPageProxy::addAllMessageReceivers()
@@ -1492,6 +1489,9 @@ void WebPageProxy::close()
     // Make sure we don't hold a process assertion after getting closed.
     m_processActivityState.reset();
     internals().audibleActivityTimer.stop();
+
+    internals().remotePageProxyInOpenerProcess = nullptr;
+    internals().openedRemotePageProxies.clear();
 
     stopAllURLSchemeTasks();
     updatePlayingMediaDidChange(MediaProducer::IsNotPlaying);
@@ -2614,8 +2614,8 @@ void WebPageProxy::dispatchActivityStateChange()
             for (auto& callback : callbacks)
                 callback();
         });
-        forEachWebContentProcess([&](auto& webProcess) {
-            webProcess.sendWithAsyncReply(Messages::WebPage::SetActivityState(internals().activityState, activityStateChangeID), [callbackAggregator] { }, webPageID());
+        forEachWebContentProcess([&](auto& webProcess, auto pageID) {
+            webProcess.sendWithAsyncReply(Messages::WebPage::SetActivityState(internals().activityState, activityStateChangeID), [callbackAggregator] { }, pageID);
         });
     }
 
@@ -3158,16 +3158,22 @@ void WebPageProxy::performDragOperation(DragData& dragData, const String& dragSt
 #endif
 }
 
-void WebPageProxy::performDragControllerAction(DragControllerAction action, DragData& dragData)
+void WebPageProxy::performDragControllerAction(DragControllerAction action, DragData& dragData, const std::optional<WebCore::FrameIdentifier>& frameID)
 {
     if (!hasRunningProcess())
         return;
 
-    auto completionHandler = [this, protectedThis = Ref { *this }] (auto... args) {
-        didPerformDragControllerAction(args...);
+    auto completionHandler = [this, protectedThis = Ref { *this }, action, dragData] (std::optional<WebCore::DragOperation> dragOperation, WebCore::DragHandlingMethod dragHandlingMethod, bool mouseIsOverFileInput, unsigned numberOfItemsToBeAccepted, const IntRect& insertionRect, const IntRect& editableElementRect, std::optional<WebCore::RemoteUserInputEventData> remoteUserInputEventData) mutable {
+        if (!remoteUserInputEventData) {
+            didPerformDragControllerAction(dragOperation, dragHandlingMethod, mouseIsOverFileInput, numberOfItemsToBeAccepted, insertionRect, editableElementRect);
+            return;
+        }
+        dragData.setClientPosition(remoteUserInputEventData->transformedPoint);
+        performDragControllerAction(action, dragData, remoteUserInputEventData->targetFrameID);
     };
 
 #if PLATFORM(GTK)
+    UNUSED_PARAM(frameID);
     String url = dragData.asURL();
     if (!url.isEmpty())
         protectedProcess()->assumeReadAccessToBaseURL(*this, url);
@@ -3175,7 +3181,7 @@ void WebPageProxy::performDragControllerAction(DragControllerAction action, Drag
     ASSERT(dragData.platformData());
     sendWithAsyncReply(Messages::WebPage::PerformDragControllerAction(action, dragData.clientPosition(), dragData.globalPosition(), dragData.draggingSourceOperationMask(), *dragData.platformData(), dragData.flags()), WTFMove(completionHandler));
 #else
-    sendWithAsyncReply(Messages::WebPage::PerformDragControllerAction(action, dragData), WTFMove(completionHandler));
+    sendToProcessContainingFrame(frameID, Messages::WebPage::PerformDragControllerAction(frameID, action, dragData), WTFMove(completionHandler));
 #endif
 }
 
@@ -3200,13 +3206,19 @@ void WebPageProxy::startDrag(SelectionData&& selectionData, OptionSet<WebCore::D
 }
 #endif
 
-void WebPageProxy::dragEnded(const IntPoint& clientPosition, const IntPoint& globalPosition, OptionSet<WebCore::DragOperation> dragOperationMask)
+void WebPageProxy::dragEnded(const IntPoint& clientPosition, const IntPoint& globalPosition, OptionSet<WebCore::DragOperation> dragOperationMask, const std::optional<WebCore::FrameIdentifier>& frameID)
 {
     if (!hasRunningProcess())
         return;
-    sendWithAsyncReply(Messages::WebPage::DragEnded(clientPosition, globalPosition, dragOperationMask), [this, protectedThis = Ref { *this }] {
-        resetCurrentDragInformation();
-    });
+    auto completionHandler = [this, protectedThis = Ref { *this }, globalPosition, dragOperationMask] (std::optional<WebCore::RemoteUserInputEventData> remoteUserInputEventData) {
+        if (!remoteUserInputEventData) {
+            resetCurrentDragInformation();
+            return;
+        }
+        dragEnded(remoteUserInputEventData->transformedPoint, globalPosition, dragOperationMask, remoteUserInputEventData->targetFrameID);
+    };
+
+    sendToProcessContainingFrame(frameID, Messages::WebPage::DragEnded(frameID, clientPosition, globalPosition, dragOperationMask), WTFMove(completionHandler));
     setDragCaretRect({ });
 }
 
@@ -3270,23 +3282,12 @@ static bool removeOldRedundantEvent(Deque<NativeWebMouseEvent>& queue, WebEventT
     return false;
 }
 
-void WebPageProxy::handleMouseEventReply(WebEventType eventType, bool handled, const std::optional<WebCore::RemoteMouseEventData>& remoteMouseEventData, std::optional<Vector<SandboxExtensionHandle>>&& sandboxExtensions)
+void WebPageProxy::handleMouseEventReply(WebEventType eventType, bool handled, const std::optional<WebCore::RemoteUserInputEventData>& remoteUserInputEventData, std::optional<Vector<SandboxExtensionHandle>>&& sandboxExtensions)
 {
-    if (remoteMouseEventData) {
-        RefPtr frame = WebFrameProxy::webFrame(remoteMouseEventData->targetFrameID);
-        if (!frame)
-            return;
-
+    if (remoteUserInputEventData) {
         auto& event = internals().mouseEventQueue.first();
-        event.setPosition(remoteMouseEventData->transformedPoint);
-
-        RefPtr remotePageProxy = frame->remotePageProxy();
-        if (!remotePageProxy) {
-            sendMouseEvent(remoteMouseEventData->targetFrameID, event, WTFMove(sandboxExtensions));
-            return;
-        }
-
-        remotePageProxy->sendMouseEvent(remoteMouseEventData->targetFrameID, event, WTFMove(sandboxExtensions));
+        event.setPosition(remoteUserInputEventData->transformedPoint);
+        sendMouseEvent(remoteUserInputEventData->targetFrameID, event, WTFMove(sandboxExtensions));
         return;
     }
     didReceiveEvent(eventType, handled);
@@ -3294,7 +3295,7 @@ void WebPageProxy::handleMouseEventReply(WebEventType eventType, bool handled, c
 
 void WebPageProxy::sendMouseEvent(const WebCore::FrameIdentifier& frameID, const NativeWebMouseEvent& event, std::optional<Vector<SandboxExtensionHandle>>&& sandboxExtensions)
 {
-    sendWithAsyncReply(Messages::WebPage::MouseEvent(frameID, event, WTFMove(sandboxExtensions)), [this, protectedThis = Ref { *this }] (std::optional<WebEventType> eventType, bool handled, std::optional<WebCore::RemoteMouseEventData> remoteMouseEventData) mutable {
+    sendToProcessContainingFrame(frameID, Messages::WebPage::MouseEvent(frameID, event, WTFMove(sandboxExtensions)), [this, protectedThis = Ref { *this }] (std::optional<WebEventType> eventType, bool handled, std::optional<WebCore::RemoteUserInputEventData> remoteUserInputEventData) {
         if (!m_pageClient)
             return;
         if (!eventType) {
@@ -3302,7 +3303,7 @@ void WebPageProxy::sendMouseEvent(const WebCore::FrameIdentifier& frameID, const
             return;
         }
         // FIXME: If these sandbox extensions are important, find a way to get them to the iframe process.
-        handleMouseEventReply(*eventType, handled, remoteMouseEventData, { });
+        handleMouseEventReply(*eventType, handled, remoteUserInputEventData, { });
     });
 }
 
@@ -3642,14 +3643,8 @@ void WebPageProxy::sendKeyEvent(const NativeWebKeyboardEvent& event)
         didReceiveEvent(*eventType, handled);
     };
 
-    if (m_focusedFrame) {
-        if (RefPtr remotePageProxy = m_focusedFrame->remotePageProxy()) {
-            remotePageProxy->sendWithAsyncReply(Messages::WebPage::KeyEvent(m_focusedFrame->frameID(), event), WTFMove(handleKeyEventReply));
-            return;
-        }
-    }
-
-    sendWithAsyncReply(Messages::WebPage::KeyEvent(m_focusedFrame ? m_focusedFrame->frameID() : m_mainFrame->frameID(), event), WTFMove(handleKeyEventReply));
+    auto targetFrameID = m_focusedFrame ? m_focusedFrame->frameID() : m_mainFrame->frameID();
+    sendToProcessContainingFrame(targetFrameID, Messages::WebPage::KeyEvent(targetFrameID, event), WTFMove(handleKeyEventReply));
 }
 
 bool WebPageProxy::handleKeyboardEvent(const NativeWebKeyboardEvent& event)
@@ -4371,7 +4366,7 @@ void WebPageProxy::continueNavigationInNewProcess(API::Navigation& navigation, W
         loadParameters.shouldTreatAsContinuingLoad = navigation.currentRequestIsRedirect() ? WebCore::ShouldTreatAsContinuingLoad::YesAfterProvisionalLoadStarted : WebCore::ShouldTreatAsContinuingLoad::YesAfterNavigationPolicyDecision;
         loadParameters.frameIdentifier = frame.frameID();
 
-        frame.prepareForProvisionalNavigationInProcess(newProcess, navigation, [loadParameters = WTFMove(loadParameters), newProcess = newProcess.copyRef(), webPageID = webPageID()] () mutable {
+        frame.prepareForProvisionalNavigationInProcess(newProcess, navigation, [loadParameters = WTFMove(loadParameters), newProcess = newProcess.copyRef(), webPageID = webPageIDInProcessForDomain(RegistrableDomain(navigation.currentRequest().url()))] () mutable {
             newProcess->send(Messages::WebPage::LoadRequest(WTFMove(loadParameters)), webPageID);
         });
         return;
@@ -5262,12 +5257,7 @@ void WebPageProxy::runJavaScriptInFrameInScriptWorld(RunJavaScriptParameters&& p
         callbackFunction({ API::SerializedScriptValue::createFromWireBytes(Vector(dataReference)).ptr() });
     };
 
-    if (RefPtr frame = frameID ? WebFrameProxy::webFrame(*frameID) : nullptr) {
-        if (RefPtr remotePageProxy = frame->remotePageProxy())
-            return remotePageProxy->sendWithAsyncReply(Messages::WebPage::RunJavaScriptInFrameInScriptWorld(parameters, frameID, world.worldData()), WTFMove(completionHandler));
-    }
-
-    sendWithAsyncReply(Messages::WebPage::RunJavaScriptInFrameInScriptWorld(parameters, frameID, world.worldData()), WTFMove(completionHandler));
+    sendToProcessContainingFrame(frameID, Messages::WebPage::RunJavaScriptInFrameInScriptWorld(parameters, frameID, world.worldData()), WTFMove(completionHandler));
 }
 
 void WebPageProxy::getRenderTreeExternalRepresentation(CompletionHandler<void(const String&)>&& callback)
@@ -5381,7 +5371,7 @@ void WebPageProxy::getSelectionAsWebArchiveData(CompletionHandler<void(API::Data
     sendWithAsyncReply(Messages::WebPage::GetSelectionAsWebArchiveData(), toAPIDataCallback(WTFMove(callback)));
 }
 
-void WebPageProxy::saveResources(WebFrameProxy* frame, const String& directory, const String& suggestedMainResourceName, CompletionHandler<void(Expected<void, WebCore::ArchiveError>)>&& completionHandler)
+void WebPageProxy::saveResources(WebFrameProxy* frame, const Vector<WebCore::MarkupExclusionRule>& markupExclusionRules, const String& directory, const String& suggestedMainResourceName, CompletionHandler<void(Expected<void, WebCore::ArchiveError>)>&& completionHandler)
 {
     if (!frame)
         return completionHandler(makeUnexpected(WebCore::ArchiveError::InvalidFrame));
@@ -5395,7 +5385,7 @@ void WebPageProxy::saveResources(WebFrameProxy* frame, const String& directory, 
         mainResourceName = host.isEmpty() ? "main"_s : host.toString();
     }
 
-    sendWithAsyncReply(Messages::WebPage::GetWebArchiveOfFrameWithFileName(frame->frameID(), mainResourceName), [directory = directory, completionHandler = WTFMove(completionHandler)](const std::optional<IPC::SharedBufferReference>& data) mutable {
+    sendWithAsyncReply(Messages::WebPage::GetWebArchiveOfFrameWithFileName(frame->frameID(), markupExclusionRules, mainResourceName), [directory = directory, completionHandler = WTFMove(completionHandler)](const std::optional<IPC::SharedBufferReference>& data) mutable {
 #if PLATFORM(COCOA)
         if (!data)
             return completionHandler(makeUnexpected(WebCore::ArchiveError::SerializationFailure));
@@ -5510,11 +5500,11 @@ void WebPageProxy::didCreateMainFrame(FrameIdentifier frameID)
 #endif
 }
 
-void WebPageProxy::didCreateSubframe(WebCore::FrameIdentifier parentID, WebCore::FrameIdentifier newFrameID)
+void WebPageProxy::didCreateSubframe(WebCore::FrameIdentifier parentID, WebCore::FrameIdentifier newFrameID, const String& frameName)
 {
     RefPtr parent = WebFrameProxy::webFrame(parentID);
     MESSAGE_CHECK(m_process, parent);
-    parent->didCreateSubframe(newFrameID);
+    parent->didCreateSubframe(newFrameID, frameName);
 }
 
 void WebPageProxy::didDestroyFrame(FrameIdentifier frameID)
@@ -6111,7 +6101,7 @@ void WebPageProxy::didFinishDocumentLoadForFrame(FrameIdentifier frameID, uint64
     }
 }
 
-void WebPageProxy::forEachWebContentProcess(Function<void(WebProcessProxy&)>&& function)
+void WebPageProxy::forEachWebContentProcess(Function<void(WebProcessProxy&, WebCore::PageIdentifier)>&& function)
 {
     for (auto& pair : internals().domainToRemotePageProxyMap) {
         auto& remotePageProxy = pair.value;
@@ -6119,12 +6109,12 @@ void WebPageProxy::forEachWebContentProcess(Function<void(WebProcessProxy&)>&& f
             ASSERT_NOT_REACHED();
             continue;
         }
-        function(remotePageProxy->protectedProcess());
+        function(remotePageProxy->protectedProcess(), remotePageProxy->pageID());
     }
-    function(protectedProcess());
+    function(protectedProcess(), webPageID());
 }
 
-void WebPageProxy::createRemoteSubframesInOtherProcesses(WebFrameProxy& newFrame)
+void WebPageProxy::createRemoteSubframesInOtherProcesses(WebFrameProxy& newFrame, const String& frameName)
 {
     if (!m_preferences->siteIsolationEnabled())
         return;
@@ -6135,28 +6125,28 @@ void WebPageProxy::createRemoteSubframesInOtherProcesses(WebFrameProxy& newFrame
         return;
     }
 
-    forEachWebContentProcess([&](auto& webProcess) {
+    forEachWebContentProcess([&](auto& webProcess, auto pageID) {
         if (webProcess.processID() == newFrame.process().processID())
             return;
-        webProcess.send(Messages::WebPage::CreateRemoteSubframe(parent->frameID(), newFrame.frameID()), webPageID());
+        webProcess.send(Messages::WebPage::CreateRemoteSubframe(parent->frameID(), newFrame.frameID(), frameName), pageID);
     });
 }
 
 void WebPageProxy::broadcastFrameRemovalToOtherProcesses(IPC::Connection& connection, WebCore::FrameIdentifier frameID)
 {
-    forEachWebContentProcess([&](auto& webProcess) {
+    forEachWebContentProcess([&](auto& webProcess, auto pageID) {
         if (!webProcess.hasConnection() || webProcess.connection() == &connection)
             return;
-        webProcess.send(Messages::WebPage::FrameWasRemovedInAnotherProcess(frameID), webPageID());
+        webProcess.send(Messages::WebPage::FrameWasRemovedInAnotherProcess(frameID), pageID);
     });
 }
 
 void WebPageProxy::broadcastMainFrameURLChangeToOtherProcesses(IPC::Connection& connection, const URL& newURL)
 {
-    forEachWebContentProcess([&](auto& webProcess) {
+    forEachWebContentProcess([&](auto& webProcess, auto pageID) {
         if (!webProcess.hasConnection() || webProcess.connection() == &connection)
             return;
-        webProcess.send(Messages::WebPage::MainFrameURLChangedInAnotherProcess(newURL), webPageID());
+        webProcess.send(Messages::WebPage::MainFrameURLChangedInAnotherProcess(newURL), pageID);
     });
 }
 
@@ -6657,7 +6647,12 @@ void WebPageProxy::decidePolicyForNavigationAction(Ref<WebProcessProxy>&& proces
     else if (m_needsInitialLinkDecorationFilteringData)
         sendCachedLinkDecorationFilteringData();
 #endif
-    Ref frameProcessBeforeNavigation { frame.provisionalFrame() ? frame.provisionalFrame()->process() : frame.process() };
+
+    // FIXME: preferences().siteIsolationEnabled() here indicates there's an issue.
+    // See rdar://118574473 and rdar://118575766 for the kinds of things that might
+    // be broken with site isolation enabled.
+    Ref frameProcessBeforeNavigation { frame.provisionalFrame() ? frame.provisionalFrame()->process() : preferences().siteIsolationEnabled()  && frame.isMainFrame() && m_provisionalPage ? m_provisionalPage->process() : frame.process() };
+
     Ref listener = frame.setUpPolicyListenerProxy([this, protectedThis = Ref { *this }, frameProcessBeforeNavigation = WTFMove(frameProcessBeforeNavigation), processInitiatingNavigation = process, frame = Ref { frame }, sender = WTFMove(sender), navigation, navigationAction, frameInfo] (PolicyAction policyAction, API::WebsitePolicies* policies, ProcessSwapRequestedByClient processSwapRequestedByClient, RefPtr<SafeBrowsingWarning>&& safeBrowsingWarning, std::optional<NavigatingToAppBoundDomain> isAppBoundDomain, WasNavigationIntercepted wasNavigationIntercepted) mutable {
         WEBPAGEPROXY_RELEASE_LOG(Loading, "decidePolicyForNavigationAction: listener called: frameID=%llu, isMainFrame=%d, navigationID=%llu, policyAction=%u, safeBrowsingWarning=%d, isAppBoundDomain=%d, wasNavigationIntercepted=%d", frame->frameID().object().toUInt64(), frame->isMainFrame(), navigation ? navigation->navigationID() : 0, (unsigned)policyAction, !!safeBrowsingWarning, !!isAppBoundDomain, wasNavigationIntercepted == WasNavigationIntercepted::Yes);
 
@@ -6825,7 +6820,7 @@ void WebPageProxy::decidePolicyForNavigationActionSync(FrameInfoData&& frameInfo
             MESSAGE_CHECK(m_process, frameInfo.parentFrameID);
             RefPtr parentFrame = WebFrameProxy::webFrame(*frameInfo.parentFrameID);
             MESSAGE_CHECK(m_process, parentFrame);
-            parentFrame->didCreateSubframe(frameInfo.frameID);
+            parentFrame->didCreateSubframe(frameInfo.frameID, frameInfo.frameName);
         }
     }
 
@@ -7313,7 +7308,9 @@ void WebPageProxy::setStatusText(const String& text)
 
 void WebPageProxy::mouseDidMoveOverElement(WebHitTestResultData&& hitTestResultData, OptionSet<WebEventModifier> modifiers, UserData&& userData)
 {
+#if PLATFORM(MAC)
     m_lastMouseMoveHitTestResult = API::HitTestResult::create(hitTestResultData, *this);
+#endif
     m_uiClient->mouseDidMoveOverElement(*this, hitTestResultData, modifiers, protectedProcess()->transformHandlesToObjects(userData.protectedObject().get()).get());
     setToolTip(hitTestResultData.toolTipText);
 }
@@ -8460,14 +8457,10 @@ void WebPageProxy::didChooseFilesForOpenPanelWithDisplayStringAndIcon(const Vect
     SandboxExtension::Handle frontboardServicesSandboxExtension, iconServicesSandboxExtension;
     auto auditToken = m_process->auditToken();
     auto machBootstrapHandle = SandboxExtension::createHandleForMachBootstrapExtension();
-#if HAVE(FRONTBOARD_SYSTEM_APP_SERVICES)
-    if (auto handle = SandboxExtension::createHandleForMachLookup("com.apple.frontboard.systemappservices"_s, auditToken))
-        frontboardServicesSandboxExtension = WTFMove(*handle);
-#endif
     if (auto handle = SandboxExtension::createHandleForMachLookup("com.apple.iconservices"_s, auditToken))
         iconServicesSandboxExtension = WTFMove(*handle);
 
-    send(Messages::WebPage::DidChooseFilesForOpenPanelWithDisplayStringAndIcon(fileURLs, displayString, iconData ? iconData->dataReference() : IPC::DataReference(), WTFMove(machBootstrapHandle), WTFMove(frontboardServicesSandboxExtension), WTFMove(iconServicesSandboxExtension)));
+    send(Messages::WebPage::DidChooseFilesForOpenPanelWithDisplayStringAndIcon(fileURLs, displayString, iconData ? iconData->dataReference() : IPC::DataReference(), WTFMove(machBootstrapHandle), WTFMove(iconServicesSandboxExtension)));
 
     RefPtr openPanelResultListener = std::exchange(m_openPanelResultListener, nullptr);
     openPanelResultListener->invalidate();
@@ -12974,8 +12967,10 @@ void WebPageProxy::removeOpenedRemotePageProxy(WebPageProxyIdentifier pageID)
 
 void WebPageProxy::addOpenedRemotePageProxy(WebPageProxyIdentifier pageID, Ref<RemotePageProxy>&& page)
 {
-    auto addResult = internals().openedRemotePageProxies.add(pageID, WTFMove(page));
-    ASSERT_UNUSED(addResult, addResult.isNewEntry);
+    // FIXME: When <rdar://116203552> is fixed we should be able to assert that the add result is a
+    // new entry because we won't make an opened RemotePageProxy until we know what process
+    // the opened page's main frame will end up in after all redirects.
+    internals().openedRemotePageProxies.add(pageID, WTFMove(page));
 }
 
 #if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
@@ -13084,6 +13079,13 @@ PageIdentifier WebPageProxy::webPageID() const
     return internals().webPageID;
 }
 
+WebCore::PageIdentifier WebPageProxy::webPageIDInProcessForDomain(const WebCore::RegistrableDomain& domain) const
+{
+    if (auto* remotePageProxy = remotePageProxyForRegistrableDomain(domain))
+        return remotePageProxy->pageID();
+    return internals().webPageID;
+}
+
 WebPopupMenuProxyClient& WebPageProxy::popupMenuClient()
 {
     return internals();
@@ -13187,13 +13189,7 @@ void WebPageProxy::dispatchLoadEventToFrameOwnerElement(WebCore::FrameIdentifier
     if (!parentFrame)
         return;
 
-    RefPtr remotePageProxy = parentFrame->remotePageProxy();
-    if (!remotePageProxy) {
-        send(Messages::WebPage::DispatchLoadEventToFrameOwnerElement(frameID));
-        return;
-    }
-
-    remotePageProxy->send(Messages::WebPage::DispatchLoadEventToFrameOwnerElement(frameID));
+    sendToProcessContainingFrame(parentFrame->frameID(), Messages::WebPage::DispatchLoadEventToFrameOwnerElement(frameID));
 }
 
 Ref<VisitedLinkStore> WebPageProxy::protectedVisitedLinkStore()
@@ -13207,10 +13203,10 @@ void WebPageProxy::broadcastFocusedFrameToOtherProcesses(IPC::Connection& connec
     if (!frame)
         return;
 
-    forEachWebContentProcess([&](auto& webProcess) {
+    forEachWebContentProcess([&](auto& webProcess, auto pageID) {
         if (!webProcess.hasConnection() || webProcess.connection() == &connection)
             return;
-        webProcess.send(Messages::WebPage::FrameWasFocusedInAnotherProcess(frameID), webPageID());
+        webProcess.send(Messages::WebPage::FrameWasFocusedInAnotherProcess(frameID), pageID);
     });
 }
 
@@ -13232,6 +13228,41 @@ Ref<WebsiteDataStore> WebPageProxy::protectedWebsiteDataStore() const
 Ref<WebBackForwardList> WebPageProxy::protectedBackForwardList() const
 {
     return m_backForwardList;
+}
+
+template<typename F>
+void WebPageProxy::sendToWebPage(std::optional<FrameIdentifier> frameID, F&& sendFunction)
+{
+    if (frameID) {
+        if (RefPtr frame = WebFrameProxy::webFrame(*frameID)) {
+            if (RefPtr remotePageProxy = frame->remotePageProxy()) {
+                sendFunction(*remotePageProxy);
+                return;
+            }
+        } else
+            ASSERT_NOT_REACHED();
+    }
+    sendFunction(*this);
+}
+
+template<typename M, typename C>
+void WebPageProxy::sendToProcessContainingFrame(std::optional<FrameIdentifier> frameID, M&& message, C&& completionHandler)
+{
+    sendToWebPage(frameID,
+        [&message, &completionHandler] (auto& targetPage) {
+            targetPage.sendWithAsyncReply(std::forward<M>(message), std::forward<C>(completionHandler));
+        }
+    );
+}
+
+template<typename M>
+void WebPageProxy::sendToProcessContainingFrame(std::optional<FrameIdentifier> frameID, M&& message)
+{
+    sendToWebPage(frameID,
+        [&message] (auto& targetPage) {
+            targetPage.send(std::forward<M>(message));
+        }
+    );
 }
 
 } // namespace WebKit

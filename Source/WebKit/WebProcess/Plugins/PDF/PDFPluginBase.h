@@ -27,6 +27,9 @@
 
 #if ENABLE(PDF_PLUGIN)
 
+#include "DataReference.h"
+#include "FrameInfoData.h"
+#include "PDFPluginIdentifier.h"
 #include <WebCore/AffineTransform.h>
 #include <WebCore/FindOptions.h>
 #include <WebCore/FloatRect.h>
@@ -39,7 +42,6 @@
 #include <wtf/TypeTraits.h>
 #include <wtf/WeakPtr.h>
 
-// FIXME: These Objective-C classes should only appear in PDFPlugin, not here in the base class.
 OBJC_CLASS NSDictionary;
 OBJC_CLASS PDFDocument;
 OBJC_CLASS PDFSelection;
@@ -52,6 +54,7 @@ class HTMLPlugInElement;
 class ResourceResponse;
 class Scrollbar;
 class SharedBuffer;
+enum class PlatformCursorType : uint8_t;
 }
 
 namespace WebKit {
@@ -70,12 +73,14 @@ class PDFPluginBase : public ThreadSafeRefCounted<PDFPluginBase>, public WebCore
 public:
     static WebCore::PluginInfo pluginInfo();
 
-    virtual ~PDFPluginBase() = default;
+    virtual ~PDFPluginBase();
 
     void destroy();
 
     virtual bool isUnifiedPDFPlugin() const { return false; }
     virtual bool isLegacyPDFPlugin() const { return false; }
+
+    PDFPluginIdentifier identifier() const { return m_identifier; }
 
     virtual WebCore::PluginLayerHostingStrategy layerHostingStrategy() const = 0;
     virtual PlatformLayer* platformLayer() const { return nullptr; }
@@ -91,21 +96,20 @@ public:
 
     virtual CGFloat scaleFactor() const = 0;
 
-    virtual bool isLocked() const = 0;
+    bool isLocked() const;
 
-    // FIXME: Can we use PDFDocument here?
     virtual RetainPtr<PDFDocument> pdfDocumentForPrinting() const = 0;
     virtual WebCore::FloatSize pdfDocumentSizeForPrinting() const = 0;
 
     virtual void geometryDidChange(const WebCore::IntSize& pluginSize, const WebCore::AffineTransform& pluginToRootViewTransform);
-    virtual void visibilityDidChange(bool) { }
+    virtual void visibilityDidChange(bool);
     virtual void contentsScaleFactorChanged(float) { }
 
     void updateControlTints(WebCore::GraphicsContext&);
 
     virtual RefPtr<WebCore::FragmentedSharedBuffer> liveResourceData() const = 0;
 
-    virtual bool wantsWheelEvents() const { return true; }
+    virtual bool wantsWheelEvents() const = 0;
     virtual bool handleMouseEvent(const WebMouseEvent&) = 0;
     virtual bool handleWheelEvent(const WebWheelEvent&) = 0;
     virtual bool handleMouseEnterEvent(const WebMouseEvent&) = 0;
@@ -141,20 +145,39 @@ public:
     void streamDidFinishLoading();
     void streamDidFail();
 
+    // FIXME: Rationalize these (both names and behavior).
     WebCore::IntPoint convertFromRootViewToPlugin(const WebCore::IntPoint&) const;
+    WebCore::IntPoint convertFromPluginToPDFView(const WebCore::IntPoint&) const;
+    WebCore::IntPoint convertFromPDFViewToRootView(const WebCore::IntPoint&) const;
+    WebCore::IntRect convertFromPDFViewToRootView(const WebCore::IntRect&) const;
+    WebCore::IntPoint convertFromRootViewToPDFView(const WebCore::IntPoint&) const;
+    WebCore::FloatRect convertFromPDFViewToScreen(const WebCore::FloatRect&) const;
+    WebCore::IntRect boundsOnScreen() const;
 
     WebCore::ScrollPosition scrollPositionForTesting() const { return scrollPosition(); }
     WebCore::Scrollbar* horizontalScrollbar() const override { return m_horizontalScrollbar.get(); }
     WebCore::Scrollbar* verticalScrollbar() const override { return m_verticalScrollbar.get(); }
+
+    virtual void didChangeSettings() { }
+
+    // HUD Actions.
+#if ENABLE(PDF_HUD)
+    virtual void zoomIn() = 0;
+    virtual void zoomOut() = 0;
+    virtual void save(CompletionHandler<void(const String&, const URL&, const IPC::DataReference&)>&&) = 0;
+    virtual void openWithPreview(CompletionHandler<void(const String&, FrameInfoData&&, const IPC::DataReference&, const String&)>&&) = 0;
+#endif
+
+    void notifyCursorChanged(WebCore::PlatformCursorType);
 
 protected:
     explicit PDFPluginBase(WebCore::HTMLPlugInElement&);
 
     WebCore::Page* page() const;
 
-    virtual void teardown() = 0;
+    virtual void teardown();
 
-    virtual void createPDFDocument() = 0;
+    void createPDFDocument();
     virtual void installPDFDocument() = 0;
     virtual void tryRunScriptsInPDFDocument() { }
 
@@ -163,6 +186,8 @@ protected:
     virtual void incrementalPDFStreamDidFail() { }
 
     virtual unsigned firstPageHeight() const = 0;
+
+    NSData *rawData() const;
 
     void ensureDataBufferLength(uint64_t);
     void addArchiveResource();
@@ -199,10 +224,21 @@ protected:
     virtual Ref<WebCore::Scrollbar> createScrollbar(WebCore::ScrollbarOrientation);
     virtual void destroyScrollbar(WebCore::ScrollbarOrientation);
 
+    // HUD.
+#if ENABLE(PDF_HUD)
+    void updatePDFHUDLocation();
+    WebCore::IntRect frameForHUD() const;
+    bool hudEnabled() const;
+#endif
+
     WeakPtr<PluginView> m_view;
     WeakPtr<WebFrame> m_frame;
+    WeakPtr<WebCore::HTMLPlugInElement, WebCore::WeakPtrImplWithEventTargetData> m_element;
+
+    PDFPluginIdentifier m_identifier;
 
     RetainPtr<CFMutableDataRef> m_data;
+    RetainPtr<PDFDocument> m_pdfDocument;
 
     String m_suggestedFilename;
     uint64_t m_streamedBytes { 0 };

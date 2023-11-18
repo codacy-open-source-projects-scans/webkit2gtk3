@@ -150,7 +150,7 @@ MediaPlayerPrivateGStreamer::MediaPlayerPrivateGStreamer(MediaPlayer* player)
     , m_preload(player->preload())
     , m_maxTimeLoadedAtLastDidLoadingProgress(MediaTime::zeroTime())
     , m_drawTimer(RunLoop::main(), this, &MediaPlayerPrivateGStreamer::repaint)
-    , m_readyTimerHandler(RunLoop::main(), this, &MediaPlayerPrivateGStreamer::readyTimerFired)
+    , m_pausedTimerHandler(RunLoop::main(), this, &MediaPlayerPrivateGStreamer::pausedTimerFired)
 #if USE(TEXTURE_MAPPER) && !USE(NICOSIA)
     , m_platformLayerProxy(adoptRef(new TextureMapperPlatformLayerProxyGL))
 #endif
@@ -164,7 +164,7 @@ MediaPlayerPrivateGStreamer::MediaPlayerPrivateGStreamer(MediaPlayer* player)
     , m_loader(player->createResourceLoader())
 {
 #if USE(GLIB)
-    m_readyTimerHandler.setPriority(G_PRIORITY_DEFAULT_IDLE);
+    m_pausedTimerHandler.setPriority(G_PRIORITY_DEFAULT_IDLE);
 #endif
     m_isPlayerShuttingDown.store(false);
 
@@ -203,7 +203,7 @@ MediaPlayerPrivateGStreamer::~MediaPlayerPrivateGStreamer()
     if (m_fillTimer.isActive())
         m_fillTimer.stop();
 
-    m_readyTimerHandler.stop();
+    m_pausedTimerHandler.stop();
 
     if (m_videoSink) {
         GRefPtr<GstPad> videoSinkPad = adoptGRef(gst_element_get_static_pad(m_videoSink.get(), "sink"));
@@ -938,12 +938,13 @@ bool MediaPlayerPrivateGStreamer::changePipelineState(GstState newState)
 
     // Create a timer when entering the READY state so that we can free resources if we stay for too long on READY.
     // Also lets remove the timer if we request a state change for any state other than READY. See also https://bugs.webkit.org/show_bug.cgi?id=117354
-    if (newState == GST_STATE_READY && !m_readyTimerHandler.isActive()) {
-        // Max interval in seconds to stay in the READY state on manual state change requests.
-        static const Seconds readyStateTimerDelay { 1_min };
-        m_readyTimerHandler.startOneShot(readyStateTimerDelay);
-    } else if (newState != GST_STATE_READY)
-        m_readyTimerHandler.stop();
+    if (newState == GST_STATE_PAUSED && m_isEndReached && m_player.get() && !m_player.get()->isLooping()
+        && !isMediaSource() && !m_pausedTimerHandler.isActive()) {
+        // Max interval in seconds to stay in the PAUSED state after video finished on manual state change requests.
+        static const Seconds readyStateTimerDelay { 5_min };
+        m_pausedTimerHandler.startOneShot(readyStateTimerDelay);
+    } else if (newState != GST_STATE_PAUSED)
+        m_pausedTimerHandler.stop();
 
     return true;
 }
@@ -1258,7 +1259,7 @@ void MediaPlayerPrivateGStreamer::loadingFailed(MediaPlayer::NetworkState networ
     }
 
     // Loading failed, remove ready timer.
-    m_readyTimerHandler.stop();
+    m_pausedTimerHandler.stop();
 }
 
 GstElement* MediaPlayerPrivateGStreamer::createAudioSink()
@@ -1343,22 +1344,23 @@ MediaTime MediaPlayerPrivateGStreamer::playbackPosition() const
     if (m_isEndReached)
         return m_playbackRate > 0 ? durationMediaTime() : MediaTime::zeroTime();
 
-    if (m_cachedPosition) {
-        GST_TRACE_OBJECT(pipeline(), "Returning cached position: %s", m_cachedPosition.value().toString().utf8().data());
-        return m_cachedPosition.value();
+    if (m_isCachedPositionValid) {
+        GST_TRACE_OBJECT(pipeline(), "Returning cached position: %s", m_cachedPosition.toString().utf8().data());
+        return m_cachedPosition;
     }
 
     GstClockTime gstreamerPosition = gstreamerPositionFromSinks();
     GST_TRACE_OBJECT(pipeline(), "Position %" GST_TIME_FORMAT ", canFallBackToLastFinishedSeekPosition: %s", GST_TIME_ARGS(gstreamerPosition), boolForPrinting(m_canFallBackToLastFinishedSeekPosition));
 
-    MediaTime playbackPosition = MediaTime::zeroTime();
+    // Cached position is marked as non valid here but we might fail to get a new one so initializing to this as "educated guess".
+    MediaTime playbackPosition = m_cachedPosition;
 
     if (GST_CLOCK_TIME_IS_VALID(gstreamerPosition))
         playbackPosition = MediaTime(gstreamerPosition, GST_SECOND);
     else if (m_canFallBackToLastFinishedSeekPosition)
         playbackPosition = m_seekTarget.time;
 
-    m_cachedPosition = playbackPosition;
+    setCachedPosition(playbackPosition);
     invalidateCachedPositionOnNextIteration();
     return playbackPosition;
 }
@@ -1839,7 +1841,7 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
 
         if (GST_CLOCK_TIME_IS_VALID(gstreamerPosition))
             playbackPosition = MediaTime(gstreamerPosition, GST_SECOND);
-        if (!eosFlagIsSetInSink && playbackPosition.isValid() && duration.isValid()
+        if (!player->isLooping() && !eosFlagIsSetInSink && playbackPosition.isValid() && duration.isValid()
             && ((m_playbackRate >= 0 && playbackPosition < duration && duration.isFinite())
             || (m_playbackRate < 0 && playbackPosition > MediaTime::zeroTime()))) {
             GST_DEBUG_OBJECT(pipeline(), "EOS received but position %s is still in the finite playable limits [%s, %s], ignoring it",
@@ -2770,7 +2772,7 @@ void MediaPlayerPrivateGStreamer::didEnd()
         // HTMLMediaElement. In some cases like reverse playback the
         // position is not always reported as 0 for instance.
         if (!m_isSeeking) {
-            m_cachedPosition = m_playbackRate > 0 ? durationMediaTime() : MediaTime::zeroTime();
+            setCachedPosition(m_playbackRate > 0 ? durationMediaTime() : MediaTime::zeroTime());
             GST_DEBUG("Position adjusted: %s", currentMediaTime().toString().utf8().data());
         }
     }
@@ -2782,7 +2784,7 @@ void MediaPlayerPrivateGStreamer::didEnd()
 
     if (player && !player->isLooping() && !isMediaSource()) {
         m_isPaused = true;
-        changePipelineState(GST_STATE_READY);
+        changePipelineState(GST_STATE_PAUSED);
         m_didDownloadFinish = false;
         configureMediaStreamAudioTracks();
     }
@@ -3073,7 +3075,10 @@ void MediaPlayerPrivateGStreamer::setupCodecProbe(GstElement* element)
         }
 
         GST_INFO_OBJECT(player->pipeline(), "Setting codec for stream %s to %s", streamId.get(), codec.get());
-        player->m_codecs.add(String::fromLatin1(streamId.get()), String::fromLatin1(codec.get()));
+        {
+            Locker locker { player->m_codecsLock };
+            player->m_codecs.add(String::fromLatin1(streamId.get()), String::fromLatin1(codec.get()));
+        }
         return GST_PAD_PROBE_REMOVE;
     }), this, nullptr);
 #else
@@ -3171,9 +3176,9 @@ bool MediaPlayerPrivateGStreamer::canSaveMediaData() const
     return false;
 }
 
-void MediaPlayerPrivateGStreamer::readyTimerFired()
+void MediaPlayerPrivateGStreamer::pausedTimerFired()
 {
-    GST_DEBUG_OBJECT(pipeline(), "In READY for too long. Releasing pipeline resources.");
+    GST_DEBUG_OBJECT(pipeline(), "In PAUSED for too long. Releasing pipeline resources.");
     changePipelineState(GST_STATE_NULL);
 }
 
@@ -3264,7 +3269,10 @@ void MediaPlayerPrivateGStreamer::pushTextureToCompositor()
         } else {
             layerBuffer = proxy.getAvailableBuffer(frameHolder->size(), GL_DONT_CARE);
             if (UNLIKELY(!layerBuffer)) {
-                auto texture = BitmapTexture::create(frameHolder->size(), frameHolder->hasAlphaChannel() ? BitmapTexture::SupportsAlpha : BitmapTexture::NoFlag);
+                OptionSet<BitmapTexture::Flags> flags;
+                if (frameHolder->hasAlphaChannel())
+                    flags.add(BitmapTexture::Flags::SupportsAlpha);
+                auto texture = BitmapTexture::create(frameHolder->size(), flags);
                 layerBuffer = makeUnique<TextureMapperPlatformLayerBuffer>(WTFMove(texture));
             }
             frameHolder->updateTexture(layerBuffer->texture());
@@ -3673,9 +3681,15 @@ void MediaPlayerPrivateGStreamer::updateVideoSizeAndOrientationFromCaps(const Gs
         player->sizeChanged();
 }
 
+void MediaPlayerPrivateGStreamer::setCachedPosition(const MediaTime& cachedPosition) const
+{
+    m_cachedPosition = cachedPosition;
+    m_isCachedPositionValid = true;
+}
+
 void MediaPlayerPrivateGStreamer::invalidateCachedPosition() const
 {
-    m_cachedPosition.reset();
+    m_isCachedPositionValid = false;
 }
 
 void MediaPlayerPrivateGStreamer::invalidateCachedPositionOnNextIteration() const
@@ -4477,6 +4491,7 @@ void MediaPlayerPrivateGStreamer::checkPlayingConsistency()
 
 String MediaPlayerPrivateGStreamer::codecForStreamId(const String& streamId)
 {
+    Locker locker { m_codecsLock };
     if (UNLIKELY(!m_codecs.contains(streamId)))
         return emptyString();
 

@@ -31,14 +31,15 @@
 
 namespace TestWebKitAPI {
 
-static auto *manifest = @{
+static auto *scriptingManifest = @{
     @"manifest_version": @3,
 
     @"name": @"Scripting Test",
     @"description": @"Scripting Test",
     @"version": @"1",
 
-    @"permissions": @[ @"scripting" ],
+    @"permissions": @[ @"scripting", @"webNavigation" ],
+    @"host_permissions": @[ @"*://localhost/*" ],
 
     @"background": @{
         @"scripts": @[ @"background.js" ],
@@ -85,12 +86,339 @@ TEST(WKWebExtensionAPIScripting, Errors)
         @"browser.test.assertThrows(() => browser.scripting.removeCSS({target: { tabId: 0 } }), /it must specify either 'css' or 'files'./i)",
         @"browser.test.assertThrows(() => browser.scripting.removeCSS({target: { tabId: '0' }, files: ['path/to/file'], css: 'css'}), /'tabId' is expected to be a number, but a string was provided./i)",
 
+        @"browser.test.assertThrows(() => browser.scripting.registerContentScripts(), /a required argument is missing/i)",
+        @"browser.test.assertThrows(() => browser.scripting.registerContentScripts({}), /an array is expected/i)",
+        @"browser.test.assertThrows(() => browser.scripting.registerContentScripts([{}]), /it is missing required keys: 'id'/i)",
+
+        @"browser.test.assertThrows(() => browser.scripting.registerContentScripts([{ id: 0 }]), /'id' is expected to be a string, but a number was provided/i)",
+        @"browser.test.assertThrows(() => browser.scripting.registerContentScripts([{ id: '' }]), /it must not be empty/i)",
+        @"browser.test.assertThrows(() => browser.scripting.registerContentScripts([{ id: '_0' }]), /it must not start with '_'/i)",
+
+        @"browser.test.assertThrows(() => browser.scripting.registerContentScripts([{ id: '0' }]), /it must specify at least one match pattern for script with ID '0'/i)",
+        @"browser.test.assertThrows(() => browser.scripting.registerContentScripts([{ id: '0', matches: [] }]), /it must specify at least one match pattern for script with ID '0'/i)",
+
+        @"browser.test.assertThrows(() => browser.scripting.registerContentScripts([{ id: '0', matches: [ '*://*/*' ] }]), /it must specify at least one 'css' or 'js' file/i)",
+        @"browser.test.assertThrows(() => browser.scripting.registerContentScripts([{ id: '0', matches: [ '*://*/*' ], js: ['path/to/file'], runAt: 'invalid_runAt' }]), /it must be one of the following: 'document_end', 'document_idle', or 'document_start'/i)",
+        @"browser.test.assertThrows(() => browser.scripting.registerContentScripts([{ id: '0', matches: [ '*://*/*' ], js: ['path/to/file'], world: 'invalid_world' }]), /it must specify either 'ISOLATED' or 'MAIN'/i)",
+
+        @"browser.test.assertThrows(() => browser.scripting.updateContentScripts([{ id: '_0' }]), /it must not start with '_'/i)",
+        @"browser.test.assertThrows(() => browser.scripting.updateContentScripts([{ id: '0', matches: [ ], js: ['path/to/file'] }]), /it must not be empty/i)",
+        @"browser.test.assertThrows(() => browser.scripting.updateContentScripts([{ id: '0', matches: [ '*://*/*' ], js: ['path/to/file'], world: 'invalid_world' }]), /it must specify either 'ISOLATED' or 'MAIN'/i)",
+
+        @"browser.test.assertThrows(() => browser.scripting.getRegisteredContentScripts([]), /an object is expected/i)",
+        @"browser.test.assertThrows(() => browser.scripting.getRegisteredContentScripts({ ids: 0 }), /'ids' is expected to be an array, but a number was provided/i)",
+        @"browser.test.assertThrows(() => browser.scripting.getRegisteredContentScripts({ ids: [ 0 ] }), /'ids' is expected to be strings in an array, but a number was provided/i)",
+
+        @"browser.test.assertThrows(() => browser.scripting.unregisterContentScripts([]), /an object is expected/i)",
+        @"browser.test.assertThrows(() => browser.scripting.unregisterContentScripts({ ids: 0 }), /'ids' is expected to be an array, but a number was provided/i)",
+        @"browser.test.assertThrows(() => browser.scripting.unregisterContentScripts({ ids: [ 0 ] }), /'ids' is expected to be strings in an array, but a number was provided/i)",
+
         @"browser.test.notifyPass()"
     ]);
 
-    // FIXME: <https://webkit.org/b/262491> Add additional tests for insertCSS() and removeCSS().
+    Util::loadAndRunExtension(scriptingManifest, @{ @"background.js": backgroundScript });
+}
 
-    Util::loadAndRunExtension(manifest, @{ @"background.js": backgroundScript });
+TEST(WKWebExtensionAPIScripting, ExecuteScript)
+{
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, ""_s } }
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *backgroundScript = Util::constructScript(@[
+        @"browser.webNavigation.onCompleted.addListener(async (details) => {",
+        @"  const tabId = details.tabId",
+
+        @"  const blueValue = 'rgb(0, 0, 255)'",
+
+        @"  const expectedResultWithFileExecution = { 'result': 'pink', 'frameId': 0 }",
+        @"  const expectedResultWithFunctionExecution = { 'result': null, 'frameId': 0 }",
+
+        @"  function changeBackgroundColor(color) { document.body.style.background = color }",
+        @"  function getBackgroundColor() { return window.getComputedStyle(document.body).getPropertyValue('background-color') }",
+
+        @"  let results = await browser.scripting.executeScript( { target: { tabId: tabId, allFrames: false }, files: [ 'backgroundColor.js' ] })",
+        @"  browser.test.assertDeepEq(results[0], expectedResultWithFileExecution)",
+
+        @"  results = await browser.scripting.executeScript( { target: { tabId: tabId, frameIds: [ 0 ] }, files: [ 'backgroundColor.js' ] })",
+        @"  browser.test.assertDeepEq(results[0], expectedResultWithFileExecution)",
+
+        @"  results = await browser.scripting.executeScript( { target: { tabId: tabId }, files: [ 'backgroundColor.js'] })",
+        @"  browser.test.assertDeepEq(results[0], expectedResultWithFileExecution)",
+
+        @"  results = await browser.scripting.executeScript( { target: { tabId: tabId, frameIds: [ 0 ] }, func: changeBackgroundColor, args: ['pink'] })",
+        @"  browser.test.assertDeepEq(results[0], expectedResultWithFunctionExecution)",
+
+        @"  await browser.scripting.executeScript( { target: { tabId: tabId, allFrames: true }, func: changeBackgroundColor, args: ['blue'] })",
+        @"  results = await browser.scripting.executeScript( { target: { tabId: tabId, allFrames: true }, func: getBackgroundColor })",
+        @"  browser.test.assertEq(results[0].result, blueValue)",
+        @"  browser.test.assertEq(results[0].result, blueValue)",
+
+        @"  browser.test.notifyPass()",
+        @"})",
+
+        @"browser.test.yield('Load Tab')",
+    ]);
+
+    static auto *backgroundColor = @"document.body.style.background = 'pink'";
+
+    static auto *resources = @{ @"background.js": backgroundScript, @"backgroundColor.js": backgroundColor };
+
+    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:scriptingManifest resources:resources]);
+    auto manager = adoptNS([[TestWebExtensionManager alloc] initForExtension:extension.get()]);
+
+    auto *urlRequest = server.requestWithLocalhost();
+    auto *url = urlRequest.URL;
+
+    auto *matchPattern = [_WKWebExtensionMatchPattern matchPatternWithScheme:url.scheme host:url.host path:@"/*"];
+    [manager.get().context setPermissionStatus:_WKWebExtensionContextPermissionStatusGrantedExplicitly forPermission:_WKWebExtensionPermissionWebNavigation];
+    [manager.get().context setPermissionStatus:_WKWebExtensionContextPermissionStatusGrantedExplicitly forMatchPattern:matchPattern];
+
+    [manager loadAndRun];
+
+    EXPECT_NS_EQUAL(manager.get().yieldMessage, @"Load Tab");
+
+    [manager.get().defaultTab.mainWebView loadRequest:urlRequest];
+
+    [manager run];
+}
+
+TEST(WKWebExtensionAPIScripting, ExecuteScriptWithFrameIds)
+{
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, "<iframe src='/frame.html'></iframe>"_s } },
+        { "/frame.html"_s, { { { "Content-Type"_s, "text/html"_s } }, "<body style='background-color: blue'></body>"_s } },
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *backgroundScript = Util::constructScript(@[
+        @"browser.webNavigation.onCompleted.addListener(async (details) => {",
+        @"  if (details.frameId !== 0)",
+        @"    return",
+
+        @"  const tabId = details.tabId",
+
+        @"  const pinkValue = 'rgb(255, 192, 203)'",
+        @"  const blueValue = 'rgb(0, 0, 255)'",
+
+        @"  function changeBackgroundColor(color) { document.body.style.background = color }",
+        @"  function getBackgroundColor() { return window.getComputedStyle(document.body).getPropertyValue('background-color') }",
+        @"  function getFontSize() { return window.getComputedStyle(document.body).getPropertyValue('font-size') }",
+
+        @"  function logMessage() { console.log('Logging message') }",
+
+        // FIXME: <https://webkit.org/b/260160> A better way to get the frame Ids would be from browser.webNavigation.getAllFrames().
+        @"  let results = await browser.scripting.executeScript( { target: { tabId: tabId, allFrames: true }, func: logMessage })",
+        @"  browser.test.assertEq(results.length, 2)",
+
+        @"  let subframe = results[1].frameId",
+        @"  results = await browser.scripting.executeScript( { target: { tabId: tabId, frameIds: [ 0, subframe ] }, files: [ 'backgroundColor.js' ]})",
+        @"  browser.test.assertEq(results[0].result, 'pink')",
+        @"  browser.test.assertEq(results[1].result, 'pink')",
+
+        @"  results = await browser.scripting.executeScript( { target: { tabId: tabId, frameIds: [ subframe ] }, func: changeBackgroundColor, args: [ 'blue' ] })",
+        @"  results = await browser.scripting.executeScript( { target: { tabId: tabId, frameIds: [ subframe ] }, func: getBackgroundColor })",
+        @"  browser.test.assertEq(results[0].result, blueValue)",
+
+        @"  results = await browser.scripting.executeScript( { target: { tabId: tabId, frameIds: [ subframe ] }, files: [ 'backgroundColor.js', 'fontSize.js' ] })",
+        @"  results = await browser.scripting.executeScript( { target: { tabId: tabId, frameIds: [ subframe ] }, func: getBackgroundColor })",
+        @"  browser.test.assertEq(results[0].result, pinkValue)",
+        @"  results = await browser.scripting.executeScript( { target: { tabId: tabId, frameIds: [ subframe ] }, func: getFontSize })",
+        @"  browser.test.assertEq(results[0].result, '104px')",
+
+        @"  browser.test.notifyPass()",
+        @"})",
+
+        @"browser.test.yield('Load Tab')",
+    ]);
+
+    static auto *backgroundColor = @"document.body.style.background = 'pink'";
+    static auto *fontSize = @"document.body.style.fontSize = '104px'";
+
+    static auto *resources = @{
+        @"background.js": backgroundScript,
+        @"backgroundColor.js": backgroundColor,
+        @"fontSize.js": fontSize,
+    };
+
+    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:scriptingManifest resources:resources]);
+    auto manager = adoptNS([[TestWebExtensionManager alloc] initForExtension:extension.get()]);
+
+    auto *urlRequest = server.requestWithLocalhost();
+    auto *url = urlRequest.URL;
+
+    auto *matchPattern = [_WKWebExtensionMatchPattern matchPatternWithScheme:url.scheme host:url.host path:@"/*"];
+    [manager.get().context setPermissionStatus:_WKWebExtensionContextPermissionStatusGrantedExplicitly forPermission:_WKWebExtensionPermissionWebNavigation];
+    [manager.get().context setPermissionStatus:_WKWebExtensionContextPermissionStatusGrantedExplicitly forMatchPattern:matchPattern];
+
+    [manager loadAndRun];
+
+    EXPECT_NS_EQUAL(manager.get().yieldMessage, @"Load Tab");
+
+    [manager.get().defaultTab.mainWebView loadRequest:urlRequest];
+
+    [manager run];
+}
+
+TEST(WKWebExtensionAPIScripting, InsertAndRemoveCSS)
+{
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, "<iframe src='/frame.html'></iframe>"_s } },
+        { "/frame.html"_s, { { { "Content-Type"_s, "text/html"_s } }, "<body style='background-color: blue'></body>"_s } },
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *backgroundScript = Util::constructScript(@[
+        @"const pinkValue = 'rgb(255, 192, 203)'",
+        @"const blueValue = 'rgb(0, 0, 255)'",
+        @"const transparentValue = 'rgba(0, 0, 0, 0)'",
+
+        @"const tabs = await browser.tabs.query({ active: true, currentWindow: true })",
+        @"const tabId = tabs[0].id",
+
+        @"function getBackgroundColor() { return window.getComputedStyle(document.body).getPropertyValue('background-color') }",
+        @"function getFontSize() { return window.getComputedStyle(document.body).getPropertyValue('font-size') }",
+
+        @"await browser.scripting.insertCSS( { target: { tabId: tabId, allFrames: false }, files: [ 'backgroundColor.css' ] })",
+        @"let results = await browser.scripting.executeScript( { target: { tabId: tabId, allFrames: true }, func: getBackgroundColor })",
+        @"browser.test.assertEq(results[0].result, pinkValue)",
+        @"browser.test.assertEq(results[1].result, blueValue)",
+
+        @"await browser.scripting.removeCSS( { target: { tabId: tabId, allFrames: false }, files: [ 'backgroundColor.css' ] })",
+        @"results = await browser.scripting.executeScript( { target: { tabId: tabId, allFrames: true }, func: getBackgroundColor })",
+        @"browser.test.assertEq(results[0].result, transparentValue)",
+        @"browser.test.assertEq(results[1].result, blueValue)",
+
+        @"await browser.scripting.insertCSS( { target: { tabId: tabId, allFrames: false }, css: 'body { background-color: pink !important }' })",
+        @"results = await browser.scripting.executeScript( { target: { tabId: tabId, allFrames: true }, func: getBackgroundColor })",
+        @"browser.test.assertEq(results[0].result, pinkValue)",
+        @"browser.test.assertEq(results[1].result, blueValue)",
+
+        @"await browser.scripting.removeCSS( { target: { tabId: tabId, allFrames: false }, css: 'body { background-color: pink !important }' })",
+        @"results = await browser.scripting.executeScript( { target: { tabId: tabId, allFrames: true }, func: getBackgroundColor })",
+        @"browser.test.assertEq(results[0].result, transparentValue)",
+        @"browser.test.assertEq(results[1].result, blueValue)",
+
+        @"await browser.scripting.insertCSS( { target: { tabId: tabId, allFrames: true }, files: [ 'backgroundColor.css' ] })",
+        @"results = await browser.scripting.executeScript( { target: { tabId: tabId, allFrames: true }, func: getBackgroundColor })",
+        @"browser.test.assertEq(results[0].result, pinkValue)",
+        @"browser.test.assertEq(results[1].result, pinkValue)",
+
+        @"await browser.scripting.removeCSS( { target: { tabId: tabId, allFrames: true }, files: [ 'backgroundColor.css' ] })",
+        @"results = await browser.scripting.executeScript( { target: { tabId: tabId, allFrames: true }, func: getBackgroundColor })",
+        @"browser.test.assertEq(results[0].result, transparentValue)",
+        @"browser.test.assertEq(results[1].result, blueValue)",
+
+        // Storing original font size.
+        @"results = await browser.scripting.executeScript( { target: { tabId: tabId, allFrames: false }, func: getFontSize })",
+        @"let originalFontSize = results[0].result",
+
+        @"await browser.scripting.insertCSS( { target: { tabId: tabId, allFrames: true }, files: [ 'backgroundColor.css', 'fontSize.css' ] })",
+        @"results = await browser.scripting.executeScript( { target: { tabId: tabId, allFrames: true }, func: getBackgroundColor })",
+        @"browser.test.assertEq(results[0].result, pinkValue)",
+        @"browser.test.assertEq(results[1].result, pinkValue)",
+
+        @"results = await browser.scripting.executeScript( { target: { tabId: tabId, allFrames: true }, func: getFontSize })",
+        @"browser.test.assertEq(results[0].result, '104px')",
+        @"browser.test.assertEq(results[1].result, '104px')",
+
+        @"await browser.scripting.removeCSS( { target: { tabId: tabId, allFrames: true }, files: [ 'backgroundColor.css', 'fontSize.css' ] })",
+        @"results = await browser.scripting.executeScript( { target: { tabId: tabId, allFrames: true }, func: getBackgroundColor })",
+        @"browser.test.assertEq(results[0].result, transparentValue)",
+        @"browser.test.assertEq(results[1].result, blueValue)",
+
+        @"results = await browser.scripting.executeScript( { target: { tabId: tabId, allFrames: true }, func: getFontSize })",
+        @"browser.test.assertEq(results[0].result, originalFontSize)",
+        @"browser.test.assertEq(results[1].result, originalFontSize)",
+
+        @"browser.test.notifyPass()"
+    ]);
+
+    static auto *backgroundColor = @"body { background-color: pink !important }";
+    static auto *fontSize = @"body { font-size: 104px }";
+
+    static auto *resources = @{
+        @"background.js": backgroundScript,
+        @"backgroundColor.css": backgroundColor,
+        @"fontSize.css": fontSize,
+    };
+
+    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:scriptingManifest resources:resources]);
+    auto manager = adoptNS([[TestWebExtensionManager alloc] initForExtension:extension.get()]);
+
+    auto *urlRequest = server.requestWithLocalhost();
+    auto *url = urlRequest.URL;
+
+    auto *matchPattern = [_WKWebExtensionMatchPattern matchPatternWithScheme:url.scheme host:url.host path:@"/*"];
+    [manager.get().context setPermissionStatus:_WKWebExtensionContextPermissionStatusGrantedExplicitly forMatchPattern:matchPattern];
+    [manager.get().defaultTab.mainWebView loadRequest:urlRequest];
+
+    [manager loadAndRun];
+}
+
+TEST(WKWebExtensionAPIScripting, InsertAndRemoveCSSWithFrameIds)
+{
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, "<iframe src='/frame.html'></iframe>"_s } },
+        { "/frame.html"_s, { { { "Content-Type"_s, "text/html"_s } }, "<body style='background-color: blue'></body>"_s } },
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *backgroundScript = Util::constructScript(@[
+        @"const pinkValue = 'rgb(255, 192, 203)'",
+        @"const blueValue = 'rgb(0, 0, 255)'",
+        @"const transparentValue = 'rgba(0, 0, 0, 0)'",
+
+        @"const tabs = await browser.tabs.query({ active: true, currentWindow: true })",
+        @"const tabId = tabs[0].id",
+
+        @"function getBackgroundColor() { return window.getComputedStyle(document.body).getPropertyValue('background-color') }",
+        @"function getFontSize() { return window.getComputedStyle(document.body).getPropertyValue('font-size') }",
+
+        @"function logMessage() { console.log('Logging message') }",
+
+        @"await browser.scripting.insertCSS( { target: { tabId: tabId, frameIds: [ 0 ] }, files: [ 'backgroundColor.css' ] })",
+        @"let results = await browser.scripting.executeScript( { target: { tabId: tabId, allFrames: true }, func: getBackgroundColor })",
+        @"browser.test.assertEq(results[0].result, pinkValue)",
+        @"browser.test.assertEq(results[1].result, blueValue)",
+
+        @"await browser.scripting.removeCSS( { target: { tabId: tabId, frameIds: [ 0 ] }, files: [ 'backgroundColor.css' ] })",
+        @"results = await browser.scripting.executeScript( { target: { tabId: tabId, allFrames: true }, func: getBackgroundColor })",
+        @"browser.test.assertEq(results[0].result, transparentValue)",
+        @"browser.test.assertEq(results[1].result, blueValue)",
+
+        @"await browser.scripting.insertCSS( { target: { tabId: tabId, frameIds: [ 0 ] }, css: 'body { background-color: pink !important }' })",
+        @"results = await browser.scripting.executeScript( { target: { tabId: tabId, allFrames: true }, func: getBackgroundColor })",
+        @"browser.test.assertEq(results[0].result, pinkValue)",
+        @"browser.test.assertEq(results[1].result, blueValue)",
+
+        @"await browser.scripting.removeCSS( { target: { tabId: tabId, frameIds: [ 0 ] }, css: 'body { background-color: pink !important }' })",
+        @"results = await browser.scripting.executeScript( { target: { tabId: tabId, allFrames: true }, func: getBackgroundColor })",
+        @"browser.test.assertEq(results[0].result, transparentValue)",
+        @"browser.test.assertEq(results[1].result, blueValue)",
+
+        // FIXME: <https://webkit.org/b/262491> Test with subframe once there's support for style injections for specific frame Ids.
+
+        @"browser.test.notifyPass()"
+    ]);
+
+    static auto *backgroundColor = @"body { background-color: pink !important }";
+    static auto *fontSize = @"body { font-size: 104px }";
+
+    static auto *resources = @{
+        @"background.js": backgroundScript,
+        @"backgroundColor.css": backgroundColor,
+        @"fontSize.css": fontSize,
+    };
+
+    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:scriptingManifest resources:resources]);
+    auto manager = adoptNS([[TestWebExtensionManager alloc] initForExtension:extension.get()]);
+
+    auto *urlRequest = server.requestWithLocalhost();
+    auto *url = urlRequest.URL;
+
+    auto *matchPattern = [_WKWebExtensionMatchPattern matchPatternWithScheme:url.scheme host:url.host path:@"/*"];
+    [manager.get().context setPermissionStatus:_WKWebExtensionContextPermissionStatusGrantedExplicitly forMatchPattern:matchPattern];
+    [manager.get().defaultTab.mainWebView loadRequest:urlRequest];
+
+    [manager loadAndRun];
 }
 
 } // namespace TestWebKitAPI

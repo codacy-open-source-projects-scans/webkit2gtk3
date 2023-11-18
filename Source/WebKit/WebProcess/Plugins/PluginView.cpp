@@ -642,6 +642,23 @@ void PluginView::willDetachRenderer()
     m_plugin->willDetachRenderer();
 }
 
+bool PluginView::usesAsyncScrolling() const
+{
+    if (!m_isInitialized)
+        return false;
+
+    return m_plugin->usesAsyncScrolling();
+}
+
+
+ScrollingNodeID PluginView::scrollingNodeID() const
+{
+    if (!m_isInitialized)
+        return 0;
+
+    return m_plugin->scrollingNodeID();
+}
+
 RefPtr<FragmentedSharedBuffer> PluginView::liveResourceData() const
 {
     if (!m_isInitialized) {
@@ -903,6 +920,11 @@ CGFloat PluginView::contentScaleFactor() const
 bool PluginView::isUsingUISideCompositing() const
 {
     return m_webPage->isUsingUISideCompositing();
+}
+
+void PluginView::didChangeSettings()
+{
+    m_plugin->didChangeSettings();
 }
 
 } // namespace WebKit

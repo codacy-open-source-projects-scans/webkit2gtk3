@@ -88,17 +88,20 @@ static RefPtr<DeviceMotionData::RotationRate> convert(std::optional<DeviceMotion
 
 std::optional<DeviceMotionEvent::Acceleration> DeviceMotionEvent::acceleration() const
 {
-    return convert(m_deviceMotionData->acceleration());
+    RefPtr acceleration = m_deviceMotionData->acceleration();
+    return convert(acceleration.get());
 }
 
 std::optional<DeviceMotionEvent::Acceleration> DeviceMotionEvent::accelerationIncludingGravity() const
 {
-    return convert(m_deviceMotionData->accelerationIncludingGravity());
+    RefPtr accelerationIncludingGravity = m_deviceMotionData->accelerationIncludingGravity();
+    return convert(accelerationIncludingGravity.get());
 }
 
 std::optional<DeviceMotionEvent::RotationRate> DeviceMotionEvent::rotationRate() const
 {
-    return convert(m_deviceMotionData->rotationRate());
+    RefPtr rotationRate = m_deviceMotionData->rotationRate();
+    return convert(rotationRate.get());
 }
 
 std::optional<double> DeviceMotionEvent::interval() const
@@ -132,7 +135,7 @@ void DeviceMotionEvent::requestPermission(Document& document, PermissionPromise&
 {
     RefPtr window = document.domWindow();
     if (!window || !document.page())
-        return promise.reject(Exception { InvalidStateError, "No browsing context"_s });
+        return promise.reject(Exception { ExceptionCode::InvalidStateError, "No browsing context"_s });
 
     String errorMessage;
     if (!window->isAllowedToUseDeviceMotion(errorMessage)) {
@@ -142,7 +145,7 @@ void DeviceMotionEvent::requestPermission(Document& document, PermissionPromise&
 
     document.deviceOrientationAndMotionAccessController().shouldAllowAccess(document, [promise = WTFMove(promise)](auto permissionState) mutable {
         if (permissionState == PermissionState::Prompt)
-            return promise.reject(Exception { NotAllowedError, "Requesting device motion access requires a user gesture to prompt"_s });
+            return promise.reject(Exception { ExceptionCode::NotAllowedError, "Requesting device motion access requires a user gesture to prompt"_s });
         promise.resolve(permissionState);
     });
 }

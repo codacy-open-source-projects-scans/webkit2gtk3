@@ -4236,10 +4236,12 @@
          "joone.hur@collabora.co.uk"
       ],
       "expertise" : "The WebKitGTK port",
+      "github" : "joone",
       "name" : "Joone Hur",
       "nicks" : [
          "joone"
-      ]
+      ],
+      "status" : "committer"
    },
    {
       "emails" : [
@@ -5288,6 +5290,13 @@
       "nicks" : [
          "marywu"
       ]
+   },
+   {
+      "emails" : [
+         "krzywix@apple.com"
+      ],
+      "github" : "mkrzywix",
+      "name" : "Mateusz Krzywicki"
    },
    {
       "emails" : [

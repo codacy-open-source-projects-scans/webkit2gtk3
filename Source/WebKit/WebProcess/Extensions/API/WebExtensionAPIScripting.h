@@ -51,11 +51,24 @@ public:
     void unregisterContentScripts(NSDictionary *filter, Ref<WebExtensionCallbackHandler>&&, NSString **outExceptionString);
 
 private:
+    bool hasValidExecutionWorld(NSDictionary *script, NSString **outExceptionString);
+
     bool validateScript(NSDictionary *, NSString **outExceptionString);
     bool validateTarget(NSDictionary *, NSString **outExceptionString);
     bool validateCSS(NSDictionary *, NSString **outExceptionString);
+
+    bool validateRegisteredScripts(NSArray *, bool isRegisteringScript, NSString **outExceptionString);
+    bool validateFilter(NSDictionary *filter, NSString **outExceptionString);
+
+    void parseCSSInjectionOptions(NSDictionary *, WebExtensionScriptInjectionParameters&);
+    void parseTargetInjectionOptions(NSDictionary *, WebExtensionScriptInjectionParameters&, NSString **outExceptionString);
+    void parseScriptInjectionOptions(NSDictionary *, WebExtensionScriptInjectionParameters&);
+    void parseRegisteredContentScripts(NSArray *, Vector<WebExtensionRegisteredScriptParameters>&);
+
 #endif
 };
+
+NSArray *toWebAPI(const Vector<WebExtensionScriptInjectionResultParameters>&, bool returnExecutionResultOnly);
 
 } // namespace WebKit
 

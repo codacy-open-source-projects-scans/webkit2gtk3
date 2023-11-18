@@ -48,15 +48,12 @@ private:
 
     void teardown() override;
 
-    void createPDFDocument() override;
     void installPDFDocument() override;
 
     CGFloat scaleFactor() const override;
 
     WebCore::IntSize contentsSize() const override;
     unsigned firstPageHeight() const override;
-
-    bool isLocked() const override;
 
     RetainPtr<PDFDocument> pdfDocumentForPrinting() const override;
     WebCore::FloatSize pdfDocumentSizeForPrinting() const override;
@@ -68,8 +65,9 @@ private:
 
     RefPtr<WebCore::FragmentedSharedBuffer> liveResourceData() const override;
 
+    bool wantsWheelEvents() const override { return false; }
     bool handleMouseEvent(const WebMouseEvent&) override;
-    bool handleWheelEvent(const WebWheelEvent&) override;
+    bool handleWheelEvent(const WebWheelEvent&) override { return false; }
     bool handleMouseEnterEvent(const WebMouseEvent&) override;
     bool handleMouseLeaveEvent(const WebMouseEvent&) override;
     bool handleContextMenuEvent(const WebMouseEvent&) override;
@@ -101,14 +99,33 @@ private:
     void didChangeScrollOffset() override;
     void didChangeIsInWindow();
 
+    void didChangeSettings() override;
+
+    bool usesAsyncScrolling() const final { return true; }
+    WebCore::ScrollingNodeID scrollingNodeID() const final { return m_scrollingNodeID; }
+
     void invalidateScrollbarRect(WebCore::Scrollbar&, const WebCore::IntRect&) override;
     void invalidateScrollCornerRect(const WebCore::IntRect&) override;
+    void updateScrollingExtents();
+    ScrollingCoordinator* scrollingCoordinator();
+
+    // HUD Actions.
+#if ENABLE(PDF_HUD)
+    void zoomIn() final;
+    void zoomOut() final;
+    void save(CompletionHandler<void(const String&, const URL&, const IPC::DataReference&)>&&) final;
+    void openWithPreview(CompletionHandler<void(const String&, FrameInfoData&&, const IPC::DataReference&, const String&)>&&) final;
+#endif
 
     RefPtr<WebCore::GraphicsLayer> createGraphicsLayer(const String& name, GraphicsLayer::Type);
 
     PDFDocumentLayout m_documentLayout;
     RefPtr<WebCore::GraphicsLayer> m_rootLayer;
-    RefPtr<WebCore::GraphicsLayer> m_contentsLayer; // FIXME: Temporary, this will be replaced with a TiledBacking.
+    RefPtr<WebCore::GraphicsLayer> m_scrollContainerLayer;
+    RefPtr<WebCore::GraphicsLayer> m_scrolledContentsLayer;
+    RefPtr<WebCore::GraphicsLayer> m_contentsLayer;
+
+    WebCore::ScrollingNodeID m_scrollingNodeID { 0 };
 };
 
 } // namespace WebKit

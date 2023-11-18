@@ -1821,16 +1821,6 @@ struct WebCore::ViewportArguments {
 };
 #endif // ENABLE(META_VIEWPORT)
 
-header: <WebCore/DisplayListItems.h>
-[AdditionalEncoder=StreamConnectionEncoder, CustomHeader] class WebCore::DisplayList::SetInlineFillColor {
-    WebCore::PackedColor::RGBA colorData()
-}
-
-[AdditionalEncoder=StreamConnectionEncoder, CustomHeader] class WebCore::DisplayList::SetInlineStroke {
-    std::optional<WebCore::PackedColor::RGBA> colorData()
-    std::optional<float> thickness()
-}
-
 header: <WebCore/HTTPHeaderMap.h>
 [Nested, CustomHeader] struct WebCore::HTTPHeaderMap::CommonHeader {
     WebCore::HTTPHeaderName key;
@@ -5236,6 +5226,13 @@ enum class WebCore::ShouldOpenExternalURLsPolicy : uint8_t {
     ShouldAllow,
 };
 
+header: <WebCore/NavigationScheduler.h>
+enum class WebCore::ScheduleLocationChangeResult : uint8_t {
+    Stopped,
+    Completed,
+    Started
+};
+
 header: <WebCore/DocumentLoader.h>
 [CustomHeader] enum class WebCore::MouseEventPolicy : uint8_t {
     Default,
@@ -5790,17 +5787,17 @@ struct WebCore::AnimationEffectTiming {
 };
 
 header: <WebCore/AcceleratedEffect.h>
-[CustomHeader] struct WebCore::AcceleratedEffectKeyframe {
-    double offset;
-    WebCore::AcceleratedEffectValues values;
-    RefPtr<WebCore::TimingFunction> timingFunction;
-    std::optional<WebCore::CompositeOperation> compositeOperation;
-    OptionSet<WebCore::AcceleratedEffectProperty> animatedProperties;
+[CustomHeader, Nested] class WebCore::AcceleratedEffect::Keyframe {
+    double offset();
+    WebCore::AcceleratedEffectValues values();
+    RefPtr<WebCore::TimingFunction> timingFunction();
+    std::optional<WebCore::CompositeOperation> compositeOperation();
+    OptionSet<WebCore::AcceleratedEffectProperty> animatedProperties();
 };
 
 [RefCounted] class WebCore::AcceleratedEffect {
     WebCore::AnimationEffectTiming timing();
-    Vector<WebCore::AcceleratedEffectKeyframe> keyframes();
+    Vector<WebCore::AcceleratedEffect::Keyframe> keyframes();
     WebCore::WebAnimationType animationType();
     WebCore::CompositeOperation compositeOperation();
     RefPtr<WebCore::TimingFunction> defaultKeyframeTimingFunction();
@@ -6256,7 +6253,7 @@ using WebCore::FontSelectionValue::BackingType = int16_t;
     std::optional<WebCore::FontSelectionRange> slope;
 };
 
-struct WebCore::RemoteMouseEventData {
+struct WebCore::RemoteUserInputEventData {
     WebCore::FrameIdentifier targetFrameID;
     WebCore::IntPoint transformedPoint;
 };
@@ -6614,3 +6611,220 @@ header: <WebCore/WheelEventTestMonitor.h>
     ContentScrollInProgress,
     RequestedScrollPosition,
 };
+
+header: <WebCore/CrossOriginAccessControl.h>
+[OptionSet] enum class WebCore::HTTPHeadersToKeepFromCleaning : uint8_t {
+    AcceptEncoding,
+    CacheControl,
+    ContentType,
+    Origin,
+    Pragma,
+    Referer,
+    UserAgent,
+};
+
+enum class WebCore::ExceptionCode : uint8_t {
+    IndexSizeError,
+    HierarchyRequestError,
+    WrongDocumentError,
+    InvalidCharacterError,
+    NoModificationAllowedError,
+    NotFoundError,
+    NotSupportedError,
+    InUseAttributeError,
+    InvalidStateError,
+    SyntaxError,
+    InvalidModificationError,
+    NamespaceError,
+    InvalidAccessError,
+    TypeMismatchError,
+    SecurityError,
+    NetworkError,
+    AbortError,
+    URLMismatchError,
+    QuotaExceededError,
+    TimeoutError,
+    InvalidNodeTypeError,
+    DataCloneError,
+    EncodingError,
+    NotReadableError,
+    UnknownError,
+    ConstraintError,
+    DataError,
+    TransactionInactiveError,
+    ReadonlyError,
+    VersionError,
+    OperationError,
+    NotAllowedError,
+    RangeError,
+    TypeError,
+    JSSyntaxError,
+    StackOverflowError,
+    OutOfMemoryError,
+    ExistingExceptionError,
+}
+
+#if ENABLE(SERVICE_WORKER)
+header: <WebCore/BackgroundFetchFailureReason.h>
+enum class WebCore::BackgroundFetchFailureReason : uint8_t {
+    EmptyString,
+    Aborted,
+    BadStatus,
+    FetchError,
+    QuotaExceeded,
+    DownloadTotalExceeded
+};
+#endif
+
+#if ENABLE(SERVICE_WORKER)
+header: <WebCore/BackgroundFetchResult.h>
+enum class WebCore::BackgroundFetchResult : uint8_t {
+    EmptyString,
+    Success,
+    Failure
+};
+#endif
+
+enum class WebCore::ResourceErrorBaseType : uint8_t {
+     Null,
+     General,
+     AccessControl,
+     Cancellation,
+     Timeout,
+}
+
+enum class WebCore::CredentialPersistence : uint8_t {
+     None,
+     ForSession,
+     Permanent,
+}
+header: <WebCore/Pagination.h>
+enum class WebCore::PaginationMode : uint8_t {
+    Unpaginated,
+    LeftToRightPaginated,
+    RightToLeftPaginated,
+    TopToBottomPaginated,
+    BottomToTopPaginated
+};
+
+header: <WebCore/RenderObject.h>
+enum class WebCore::RepaintRectCalculation : bool;
+
+[Nested] enum class WebCore::HdrMetadataType : uint8_t {
+    SmpteSt2086,
+    SmpteSt209410,
+    SmpteSt209440,
+};
+
+[Nested] enum class WebCore::TransferFunction : uint8_t {
+     SRGB,
+     PQ,
+     HLG,
+};
+
+[Nested] enum class WebCore::ColorGamut : uint8_t {
+    SRGB,
+    P3,
+    Rec2020,
+};
+
+[RefCounted, AdditionalEncoder=StreamConnectionEncoder] class WebCore::ByteArrayPixelBuffer {
+    WebCore:: PixelBufferFormat format();
+    WebCore::IntSize size();
+    std::span<const uint8_t> dataSpan();
+}
+
+#if ENABLE(WEB_AUTHN)
+header: <WebCore/CredentialRequestOptions.h>
+enum class WebCore::MediationRequirement : uint8_t {
+    Silent,
+    Optional,
+    Required,
+    Conditional,
+};
+
+#if ENABLE(VIDEO)
+header: <WebCore/VTTCue.h>
+[Nested] enum class WebCore::VTTDirectionSetting : uint8_t {
+    Horizontal,
+    VerticalGrowingLeft,
+    VerticalGrowingRight,
+};
+
+[Nested] enum class WebCore::VTTLineAlignSetting : uint8_t {
+    Start,
+    Center,
+    End,
+};
+
+[Nested] enum class WebCore::VTTPositionAlignSetting : uint8_t {
+    LineLeft,
+    Center,
+    LineRight,
+    Auto,
+};
+
+[Nested] enum class WebCore::VTTAlignSetting : uint8_t {
+    Start,
+    Center,
+    End,
+    Left,
+    Right,
+};
+#endif
+
+#if ENABLE(CONTEXT_MENUS)
+header: <WebCore/ContextMenuContext.h>
+enum class WebCore::ContextMenuContextType : uint8_t {
+    ContextMenu,
+#if ENABLE(SERVICE_CONTROLS)
+    ServicesMenu,
+#endif
+#if ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS)
+    MediaControls,
+#endif
+};
+#endif
+
+#if ENABLE(TRACKING_PREVENTION)
+header: <WebCore/CrossSiteNavigationDataTransfer.h>
+[OptionSet] enum class WebCore::CrossSiteNavigationDataTransferFlag : uint8_t {
+    DestinationLinkDecoration,
+    ReferrerLinkDecoration
+};
+#endif
+
+header: <WebCore/ScrollingCoordinatorTypes.h>
+[Nested, OptionSet] enum class WebCore::SynchronousScrollingReason : uint8_t {
+    ForcedOnMainThread,
+    HasViewportConstrainedObjectsWithoutSupportingFixedLayers,
+    HasNonLayerViewportConstrainedObjects,
+    IsImageDocument,
+    HasSlowRepaintObjects,
+    DescendantScrollersHaveSynchronousScrolling
+};
+
+header: <WebCore/ScrollingCoordinatorTypes.h>
+[Nested] enum class WebCore::ScrollRequestType : uint8_t {
+    PositionUpdate,
+    DeltaUpdate,
+    CancelAnimatedScroll
+};
+
+header: <WebCore/ScrollingCoordinatorTypes.h>
+[Nested] enum class WebCore::KeyboardScrollAction : uint8_t {
+    StartAnimation,
+    StopWithAnimation,
+    StopImmediately
+};
+
+struct WebCore::MarkupExclusionRule {
+    AtomString elementLocalName;
+    Vector<std::pair<AtomString, AtomString>> attributes;
+};
+
+header: <WebCore/Font.h>
+[Nested] enum class WebCore::FontOrigin : bool;
+[Nested] enum class WebCore::FontIsInterstitial : bool;
+[Nested] enum class WebCore::FontVisibility : bool;
+[Nested] enum class WebCore::FontIsOrientationFallback : bool;

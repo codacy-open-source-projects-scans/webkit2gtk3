@@ -271,13 +271,13 @@ void RemoteDeviceProxy::createComputePipelineAsync(const WebCore::WebGPU::Comput
     }
 
     auto identifier = WebGPUIdentifier::generate();
-    auto sendResult = sendWithAsyncReply(Messages::RemoteDevice::CreateComputePipelineAsync(*convertedDescriptor, identifier), [identifier, callback = WTFMove(callback), strongThis = Ref { *this }, label = WTFMove(convertedDescriptor->label)](auto result) mutable {
+    auto sendResult = sendWithAsyncReply(Messages::RemoteDevice::CreateComputePipelineAsync(*convertedDescriptor, identifier), [identifier, callback = WTFMove(callback), protectedThis = Ref { *this }, label = WTFMove(convertedDescriptor->label)](auto result) mutable {
         if (!result) {
             callback(nullptr);
             return;
         }
 
-        auto computePipelineResult = RemoteComputePipelineProxy::create(strongThis, strongThis->m_convertToBackingContext, identifier);
+        auto computePipelineResult = RemoteComputePipelineProxy::create(protectedThis, protectedThis->m_convertToBackingContext, identifier);
         computePipelineResult->setLabel(WTFMove(label));
         callback(WTFMove(computePipelineResult));
     });
@@ -292,13 +292,13 @@ void RemoteDeviceProxy::createRenderPipelineAsync(const WebCore::WebGPU::RenderP
         return;
 
     auto identifier = WebGPUIdentifier::generate();
-    auto sendResult = sendWithAsyncReply(Messages::RemoteDevice::CreateRenderPipelineAsync(*convertedDescriptor, identifier), [identifier, callback = WTFMove(callback), strongThis = Ref { *this }, label = WTFMove(convertedDescriptor->label)](auto result) mutable {
+    auto sendResult = sendWithAsyncReply(Messages::RemoteDevice::CreateRenderPipelineAsync(*convertedDescriptor, identifier), [identifier, callback = WTFMove(callback), protectedThis = Ref { *this }, label = WTFMove(convertedDescriptor->label)](auto result) mutable {
         if (!result) {
             callback(nullptr);
             return;
         }
 
-        auto renderPipelineResult = RemoteRenderPipelineProxy::create(strongThis, strongThis->m_convertToBackingContext, identifier);
+        auto renderPipelineResult = RemoteRenderPipelineProxy::create(protectedThis, protectedThis->m_convertToBackingContext, identifier);
         renderPipelineResult->setLabel(WTFMove(label));
         callback(WTFMove(renderPipelineResult));
     });
@@ -387,6 +387,15 @@ void RemoteDeviceProxy::setLabelInternal(const String& label)
 {
     auto sendResult = send(Messages::RemoteDevice::SetLabel(label));
     UNUSED_VARIABLE(sendResult);
+}
+
+void RemoteDeviceProxy::resolveDeviceLostPromise(CompletionHandler<void(WebCore::WebGPU::DeviceLostReason)>&& callback)
+{
+    auto sendResult = sendWithAsyncReply(Messages::RemoteDevice::ResolveDeviceLostPromise(), [callback = WTFMove(callback)] (WebCore::WebGPU::DeviceLostReason reason) mutable {
+        callback(reason);
+    });
+
+    UNUSED_PARAM(sendResult);
 }
 
 } // namespace WebKit::WebGPU

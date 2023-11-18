@@ -40,6 +40,7 @@
 #include "WebExtensionDynamicScripts.h"
 #include "WebExtensionEventListenerType.h"
 #include "WebExtensionFrameIdentifier.h"
+#include "WebExtensionFrameParameters.h"
 #include "WebExtensionMatchPattern.h"
 #include "WebExtensionMessagePort.h"
 #include "WebExtensionPortChannelIdentifier.h"
@@ -64,9 +65,9 @@
 #include <wtf/WeakHashMap.h>
 #include <wtf/WeakPtr.h>
 
+OBJC_CLASS NSArray;
 OBJC_CLASS NSDate;
 OBJC_CLASS NSDictionary;
-OBJC_CLASS NSMapTable;
 OBJC_CLASS NSMutableDictionary;
 OBJC_CLASS NSString;
 OBJC_CLASS NSURL;
@@ -85,6 +86,13 @@ namespace WebKit {
 class WebExtension;
 class WebUserContentControllerProxy;
 struct WebExtensionContextParameters;
+
+enum class WebExtensionContextInstallReason : uint8_t {
+    None,
+    ExtensionInstall,
+    ExtensionUpdate,
+    BrowserUpdate,
+};
 
 class WebExtensionContext : public API::ObjectImpl<API::Object::Type::WebExtensionContext>, public IPC::MessageReceiver {
     WTF_MAKE_NONCOPYABLE(WebExtensionContext);
@@ -168,12 +176,7 @@ public:
         SkipRequestedPermissions    = 1 << 1, // Don't check requested permissions.
     };
 
-    enum class InstallReason : uint8_t {
-        None,
-        ExtensionInstall,
-        ExtensionUpdate,
-        BrowserUpdate,
-    };
+    using InstallReason = WebExtensionContextInstallReason;
 
     enum class WebViewPurpose : uint8_t {
         Any,
@@ -214,7 +217,8 @@ public:
     void setInspectable(bool);
 
     const InjectedContentVector& injectedContents();
-    bool hasInjectedContentForURL(NSURL *);
+    bool hasInjectedContentForURL(const URL&);
+    bool hasInjectedContent();
 
     URL optionsPageURL() const;
     URL overrideNewTabPageURL() const;
@@ -240,14 +244,14 @@ public:
     void grantPermissions(PermissionsSet&&, WallTime expirationDate = WallTime::infinity());
     void denyPermissions(PermissionsSet&&, WallTime expirationDate = WallTime::infinity());
 
-    void grantPermissionMatchPatterns(MatchPatternSet&&, WallTime expirationDate = WallTime::infinity());
-    void denyPermissionMatchPatterns(MatchPatternSet&&, WallTime expirationDate = WallTime::infinity());
+    void grantPermissionMatchPatterns(MatchPatternSet&&, WallTime expirationDate = WallTime::infinity(), EqualityOnly = EqualityOnly::Yes);
+    void denyPermissionMatchPatterns(MatchPatternSet&&, WallTime expirationDate = WallTime::infinity(), EqualityOnly = EqualityOnly::Yes);
 
     bool removeGrantedPermissions(PermissionsSet&);
-    bool removeGrantedPermissionMatchPatterns(MatchPatternSet&, EqualityOnly);
+    bool removeGrantedPermissionMatchPatterns(MatchPatternSet&, EqualityOnly = EqualityOnly::Yes);
 
     bool removeDeniedPermissions(PermissionsSet&);
-    bool removeDeniedPermissionMatchPatterns(MatchPatternSet&, EqualityOnly);
+    bool removeDeniedPermissionMatchPatterns(MatchPatternSet&, EqualityOnly = EqualityOnly::Yes);
 
     PermissionsMap::KeysConstIteratorRange currentPermissions() { return grantedPermissions().keys(); }
     PermissionMatchPatternsMap::KeysConstIteratorRange currentPermissionMatchPatterns() { return grantedPermissionMatchPatterns().keys(); }
@@ -294,7 +298,12 @@ public:
 
     void didMoveTab(const WebExtensionTab&, size_t oldIndex, const WebExtensionWindow* oldWindow = nullptr);
     void didReplaceTab(const WebExtensionTab& oldTab, const WebExtensionTab& newTab);
-    void didChangeTabProperties(const WebExtensionTab&, OptionSet<WebExtensionTab::ChangedProperties> = { });
+    void didChangeTabProperties(WebExtensionTab&, OptionSet<WebExtensionTab::ChangedProperties> = { });
+
+    void didStartProvisionalLoadForFrame(WebPageProxyIdentifier, WebExtensionFrameIdentifier, WebExtensionFrameIdentifier parentFrameID, const URL&, WallTime);
+    void didCommitLoadForFrame(WebPageProxyIdentifier, WebExtensionFrameIdentifier, WebExtensionFrameIdentifier parentFrameID, const URL&, WallTime);
+    void didFinishLoadForFrame(WebPageProxyIdentifier, WebExtensionFrameIdentifier, WebExtensionFrameIdentifier parentFrameID, const URL&, WallTime);
+    void didFailLoadForFrame(WebPageProxyIdentifier, WebExtensionFrameIdentifier, WebExtensionFrameIdentifier parentFrameID, const URL&, WallTime);
 
     WebExtensionAction& defaultAction();
     Ref<WebExtensionAction> getAction(WebExtensionWindow*);
@@ -402,6 +411,9 @@ private:
     void removeInjectedContent(MatchPatternSet&);
     void removeInjectedContent(WebExtensionMatchPattern&);
 
+    void loadDeclarativeNetRequestRules();
+    void compileDeclarativeNetRequestRules(NSArray *);
+
     // Action APIs
     void actionGetTitle(std::optional<WebExtensionWindowIdentifier>, std::optional<WebExtensionTabIdentifier>, CompletionHandler<void(std::optional<String>, std::optional<String>)>&&);
     void actionSetTitle(std::optional<WebExtensionWindowIdentifier>, std::optional<WebExtensionTabIdentifier>, const String& title, CompletionHandler<void(std::optional<String>)>&&);
@@ -470,6 +482,10 @@ private:
     void scriptingExecuteScript(const WebExtensionScriptInjectionParameters&, CompletionHandler<void(std::optional<Vector<WebExtensionScriptInjectionResultParameters>>, WebExtensionDynamicScripts::Error)>&&);
     void scriptingInsertCSS(const WebExtensionScriptInjectionParameters&, CompletionHandler<void(WebExtensionDynamicScripts::Error)>&&);
     void scriptingRemoveCSS(const WebExtensionScriptInjectionParameters&, CompletionHandler<void(WebExtensionDynamicScripts::Error)>&&);
+    void scriptingRegisterScripts(const Vector<WebExtensionRegisteredScriptParameters>& scripts, CompletionHandler<void(WebExtensionDynamicScripts::Error)>&&);
+    void scriptingUpdateRegisteredScripts(const Vector<WebExtensionRegisteredScriptParameters>& scripts, CompletionHandler<void(WebExtensionDynamicScripts::Error)>&&);
+    void scriptingGetRegisteredScripts(const Vector<String>&, CompletionHandler<void(std::optional<Vector<WebExtensionRegisteredScriptParameters>> scripts, WebExtensionDynamicScripts::Error)>&&);
+    void scriptingUnregisterScripts(const Vector<String>&, CompletionHandler<void(std::optional<Vector<WebExtensionRegisteredScriptParameters>> scripts, WebExtensionDynamicScripts::Error)>&&);
 
     // Tabs APIs
     void tabsCreate(WebPageProxyIdentifier, const WebExtensionTabParameters&, CompletionHandler<void(std::optional<WebExtensionTabParameters>, WebExtensionTab::Error)>&&);
@@ -508,6 +524,12 @@ private:
     void testMessage(String message, String sourceURL, unsigned lineNumber);
     void testYielded(String message, String sourceURL, unsigned lineNumber);
     void testFinished(bool result, String message, String sourceURL, unsigned lineNumber);
+
+    // WebNavigation APIs
+    void webNavigationGetFrame(WebExtensionTabIdentifier, WebExtensionFrameIdentifier, CompletionHandler<void(std::optional<WebExtensionFrameParameters>)>&&);
+    void webNavigationGetAllFrames(WebExtensionTabIdentifier, CompletionHandler<void(std::optional<Vector<WebExtensionFrameParameters>>)>&&);
+    void webNavigationTraverseFrameTreeForFrame(_WKFrameTreeNode *, _WKFrameTreeNode *parentFrame, WebExtensionTab*, Vector<WebExtensionFrameParameters> &);
+    std::optional<WebExtensionFrameParameters> webNavigationFindFrameIdentifierInFrameTree(_WKFrameTreeNode *, _WKFrameTreeNode *parentFrame, WebExtensionTab*, WebExtensionFrameIdentifier);
 
     // Windows APIs
     void windowsCreate(const WebExtensionWindowParameters&, CompletionHandler<void(std::optional<WebExtensionWindowParameters>, WebExtensionWindow::Error)>&&);
@@ -552,8 +574,6 @@ private:
 
     ListHashSet<URL> m_cachedPermissionURLs;
     HashMap<URL, PermissionState> m_cachedPermissionStates;
-
-    RetainPtr<NSMapTable> m_temporaryTabPermissionMatchPatterns;
 
     bool m_requestedOptionalAccessToAllHosts { false };
     bool m_hasAccessInPrivateBrowsing { false };
@@ -620,19 +640,5 @@ void WebExtensionContext::sendToContentScriptProcessesForEvent(WebExtensionEvent
 }
 
 } // namespace WebKit
-
-namespace WTF {
-
-template<> struct EnumTraits<WebKit::WebExtensionContext::InstallReason> {
-    using values = EnumValues<
-        WebKit::WebExtensionContext::InstallReason,
-        WebKit::WebExtensionContext::InstallReason::None,
-        WebKit::WebExtensionContext::InstallReason::ExtensionInstall,
-        WebKit::WebExtensionContext::InstallReason::ExtensionUpdate,
-        WebKit::WebExtensionContext::InstallReason::BrowserUpdate
-    >;
-};
-
-} // namespace WTF
 
 #endif // ENABLE(WK_WEB_EXTENSIONS)

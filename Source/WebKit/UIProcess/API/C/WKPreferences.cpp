@@ -1539,12 +1539,11 @@ bool WKPreferencesGetDownloadAttributeEnabled(WKPreferencesRef preferencesRef)
 
 void WKPreferencesSetIntersectionObserverEnabled(WKPreferencesRef preferencesRef, bool flag)
 {
-    toImpl(preferencesRef)->setIntersectionObserverEnabled(flag);
 }
 
 bool WKPreferencesGetIntersectionObserverEnabled(WKPreferencesRef preferencesRef)
 {
-    return toImpl(preferencesRef)->intersectionObserverEnabled();
+    return true;
 }
 
 void WKPreferencesSetMenuItemElementEnabled(WKPreferencesRef preferencesRef, bool flag)
@@ -1714,16 +1713,6 @@ bool WKPreferencesGetAllowMediaContentTypesRequiringHardwareSupportAsFallback(WK
 void WKPreferencesSetAllowMediaContentTypesRequiringHardwareSupportAsFallback(WKPreferencesRef preferencesRef, bool allow)
 {
     return toImpl(preferencesRef)->setAllowMediaContentTypesRequiringHardwareSupportAsFallback(allow);
-}
-
-void WKPreferencesSetStorageAccessAPIEnabled(WKPreferencesRef preferencesRef, bool flag)
-{
-    toImpl(preferencesRef)->setStorageAccessAPIEnabled(flag);
-}
-
-bool WKPreferencesGetStorageAccessAPIEnabled(WKPreferencesRef preferencesRef)
-{
-    return toImpl(preferencesRef)->storageAccessAPIEnabled();
 }
 
 void WKPreferencesSetSyntheticEditingCommandsEnabled(WKPreferencesRef preferencesRef, bool flag)
@@ -1914,6 +1903,15 @@ void WKPreferencesSetAVFoundationNSURLSessionEnabled(WKPreferencesRef, bool)
 }
 
 bool WKPreferencesGetAVFoundationNSURLSessionEnabled(WKPreferencesRef)
+{
+    return true;
+}
+
+void WKPreferencesSetStorageAccessAPIEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+}
+
+bool WKPreferencesGetStorageAccessAPIEnabled(WKPreferencesRef preferencesRef)
 {
     return true;
 }

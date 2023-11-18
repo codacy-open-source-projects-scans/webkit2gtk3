@@ -837,21 +837,6 @@ BroadcastChannelOriginPartitioningEnabled:
     WebCore:
       default: true
 
-BuiltInCDMKeyGroupingStrategyEnabled:
-  type: bool
-  status: unstable
-  category: media
-  humanReadableName: "Built-in CDM key grouping strategy"
-  humanReadableDescription: "Enable built-in CDM key grouping strategy"
-  condition: ENABLE(ENCRYPTED_MEDIA)
-  defaultValue:
-    WebCore:
-      default: false
-    WebKit:
-      default: false
-    WebKitLegacy:
-      default: false
-
 BuiltInNotificationsEnabled:
   type: bool
   status: unstable
@@ -1251,6 +1236,20 @@ CSSRhythmicSizingEnabled:
   category: css
   humanReadableName: "CSS Rhythmic Sizing"
   humanReadableDescription: "Enable CSS Rhythmic Sizing properties"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
+CSSScopeAtRuleEnabled:
+  type: bool
+  status: testable
+  category: css
+  humanReadableName: "CSS Scoping (@scope)"
+  humanReadableDescription: "Enable the CSS Scoping feature with @scope rule"
   defaultValue:
     WebKitLegacy:
       default: false
@@ -3462,19 +3461,6 @@ InterruptVideoOnPageVisibilityChangeEnabled:
     WebCore:
       default: false
 
-IntersectionObserverEnabled:
-  type: bool
-  status: mature
-  humanReadableName: "Intersection Observer"
-  humanReadableDescription: "Enable Intersection Observer support"
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
-
 InvisibleAutoplayNotPermitted:
   type: bool
   status: embedder
@@ -5450,19 +5436,6 @@ RequiresUserGestureToLoadVideo:
       "PLATFORM(IOS_FAMILY)": true
       default: false
 
-ResizeObserverEnabled:
-  type: bool
-  status: mature
-  humanReadableName: "Resize Observer"
-  humanReadableDescription: "Enable Resize Observer support"
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
-
 ResourceLoadSchedulingEnabled:
   type: bool
   status: internal
@@ -6403,19 +6376,6 @@ StorageAPIEstimateEnabled:
       "PLATFORM(COCOA)" : true
       default: false
 
-StorageAccessAPIEnabled:
-  type: bool
-  status: mature
-  humanReadableName: "Storage Access API"
-  humanReadableDescription: "Enable Storage Access API"
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
-
 StorageBlockingPolicy:
   type: uint32_t
   humanReadableName: "Storage Blocking Policy"
@@ -6704,6 +6664,20 @@ TreatsAnyTextCSSLinkAsStylesheet:
   defaultValue:
     WebKitLegacy:
       PLATFORM(MAC): WebKit::defaultTreatsAnyTextCSSLinkAsStylesheet()
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
+UAVisualTransitionDetectionEnabled:
+  type: bool
+  status: testable
+  category: dom
+  humanReadableName: "Detect UA visual transitions"
+  humanReadableDescription: "Enable detection of UA visual transitions"
+  defaultValue:
+    WebKitLegacy:
       default: false
     WebKit:
       default: false
@@ -7078,16 +7052,19 @@ VerifyWindowOpenUserGestureFromUIProcess:
 
 VerticalFormControlsEnabled:
   type: bool
-  status: testable
+  status: stable
   category: html
   humanReadableName: "Vertical form control support"
   humanReadableDescription: "Enable support for form controls in vertical writing mode"
   defaultValue:
     WebKitLegacy:
+      "PLATFORM(COCOA)": true
       default: false
     WebKit:
+      "PLATFORM(COCOA)": true
       default: false
     WebCore:
+      "PLATFORM(COCOA)": true
       default: false
 
 VideoFullscreenRequiresElementFullscreen:

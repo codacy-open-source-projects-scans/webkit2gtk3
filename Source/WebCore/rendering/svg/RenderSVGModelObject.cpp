@@ -34,6 +34,7 @@
 
 #if ENABLE(LAYER_BASED_SVG_ENGINE)
 #include "LegacyRenderSVGResource.h"
+#include "RenderElementInlines.h"
 #include "RenderGeometryMap.h"
 #include "RenderLayer.h"
 #include "RenderLayerInlines.h"
@@ -276,7 +277,7 @@ Path RenderSVGModelObject::computeClipPath(AffineTransform& transform) const
     if (layer()->isTransformed())
         transform.multiply(layer()->currentTransform(RenderStyle::individualTransformOperations()).toAffineTransform());
 
-    return pathFromGraphicsElement(&downcast<SVGGraphicsElement>(element()));
+    return pathFromGraphicsElement(downcast<SVGGraphicsElement>(element()));
 }
 
 } // namespace WebCore

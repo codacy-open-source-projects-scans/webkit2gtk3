@@ -867,6 +867,7 @@ static bool supportsMultisampling(WGPUTextureFormat format)
     case WGPUTextureFormat_BGRA8Unorm:
     case WGPUTextureFormat_BGRA8UnormSrgb:
     case WGPUTextureFormat_RGB10A2Unorm:
+    case WGPUTextureFormat_RGB10A2Uint:
     case WGPUTextureFormat_RG11B10Ufloat:
     case WGPUTextureFormat_RGBA16Uint:
     case WGPUTextureFormat_RGBA16Sint:
@@ -888,7 +889,6 @@ static bool supportsMultisampling(WGPUTextureFormat format)
     case WGPUTextureFormat_RGBA32Uint:
     case WGPUTextureFormat_RGBA32Sint:
     case WGPUTextureFormat_RGB9E5Ufloat:
-    case WGPUTextureFormat_RGB10A2Uint:
     case WGPUTextureFormat_BC1RGBAUnorm:
     case WGPUTextureFormat_BC1RGBAUnormSrgb:
     case WGPUTextureFormat_BC2RGBAUnorm:
@@ -1304,7 +1304,7 @@ bool Device::validateCreateTexture(const WGPUTextureDescriptor& descriptor, cons
         if (descriptor.size.depthOrArrayLayers != 1)
             return false;
 
-        if (descriptor.usage & WGPUTextureUsage_StorageBinding)
+        if ((descriptor.usage & WGPUTextureUsage_StorageBinding) || !(descriptor.usage & WGPUTextureUsage_RenderAttachment))
             return false;
 
         if (!isRenderableFormat(descriptor.format))
@@ -1970,7 +1970,7 @@ static MTLStorageMode storageMode(bool deviceHasUnifiedMemory, bool supportsNonP
 
 Ref<Texture> Device::createTexture(const WGPUTextureDescriptor& descriptor)
 {
-    if (descriptor.nextInChain)
+    if (descriptor.nextInChain || !isValid())
         return Texture::createInvalid(*this);
 
     // https://gpuweb.github.io/gpuweb/#dom-gpudevice-createtexture

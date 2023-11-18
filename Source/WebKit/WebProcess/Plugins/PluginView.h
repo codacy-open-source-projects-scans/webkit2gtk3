@@ -105,6 +105,8 @@ public:
 
     void invalidateRect(const WebCore::IntRect&) final;
 
+    void didChangeSettings();
+
 private:
     PluginView(WebCore::HTMLPlugInElement&, const URL&, const String& contentType, bool shouldUseManualLoader, WebPage&);
     virtual ~PluginView();
@@ -139,6 +141,9 @@ private:
     bool wantsWheelEvents() final;
     bool shouldAllowNavigationFromDrags() const final;
     void willDetachRenderer() final;
+
+    bool usesAsyncScrolling() const final;
+    WebCore::ScrollingNodeID scrollingNodeID() const final;
 
     // WebCore::Widget
     void setFrameRect(const WebCore::IntRect&) final;

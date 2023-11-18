@@ -38,8 +38,8 @@
 #import "WKWebViewPrivate.h"
 #import "WebExtensionContextProxy.h"
 #import "WebExtensionContextProxyMessages.h"
+#import "WebExtensionRegisteredScriptParameters.h"
 #import "WebExtensionScriptInjectionParameters.h"
-#import "WebExtensionScriptInjectionResultParameters.h"
 #import "WebExtensionTab.h"
 #import "WebExtensionTabIdentifier.h"
 #import "WebExtensionUtilities.h"
@@ -73,8 +73,10 @@ void WebExtensionContext::scriptingExecuteScript(const WebExtensionScriptInjecti
         return;
     }
 
-    // FIXME: <https://webkit.org/b/259954> Implement scripting.executeScript().
-    completionHandler({ }, std::nullopt);
+    auto scriptPairs = getSourcePairsForParameters(parameters, m_extension);
+    executeScript(scriptPairs, webView, *m_contentScriptWorld, tab.get(), parameters, *this, [completionHandler = WTFMove(completionHandler)](InjectionResultHolder& injectionResults) mutable {
+        completionHandler(injectionResults.results, std::nullopt);
+    });
 }
 
 void WebExtensionContext::scriptingInsertCSS(const WebExtensionScriptInjectionParameters& parameters, CompletionHandler<void(WebExtensionDynamicScripts::Error)>&& completionHandler)
@@ -100,7 +102,7 @@ void WebExtensionContext::scriptingInsertCSS(const WebExtensionScriptInjectionPa
     // FIXME: <https://webkit.org/b/262491> There is currently no way to inject CSS in specific frames based on ID's. If 'frameIds' is passed, default to the main frame.
     auto injectedFrames = parameters.frameIDs ? WebCore::UserContentInjectedFrames::InjectInTopFrameOnly : WebCore::UserContentInjectedFrames::InjectInAllFrames;
 
-    SourcePairs styleSheetPairs = getSourcePairsForResource(parameters.files, parameters.css, m_extension);
+    auto styleSheetPairs = getSourcePairsForParameters(parameters, m_extension);
     injectStyleSheets(styleSheetPairs, webView, *m_contentScriptWorld, injectedFrames, *this);
 
     completionHandler(std::nullopt);
@@ -134,10 +136,38 @@ void WebExtensionContext::scriptingRemoveCSS(const WebExtensionScriptInjectionPa
     // FIXME: <https://webkit.org/b/262491> There is currently no way to inject CSS in specific frames based on ID's. If 'frameIds' is passed, default to the main frame.
     auto injectedFrames = parameters.frameIDs ? WebCore::UserContentInjectedFrames::InjectInTopFrameOnly : WebCore::UserContentInjectedFrames::InjectInAllFrames;
 
-    Vector<std::optional<SourcePair>> styleSheetPairs = getSourcePairsForResource(parameters.files, parameters.css, m_extension);
-    removeStyleSheets(styleSheetPairs, injectedFrames, *this);
+    auto styleSheetPairs = getSourcePairsForParameters(parameters, m_extension);
+    removeStyleSheets(styleSheetPairs, webView, injectedFrames, *this);
 
     completionHandler(std::nullopt);
+}
+
+void WebExtensionContext::scriptingRegisterScripts(const Vector<WebExtensionRegisteredScriptParameters>& scripts, CompletionHandler<void(WebExtensionDynamicScripts::Error)>&& completionHandler)
+{
+    // FIXME: <https://webkit.org/b/261769> Implement this.
+
+    completionHandler(std::nullopt);
+}
+
+void WebExtensionContext::scriptingUpdateRegisteredScripts(const Vector<WebExtensionRegisteredScriptParameters>& scripts, CompletionHandler<void(WebExtensionDynamicScripts::Error)>&& completionHandler)
+{
+    // FIXME: <https://webkit.org/b/261769> Implement this.
+
+    completionHandler(std::nullopt);
+}
+
+void WebExtensionContext::scriptingGetRegisteredScripts(const Vector<String>& scriptIDs, CompletionHandler<void(std::optional<Vector<WebExtensionRegisteredScriptParameters>> scripts, WebExtensionDynamicScripts::Error)>&& completionHandler)
+{
+    // FIXME: <https://webkit.org/b/261769> Implement this.
+
+    completionHandler({ }, std::nullopt);
+}
+
+void WebExtensionContext::scriptingUnregisterScripts(const Vector<String>& scriptIDs, CompletionHandler<void(std::optional<Vector<WebExtensionRegisteredScriptParameters>> scripts, WebExtensionDynamicScripts::Error)>&& completionHandler)
+{
+    // FIXME: <https://webkit.org/b/261769> Implement this.
+
+    completionHandler({ }, std::nullopt);
 }
 
 } // namespace WebKit

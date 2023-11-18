@@ -364,6 +364,7 @@ set(WebKit_SERIALIZATION_IN_FILES
 
     NetworkProcess/NetworkProcessCreationParameters.serialization.in
     NetworkProcess/NetworkResourceLoadParameters.serialization.in
+    NetworkProcess/NetworkSessionCreationParameters.serialization.in
 
     NetworkProcess/Classifier/ITPThirdPartyData.serialization.in
     NetworkProcess/Classifier/ITPThirdPartyDataForSpecificFirstParty.serialization.in
@@ -373,6 +374,9 @@ set(WebKit_SERIALIZATION_IN_FILES
 
     NetworkProcess/storage/FileSystemStorageError.serialization.in
 
+    Platform/IPC/FormDataReference.serialization.in
+    Platform/IPC/IPCSemaphore.serialization.in
+    Platform/IPC/SharedBufferReference.serialization.in
     Platform/IPC/StreamServerConnection.serialization.in
 
     Platform/SharedMemory.serialization.in
@@ -397,6 +401,7 @@ set(WebKit_SERIALIZATION_IN_FILES
     Shared/GPUProcessPreferencesForWebProcess.serialization.in
     Shared/GoToBackForwardItemParameters.serialization.in
     Shared/LayerTreeContext.serialization.in
+    Shared/LoadParameters.serialization.in
     Shared/LocalFrameCreationParameters.serialization.in
     Shared/Model.serialization.in
     Shared/NavigationActionData.serialization.in
@@ -406,22 +411,26 @@ set(WebKit_SERIALIZATION_IN_FILES
     Shared/PolicyDecision.serialization.in
     Shared/PrintInfo.serialization.in
     Shared/RTCNetwork.serialization.in
+    Shared/RTCPacketOptions.serialization.in
     Shared/RemoteWorkerInitializationData.serialization.in
     Shared/RemoteWorkerType.serialization.in
     Shared/ResourceLoadInfo.serialization.in
     Shared/ResourceLoadStatisticsParameters.serialization.in
     Shared/SameDocumentNavigationType.serialization.in
+    Shared/SandboxExtension.serialization.in
     Shared/ScrollingAccelerationCurve.serialization.in
     Shared/SessionState.serialization.in
     Shared/ShareableBitmap.serialization.in
     Shared/ShareableResource.serialization.in
     Shared/TextFlags.serialization.in
     Shared/TextRecognitionResult.serialization.in
+    Shared/URLSchemeTaskParameters.serialization.in
     Shared/UpdateInfo.serialization.in
     Shared/UserContentControllerParameters.serialization.in
     Shared/VisibleContentRectUpdateInfo.serialization.in
     Shared/WTFArgumentCoders.serialization.in
     Shared/WebBackForwardListCounts.serialization.in
+    Shared/WebContextMenuItemData.serialization.in
     Shared/WebCoreArgumentCoders.serialization.in
     Shared/WebCompiledContentRuleListData.serialization.in
     Shared/WebEvent.serialization.in
@@ -432,6 +441,7 @@ set(WebKit_SERIALIZATION_IN_FILES
     Shared/WebPageGroupData.serialization.in
     Shared/WebPageNetworkParameters.serialization.in
     Shared/WebPopupItem.serialization.in
+    Shared/WebPreferencesStore.serialization.in
     Shared/WebProcessCreationParameters.serialization.in
     Shared/WebProcessDataStoreParameters.serialization.in
     Shared/WebPushDaemonConnectionConfiguration.serialization.in
@@ -538,6 +548,7 @@ set(WebKit_SERIALIZATION_IN_FILES
     WebProcess/GPU/media/RemoteCDMInstanceConfiguration.serialization.in
     WebProcess/GPU/media/RemoteMediaPlayerConfiguration.serialization.in
     WebProcess/GPU/media/RemoteMediaPlayerState.serialization.in
+    WebProcess/GPU/media/RemoteVideoFrameProxyProperties.serialization.in
 
     WebProcess/GPU/webrtc/SharedVideoFrame.serialization.in
 
@@ -559,13 +570,11 @@ set(WebCore_SERIALIZATION_IN_FILES
     IndexedDB.serialization.in
     LayoutMilestones.serialization.in
     MDNSRegisterError.serialization.in
-    MediaPlaybackTargetContext.serialization.in
     MediaProducer.serialization.in
     PlatformEvent.serialization.in
     PlatformMediaSession.serialization.in
     PlatformScreen.serialization.in
     PlatformWheelEvent.serialization.in
-    PlaybackSessionModel.serialization.in
     ProtectionSpaceBase.serialization.in
     ScrollTypes.serialization.in
     WebGPU.serialization.in

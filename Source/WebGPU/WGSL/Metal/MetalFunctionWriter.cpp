@@ -120,6 +120,7 @@ private:
     void generatePackingHelpers(AST::Structure&);
     bool emitPackedVector(const Types::Vector&);
     void serializeConstant(const Type*, ConstantValue);
+    void serializeBinaryExpression(AST::Expression&, AST::BinaryOperation, AST::Expression&);
 
     StringBuilder& m_stringBuilder;
     CallGraph& m_callGraph;
@@ -241,6 +242,23 @@ void FunctionDefinitionWriter::emitNecessaryHelpers()
                 m_stringBuilder.append(m_indent, "predicate = predicate || (V(lhs) == V(numeric_limits<T>::lowest()) && V(rhs) == V(-1));\n");
             }
             m_stringBuilder.append(m_indent, "return lhs / select(V(rhs), V(1), predicate);\n");
+        }
+        m_stringBuilder.append(m_indent, "}\n\n");
+    }
+
+    if (m_callGraph.ast().usesModulo()) {
+        m_stringBuilder.append(m_indent, "template<typename T, typename U, typename V = conditional_t<is_scalar_v<U>, T, U>>\n");
+        m_stringBuilder.append(m_indent, "V __wgslMod(T lhs, U rhs)\n");
+        m_stringBuilder.append(m_indent, "{\n");
+        {
+            IndentationScope scope(m_indent);
+            m_stringBuilder.append(m_indent, "auto predicate = V(rhs) == V(0);\n");
+            m_stringBuilder.append(m_indent, "if constexpr (is_signed_v<U>)\n");
+            {
+                IndentationScope scope(m_indent);
+                m_stringBuilder.append(m_indent, "predicate = predicate || (V(lhs) == V(numeric_limits<T>::lowest()) && V(rhs) == V(-1));\n");
+            }
+            m_stringBuilder.append(m_indent, "return select(lhs % V(rhs), V(0), predicate);\n");
         }
         m_stringBuilder.append(m_indent, "}\n\n");
     }
@@ -986,6 +1004,62 @@ static void emitTextureDimensions(FunctionDefinitionWriter* writer, AST::CallExp
     writer->stringBuilder().append(")");
 }
 
+static void emitTextureGather(FunctionDefinitionWriter* writer, AST::CallExpression& call)
+{
+    ASSERT(call.arguments().size() > 1);
+    unsigned offset = 0;
+    const char* component = nullptr;
+    bool hasOffset = true;
+    auto& firstArgument = call.arguments()[0];
+    if (std::holds_alternative<Types::Primitive>(*firstArgument.inferredType())) {
+        offset = 1;
+        switch (firstArgument.constantValue()->integerValue()) {
+        case 0:
+            component = "x";
+            break;
+        case 1:
+            component = "y";
+            break;
+        case 2:
+            component = "z";
+            break;
+        case 3:
+            component = "w";
+            break;
+        default:
+            RELEASE_ASSERT_NOT_REACHED();
+        }
+
+        auto& textureType = std::get<Types::Texture>(*call.arguments()[1].inferredType());
+        if (textureType.kind == Types::Texture::Kind::Texture2d || textureType.kind == Types::Texture::Kind::Texture2dArray) {
+            auto& lastArgument = call.arguments().last();
+            auto* vectorType = std::get_if<Types::Vector>(lastArgument.inferredType());
+            if (!vectorType || !satisfies(vectorType->element, Constraints::Integer))
+                hasOffset = false;
+        }
+    }
+    writer->visit(call.arguments()[offset]);
+    writer->stringBuilder().append(".gather(");
+    for (unsigned i = offset + 1; i < call.arguments().size(); ++i) {
+        if (i != offset + 1)
+            writer->stringBuilder().append(", ");
+        writer->visit(call.arguments()[i]);
+    }
+    if (!hasOffset)
+        writer->stringBuilder().append(", int2(0)");
+    if (component)
+        writer->stringBuilder().append(", component::", component);
+    writer->stringBuilder().append(")");
+}
+
+static void emitTextureGatherCompare(FunctionDefinitionWriter* writer, AST::CallExpression& call)
+{
+    ASSERT(call.arguments().size() > 1);
+    writer->visit(call.arguments()[0]);
+    writer->stringBuilder().append(".gather_compare");
+    visitArguments(writer, call, 1);
+}
+
 static void emitTextureLoad(FunctionDefinitionWriter* writer, AST::CallExpression& call)
 {
     auto& texture = call.arguments()[0];
@@ -1196,10 +1270,19 @@ static void emitTextureSampleLevel(FunctionDefinitionWriter* writer, AST::CallEx
     writer->stringBuilder().append(")");
 }
 
-static void emitTextureSampleClampToEdge(FunctionDefinitionWriter* writer, AST::CallExpression& call)
+static void emitTextureSampleBaseClampToEdge(FunctionDefinitionWriter* writer, AST::CallExpression& call)
 {
-    // FIXME: we need to handle `texture2d<T>` here too, not only `texture_external`
     auto& texture = call.arguments()[0];
+    auto* textureType = std::get_if<Types::Texture>(texture.inferredType());
+
+    if (textureType) {
+        // FIXME: this needs to clamp the coordinates
+        writer->visit(texture);
+        writer->stringBuilder().append(".sample");
+        visitArguments(writer, call, 1);
+        return;
+    }
+
     auto& sampler = call.arguments()[1];
     auto& coordinates = call.arguments()[2];
     writer->stringBuilder().append("({\n");
@@ -1236,10 +1319,58 @@ static void emitTextureSampleClampToEdge(FunctionDefinitionWriter* writer, AST::
     writer->stringBuilder().append(writer->indent(), "})");
 }
 
+static void emitTextureSampleBias(FunctionDefinitionWriter* writer, AST::CallExpression& call)
+{
+    auto& texture = call.arguments()[0];
+    auto& textureType = std::get<Types::Texture>(*texture.inferredType());
+    bool isArray = false;
+    switch (textureType.kind) {
+    case Types::Texture::Kind::Texture2dArray:
+    case Types::Texture::Kind::TextureCubeArray:
+        isArray = true;
+        break;
+    case Types::Texture::Kind::Texture1d:
+    case Types::Texture::Kind::Texture2d:
+    case Types::Texture::Kind::Texture3d:
+    case Types::Texture::Kind::TextureCube:
+    case Types::Texture::Kind::TextureMultisampled2d:
+        break;
+    }
+
+    unsigned biasIndex = isArray ? 4 : 3;
+    writer->visit(texture);
+    writer->stringBuilder().append(".sample(");
+    for (unsigned i = 1; i < biasIndex; ++i) {
+        if (i != 1)
+            writer->stringBuilder().append(", ");
+        writer->visit(call.arguments()[i]);
+    }
+    writer->stringBuilder().append(", bias(");
+    writer->visit(call.arguments()[biasIndex]);
+    writer->stringBuilder().append(")");
+    for (unsigned i = biasIndex + 1; i < call.arguments().size(); ++i) {
+        writer->stringBuilder().append(", ");
+        writer->visit(call.arguments()[i]);
+    }
+    writer->stringBuilder().append(")");
+}
+
+static void emitTextureNumLayers(FunctionDefinitionWriter* writer, AST::CallExpression& call)
+{
+    writer->visit(call.arguments()[0]);
+    writer->stringBuilder().append(".get_array_size()");
+}
+
 static void emitTextureNumLevels(FunctionDefinitionWriter* writer, AST::CallExpression& call)
 {
     writer->visit(call.arguments()[0]);
     writer->stringBuilder().append(".get_num_mip_levels()");
+}
+
+static void emitTextureNumSamples(FunctionDefinitionWriter* writer, AST::CallExpression& call)
+{
+    writer->visit(call.arguments()[0]);
+    writer->stringBuilder().append(".get_num_samples()");
 }
 
 static void emitTextureStore(FunctionDefinitionWriter* writer, AST::CallExpression& call)
@@ -1456,10 +1587,15 @@ void FunctionDefinitionWriter::visit(const Type* type, AST::CallExpression& call
             { "distance", emitDistance },
             { "storageBarrier", emitStorageBarrier },
             { "textureDimensions", emitTextureDimensions },
+            { "textureGather", emitTextureGather },
+            { "textureGatherCompare", emitTextureGatherCompare },
             { "textureLoad", emitTextureLoad },
+            { "textureNumLayers", emitTextureNumLayers },
             { "textureNumLevels", emitTextureNumLevels },
+            { "textureNumSamples", emitTextureNumSamples },
             { "textureSample", emitTextureSample },
-            { "textureSampleBaseClampToEdge", emitTextureSampleClampToEdge },
+            { "textureSampleBaseClampToEdge", emitTextureSampleBaseClampToEdge },
+            { "textureSampleBias", emitTextureSampleBias },
             { "textureSampleCompare", emitTextureSampleCompare },
             { "textureSampleCompareLevel", emitTextureSampleCompare },
             { "textureSampleGrad", emitTextureSampleGrad },
@@ -1533,38 +1669,38 @@ void FunctionDefinitionWriter::visit(AST::UnaryExpression& unary)
     m_stringBuilder.append(")");
 }
 
-void FunctionDefinitionWriter::visit(AST::BinaryExpression& binary)
+void FunctionDefinitionWriter::serializeBinaryExpression(AST::Expression& lhs, AST::BinaryOperation operation, AST::Expression& rhs)
 {
-    if (binary.operation() == AST::BinaryOperation::Modulo) {
-        auto* leftType = binary.leftExpression().inferredType();
-        auto* rightType = binary.rightExpression().inferredType();
-        if (satisfies(leftType, Constraints::Float) || satisfies(rightType, Constraints::Float)) {
-            m_stringBuilder.append("fmod(");
-            visit(binary.leftExpression());
-            m_stringBuilder.append(", ");
-            visit(binary.rightExpression());
-            m_stringBuilder.append(")");
-            return;
-        }
-    }
+    bool isDiv = operation == AST::BinaryOperation::Divide;
+    bool isMod = !isDiv && operation == AST::BinaryOperation::Modulo;
 
-    if (binary.operation() == AST::BinaryOperation::Divide) {
-        auto* resultType = binary.inferredType();
-        if (auto* vectorType = std::get_if<Types::Vector>(resultType))
-            resultType = vectorType->element;
-        if (satisfies(resultType, Constraints::Integer)) {
-            m_stringBuilder.append("__wgslDiv(");
-            visit(binary.leftExpression());
+    if (isDiv || isMod) {
+        auto* rightType = rhs.inferredType();
+        if (auto* vectorType = std::get_if<Types::Vector>(rightType))
+            rightType = vectorType->element;
+
+        const char* helperFunction = nullptr;
+        if (satisfies(rightType, Constraints::Integer)) {
+            if (isDiv)
+                helperFunction = "__wgslDiv";
+            else
+                helperFunction = "__wgslMod";
+        } else if (isMod)
+            helperFunction = "fmod";
+
+        if (helperFunction) {
+            m_stringBuilder.append(helperFunction, "(");
+            visit(lhs);
             m_stringBuilder.append(", ");
-            visit(binary.rightExpression());
+            visit(rhs);
             m_stringBuilder.append(")");
             return;
         }
     }
 
     m_stringBuilder.append("(");
-    visit(binary.leftExpression());
-    switch (binary.operation()) {
+    visit(lhs);
+    switch (operation) {
     case AST::BinaryOperation::Add:
         m_stringBuilder.append(" + ");
         break;
@@ -1623,8 +1759,13 @@ void FunctionDefinitionWriter::visit(AST::BinaryExpression& binary)
         m_stringBuilder.append(" || ");
         break;
     }
-    visit(binary.rightExpression());
+    visit(rhs);
     m_stringBuilder.append(")");
+}
+
+void FunctionDefinitionWriter::visit(AST::BinaryExpression& binary)
+{
+    serializeBinaryExpression(binary.leftExpression(), binary.operation(), binary.rightExpression());
 }
 
 void FunctionDefinitionWriter::visit(AST::PointerDereferenceExpression& pointerDereference)
@@ -1719,24 +1860,9 @@ void FunctionDefinitionWriter::visit(AST::CallStatement& statement)
 
 void FunctionDefinitionWriter::visit(AST::CompoundAssignmentStatement& statement)
 {
-    if (statement.operation() == AST::BinaryOperation::Divide) {
-        auto* rightType = statement.rightExpression().inferredType();
-        if (auto* vectorType = std::get_if<Types::Vector>(rightType))
-            rightType = vectorType->element;
-        if (satisfies(rightType, Constraints::Integer)) {
-            visit(statement.leftExpression());
-            m_stringBuilder.append(" = __wgslDiv(");
-            visit(statement.leftExpression());
-            m_stringBuilder.append(", ");
-            visit(statement.rightExpression());
-            m_stringBuilder.append(")");
-            return;
-        }
-    }
-
     visit(statement.leftExpression());
-    m_stringBuilder.append(" ", toASCIILiteral(statement.operation()), "= ");
-    visit(statement.rightExpression());
+    m_stringBuilder.append(" = ");
+    serializeBinaryExpression(statement.leftExpression(), statement.operation(), statement.rightExpression());
 }
 
 void FunctionDefinitionWriter::visit(AST::CompoundStatement& statement)

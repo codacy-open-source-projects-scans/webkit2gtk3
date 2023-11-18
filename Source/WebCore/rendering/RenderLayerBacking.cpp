@@ -270,6 +270,7 @@ RenderLayerBacking::~RenderLayerBacking()
     ASSERT(!m_viewportConstrainedNodeID);
     ASSERT(!m_scrollingNodeID);
     ASSERT(!m_frameHostingNodeID);
+    ASSERT(!m_pluginHostingNodeID);
     ASSERT(!m_positioningNodeID);
 
     destroyGraphicsLayers();
@@ -2557,7 +2558,7 @@ bool RenderLayerBacking::updateScrollingLayers(bool needsScrollingLayers)
 
 void RenderLayerBacking::detachFromScrollingCoordinator(OptionSet<ScrollCoordinationRole> roles)
 {
-    if (!m_scrollingNodeID && !m_ancestorClippingStack && !m_frameHostingNodeID && !m_viewportConstrainedNodeID && !m_positioningNodeID)
+    if (!m_scrollingNodeID && !m_ancestorClippingStack && !m_frameHostingNodeID && !m_pluginHostingNodeID && !m_viewportConstrainedNodeID && !m_positioningNodeID)
         return;
 
     auto* scrollingCoordinator = m_owningLayer.page().scrollingCoordinator();
@@ -2590,6 +2591,12 @@ void RenderLayerBacking::detachFromScrollingCoordinator(OptionSet<ScrollCoordina
         LOG_WITH_STREAM(Compositing, stream << "Detaching FrameHosting node " << m_frameHostingNodeID);
         scrollingCoordinator->unparentChildrenAndDestroyNode(m_frameHostingNodeID);
         m_frameHostingNodeID = 0;
+    }
+
+    if (roles.contains(ScrollCoordinationRole::PluginHosting) && m_pluginHostingNodeID) {
+        LOG_WITH_STREAM(Compositing, stream << "Detaching PluginHosting node " << m_pluginHostingNodeID);
+        scrollingCoordinator->unparentChildrenAndDestroyNode(m_pluginHostingNodeID);
+        m_pluginHostingNodeID = 0;
     }
 
     if (roles.contains(ScrollCoordinationRole::ViewportConstrained) && m_viewportConstrainedNodeID) {
@@ -2631,6 +2638,9 @@ void RenderLayerBacking::setScrollingNodeIDForRole(ScrollingNodeID nodeID, Scrol
         break;
     case ScrollCoordinationRole::FrameHosting:
         m_frameHostingNodeID = nodeID;
+        break;
+    case ScrollCoordinationRole::PluginHosting:
+        m_pluginHostingNodeID = nodeID;
         break;
     case ScrollCoordinationRole::ViewportConstrained:
         m_viewportConstrainedNodeID = nodeID;
@@ -3987,34 +3997,34 @@ bool RenderLayerBacking::startAnimation(double timeOffset, const Animation& anim
 
     for (auto& currentKeyframe : keyframes) {
         const RenderStyle* keyframeStyle = currentKeyframe.style();
-        double key = currentKeyframe.key();
+        double offset = currentKeyframe.offset();
 
         if (!keyframeStyle)
             continue;
             
         auto* tf = currentKeyframe.timingFunction();
-        
-        if (currentKeyframe.containsProperty(CSSPropertyRotate))
-            rotateVector.insert(makeUnique<TransformAnimationValue>(key, keyframeStyle->rotate(), tf));
 
-        if (currentKeyframe.containsProperty(CSSPropertyScale))
-            scaleVector.insert(makeUnique<TransformAnimationValue>(key, keyframeStyle->scale(), tf));
+        if (currentKeyframe.animatesProperty(CSSPropertyRotate))
+            rotateVector.insert(makeUnique<TransformAnimationValue>(offset, keyframeStyle->rotate(), tf));
 
-        if (currentKeyframe.containsProperty(CSSPropertyTranslate))
-            translateVector.insert(makeUnique<TransformAnimationValue>(key, keyframeStyle->translate(), tf));
+        if (currentKeyframe.animatesProperty(CSSPropertyScale))
+            scaleVector.insert(makeUnique<TransformAnimationValue>(offset, keyframeStyle->scale(), tf));
 
-        if (currentKeyframe.containsProperty(CSSPropertyTransform))
-            transformVector.insert(makeUnique<TransformAnimationValue>(key, keyframeStyle->transform(), tf));
+        if (currentKeyframe.animatesProperty(CSSPropertyTranslate))
+            translateVector.insert(makeUnique<TransformAnimationValue>(offset, keyframeStyle->translate(), tf));
 
-        if (currentKeyframe.containsProperty(CSSPropertyOpacity))
-            opacityVector.insert(makeUnique<FloatAnimationValue>(key, keyframeStyle->opacity(), tf));
+        if (currentKeyframe.animatesProperty(CSSPropertyTransform))
+            transformVector.insert(makeUnique<TransformAnimationValue>(offset, keyframeStyle->transform(), tf));
 
-        if (currentKeyframe.containsProperty(CSSPropertyFilter))
-            filterVector.insert(makeUnique<FilterAnimationValue>(key, keyframeStyle->filter(), tf));
+        if (currentKeyframe.animatesProperty(CSSPropertyOpacity))
+            opacityVector.insert(makeUnique<FloatAnimationValue>(offset, keyframeStyle->opacity(), tf));
+
+        if (currentKeyframe.animatesProperty(CSSPropertyFilter))
+            filterVector.insert(makeUnique<FilterAnimationValue>(offset, keyframeStyle->filter(), tf));
 
 #if ENABLE(FILTERS_LEVEL_2)
-        if (currentKeyframe.containsProperty(CSSPropertyWebkitBackdropFilter) || currentKeyframe.containsProperty(CSSPropertyBackdropFilter))
-            backdropFilterVector.insert(makeUnique<FilterAnimationValue>(key, keyframeStyle->backdropFilter(), tf));
+        if (currentKeyframe.animatesProperty(CSSPropertyWebkitBackdropFilter) || currentKeyframe.animatesProperty(CSSPropertyBackdropFilter))
+            backdropFilterVector.insert(makeUnique<FilterAnimationValue>(offset, keyframeStyle->backdropFilter(), tf));
 #endif
     }
 
@@ -4303,6 +4313,8 @@ TextStream& operator<<(TextStream& ts, const RenderLayerBacking& backing)
 
     if (auto nodeID = backing.scrollingNodeIDForRole(ScrollCoordinationRole::FrameHosting))
         ts << " frame hosting node " << nodeID;
+    if (auto nodeID = backing.scrollingNodeIDForRole(ScrollCoordinationRole::PluginHosting))
+        ts << " plugin hosting node " << nodeID;
     if (auto nodeID = backing.scrollingNodeIDForRole(ScrollCoordinationRole::Positioning))
         ts << " positioning node " << nodeID;
     return ts;

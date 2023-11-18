@@ -168,7 +168,7 @@ Pagination::Mode paginationModeForRenderStyle(const RenderStyle& style)
 {
     auto overflow = style.overflowY();
     if (overflow != Overflow::PagedX && overflow != Overflow::PagedY)
-        return Unpaginated;
+        return Pagination::Mode::Unpaginated;
 
     bool isHorizontalWritingMode = style.isHorizontalWritingMode();
     auto textDirection = style.direction();
@@ -179,16 +179,16 @@ Pagination::Mode paginationModeForRenderStyle(const RenderStyle& style)
     // is vertical, then the block flow direction dictates the choice.
     if (overflow == Overflow::PagedX) {
         if ((isHorizontalWritingMode && textDirection == TextDirection::LTR) || blockFlowDirection == BlockFlowDirection::LeftToRight)
-            return LeftToRightPaginated;
-        return RightToLeftPaginated;
+            return Pagination::Mode::LeftToRightPaginated;
+        return Pagination::Mode::RightToLeftPaginated;
     }
 
     // paged-y always corresponds to TopToBottomPaginated or BottomToTopPaginated. If the WritingMode
     // is horizontal, then the block flow direction dictates the choice. If the WritingMode
     // is vertical, then we use TextDirection to choose between those options. 
     if (blockFlowDirection == BlockFlowDirection::TopToBottom || (!isHorizontalWritingMode && textDirection == TextDirection::RTL))
-        return TopToBottomPaginated;
-    return BottomToTopPaginated;
+        return Pagination::Mode::TopToBottomPaginated;
+    return Pagination::Mode::BottomToTopPaginated;
 }
 
 LocalFrameView::LocalFrameView(LocalFrame& frame)
@@ -885,6 +885,9 @@ ScrollableArea* LocalFrameView::scrollableAreaForScrollingNodeID(ScrollingNodeID
     RenderView* renderView = this->renderView();
     if (!renderView)
         return nullptr;
+
+    if (auto area = m_scrollingNodeIDToPluginScrollableAreaMap.get(nodeID))
+        return area.get();
 
     return renderView->compositor().scrollableAreaForScrollingNodeID(nodeID);
 }
@@ -3751,15 +3754,16 @@ void LocalFrameView::scrollToTextFragmentRange()
     TemporarySelectionChange selectionChange(document, { range }, { TemporarySelectionOption::RevealSelection, TemporarySelectionOption::RevealSelectionBounds, TemporarySelectionOption::UserTriggered, TemporarySelectionOption::ForceCenterScroll });
 }
 
-void LocalFrameView::updateEmbeddedObject(RenderEmbeddedObject& embeddedObject)
+void LocalFrameView::updateEmbeddedObject(const WeakPtr<RenderEmbeddedObject>& embeddedObject)
 {
+    // The to-be-updated renderer is passed in as WeakPtr for convenience, but it will be alive at this point.
+    ASSERT(embeddedObject);
+
     // No need to update if it's already crashed or known to be missing.
-    if (embeddedObject.isPluginUnavailable())
+    if (embeddedObject->isPluginUnavailable())
         return;
 
-    auto& element = embeddedObject.frameOwnerElement();
-
-    WeakPtr weakRenderer { embeddedObject };
+    auto& element = embeddedObject->frameOwnerElement();
 
     if (is<HTMLPlugInImageElement>(element)) {
         auto& pluginElement = downcast<HTMLPlugInImageElement>(element);
@@ -3769,10 +3773,10 @@ void LocalFrameView::updateEmbeddedObject(RenderEmbeddedObject& embeddedObject)
         ASSERT_NOT_REACHED();
 
     // It's possible the renderer was destroyed below updateWidget() since loading a plugin may execute arbitrary JavaScript.
-    if (!weakRenderer)
+    if (!embeddedObject)
         return;
 
-    auto ignoreWidgetState = embeddedObject.updateWidgetPosition();
+    auto ignoreWidgetState = embeddedObject->updateWidgetPosition();
     UNUSED_PARAM(ignoreWidgetState);
 }
 
@@ -3789,10 +3793,19 @@ bool LocalFrameView::updateEmbeddedObjects()
     m_embeddedObjectsToUpdate->add(nullptr);
 
     while (!m_embeddedObjectsToUpdate->isEmpty()) {
-        auto embeddedObject = m_embeddedObjectsToUpdate->takeFirst();
-        if (!embeddedObject)
-            break;
-        updateEmbeddedObject(*embeddedObject);
+        // The CheckedPtr value taken from the ListHashSet shouldn't be kept alive during the update since
+        // the underlying object can be destroyed, leaving the CheckedPtr dangling. Instead, construct a WeakPtr
+        // that can be passed to the updateEmbeddedObject() method.
+
+        WeakPtr<RenderEmbeddedObject> weakObject;
+        {
+            CheckedPtr embeddedObject = m_embeddedObjectsToUpdate->takeFirst();
+            if (!embeddedObject)
+                break;
+
+            weakObject = *embeddedObject;
+        }
+        updateEmbeddedObject(weakObject);
     }
 
     return m_embeddedObjectsToUpdate->isEmpty();
@@ -4306,21 +4319,6 @@ void LocalFrameView::scrollTo(const ScrollPosition& newPosition)
         scrollPositionChanged(oldPosition, scrollPosition());
 
     didChangeScrollOffset();
-}
-
-void LocalFrameView::scrollToPositionWithAnimation(const ScrollPosition& position, const ScrollPositionChangeOptions& options)
-{
-    // FIXME: Why isn't all this in ScrollableArea?
-    auto previousScrollType = currentScrollType();
-    setCurrentScrollType(options.type);
-
-    if (scrollAnimationStatus() == ScrollAnimationStatus::Animating)
-        scrollAnimator().cancelAnimations();
-
-    if (position != scrollPosition())
-        ScrollableArea::scrollToPositionWithAnimation(position, options);
-
-    setCurrentScrollType(previousScrollType);
 }
 
 float LocalFrameView::adjustVerticalPageScrollStepForFixedContent(float step)

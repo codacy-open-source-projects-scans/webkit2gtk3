@@ -402,9 +402,6 @@ inline void RenderStyle::NonInheritedFlags::copyNonInheritedFrom(const NonInheri
     textDecorationLine = other.textDecorationLine;
     hasExplicitlySetDirection = other.hasExplicitlySetDirection;
     hasExplicitlySetWritingMode = other.hasExplicitlySetWritingMode;
-#if ENABLE(DARK_MODE_CSS)
-    hasExplicitlySetColorScheme = other.hasExplicitlySetColorScheme;
-#endif
     usesViewportUnits = other.usesViewportUnits;
     usesContainerUnits = other.usesContainerUnits;
     hasExplicitlyInheritedProperties = other.hasExplicitlyInheritedProperties;
@@ -1564,7 +1561,6 @@ void RenderStyle::conservativelyCollectChangedAnimatableProperties(const RenderS
         // unicodeBidi
         // hasExplicitlySetDirection
         // hasExplicitlySetWritingMode
-        // hasExplicitlySetColorScheme
         // usesViewportUnits
         // usesContainerUnits
         // hasExplicitlyInheritedProperties
@@ -1810,6 +1806,7 @@ void RenderStyle::conservativelyCollectChangedAnimatableProperties(const RenderS
         // Non animated styles are followings.
         // deprecatedFlexibleBox
         // hasAttrContent
+        // hasExplicitlySetColorScheme
         // appearance
         // effectiveAppearance
         // userDrag
@@ -3464,41 +3461,41 @@ void RenderStyle::setBorderImageVerticalRule(NinePieceImageRule rule)
 
 void RenderStyle::setColumnStylesFromPaginationMode(PaginationMode paginationMode)
 {
-    if (paginationMode == Unpaginated)
+    if (paginationMode == Pagination::Mode::Unpaginated)
         return;
     
     setColumnFill(ColumnFill::Auto);
     
     switch (paginationMode) {
-    case LeftToRightPaginated:
+    case Pagination::Mode::LeftToRightPaginated:
         setColumnAxis(ColumnAxis::Horizontal);
         if (isHorizontalWritingMode())
             setColumnProgression(isLeftToRightDirection() ? ColumnProgression::Normal : ColumnProgression::Reverse);
         else
             setColumnProgression(isFlippedBlocksWritingMode() ? ColumnProgression::Reverse : ColumnProgression::Normal);
         break;
-    case RightToLeftPaginated:
+    case Pagination::Mode::RightToLeftPaginated:
         setColumnAxis(ColumnAxis::Horizontal);
         if (isHorizontalWritingMode())
             setColumnProgression(isLeftToRightDirection() ? ColumnProgression::Reverse : ColumnProgression::Normal);
         else
             setColumnProgression(isFlippedBlocksWritingMode() ? ColumnProgression::Normal : ColumnProgression::Reverse);
         break;
-    case TopToBottomPaginated:
+    case Pagination::Mode::TopToBottomPaginated:
         setColumnAxis(ColumnAxis::Vertical);
         if (isHorizontalWritingMode())
             setColumnProgression(isFlippedBlocksWritingMode() ? ColumnProgression::Reverse : ColumnProgression::Normal);
         else
             setColumnProgression(isLeftToRightDirection() ? ColumnProgression::Normal : ColumnProgression::Reverse);
         break;
-    case BottomToTopPaginated:
+    case Pagination::Mode::BottomToTopPaginated:
         setColumnAxis(ColumnAxis::Vertical);
         if (isHorizontalWritingMode())
             setColumnProgression(isFlippedBlocksWritingMode() ? ColumnProgression::Normal : ColumnProgression::Reverse);
         else
             setColumnProgression(isLeftToRightDirection() ? ColumnProgression::Reverse : ColumnProgression::Normal);
         break;
-    case Unpaginated:
+    case Pagination::Mode::Unpaginated:
         ASSERT_NOT_REACHED();
         break;
     }

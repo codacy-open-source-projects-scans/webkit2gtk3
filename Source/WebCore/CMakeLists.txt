@@ -924,6 +924,7 @@ set(WebCore_NON_SVG_IDL_FILES
     css/CSSPropertyRule.idl
     css/CSSRule.idl
     css/CSSRuleList.idl
+    css/CSSScopeRule.idl
     css/CSSStyleDeclaration.idl
     css/CSSStyleRule.idl
     css/CSSStyleSheet.idl
@@ -1739,7 +1740,6 @@ list(APPEND WebCore_NON_SVG_IDL_FILES
     Modules/WebGPU/GPUCompilationMessageType.idl
     Modules/WebGPU/GPUComputePassDescriptor.idl
     Modules/WebGPU/GPUComputePassEncoder.idl
-    Modules/WebGPU/GPUComputePassTimestampLocation.idl
     Modules/WebGPU/GPUComputePassTimestampWrites.idl
     Modules/WebGPU/GPUComputePipeline.idl
     Modules/WebGPU/GPUComputePipelineDescriptor.idl
@@ -1805,7 +1805,6 @@ list(APPEND WebCore_NON_SVG_IDL_FILES
     Modules/WebGPU/GPURenderPassDescriptor.idl
     Modules/WebGPU/GPURenderPassEncoder.idl
     Modules/WebGPU/GPURenderPassLayout.idl
-    Modules/WebGPU/GPURenderPassTimestampLocation.idl
     Modules/WebGPU/GPURenderPassTimestampWrites.idl
     Modules/WebGPU/GPURenderPipeline.idl
     Modules/WebGPU/GPURenderPipelineDescriptor.idl
@@ -2061,6 +2060,7 @@ if (ENABLE_WEBGL)
         html/canvas/WebGLTimerQueryEXT.cpp
         html/canvas/WebGLTransformFeedback.cpp
         html/canvas/WebGLUniformLocation.cpp
+        html/canvas/WebGLUtilities.cpp
         html/canvas/WebGLVertexArrayObject.cpp
         html/canvas/WebGLVertexArrayObjectBase.cpp
         html/canvas/WebGLVertexArrayObjectOES.cpp
@@ -2797,18 +2797,12 @@ list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/LayoutMilestones.serialization.in
     page/MediaProducer.serialization.in
 
-    platform/graphics/ca/PlatformCALayer.messages.in
-
     platform/PlatformEvent.serialization.in
     platform/PlatformScreen.serialization.in
     platform/PlatformWheelEvent.serialization.in
     platform/ScrollTypes.serialization.in
 
     platform/audio/PlatformMediaSession.serialization.in
-
-    platform/cocoa/PlaybackSessionModel.serialization.in
-
-    platform/graphics/cocoa/MediaPlaybackTargetContext.serialization.in
 
     platform/graphics/InbandTextTrackPrivate.serialization.in
 

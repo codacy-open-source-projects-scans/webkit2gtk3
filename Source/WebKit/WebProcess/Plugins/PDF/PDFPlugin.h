@@ -27,9 +27,7 @@
 
 #if ENABLE(LEGACY_PDFKIT_PLUGIN)
 
-#include "DataReference.h"
 #include "PDFPluginBase.h"
-#include "PDFPluginIdentifier.h"
 #include "WebMouseEvent.h"
 #include <WebCore/NetscapePlugInStreamLoader.h>
 #include <wtf/HashMap.h>
@@ -82,8 +80,6 @@ class ShareableBitmap;
 class WebFrame;
 class WebKeyboardEvent;
 class WebWheelEvent;
-
-struct FrameInfoData;
 struct WebHitTestResultData;
 
 class PDFPlugin final : public PDFPluginBase {
@@ -91,7 +87,7 @@ public:
     static bool pdfKitLayerControllerIsAvailable();
 
     static Ref<PDFPlugin> create(WebCore::HTMLPlugInElement&);
-    ~PDFPlugin();
+    virtual ~PDFPlugin() = default;
 
     void didMutatePDFDocument() { m_pdfDocumentWasMutated = true; }
 
@@ -102,13 +98,14 @@ public:
     void notifyDisplayModeChanged(int);
 
     void notifySelectionChanged(PDFSelection *);
-    void notifyCursorChanged(uint64_t /* PDFLayerControllerCursorType */);
 
-    void zoomIn();
-    void zoomOut();
-    void save(CompletionHandler<void(const String&, const URL&, const IPC::DataReference&)>&&);
-    void openWithPreview(CompletionHandler<void(const String&, FrameInfoData&&, const IPC::DataReference&, const String&)>&&);
-    PDFPluginIdentifier identifier() const { return m_identifier; }
+    // HUD Actions.
+#if ENABLE(PDF_HUD)
+    void zoomIn() final;
+    void zoomOut() final;
+    void save(CompletionHandler<void(const String&, const URL&, const IPC::DataReference&)>&&) final;
+    void openWithPreview(CompletionHandler<void(const String&, FrameInfoData&&, const IPC::DataReference&, const String&)>&&) final;
+#endif
 
     void clickedLink(NSURL *);
 
@@ -121,10 +118,6 @@ public:
     void focusPreviousAnnotation();
 
     void attemptToUnlockPDF(const String& password);
-
-    WebCore::FloatRect convertFromPDFViewToScreen(const WebCore::FloatRect&) const;
-    WebCore::IntPoint convertFromRootViewToPDFView(const WebCore::IntPoint&) const;
-    WebCore::IntRect boundsOnScreen() const;
 
     bool showContextMenuAtPoint(const WebCore::IntPoint&);
 
@@ -167,7 +160,6 @@ private:
     void teardown() override;
     bool isComposited() const override { return true; }
 
-    void createPDFDocument() override;
     void installPDFDocument() override;
     void tryRunScriptsInPDFDocument() override;
 
@@ -177,16 +169,14 @@ private:
     WebCore::FloatSize pdfDocumentSizeForPrinting() const override;
 
     void geometryDidChange(const WebCore::IntSize& pluginSize, const WebCore::AffineTransform& pluginToRootViewTransform) override;
-    void visibilityDidChange(bool) override;
     void contentsScaleFactorChanged(float) override;
 
     WebCore::IntSize contentsSize() const override;
     unsigned firstPageHeight() const override;
 
-    bool isLocked() const override;
-
     RefPtr<WebCore::FragmentedSharedBuffer> liveResourceData() const override;
 
+    bool wantsWheelEvents() const override { return true; }
     bool handleMouseEvent(const WebMouseEvent&) override;
     bool handleWheelEvent(const WebWheelEvent&) override;
     bool handleMouseEnterEvent(const WebMouseEvent&) override;
@@ -216,13 +206,7 @@ private:
     bool incrementalPDFStreamDidFinishLoading() override;
     void incrementalPDFStreamDidFail() override;
 
-    void updatePDFHUDLocation();
-
     NSEvent *nsEventForWebMouseEvent(const WebMouseEvent&);
-    WebCore::IntPoint convertFromPluginToPDFView(const WebCore::IntPoint&) const;
-    WebCore::IntPoint convertFromPDFViewToRootView(const WebCore::IntPoint&) const;
-    WebCore::IntRect convertFromPDFViewToRootView(const WebCore::IntRect&) const;
-    WebCore::IntRect frameForHUD() const;
 
     bool supportsForms();
 
@@ -231,13 +215,7 @@ private:
 
     void createPasswordEntryForm();
 
-    bool hudEnabled() const;
-
-#ifdef __OBJC__
     NSData *liveData() const;
-    NSData *rawData() const { return (__bridge NSData *)m_data.get(); }
-#endif
-
     JSObjectRef makeJSPDFDoc(JSContextRef);
     static JSClassRef jsPDFDocClass();
     static JSValueRef jsPDFDocPrint(JSContextRef, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception);
@@ -266,8 +244,6 @@ private:
     RetainPtr<WKPDFLayerControllerDelegate> m_pdfLayerControllerDelegate;
 
     URL m_sourceURL;
-
-    RetainPtr<PDFDocument> m_pdfDocument;
 
 #if HAVE(INCREMENTAL_PDF_APIS)
     void threadEntry(Ref<PDFPlugin>&&);
@@ -352,8 +328,6 @@ private:
 #endif
 
 #endif // HAVE(INCREMENTAL_PDF_APIS)
-
-    PDFPluginIdentifier m_identifier;
 };
 
 } // namespace WebKit

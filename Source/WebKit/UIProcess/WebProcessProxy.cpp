@@ -199,6 +199,11 @@ Vector<Ref<WebPageProxy>> WebProcessProxy::pages() const
     });
 }
 
+Vector<WeakPtr<RemotePageProxy>> WebProcessProxy::remotePages() const
+{
+    return WTF::copyToVector(m_remotePages);
+}
+
 void WebProcessProxy::forWebPagesWithOrigin(PAL::SessionID sessionID, const SecurityOriginData& origin, const Function<void(WebPageProxy&)>& callback)
 {
     for (Ref page : globalPages()) {
@@ -1287,11 +1292,8 @@ void WebProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Connect
     m_throttler.setShouldTakeNearSuspendedAssertion(shouldTakeNearSuspendedAssertion());
     m_throttler.setShouldDropNearSuspendedAssertionAfterDelay(shouldDropNearSuspendedAssertionAfterDelay());
 
-#if PLATFORM(COCOA)
-    unblockAccessibilityServerIfNeeded();
-#if ENABLE(REMOTE_INSPECTOR)
+#if PLATFORM(COCOA) && ENABLE(REMOTE_INSPECTOR)
     enableRemoteInspectorIfNeeded();
-#endif
 #endif
 
     beginResponsivenessChecks();
@@ -1398,6 +1400,22 @@ void WebProcessProxy::closeRemoteFrame(WebCore::FrameIdentifier frameID)
         return;
     if (RefPtr page = destinationFrame->page())
         page->closePage();
+}
+
+void WebProcessProxy::focusRemoteFrame(WebCore::FrameIdentifier frameID)
+{
+    // FIXME: <rdar://117383252> This, postMessageToRemote, renderTreeAsText, etc. should be messages to the WebPageProxy instead of the process.
+    // They are more the page doing things than the process.
+    RefPtr destinationFrame = WebFrameProxy::webFrame(frameID);
+    if (!destinationFrame || !destinationFrame->isMainFrame())
+        return;
+
+    RefPtr page = destinationFrame->page();
+    if (!page)
+        return;
+
+    page->broadcastFocusedFrameToOtherProcesses(*connection(), frameID);
+    page->setFocus(true);
 }
 
 void WebProcessProxy::renderTreeAsText(WebCore::FrameIdentifier frameIdentifier, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag> behavior, CompletionHandler<void(String&&)>&& completionHandler)

@@ -940,11 +940,11 @@ void Document::invalidateAccessKeyCacheSlowCase()
 ExceptionOr<SelectorQuery&> Document::selectorQueryForString(const String& selectorString)
 {
     if (selectorString.isEmpty())
-        return Exception { SyntaxError, makeString("'", selectorString, "' is not a valid selector.") };
+        return Exception { ExceptionCode::SyntaxError, makeString("'", selectorString, "' is not a valid selector.") };
 
     auto* query = SelectorQueryCache::singleton().add(selectorString, *this);
     if (!query)
-        return Exception { SyntaxError, makeString("'", selectorString, "' is not a valid selector.") };
+        return Exception { ExceptionCode::SyntaxError, makeString("'", selectorString, "' is not a valid selector.") };
 
     return *query;
 }
@@ -1043,8 +1043,8 @@ bool Document::hasManifest() const
 DocumentType* Document::doctype() const
 {
     for (Node* node = firstChild(); node; node = node->nextSibling()) {
-        if (is<DocumentType>(node))
-            return downcast<DocumentType>(node);
+        if (auto* documentType = dynamicDowncast<DocumentType>(node))
+            return documentType;
     }
     return nullptr;
 }
@@ -1064,8 +1064,9 @@ void Document::childrenChanged(const ChildChange& change)
         return;
     m_documentElement = WTFMove(newDocumentElement);
     setDocumentElementLanguage(m_documentElement ? m_documentElement->langFromAttribute() : nullAtom());
-    setDocumentElementTextDirection(m_documentElement && is<HTMLElement>(m_documentElement) && m_documentElement->usesEffectiveTextDirection()
-        ? downcast<HTMLElement>(*m_documentElement).effectiveTextDirection() : TextDirection::LTR);
+    auto* htmlDocumentElement = dynamicDowncast<HTMLElement>(m_documentElement.get());
+    setDocumentElementTextDirection(htmlDocumentElement && htmlDocumentElement->usesEffectiveTextDirection()
+        ? htmlDocumentElement->effectiveTextDirection() : TextDirection::LTR);
     // The root style used for media query matching depends on the document element.
     styleScope().clearResolver();
 }
@@ -1111,7 +1112,7 @@ static ExceptionOr<Ref<Element>> createHTMLElementWithNameValidation(Document& d
     }
 
     if (UNLIKELY(!isValidHTMLElementName(name)))
-        return Exception { InvalidCharacterError };
+        return Exception { ExceptionCode::InvalidCharacterError };
 
     return Ref<Element> { createUpgradeCandidateElement(document, name) };
 }
@@ -1125,7 +1126,7 @@ ExceptionOr<Ref<Element>> Document::createElementForBindings(const AtomString& n
         return createHTMLElementWithNameValidation(*this, name);
 
     if (!isValidName(name))
-        return Exception { InvalidCharacterError, makeString("Invalid qualified name: '", name, "'") };
+        return Exception { ExceptionCode::InvalidCharacterError, makeString("Invalid qualified name: '", name, "'") };
 
     return createElement(QualifiedName(nullAtom(), name, nullAtom()), false);
 }
@@ -1148,10 +1149,10 @@ Ref<Comment> Document::createComment(String&& data)
 ExceptionOr<Ref<CDATASection>> Document::createCDATASection(String&& data)
 {
     if (isHTMLDocument())
-        return Exception { NotSupportedError };
+        return Exception { ExceptionCode::NotSupportedError };
 
     if (data.contains("]]>"_s))
-        return Exception { InvalidCharacterError };
+        return Exception { ExceptionCode::InvalidCharacterError };
 
     return CDATASection::create(*this, WTFMove(data));
 }
@@ -1159,10 +1160,10 @@ ExceptionOr<Ref<CDATASection>> Document::createCDATASection(String&& data)
 ExceptionOr<Ref<ProcessingInstruction>> Document::createProcessingInstruction(String&& target, String&& data)
 {
     if (!isValidName(target))
-        return Exception { InvalidCharacterError, makeString("Invalid qualified name: '", target, "'") };
+        return Exception { ExceptionCode::InvalidCharacterError, makeString("Invalid qualified name: '", target, "'") };
 
     if (data.contains("?>"_s))
-        return Exception { InvalidCharacterError };
+        return Exception { ExceptionCode::InvalidCharacterError };
 
     return ProcessingInstruction::create(*this, WTFMove(target), WTFMove(data));
 }
@@ -1201,7 +1202,7 @@ ExceptionOr<Ref<Node>> Document::importNode(Node& nodeToImport, bool deep)
         break;
     }
 
-    return Exception { NotSupportedError };
+    return Exception { ExceptionCode::NotSupportedError };
 }
 
 
@@ -1211,7 +1212,7 @@ ExceptionOr<Ref<Node>> Document::adoptNode(Node& source)
 
     switch (source.nodeType()) {
     case DOCUMENT_NODE:
-        return Exception { NotSupportedError };
+        return Exception { ExceptionCode::NotSupportedError };
     case ATTRIBUTE_NODE: {
         auto& attr = downcast<Attr>(source);
         if (RefPtr element = attr.ownerElement()) {
@@ -1224,12 +1225,11 @@ ExceptionOr<Ref<Node>> Document::adoptNode(Node& source)
     default:
         if (source.isShadowRoot()) {
             // ShadowRoot cannot disconnect itself from the host node.
-            return Exception { HierarchyRequestError };
+            return Exception { ExceptionCode::HierarchyRequestError };
         }
-        if (is<HTMLFrameOwnerElement>(source)) {
-            auto& frameOwnerElement = downcast<HTMLFrameOwnerElement>(source);
-            if (frame() && frame()->tree().isDescendantOf(frameOwnerElement.contentFrame()))
-                return Exception { HierarchyRequestError };
+        if (auto* frameOwnerElement = dynamicDowncast<HTMLFrameOwnerElement>(source)) {
+            if (frame() && frame()->tree().isDescendantOf(frameOwnerElement->contentFrame()))
+                return Exception { ExceptionCode::HierarchyRequestError };
         }
         auto result = source.remove();
         if (result.hasException())
@@ -1426,7 +1426,7 @@ ExceptionOr<Ref<Element>> Document::createElementNS(const AtomString& namespaceU
         return parseResult.releaseException();
     QualifiedName parsedName { parseResult.releaseReturnValue() };
     if (!hasValidNamespaceForElements(parsedName))
-        return Exception { NamespaceError };
+        return Exception { ExceptionCode::NamespaceError };
 
     if (parsedName.namespaceURI() == xhtmlNamespaceURI)
         return createHTMLElementWithNameValidation(*this, parsedName);
@@ -1636,7 +1636,7 @@ void Document::setDocumentElementLanguage(const AtomString& language)
 ExceptionOr<void> Document::setXMLVersion(const String& version)
 {
     if (!XMLDocumentParser::supportsXMLVersion(version))
-        return Exception { NotSupportedError };
+        return Exception { ExceptionCode::NotSupportedError };
 
     m_xmlVersion = version;
     return { };
@@ -1694,6 +1694,12 @@ String Document::contentType() const
         return mimeType;
 
     return "application/xml"_s;
+}
+
+AtomString Document::encoding() const
+{
+    auto encoding = textEncoding().domName();
+    return encoding.isNull() ? nullAtom() : AtomString { encoding };
 }
 
 RefPtr<Range> Document::caretRangeFromPoint(int x, int y)
@@ -1903,11 +1909,12 @@ template<> struct TitleTraits<SVGTitleElement> {
     static SVGTitleElement* findTitleElement(Document& document) { return childrenOfType<SVGTitleElement>(*document.documentElement()).first(); }
 };
 
-template<typename TitleElement> Element* selectNewTitleElement(Document& document, Element* oldTitleElement, Element& changingTitleElement)
+template<typename TitleElement> Element* selectNewTitleElement(Document& document, Element* oldTitleElement, Element& changingElement)
 {
     using Traits = TitleTraits<TitleElement>;
 
-    if (!is<TitleElement>(changingTitleElement)) {
+    auto* changingTitleElement = dynamicDowncast<TitleElement>(changingElement);
+    if (!changingTitleElement) {
         ASSERT(oldTitleElement == Traits::findTitleElement(document));
         return oldTitleElement;
     }
@@ -1917,8 +1924,8 @@ template<typename TitleElement> Element* selectNewTitleElement(Document& documen
 
     // Optimized common case: We have no title element yet.
     // We can figure out which title element should be used without searching.
-    bool isEligible = Traits::isInEligibleLocation(downcast<TitleElement>(changingTitleElement));
-    auto* newTitleElement = isEligible ? &changingTitleElement : nullptr;
+    bool isEligible = Traits::isInEligibleLocation(*changingTitleElement);
+    auto* newTitleElement = isEligible ? changingTitleElement : nullptr;
     ASSERT(newTitleElement == Traits::findTitleElement(document));
     return newTitleElement;
 }
@@ -2469,20 +2476,25 @@ bool Document::updateLayoutIfDimensionsOutOfDate(Element& element, OptionSet<Dim
 
     updateStyleIfNeeded();
 
-    CheckedPtr renderer = element.renderer();
-    if (!renderer || renderer->needsLayout()) {
-        // If we don't have a renderer or if the renderer needs layout for any reason, give up.
+    bool isVertical = false;
+    bool hasSpecifiedLogicalHeight = false;
+    if (CheckedPtr renderer = element.renderer()) {
+        if (renderer->needsLayout()) {
+            // If the renderer needs layout for any reason, give up.
+            requireFullLayout = true;
+        }
+
+        isVertical = !renderer->isHorizontalWritingMode();
+        hasSpecifiedLogicalHeight = renderer->style().logicalMinHeight() == Length(0, LengthType::Fixed) && renderer->style().logicalHeight().isFixed() && renderer->style().logicalMaxHeight().isAuto();
+    } else // If we don't have a renderer, give up
         requireFullLayout = true;
-    }
 
     // Turn off this optimization for input elements with shadow content.
     if (is<HTMLInputElement>(element))
         requireFullLayout = true;
 
-    bool isVertical = renderer && !renderer->isHorizontalWritingMode();
     bool checkingLogicalWidth = (dimensionsCheck.contains(DimensionsCheck::Width) && !isVertical) || (dimensionsCheck.contains(DimensionsCheck::Height) && isVertical);
     bool checkingLogicalHeight = (dimensionsCheck.contains(DimensionsCheck::Height) && !isVertical) || (dimensionsCheck.contains(DimensionsCheck::Width) && isVertical);
-    bool hasSpecifiedLogicalHeight = renderer && renderer->style().logicalMinHeight() == Length(0, LengthType::Fixed) && renderer->style().logicalHeight().isFixed() && renderer->style().logicalMaxHeight().isAuto();
 
     if (!requireFullLayout) {
         CheckedPtr<RenderBox> previousBox;
@@ -2492,12 +2504,13 @@ bool Document::updateLayoutIfDimensionsOutOfDate(Element& element, OptionSet<Dim
         for (CheckedPtr currentRenderer = element.renderer(); currentRenderer && !currentRenderer->isRenderView(); currentRenderer = currentRenderer->container()) {
 
             // Require the entire container chain to be boxes.
-            if (!is<RenderBox>(*currentRenderer)) {
+            CheckedPtr currentRendererBox = dynamicDowncast<RenderBox>(*currentRenderer);
+            if (!currentRendererBox) {
                 requireFullLayout = true;
                 break;
             }
 
-            previousBox = std::exchange(currentBox, downcast<RenderBox>(currentRenderer.get()));
+            previousBox = std::exchange(currentBox, WTFMove(currentRendererBox));
 
             if (currentBox->style().containerType() != ContainerType::Normal) {
                 requireFullLayout = true;
@@ -2821,8 +2834,8 @@ void Document::willBeRemovedFromFrame()
     if (hasLivingRenderTree())
         destroyRenderTree();
 
-    if (is<PluginDocument>(*this))
-        downcast<PluginDocument>(*this).detachFromPluginElement();
+    if (auto* pluginDocument = dynamicDowncast<PluginDocument>(*this))
+        pluginDocument->detachFromPluginElement();
 
     if (CheckedPtr page = this->page()) {
 #if ENABLE(POINTER_LOCK)
@@ -3139,7 +3152,7 @@ ScriptableDocumentParser* Document::scriptableDocumentParser() const
 ExceptionOr<RefPtr<WindowProxy>> Document::openForBindings(LocalDOMWindow& activeWindow, LocalDOMWindow& firstWindow, const String& url, const AtomString& name, const String& features)
 {
     if (!m_domWindow)
-        return Exception { InvalidAccessError };
+        return Exception { ExceptionCode::InvalidAccessError };
 
     return protectedWindow()->open(activeWindow, firstWindow, url, name, features);
 }
@@ -3147,7 +3160,7 @@ ExceptionOr<RefPtr<WindowProxy>> Document::openForBindings(LocalDOMWindow& activ
 ExceptionOr<Document&> Document::openForBindings(Document* entryDocument, const String&, const String&)
 {
     if (!isHTMLDocument() || m_throwOnDynamicMarkupInsertionCount)
-        return Exception { InvalidStateError };
+        return Exception { ExceptionCode::InvalidStateError };
 
     auto result = open(entryDocument);
     if (UNLIKELY(result.hasException()))
@@ -3159,7 +3172,7 @@ ExceptionOr<Document&> Document::openForBindings(Document* entryDocument, const 
 ExceptionOr<void> Document::open(Document* entryDocument)
 {
     if (entryDocument && !entryDocument->securityOrigin().isSameOriginAs(securityOrigin()))
-        return Exception { SecurityError };
+        return Exception { ExceptionCode::SecurityError };
 
     if (m_ignoreOpensDuringUnloadCount)
         return { };
@@ -3305,14 +3318,14 @@ HTMLElement* Document::bodyOrFrameset() const
 ExceptionOr<void> Document::setBodyOrFrameset(RefPtr<HTMLElement>&& newBody)
 {
     if (!is<HTMLBodyElement>(newBody) && !is<HTMLFrameSetElement>(newBody))
-        return Exception { HierarchyRequestError };
+        return Exception { ExceptionCode::HierarchyRequestError };
 
     RefPtr currentBody = bodyOrFrameset();
     if (newBody == currentBody)
         return { };
 
     if (!m_documentElement)
-        return Exception { HierarchyRequestError };
+        return Exception { ExceptionCode::HierarchyRequestError };
 
     if (currentBody)
         return protectedDocumentElement()->replaceChild(*newBody, *currentBody);
@@ -3343,7 +3356,7 @@ ExceptionOr<void> Document::closeForBindings()
     //        http://www.whatwg.org/specs/web-apps/current-work/#dom-document-close
 
     if (!isHTMLDocument() || m_throwOnDynamicMarkupInsertionCount)
-        return Exception { InvalidStateError };
+        return Exception { ExceptionCode::InvalidStateError };
 
     close();
     return { };
@@ -3575,7 +3588,7 @@ ExceptionOr<void> Document::write(Document* entryDocument, SegmentedString&& tex
 ExceptionOr<void> Document::write(Document* entryDocument, FixedVector<String>&& strings)
 {
     if (!isHTMLDocument() || m_throwOnDynamicMarkupInsertionCount)
-        return Exception { InvalidStateError };
+        return Exception { ExceptionCode::InvalidStateError };
 
     SegmentedString text;
     for (auto& string : strings)
@@ -3587,7 +3600,7 @@ ExceptionOr<void> Document::write(Document* entryDocument, FixedVector<String>&&
 ExceptionOr<void> Document::writeln(Document* entryDocument, FixedVector<String>&& strings)
 {
     if (!isHTMLDocument() || m_throwOnDynamicMarkupInsertionCount)
-        return Exception { InvalidStateError };
+        return Exception { ExceptionCode::InvalidStateError };
 
     SegmentedString text;
     for (auto& string : strings)
@@ -5073,10 +5086,9 @@ bool Document::setFocusedElement(Element* newFocusedElement, const FocusOptions&
 
         if (options.removalEventsMode == FocusRemovalEventsMode::Dispatch) {
             // Dispatch a change event for form control elements that have been edited.
-            if (is<HTMLFormControlElement>(*oldFocusedElement)) {
-                HTMLFormControlElement& formControlElement = downcast<HTMLFormControlElement>(*oldFocusedElement);
-                if (formControlElement.wasChangedSinceLastFormControlChangeEvent())
-                    formControlElement.dispatchFormControlChangeEvent();
+            if (RefPtr formControlElement = dynamicDowncast<HTMLFormControlElement>(*oldFocusedElement)) {
+                if (formControlElement->wasChangedSinceLastFormControlChangeEvent())
+                    formControlElement->dispatchFormControlChangeEvent();
             }
 
             // Dispatch the blur event and let the node do any other blur related activities (important for text fields)
@@ -5097,8 +5109,8 @@ bool Document::setFocusedElement(Element* newFocusedElement, const FocusOptions&
             }
         } else {
             // Match the order in HTMLTextFormControlElement::dispatchBlurEvent.
-            if (is<HTMLInputElement>(*oldFocusedElement))
-                downcast<HTMLInputElement>(*oldFocusedElement).endEditing();
+            if (RefPtr inputElement = dynamicDowncast<HTMLInputElement>(*oldFocusedElement))
+                inputElement->endEditing();
             if (CheckedPtr page = this->page())
                 page->chrome().client().elementDidBlur(*oldFocusedElement);
             ASSERT(!m_focusedElement);
@@ -5114,10 +5126,10 @@ bool Document::setFocusedElement(Element* newFocusedElement, const FocusOptions&
                 view->setFocus(false);
         }
 
-        if (is<HTMLInputElement>(oldFocusedElement)) {
+        if (RefPtr inputElement = dynamicDowncast<HTMLInputElement>(*oldFocusedElement)) {
             // HTMLInputElement::didBlur just scrolls text fields back to the beginning.
             // FIXME: This could be done asynchronusly.
-            downcast<HTMLInputElement>(*oldFocusedElement).didBlur();
+            inputElement->didBlur();
         }
 
         if (focusChangeBlocked)
@@ -5258,13 +5270,13 @@ Element* Document::focusNavigationStartingNode(FocusDirection direction) const
             nextNode = WTFMove(node);
         if (direction == FocusDirection::Forward)
             return ElementTraversal::previous(*nextNode);
-        if (is<Element>(*nextNode))
-            return downcast<Element>(nextNode.get());
+        if (auto* nextElement = dynamicDowncast<Element>(*nextNode))
+            return nextElement;
         return ElementTraversal::next(*nextNode);
     }
 
-    if (is<Element>(*node))
-        return downcast<Element>(node.get());
+    if (auto* element = dynamicDowncast<Element>(*node))
+        return element;
     if (Element* elementBeforeNextFocusableElement = direction == FocusDirection::Forward ? ElementTraversal::previous(*node) : ElementTraversal::next(*node))
         return elementBeforeNextFocusableElement;
     return node->parentOrShadowHostElement();
@@ -5665,7 +5677,7 @@ ExceptionOr<Ref<Event>> Document::createEvent(const String& type)
     if (equalLettersIgnoringASCIICase(type, "wheelevent"_s))
         return Ref<Event> { WheelEvent::createForBindings() };
 
-    return Exception { NotSupportedError };
+    return Exception { ExceptionCode::NotSupportedError };
 }
 
 bool Document::hasListenerTypeForEventType(PlatformEvent::Type eventType) const
@@ -5755,7 +5767,7 @@ ExceptionOr<String> Document::cookie()
         return String();
 
     if (canAccessResource(ScriptExecutionContext::ResourceType::Cookies) == ScriptExecutionContext::HasResourceAccess::No)
-        return Exception { SecurityError };
+        return Exception { ExceptionCode::SecurityError };
 
     URL cookieURL = this->cookieURL();
     if (cookieURL.isEmpty())
@@ -5776,7 +5788,7 @@ ExceptionOr<void> Document::setCookie(const String& value)
         return { };
 
     if (canAccessResource(ScriptExecutionContext::ResourceType::Cookies) == ScriptExecutionContext::HasResourceAccess::No)
-        return Exception { SecurityError };
+        return Exception { ExceptionCode::SecurityError };
 
     URL cookieURL = this->cookieURL();
     if (cookieURL.isEmpty())
@@ -5833,22 +5845,22 @@ String Document::domain() const
 ExceptionOr<void> Document::setDomain(const String& newDomain)
 {
     if (!frame())
-        return Exception { SecurityError, "A browsing context is required to set a domain."_s };
+        return Exception { ExceptionCode::SecurityError, "A browsing context is required to set a domain."_s };
 
     if (isSandboxed(SandboxDocumentDomain))
-        return Exception { SecurityError, "Assignment is forbidden for sandboxed iframes."_s };
+        return Exception { ExceptionCode::SecurityError, "Assignment is forbidden for sandboxed iframes."_s };
 
     if (LegacySchemeRegistry::isDomainRelaxationForbiddenForURLScheme(securityOrigin().protocol()))
-        return Exception { SecurityError };
+        return Exception { ExceptionCode::SecurityError };
 
     // FIXME: We should add logging indicating why a domain was not allowed.
 
     const String& effectiveDomain = domain();
     if (effectiveDomain.isEmpty())
-        return Exception { SecurityError, "The document has a null effectiveDomain."_s };
+        return Exception { ExceptionCode::SecurityError, "The document has a null effectiveDomain."_s };
 
     if (!securityOrigin().isMatchingRegistrableDomainSuffix(newDomain, settings().treatIPAddressAsDomain()))
-        return Exception { SecurityError, "Attempted to use a non-registrable domain."_s };
+        return Exception { ExceptionCode::SecurityError, "Attempted to use a non-registrable domain."_s };
 
     securityOrigin().setDomainFromDOM(newDomain);
     return { };
@@ -5976,7 +5988,7 @@ ExceptionOr<std::pair<AtomString, AtomString>> Document::parseQualifiedName(cons
     unsigned length = qualifiedName.length();
 
     if (!length)
-        return Exception { InvalidCharacterError };
+        return Exception { ExceptionCode::InvalidCharacterError };
 
     bool nameStart = true;
     bool sawColon = false;
@@ -5991,17 +6003,17 @@ ExceptionOr<std::pair<AtomString, AtomString>> Document::parseQualifiedName(cons
         U16_NEXT(qualifiedName, i, length, c);
         if (c == ':') {
             if (sawColon)
-                return Exception { InvalidCharacterError, makeString("Unexpected colon in qualified name '", qualifiedName, "'") };
+                return Exception { ExceptionCode::InvalidCharacterError, makeString("Unexpected colon in qualified name '", qualifiedName, "'") };
             nameStart = true;
             sawColon = true;
             colonPosition = i - 1;
         } else if (nameStart) {
             if (!isValidNameStart(c))
-                return Exception { InvalidCharacterError, makeString("Invalid qualified name start in '", qualifiedName, "'") };
+                return Exception { ExceptionCode::InvalidCharacterError, makeString("Invalid qualified name start in '", qualifiedName, "'") };
             nameStart = false;
         } else {
             if (!isValidNamePart(c))
-                return Exception { InvalidCharacterError, makeString("Invalid qualified name part in '", qualifiedName, "'") };
+                return Exception { ExceptionCode::InvalidCharacterError, makeString("Invalid qualified name part in '", qualifiedName, "'") };
         }
     }
 
@@ -6009,7 +6021,7 @@ ExceptionOr<std::pair<AtomString, AtomString>> Document::parseQualifiedName(cons
         return std::pair<AtomString, AtomString> { { }, { qualifiedName } };
 
     if (!colonPosition || length - colonPosition <= 1)
-        return Exception { InvalidCharacterError, makeString("Namespace in qualified name '", qualifiedName, "' is too short") };
+        return Exception { ExceptionCode::InvalidCharacterError, makeString("Namespace in qualified name '", qualifiedName, "' is too short") };
 
     return std::pair<AtomString, AtomString> { StringView { qualifiedName }.left(colonPosition).toAtomString(), StringView { qualifiedName }.substring(colonPosition + 1).toAtomString() };
 }
@@ -6362,7 +6374,7 @@ static Editor::Command command(Document* document, const String& commandName, bo
 ExceptionOr<bool> Document::execCommand(const String& commandName, bool userInterface, const String& value)
 {
     if (UNLIKELY(!isHTMLDocument() && !isXHTMLDocument()))
-        return Exception { InvalidStateError, "execCommand is only supported on HTML documents."_s };
+        return Exception { ExceptionCode::InvalidStateError, "execCommand is only supported on HTML documents."_s };
 
     EventQueueScope eventQueueScope;
     return command(this, commandName, userInterface).execute(value);
@@ -6371,35 +6383,35 @@ ExceptionOr<bool> Document::execCommand(const String& commandName, bool userInte
 ExceptionOr<bool> Document::queryCommandEnabled(const String& commandName)
 {
     if (UNLIKELY(!isHTMLDocument() && !isXHTMLDocument()))
-        return Exception { InvalidStateError, "queryCommandEnabled is only supported on HTML documents."_s };
+        return Exception { ExceptionCode::InvalidStateError, "queryCommandEnabled is only supported on HTML documents."_s };
     return command(this, commandName).isEnabled();
 }
 
 ExceptionOr<bool> Document::queryCommandIndeterm(const String& commandName)
 {
     if (UNLIKELY(!isHTMLDocument() && !isXHTMLDocument()))
-        return Exception { InvalidStateError, "queryCommandIndeterm is only supported on HTML documents."_s };
+        return Exception { ExceptionCode::InvalidStateError, "queryCommandIndeterm is only supported on HTML documents."_s };
     return command(this, commandName).state() == TriState::Indeterminate;
 }
 
 ExceptionOr<bool> Document::queryCommandState(const String& commandName)
 {
     if (UNLIKELY(!isHTMLDocument() && !isXHTMLDocument()))
-        return Exception { InvalidStateError, "queryCommandState is only supported on HTML documents."_s };
+        return Exception { ExceptionCode::InvalidStateError, "queryCommandState is only supported on HTML documents."_s };
     return command(this, commandName).state() == TriState::True;
 }
 
 ExceptionOr<bool> Document::queryCommandSupported(const String& commandName)
 {
     if (UNLIKELY(!isHTMLDocument() && !isXHTMLDocument()))
-        return Exception { InvalidStateError, "queryCommandSupported is only supported on HTML documents."_s };
+        return Exception { ExceptionCode::InvalidStateError, "queryCommandSupported is only supported on HTML documents."_s };
     return command(this, commandName).isSupported();
 }
 
 ExceptionOr<String> Document::queryCommandValue(const String& commandName)
 {
     if (UNLIKELY(!isHTMLDocument() && !isXHTMLDocument()))
-        return Exception { InvalidStateError, "queryCommandValue is only supported on HTML documents."_s };
+        return Exception { ExceptionCode::InvalidStateError, "queryCommandValue is only supported on HTML documents."_s };
     return command(this, commandName).value();
 }
 
@@ -6530,7 +6542,7 @@ CheckedRef<ScriptRunner> Document::checkedScriptRunner()
 ExceptionOr<Ref<Attr>> Document::createAttribute(const AtomString& localName)
 {
     if (!isValidName(localName))
-        return Exception { InvalidCharacterError, makeString("Invalid qualified name: '", localName, "'") };
+        return Exception { ExceptionCode::InvalidCharacterError, makeString("Invalid qualified name: '", localName, "'") };
     return Attr::create(*this, QualifiedName { nullAtom(), isHTMLDocument() ? localName.convertToASCIILowercase() : localName, nullAtom() }, emptyAtom());
 }
 
@@ -6541,7 +6553,7 @@ ExceptionOr<Ref<Attr>> Document::createAttributeNS(const AtomString& namespaceUR
         return parseResult.releaseException();
     QualifiedName parsedName { parseResult.releaseReturnValue() };
     if (!shouldIgnoreNamespaceChecks && !hasValidNamespaceForAttributes(parsedName))
-        return Exception { NamespaceError };
+        return Exception { ExceptionCode::NamespaceError };
     return Attr::create(*this, parsedName, emptyAtom());
 }
 
@@ -7008,18 +7020,18 @@ std::optional<RenderingContext> Document::getCSSCanvasContext(const String& type
         return std::nullopt;
 
 #if ENABLE(WEBGL)
-    if (is<WebGLRenderingContext>(*context))
-        return RenderingContext { RefPtr<WebGLRenderingContext> { &downcast<WebGLRenderingContext>(*context) } };
+    if (RefPtr renderingContext = dynamicDowncast<WebGLRenderingContext>(*context))
+        return RenderingContext { WTFMove(renderingContext) };
 
-    if (is<WebGL2RenderingContext>(*context))
-        return RenderingContext { RefPtr<WebGL2RenderingContext> { &downcast<WebGL2RenderingContext>(*context) } };
+    if (RefPtr renderingContext = dynamicDowncast<WebGL2RenderingContext>(*context))
+        return RenderingContext { WTFMove(renderingContext) };
 #endif
 
-    if (is<ImageBitmapRenderingContext>(*context))
-        return RenderingContext { RefPtr<ImageBitmapRenderingContext> { &downcast<ImageBitmapRenderingContext>(*context) } };
+    if (RefPtr renderingContext = dynamicDowncast<ImageBitmapRenderingContext>(*context))
+        return RenderingContext { WTFMove(renderingContext) };
 
-    if (is<GPUCanvasContext>(*context))
-        return RenderingContext { RefPtr<GPUCanvasContext> { &downcast<GPUCanvasContext>(*context) } };
+    if (RefPtr gpuCanvasContext = dynamicDowncast<GPUCanvasContext>(*context))
+        return RenderingContext { WTFMove(gpuCanvasContext) };
 
     return RenderingContext { RefPtr<CanvasRenderingContext2D> { &downcast<CanvasRenderingContext2D>(*context) } };
 }
@@ -7265,11 +7277,8 @@ void Document::serviceRequestVideoFrameCallbacks()
 
     bool isServicingRequestVideoFrameCallbacks = false;
     forEachMediaElement([now = domWindow()->frozenNowTimestamp(), &isServicingRequestVideoFrameCallbacks](auto& element) {
-        if (!is<HTMLVideoElement>(element))
-            return;
-
-        Ref videoElement = downcast<HTMLVideoElement>(element);
-        if (videoElement->shouldServiceRequestVideoFrameCallbacks()) {
+        RefPtr videoElement = dynamicDowncast<HTMLVideoElement>(element);
+        if (videoElement && videoElement->shouldServiceRequestVideoFrameCallbacks()) {
             isServicingRequestVideoFrameCallbacks = true;
             videoElement->serviceRequestVideoFrameCallbacks(now);
         }
@@ -7680,20 +7689,18 @@ Document::RegionFixedPair Document::absoluteEventRegionForNode(Node& node)
     LayoutRect rootRelativeBounds;
     bool insideFixedPosition = false;
 
-    if (is<Document>(node)) {
-        auto& document = downcast<Document>(node);
-        if (&document == this)
+    if (auto* document = dynamicDowncast<Document>(node)) {
+        if (document == this)
             rootRelativeBounds = absoluteEventHandlerBounds(insideFixedPosition);
-        else if (RefPtr element = document.ownerElement())
+        else if (RefPtr element = document->ownerElement())
             rootRelativeBounds = element->absoluteEventHandlerBounds(insideFixedPosition);
-    } else if (is<Element>(node)) {
-        auto& element = downcast<Element>(node);
-        if (is<HTMLBodyElement>(element)) {
+    } else if (auto* element = dynamicDowncast<Element>(node)) {
+        if (is<HTMLBodyElement>(*element)) {
             // For the body, just use the document bounds.
             // The body may not cover this whole area, but it's OK for this region to be an overestimate.
             rootRelativeBounds = absoluteEventHandlerBounds(insideFixedPosition);
         } else
-            rootRelativeBounds = element.absoluteEventHandlerBounds(insideFixedPosition);
+            rootRelativeBounds = element->absoluteEventHandlerBounds(insideFixedPosition);
     }
 
     if (!rootRelativeBounds.isEmpty())
@@ -7814,8 +7821,10 @@ Element* eventTargetElementForDocument(Document* document)
     if (!document)
         return nullptr;
     Element* element = document->focusedElement();
-    if (!element && is<PluginDocument>(*document))
-        element = downcast<PluginDocument>(*document).pluginElement();
+    if (!element) {
+        if (auto* pluginDocument = dynamicDowncast<PluginDocument>(*document))
+            element = pluginDocument->pluginElement();
+    }
     if (!element && document->isHTMLDocument())
         element = document->bodyOrFrameset();
     if (!element)
@@ -8002,8 +8011,8 @@ void Document::updateHoverActiveState(const HitTestRequest& request, Element* in
             elementsToClearHover.append(element);
         }
         // Unset hovered nodes in sub frame documents if the old hovered node was a frame owner.
-        if (is<HTMLFrameOwnerElement>(oldHoveredElement)) {
-            if (RefPtr contentDocument = downcast<HTMLFrameOwnerElement>(*oldHoveredElement).contentDocument())
+        if (auto* frameOwnerElement = dynamicDowncast<HTMLFrameOwnerElement>(oldHoveredElement.get())) {
+            if (RefPtr contentDocument = frameOwnerElement->contentDocument())
                 contentDocument->updateHoverActiveState(request, nullptr);
         }
     }
@@ -8102,6 +8111,11 @@ Ref<FontFaceSet> Document::fonts()
 EditingBehavior Document::editingBehavior() const
 {
     return EditingBehavior { settings().editingBehaviorType() };
+}
+
+Ref<Settings> Document::protectedSettings() const
+{
+    return const_cast<Settings&>(m_settings.get());
 }
 
 float Document::deviceScaleFactor() const
@@ -8655,17 +8669,14 @@ void Document::updateResizeObservations(Page& page)
 
 const AtomString& Document::dir() const
 {
-    auto* documentElement = this->documentElement();
-    if (!is<HTMLHtmlElement>(documentElement))
-        return nullAtom();
-    return downcast<HTMLHtmlElement>(*documentElement).dir();
+    auto* documentElement = dynamicDowncast<HTMLHtmlElement>(this->documentElement());
+    return documentElement ? documentElement->dir() : nullAtom();
 }
 
 void Document::setDir(const AtomString& value)
 {
-    RefPtr documentElement = this->documentElement();
-    if (is<HTMLHtmlElement>(documentElement))
-        downcast<HTMLHtmlElement>(*documentElement).setDir(value);
+    if (RefPtr documentElement = dynamicDowncast<HTMLHtmlElement>(this->documentElement()))
+        documentElement->setDir(value);
 }
 
 DOMSelection* Document::getSelection()
@@ -8986,18 +8997,18 @@ Vector<RefPtr<WebAnimation>> Document::matchingAnimations(const Function<bool(El
 void Document::keyframesRuleDidChange(const String& name)
 {
     for (auto* animation : WebAnimation::instances()) {
-        if (!is<CSSAnimation>(*animation) || !animation->isRelevant())
+        auto cssAnimation = dynamicDowncast<CSSAnimation>(*animation);
+        if (!cssAnimation || !cssAnimation->isRelevant())
             continue;
 
-        auto& cssAnimation = downcast<CSSAnimation>(*animation);
-        if (cssAnimation.animationName() != name)
+        if (cssAnimation->animationName() != name)
             continue;
 
-        auto owningElement = cssAnimation.owningElement();
+        auto owningElement = cssAnimation->owningElement();
         if (!owningElement || !owningElement->element.isConnected() || &owningElement->element.document() != this)
             continue;
 
-        cssAnimation.keyframesRuleDidChange();
+        cssAnimation->keyframesRuleDidChange();
     }
 }
 
@@ -9011,7 +9022,8 @@ void Document::addTopLayerElement(Element& element)
         if (candidatePopover->hasFullscreenFlag())
             return;
 #endif
-        if (is<HTMLDialogElement>(*candidatePopover) && downcast<HTMLDialogElement>(*candidatePopover).isModal())
+        auto* dialogElement = dynamicDowncast<HTMLDialogElement>(*candidatePopover);
+        if (dialogElement && dialogElement->isModal())
             return;
         auto result = m_autoPopoverList.add(*candidatePopover);
         RELEASE_ASSERT(result.isNewEntry);
@@ -9032,8 +9044,8 @@ void Document::removeTopLayerElement(Element& element)
 HTMLDialogElement* Document::activeModalDialog() const
 {
     for (auto& element : makeReversedRange(m_topLayerElements)) {
-        if (is<HTMLDialogElement>(element))
-            return downcast<HTMLDialogElement>(element.ptr());
+        if (auto* dialogElement = dynamicDowncast<HTMLDialogElement>(element.get()))
+            return dialogElement;
     }
 
     return nullptr;
@@ -9092,7 +9104,8 @@ void Document::handlePopoverLightDismiss(const PointerEvent& event, Node& target
         return;
 
     RefPtr popoverToAvoidHiding = [&]() -> HTMLElement* {
-        RefPtr startElement = is<Element>(target) ? &downcast<Element>(target) : target.parentElement();
+        auto* targetElement = dynamicDowncast<Element>(target);
+        RefPtr startElement = targetElement ? targetElement : target.parentElement();
         auto [clickedPopover, invokerPopover] = [&]() {
             RefPtr<HTMLElement> clickedPopover;
             RefPtr<HTMLElement> invokerPopover;
@@ -9289,20 +9302,20 @@ void Document::updateServiceWorkerClientData()
     serviceWorkerConnection->registerServiceWorkerClient(clientOrigin(), ServiceWorkerClientData::from(*this), controllingServiceWorkerRegistrationIdentifier, userAgent(url()));
 }
 
-void Document::navigateFromServiceWorker(const URL& url, CompletionHandler<void(bool)>&& callback)
+void Document::navigateFromServiceWorker(const URL& url, CompletionHandler<void(ScheduleLocationChangeResult)>&& callback)
 {
     if (activeDOMObjectsAreSuspended() || activeDOMObjectsAreStopped()) {
-        callback(false);
+        callback(ScheduleLocationChangeResult::Stopped);
         return;
     }
     eventLoop().queueTask(TaskSource::DOMManipulation, [weakThis = WeakPtr<Document, WeakPtrImplWithEventTargetData> { *this }, url, callback = WTFMove(callback)]() mutable {
         RefPtr frame = weakThis ? weakThis->frame() : nullptr;
         if (!frame) {
-            callback(false);
+            callback(ScheduleLocationChangeResult::Stopped);
             return;
         }
-        frame->navigationScheduler().scheduleLocationChange(*weakThis, weakThis->securityOrigin(), url, frame->loader().outgoingReferrer(), LockHistory::Yes, LockBackForwardList::No, [callback = WTFMove(callback)]() mutable {
-            callback(true);
+        frame->navigationScheduler().scheduleLocationChange(*weakThis, weakThis->securityOrigin(), url, frame->loader().outgoingReferrer(), LockHistory::Yes, LockBackForwardList::No, [callback = WTFMove(callback)](auto result) mutable {
+            callback(result);
         });
     });
 }
@@ -9557,11 +9570,9 @@ void Document::clearCanvasPreparation(HTMLCanvasElement& canvas)
 
 void Document::canvasChanged(CanvasBase& canvasBase, const std::optional<FloatRect>& changedRect)
 {
-    if (!is<HTMLCanvasElement>(canvasBase))
-        return;
-    auto& canvas = downcast<HTMLCanvasElement>(canvasBase);
-    if (canvas.needsPreparationForDisplay()) {
-        m_canvasesNeedingDisplayPreparation.add(canvas);
+    auto* canvas = dynamicDowncast<HTMLCanvasElement>(canvasBase);
+    if (canvas && canvas->needsPreparationForDisplay()) {
+        m_canvasesNeedingDisplayPreparation.add(*canvas);
         // Schedule a rendering update to force handling of prepareForDisplay
         // for any queued canvases. This is especially important for any canvas
         // that is not in the DOM, as those don't have a rect to invalidate to
@@ -9583,10 +9594,8 @@ void Document::updateSleepDisablerIfNeeded()
 
 void Document::canvasDestroyed(CanvasBase& canvasBase)
 {
-    if (!is<HTMLCanvasElement>(canvasBase))
-        return;
-    auto& canvas = downcast<HTMLCanvasElement>(canvasBase);
-    m_canvasesNeedingDisplayPreparation.remove(canvas);
+    if (auto* canvasElement = dynamicDowncast<HTMLCanvasElement>(canvasBase))
+        m_canvasesNeedingDisplayPreparation.remove(*canvasElement);
 }
 
 JSC::VM& Document::vm()

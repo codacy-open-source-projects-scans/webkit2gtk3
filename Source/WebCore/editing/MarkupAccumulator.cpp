@@ -41,6 +41,7 @@
 #include "HTMLElement.h"
 #include "HTMLFrameElement.h"
 #include "HTMLIFrameElement.h"
+#include "HTMLLinkElement.h"
 #include "HTMLNames.h"
 #include "HTMLStyleElement.h"
 #include "HTMLTemplateElement.h"
@@ -192,34 +193,43 @@ void MarkupAccumulator::appendCharactersReplacingEntities(StringBuilder& result,
         appendCharactersReplacingEntitiesInternal<UChar>(result, source, offset, length, entityMask);
 }
 
-MarkupAccumulator::MarkupAccumulator(Vector<Ref<Node>>* nodes, ResolveURLs resolveURLs, SerializationSyntax serializationSyntax, HashMap<String, String>&& replacementURLStrings, ShouldIncludeShadowDOM shouldIncludeShadowDOM)
+MarkupAccumulator::MarkupAccumulator(Vector<Ref<Node>>* nodes, ResolveURLs resolveURLs, SerializationSyntax serializationSyntax, HashMap<String, String>&& replacementURLStrings, HashMap<RefPtr<CSSStyleSheet>, String>&& replacementURLStringsForCSSStyleSheet, ShouldIncludeShadowDOM shouldIncludeShadowDOM, const Vector<MarkupExclusionRule>& exclusionRules)
     : m_nodes(nodes)
     , m_resolveURLs(resolveURLs)
     , m_serializationSyntax(serializationSyntax)
     , m_replacementURLStrings(WTFMove(replacementURLStrings))
+    , m_replacementURLStringsForCSSStyleSheet(WTFMove(replacementURLStringsForCSSStyleSheet))
     , m_shouldIncludeShadowDOM(shouldIncludeShadowDOM == ShouldIncludeShadowDOM::Yes)
+    , m_exclusionRules(exclusionRules)
 {
 }
 
 MarkupAccumulator::~MarkupAccumulator() = default;
 
-String MarkupAccumulator::serializeNodes(Node& targetNode, SerializedNodes root, Vector<QualifiedName>* tagNamesToSkip)
+String MarkupAccumulator::serializeNodes(Node& targetNode, SerializedNodes root)
 {
-    serializeNodesWithNamespaces(targetNode, root, 0, tagNamesToSkip);
+    serializeNodesWithNamespaces(targetNode, root, 0);
     return m_markup.toString();
 }
 
 bool MarkupAccumulator::appendContentsForNode(StringBuilder& result, const Node& targetNode)
 {
-    if (m_replacementURLStrings.isEmpty() || !targetNode.hasTagName(styleTag))
+    if (!targetNode.hasTagName(styleTag))
+        return false;
+
+    if (m_replacementURLStrings.isEmpty() && m_replacementURLStringsForCSSStyleSheet.isEmpty())
         return false;
 
     auto& styleElement = downcast<HTMLStyleElement>(targetNode);
-    result.append(styleElement.textContentWithReplacementURLs(m_replacementURLStrings));
+    RefPtr cssStyleSheet = styleElement.sheet();
+    if (!cssStyleSheet)
+        return false;
+
+    result.append(cssStyleSheet->cssTextWithReplacementURLs(m_replacementURLStrings, m_replacementURLStringsForCSSStyleSheet));
     return true;
 }
 
-void MarkupAccumulator::serializeNodesWithNamespaces(Node& targetNode, SerializedNodes root, const Namespaces* namespaces, Vector<QualifiedName>* tagNamesToSkip)
+void MarkupAccumulator::serializeNodesWithNamespaces(Node& targetNode, SerializedNodes root, const Namespaces* namespaces)
 {
     WTF::Vector<Namespaces> namespaceStack;
     if (namespaces)
@@ -236,12 +246,8 @@ void MarkupAccumulator::serializeNodesWithNamespaces(Node& targetNode, Serialize
     RefPtr<const Node> current = &targetNode;
     do {
         bool shouldSkipNode = false;
-        if (tagNamesToSkip && is<Element>(current)) {
-            for (auto& name : *tagNamesToSkip) {
-                if (downcast<Element>(*current).hasTagName(name))
-                    shouldSkipNode = true;
-            }
-        }
+        if (is<Element>(current) && shouldExcludeElement(downcast<Element>(*current)))
+            shouldSkipNode = true;
 
         bool shouldAppendNode = !shouldSkipNode && !(current == &targetNode && root != SerializedNodes::SubtreeIncludingNode);
         if (shouldAppendNode)
@@ -304,11 +310,19 @@ void MarkupAccumulator::serializeNodesWithNamespaces(Node& targetNode, Serialize
 
 String MarkupAccumulator::resolveURLIfNeeded(const Element& element, const String& urlString) const
 {
+    if (!m_replacementURLStringsForCSSStyleSheet.isEmpty() && is<HTMLLinkElement>(element)) {
+        if (RefPtr cssStyleSheet = downcast<HTMLLinkElement>(element).sheet()) {
+            auto replacementURLString = m_replacementURLStringsForCSSStyleSheet.get(cssStyleSheet);
+            if (!replacementURLString.isEmpty())
+                return replacementURLString;
+        }
+    }
+
     if (!m_replacementURLStrings.isEmpty()) {
         if (auto frame = frameForAttributeReplacement(element)) {
-            auto replacementString = m_replacementURLStrings.get(frame->frameID().toString());
-            if (!replacementString.isEmpty())
-                return replacementString;
+            auto replacementURLString = m_replacementURLStrings.get(frame->frameID().toString());
+            if (!replacementURLString.isEmpty())
+                return replacementURLString;
         }
 
         auto resolvedURLString = element.resolveURLStringIfNeeded(urlString);
@@ -722,6 +736,40 @@ void MarkupAccumulator::appendNonElementNode(StringBuilder& result, const Node& 
         appendAttributeValue(result, downcast<Attr>(node).value(), false);
         break;
     }
+}
+
+static bool isElementExcludedByRule(const MarkupExclusionRule& rule, const Element& element)
+{
+    if (!rule.elementLocalName.isNull() && !equalIgnoringASCIICase(rule.elementLocalName, element.localName()))
+        return false;
+
+    unsigned matchedAttributes = 0;
+    if (element.hasAttributes()) {
+        for (auto& [attributeLocalName, attributeValue] : rule.attributes) {
+            if (attributeLocalName.isNull()) {
+                ++matchedAttributes;
+                continue;
+            }
+
+            // FIXME: We might optimize this by using a HashMap when there are too many attributes.
+            for (const Attribute& attribute : element.attributesIterator()) {
+                if (!equalIgnoringASCIICase(attribute.localName(), attributeLocalName))
+                    continue;
+                if (attributeValue.isNull() || equalIgnoringASCIICase(attribute.value(), attributeValue)) {
+                    ++matchedAttributes;
+                    break;
+                }
+            }
+        }
+    }
+    return matchedAttributes == rule.attributes.size();
+}
+
+bool MarkupAccumulator::shouldExcludeElement(const Element& element)
+{
+    return WTF::anyOf(m_exclusionRules, [&](auto& rule) {
+        return isElementExcludedByRule(rule, element);
+    });
 }
 
 }

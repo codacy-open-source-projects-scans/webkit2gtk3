@@ -548,11 +548,11 @@ static LengthSize switchSize(const LengthSize& zoomedSize, float zoomFactor)
 
 // Theme overrides
 
-int ThemeMac::baselinePositionAdjustment(StyleAppearance appearance) const
+int ThemeMac::baselinePositionAdjustment(StyleAppearance appearance, bool isHorizontalWritingMode) const
 {
-    if (appearance == StyleAppearance::Checkbox || appearance == StyleAppearance::Radio)
+    if ((appearance == StyleAppearance::Checkbox || appearance == StyleAppearance::Radio) && isHorizontalWritingMode)
         return -2;
-    return Theme::baselinePositionAdjustment(appearance);
+    return Theme::baselinePositionAdjustment(appearance, isHorizontalWritingMode);
 }
 
 std::optional<FontCascadeDescription> ThemeMac::controlFont(StyleAppearance appearance, const FontCascade& font, float zoomFactor) const
@@ -711,14 +711,14 @@ void ThemeMac::inflateControlPaintRect(StyleAppearance appearance, const Control
     END_BLOCK_OBJC_EXCEPTIONS
 }
 
-bool ThemeMac::userPrefersReducedMotion() const
-{
-    return [[NSWorkspace sharedWorkspace] accessibilityDisplayShouldReduceMotion];
-}
-
 bool ThemeMac::userPrefersContrast() const
 {
     return [[NSWorkspace sharedWorkspace] accessibilityDisplayShouldIncreaseContrast];
+}
+
+bool ThemeMac::userPrefersReducedMotion() const
+{
+    return [[NSWorkspace sharedWorkspace] accessibilityDisplayShouldReduceMotion];
 }
 
 bool ThemeMac::supportsLargeFormControls()

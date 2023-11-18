@@ -141,30 +141,42 @@ fn testAddEq() {
   }
 }
 
-fn testMultiply() {
-  {
+// RUN: %metal-compile testMultiply
+@compute @workgroup_size(1)
+fn testMultiply()
+{
     _ = 0 * 0;
     _ = 0i * 0i;
     _ = 0u * 0u;
     _ = 0.0 * 0.0;
     _ = 0.0f * 0.0f;
-  }
 
-  let v2 = vec2<f32>(0, 0);
-  let v4 = vec4<f32>(0, 0, 0, 0);
-  let m = mat2x4<f32>(0, 0, 0, 0, 0, 0, 0, 0);
-  _ = m * v2;
-  _ = v4 * m;
-  _ = vec2(1, 1) * 1;
-  _ = 1 * vec2(1, 1);
-  _ = vec2(1, 1) * vec2(1, 1);
+    var v2 = vec2<f32>(0, 0);
+    var v4 = vec4<f32>(0, 0, 0, 0);
+    var m = mat2x4<f32>(0, 0, 0, 0, 0, 0, 0, 0);
+    _ = m * v2;
+    _ = v4 * m;
+    _ = vec2(1, 1) * 1;
+    _ = 1 * vec2(1, 1);
+    _ = vec2(1, 1) * vec2(1, 1);
 
-  _ = m * 2;
-  _ = 2 * m;
+    _ = m * 2;
+    _ = 2 * m;
 
-  _ = mat2x2(0, 0, 0, 0) * mat2x2(0, 0, 0, 0);
-  _ = mat2x2(0, 0, 0, 0) * mat3x2(0, 0, 0, 0, 0, 0);
-  _ = mat2x2(0, 0, 0, 0) * mat4x2(0, 0, 0, 0, 0, 0, 0, 0);
+    v2 *= v2;
+    v2 *= 2;
+
+    v4 *= v4;
+    v4 *= 2;
+
+    var m2 = mat2x2<f32>(0, 0, 0, 0);
+    m2 *= m2;
+    // FIXME: this requires type checking compound assignment
+    // m2 *= 2;
+
+    _ = mat2x2(0, 0, 0, 0) * mat2x2(0, 0, 0, 0);
+    _ = mat2x2(0, 0, 0, 0) * mat3x2(0, 0, 0, 0, 0, 0);
+    _ = mat2x2(0, 0, 0, 0) * mat4x2(0, 0, 0, 0, 0, 0, 0, 0);
 }
 
 fn testDivision() {
@@ -178,6 +190,8 @@ fn testDivision() {
    _ = vec2(0.0, 0.0) / vec2(1.0, 1.0);
 }
 
+// RUN: %metal-compile testModulo
+@compute @workgroup_size(1)
 fn testModulo() {
    _ = 0 % 1;
    _ = 0i % 1i;
@@ -277,49 +291,97 @@ fn testComparison() {
 
 // 8.9. Bit Expressions (https://www.w3.org/TR/WGSL/#bit-expr)
 
+// RUN: %metal-compile testBitwise
+@compute @workgroup_size(1)
 fn testBitwise()
 {
-  {
-    _ = ~0;
-    _ = ~0i;
-    _ = ~0u;
-  }
+    {
+        var i = 0i;
+        var u = 0u;
+        const x1: u32 = ~(-1);
+        const x2: i32 = ~1i;
+        const x3: u32 = ~1u;
+        const x4: vec2<u32> = ~vec2(-1);
+        const x5: vec2<i32> = ~vec2(0i);
+        const x6: vec2<u32> = ~vec2(0u);
+        let x7: i32 = ~i;
+        let x8: u32 = ~u;
+    }
 
-  {
-    _ = 0 & 1;
-    _ = 0i & 1i;
-    _ = 0u & 1u;
-  }
+    {
+        var i = 0i;
+        var u = 0u;
+        const x1: u32 = 0 & 1;
+        const x2: i32 = 0i & 1i;
+        const x3: u32 = 0u & 1u;
+        const x4: vec2<u32> = vec2(0) & vec2(1);
+        const x5: vec2<i32> = vec2(0i) & vec2(1i);
+        const x6: vec2<u32> = vec2(0u) & vec2(1u);
+        let x7: i32 = i & 1;
+        let x8: u32 = u & 1;
+        i &= 1;
+        u &= 1;
+    }
 
-  {
-    _ = 0 | 1;
-    _ = 0i | 1i;
-    _ = 0u | 1u;
-  }
+    {
+        var i = 0i;
+        var u = 0u;
+        const x1: u32 = 0 | 1;
+        const x2: i32 = 0i | 1i;
+        const x3: u32 = 0u | 1u;
+        const x4: vec2<u32> = vec2(0) | vec2(1);
+        const x5: vec2<i32> = vec2(0i) | vec2(1);
+        const x6: vec2<u32> = vec2(0u) | vec2(1);
+        let x7: i32 = i | 1;
+        let x8: u32 = u | 1;
+        i |= 1;
+        u |= 1;
+    }
 
-  {
-    _ = 0 ^ 1;
-    _ = 0i ^ 1i;
-    _ = 0u ^ 1u;
-  }
+    {
+        var i = 0i;
+        var u = 0u;
+        const x1: u32 = 0 ^ 1;
+        const x2: i32 = 0i ^ 1i;
+        const x3: u32 = 0u ^ 1u;
+        const x4: vec2<u32> = vec2(0) ^ vec2(1);
+        const x5: vec2<i32> = vec2(0i) ^ vec2(1i);
+        const x6: vec2<u32> = vec2(0u) ^ vec2(1u);
+        let x7: i32 = i ^ 1;
+        let x8: u32 = u ^ 1;
+        i ^= 1;
+        u ^= 1;
+    }
 
-  {
-    const x: u32 = 1 << 2;
-    _ = 1i << 2u;
-    _ = 1u << 2u;
-    _ = vec2(1) << vec2(2);
-    _ = vec2(1i) << vec2(2u);
-    _ = vec2(1u) << vec2(2u);
-  }
+    {
+        var i = 0i;
+        var u = 0u;
+        const x1: u32 = 1 << 2;
+        const x2: i32 = 1i << 2u;
+        const x3: u32 = 1u << 2u;
+        const x4: vec2<u32> = vec2(1) << vec2(2);
+        const x5: vec2<i32> = vec2(1i) << vec2(2u);
+        const x6: vec2<u32> = vec2(1u) << vec2(2u);
+        let x7: i32 = i << 1;
+        let x8: u32 = u << 1;
+        i <<= 1;
+        u <<= 1;
+    }
 
-  {
-    const x: u32 = 1 >> 2;
-    _ = 1i >> 2u;
-    _ = 1u >> 2u;
-    _ = vec2(1) >> vec2(2);
-    _ = vec2(1i) >> vec2(2u);
-    _ = vec2(1u) >> vec2(2u);
-  }
+    {
+        var i = 0i;
+        var u = 0u;
+        const x: u32 = 1 >> 2;
+        const x2: i32 = 1i >> 2u;
+        const x3: u32 = 1u >> 2u;
+        const x4: vec2<u32> = vec2(1) >> vec2(2);
+        const x5: vec2<i32> = vec2(1i) >> vec2(2u);
+        const x6: vec2<u32> = vec2(1u) >> vec2(2u);
+        let x7: i32 = i >> 1;
+        let x8: u32 = u >> 1;
+        i >>= 1;
+        u >>= 1;
+    }
 }
 
 // 8.13. Address-Of Expression (https://www.w3.org/TR/WGSL/#address-of-expr)
@@ -2417,6 +2479,8 @@ fn testTextureDimensions()
 }
 
 // 16.7.2
+// RUN: %metal-compile testTextureGather
+@compute @workgroup_size(1)
 fn testTextureGather()
 {
     // [T < ConcreteInteger, S < Concrete32BitNumber].(T, Texture[S, Texture2d], Sampler, Vector[F32, 2]) => Vector[S, 4],
@@ -2457,6 +2521,8 @@ fn testTextureGather()
 }
 
 // 16.7.3 textureGatherCompare
+// RUN: %metal-compile testTextureGatherCompare
+@compute @workgroup_size(1)
 fn testTextureGatherCompare()
 {
     // [].(texture_depth_2d, sampler_comparison, vec2[f32], f32) => vec4[f32],
@@ -2624,6 +2690,8 @@ fn testTextureLoad()
 }
 
 // 16.7.5
+// RUN: %metal-compile testTextureNumLayers
+@compute @workgroup_size(1)
 fn testTextureNumLayers()
 {
     // [S < Concrete32BitNumber].(Texture[S, Texture2dArray]) => U32,
@@ -2679,6 +2747,8 @@ fn testTextureNumLevels()
 }
 
 // 16.7.7
+// RUN: %metal-compile testTextureNumSamples
+@compute @workgroup_size(1)
 fn testTextureNumSamples()
 {
     // [S < Concrete32BitNumber].(Texture[S, TextureMultisampled2d]) => U32,
@@ -2689,6 +2759,8 @@ fn testTextureNumSamples()
 }
 
 // 16.7.8
+// RUN: %metal-compile testTextureSample
+@compute @workgroup_size(1)
 fn testTextureSample()
 {
     // [].(Texture[F32, Texture1d], Sampler, F32) => Vector[F32, 4],
@@ -2739,6 +2811,8 @@ fn testTextureSample()
 
 
 // 16.7.9
+// RUN: %metal-compile testTextureSampleBias
+@compute @workgroup_size(1)
 fn testTextureSampleBias()
 {
     // [].(Texture[F32, Texture2d], Sampler, Vector[F32, 2], F32) => Vector[F32, 4],
@@ -2893,7 +2967,10 @@ fn testTextureSampleLevel()
 }
 
 // 16.7.14
-fn testTextureSampleBaseClampToEdge() {
+// RUN: %metal-compile testTextureSampleBaseClampToEdge
+@compute @workgroup_size(1)
+fn testTextureSampleBaseClampToEdge()
+{
     // [].(TextureExternal, Sampler, Vector[F32, 2]) => Vector[F32, 4],
     _ = textureSampleBaseClampToEdge(te, s, vec2f(0));
 
