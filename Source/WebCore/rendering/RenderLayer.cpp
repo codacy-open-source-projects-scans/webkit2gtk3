@@ -130,6 +130,7 @@
 #include "RenderTreeAsText.h"
 #include "RenderTreeMutationDisallowedScope.h"
 #include "RenderView.h"
+#include "SVGClipPathElement.h"
 #include "SVGNames.h"
 #include "ScaleTransformOperation.h"
 #include "ScrollAnimator.h"
@@ -1344,11 +1345,18 @@ void RenderLayer::dirtyAncestorChainHasBlendingDescendants()
 
 FloatRect RenderLayer::referenceBoxRectForClipPath(CSSBoxType boxType, const LayoutSize& offsetFromRoot, const LayoutRect& rootRelativeBounds) const
 {
-    // FIXME: [LBSE] Upstream clipping support for SVG.
+    bool isReferenceBox = false;
+
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
+    if (renderer().document().settings().layerBasedSVGEngineEnabled() && renderer().isSVGLayerAwareRenderer())
+        isReferenceBox = true;
+    else
+#endif
+        isReferenceBox = renderer().isRenderBox();
 
     // FIXME: Support different reference boxes for inline content.
     // https://bugs.webkit.org/show_bug.cgi?id=129047
-    if (!renderer().isRenderBox())
+    if (!isReferenceBox)
         return rootRelativeBounds;
 
     auto referenceBoxRect = renderer().referenceBoxRect(boxType);
@@ -2932,7 +2940,11 @@ void RenderLayer::paintSVGResourceLayer(GraphicsContext& context, GraphicsContex
     if (!renderer().hasNonVisibleOverflow())
         flags.add(PaintLayerFlag::PaintingOverflowContents);
 
-    paintLayer(context, paintingInfo, flags);
+    {
+        // FIXME: Rename SVGHitTestCycleDetectionScope -> SVGResourceCycleDetectionScope
+        SVGHitTestCycleDetectionScope paintingScope(renderer());
+        paintLayer(context, paintingInfo, flags);
+    }
 
     m_isPaintingSVGResourceLayer = wasPaintingSVGResourceLayer;
 #else
@@ -3168,7 +3180,7 @@ void RenderLayer::setupClipPath(GraphicsContext& context, GraphicsContextStateSa
     if (is<ReferencePathOperation>(style.clipPath())) {
         auto& referenceClipPathOperation = downcast<ReferencePathOperation>(*style.clipPath());
 #if ENABLE(LAYER_BASED_SVG_ENGINE)
-        if (auto* svgClipper = svgClipperFromStyle()) {
+        if (auto* svgClipper = renderer().svgClipperResourceFromStyle()) {
             auto* graphicsElement = svgClipper->shouldApplyPathClipping();
             if (!graphicsElement) {
                 paintFlags.add(PaintLayerFlag::PaintingSVGClippingMask);
@@ -5542,29 +5554,6 @@ bool RenderLayer::isVisuallyNonEmpty(PaintedContentRequest* request) const
         request = &localRequest;
 
     return hasNonEmptyChildRenderers(*request);
-}
-
-// FIXME: this probably belongs in RenderLayerModelObject or SVGResourcesCache.
-RenderSVGResourceClipper* RenderLayer::svgClipperFromStyle() const
-{
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
-    if (!renderer().document().settings().layerBasedSVGEngineEnabled())
-        return nullptr;
-
-    if (!renderer().style().clipPath() || !is<ReferencePathOperation>(renderer().style().clipPath()))
-        return nullptr;
-
-    const auto& referenceClipPathOperation = downcast<ReferencePathOperation>(*renderer().style().clipPath());
-    if (auto* renderResource = dynamicDowncast<RenderSVGResourceClipper>(renderer().document().lookupSVGResourceById(referenceClipPathOperation.fragment())))
-        return renderResource;
-
-    if (auto* element = enclosingElement()) {
-        ASSERT(is<SVGElement>(element));
-        renderer().document().addPendingSVGResource(referenceClipPathOperation.fragment(), downcast<SVGElement>(*element));
-    }
-#endif
-
-    return nullptr;
 }
 
 void RenderLayer::styleChanged(StyleDifference diff, const RenderStyle* oldStyle)

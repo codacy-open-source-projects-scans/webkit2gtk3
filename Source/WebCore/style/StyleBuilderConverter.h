@@ -63,6 +63,7 @@
 #include "SVGPathElement.h"
 #include "SVGRenderStyle.h"
 #include "SVGURIReference.h"
+#include "ScrollAxis.h"
 #include "ScrollbarColor.h"
 #include "ScrollbarGutter.h"
 #include "Settings.h"
@@ -208,8 +209,13 @@ public:
     static TextAutospace convertTextAutospace(BuilderState&, const CSSValue&);
 
     static std::optional<Length> convertBlockStepSize(BuilderState&, const CSSValue&);
+
+    static std::optional<Style::ScopedName> convertViewTransitionName(BuilderState&, const CSSValue&);
     static RefPtr<WillChangeData> convertWillChange(BuilderState&, const CSSValue&);
     
+    static Vector<AtomString> convertScrollTimelineName(BuilderState&, const CSSValue&);
+    static Vector<ScrollAxis> convertScrollTimelineAxis(BuilderState&, const CSSValue&);
+
 private:
     friend class BuilderCustom;
 
@@ -2026,6 +2032,17 @@ inline OptionSet<Containment> BuilderConverter::convertContain(BuilderState&, co
     return containment;
 }
 
+inline std::optional<Style::ScopedName> BuilderConverter::convertViewTransitionName(BuilderState& state, const CSSValue& value)
+{
+    if (!is<CSSPrimitiveValue>(value))
+        return { };
+
+    if (value.valueID() == CSSValueNone)
+        return std::nullopt;
+
+    return Style::ScopedName { AtomString { downcast<CSSPrimitiveValue>(value).stringValue() }, state.styleScopeOrdinal() };
+}
+
 inline RefPtr<WillChangeData> BuilderConverter::convertWillChange(BuilderState& builderState, const CSSValue& value)
 {
     if (value.valueID() == CSSValueAuto)
@@ -2058,6 +2075,33 @@ inline RefPtr<WillChangeData> BuilderConverter::convertWillChange(BuilderState& 
     } else
         processSingleValue(value);
     return willChange;
+}
+
+inline Vector<AtomString> BuilderConverter::convertScrollTimelineName(BuilderState&, const CSSValue& value)
+{
+    if (is<CSSPrimitiveValue>(value)) {
+        if (value.valueID() == CSSValueNone)
+            return { };
+        return { AtomString { downcast<CSSPrimitiveValue>(value).stringValue() } };
+    }
+
+    if (!is<CSSValueList>(value))
+        return { };
+
+    return WTF::map(downcast<CSSValueList>(value), [&](auto& item) {
+        return AtomString { downcast<CSSPrimitiveValue>(item).stringValue() };
+    });
+}
+
+inline Vector<ScrollAxis> BuilderConverter::convertScrollTimelineAxis(BuilderState&, const CSSValue& value)
+{
+    if (is<CSSPrimitiveValue>(value))
+        return { fromCSSValueID<ScrollAxis>(value.valueID()) };
+
+    ASSERT(is<CSSValueList>(value));
+    return WTF::map(downcast<CSSValueList>(value), [&](auto& item) {
+        return fromCSSValueID<ScrollAxis>(item.valueID());
+    });
 }
 
 } // namespace Style

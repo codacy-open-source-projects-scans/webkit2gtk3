@@ -291,6 +291,7 @@ String ShorthandSerializer::serialize()
     case CSSPropertyBackgroundPosition:
     case CSSPropertyMask:
     case CSSPropertyMaskPosition:
+    case CSSPropertyScrollTimeline:
     case CSSPropertyTransition:
     case CSSPropertyWebkitMask:
     case CSSPropertyWebkitMaskPosition:
@@ -576,8 +577,8 @@ String ShorthandSerializer::serializeLayered() const
 {
     unsigned numLayers = 1;
     for (auto& value : longhandValues()) {
-        if (is<CSSValueList>(value))
-            numLayers = std::max(downcast<CSSValueList>(value).length(), numLayers);
+        if (auto* valueList = dynamicDowncast<CSSValueList>(value))
+            numLayers = std::max(valueList->length(), numLayers);
     }
 
     StringBuilder result;
@@ -586,8 +587,8 @@ String ShorthandSerializer::serializeLayered() const
 
         for (unsigned j = 0; j < length(); j++) {
             auto& value = longhandValue(j);
-            if (is<CSSValueList>(value))
-                layerValues.set(j, downcast<CSSValueList>(value).item(i));
+            if (auto* valueList = dynamicDowncast<CSSValueList>(value))
+                layerValues.set(j, valueList->item(i));
             else {
                 // Color is only in the last layer. Other singletons are only in the first.
                 auto singletonLayer = longhandProperty(j) == CSSPropertyBackgroundColor ? numLayers - 1 : 0;
@@ -637,6 +638,10 @@ String ShorthandSerializer::serializeLayered() const
                         layerValues.skip(j) = false;
                 }
             }
+
+            // We never want to skip the scroll-timeline-name, even if it's the default "none".
+            if (longhand == CSSPropertyScrollTimelineName)
+                layerValues.skip(j) = false;
 
             if (layerValues.skip(j))
                 continue;
@@ -983,11 +988,10 @@ String ShorthandSerializer::serializeFontVariant() const
 
 static bool isValueIDIncludingList(const CSSValue& value, CSSValueID id)
 {
-    if (is<CSSValueList>(value)) {
-        auto& valueList = downcast<CSSValueList>(value);
-        if (valueList.size() != 1)
+    if (auto* valueList = dynamicDowncast<CSSValueList>(value)) {
+        if (valueList->size() != 1)
             return false;
-        auto* item = valueList.item(0);
+        auto* item = valueList->item(0);
         return item && isValueID(*item, id);
     }
     return isValueID(value, id);
@@ -995,8 +999,8 @@ static bool isValueIDIncludingList(const CSSValue& value, CSSValueID id)
 
 static bool gridAutoFlowContains(CSSValue& autoFlow, CSSValueID id)
 {
-    if (is<CSSValueList>(autoFlow)) {
-        for (auto& currentValue : downcast<CSSValueList>(autoFlow)) {
+    if (auto* valueList = dynamicDowncast<CSSValueList>(autoFlow)) {
+        for (auto& currentValue : *valueList) {
             if (isValueID(currentValue, id))
                 return true;
         }
@@ -1053,7 +1057,8 @@ String ShorthandSerializer::serializeGrid() const
 
 static bool isCustomIdentValue(const CSSValue& value)
 {
-    return is<CSSPrimitiveValue>(value) && downcast<CSSPrimitiveValue>(value).isCustomIdent();
+    auto* primitiveValue = dynamicDowncast<CSSPrimitiveValue>(value);
+    return primitiveValue && primitiveValue->isCustomIdent();
 }
 
 static bool canOmitTrailingGridAreaValue(CSSValue& value, CSSValue& trailing)
@@ -1111,12 +1116,12 @@ String ShorthandSerializer::serializeGridTemplate() const
         return false;
     };
     auto isValidExplicitTrackList = [&] (const CSSValue& value) {
-        if (!value.isValueList())
+        const auto* values = dynamicDowncast<CSSValueList>(value);
+        if (!values)
             return isValidTrackSize(value);
 
-        const auto& values = downcast<CSSValueList>(value);
         auto hasAtLeastOneTrackSize = false;
-        for (const auto& value : values) {
+        for (const auto& value : *values) {
             if (isValidTrackSize(value))
                 hasAtLeastOneTrackSize = true;
             else if (!value.isGridLineNamesValue())

@@ -40,6 +40,7 @@ imported/w3c/web-platform-tests/video-rvfc/request-video-frame-callback-during-x
 
 webkit.org/b/235072 imported/w3c/web-platform-tests/video-rvfc/request-video-frame-callback-repeating.html [ Skip ]
 
+http/tests/webcodecs [ Skip ]
 http/wpt/webcodecs [ Skip ]
 imported/w3c/web-platform-tests/webcodecs [ Skip ]
 
@@ -1033,6 +1034,9 @@ webkit.org/b/251113 inspector/timeline/timeline-event-screenshots.html [ Skip ]
 # The CookieStore API is not fully implemented on macOS WK1 yet.
 imported/w3c/web-platform-tests/cookie-store [ Skip ]
 imported/w3c/web-platform-tests/cookies/partitioned-cookies/partitioned-cookies.tentative.https.html [ Skip ]
+
+# View Transitions API is disabled in WK1.
+imported/w3c/web-platform-tests/css/css-view-transitions [ Skip ]
 
 #//////////////////////////////////////////////////////////////////////////////////////////
 # End features not supported in WebKit1

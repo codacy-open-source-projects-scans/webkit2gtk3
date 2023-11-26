@@ -94,9 +94,8 @@ public:
     static Ref<SourceBufferPrivateAVFObjC> create(MediaSourcePrivateAVFObjC&, Ref<SourceBufferParser>&&);
     virtual ~SourceBufferPrivateAVFObjC();
 
-    constexpr PlatformType platformType() const final { return PlatformType::AVFObjC; }
+    constexpr MediaPlatformType platformType() const final { return MediaPlatformType::AVFObjC; }
 
-    void willProvideContentKeyRequestInitializationDataForTrackID(uint64_t trackID);
     void didProvideContentKeyRequestInitializationDataForTrackID(Ref<SharedBuffer>&&, uint64_t trackID, Box<BinarySemaphore>);
 
     void didProvideContentKeyRequestIdentifierForTrackID(Ref<SharedBuffer>&&, uint64_t trackID);
@@ -192,7 +191,7 @@ ALLOW_NEW_API_WITHOUT_GUARDS_BEGIN
     void flushAudio(AVSampleBufferAudioRenderer *);
 ALLOW_NEW_API_WITHOUT_GUARDS_END
 
-    MediaPlayerPrivateMediaSourceAVFObjC* player() const;
+    RefPtr<MediaPlayerPrivateMediaSourceAVFObjC> player() const;
     bool canEnqueueSample(uint64_t trackID, const MediaSampleAVFObjC&);
     bool trackIsBlocked(uint64_t track) const;
 
@@ -265,7 +264,7 @@ ALLOW_NEW_API_WITHOUT_GUARDS_END
 } // namespace WebCore
 
 SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::SourceBufferPrivateAVFObjC)
-static bool isType(const WebCore::SourceBufferPrivate& sourceBuffer) { return sourceBuffer.platformType() == WebCore::SourceBufferPrivate::PlatformType::AVFObjC; }
+static bool isType(const WebCore::SourceBufferPrivate& sourceBuffer) { return sourceBuffer.platformType() == WebCore::MediaPlatformType::AVFObjC; }
 SPECIALIZE_TYPE_TRAITS_END()
 
 #endif // ENABLE(MEDIA_SOURCE) && USE(AVFOUNDATION)

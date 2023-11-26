@@ -55,9 +55,9 @@ class SourceBufferPrivateGStreamer final : public SourceBufferPrivate {
 public:
     static bool isContentTypeSupported(const ContentType&);
     static Ref<SourceBufferPrivateGStreamer> create(MediaSourcePrivateGStreamer&, const ContentType&, MediaPlayerPrivateGStreamerMSE&);
-    virtual ~SourceBufferPrivateGStreamer() = default;
+    ~SourceBufferPrivateGStreamer();
 
-    constexpr PlatformType platformType() const final { return PlatformType::GStreamer; }
+    constexpr MediaPlatformType platformType() const final { return MediaPlatformType::GStreamer; }
 
     Ref<MediaPromise> appendInternal(Ref<SharedBuffer>&&) final;
     void resetParserStateInternal() final;
@@ -116,7 +116,7 @@ private:
 } // namespace WebCore
 
 SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::SourceBufferPrivateGStreamer)
-static bool isType(const WebCore::SourceBufferPrivate& sourceBuffer) { return sourceBuffer.platformType() == WebCore::SourceBufferPrivate::PlatformType::GStreamer; }
+static bool isType(const WebCore::SourceBufferPrivate& sourceBuffer) { return sourceBuffer.platformType() == WebCore::MediaPlatformType::GStreamer; }
 SPECIALIZE_TYPE_TRAITS_END()
 
 #endif

@@ -277,14 +277,12 @@ public:
     void deleteWebsiteData(PAL::SessionID, OptionSet<WebsiteDataType>, WallTime modifiedSince, CompletionHandler<void()>&&);
     void deleteWebsiteDataForOrigins(PAL::SessionID, OptionSet<WebsiteDataType>, const Vector<WebCore::SecurityOriginData>&, CompletionHandler<void()>&&);
 
-#if ENABLE(TRACKING_PREVENTION)
     static void notifyPageStatisticsAndDataRecordsProcessed();
 
     static void notifyWebsiteDataDeletionForRegistrableDomainsFinished();
     static void notifyWebsiteDataScanForRegistrableDomainsFinished();
 
     void setThirdPartyCookieBlockingMode(WebCore::ThirdPartyCookieBlockingMode, CompletionHandler<void()>&&);
-#endif
 
     void enableSuddenTermination();
     void disableSuddenTermination();
@@ -399,6 +397,10 @@ public:
     void enableRemoteInspectorIfNeeded();
 #endif
     
+#if PLATFORM(COCOA)
+    void unblockAccessibilityServerIfNeeded();
+#endif
+
     void updateAudibleMediaAssertions();
     void updateMediaStreamingActivity();
 
@@ -675,6 +677,10 @@ private:
 
 #if HAVE(DISPLAY_LINK)
     DisplayLinkProcessProxyClient m_displayLinkClient;
+#endif
+
+#if PLATFORM(COCOA)
+    bool m_hasSentMessageToUnblockAccessibilityServer { false };
 #endif
 
     HashMap<String, uint64_t> m_pageURLRetainCountMap;

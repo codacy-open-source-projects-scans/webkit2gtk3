@@ -74,6 +74,7 @@ class RoundedRect;
 class SVGLengthValue;
 class SVGRenderStyle;
 class ScaleTransformOperation;
+class ScrollTimeline;
 class ShadowData;
 class ShapeValue;
 class StyleColor;
@@ -186,6 +187,7 @@ enum class QuoteType : uint8_t;
 enum class Resize : uint8_t;
 enum class RubyPosition : uint8_t;
 enum class SVGPaintType : uint8_t;
+enum class ScrollAxis : uint8_t;
 enum class ScrollSnapStop : bool;
 enum class ScrollbarWidth : uint8_t;
 enum class SpeakAs : uint8_t;
@@ -273,7 +275,7 @@ class CustomPropertyRegistry;
 struct ScopedName;
 }
 
-constexpr auto PublicPseudoIDBits = 9;
+constexpr auto PublicPseudoIDBits = 14;
 constexpr auto TextDecorationLineBits = 4;
 constexpr auto TextTransformBits = 5;
 
@@ -505,7 +507,7 @@ public:
     inline OverscrollBehavior overscrollBehaviorY() const;
     
     Visibility visibility() const { return static_cast<Visibility>(m_inheritedFlags.visibility); }
-    VerticalAlign verticalAlign() const { return static_cast<VerticalAlign>(m_nonInheritedFlags.verticalAlign); }
+    VerticalAlign verticalAlign() const;
     const Length& verticalAlignLength() const;
 
     inline const Length& clipLeft() const;
@@ -569,7 +571,7 @@ public:
 
     TextDirection direction() const { return static_cast<TextDirection>(m_inheritedFlags.direction); }
     inline bool isLeftToRightDirection() const;
-    bool hasExplicitlySetDirection() const { return m_nonInheritedFlags.hasExplicitlySetDirection; }
+    inline bool hasExplicitlySetDirection() const;
 
     const Length& specifiedLineHeight() const;
     WEBCORE_EXPORT const Length& lineHeight() const;
@@ -925,6 +927,13 @@ public:
 
     PointerEvents pointerEvents() const { return static_cast<PointerEvents>(m_inheritedFlags.pointerEvents); }
     inline PointerEvents effectivePointerEvents() const;
+
+    inline const Vector<Ref<ScrollTimeline>>& scrollTimelines() const;
+    inline const Vector<ScrollAxis>& scrollTimelineAxes() const;
+    inline const Vector<AtomString>& scrollTimelineNames() const;
+    inline void setScrollTimelineAxes(const Vector<ScrollAxis>&);
+    inline void setScrollTimelineNames(const Vector<AtomString>&);
+
     inline const AnimationList* animations() const;
     inline const AnimationList* transitions() const;
 
@@ -1071,6 +1080,8 @@ public:
 
     inline MathStyle mathStyle() const;
 
+    inline std::optional<Style::ScopedName> viewTransitionName() const;
+
     void setDisplay(DisplayType value)
     {
         m_nonInheritedFlags.originalDisplay = static_cast<unsigned>(value);
@@ -1177,7 +1188,7 @@ public:
     inline void setOverscrollBehaviorX(OverscrollBehavior);
     inline void setOverscrollBehaviorY(OverscrollBehavior);
     void setVisibility(Visibility v) { m_inheritedFlags.visibility = static_cast<unsigned>(v); }
-    void setVerticalAlign(VerticalAlign v) { m_nonInheritedFlags.verticalAlign = static_cast<unsigned>(v); }
+    void setVerticalAlign(VerticalAlign);
     void setVerticalAlignLength(Length&&);
 
     inline void setHasClip(bool = true);
@@ -1220,7 +1231,7 @@ public:
     inline void setTextUnderlineOffset(TextUnderlineOffset);
     inline void setTextDecorationThickness(TextDecorationThickness);
     void setDirection(TextDirection v) { m_inheritedFlags.direction = static_cast<unsigned>(v); }
-    void setHasExplicitlySetDirection(bool v) { m_nonInheritedFlags.hasExplicitlySetDirection = v; }
+    inline void setHasExplicitlySetDirection();
     void setLineHeight(Length&&);
     bool setZoom(float);
     void setZoomWithoutReturnValue(float f) { setZoom(f); }
@@ -1501,6 +1512,8 @@ public:
     void adjustAnimations();
     void adjustTransitions();
 
+    void adjustScrollTimelines();
+
     inline void setTransformStyle3D(TransformStyle3D);
     inline void setTransformStyleForcedToFlat(bool);
     inline void setBackfaceVisibility(BackfaceVisibility);
@@ -1701,6 +1714,8 @@ public:
     inline QuotesData* quotes() const;
     void setQuotes(RefPtr<QuotesData>&&);
 
+    inline void setViewTransitionName(std::optional<Style::ScopedName>);
+
     inline WillChangeData* willChange() const;
     void setWillChange(RefPtr<WillChangeData>&&);
 
@@ -1736,8 +1751,8 @@ public:
 
     inline bool setWritingMode(WritingMode);
 
-    bool hasExplicitlySetWritingMode() const { return m_nonInheritedFlags.hasExplicitlySetWritingMode; }
-    void setHasExplicitlySetWritingMode(bool v) { m_nonInheritedFlags.hasExplicitlySetWritingMode = v; }
+    inline bool hasExplicitlySetWritingMode() const;
+    inline void setHasExplicitlySetWritingMode();
 
     // A unique style is one that has matches something that makes it impossible to share.
     bool unique() const { return m_nonInheritedFlags.isUnique; }
@@ -1805,6 +1820,7 @@ public:
     static constexpr ListStylePosition initialListStylePosition();
     static inline ListStyleType initialListStyleType();
     static constexpr OptionSet<TextTransform> initialTextTransform();
+    static inline std::optional<Style::ScopedName> initialViewTransitionName();
     static constexpr Visibility initialVisibility();
     static constexpr WhiteSpaceCollapse initialWhiteSpaceCollapse();
     static float initialHorizontalBorderSpacing() { return 0; }
@@ -1975,6 +1991,9 @@ public:
     static ScrollSnapType initialScrollSnapType();
     static ScrollSnapAlign initialScrollSnapAlign();
     static ScrollSnapStop initialScrollSnapStop();
+
+    static Vector<ScrollAxis> initialScrollTimelineAxes() { return { }; }
+    static Vector<AtomString> initialScrollTimelineNames() { return { }; }
 
     static inline std::optional<ScrollbarColor> initialScrollbarColor();
     static ScrollbarGutter initialScrollbarGutter();
@@ -2159,7 +2178,6 @@ private:
         unsigned originalDisplay : 5; // DisplayType
         unsigned overflowX : 3; // Overflow
         unsigned overflowY : 3; // Overflow
-        unsigned verticalAlign : 4; // VerticalAlign
         unsigned clear : 3; // Clear
         unsigned position : 3; // PositionType
         unsigned unicodeBidi : 3; // UnicodeBidi
@@ -2167,8 +2185,6 @@ private:
         unsigned tableLayout : 1; // TableLayoutType
         unsigned textDecorationLine : TextDecorationLineBits; // Text decorations defined *only* by this element.
 
-        unsigned hasExplicitlySetDirection : 1;
-        unsigned hasExplicitlySetWritingMode : 1;
         unsigned usesViewportUnits : 1;
         unsigned usesContainerUnits : 1;
         unsigned hasExplicitlyInheritedProperties : 1; // Explicitly inherits a non-inherited property.

@@ -69,6 +69,7 @@ StyleRareNonInheritedData::StyleRareNonInheritedData()
     , translate(RenderStyle::initialTranslate())
     , offsetPath(RenderStyle::initialOffsetPath())
     // containerNames
+    // viewTransitionName
     , columnGap(RenderStyle::initialColumnGap())
     , rowGap(RenderStyle::initialRowGap())
     , offsetDistance(RenderStyle::initialOffsetDistance())
@@ -79,6 +80,9 @@ StyleRareNonInheritedData::StyleRareNonInheritedData()
     , touchActions(RenderStyle::initialTouchActions())
     , marginTrim(RenderStyle::initialMarginTrim())
     , contain(RenderStyle::initialContainment())
+    // scrollTimelines
+    // scrollTimelineAxes
+    // scrollTimelineNames
     // scrollSnapType
     // scrollSnapAlign
     // scrollSnapStop
@@ -153,6 +157,7 @@ inline StyleRareNonInheritedData::StyleRareNonInheritedData(const StyleRareNonIn
     , translate(o.translate)
     , offsetPath(o.offsetPath)
     , containerNames(o.containerNames)
+    , viewTransitionName(o.viewTransitionName)
     , columnGap(o.columnGap)
     , rowGap(o.rowGap)
     , offsetDistance(o.offsetDistance)
@@ -166,6 +171,9 @@ inline StyleRareNonInheritedData::StyleRareNonInheritedData(const StyleRareNonIn
     , scrollSnapType(o.scrollSnapType)
     , scrollSnapAlign(o.scrollSnapAlign)
     , scrollSnapStop(o.scrollSnapStop)
+    , scrollTimelines(o.scrollTimelines)
+    , scrollTimelineAxes(o.scrollTimelineAxes)
+    , scrollTimelineNames(o.scrollTimelineNames)
     , scrollbarGutter(o.scrollbarGutter)
     , scrollbarWidth(o.scrollbarWidth)
     , zoom(o.zoom)
@@ -257,6 +265,9 @@ bool StyleRareNonInheritedData::operator==(const StyleRareNonInheritedData& o) c
         && scrollSnapType == o.scrollSnapType
         && scrollSnapAlign == o.scrollSnapAlign
         && scrollSnapStop == o.scrollSnapStop
+        && scrollTimelines == o.scrollTimelines
+        && scrollTimelineAxes == o.scrollTimelineAxes
+        && scrollTimelineNames == o.scrollTimelineNames
         && scrollbarGutter == o.scrollbarGutter
         && scrollbarWidth == o.scrollbarWidth
         && zoom == o.zoom
@@ -289,6 +300,7 @@ bool StyleRareNonInheritedData::operator==(const StyleRareNonInheritedData& o) c
         && containerType == o.containerType
         && textBoxTrim == o.textBoxTrim
         && overflowAnchor == o.overflowAnchor
+        && viewTransitionName == o.viewTransitionName
         && hasClip == o.hasClip;
 }
 

@@ -713,7 +713,6 @@ RefPtr<WebPageProxy> WebProcessProxy::webPageWithActiveXRSession()
 }
 #endif
 
-#if ENABLE(TRACKING_PREVENTION)
 void WebProcessProxy::notifyPageStatisticsAndDataRecordsProcessed()
 {
     for (Ref page : globalPages())
@@ -736,7 +735,6 @@ void WebProcessProxy::setThirdPartyCookieBlockingMode(ThirdPartyCookieBlockingMo
 {
     sendWithAsyncReply(Messages::WebProcess::SetThirdPartyCookieBlockingMode(thirdPartyCookieBlockingMode), WTFMove(completionHandler));
 }
-#endif
 
 Ref<WebPageProxy> WebProcessProxy::createWebPage(PageClient& pageClient, Ref<API::PageConfiguration>&& pageConfiguration)
 {
@@ -1292,8 +1290,11 @@ void WebProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Connect
     m_throttler.setShouldTakeNearSuspendedAssertion(shouldTakeNearSuspendedAssertion());
     m_throttler.setShouldDropNearSuspendedAssertionAfterDelay(shouldDropNearSuspendedAssertionAfterDelay());
 
-#if PLATFORM(COCOA) && ENABLE(REMOTE_INSPECTOR)
+#if PLATFORM(COCOA)
+    unblockAccessibilityServerIfNeeded();
+#if ENABLE(REMOTE_INSPECTOR)
     enableRemoteInspectorIfNeeded();
+#endif
 #endif
 
     beginResponsivenessChecks();

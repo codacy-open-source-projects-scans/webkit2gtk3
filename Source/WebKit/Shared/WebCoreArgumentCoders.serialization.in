@@ -431,7 +431,7 @@ enum class WebCore::ScrollGranularity : uint8_t {
     WebCore::FetchOptions options;
     String referrer;
     WebCore::FetchHeadersGuard responseHeadersGuard;
-    WebCore::ResourceResponse::CrossThreadData response;
+    WebCore::ResourceResponseData response;
     std::variant<std::nullptr_t, Ref<WebCore::FormData>, Ref<WebCore::SharedBuffer>> responseBody;
     uint64_t responseBodySize;
 };
@@ -3023,38 +3023,15 @@ using WebCore::ResourceResponseBase::Type = WebCore::ResourceResponseBaseType;
 using WebCore::ResourceResponseBase::Tainting = WebCore::ResourceResponseBaseTainting;
 using WebCore::ResourceResponseBase::Source = WebCore::ResourceResponseBaseSource;
 
-[Nested] struct WebCore::ResourceResponseBase::ResponseData {
-    URL m_url;
-    AtomString m_mimeType;
-    long long m_expectedContentLength;
-    AtomString m_textEncodingName;
-    AtomString m_httpStatusText;
-    AtomString m_httpVersion;
-    WebCore::HTTPHeaderMap m_httpHeaderFields;
-    Box<WebCore::NetworkLoadMetrics> m_networkLoadMetrics;
-
-    short m_httpStatusCode;
-    std::optional<WebCore::CertificateInfo> m_certificateInfo;
-
-    WebCore::ResourceResponseBase::Source m_source;
-    WebCore::ResourceResponseBase::Type m_type;
-    WebCore::ResourceResponseBase::Tainting m_tainting;
-
-    bool m_isRedirected;
-    WebCore::UsedLegacyTLS m_usedLegacyTLS;
-    WebCore::WasPrivateRelayed m_wasPrivateRelayed;
-    bool m_isRangeRequested;
-}
-
 class WebCore::ResourceResponseBase {
-    std::optional<WebCore::ResourceResponseBase::ResponseData> getResponseData()
+    std::optional<WebCore::ResourceResponseData> getResponseData()
 }
 
 class WebCore::ResourceResponse : WebCore::ResourceResponseBase {
 }
 
 header: <WebCore/ResourceResponseBase.h>
-[CustomHeader] struct WebCore::ResourceResponseBaseCrossThreadData {
+[CustomHeader] struct WebCore::ResourceResponseData {
     URL url;
     String mimeType;
     long long expectedContentLength;
@@ -3073,8 +3050,6 @@ header: <WebCore/ResourceResponseBase.h>
     bool isRangeRequested;
     std::optional<WebCore::CertificateInfo> certificateInfo;
 };
-
-using WebCore::ResourceResponseBase::CrossThreadData = WebCore::ResourceResponseBaseCrossThreadData;
 
 enum class WebCore::ReferrerPolicy : uint8_t {
     EmptyString,
@@ -4770,8 +4745,6 @@ struct WebCore::MessageWithMessagePorts {
     Vector<WebCore::TransferredMessagePort> transferredPorts;
 };
 
-#if ENABLE(TRACKING_PREVENTION)
-
 enum class WebCore::StorageAccessWasGranted : bool
 
 enum class WebCore::StorageAccessPromptWasShown : bool
@@ -4788,8 +4761,6 @@ header: <WebCore/DocumentStorageAccess.h>
     WebCore::RegistrableDomain topFrameDomain;
     WebCore::RegistrableDomain subFrameDomain;
 };
-
-#endif // ENABLE(TRACKING_PREVENTION)
 
 class WebCore::Exception {
     WebCore::ExceptionCode code();
@@ -6786,13 +6757,11 @@ enum class WebCore::ContextMenuContextType : uint8_t {
 };
 #endif
 
-#if ENABLE(TRACKING_PREVENTION)
 header: <WebCore/CrossSiteNavigationDataTransfer.h>
 [OptionSet] enum class WebCore::CrossSiteNavigationDataTransferFlag : uint8_t {
     DestinationLinkDecoration,
     ReferrerLinkDecoration
 };
-#endif
 
 header: <WebCore/ScrollingCoordinatorTypes.h>
 [Nested, OptionSet] enum class WebCore::SynchronousScrollingReason : uint8_t {
@@ -6828,3 +6797,18 @@ header: <WebCore/Font.h>
 [Nested] enum class WebCore::FontIsInterstitial : bool;
 [Nested] enum class WebCore::FontVisibility : bool;
 [Nested] enum class WebCore::FontIsOrientationFallback : bool;
+
+header: <WebCore/CaptionUserPreferences.h>
+enum class WebCore::CaptionUserPreferencesDisplayMode : uint8_t {
+    Automatic,
+    ForcedOnly,
+    AlwaysOn,
+    Manual,
+};
+
+header: <WebCore/InspectorClient.h>
+enum class WebCore::InspectorClientDeveloperPreference : uint8_t {
+    PrivateClickMeasurementDebugModeEnabled,
+    ITPDebugModeEnabled,
+    MockCaptureDevicesEnabled,
+};

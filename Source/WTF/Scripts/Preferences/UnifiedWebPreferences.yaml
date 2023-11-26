@@ -3041,21 +3041,6 @@ ICECandidateFilteringEnabled:
     WebCore:
       default: true
 
-IOSFormControlRefreshEnabled:
-  type: bool
-  status: internal
-  category: dom
-  humanReadableName: "iOS Form Control Refresh"
-  humanReadableDescription: "Enable the new appearance for form controls on iOS"
-  condition: ENABLE(IOS_FORM_CONTROL_REFRESH)
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
-
 IPCTestingAPIEnabled:
   type: bool
   status: internal
@@ -3110,6 +3095,21 @@ ImageAnimationControlEnabled:
       default: true
     WebCore:
       default: true
+
+ImageCaptureEnabled:
+  type: bool
+  status: testable
+  category: media
+  humanReadableName: "Image Capture API"
+  humanReadableDescription: "Enable Image Capture API"
+  condition: ENABLE(MEDIA_STREAM)
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
 
 ImageControlsEnabled:
   type: bool
@@ -4915,19 +4915,6 @@ PageVisibilityBasedProcessSuppressionEnabled:
     WebKit:
       default: true
 
-# FIXME: This is on by default in WebKit2. Perhaps we should consider turning it on for WebKitLegacy as well.
-PaintTimingEnabled:
-  type: bool
-  status: mature
-  humanReadableName: "Paint Timing"
-  humanReadableDescription: "Enable PaintTiming API"
-  webcoreBinding: DeprecatedGlobalSettings
-  defaultValue:
-    WebKitLegacy:
-      default: false
-    WebKit:
-      default: true
-
 PassiveTouchListenersAsDefaultOnDocument:
   type: bool
   status: embedder
@@ -5122,13 +5109,13 @@ PreferPageRenderingUpdatesNear60FPSEnabled:
   humanReadableDescription: "Prefer page rendering updates near 60 frames per second rather than using the display's refresh rate"
   defaultValue:
     WebKitLegacy:
-      "ENABLE(FULL_SPEED_ANIMATION_LOOP)": false
+      "PLATFORM(VISION)": false
       default: true
     WebKit:
-      "ENABLE(FULL_SPEED_ANIMATION_LOOP)": false
+      "PLATFORM(VISION)": false
       default: true
     WebCore:
-      "ENABLE(FULL_SPEED_ANIMATION_LOOP)": false
+      "PLATFORM(VISION)": false
       default: true
 
 PreferSandboxedMediaParsing:
@@ -6429,19 +6416,6 @@ SwitchControlEnabled:
     WebCore:
       default: false
 
-SyntheticEditingCommandsEnabled:
-  type: bool
-  status: mature
-  humanReadableName: "Synthetic Editing Commands"
-  humanReadableDescription: "Enable Synthetic Editing Commands"
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
-
 # FIXME: There is no custom binding implemented for WebKitLegacy.
 SystemLayoutDirection:
   type: uint32_t
@@ -6580,19 +6554,6 @@ TextRecognitionInVideosEnabled:
       default: false
     WebKit:
       default: defaultTextRecognitionInVideosEnabled()
-
-ThirdPartyIframeRedirectBlockingEnabled:
-  type: bool
-  status: mature
-  humanReadableName: "Block top-level redirects by third-party iframes"
-  humanReadableDescription: "Block top-level redirects by third-party iframes"
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
 
 ThreadedAnimationResolutionEnabled:
   type: bool
@@ -7114,6 +7075,20 @@ ViewGestureDebuggingEnabled:
   exposed: [ WebKit ]
   defaultValue:
     WebKit:
+      default: false
+
+ViewTransitionsEnabled:
+  type: bool
+  category: animation
+  status: testable
+  humanReadableName: "View Transitions"
+  humanReadableDescription: "Enable the View Transitions API"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
       default: false
 
 VisibleDebugOverlayRegions:
@@ -8002,6 +7977,21 @@ WirelessPlaybackTargetAPIEnabled:
       default: true
     WebCore:
       "PLATFORM(VISION)" : false
+      default: true
+
+WriteRichTextDataWhenCopyingOrDragging:
+  type: bool
+  status: internal
+  humanReadableName: "Write RTF on Copy"
+  humanReadableDescription: "Write RTF, RTFD and attributed strings to the pasteboard when copying or dragging"
+  condition: PLATFORM(COCOA)
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      "HAVE(PASTEBOARD_CONVERSION_FROM_HTML_TO_RTF)" : false
+      default: true
+    WebCore:
       default: true
 
 ZoomOnDoubleTapWhenRoot:
