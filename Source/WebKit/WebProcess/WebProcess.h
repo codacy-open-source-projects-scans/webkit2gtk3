@@ -67,12 +67,11 @@
 #endif
 
 #if PLATFORM(GTK)
-#include "DMABufRendererBufferMode.h"
 #include <WebCore/PlatformDisplay.h>
 #endif
 
-#if PLATFORM(WAYLAND)
-#include <WebCore/PlatformDisplayLibWPE.h>
+#if PLATFORM(GTK) || PLATFORM(WPE)
+#include "DMABufRendererBufferMode.h"
 #endif
 
 #if PLATFORM(IOS_FAMILY)
@@ -100,6 +99,7 @@ namespace WebCore {
 class ApplicationCacheStorage;
 class CPUMonitor;
 class PageGroup;
+class SecurityOriginData;
 class UserGestureToken;
 
 enum class EventMakesGamepadsVisible : bool;
@@ -111,11 +111,7 @@ struct MessagePortIdentifier;
 struct MessageWithMessagePorts;
 struct MockMediaDevice;
 struct PrewarmInformation;
-class SecurityOriginData;
-
-#if ENABLE(SERVICE_WORKER)
 struct ServiceWorkerContextData;
-#endif
 }
 
 namespace WebKit {
@@ -358,7 +354,7 @@ public:
 #if ENABLE(REMOTE_INSPECTOR)
     void enableRemoteWebInspector();
 #endif
-    void unblockServicesRequiredByAccessibility(const Vector<SandboxExtension::Handle>&);
+    void unblockServicesRequiredByAccessibility(Vector<SandboxExtension::Handle>&&);
     static id accessibilityFocusedUIElement();
 #if ENABLE(CFPREFS_DIRECT_MODE)
     void notifyPreferencesChanged(const String& domain, const String& key, const std::optional<String>& encodedValue);
@@ -379,10 +375,8 @@ public:
 
     void messagesAvailableForPort(const WebCore::MessagePortIdentifier&);
 
-#if ENABLE(SERVICE_WORKER)
     void addServiceWorkerRegistration(WebCore::ServiceWorkerRegistrationIdentifier);
     bool removeServiceWorkerRegistration(WebCore::ServiceWorkerRegistrationIdentifier);
-#endif
 
     void grantAccessToAssetServices(Vector<WebKit::SandboxExtension::Handle>&& assetServicesHandles);
     void revokeAccessToAssetServices();
@@ -436,7 +430,7 @@ public:
     void revokeLaunchServicesSandboxExtension();
 #endif
 
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) || PLATFORM(WPE)
     const OptionSet<DMABufRendererBufferMode>& dmaBufRendererBufferMode() const { return m_dmaBufRendererBufferMode; }
 #endif
 
@@ -500,9 +494,6 @@ private:
     void platformSetCacheModel(CacheModel);
 
     void setEnhancedAccessibility(bool);
-    void remotePostMessage(WebCore::FrameIdentifier, std::optional<WebCore::SecurityOriginData>, const WebCore::MessageWithMessagePorts&);
-
-    void renderTreeAsText(WebCore::FrameIdentifier, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag>, CompletionHandler<void(String&&)>&&);
 
     void startMemorySampler(SandboxExtension::Handle&&, const String&, const double);
     void stopMemorySampler();
@@ -598,7 +589,6 @@ private:
     void didClose(IPC::Connection&) final;
 
     // Implemented in generated WebProcessMessageReceiver.cpp
-    bool didReceiveSyncWebProcessMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&);
     void didReceiveWebProcessMessage(IPC::Connection&, IPC::Decoder&);
 
 #if PLATFORM(MAC)
@@ -775,9 +765,12 @@ private:
 
     WeakHashMap<WebCore::UserGestureToken, uint64_t> m_userGestureTokens;
 
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    OptionSet<DMABufRendererBufferMode> m_dmaBufRendererBufferMode;
+#endif
+
 #if PLATFORM(GTK)
     std::unique_ptr<WebCore::PlatformDisplay> m_displayForCompositing;
-    OptionSet<DMABufRendererBufferMode> m_dmaBufRendererBufferMode;
 #endif
 
     bool m_hasSuspendedPageProxy { false };
@@ -793,9 +786,7 @@ private:
     float m_backlightLevel { 0 };
 #endif
 
-#if ENABLE(SERVICE_WORKER)
     HashCountedSet<WebCore::ServiceWorkerRegistrationIdentifier> m_swRegistrationCounts;
-#endif
 
     HashMap<StorageAreaMapIdentifier, WeakPtr<StorageAreaMap>> m_storageAreaMaps;
     

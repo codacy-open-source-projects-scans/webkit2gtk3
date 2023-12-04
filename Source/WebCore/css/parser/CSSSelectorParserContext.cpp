@@ -36,7 +36,9 @@ CSSSelectorParserContext::CSSSelectorParserContext(const CSSParserContext& conte
     : mode(context.mode)
     , cssNestingEnabled(context.cssNestingEnabled)
     , focusVisibleEnabled(context.focusVisibleEnabled)
+    , grammarAndSpellingPseudoElementsEnabled(context.grammarAndSpellingPseudoElementsEnabled)
     , hasPseudoClassEnabled(context.hasPseudoClassEnabled)
+    , highlightAPIEnabled(context.highlightAPIEnabled)
     , popoverAttributeEnabled(context.popoverAttributeEnabled)
     , viewTransitionsEnabled(context.propertySettings.viewTransitionsEnabled)
 {
@@ -46,7 +48,9 @@ CSSSelectorParserContext::CSSSelectorParserContext(const Document& document)
     : mode(document.inQuirksMode() ? HTMLQuirksMode : HTMLStandardMode)
     , cssNestingEnabled(document.settings().cssNestingEnabled())
     , focusVisibleEnabled(document.settings().focusVisibleEnabled())
+    , grammarAndSpellingPseudoElementsEnabled(document.settings().grammarAndSpellingPseudoElementsEnabled())
     , hasPseudoClassEnabled(document.settings().hasPseudoClassEnabled())
+    , highlightAPIEnabled(document.settings().highlightAPIEnabled())
     , popoverAttributeEnabled(document.settings().popoverAttributeEnabled())
     , viewTransitionsEnabled(document.settings().viewTransitionsEnabled())
 {
@@ -58,7 +62,9 @@ void add(Hasher& hasher, const CSSSelectorParserContext& context)
         context.mode,
         context.cssNestingEnabled,
         context.focusVisibleEnabled,
+        context.grammarAndSpellingPseudoElementsEnabled,
         context.hasPseudoClassEnabled,
+        context.highlightAPIEnabled,
         context.popoverAttributeEnabled,
         context.viewTransitionsEnabled
     );

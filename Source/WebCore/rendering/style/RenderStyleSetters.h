@@ -272,6 +272,9 @@ inline void RenderStyle::setRowGap(GapLength&& gapLength) { SET_NESTED(m_nonInhe
 inline void RenderStyle::setRubyPosition(RubyPosition position) { SET(m_rareInheritedData, rubyPosition, static_cast<unsigned>(position)); }
 inline void RenderStyle::setScrollTimelineAxes(const Vector<ScrollAxis>& axes) { SET_NESTED(m_nonInheritedData, rareData, scrollTimelineAxes, axes); }
 inline void RenderStyle::setScrollTimelineNames(const Vector<AtomString>& names) { SET_NESTED(m_nonInheritedData, rareData, scrollTimelineNames, names); }
+inline void RenderStyle::setViewTimelineAxes(const Vector<ScrollAxis>& axes) { SET_NESTED(m_nonInheritedData, rareData, viewTimelineAxes, axes); }
+inline void RenderStyle::setViewTimelineInsets(const Vector<ViewTimelineInsets>& insets) { SET_NESTED(m_nonInheritedData, rareData, viewTimelineInsets, insets); }
+inline void RenderStyle::setViewTimelineNames(const Vector<AtomString>& names) { SET_NESTED(m_nonInheritedData, rareData, viewTimelineNames, names); }
 inline void RenderStyle::setScrollbarColor(const std::optional<ScrollbarColor>& color) { SET(m_rareInheritedData, scrollbarColor, color); }
 inline void RenderStyle::setScrollbarThumbColor(const StyleColor& color) { m_rareInheritedData.access().scrollbarColor->thumbColor = color; }
 inline void RenderStyle::setScrollbarTrackColor(const StyleColor& color) { m_rareInheritedData.access().scrollbarColor->trackColor = color; }
@@ -348,19 +351,15 @@ inline void RenderStyle::setApplePayButtonStyle(ApplePayButtonStyle style) { SET
 inline void RenderStyle::setApplePayButtonType(ApplePayButtonType type) { SET_NESTED(m_nonInheritedData, rareData, applePayButtonType, static_cast<unsigned>(type)); }
 #endif
 
-#if ENABLE(CSS_BOX_DECORATION_BREAK)
 inline void RenderStyle::setBoxDecorationBreak(BoxDecorationBreak value) { SET_NESTED(m_nonInheritedData, boxData, m_boxDecorationBreak, static_cast<unsigned>(value)); }
-#endif
 
 #if ENABLE(DARK_MODE_CSS)
 inline void RenderStyle::setColorScheme(StyleColorScheme scheme) { SET(m_rareInheritedData, colorScheme, scheme); }
 inline void RenderStyle::setHasExplicitlySetColorScheme() { SET_NESTED(m_nonInheritedData, miscData, hasExplicitlySetColorScheme, true); }
 #endif
 
-#if ENABLE(FILTERS_LEVEL_2)
 inline FilterOperations& RenderStyle::mutableBackdropFilter() { return m_nonInheritedData.access().rareData.access().backdropFilter.access().operations; }
 inline void RenderStyle::setBackdropFilter(const FilterOperations& ops) { SET_DOUBLY_NESTED(m_nonInheritedData, rareData, backdropFilter, operations, ops); }
-#endif
 
 #if PLATFORM(IOS_FAMILY)
 inline void RenderStyle::setTouchCalloutEnabled(bool value) { SET(m_rareInheritedData, touchCalloutEnabled, value); }

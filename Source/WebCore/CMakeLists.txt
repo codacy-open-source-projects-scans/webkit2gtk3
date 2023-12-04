@@ -98,9 +98,6 @@ set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/css/typedom/numeric"
     "${WEBCORE_DIR}/css/typedom/transform"
     "${WEBCORE_DIR}/cssjit"
-    "${WEBCORE_DIR}/display"
-    "${WEBCORE_DIR}/display/compositing"
-    "${WEBCORE_DIR}/display/css"
     "${WEBCORE_DIR}/dom"
     "${WEBCORE_DIR}/dom/messageports"
     "${WEBCORE_DIR}/domjit"
@@ -310,6 +307,7 @@ set(WebCore_NON_SVG_IDL_FILES
 
     Modules/credentialmanagement/BasicCredential.idl
     Modules/credentialmanagement/CredentialCreationOptions.idl
+    Modules/credentialmanagement/CredentialMediationRequirement.idl
     Modules/credentialmanagement/CredentialRequestOptions.idl
     Modules/credentialmanagement/CredentialsContainer.idl
     Modules/credentialmanagement/Navigator+Credentials.idl
@@ -1050,6 +1048,7 @@ set(WebCore_NON_SVG_IDL_FILES
     dom/Document+StorageAccess.idl
     dom/Document+Touch.idl
     dom/Document+UndoMananger.idl
+    dom/Document+ViewTransition.idl
     dom/Document.idl
     dom/DocumentAndElementEventHandlers.idl
     dom/DocumentFragment.idl
@@ -1086,6 +1085,7 @@ set(WebCore_NON_SVG_IDL_FILES
     dom/IdleRequestOptions.idl
     dom/InnerHTML.idl
     dom/InputEvent.idl
+    dom/InvokeEvent.idl
     dom/KeyboardEvent.idl
     dom/MessageChannel.idl
     dom/MessageEvent.idl
@@ -1141,6 +1141,8 @@ set(WebCore_NON_SVG_IDL_FILES
     dom/UIEvent.idl
     dom/UIEventInit.idl
     dom/ValidityStateFlags.idl
+    dom/ViewTransition.idl
+    dom/ViewTransitionUpdateCallback.idl
     dom/VisibilityState.idl
     dom/WheelEvent.idl
     dom/XMLDocument.idl
@@ -1245,6 +1247,7 @@ set(WebCore_NON_SVG_IDL_FILES
     html/ImageBitmapOptions.idl
     html/ImageData.idl
     html/ImageDataSettings.idl
+    html/InvokerElement.idl
     html/MediaController.idl
     html/MediaEncryptedEvent.idl
     html/MediaError.idl

@@ -103,16 +103,12 @@ InlineLayoutResult InlineFormattingContext::layout(const ConstraintsForInlineCon
         return { { }, InlineLayoutResult::Range::Full };
     }
 
-    auto& inlineContentCache = this->inlineContentCache();
-    auto needsInlineItemListUpdate = inlineContentCache.inlineItems().isEmpty() || lineDamage;
-    if (needsInlineItemListUpdate) {
+    if (rebuildInlineItemListIfNeeded(lineDamage)) {
         // FIXME: This should go to invalidation.
-        inlineContentCache.clearMaximumIntrinsicWidthLayoutResult();
-        auto startPosition = !lineDamage || !lineDamage->start() ? InlineItemPosition() : lineDamage->start()->inlineItemPosition;
-        InlineItemsBuilder { inlineContentCache, root() }.build(startPosition);
+        inlineContentCache().clearMaximumIntrinsicWidthLayoutResult();
     }
 
-    auto& inlineItemList = inlineContentCache.inlineItems().content();
+    auto& inlineItemList = inlineContentCache().inlineItems().content();
     auto needsLayoutRange = InlineItemRange { { }, { inlineItemList.size(), 0 } };
     if (lineDamage) {
         if (auto partialRange = partialRangeForDamage(inlineItemList, *lineDamage))
@@ -146,7 +142,7 @@ InlineLayoutResult InlineFormattingContext::layout(const ConstraintsForInlineCon
             layoutState().setAvailableLineWidthOverride({ *balancedLineWidths });
     }
 
-    if (TextOnlySimpleLineBuilder::isEligibleForSimplifiedTextOnlyInlineLayout(root(), this->inlineContentCache(), &placedFloats)) {
+    if (TextOnlySimpleLineBuilder::isEligibleForSimplifiedTextOnlyInlineLayout(root(), inlineContentCache(), &placedFloats)) {
         auto simplifiedLineBuilder = TextOnlySimpleLineBuilder { *this, constraints.horizontal(), inlineItemList };
         return lineLayout(simplifiedLineBuilder, inlineItemList, needsLayoutRange, previousLine(), constraints, lineDamage);
     }
@@ -154,43 +150,39 @@ InlineLayoutResult InlineFormattingContext::layout(const ConstraintsForInlineCon
     return lineLayout(lineBuilder, inlineItemList, needsLayoutRange, previousLine(), constraints, lineDamage);
 }
 
-IntrinsicWidthConstraints InlineFormattingContext::computedIntrinsicSizes(const InlineDamage* lineDamage)
+LayoutUnit InlineFormattingContext::minimumContentSize(const InlineDamage* lineDamage)
 {
     auto& inlineContentCache = this->inlineContentCache();
-    if (lineDamage)
-        inlineContentCache.resetIntrinsicWidthConstraints();
+    if (inlineContentCache.minimumContentSize())
+        return ceiledLayoutUnit(*inlineContentCache.minimumContentSize());
 
-    if (auto intrinsicSizes = inlineContentCache.intrinsicWidthConstraints())
-        return *intrinsicSizes;
-
-    auto needsLayoutStartPosition = !lineDamage || !lineDamage->start() ? InlineItemPosition() : lineDamage->start()->inlineItemPosition;
-    auto needsInlineItemListUpdate = inlineContentCache.inlineItems().isEmpty() || lineDamage;
-    if (needsInlineItemListUpdate)
-        InlineItemsBuilder { inlineContentCache, root() }.build(needsLayoutStartPosition);
-
+    rebuildInlineItemListIfNeeded(lineDamage);
     auto& inlineItemList = inlineContentCache.inlineItems().content();
-    if (!lineDamage && isEmptyInlineContent(inlineItemList)) {
-        inlineContentCache.setIntrinsicWidthConstraints({ });
-        return { };
-    }
-
-    auto mayUseSimplifiedTextOnlyInlineLayout = TextOnlySimpleLineBuilder::isEligibleForSimplifiedTextOnlyInlineLayout(root(), inlineContentCache);
-    auto intrinsicWidthHandler = IntrinsicWidthHandler { *this, inlineItemList, mayUseSimplifiedTextOnlyInlineLayout };
-    auto intrinsicSizes = intrinsicWidthHandler.computedIntrinsicSizes();
-    inlineContentCache.setIntrinsicWidthConstraints(intrinsicSizes);
-    if (intrinsicWidthHandler.maximumIntrinsicWidthResult())
-        inlineContentCache.setMaximumIntrinsicWidthLayoutResult(WTFMove(*intrinsicWidthHandler.maximumIntrinsicWidthResult()));
-    return intrinsicSizes;
+    auto minimumContentSize = InlineLayoutUnit { };
+    if (!isEmptyInlineContent(inlineItemList))
+        minimumContentSize = IntrinsicWidthHandler { *this, inlineItemList, TextOnlySimpleLineBuilder::isEligibleForSimplifiedTextOnlyInlineLayout(root(), inlineContentCache) }.minimumContentSize();
+    inlineContentCache.setMinimumContentSize(minimumContentSize);
+    return ceiledLayoutUnit(minimumContentSize);
 }
 
-LayoutUnit InlineFormattingContext::maximumContentSize()
+LayoutUnit InlineFormattingContext::maximumContentSize(const InlineDamage* lineDamage)
 {
     auto& inlineContentCache = this->inlineContentCache();
-    if (auto intrinsicWidthConstraints = inlineContentCache.intrinsicWidthConstraints())
-        return intrinsicWidthConstraints->maximum;
+    if (inlineContentCache.maximumContentSize())
+        return ceiledLayoutUnit(*inlineContentCache.maximumContentSize());
 
-    auto mayUseSimplifiedTextOnlyInlineLayout = TextOnlySimpleLineBuilder::isEligibleForSimplifiedTextOnlyInlineLayout(root(), inlineContentCache);
-    return IntrinsicWidthHandler { *this, inlineContentCache.inlineItems().content(), mayUseSimplifiedTextOnlyInlineLayout }.maximumContentSize();
+    rebuildInlineItemListIfNeeded(lineDamage);
+    auto& inlineItemList = inlineContentCache.inlineItems().content();
+    auto maximumContentSize = InlineLayoutUnit { };
+    if (!isEmptyInlineContent(inlineItemList)) {
+        auto intrinsicWidthHandler = IntrinsicWidthHandler { *this, inlineItemList, TextOnlySimpleLineBuilder::isEligibleForSimplifiedTextOnlyInlineLayout(root(), inlineContentCache) };
+
+        maximumContentSize = intrinsicWidthHandler.maximumContentSize();
+        if (intrinsicWidthHandler.maximumIntrinsicWidthResult())
+            inlineContentCache.setMaximumIntrinsicWidthLayoutResult(WTFMove(*intrinsicWidthHandler.maximumIntrinsicWidthResult()));
+    }
+    inlineContentCache.setMaximumContentSize(maximumContentSize);
+    return ceiledLayoutUnit(maximumContentSize);
 }
 
 static bool mayExitFromPartialLayout(const InlineDamage& lineDamage, size_t lineIndex, const InlineDisplay::Boxes& newContent)
@@ -470,6 +462,18 @@ BoxGeometry& InlineFormattingContext::geometryForBox(const Box& layoutBox, std::
 {
     ASSERT_UNUSED(escapeReason, isOkToAccessBoxGeometry(layoutBox, root(), escapeReason));
     return m_layoutState.ensureGeometryForBox(layoutBox);
+}
+
+bool InlineFormattingContext::rebuildInlineItemListIfNeeded(const InlineDamage* lineDamage)
+{
+    auto& inlineContentCache = this->inlineContentCache();
+    auto inlineItemListNeedsUpdate = inlineContentCache.inlineItems().isEmpty() || lineDamage;
+    if (!inlineItemListNeedsUpdate)
+        return false;
+
+    auto needsLayoutStartPosition = !lineDamage || !lineDamage->start() ? InlineItemPosition() : lineDamage->start()->inlineItemPosition;
+    InlineItemsBuilder { inlineContentCache, root() }.build(needsLayoutStartPosition);
+    return true;
 }
 
 }

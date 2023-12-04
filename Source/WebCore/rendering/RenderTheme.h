@@ -215,11 +215,9 @@ public:
 
     virtual ScrollbarWidth scrollbarWidthStyleForPart(StyleAppearance) { return ScrollbarWidth::Auto; }
 
-    // Returns the repeat interval of the animation for the progress bar.
-    virtual Seconds animationRepeatIntervalForProgressBar(const RenderProgress&) const;
-    // Returns the duration of the animation for the progress bar.
-    virtual Seconds animationDurationForProgressBar(const RenderProgress&) const;
-    virtual IntRect progressBarRectForBounds(const RenderProgress&, const IntRect&) const;
+    virtual Seconds animationRepeatIntervalForProgressBar(const RenderProgress&) const { return 0_s; }
+    virtual Seconds animationDurationForProgressBar() const { return 0_s; }
+    virtual IntRect progressBarRectForBounds(const RenderProgress&, const IntRect& bounds) const { return bounds; }
 
     virtual FloatSize meterSizeForBounds(const RenderMeter&, const FloatRect&) const;
     virtual bool supportsMeter(StyleAppearance) const { return false; }
@@ -265,6 +263,7 @@ public:
 #if USE(SYSTEM_PREVIEW)
     virtual void paintSystemPreviewBadge(Image&, const PaintInfo&, const FloatRect&);
 #endif
+    virtual Seconds switchCheckedChangeAnimationDuration() const { return 0_s; }
 
 protected:
     virtual bool canPaint(const PaintInfo&, const Settings&, StyleAppearance) const { return true; }
@@ -293,7 +292,7 @@ protected:
     virtual bool supportsSelectionForegroundColors(OptionSet<StyleColorOptions>) const { return true; }
     virtual bool supportsListBoxSelectionForegroundColors(OptionSet<StyleColorOptions>) const { return true; }
 
-#if !USE(NEW_THEME)
+#if PLATFORM(IOS_FAMILY)
     // Methods for each appearance value.
     virtual void adjustCheckboxStyle(RenderStyle&, const Element*) const;
     virtual bool paintCheckbox(const RenderObject&, const PaintInfo&, const FloatRect&) { return true; }
@@ -308,7 +307,7 @@ protected:
     virtual void adjustColorWellStyle(RenderStyle&, const Element*) const;
     virtual bool paintColorWell(const RenderObject&, const PaintInfo&, const IntRect&);
 #endif
-#endif // !USE(NEW_THEME)
+#endif // PLATFORM(IOS_FAMILY)
 
 #if ENABLE(INPUT_TYPE_COLOR)
     virtual void paintColorWellDecorations(const RenderObject&, const PaintInfo&, const FloatRect&) { }

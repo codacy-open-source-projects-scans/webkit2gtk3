@@ -47,13 +47,11 @@
 #import "LocalFrame.h"
 #import "LocalFrameView.h"
 #import "LocalizedStrings.h"
-#import "Page.h"
 #import "PaintInfo.h"
 #import "PathUtilities.h"
 #import "RenderAttachment.h"
 #import "RenderMedia.h"
 #import "RenderMeter.h"
-#import "RenderProgress.h"
 #import "RenderSlider.h"
 #import "RenderStyleSetters.h"
 #import "RenderView.h"
@@ -81,8 +79,6 @@
 #if ENABLE(SERVICE_CONTROLS)
 #include "ImageControlsMac.h"
 #endif
-
-constexpr Seconds progressAnimationRepeatInterval = 33_ms; // 30 fps
 
 @interface WebCoreRenderThemeNotificationObserver : NSObject
 @end
@@ -1065,11 +1061,6 @@ IntRect RenderThemeMac::progressBarRectForBounds(const RenderProgress& renderPro
     return IntRect(control->rectForBounds(bounds, controlStyle));
 }
 
-Seconds RenderThemeMac::animationRepeatIntervalForProgressBar(const RenderProgress&) const
-{
-    return progressAnimationRepeatInterval;
-}
-
 void RenderThemeMac::adjustProgressBarStyle(RenderStyle&, const Element*) const
 {
 }
@@ -1609,21 +1600,20 @@ static void paintAttachmentPlaceholderBorder(const RenderAttachment& attachment,
 
 bool RenderThemeMac::paintAttachment(const RenderObject& renderer, const PaintInfo& paintInfo, const IntRect& paintRect)
 {
-    if (!is<RenderAttachment>(renderer))
+    auto* attachment = dynamicDowncast<RenderAttachment>(renderer);
+    if (!attachment)
         return false;
 
-    const RenderAttachment& attachment = downcast<RenderAttachment>(renderer);
-
-    if (attachment.paintWideLayoutAttachmentOnly(paintInfo, paintRect.location()))
+    if (attachment->paintWideLayoutAttachmentOnly(paintInfo, paintRect.location()))
         return true;
 
-    HTMLAttachmentElement& element = attachment.attachmentElement();
+    HTMLAttachmentElement& element = attachment->attachmentElement();
 
     auto layoutStyle = AttachmentLayoutStyle::NonSelected;
-    if (attachment.selectionState() != RenderObject::HighlightState::None && paintInfo.phase != PaintPhase::Selection)
+    if (attachment->selectionState() != RenderObject::HighlightState::None && paintInfo.phase != PaintPhase::Selection)
         layoutStyle = AttachmentLayoutStyle::Selected;
 
-    AttachmentLayout layout(attachment, layoutStyle);
+    AttachmentLayout layout(*attachment, layoutStyle);
 
     auto& progressString = element.attributeWithoutSynchronization(progressAttr);
     bool validProgress = false;
@@ -1639,21 +1629,21 @@ bool RenderThemeMac::paintAttachment(const RenderObject& renderer, const PaintIn
 
     bool usePlaceholder = validProgress && !progress;
 
-    paintAttachmentIconBackground(attachment, context, layout);
+    paintAttachmentIconBackground(*attachment, context, layout);
 
     if (usePlaceholder)
-        paintAttachmentIconPlaceholder(attachment, context, layout);
+        paintAttachmentIconPlaceholder(*attachment, context, layout);
     else
-        paintAttachmentIcon(attachment, context, layout);
+        paintAttachmentIcon(*attachment, context, layout);
 
-    paintAttachmentTitleBackground(attachment, context, layout);
+    paintAttachmentTitleBackground(*attachment, context, layout);
     paintAttachmentText(context, &layout);
 
     if (validProgress && progress)
-        paintAttachmentProgress(attachment, context, layout, progress);
+        paintAttachmentProgress(*attachment, context, layout, progress);
 
     if (usePlaceholder)
-        paintAttachmentPlaceholderBorder(attachment, context, layout);
+        paintAttachmentPlaceholderBorder(*attachment, context, layout);
 
     return true;
 }

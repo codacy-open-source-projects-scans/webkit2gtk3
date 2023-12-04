@@ -31,10 +31,13 @@
 
 #include "MessageReceiver.h"
 #include <wtf/Noncopyable.h>
+#include <wtf/RunLoop.h>
 #include <wtf/unix/UnixFileDescriptor.h>
 
 #if USE(GBM)
 #include "DMABufRendererBufferFormat.h"
+#include <atomic>
+#include <wtf/Lock.h>
 typedef void *EGLImage;
 struct gbm_bo;
 #endif
@@ -50,12 +53,13 @@ public:
     static std::unique_ptr<AcceleratedSurfaceDMABuf> create(WebPage&, Client&);
     ~AcceleratedSurfaceDMABuf();
 
+private:
     uint64_t window() const override { return 0; }
     uint64_t surfaceID() const override;
     void clientResize(const WebCore::IntSize&) override;
     bool shouldPaintMirrored() const override
     {
-#if PLATFORM(GTK) && USE(GTK4)
+#if PLATFORM(WPE) || (PLATFORM(GTK) && USE(GTK4))
         return false;
 #else
         return true;
@@ -69,7 +73,12 @@ public:
     void didCreateCompositingRunLoop(WTF::RunLoop&) override;
     void willDestroyCompositingRunLoop() override;
 
-private:
+#if PLATFORM(WPE) && USE(GBM)
+    void preferredBufferFormatsDidChange() override;
+#endif
+
+    void visibilityDidChange(bool) override;
+
     AcceleratedSurfaceDMABuf(WebPage&, Client&);
 
     // IPC::MessageReceiver.
@@ -77,6 +86,7 @@ private:
 
     void releaseBuffer(uint64_t);
     void frameDone();
+    void releaseUnusedBuffersTimerFired();
 
     class RenderTarget {
         WTF_MAKE_FAST_ALLOCATED;
@@ -155,6 +165,7 @@ private:
         RenderTarget* nextTarget();
         void releaseTarget(uint64_t);
         void reset();
+        void releaseUnusedBuffers();
 
         unsigned size() const { return m_freeTargets.size() + m_lockedTargets.size(); }
 
@@ -173,7 +184,9 @@ private:
         Vector<std::unique_ptr<RenderTarget>, s_maximumBuffers> m_freeTargets;
         Vector<std::unique_ptr<RenderTarget>, s_maximumBuffers> m_lockedTargets;
 #if USE(GBM)
-        DMABufRendererBufferFormat m_dmabufFormat;
+        Lock m_dmabufFormatLock;
+        DMABufRendererBufferFormat m_dmabufFormat WTF_GUARDED_BY_LOCK(m_dmabufFormatLock);
+        bool m_dmabufFormatChanged WTF_GUARDED_BY_LOCK(m_dmabufFormatLock) { false };
 #endif
     };
 
@@ -181,6 +194,8 @@ private:
     unsigned m_fbo { 0 };
     SwapChain m_swapChain;
     RenderTarget* m_target { nullptr };
+    bool m_isVisible { false };
+    std::unique_ptr<RunLoop::Timer> m_releaseUnusedBuffersTimer;
 };
 
 } // namespace WebKit

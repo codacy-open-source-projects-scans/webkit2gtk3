@@ -1483,6 +1483,7 @@ static FunctionType constructFragmentsInternal(const CSSSelector* rootSelector, 
             case CSSSelector::PseudoElementBefore:
             case CSSSelector::PseudoElementFirstLetter:
             case CSSSelector::PseudoElementFirstLine:
+            case CSSSelector::PseudoElementGrammarError:
             case CSSSelector::PseudoElementMarker:
             case CSSSelector::PseudoElementResizer:
             case CSSSelector::PseudoElementScrollbar:
@@ -1492,6 +1493,7 @@ static FunctionType constructFragmentsInternal(const CSSSelector* rootSelector, 
             case CSSSelector::PseudoElementScrollbarTrack:
             case CSSSelector::PseudoElementScrollbarTrackPiece:
             case CSSSelector::PseudoElementSelection:
+            case CSSSelector::PseudoElementSpellingError:
             case CSSSelector::PseudoElementViewTransition:
             case CSSSelector::PseudoElementWebKitCustom:
             case CSSSelector::PseudoElementWebKitCustomLegacyPrefixed:
@@ -4001,10 +4003,11 @@ void SelectorCodeGenerator::generateElementIsOnlyChild(Assembler::JumpList& fail
 JSC_DEFINE_JIT_OPERATION(operationMakeContextStyleUniqueIfNecessaryAndTestIsPlaceholderShown, bool, (const Element* element, SelectorChecker::CheckingContext* checkingContext))
 {
     COUNT_SELECTOR_OPERATION(operationMakeContextStyleUniqueIfNecessaryAndTestIsPlaceholderShown);
-    if (is<HTMLTextFormControlElement>(*element) && element->isTextField()) {
+    auto* formControl = dynamicDowncast<HTMLTextFormControlElement>(*element);
+    if (formControl && element->isTextField()) {
         if (checkingContext->resolvingMode == SelectorChecker::Mode::ResolvingStyle)
             checkingContext->styleRelations.append({ *element, Style::Relation::Unique, 1 });
-        return downcast<HTMLTextFormControlElement>(*element).isPlaceholderVisible();
+        return formControl->isPlaceholderVisible();
     }
     return false;
 }
@@ -4012,7 +4015,8 @@ JSC_DEFINE_JIT_OPERATION(operationMakeContextStyleUniqueIfNecessaryAndTestIsPlac
 JSC_DEFINE_JIT_OPERATION(operationIsPlaceholderShown, bool, (const Element* element))
 {
     COUNT_SELECTOR_OPERATION(operationIsPlaceholderShown);
-    return is<HTMLTextFormControlElement>(*element) && downcast<HTMLTextFormControlElement>(*element).isPlaceholderVisible();
+    auto* formControl = dynamicDowncast<HTMLTextFormControlElement>(*element);
+    return formControl && formControl->isPlaceholderVisible();
 }
 
 JSC_DEFINE_JIT_OPERATION(operationSynchronizeStyleAttributeInternal, void, (StyledElement* styledElement))

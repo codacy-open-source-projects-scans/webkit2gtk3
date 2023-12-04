@@ -329,10 +329,7 @@ void LocalDOMWindow::dispatchAllPendingUnloadEvents()
 // 5) Translate the window rect coordinates to be within the coordinate space of the screen.
 FloatRect LocalDOMWindow::adjustWindowRect(Page& page, const FloatRect& pendingChanges)
 {
-    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(page.mainFrame());
-    if (!localMainFrame)
-        return FloatRect();
-    FloatRect screen = screenAvailableRect(localMainFrame->view());
+    FloatRect screen = screenAvailableRect(page.mainFrame().virtualView());
     FloatRect window = page.chrome().windowRect();
 
     // Make sure we're in a valid state before adjusting dimensions.
@@ -911,21 +908,18 @@ ExceptionOr<Storage*> LocalDOMWindow::localStorage()
     return m_localStorage.get();
 }
 
-void LocalDOMWindow::processPostMessage(JSC::JSGlobalObject& lexicalGlobalObject, RefPtr<Document>&& sourceDocument, const MessageWithMessagePorts& message, RefPtr<WindowProxy>&& incumbentWindowProxy, RefPtr<SecurityOrigin>&& targetOrigin)
+void LocalDOMWindow::processPostMessage(JSC::JSGlobalObject& lexicalGlobalObject, const String& sourceOrigin, const MessageWithMessagePorts& message, RefPtr<WindowProxy>&& incumbentWindowProxy, RefPtr<SecurityOrigin>&& targetOrigin)
 {
-    // Capture the source of the message.  We need to do this synchronously
-    // in order to capture the source of the message correctly.
-    auto sourceOrigin = sourceDocument->securityOrigin().toString();
     // Capture stack trace only when inspector front-end is loaded as it may be time consuming.
     RefPtr<ScriptCallStack> stackTrace;
-    if (InspectorInstrumentation::consoleAgentEnabled(sourceDocument.get()))
+    if (InspectorInstrumentation::consoleAgentEnabled(document()))
         stackTrace = createScriptCallStack(JSExecState::currentState());
 
     auto postMessageIdentifier = InspectorInstrumentation::willPostMessage(*frame());
 
     auto userGestureToForward = UserGestureIndicator::currentUserGesture();
 
-    protectedDocument()->checkedEventLoop()->queueTask(TaskSource::PostedMessageQueue, [this, protectedThis = Ref { *this }, message = message, incumbentWindowProxy = WTFMove(incumbentWindowProxy), sourceOrigin = WTFMove(sourceOrigin), userGestureToForward = WTFMove(userGestureToForward), postMessageIdentifier, stackTrace = WTFMove(stackTrace), targetOrigin = WTFMove(targetOrigin)]() mutable {
+    protectedDocument()->checkedEventLoop()->queueTask(TaskSource::PostedMessageQueue, [this, protectedThis = Ref { *this }, message = message, incumbentWindowProxy = WTFMove(incumbentWindowProxy), sourceOrigin, userGestureToForward = WTFMove(userGestureToForward), postMessageIdentifier, stackTrace = WTFMove(stackTrace), targetOrigin = WTFMove(targetOrigin)]() mutable {
         if (!isCurrentlyDisplayedInFrame())
             return;
 
@@ -994,29 +988,27 @@ ExceptionOr<void> LocalDOMWindow::postMessage(JSC::JSGlobalObject& lexicalGlobal
     if (disentangledPorts.hasException())
         return disentangledPorts.releaseException();
 
+    // Capture the source of the message. We need to do this synchronously
+    // in order to capture the source of the message correctly.
+    auto sourceOrigin = sourceDocument->securityOrigin().toString();
+
     // Schedule the message.
     RefPtr incumbentWindowProxy = incumbentWindow.frame() ? &incumbentWindow.frame()->windowProxy() : nullptr;
     MessageWithMessagePorts message { messageData.releaseReturnValue(), disentangledPorts.releaseReturnValue() };
-    processPostMessage(lexicalGlobalObject, WTFMove(sourceDocument), message, WTFMove(incumbentWindowProxy), targetSecurityOrigin.releaseReturnValue());
+    processPostMessage(lexicalGlobalObject, sourceOrigin, message, WTFMove(incumbentWindowProxy), targetSecurityOrigin.releaseReturnValue());
     return { };
 }
 
-void LocalDOMWindow::postMessageFromRemoteFrame(JSC::JSGlobalObject& lexicalGlobalObject, std::optional<WebCore::SecurityOriginData> target, const WebCore::MessageWithMessagePorts& message)
+void LocalDOMWindow::postMessageFromRemoteFrame(JSC::JSGlobalObject& lexicalGlobalObject, RefPtr<WindowProxy>&& source, const String& sourceOrigin, std::optional<WebCore::SecurityOriginData>&& targetOriginData, const WebCore::MessageWithMessagePorts& message)
 {
-    RefPtr sourceDocument = document();
-    if (!sourceDocument)
-        return;
-
     if (!frame())
         return;
 
-    RefPtr incumbentWindowProxy = &frame()->windowProxy();
-
     RefPtr<SecurityOrigin> targetOrigin;
-    if (target)
-        targetOrigin = target->securityOrigin();
+    if (targetOriginData)
+        targetOrigin = targetOriginData->securityOrigin();
 
-    processPostMessage(lexicalGlobalObject, WTFMove(sourceDocument), message, WTFMove(incumbentWindowProxy), WTFMove(targetOrigin));
+    processPostMessage(lexicalGlobalObject, sourceOrigin, message, WTFMove(source), WTFMove(targetOrigin));
 }
 
 DOMSelection* LocalDOMWindow::getSelection()
@@ -1806,7 +1798,7 @@ void LocalDOMWindow::scrollTo(const ScrollToOptions& options, ScrollClamping cla
     }
 
     view->cancelScheduledScrolls();
-    protectedDocument()->updateLayoutIgnorePendingStylesheets();
+    protectedDocument()->updateLayoutIgnorePendingStylesheets(LayoutOptions::UpdateCompositingLayers);
 
     IntPoint layoutPos(view->mapFromCSSToLayoutUnits(scrollToOptions.left.value()), view->mapFromCSSToLayoutUnits(scrollToOptions.top.value()));
 
@@ -1851,38 +1843,35 @@ void LocalDOMWindow::moveTo(int x, int y) const
 
     CheckedPtr page = frame()->page();
     auto fr = page->chrome().windowRect();
-    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(page->mainFrame());
-    if (!localMainFrame)
-        return;
 
-    auto sr = screenAvailableRect(localMainFrame->view());
+    auto sr = screenAvailableRect(page->mainFrame().virtualView());
     fr.setLocation(sr.location());
     auto update = fr;
     update.move(x, y);
     page->chrome().setWindowRect(adjustWindowRect(*page, update));
 }
 
-void LocalDOMWindow::resizeBy(float x, float y) const
+void LocalDOMWindow::resizeBy(int x, int y) const
 {
     if (!allowedToChangeWindowGeometry())
         return;
 
     CheckedPtr page = frame()->page();
-    FloatRect fr = page->chrome().windowRect();
-    FloatSize dest = fr.size() + FloatSize(x, y);
-    FloatRect update(fr.location(), dest);
+    auto fr = page->chrome().windowRect();
+    auto dest = fr.size() + LayoutSize(x, y);
+    LayoutRect update(fr.location(), dest);
     page->chrome().setWindowRect(adjustWindowRect(*page, update));
 }
 
-void LocalDOMWindow::resizeTo(float width, float height) const
+void LocalDOMWindow::resizeTo(int width, int height) const
 {
     if (!allowedToChangeWindowGeometry())
         return;
 
     CheckedPtr page = frame()->page();
-    FloatRect fr = page->chrome().windowRect();
-    FloatSize dest = FloatSize(width, height);
-    FloatRect update(fr.location(), dest);
+    auto fr = page->chrome().windowRect();
+    auto dest = LayoutSize(width, height);
+    LayoutRect update(fr.location(), dest);
     page->chrome().setWindowRect(adjustWindowRect(*page, update));
 }
 

@@ -219,7 +219,6 @@ static inline void executeTask(HTMLConstructionSiteTask& task)
 void HTMLConstructionSite::attachLater(Ref<ContainerNode>&& parent, Ref<Node>&& child, bool selfClosing)
 {
     ASSERT(scriptingContentIsAllowed(m_parserContentPolicy) || !is<Element>(child) || !isScriptElement(downcast<Element>(child.get())));
-    ASSERT(pluginContentIsAllowed(m_parserContentPolicy) || !child->isPluginElement());
 
     if (shouldFosterParent()) {
         fosterParent(WTFMove(child));
@@ -263,7 +262,6 @@ HTMLConstructionSite::HTMLConstructionSite(Document& document, OptionSet<ParserC
     , m_maximumDOMTreeDepth(maximumDOMTreeDepth)
     , m_inQuirksMode(document.inQuirksMode())
 {
-    ASSERT(document.isHTMLDocument() || document.isXHTMLDocument());
 }
 
 HTMLConstructionSite::HTMLConstructionSite(DocumentFragment& fragment, OptionSet<ParserContentPolicy> parserContentPolicy, unsigned maximumDOMTreeDepth)
@@ -275,7 +273,6 @@ HTMLConstructionSite::HTMLConstructionSite(DocumentFragment& fragment, OptionSet
     , m_maximumDOMTreeDepth(maximumDOMTreeDepth)
     , m_inQuirksMode(fragment.document().inQuirksMode())
 {
-    ASSERT(document().isHTMLDocument() || document().isXHTMLDocument());
 }
 
 HTMLConstructionSite::~HTMLConstructionSite() = default;
@@ -542,7 +539,7 @@ void HTMLConstructionSite::insertHTMLElement(AtomHTMLToken&& token)
 
 void HTMLConstructionSite::insertHTMLTemplateElement(AtomHTMLToken&& token)
 {
-    if (document().settings().declarativeShadowDOMEnabled() && m_parserContentPolicy.contains(ParserContentPolicy::AllowDeclarativeShadowDOM)) {
+    if (document().settings().declarativeShadowRootsEnabled() && m_parserContentPolicy.contains(ParserContentPolicy::AllowDeclarativeShadowRoots)) {
         std::optional<ShadowRootMode> mode;
         bool delegatesFocus = false;
         for (auto& attribute : token.attributes()) {
@@ -554,7 +551,7 @@ void HTMLConstructionSite::insertHTMLTemplateElement(AtomHTMLToken&& token)
             } else if (attribute.name() == HTMLNames::shadowrootdelegatesfocusAttr)
                 delegatesFocus = true;
         }
-        if (mode) {
+        if (mode && is<Element>(currentNode())) {
             auto exceptionOrShadowRoot = currentElement().attachDeclarativeShadow(*mode, delegatesFocus);
             if (!exceptionOrShadowRoot.hasException()) {
                 Ref shadowRoot = exceptionOrShadowRoot.releaseReturnValue();

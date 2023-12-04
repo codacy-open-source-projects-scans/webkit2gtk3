@@ -638,12 +638,6 @@ void InputType::handleBeforeTextInsertedEvent(BeforeTextInsertedEvent&)
 {
 }
 
-#if ENABLE(TOUCH_EVENTS)
-void InputType::handleTouchEvent(TouchEvent&)
-{
-}
-#endif
-
 void InputType::forwardEvent(Event&)
 {
 }
@@ -964,13 +958,6 @@ void InputType::subtreeHasChanged()
     ASSERT_NOT_REACHED();
 }
 
-#if ENABLE(TOUCH_EVENTS)
-bool InputType::hasTouchEventHandler() const
-{
-    return false;
-}
-#endif
-
 String InputType::defaultToolTip() const
 {
     return String();
@@ -989,11 +976,6 @@ std::optional<Decimal> InputType::findClosestTickMarkValue(const Decimal&)
 #endif
 
 bool InputType::matchesIndeterminatePseudoClass() const
-{
-    return false;
-}
-
-bool InputType::shouldAppearIndeterminate() const
 {
     return false;
 }

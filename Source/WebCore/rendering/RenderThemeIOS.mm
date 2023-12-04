@@ -65,7 +65,6 @@
 #import "LocalFrameView.h"
 #import "LocalizedDateCache.h"
 #import "NodeRenderStyle.h"
-#import "Page.h"
 #import "PaintInfo.h"
 #import "PathUtilities.h"
 #import "PlatformLocale.h"
@@ -75,7 +74,6 @@
 #import "RenderMenuList.h"
 #import "RenderMeter.h"
 #import "RenderObject.h"
-#import "RenderProgress.h"
 #import "RenderSlider.h"
 #import "RenderStyleSetters.h"
 #import "RenderView.h"
@@ -251,11 +249,10 @@ void RenderThemeIOS::adjustTextFieldStyle(RenderStyle& style, const Element* ele
     bool hasTextfieldAppearance = false;
     // Do not force a background color for elements that have a textfield
     // appearance by default, so that their background color can be styled.
-    if (is<HTMLInputElement>(*element)) {
-        auto& input = downcast<HTMLInputElement>(*element);
+    if (RefPtr input = dynamicDowncast<HTMLInputElement>(*element)) {
         // <input type=search> is the only TextFieldInputType that has a
         // non-textfield appearance value.
-        hasTextfieldAppearance = input.isTextField() && !input.isSearchField();
+        hasTextfieldAppearance = input->isTextField() && !input->isSearchField();
     }
 
     auto adjustBackgroundColor = [&] {
@@ -316,9 +313,8 @@ void RenderThemeIOS::paintTextFieldDecorations(const RenderBox& box, const Paint
 
     auto shouldPaintFillAndInnerShadow = false;
     auto element = box.element();
-    if (is<HTMLInputElement>(*element)) {
-        auto& input = downcast<HTMLInputElement>(*element);
-        if (input.isTextField() && !input.isSearchField())
+    if (RefPtr input = dynamicDowncast<HTMLInputElement>(*element)) {
+        if (input->isTextField() && !input->isSearchField())
             shouldPaintFillAndInnerShadow = true;
     } else if (is<HTMLTextAreaElement>(*element))
         shouldPaintFillAndInnerShadow = true;
@@ -503,8 +499,8 @@ void RenderThemeIOS::adjustMenuListButtonStyle(RenderStyle& style, const Element
     // "-webkit-appearance: menulist-button".
     if (is<HTMLSelectElement>(*element) && !element->hasAttributeWithoutSynchronization(HTMLNames::multipleAttr))
         adjustSelectListButtonStyle(style, *element);
-    else if (is<HTMLInputElement>(*element))
-        adjustInputElementButtonStyle(style, downcast<HTMLInputElement>(*element));
+    else if (RefPtr input = dynamicDowncast<HTMLInputElement>(*element))
+        adjustInputElementButtonStyle(style, *input);
 }
 
 void RenderThemeIOS::paintMenuListButtonDecorations(const RenderBox& box, const PaintInfo& paintInfo, const FloatRect& rect)
@@ -614,9 +610,9 @@ constexpr auto nativeControlBorderInlineSize = 1.0f;
 
 bool RenderThemeIOS::paintSliderTrack(const RenderObject& box, const PaintInfo& paintInfo, const IntRect& rect)
 {
-    if (!is<RenderSlider>(box))
+    auto* renderSlider = dynamicDowncast<RenderSlider>(box);
+    if (!renderSlider)
         return true;
-    auto& renderSlider = downcast<RenderSlider>(box);
 
     auto& context = paintInfo.context();
     GraphicsContextStateSaver stateSaver(context);
@@ -666,7 +662,7 @@ bool RenderThemeIOS::paintSliderTrack(const RenderObject& box, const PaintInfo& 
     paintSliderTicks(box, paintInfo, trackClip);
 #endif
 
-    double valueRatio = renderSlider.valueRatio();
+    double valueRatio = renderSlider->valueRatio();
     if (isHorizontal) {
         double newWidth = trackClip.width() * valueRatio;
 
@@ -708,9 +704,9 @@ constexpr auto reducedMotionProgressAnimationMaxOpacity = 0.6f;
 
 bool RenderThemeIOS::paintProgressBar(const RenderObject& renderer, const PaintInfo& paintInfo, const IntRect& rect)
 {
-    if (!is<RenderProgress>(renderer))
+    auto* renderProgress = dynamicDowncast<RenderProgress>(renderer);
+    if (!renderProgress)
         return true;
-    auto& renderProgress = downcast<RenderProgress>(renderer);
 
     auto& context = paintInfo.context();
     GraphicsContextStateSaver stateSaver(context);
@@ -759,13 +755,13 @@ bool RenderThemeIOS::paintProgressBar(const RenderObject& renderer, const PaintI
     float barBlockStart = trackBlockStart;
     float alpha = 1.0f;
 
-    if (renderProgress.isDeterminate()) {
-        barInlineSize = clampTo<float>(renderProgress.position(), 0.0f, 1.0f) * trackInlineSize;
+    if (renderProgress->isDeterminate()) {
+        barInlineSize = clampTo<float>(renderProgress->position(), 0.0f, 1.0f) * trackInlineSize;
 
-        if (!renderProgress.style().isLeftToRightDirection())
+        if (!renderProgress->style().isLeftToRightDirection())
             barInlineStart = trackInlineStart + trackInlineSize - barInlineSize;
     } else {
-        Seconds elapsed = MonotonicTime::now() - renderProgress.animationStartTime();
+        Seconds elapsed = MonotonicTime::now() - renderProgress->animationStartTime();
         float position = fmodf(elapsed.value(), 1.0f);
         bool reverseDirection = static_cast<int>(elapsed.value()) % 2;
 
@@ -837,11 +833,11 @@ constexpr auto pressedStateOpacity = 0.75f;
 
 bool RenderThemeIOS::isSubmitStyleButton(const Element& element) const
 {
-    if (is<HTMLInputElement>(element) && downcast<HTMLInputElement>(element).isSubmitButton())
-        return true;
+    if (RefPtr input = dynamicDowncast<HTMLInputElement>(element))
+        return input->isSubmitButton();
 
-    if (is<HTMLButtonElement>(element) && downcast<HTMLButtonElement>(element).isExplicitlySetSubmitButton())
-        return true;
+    if (RefPtr button = dynamicDowncast<HTMLButtonElement>(element))
+        return button->isExplicitlySetSubmitButton();
 
     return false;
 }
@@ -882,8 +878,13 @@ void RenderThemeIOS::adjustButtonStyle(RenderStyle& style, const Element* elemen
     // If no size is specified, ensure the height of the button matches ControlBaseHeight scaled
     // with the font size. min-height is used rather than height to avoid clipping the contents of
     // the button in cases where the button contains more than one line of text.
-    if (style.logicalWidth().isIntrinsicOrAuto() || style.logicalHeight().isAuto())
-        style.setLogicalMinHeight(Length(ControlBaseHeight / ControlBaseFontSize * style.fontDescription().computedSize(), LengthType::Fixed));
+    if (style.logicalWidth().isIntrinsicOrAuto() || style.logicalHeight().isAuto()) {
+        auto minimumHeight = ControlBaseHeight / ControlBaseFontSize * style.fontDescription().computedSize();
+        if (style.logicalMinHeight().isFixed())
+            minimumHeight = std::max(minimumHeight, style.logicalMinHeight().value());
+        // FIXME: This may need to be a layout time adjustment to support various values like fit-content etc.
+        style.setLogicalMinHeight(Length(minimumHeight, LengthType::Fixed));
+    }
 
 #if ENABLE(INPUT_TYPE_COLOR)
     if (style.effectiveAppearance() == StyleAppearance::ColorWell)
@@ -1299,22 +1300,21 @@ static void paintAttachmentBorder(GraphicsContext& context, Path& borderPath)
 
 bool RenderThemeIOS::paintAttachment(const RenderObject& renderer, const PaintInfo& paintInfo, const IntRect& paintRect)
 {
-    if (!is<RenderAttachment>(renderer))
+    auto* attachment = dynamicDowncast<RenderAttachment>(renderer);
+    if (!attachment)
         return false;
 
-    const RenderAttachment& attachment = downcast<RenderAttachment>(renderer);
-
-    if (attachment.paintWideLayoutAttachmentOnly(paintInfo, paintRect.location()))
+    if (attachment->paintWideLayoutAttachmentOnly(paintInfo, paintRect.location()))
         return true;
 
-    AttachmentLayout info(attachment);
+    AttachmentLayout info(*attachment);
 
     GraphicsContext& context = paintInfo.context();
     GraphicsContextStateSaver saver(context);
 
     context.translate(toFloatSize(paintRect.location()));
 
-    if (attachment.shouldDrawBorder()) {
+    if (attachment->shouldDrawBorder()) {
         auto borderPath = attachmentBorderPath(info);
         paintAttachmentBorder(context, borderPath);
         context.clipPath(borderPath);
@@ -1601,13 +1601,6 @@ bool RenderThemeIOS::paintRadio(const RenderObject& box, const PaintInfo& paintI
     return false;
 }
 
-constexpr Seconds progressAnimationRepeatInterval = 16_ms;
-
-Seconds RenderThemeIOS::animationRepeatIntervalForProgressBar(const RenderProgress&) const
-{
-    return progressAnimationRepeatInterval;
-}
-
 bool RenderThemeIOS::supportsMeter(StyleAppearance appearance) const
 {
     return appearance == StyleAppearance::Meter;
@@ -1615,11 +1608,11 @@ bool RenderThemeIOS::supportsMeter(StyleAppearance appearance) const
 
 bool RenderThemeIOS::paintMeter(const RenderObject& renderer, const PaintInfo& paintInfo, const IntRect& rect)
 {
-    if (!is<RenderMeter>(renderer))
+    auto* renderMeter = dynamicDowncast<RenderMeter>(renderer);
+    if (!renderMeter)
         return true;
 
-    auto& renderMeter = downcast<RenderMeter>(renderer);
-    RefPtr element = renderMeter.meterElement();
+    RefPtr element = renderMeter->meterElement();
 
     auto& context = paintInfo.context();
     GraphicsContextStateSaver stateSaver(context);
@@ -1714,19 +1707,16 @@ bool RenderThemeIOS::paintListButton(const RenderObject& box, const PaintInfo& p
 
 void RenderThemeIOS::paintSliderTicks(const RenderObject& box, const PaintInfo& paintInfo, const FloatRect& rect)
 {
-    if (!is<HTMLInputElement>(box.node()))
+    RefPtr input = dynamicDowncast<HTMLInputElement>(box.node());
+    if (!input || !input->isRangeControl())
         return;
 
-    auto& input = downcast<HTMLInputElement>(*box.node());
-    if (!input.isRangeControl())
-        return;
-
-    auto dataList = input.dataList();
+    auto dataList = input->dataList();
     if (!dataList)
         return;
 
-    double min = input.minimum();
-    double max = input.maximum();
+    double min = input->minimum();
+    double max = input->maximum();
     if (min >= max)
         return;
 
@@ -1751,13 +1741,13 @@ void RenderThemeIOS::paintSliderTicks(const RenderObject& box, const PaintInfo& 
     auto& context = paintInfo.context();
     GraphicsContextStateSaver stateSaver(context);
 
-    auto value = input.valueAsNumber();
+    auto value = input->valueAsNumber();
     auto deviceScaleFactor = box.document().deviceScaleFactor();
     auto styleColorOptions = box.styleColorOptions();
 
     bool isReversedInlineDirection = (!isHorizontal && box.style().isHorizontalWritingMode()) || !box.style().isLeftToRightDirection();
     for (auto& optionElement : dataList->suggestions()) {
-        if (auto optionValue = input.listOptionValueAsDouble(optionElement)) {
+        if (auto optionValue = input->listOptionValueAsDouble(optionElement)) {
             auto tickFraction = (*optionValue - min) / (max - min);
             auto tickRatio = isReversedInlineDirection ? 1.0 - tickFraction : tickFraction;
             if (isHorizontal)

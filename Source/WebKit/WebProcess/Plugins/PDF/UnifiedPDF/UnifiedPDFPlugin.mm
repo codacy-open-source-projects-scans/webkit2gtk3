@@ -28,7 +28,11 @@
 
 #if ENABLE(UNIFIED_PDF)
 
+#include "PDFContextMenu.h"
 #include "PluginView.h"
+#include "WebEventType.h"
+#include "WebMouseEvent.h"
+#include "WebPageProxyMessages.h"
 #include <CoreGraphics/CoreGraphics.h>
 #include <WebCore/AffineTransform.h>
 #include <WebCore/Chrome.h>
@@ -217,6 +221,17 @@ void UnifiedPDFPlugin::didChangeIsInWindow()
     m_contentsLayer->tiledBacking()->setIsInWindow(page->isInWindow());
 }
 
+void UnifiedPDFPlugin::paint(WebCore::GraphicsContext& context, const WebCore::IntRect&)
+{
+    // Only called for snapshotting.
+
+    if (size().isEmpty())
+        return;
+
+    context.translate(-m_scrollOffset.width(), -m_scrollOffset.height());
+    paintContents(m_contentsLayer.get(), context, { FloatPoint(m_scrollOffset), size() }, { });
+}
+
 void UnifiedPDFPlugin::paintContents(const GraphicsLayer* layer, GraphicsContext& context, const FloatRect& clipRect, OptionSet<GraphicsLayerPaintBehavior>)
 {
     if (layer != m_contentsLayer.get())
@@ -258,14 +273,10 @@ void UnifiedPDFPlugin::paintContents(const GraphicsLayer* layer, GraphicsContext
         bufferContext.clip(destinationRect);
         bufferContext.fillRect(destinationRect, Color::white);
 
-        // Translate the context to the bottom of pageBounds and flip, so that CGPDFPageGetDrawingTransform operates
+        // Translate the context to the bottom of pageBounds and flip, so that PDFKit operates
         // from this page's drawing origin.
         bufferContext.translate(destinationRect.minXMaxYCorner());
         bufferContext.scale({ 1, -1 });
-
-        destinationRect.setLocation({ });
-        auto transform = [page transformForBox:kPDFDisplayBoxCropBox];
-        bufferContext.concatCTM(transform);
 
         [page drawWithBox:kPDFDisplayBoxCropBox toContext:imageBuffer->context().platformContext()];
     }
@@ -363,9 +374,43 @@ void UnifiedPDFPlugin::updateScrollingExtents()
     m_scrollContainerLayer->setEventRegion(WTFMove(eventRegion));
 }
 
-bool UnifiedPDFPlugin::handleMouseEvent(const WebMouseEvent&)
+enum class AltKeyIsActive : bool { No, Yes };
+
+static WebCore::Cursor::Type toWebCoreCursorType(UnifiedPDFPlugin::PDFElementTypes pdfElementTypes, AltKeyIsActive altKeyIsActive = AltKeyIsActive::No)
 {
-    return false;
+    if (pdfElementTypes.containsAny({ UnifiedPDFPlugin::PDFElementType::Link, UnifiedPDFPlugin::PDFElementType::Control, UnifiedPDFPlugin::PDFElementType::Icon }) || altKeyIsActive == AltKeyIsActive::Yes)
+        return WebCore::Cursor::Type::Hand;
+
+    if (pdfElementTypes.containsAny({ UnifiedPDFPlugin::PDFElementType::Text, UnifiedPDFPlugin::PDFElementType::TextField }))
+        return WebCore::Cursor::Type::IBeam;
+
+    return WebCore::Cursor::Type::Pointer;
+}
+
+auto UnifiedPDFPlugin::pdfElementTypesForPluginPoint(const WebCore::IntPoint&) const -> PDFElementTypes
+{
+    return { };
+}
+
+bool UnifiedPDFPlugin::handleMouseEvent(const WebMouseEvent& event)
+{
+    switch (event.type()) {
+    case WebEventType::MouseMove:
+        mouseMovedInContentArea();
+        switch (event.button()) {
+        case WebMouseEventButton::None: {
+            auto altKeyIsActive = event.altKey() ? AltKeyIsActive::Yes : AltKeyIsActive::No;
+            auto mousePositionInPluginCoordinates = convertFromRootViewToPlugin(event.position());
+            auto pdfElementTypes = pdfElementTypesForPluginPoint(mousePositionInPluginCoordinates);
+            notifyCursorChanged(toWebCoreCursorType(pdfElementTypes, altKeyIsActive));
+            return true;
+        }
+        default:
+            return false;
+        }
+    default:
+        return false;
+    }
 }
 
 bool UnifiedPDFPlugin::handleMouseEnterEvent(const WebMouseEvent&)
@@ -378,9 +423,49 @@ bool UnifiedPDFPlugin::handleMouseLeaveEvent(const WebMouseEvent&)
     return false;
 }
 
-bool UnifiedPDFPlugin::handleContextMenuEvent(const WebMouseEvent&)
+#if PLATFORM(MAC)
+PDFContextMenu UnifiedPDFPlugin::createContextMenu(const IntPoint& contextMenuPoint) const
 {
+    Vector<PDFContextMenuItem> menuItems;
+
+    // FIXME: We should also set the openInPreviewIndex when UnifiedPdfPlugin::openWithPreview is implemented
+    menuItems.append({ WebCore::contextMenuItemPDFOpenWithPreview(), true, false, 0, true, static_cast<uint8_t>(ContextMenuItemTag::OpenWithPreview) });
+
+    return { contextMenuPoint, WTFMove(menuItems), { } };
+}
+
+void UnifiedPDFPlugin::performContextMenuAction(ContextMenuItemTag tag) const
+{
+    switch (tag) {
+    // The OpenWithPreviewAction is handled in the UI Process
+    case ContextMenuItemTag::OpenWithPreview: return;
+    }
+}
+#endif
+
+bool UnifiedPDFPlugin::handleContextMenuEvent(const WebMouseEvent& event)
+{
+#if PLATFORM(MAC)
+    if (!m_frame || !m_frame->coreLocalFrame())
+        return false;
+    RefPtr webPage = m_frame->page();
+    if (!webPage)
+        return false;
+    RefPtr frameView = m_frame->coreLocalFrame()->view();
+    if (!frameView)
+        return false;
+
+    auto contextMenu = createContextMenu(frameView->contentsToScreen(IntRect(frameView->windowToContents(event.position()), IntSize())).location());
+
+    auto sendResult = webPage->sendSync(Messages::WebPageProxy::ShowPDFContextMenu(contextMenu, m_identifier));
+    auto [selectedItemTag] = sendResult.takeReplyOr(-1);
+
+    if (selectedItemTag >= 0)
+        performContextMenuAction(static_cast<ContextMenuItemTag>(selectedItemTag.value()));
+    return true;
+#else
     return false;
+#endif
 }
 
 bool UnifiedPDFPlugin::handleKeyboardEvent(const WebKeyboardEvent&)
@@ -431,11 +516,6 @@ bool UnifiedPDFPlugin::performDictionaryLookupAtLocation(const FloatPoint&)
 std::tuple<String, PDFSelection *, NSDictionary *> UnifiedPDFPlugin::lookupTextAtLocation(const FloatPoint&, WebHitTestResultData&) const
 {
     return { };
-}
-
-RefPtr<ShareableBitmap> UnifiedPDFPlugin::snapshot()
-{
-    return nullptr;
 }
 
 id UnifiedPDFPlugin::accessibilityHitTest(const IntPoint&) const

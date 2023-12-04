@@ -66,6 +66,7 @@ struct PossiblyQuotedIdentifier {
         bool visitAllSimpleSelectors(auto& apply) const;
 
         bool hasExplicitNestingParent() const;
+        bool hasExplicitPseudoClassScope() const;
         void resolveNestingParentSelectors(const CSSSelectorList& parent);
         void replaceNestingParentByPseudoClassScope();
 
@@ -210,6 +211,7 @@ struct PossiblyQuotedIdentifier {
 #endif
             PseudoElementFirstLetter,
             PseudoElementFirstLine,
+            PseudoElementGrammarError,
             PseudoElementHighlight,
             PseudoElementMarker,
             PseudoElementPart,
@@ -222,6 +224,7 @@ struct PossiblyQuotedIdentifier {
             PseudoElementScrollbarTrackPiece,
             PseudoElementSelection,
             PseudoElementSlotted,
+            PseudoElementSpellingError,
             PseudoElementViewTransition,
             PseudoElementViewTransitionGroup,
             PseudoElementViewTransitionImagePair,

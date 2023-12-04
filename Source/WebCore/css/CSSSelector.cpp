@@ -31,7 +31,6 @@
 #include "CSSSelectorList.h"
 #include "CSSSelectorParserContext.h"
 #include "CommonAtomStrings.h"
-#include "DeprecatedGlobalSettings.h"
 #include "HTMLNames.h"
 #include "SelectorPseudoTypeMap.h"
 #include <memory>
@@ -242,6 +241,10 @@ PseudoId CSSSelector::pseudoId(PseudoElementType type)
         return PseudoId::FirstLine;
     case PseudoElementFirstLetter:
         return PseudoId::FirstLetter;
+    case PseudoElementGrammarError:
+        return PseudoId::GrammarError;
+    case PseudoElementSpellingError:
+        return PseudoId::SpellingError;
     case PseudoElementSelection:
         return PseudoId::Selection;
     case PseudoElementHighlight:
@@ -309,8 +312,12 @@ CSSSelector::PseudoElementType CSSSelector::parsePseudoElementType(StringView na
             return PseudoElementWebKitCustom;
         break;
     case PseudoElementHighlight:
-        // FIXME: Stop using DeprecatedGlobalSettings.
-        if (!DeprecatedGlobalSettings::highlightAPIEnabled())
+        if (!context.highlightAPIEnabled)
+            return PseudoElementUnknown;
+        break;
+    case PseudoElementGrammarError:
+    case PseudoElementSpellingError:
+        if (!context.grammarAndSpellingPseudoElementsEnabled)
             return PseudoElementUnknown;
         break;
     case PseudoElementViewTransition:
@@ -1093,6 +1100,18 @@ bool CSSSelector::hasExplicitNestingParent() const
     };
 
     return visitAllSimpleSelectors(checkForExplicitParent);
+}
+
+bool CSSSelector::hasExplicitPseudoClassScope() const
+{
+    auto check = [] (const CSSSelector& selector) {
+        if (selector.match() == Match::PseudoClass && selector.pseudoClassType() == PseudoClassType::Scope)
+            return true;
+
+        return false;
+    };
+
+    return visitAllSimpleSelectors(check);
 }
 
 } // namespace WebCore

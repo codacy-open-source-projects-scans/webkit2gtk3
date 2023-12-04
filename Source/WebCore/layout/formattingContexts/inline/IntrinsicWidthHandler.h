@@ -39,8 +39,8 @@ class IntrinsicWidthHandler {
 public:
     IntrinsicWidthHandler(InlineFormattingContext&, const InlineItemList&, bool mayUseSimplifiedTextOnlyInlineLayout);
 
-    IntrinsicWidthConstraints computedIntrinsicSizes();
-    LayoutUnit maximumContentSize();
+    InlineLayoutUnit minimumContentSize();
+    InlineLayoutUnit maximumContentSize();
 
     struct LineBreakingResult {
         InlineLayoutUnit constraint;

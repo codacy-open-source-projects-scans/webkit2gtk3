@@ -48,6 +48,7 @@
 #include "TextDecorationThickness.h"
 #include "TouchAction.h"
 #include "TranslateTransformOperation.h"
+#include "ViewTimeline.h"
 #include "WillChangeData.h"
 #include <memory>
 #include <wtf/DataRef.h>
@@ -98,9 +99,7 @@ public:
 
     LengthPoint perspectiveOrigin() const { return { perspectiveOriginX, perspectiveOriginY }; }
 
-#if ENABLE(FILTERS_LEVEL_2)
     bool hasBackdropFilters() const;
-#endif
 
     OptionSet<Containment> effectiveContainment() const;
 
@@ -116,9 +115,7 @@ public:
 
     DataRef<StyleMarqueeData> marquee; // Marquee properties
 
-#if ENABLE(FILTERS_LEVEL_2)
     DataRef<StyleFilterData> backdropFilter; // Filter operations (url, sepia, blur, etc.)
-#endif
 
     DataRef<StyleGridData> grid;
     DataRef<StyleGridItemData> gridItem;
@@ -179,6 +176,11 @@ public:
     Vector<Ref<ScrollTimeline>> scrollTimelines;
     Vector<ScrollAxis> scrollTimelineAxes;
     Vector<AtomString> scrollTimelineNames;
+
+    Vector<Ref<ViewTimeline>> viewTimelines;
+    Vector<ScrollAxis> viewTimelineAxes;
+    Vector<ViewTimelineInsets> viewTimelineInsets;
+    Vector<AtomString> viewTimelineNames;
 
     ScrollbarGutter scrollbarGutter;
     ScrollbarWidth scrollbarWidth { ScrollbarWidth::Auto };

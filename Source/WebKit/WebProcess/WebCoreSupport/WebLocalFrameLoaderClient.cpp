@@ -362,7 +362,7 @@ void WebLocalFrameLoaderClient::dispatchDidReceiveServerRedirectForProvisionalLo
 
     RefPtr documentLoader = static_cast<WebDocumentLoader*>(m_frame->coreLocalFrame()->loader().provisionalDocumentLoader());
     if (!documentLoader) {
-        WebLocalFrameLoaderClient_RELEASE_LOG_FAULT(Loading, "dispatchDidReceiveServerRedirectForProvisionalLoad: Called with no provisional DocumentLoader (frameState=%hhu, stateForDebugging=%i)", m_frame->coreLocalFrame()->loader().state(), m_frame->coreLocalFrame()->loader().stateMachine().stateForDebugging());
+        WebLocalFrameLoaderClient_RELEASE_LOG_FAULT(Loading, "dispatchDidReceiveServerRedirectForProvisionalLoad: Called with no provisional DocumentLoader (frameState=%hhu, stateForDebugging=%i)", static_cast<uint8_t>(m_frame->coreLocalFrame()->loader().state()), m_frame->coreLocalFrame()->loader().stateMachine().stateForDebugging());
         return;
     }
 
@@ -1894,7 +1894,6 @@ void WebLocalFrameLoaderClient::broadcastMainFrameURLChangeToOtherProcesses(cons
     webPage->send(Messages::WebPageProxy::BroadcastMainFrameURLChangeToOtherProcesses(url));
 }
 
-#if ENABLE(SERVICE_WORKER)
 void WebLocalFrameLoaderClient::didFinishServiceWorkerPageRegistration(bool success)
 {
     RefPtr webPage = m_frame->page();
@@ -1903,7 +1902,6 @@ void WebLocalFrameLoaderClient::didFinishServiceWorkerPageRegistration(bool succ
 
     webPage->send(Messages::WebPageProxy::DidFinishServiceWorkerPageRegistration(success));
 }
-#endif
 
 #if ENABLE(APP_BOUND_DOMAINS)
 bool WebLocalFrameLoaderClient::shouldEnableInAppBrowserPrivacyProtections() const

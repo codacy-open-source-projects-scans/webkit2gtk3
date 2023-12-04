@@ -38,7 +38,9 @@ struct CSSSelectorParserContext {
     CSSParserMode mode { CSSParserMode::HTMLStandardMode };
     bool cssNestingEnabled { false };
     bool focusVisibleEnabled { false };
+    bool grammarAndSpellingPseudoElementsEnabled { false };
     bool hasPseudoClassEnabled { false };
+    bool highlightAPIEnabled { false };
     bool popoverAttributeEnabled { false };
     bool viewTransitionsEnabled { false };
 

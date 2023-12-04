@@ -82,6 +82,7 @@
 #include "Styleable.h"
 #include "TransformOperationData.h"
 #include "TranslateTransformOperation.h"
+#include "ViewTimeline.h"
 #include "WebAnimationUtilities.h"
 
 namespace WebCore {
@@ -528,14 +529,14 @@ static RefPtr<CSSValue> positionOffsetValue(const RenderStyle& style, CSSPropert
     auto offset = getOffsetComputedLength(style, propertyID);
 
     // If the element is not displayed; return the "computed value".
-    if (!renderer || !renderer->isRenderBox())
+    CheckedPtr box = dynamicDowncast<RenderBox>(renderer);
+    if (!box)
         return zoomAdjustedPixelValueForLength(offset, style);
 
-    auto& box = downcast<RenderBox>(*renderer);
-    auto* containingBlock = box.containingBlock();
+    auto* containingBlock = box->containingBlock();
 
     // Resolve a "computed value" percentage if the element is positioned.
-    if (containingBlock && offset.isPercentOrCalculated() && box.isPositioned()) {
+    if (containingBlock && offset.isPercentOrCalculated() && box->isPositioned()) {
         bool isVerticalProperty;
         if (propertyID == CSSPropertyTop || propertyID == CSSPropertyBottom)
             isVerticalProperty = true;
@@ -544,21 +545,21 @@ static RefPtr<CSSValue> positionOffsetValue(const RenderStyle& style, CSSPropert
             isVerticalProperty = false;
         }
         LayoutUnit containingBlockSize;
-        if (box.isStickilyPositioned()) {
-            auto& enclosingClippingBox = box.enclosingClippingBoxForStickyPosition().first;
+        if (box->isStickilyPositioned()) {
+            auto& enclosingClippingBox = box->enclosingClippingBoxForStickyPosition().first;
             if (isVerticalProperty == enclosingClippingBox.isHorizontalWritingMode())
                 containingBlockSize = enclosingClippingBox.contentLogicalHeight();
             else
                 containingBlockSize = enclosingClippingBox.contentLogicalWidth();
         } else {
             if (isVerticalProperty == containingBlock->isHorizontalWritingMode()) {
-                containingBlockSize = box.isOutOfFlowPositioned()
-                    ? box.containingBlockLogicalHeightForPositioned(*containingBlock, false)
-                    : box.containingBlockLogicalHeightForContent(ExcludeMarginBorderPadding);
+                containingBlockSize = box->isOutOfFlowPositioned()
+                    ? box->containingBlockLogicalHeightForPositioned(*containingBlock, false)
+                    : box->containingBlockLogicalHeightForContent(ExcludeMarginBorderPadding);
             } else {
-                containingBlockSize = box.isOutOfFlowPositioned()
-                    ? box.containingBlockLogicalWidthForPositioned(*containingBlock, nullptr, false)
-                    : box.containingBlockLogicalWidthForContent();
+                containingBlockSize = box->isOutOfFlowPositioned()
+                    ? box->containingBlockLogicalWidthForPositioned(*containingBlock, nullptr, false)
+                    : box->containingBlockLogicalWidthForContent();
             }
         }
         return zoomAdjustedPixelValue(floatValueForLength(offset, containingBlockSize), style);
@@ -569,11 +570,11 @@ static RefPtr<CSSValue> positionOffsetValue(const RenderStyle& style, CSSPropert
         return zoomAdjustedPixelValueForLength(offset, style);
 
     // The property won't be overconstrained if its computed value is "auto", so the "used value" can be returned.
-    if (box.isRelativelyPositioned())
-        return zoomAdjustedPixelValue(getOffsetUsedStyleRelative(box, propertyID), style);
+    if (box->isRelativelyPositioned())
+        return zoomAdjustedPixelValue(getOffsetUsedStyleRelative(*box, propertyID), style);
 
-    if (containingBlock && box.isOutOfFlowPositioned())
-        return zoomAdjustedPixelValue(getOffsetUsedStyleOutOfFlowPositioned(*containingBlock, box, propertyID), style);
+    if (containingBlock && box->isOutOfFlowPositioned())
+        return zoomAdjustedPixelValue(getOffsetUsedStyleOutOfFlowPositioned(*containingBlock, *box, propertyID), style);
 
     return CSSPrimitiveValue::create(CSSValueAuto);
 }
@@ -2494,10 +2495,8 @@ static bool isLayoutDependent(CSSPropertyID propertyID, const RenderStyle* style
     case CSSPropertyTransformOrigin:
     case CSSPropertyTransform:
     case CSSPropertyFilter: // Why are filters layout-dependent?
-#if ENABLE(FILTERS_LEVEL_2)
     case CSSPropertyBackdropFilter:
     case CSSPropertyWebkitBackdropFilter: // Ditto for backdrop-filter.
-#endif
         return true;
     case CSSPropertyMargin:
         return isLayoutDependent(CSSPropertyMarginBlock, style, renderer) || isLayoutDependent(CSSPropertyMarginInline, style, renderer);
@@ -2880,6 +2879,65 @@ static Ref<CSSValue> scrollTimelineShorthandValue(const Vector<Ref<ScrollTimelin
     return CSSValueList::createCommaSeparated(WTFMove(list));
 }
 
+static Ref<CSSValue> valueForSingleViewTimelineInset(const ViewTimelineInsets& insets, const RenderStyle& style)
+{
+    ASSERT(insets.start);
+    if (insets.end && insets.start != insets.end)
+        return CSSValuePair::createNoncoalescing(CSSPrimitiveValue::create(*insets.start, style), CSSPrimitiveValue::create(*insets.end, style));
+    return CSSPrimitiveValue::create(*insets.start, style);
+}
+
+static Ref<CSSValue> valueForViewTimelineInset(const Vector<ViewTimelineInsets>& insets, const RenderStyle& style)
+{
+    if (insets.isEmpty())
+        return CSSPrimitiveValue::create(CSSValueAuto);
+
+    CSSValueListBuilder list;
+    for (auto& singleInsets : insets)
+        list.append(valueForSingleViewTimelineInset(singleInsets, style));
+    return CSSValueList::createCommaSeparated(WTFMove(list));
+}
+
+static Ref<CSSValue> viewTimelineShorthandValue(const Vector<Ref<ViewTimeline>>& timelines, const RenderStyle& style)
+{
+    if (timelines.isEmpty())
+        return CSSPrimitiveValue::create(CSSValueNone);
+
+    CSSValueListBuilder list;
+    for (auto& timeline : timelines) {
+        auto& name = timeline->name();
+        auto axis = timeline->axis();
+        auto& insets = timeline->insets();
+
+        auto hasDefaultAxis = axis == ScrollAxis::Block;
+        auto hasDefaultInsets = [insets]() {
+            if (!insets.start && !insets.end)
+                return true;
+            if (insets.start->isAuto())
+                return true;
+            return false;
+        }();
+
+        ASSERT(!name.isNull());
+        auto nameCSSValue = CSSPrimitiveValue::createCustomIdent(name);
+
+        if (hasDefaultAxis && hasDefaultInsets)
+            list.append(WTFMove(nameCSSValue));
+        else if (hasDefaultAxis)
+            list.append(CSSValuePair::createNoncoalescing(nameCSSValue, valueForSingleViewTimelineInset(insets, style)));
+        else if (hasDefaultInsets)
+            list.append(CSSValuePair::createNoncoalescing(nameCSSValue, createConvertingToCSSValueID(axis)));
+        else {
+            list.append(CSSValueList::createSpaceSeparated(
+                WTFMove(nameCSSValue),
+                createConvertingToCSSValueID(axis),
+                valueForSingleViewTimelineInset(insets, style)
+            ));
+        }
+    }
+    return CSSValueList::createCommaSeparated(WTFMove(list));
+}
+
 RefPtr<CSSValue> ComputedStyleExtractor::customPropertyValue(const AtomString& propertyName) const
 {
     Element* styledElement = m_element.get();
@@ -3218,12 +3276,10 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         return positionOffsetValue(style, CSSPropertyBottom, renderer);
     case CSSPropertyWebkitBoxAlign:
         return createConvertingToCSSValueID(style.boxAlign());
-#if ENABLE(CSS_BOX_DECORATION_BREAK)
     case CSSPropertyWebkitBoxDecorationBreak:
         if (style.boxDecorationBreak() == BoxDecorationBreak::Slice)
             return CSSPrimitiveValue::create(CSSValueSlice);
-    return CSSPrimitiveValue::create(CSSValueClone);
-#endif
+        return CSSPrimitiveValue::create(CSSValueClone);
     case CSSPropertyWebkitBoxDirection:
         return createConvertingToCSSValueID(style.boxDirection());
     case CSSPropertyWebkitBoxFlex:
@@ -3518,10 +3574,15 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         return createConvertingToCSSValueID(style.inputSecurity());
     case CSSPropertyLeft:
         return positionOffsetValue(style, CSSPropertyLeft, renderer);
-    case CSSPropertyLetterSpacing:
-        if (!style.letterSpacing())
-            return CSSPrimitiveValue::create(CSSValueNormal);
-        return zoomAdjustedPixelValue(style.letterSpacing(), style);
+    case CSSPropertyLetterSpacing: {
+        const Length& spacing = style.computedLetterSpacing();
+        if (spacing.isFixed()) {
+            if (spacing.isZero())
+                return CSSPrimitiveValue::create(CSSValueNormal);
+            return zoomAdjustedPixelValue(spacing.value(), style);
+        }
+        return CSSPrimitiveValue::create(spacing, style);
+    }
     case CSSPropertyWebkitLineClamp:
         if (style.lineClamp().isNone())
             return CSSPrimitiveValue::create(CSSValueNone);
@@ -3858,10 +3919,10 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
     case CSSPropertyWordBreak:
         return createConvertingToCSSValueID(style.wordBreak());
     case CSSPropertyWordSpacing: {
-        auto& wordSpacingLength = style.wordSpacing();
-        if (wordSpacingLength.isFixed() || wordSpacingLength.isAuto())
-            return zoomAdjustedPixelValue(style.fontCascade().wordSpacing(), style);
-        return CSSPrimitiveValue::create(wordSpacingLength, style);
+        const Length& spacing = style.computedWordSpacing();
+        if (spacing.isFixed())
+            return zoomAdjustedPixelValue(spacing.value(), style);
+        return CSSPrimitiveValue::create(spacing, style);
     }
     case CSSPropertyLineBreak:
         return createConvertingToCSSValueID(style.lineBreak());
@@ -4170,11 +4231,9 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         return valueForFilter(style, style.filter());
     case CSSPropertyAppleColorFilter:
         return valueForFilter(style, style.appleColorFilter());
-#if ENABLE(FILTERS_LEVEL_2)
     case CSSPropertyWebkitBackdropFilter:
     case CSSPropertyBackdropFilter:
         return valueForFilter(style, style.backdropFilter());
-#endif
     case CSSPropertyMathStyle:
         return createConvertingToCSSValueID(style.mathStyle());
 #if ENABLE(CSS_COMPOSITING)
@@ -4320,6 +4379,14 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         return valueForScrollTimelineName(style.scrollTimelineNames());
     case CSSPropertyScrollTimeline:
         return scrollTimelineShorthandValue(style.scrollTimelines());
+    case CSSPropertyViewTimelineAxis:
+        return valueForScrollTimelineAxis(style.viewTimelineAxes());
+    case CSSPropertyViewTimelineInset:
+        return valueForViewTimelineInset(style.viewTimelineInsets(), style);
+    case CSSPropertyViewTimelineName:
+        return valueForScrollTimelineName(style.viewTimelineNames());
+    case CSSPropertyViewTimeline:
+        return viewTimelineShorthandValue(style.viewTimelines(), style);
     case CSSPropertyScrollbarColor:
         if (!style.scrollbarColor())
             return CSSPrimitiveValue::create(CSSValueAuto);
