@@ -26,10 +26,12 @@
 #import "config.h"
 #import "RemoteLayerTreePropertyApplier.h"
 
+#import "Logging.h"
 #import "PlatformCAAnimationRemote.h"
 #import "PlatformCALayerRemote.h"
 #import "RemoteLayerTreeHost.h"
 #import "RemoteLayerTreeInteractionRegionLayers.h"
+#import "WKVideoView.h"
 #import <QuartzCore/QuartzCore.h>
 #import <WebCore/MediaPlayerEnumsCocoa.h>
 #import <WebCore/PlatformCAFilters.h>
@@ -267,8 +269,15 @@ void RemoteLayerTreePropertyApplier::applyPropertiesToLayer(CALayer *layer, Remo
     if (properties.changedProperties & LayerChange::FiltersChanged)
         PlatformCAFilters::setFiltersOnLayer(layer, properties.filters ? *properties.filters : FilterOperations());
 
-    if (properties.changedProperties & LayerChange::AnimationsChanged)
+    if (properties.changedProperties & LayerChange::AnimationsChanged) {
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+        if (layerTreeHost->threadedAnimationResolutionEnabled()) {
+            LOG_WITH_STREAM(Animations, stream << "RemoteLayerTreePropertyApplier::applyProperties() for layer " << layerTreeNode->layerID() << " found " << properties.animationChanges.effects.size() << " effects.");
+            layerTreeNode->setAcceleratedEffectsAndBaseValues(properties.animationChanges.effects, properties.animationChanges.baseValues, *layerTreeHost);
+        } else
+#endif
         PlatformCAAnimationRemote::updateLayerAnimations(layer, layerTreeHost, properties.animationChanges.addedAnimations, properties.animationChanges.keysOfAnimationsToRemove);
+    }
 
     if (properties.changedProperties & LayerChange::AntialiasesEdgesChanged)
         layer.edgeAntialiasingMask = properties.antialiasesEdges ? (kCALayerLeftEdge | kCALayerRightEdge | kCALayerBottomEdge | kCALayerTopEdge) : 0;
@@ -299,8 +308,14 @@ void RemoteLayerTreePropertyApplier::applyPropertiesToLayer(CALayer *layer, Remo
 
 #if HAVE(AVKIT)
     if (properties.changedProperties & LayerChange::VideoGravityChanged) {
-        if ([layer respondsToSelector:@selector(setVideoGravity:)])
-            [(WebAVPlayerLayer*)layer setVideoGravity:convertMediaPlayerToAVLayerVideoGravity(properties.videoGravity)];
+        auto *playerLayer = layer;
+#if PLATFORM(IOS_FAMILY)
+        if (layerTreeNode && [layerTreeNode->uiView() isKindOfClass:WKVideoView.class])
+            playerLayer = [(WKVideoView*)layerTreeNode->uiView() playerLayer];
+#endif
+        ASSERT([playerLayer respondsToSelector:@selector(setVideoGravity:)]);
+        if ([playerLayer respondsToSelector:@selector(setVideoGravity:)])
+            [(WebAVPlayerLayer*)playerLayer setVideoGravity:convertMediaPlayerToAVLayerVideoGravity(properties.videoGravity)];
     }
 #endif
 }

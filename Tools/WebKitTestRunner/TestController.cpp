@@ -964,7 +964,6 @@ void TestController::createWebViewWithOptions(const TestOptions& options)
         runWebAuthenticationPanel,
         0,
         decidePolicyForMediaKeySystemPermissionRequest,
-        nullptr, // requestWebAuthenticationNoGesture
         queryPermission,
 #if PLATFORM(IOS) || PLATFORM(VISION)
         lockScreenOrientationCallback,
@@ -1071,6 +1070,7 @@ void TestController::resetPreferencesToConsistentValues(const TestOptions& optio
         if (enableAllExperimentalFeatures) {
             WKPreferencesEnableAllExperimentalFeatures(preferences);
             WKPreferencesSetExperimentalFeatureForKey(preferences, false, toWK("SiteIsolationEnabled").get());
+            WKPreferencesSetExperimentalFeatureForKey(preferences, false, toWK("CFNetworkNetworkLoaderEnabled").get());
         }
 
         WKPreferencesResetAllInternalDebugFeatures(preferences);
@@ -4144,6 +4144,13 @@ void TestController::setAllowedMenuActions(const Vector<String>&)
 WKRetainPtr<WKStringRef> TestController::takeViewPortSnapshot()
 {
     return adoptWK(WKStringCreateWithUTF8CString("not implemented"));
+}
+#endif
+
+#if !PLATFORM(COCOA)
+WKRetainPtr<WKArrayRef> TestController::getAndClearReportedWindowProxyAccessDomains()
+{
+    return nullptr;
 }
 #endif
 

@@ -132,6 +132,7 @@
 
 #if PLATFORM(COCOA)
 #include "DefaultWebBrowserChecks.h"
+#include "WebPrivacyHelpers.h"
 #include <WebCore/GameControllerGamepadProvider.h>
 #include <WebCore/HIDGamepadProvider.h>
 #include <WebCore/MultiGamepadProvider.h>
@@ -145,6 +146,11 @@
 
 #if ENABLE(IPC_TESTING_API)
 #include "IPCTesterMessages.h"
+#endif
+
+#if ENABLE(EXTENSION_CAPABILITIES)
+#include "ExtensionCapabilityGrant.h"
+#include "MediaCapability.h"
 #endif
 
 #define WEBPROCESSPOOL_RELEASE_LOG(channel, fmt, ...) RELEASE_LOG(channel, "%p - WebProcessPool::" fmt, this, ##__VA_ARGS__)
@@ -295,6 +301,29 @@ WebProcessPool::WebProcessPool(API::ProcessPoolConfiguration& configuration)
         });
     }
 #endif
+
+#if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
+    m_storageAccessUserAgentStringQuirksDataUpdateObserver = StorageAccessUserAgentStringQuirkController::shared().observeUpdates([weakThis = WeakPtr { *this }] {
+        if (RefPtr protectedThis = weakThis.get()) {
+            if (StorageAccessUserAgentStringQuirkController::shared().cachedQuirks().isEmpty())
+                return;
+            // FIXME: Filter by process's site when site isolation is enabled
+            protectedThis->sendToAllProcesses(Messages::WebProcess::UpdateStorageAccessUserAgentStringQuirks(StorageAccessUserAgentStringQuirkController::shared().cachedQuirks()));
+        }
+    });
+
+    m_storageAccessPromptQuirksDataUpdateObserver = StorageAccessPromptQuirkController::shared().observeUpdates([weakThis = WeakPtr { *this }] {
+        if (RefPtr protectedThis = weakThis.get()) {
+            HashSet<WebCore::RegistrableDomain> domainSet;
+            for (auto&& entry : StorageAccessPromptQuirkController::shared().cachedQuirks()) {
+                for (auto&& domain : entry.domainPairings.keys())
+                    domainSet.add(domain);
+            }
+            protectedThis->sendToAllProcesses(Messages::WebProcess::UpdateDomainsWithStorageAccessQuirks(domainSet));
+        }
+    });
+#endif
+
 }
 
 WebProcessPool::~WebProcessPool()
@@ -655,6 +684,11 @@ Ref<WebProcessProxy> WebProcessPool::createNewWebProcess(WebsiteDataStore* websi
         websiteDataStore->setTrackingPreventionEnabled(m_tccPreferenceEnabled);
 #endif
 
+#if USE(EXTENSIONKIT)
+    bool manageWebKitProcessesAsExtensions = CFPreferencesGetAppBooleanValue(CFSTR("manageProcessesAsExtensions"), CFSTR("com.apple.WebKit"), nullptr);
+    AuxiliaryProcessProxy::setManageProcessesAsExtensions(manageWebKitProcessesAsExtensions);
+#endif
+
     auto processProxy = WebProcessProxy::create(*this, websiteDataStore, lockdownMode, isPrewarmed, crossOriginMode);
     initializeNewWebProcess(processProxy, websiteDataStore, isPrewarmed);
     m_processes.append(processProxy.copyRef());
@@ -720,11 +754,13 @@ WebProcessDataStoreParameters WebProcessPool::webProcessDataStoreParameters(WebP
     String applicationCacheFlatFileSubdirectoryName = websiteDataStore.applicationCacheFlatFileSubdirectoryName();
 
     String mediaCacheDirectory = websiteDataStore.resolvedMediaCacheDirectory();
+#if !ENABLE(GPU_PROCESS)
     SandboxExtension::Handle mediaCacheDirectoryExtensionHandle;
     if (!mediaCacheDirectory.isEmpty()) {
         if (auto handle = SandboxExtension::createHandleWithoutResolvingPath(mediaCacheDirectory, SandboxExtension::Type::ReadWrite))
             mediaCacheDirectoryExtensionHandle = WTFMove(*handle);
     }
+#endif
 
     String mediaKeyStorageDirectory = websiteDataStore.resolvedMediaKeysDirectory();
     SandboxExtension::Handle mediaKeyStorageDirectoryExtensionHandle;
@@ -773,7 +809,9 @@ WebProcessDataStoreParameters WebProcessPool::webProcessDataStoreParameters(WebP
         WTFMove(applicationCacheDirectoryExtensionHandle),
         WTFMove(applicationCacheFlatFileSubdirectoryName),
         WTFMove(mediaCacheDirectory),
+#if !ENABLE(GPU_PROCESS)
         WTFMove(mediaCacheDirectoryExtensionHandle),
+#endif
         WTFMove(mediaKeyStorageDirectory),
         WTFMove(mediaKeyStorageDirectoryExtensionHandle),
         WTFMove(mediaKeyStorageSalt),
@@ -999,6 +1037,15 @@ void WebProcessPool::processDidFinishLaunching(WebProcessProxy& process)
         process.protectedConnection()->ignoreTimeoutsForTesting();
 
     m_connectionClient.didCreateConnection(this, process.protectedWebConnection().get());
+
+#if ENABLE(EXTENSION_CAPABILITIES)
+    for (auto& page : process.pages()) {
+        if (auto& mediaCapability = page->mediaCapability()) {
+            WEBPROCESSPOOL_RELEASE_LOG(ProcessCapabilities, "processDidFinishLaunching: granting media capability (envID=%{public}s)", mediaCapability->environmentIdentifier().utf8().data());
+            extensionCapabilityGranter().grant(*mediaCapability);
+        }
+    }
+#endif
 }
 
 void WebProcessPool::disconnectProcess(WebProcessProxy& process)
@@ -1033,6 +1080,10 @@ void WebProcessPool::disconnectProcess(WebProcessProxy& process)
 #endif
 
     removeProcessFromOriginCacheSet(process);
+
+#if ENABLE(EXTENSION_CAPABILITIES)
+    extensionCapabilityGranter().invalidateGrants(moveToVector(std::exchange(process.extensionCapabilityGrants(), { }).values()));
+#endif
 }
 
 Ref<WebProcessProxy> WebProcessPool::processForRegistrableDomain(WebsiteDataStore& websiteDataStore, const RegistrableDomain& registrableDomain, WebProcessProxy::LockdownMode lockdownMode, const API::PageConfiguration& pageConfiguration)
@@ -1104,11 +1155,6 @@ Ref<WebPageProxy> WebProcessPool::createWebPage(PageClient& pageClient, Ref<API:
         // But if there is an attempt to create a web page without any specified data store, then we have to create it.
         pageConfiguration->setWebsiteDataStore(WebKit::WebsiteDataStore::defaultDataStore());
     }
-
-#if USE(EXTENSIONKIT)
-    auto manageWebKitProcessesAsExtensions = pageConfiguration->preferences()->store().getBoolValueForKey(WebPreferencesKey::manageWebKitProcessesAsExtensionsKey());
-    AuxiliaryProcessProxy::setManageProcessesAsExtensions(manageWebKitProcessesAsExtensions);
-#endif
 
     RefPtr<WebProcessProxy> process;
     auto lockdownMode = pageConfiguration->lockdownModeEnabled() ? WebProcessProxy::LockdownMode::Enabled : WebProcessProxy::LockdownMode::Disabled;
@@ -1840,9 +1886,13 @@ void WebProcessPool::processForNavigation(WebPageProxy& page, WebFrameProxy& fra
     auto registrableDomain = RegistrableDomain { navigation.currentRequest().url() };
     if (page.preferences().siteIsolationEnabled() && !registrableDomain.isEmpty()) {
         RegistrableDomain mainFrameDomain(URL(page.pageLoadState().activeURL()));
-        if (!frame.isMainFrame() && registrableDomain == mainFrameDomain)
-            return completionHandler(page.mainFrame()->protectedProcess(), nullptr, "Found process for the same registration domain as mainFrame domain"_s);
-        if (RefPtr process = page.processForRegistrableDomain(registrableDomain))
+        if (!frame.isMainFrame() && registrableDomain == mainFrameDomain) {
+            Ref mainFrameProcess = page.mainFrame()->protectedProcess();
+            if (!mainFrameProcess->isInProcessCache())
+                return completionHandler(mainFrameProcess.copyRef(), nullptr, "Found process for the same registration domain as mainFrame domain"_s);
+        }
+        RefPtr process = page.processForRegistrableDomain(registrableDomain);
+        if (process && !process->isInProcessCache())
             return completionHandler(process.releaseNonNull(), nullptr, "Found process for the same registration domain"_s);
     }
 

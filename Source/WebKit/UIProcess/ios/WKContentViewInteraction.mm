@@ -44,6 +44,7 @@
 #import "RevealItem.h"
 #import "SmartMagnificationController.h"
 #import "TextChecker.h"
+#import "TextCheckerState.h"
 #import "TextInputSPI.h"
 #import "TextRecognitionUpdateResult.h"
 #import "UIKitSPI.h"
@@ -196,10 +197,7 @@
 #import <pal/spi/ios/DataDetectorsUISoftLink.h>
 
 SOFT_LINK_FRAMEWORK(UIKit)
-SOFT_LINK_CLASS_OPTIONAL(UIKit, _UIAsyncDragInteraction)
-SOFT_LINK_CLASS_OPTIONAL(UIKit, _UIContextMenuAsyncConfiguration)
-SOFT_LINK_CLASS_OPTIONAL(UIKit, _UITextCursorDragAnimator)
-SOFT_LINK_CLASS_OPTIONAL(UIKit, UIKeyEventContext)
+SOFT_LINK_CLASS_OPTIONAL(UIKit, UITextCursorDropPositionAnimator)
 
 #if HAVE(AUTOCORRECTION_ENHANCEMENTS)
 #define UIWKDocumentRequestAutocorrectedRanges (1 << 7)
@@ -1139,11 +1137,7 @@ static WKDragSessionContext *ensureLocalDragSessionContext(id <UIDragSession> se
 - (BOOL)_shouldUseUIContextMenuAsyncConfiguration
 {
 #if HAVE(UI_CONTEXT_MENU_ASYNC_CONFIGURATION)
-    if (!self.shouldUseAsyncInteractions)
-        return NO;
-
-    static BOOL hasAsyncConfigurationClass = !!get_UIContextMenuAsyncConfigurationClass();
-    return hasAsyncConfigurationClass;
+    return self.shouldUseAsyncInteractions;
 #else
     return NO;
 #endif
@@ -1151,12 +1145,12 @@ static WKDragSessionContext *ensureLocalDragSessionContext(id <UIDragSession> se
 
 - (BOOL)_shouldUseTextCursorDragAnimator
 {
-#if HAVE(UI_TEXT_CURSOR_DRAG_ANIMATOR)
+#if HAVE(UI_TEXT_CURSOR_DROP_POSITION_ANIMATOR)
     if (!self.shouldUseAsyncInteractions)
         return NO;
 
-    static BOOL hasTextCursorDragAnimatorClass = !!get_UITextCursorDragAnimatorClass();
-    return hasTextCursorDragAnimatorClass;
+    static BOOL hasClass = !!getUITextCursorDropPositionAnimatorClass();
+    return hasClass;
 #else
     return NO;
 #endif
@@ -1467,6 +1461,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     _treatAsContentEditableUntilNextEditorStateUpdate = NO;
     _isHandlingActiveKeyEvent = NO;
     _isHandlingActivePressesEvent = NO;
+    _isDeferringKeyEventsToInputMethod = NO;
 
     if (_interactionViewsContainerView) {
         [self.layer removeObserver:self forKeyPath:@"transform" context:WKContentViewKVOTransformContext];
@@ -4254,30 +4249,23 @@ WEBCORE_COMMAND_FOR_WEBVIEW(pasteAndMatchStyle);
 
 - (NSDictionary *)textStylingAtPosition:(UITextPosition *)position inDirection:(UITextStorageDirection)direction
 {
-    if (!position || !_page->editorState().isContentRichlyEditable)
-        return nil;
-
     NSMutableDictionary* result = [NSMutableDictionary dictionary];
+    [result setObject:[UIColor blackColor] forKey:NSForegroundColorAttributeName];
+    if (!position || !_page->editorState().isContentRichlyEditable)
+        return result;
 
     if (!_page->editorState().postLayoutData)
-        return nil;
-    auto typingAttributes = _page->editorState().postLayoutData->typingAttributes;
-    CTFontSymbolicTraits symbolicTraits = 0;
-    if (typingAttributes.contains(WebKit::TypingAttribute::Bold))
-        symbolicTraits |= kCTFontBoldTrait;
-    if (typingAttributes.contains(WebKit::TypingAttribute::Italics))
-        symbolicTraits |= kCTFontTraitItalic;
+        return result;
 
-    // We chose a random font family and size.
-    // What matters are the traits but the caller expects a font object
-    // in the dictionary for NSFontAttributeName.
-    RetainPtr<CTFontDescriptorRef> fontDescriptor = adoptCF(CTFontDescriptorCreateWithNameAndSize(CFSTR("Helvetica"), 10));
-    if (symbolicTraits)
-        fontDescriptor = adoptCF(CTFontDescriptorCreateCopyWithSymbolicTraits(fontDescriptor.get(), symbolicTraits, symbolicTraits));
+    auto typingAttributes = _page->editorState().postLayoutData->typingAttributes;
     
-    RetainPtr<CTFontRef> font = adoptCF(CTFontCreateWithFontDescriptor(fontDescriptor.get(), 10, nullptr));
+    UIFont *font = _autocorrectionData.font.get();
+    double zoomScale = self._contentZoomScale;
+    if (std::abs(zoomScale - 1) > FLT_EPSILON)
+        font = [font fontWithSize:font.pointSize * zoomScale];
+
     if (font)
-        [result setObject:(id)font.get() forKey:NSFontAttributeName];
+        [result setObject:font forKey:NSFontAttributeName];
     
     if (typingAttributes.contains(WebKit::TypingAttribute::Underline))
         [result setObject:@(NSUnderlineStyleSingle) forKey:NSUnderlineStyleAttributeName];
@@ -4557,7 +4545,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 
     if (action == @selector(select:)) {
         // Disable select in password fields so that you can't see word boundaries.
-        return !editorState.isInPasswordField && !editorState.selectionIsRange && self.hasContent;
+        return !editorState.isInPasswordField && !editorState.selectionIsRange && self._hasContent;
     }
 
     auto isPreparingEditMenu = [&] {
@@ -4567,7 +4555,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     if (action == @selector(selectAll:)) {
         if (isPreparingEditMenu()) {
             // By platform convention we don't show Select All in the edit menu for a range selection.
-            return !editorState.selectionIsRange && self.hasContent;
+            return !editorState.selectionIsRange && self._hasContent;
         }
         return YES;
     }
@@ -4627,6 +4615,9 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 
 - (id)targetForActionForWebView:(SEL)action withSender:(id)sender
 {
+    BOOL hasFallbackAsyncTextInputAction = action == @selector(_define:) || action == @selector(_translate:) || action == @selector(_lookup:);
+    if (self.shouldUseAsyncInteractions && hasFallbackAsyncTextInputAction)
+        return nil;
     return [super targetForAction:action withSender:sender];
 }
 
@@ -4742,7 +4733,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 {
     RELEASE_ASSERT_ASYNC_TEXT_INTERACTIONS_DISABLED();
 
-    [self _defineForWebView:sender];
+    [self defineForWebView:sender];
 }
 
 - (void)accessibilityRetrieveSpeakSelectionContent
@@ -6305,13 +6296,14 @@ static Vector<WebCore::CompositionHighlight> compositionHighlights(NSAttributedS
 - (void)_setMarkedText:(NSString *)markedText underlines:(const Vector<WebCore::CompositionUnderline>&)underlines highlights:(const Vector<WebCore::CompositionHighlight>&)highlights selectedRange:(NSRange)selectedRange
 {
     _autocorrectionContextNeedsUpdate = YES;
-    _candidateViewNeedsUpdate = !self.hasMarkedText;
+    _candidateViewNeedsUpdate = !self.hasMarkedText && _isDeferringKeyEventsToInputMethod;
     _markedText = markedText;
     _page->setCompositionAsync(markedText, underlines, highlights, { }, selectedRange, { });
 }
 
 - (void)unmarkText
 {
+    _isDeferringKeyEventsToInputMethod = NO;
     _markedText = nil;
     _page->confirmCompositionAsync();
 }
@@ -7102,6 +7094,11 @@ inline static UIShiftKeyState shiftKeyState(UIKeyModifierFlags flags)
 {
     RELEASE_ASSERT_ASYNC_TEXT_INTERACTIONS_DISABLED();
 
+    [self _internalHandleKeyWebEvent:theEvent];
+}
+
+- (void)_internalHandleKeyWebEvent:(::WebEvent *)theEvent
+{
     _page->handleKeyboardEvent(WebKit::NativeWebKeyboardEvent(theEvent, WebKit::NativeWebKeyboardEvent::HandledByInputMethod::No));
 }
 
@@ -7123,7 +7120,7 @@ inline static UIShiftKeyState shiftKeyState(UIKeyModifierFlags flags)
         if (!inputDelegate)
             return NO;
 
-        auto context = adoptNS([allocUIKeyEventContextInstance() initWithKeyEvent:event.originalUIKeyEvent]);
+        auto context = adoptNS([[UIKeyEventContext alloc] initWithKeyEvent:event.originalUIKeyEvent]);
         if ([context respondsToSelector:@selector(setShouldEvaluateForInputSystemHandling:)])
             [context setShouldEvaluateForInputSystemHandling:YES];
         [context setDocumentIsEditable:YES];
@@ -7150,6 +7147,7 @@ inline static UIShiftKeyState shiftKeyState(UIKeyModifierFlags flags)
     using HandledByInputMethod = WebKit::NativeWebKeyboardEvent::HandledByInputMethod;
     if ([self _deferKeyEventToInputMethodEditing:event]) {
         completionHandler(event, YES);
+        _isDeferringKeyEventsToInputMethod = YES;
         _page->handleKeyboardEvent(WebKit::NativeWebKeyboardEvent(event, HandledByInputMethod::Yes));
         return;
     }
@@ -7190,7 +7188,7 @@ inline static UIShiftKeyState shiftKeyState(UIKeyModifierFlags flags)
         if (!systemDelegate)
             return NO;
 
-        auto context = adoptNS([allocUIKeyEventContextInstance() initWithKeyEvent:event.originalUIKeyEvent]);
+        auto context = adoptNS([[UIKeyEventContext alloc] initWithKeyEvent:event.originalUIKeyEvent]);
         [context setDocumentIsEditable:_page->editorState().isContentEditable];
         [context setShouldInsertChar:isCharEvent];
         return [systemDelegate deferEventHandlingToSystemWithContext:context.get()];
@@ -7528,6 +7526,11 @@ inline static UIShiftKeyState shiftKeyState(UIKeyModifierFlags flags)
 {
     RELEASE_ASSERT_ASYNC_TEXT_INTERACTIONS_DISABLED();
 
+    return self._hasContent;
+}
+
+- (BOOL)_hasContent
+{
     auto& editorState = _page->editorState();
     return !editorState.selectionIsNone && editorState.postLayoutData && editorState.postLayoutData->hasContent;
 }
@@ -7535,18 +7538,6 @@ inline static UIShiftKeyState shiftKeyState(UIKeyModifierFlags flags)
 - (void)selectAll
 {
     RELEASE_ASSERT_ASYNC_TEXT_INTERACTIONS_DISABLED();
-}
-
-- (UIColor *)textColorForCaretSelection
-{
-    return [UIColor blackColor];
-}
-
-- (UIFont *)fontForCaretSelection
-{
-    UIFont *font = _autocorrectionData.font.get();
-    double zoomScale = self._contentZoomScale;
-    return std::abs(zoomScale - 1) > FLT_EPSILON ? [font fontWithSize:font.pointSize * zoomScale] : font;
 }
 
 - (BOOL)hasSelection
@@ -8032,6 +8023,18 @@ static RetainPtr<NSObject <WKFormPeripheral>> createInputPeripheralWithView(WebK
     else
 #endif
         [UIKeyboardImpl.activeInstance updateForChangedSelection];
+}
+
+- (void)_updateFocusedElementInformation:(const WebKit::FocusedElementInformation&)information
+{
+    if (!self._hasFocusedElement)
+        return;
+
+    if (!_focusedElementInformation.elementContext.isSameElement(information.elementContext))
+        return;
+
+    _focusedElementInformation = information;
+    [_inputPeripheral updateEditing];
 }
 
 - (BOOL)shouldIgnoreKeyboardWillHideNotification
@@ -8691,6 +8694,8 @@ static bool canUseQuickboardControllerFor(UITextContentType type)
         // FIXME: We need to figure out what to do if the selection is changed by Javascript.
         if (_textInteractionWrapper) {
             _markedText = editorState.hasComposition ? postLayoutData.markedText : String { };
+            if (![_markedText length])
+                _isDeferringKeyEventsToInputMethod = NO;
             [_textInteractionWrapper selectionChanged];
         }
 
@@ -9652,10 +9657,8 @@ static BOOL shouldEnableDragInteractionForPolicy(_WKDragInteractionPolicy policy
 - (Class)_dragInteractionClass
 {
 #if HAVE(UI_ASYNC_DRAG_INTERACTION)
-    if (self.shouldUseAsyncInteractions) {
-        if (auto interactionClass = get_UIAsyncDragInteractionClass())
-            return interactionClass;
-    }
+    if (self.shouldUseAsyncInteractions)
+        return [WKSEDragInteraction class];
 #endif
     return UIDragInteraction.class;
 }
@@ -9664,10 +9667,12 @@ static BOOL shouldEnableDragInteractionForPolicy(_WKDragInteractionPolicy policy
 {
     _dragInteraction = adoptNS([[self._dragInteractionClass alloc] initWithDelegate:self]);
     _dropInteraction = adoptNS([[UIDropInteraction alloc] initWithDelegate:self]);
-    [_dragInteraction _setLiftDelay:self.dragLiftDelay];
     [_dragInteraction setEnabled:shouldEnableDragInteractionForPolicy(self.webView._dragInteractionPolicy)];
 #if HAVE(UIKIT_WITH_MOUSE_SUPPORT)
-    [_dragInteraction _setAllowsPointerDragBeforeLiftDelay:NO];
+    if (!self.shouldUseAsyncInteractions) {
+        [_dragInteraction _setLiftDelay:self.dragLiftDelay];
+        [_dragInteraction _setAllowsPointerDragBeforeLiftDelay:NO];
+    }
 #endif
 
     [self addInteraction:_dragInteraction.get()];
@@ -9833,17 +9838,17 @@ static std::optional<WebCore::DragOperation> coreDragOperationForUIDropOperation
 
 - (void)_insertDropCaret:(CGRect)rect
 {
-#if HAVE(UI_TEXT_CURSOR_DRAG_ANIMATOR)
+#if HAVE(UI_TEXT_CURSOR_DROP_POSITION_ANIMATOR)
     if (self._shouldUseTextCursorDragAnimator) {
         _editDropTextCursorView = [adoptNS([[UITextSelectionDisplayInteraction alloc] initWithTextInput:self delegate:self]) cursorView];
         [self addSubview:_editDropTextCursorView.get()];
         [_editDropTextCursorView setFrame:rect];
-        _editDropCaretAnimator = adoptNS([alloc_UITextCursorDragAnimatorInstance() _initWithTextCursorView:_editDropTextCursorView.get() textInput:self]);
-        [_editDropCaretAnimator _setCursorVisible:YES animated:YES];
-        [_editDropCaretAnimator _updateCursorForPosition:[WKTextPosition textPositionWithRect:rect] animated:NO];
+        _editDropCaretAnimator = adoptNS([allocUITextCursorDropPositionAnimatorInstance() initWithTextCursorView:_editDropTextCursorView.get() textInput:self]);
+        [_editDropCaretAnimator setCursorVisible:YES animated:YES];
+        [_editDropCaretAnimator placeCursorAtPosition:[WKTextPosition textPositionWithRect:rect] animated:NO];
         return;
     }
-#endif // HAVE(UI_TEXT_CURSOR_DRAG_ANIMATOR)
+#endif // HAVE(UI_TEXT_CURSOR_DROP_POSITION_ANIMATOR)
     _editDropCaretView = adoptNS([[_UITextDragCaretView alloc] initWithTextInputView:self]);
     [_editDropCaretView insertAtPosition:[WKTextPosition textPositionWithRect:rect]];
 }
@@ -9851,8 +9856,8 @@ static std::optional<WebCore::DragOperation> coreDragOperationForUIDropOperation
 - (void)_removeDropCaret
 {
     [std::exchange(_editDropCaretView, nil) remove];
-#if HAVE(UI_TEXT_CURSOR_DRAG_ANIMATOR)
-    [std::exchange(_editDropCaretAnimator, nil) _setCursorVisible:NO animated:NO];
+#if HAVE(UI_TEXT_CURSOR_DROP_POSITION_ANIMATOR)
+    [std::exchange(_editDropCaretAnimator, nil) setCursorVisible:NO animated:NO];
     [std::exchange(_editDropTextCursorView, nil) removeFromSuperview];
 #endif
 }
@@ -9952,8 +9957,8 @@ static NSArray<NSItemProvider *> *extractItemProvidersFromDropSession(id <UIDrop
     }
 
     RetainPtr caretPosition = [WKTextPosition textPositionWithRect:rect];
-#if HAVE(UI_TEXT_CURSOR_DRAG_ANIMATOR)
-    [_editDropCaretAnimator _updateCursorForPosition:caretPosition.get() animated:YES];
+#if HAVE(UI_TEXT_CURSOR_DROP_POSITION_ANIMATOR)
+    [_editDropCaretAnimator placeCursorAtPosition:caretPosition.get() animated:YES];
 #endif
     [_editDropCaretView updateToPosition:caretPosition.get()];
 }
@@ -10685,16 +10690,24 @@ static Vector<WebCore::IntSize> sizesOfPlaceholderElementsToInsertWhenDroppingIt
 
 #if HAVE(UI_ASYNC_DRAG_INTERACTION)
 
-#pragma mark - _UIAsyncDragInteractionDelegate
+#pragma mark - WKSEDragInteractionDelegate
 
-- (void)_asyncDragInteraction:(_UIAsyncDragInteraction *)interaction prepareDragSession:(id<UIDragSession>)session completion:(BOOL(^)(void))completion
+#if SERVICE_EXTENSIONS_DRAG_INTERACTION_IS_AVAILABLE
+- (void)dragInteraction:(WKSEDragInteraction *)interaction prepareDragSession:(id<UIDragSession>)session completion:(BOOL(^)(void))completion
+#else
+- (void)_asyncDragInteraction:(WKSEDragInteraction *)interaction prepareDragSession:(id<UIDragSession>)session completion:(BOOL(^)(void))completion
+#endif
 {
     [self _dragInteraction:interaction prepareForSession:session completion:[completion = makeBlockPtr(completion)] {
         completion();
     }];
 }
 
-- (void)_asyncDragInteraction:(_UIAsyncDragInteraction *)interaction itemsForAddingToSession:(id<UIDragSession>)session withTouchAtPoint:(CGPoint)point completion:(BOOL(^)(NSArray<UIDragItem *> *))completion
+#if SERVICE_EXTENSIONS_DRAG_INTERACTION_IS_AVAILABLE
+- (void)dragInteraction:(WKSEDragInteraction *)interaction itemsForAddingToSession:(id<UIDragSession>)session forTouchAtPoint:(CGPoint)point completion:(BOOL(^)(NSArray<UIDragItem *> *))completion
+#else
+- (void)_asyncDragInteraction:(WKSEDragInteraction *)interaction itemsForAddingToSession:(id<UIDragSession>)session withTouchAtPoint:(CGPoint)point completion:(BOOL(^)(NSArray<UIDragItem *> *))completion
+#endif
 {
     [self _dragInteraction:interaction itemsForAddingToSession:session withTouchAtPoint:point completion:[completion = makeBlockPtr(completion)](NSArray<UIDragItem *> *items) {
         completion(items);
@@ -11088,6 +11101,15 @@ static Vector<WebCore::IntSize> sizesOfPlaceholderElementsToInsertWhenDroppingIt
 {
     if (WebKit::TextChecker::setContinuousSpellCheckingEnabled(enabled))
         _page->process().updateTextCheckerState();
+}
+
+- (void)setGrammarCheckingEnabled:(BOOL)enabled
+{
+    if (static_cast<bool>(enabled) == WebKit::TextChecker::state().isGrammarCheckingEnabled)
+        return;
+
+    WebKit::TextChecker::setGrammarCheckingEnabled(enabled);
+    _page->process().updateTextCheckerState();
 }
 
 #if HAVE(UIKIT_WITH_MOUSE_SUPPORT)
@@ -12753,7 +12775,7 @@ inline static NSString *extendSelectionCommand(UITextLayoutDirection direction)
             syntheticEvent = adoptNS([[WKSyntheticFlagsChangedWebEvent alloc] initWithCapsLockState:keyDown]);
             break;
         }
-        [self handleKeyWebEvent:syntheticEvent.get()];
+        [self _internalHandleKeyWebEvent:syntheticEvent.get()];
     };
 
     dispatchSyntheticFlagsChangedEvents(oldState, false);
@@ -13319,9 +13341,13 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     RetainPtr<UIContextMenuConfiguration> configuration;
 #if HAVE(UI_CONTEXT_MENU_ASYNC_CONFIGURATION)
     if (self._shouldUseUIContextMenuAsyncConfiguration) {
-        auto asyncConfiguration = adoptNS([alloc_UIContextMenuAsyncConfigurationInstance() init]);
+        auto asyncConfiguration = adoptNS([[WKSEContextMenuConfiguration alloc] init]);
         [self _internalContextMenuInteraction:interaction configurationForMenuAtLocation:location completion:[asyncConfiguration](UIContextMenuConfiguration *finalConfiguration) {
+#if SERVICE_EXTENSIONS_CONTEXT_MENU_CONFIGURATION_IS_AVAILABLE
+            [asyncConfiguration fulfillUsingConfiguration:finalConfiguration];
+#else
             [asyncConfiguration fulfillWithConfiguration:finalConfiguration];
+#endif
         }];
         configuration = asyncConfiguration.get();
     }

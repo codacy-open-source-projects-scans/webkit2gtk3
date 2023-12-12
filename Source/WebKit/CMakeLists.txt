@@ -138,6 +138,7 @@ set(WebKit_MESSAGES_IN_FILES
     GPUProcess/graphics/RemoteDisplayListRecorder
     GPUProcess/graphics/RemoteGraphicsContextGL
     GPUProcess/graphics/RemoteImageBuffer
+    GPUProcess/graphics/RemoteImageBufferSet
     GPUProcess/graphics/RemoteRenderingBackend
 
     GPUProcess/graphics/WebGPU/RemoteAdapter
@@ -383,6 +384,7 @@ set(WebKit_SERIALIZATION_IN_FILES
     Shared/AuxiliaryProcessCreationParameters.serialization.in
     Shared/BackgroundFetchState.serialization.in
     Shared/CallbackID.serialization.in
+    Shared/ContextMenuContextData.serialization.in
     Shared/DebuggableInfoData.serialization.in
     Shared/DisplayListArgumentCoders.serialization.in
     Shared/DocumentEditingContext.serialization.in
@@ -398,6 +400,7 @@ set(WebKit_SERIALIZATION_IN_FILES
     Shared/GPUProcessConnectionParameters.serialization.in
     Shared/GPUProcessPreferencesForWebProcess.serialization.in
     Shared/GoToBackForwardItemParameters.serialization.in
+    Shared/JavaScriptCore.serialization.in
     Shared/LayerTreeContext.serialization.in
     Shared/LoadParameters.serialization.in
     Shared/LocalFrameCreationParameters.serialization.in
@@ -425,6 +428,7 @@ set(WebKit_SERIALIZATION_IN_FILES
     Shared/URLSchemeTaskParameters.serialization.in
     Shared/UpdateInfo.serialization.in
     Shared/UserContentControllerParameters.serialization.in
+    Shared/UserData.serialization.in
     Shared/VisibleContentRectUpdateInfo.serialization.in
     Shared/WTFArgumentCoders.serialization.in
     Shared/WebBackForwardListCounts.serialization.in
@@ -432,8 +436,10 @@ set(WebKit_SERIALIZATION_IN_FILES
     Shared/WebCoreArgumentCoders.serialization.in
     Shared/WebCompiledContentRuleListData.serialization.in
     Shared/WebEvent.serialization.in
+    Shared/WebFindOptions.serialization.in
     Shared/WebFoundTextRange.serialization.in
     Shared/WebHitTestResultData.serialization.in
+    Shared/WebImage.serialization.in
     Shared/WebNavigationDataStore.serialization.in
     Shared/WebPageCreationParameters.serialization.in
     Shared/WebPageGroupData.serialization.in
@@ -448,14 +454,21 @@ set(WebKit_SERIALIZATION_IN_FILES
     Shared/WebsiteDataStoreParameters.serialization.in
     Shared/WebsitePoliciesData.serialization.in
 
+    Shared/API/APIArray.serialization.in
     Shared/API/APIData.serialization.in
+    Shared/API/APIDictionary.serialization.in
     Shared/API/APIError.serialization.in
     Shared/API/APIFrameHandle.serialization.in
     Shared/API/APIGeometry.serialization.in
+    Shared/API/APINumber.serialization.in
+    Shared/API/APIObject.serialization.in
     Shared/API/APIPageHandle.serialization.in
+    Shared/API/APISerializedScriptValue.serialization.in
+    Shared/API/APIString.serialization.in
     Shared/API/APIURL.serialization.in
     Shared/API/APIURLRequest.serialization.in
     Shared/API/APIURLResponse.serialization.in
+    Shared/API/APIUserContentURLPattern.serialization.in
 
     Shared/Databases/IndexedDB/WebIDBResult.serialization.in
 
@@ -533,6 +546,7 @@ set(WebKit_SERIALIZATION_IN_FILES
     Shared/WebsiteData/WebsiteDataFetchOption.serialization.in
     Shared/WebsiteData/WebsiteDataType.serialization.in
 
+    Shared/XR/PlatformXR.serialization.in
     Shared/XR/XRSystem.serialization.in
 
     WebProcess/GPU/GPUProcessConnectionInfo.serialization.in

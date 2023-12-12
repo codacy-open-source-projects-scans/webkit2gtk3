@@ -125,6 +125,7 @@
 #include <WebCore/PlatformKeyboardEvent.h>
 #include <WebCore/PlatformMediaSessionManager.h>
 #include <WebCore/ProcessWarming.h>
+#include <WebCore/Quirks.h>
 #include <WebCore/RegistrableDomain.h>
 #include <WebCore/RemoteCommandListener.h>
 #include <WebCore/RenderTreeAsText.h>
@@ -610,6 +611,9 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
         prewarmGlobally();
 #endif
 
+    updateStorageAccessUserAgentStringQuirks(WTFMove(parameters.storageAccessUserAgentStringQuirksData));
+    updateDomainsWithStorageAccessQuirks(WTFMove(parameters.storageAccessPromptQuirksDomains));
+
     WEBPROCESS_RELEASE_LOG(Process, "initializeWebProcess: Presenting processPID=%d", WebCore::presentingApplicationPID());
 }
 
@@ -824,6 +828,11 @@ WebPage* WebProcess::focusedWebPage() const
             return page.get();
     }
     return 0;
+}
+
+void WebProcess::updateStorageAccessUserAgentStringQuirks(HashMap<RegistrableDomain, String>&& userAgentStringQuirk)
+{
+    Quirks::updateStorageAccessUserAgentStringQuirks(WTFMove(userAgentStringQuirk));
 }
     
 WebPage* WebProcess::webPage(PageIdentifier pageID) const
@@ -1185,7 +1194,7 @@ NetworkProcessConnection& WebProcess::ensureNetworkProcessConnection()
 
         m_networkProcessConnection = NetworkProcessConnection::create(IPC::Connection::Identifier { WTFMove(connectionInfo.connection) }, connectionInfo.cookieAcceptPolicy);
 #if HAVE(AUDIT_TOKEN)
-        m_networkProcessConnection->setNetworkProcessAuditToken(WTFMove(connectionInfo.auditToken));
+        m_networkProcessConnection->setNetworkProcessAuditToken(connectionInfo.auditToken ? std::optional(connectionInfo.auditToken->auditToken()) : std::nullopt);
 #endif
         setNetworkProcessConnectionID(m_networkProcessConnection->connection().uniqueID());
         m_networkProcessConnection->connection().send(Messages::NetworkConnectionToWebProcess::RegisterURLSchemesAsCORSEnabled(WebCore::LegacySchemeRegistry::allURLSchemesRegisteredAsCORSEnabled()), 0);
@@ -2113,6 +2122,18 @@ void WebProcess::sendResourceLoadStatisticsDataImmediately(CompletionHandler<voi
     ResourceLoadObserver::shared().updateCentralStatisticsStore(WTFMove(completionHandler));
 }
 
+bool WebProcess::haveStorageAccessQuirksForDomain(const WebCore::RegistrableDomain& domain)
+{
+    return m_domainsWithStorageAccessQuirks.contains(domain);
+}
+
+void WebProcess::updateDomainsWithStorageAccessQuirks(HashSet<WebCore::RegistrableDomain>&& domainsWithStorageAccessQuirks)
+{
+    m_domainsWithStorageAccessQuirks.clear();
+    for (auto&& domain : domainsWithStorageAccessQuirks)
+        m_domainsWithStorageAccessQuirks.add(domain);
+}
+
 #if ENABLE(GPU_PROCESS)
 void WebProcess::setUseGPUProcessForCanvasRendering(bool useGPUProcessForCanvasRendering)
 {
@@ -2206,13 +2227,15 @@ bool WebProcess::shouldUseRemoteRenderingFor(RenderingPurpose purpose)
         return m_useGPUProcessForCanvasRendering;
     case RenderingPurpose::DOM:
     case RenderingPurpose::LayerBacking:
+    case RenderingPurpose::BitmapOnlyLayerBacking:
     case RenderingPurpose::Snapshot:
     case RenderingPurpose::ShareableSnapshot:
         return m_useGPUProcessForDOMRendering;
     case RenderingPurpose::MediaPainting:
         return m_useGPUProcessForMedia;
-    default:
-        break;
+    case RenderingPurpose::ShareableLocalSnapshot:
+    case RenderingPurpose::Unspecified:
+        return false;
     }
     return false;
 }

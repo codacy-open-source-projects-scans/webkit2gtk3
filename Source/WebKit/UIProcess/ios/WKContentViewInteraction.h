@@ -43,6 +43,7 @@
 #import "TransactionID.h"
 #import "UIKitSPI.h"
 #import "WKMouseInteraction.h"
+#import "WKSEDefinitions.h"
 #import <WebKit/WKActionSheetAssistant.h>
 #import <WebKit/WKAirPlayRoutePicker.h>
 #import <WebKit/WKContactPicker.h>
@@ -141,7 +142,6 @@ class WebPageProxy;
 @class UIPointerRegion;
 @class UITargetedPreview;
 @class _UILookupGestureRecognizer;
-@class _UITextCursorDragAnimator;
 
 #if HAVE(PEPPER_UI_CORE)
 @class PUICQuickboardViewController;
@@ -505,6 +505,7 @@ struct ImageAnalysisContextMenuActionData {
     BOOL _isPresentingEditMenu;
     BOOL _isHandlingActiveKeyEvent;
     BOOL _isHandlingActivePressesEvent;
+    BOOL _isDeferringKeyEventsToInputMethod;
 
     BOOL _focusRequiresStrongPasswordAssistance;
     BOOL _waitingForEditDragSnapshot;
@@ -536,9 +537,9 @@ struct ImageAnalysisContextMenuActionData {
     RetainPtr<_UITextDragCaretView> _editDropCaretView;
     BlockPtr<void()> _actionToPerformAfterReceivingEditDragSnapshot;
 #endif
-#if HAVE(UI_TEXT_CURSOR_DRAG_ANIMATOR)
+#if HAVE(UI_TEXT_CURSOR_DROP_POSITION_ANIMATOR)
     RetainPtr<UIView<UITextCursorView>> _editDropTextCursorView;
-    RetainPtr<_UITextCursorDragAnimator> _editDropCaretAnimator;
+    RetainPtr<UITextCursorDropPositionAnimator> _editDropCaretAnimator;
 #endif
 
 #if HAVE(PEPPER_UI_CORE)
@@ -606,7 +607,7 @@ struct ImageAnalysisContextMenuActionData {
     , WKMouseInteractionDelegate
 #endif
 #if HAVE(UI_ASYNC_DRAG_INTERACTION)
-    , _UIAsyncDragInteractionDelegate
+    , WKSEDragInteractionDelegate
 #elif ENABLE(DRAG_SUPPORT)
     , UIDragInteractionDelegate
 #endif
@@ -703,6 +704,7 @@ FOR_EACH_PRIVATE_WKCONTENTVIEW_ACTION(DECLARE_WKCONTENTVIEW_ACTION_FOR_WEB_VIEW)
 - (void)_handleSmartMagnificationInformationForPotentialTap:(WebKit::TapIdentifier)requestID renderRect:(const WebCore::FloatRect&)renderRect fitEntireRect:(BOOL)fitEntireRect viewportMinimumScale:(double)viewportMinimumScale viewportMaximumScale:(double)viewportMaximumScale nodeIsRootLevel:(BOOL)nodeIsRootLevel;
 - (void)_elementDidFocus:(const WebKit::FocusedElementInformation&)information userIsInteracting:(BOOL)userIsInteracting blurPreviousNode:(BOOL)blurPreviousNode activityStateChanges:(OptionSet<WebCore::ActivityState>)activityStateChanges userObject:(NSObject <NSSecureCoding> *)userObject;
 - (void)_updateInputContextAfterBlurringAndRefocusingElement;
+- (void)_updateFocusedElementInformation:(const WebKit::FocusedElementInformation&)information;
 - (void)_elementDidBlur;
 - (void)_didUpdateInputMode:(WebCore::InputMode)mode;
 - (void)_didUpdateEditorState;
@@ -820,6 +822,7 @@ FOR_EACH_PRIVATE_WKCONTENTVIEW_ACTION(DECLARE_WKCONTENTVIEW_ACTION_FOR_WEB_VIEW)
 
 - (void)_didChangeLinkPreviewAvailability;
 - (void)setContinuousSpellCheckingEnabled:(BOOL)enabled;
+- (void)setGrammarCheckingEnabled:(BOOL)enabled;
 
 - (void)updateSoftwareKeyboardSuppressionStateFromWebView;
 

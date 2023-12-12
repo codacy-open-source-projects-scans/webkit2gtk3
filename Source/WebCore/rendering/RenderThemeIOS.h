@@ -84,6 +84,8 @@ private:
 
     void adjustButtonStyle(RenderStyle&, const Element*) const override;
 
+    void adjustInnerSpinButtonStyle(RenderStyle&, const Element*) const final { }
+
     void adjustTextFieldStyle(RenderStyle&, const Element*) const final;
     void paintTextFieldDecorations(const RenderBox&, const PaintInfo&, const FloatRect&) override;
     void adjustTextAreaStyle(RenderStyle&, const Element*) const final;
@@ -98,6 +100,12 @@ private:
     bool paintSliderTrack(const RenderObject&, const PaintInfo&, const IntRect&) override;
 
     void adjustSliderThumbSize(RenderStyle&, const Element*) const override;
+
+    void adjustSwitchStyle(RenderStyle&, const Element*) const override;
+    bool paintSwitchThumb(const RenderObject&, const PaintInfo&, const FloatRect&) override;
+    bool paintSwitchTrack(const RenderObject&, const PaintInfo&, const FloatRect&) override;
+    Seconds switchAnimationVisuallyOnDuration() const final { return 300_ms; }
+    Seconds switchAnimationPressedDuration() const final { return 300_ms; }
 
     bool paintProgressBar(const RenderObject&, const PaintInfo&, const IntRect&) override;
 
@@ -132,7 +140,6 @@ private:
     String colorInputStyleSheet() const final;
 
     void adjustColorWellStyle(RenderStyle&, const Element*) const final;
-    bool paintColorWell(const RenderObject&, const PaintInfo&, const IntRect&) final;
     void paintColorWellDecorations(const RenderObject&, const PaintInfo&, const FloatRect&) final;
 #endif
 

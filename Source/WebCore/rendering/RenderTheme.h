@@ -139,7 +139,7 @@ public:
 
     // Some controls may spill out of their containers (e.g., the check on an OS X checkbox).  When these controls repaint,
     // the theme needs to communicate this inflated rect to the engine so that it can invalidate the whole control.
-    virtual void adjustRepaintRect(const RenderObject&, FloatRect&);
+    virtual void adjustRepaintRect(const RenderObject&, FloatRect&) { }
 
     // This method is called whenever a relevant state changes on a particular themed object, e.g., the mouse becomes pressed
     // or a control becomes disabled.
@@ -263,7 +263,9 @@ public:
 #if USE(SYSTEM_PREVIEW)
     virtual void paintSystemPreviewBadge(Image&, const PaintInfo&, const FloatRect&);
 #endif
-    virtual Seconds switchCheckedChangeAnimationDuration() const { return 0_s; }
+    virtual Seconds switchAnimationVisuallyOnDuration() const { return 0_s; }
+    virtual Seconds switchAnimationPressedDuration() const { return 0_s; }
+    float switchPointerTrackingMagnitudeProportion() const { return 0.4f; }
 
 protected:
     virtual bool canPaint(const PaintInfo&, const Settings&, StyleAppearance) const { return true; }
@@ -292,7 +294,6 @@ protected:
     virtual bool supportsSelectionForegroundColors(OptionSet<StyleColorOptions>) const { return true; }
     virtual bool supportsListBoxSelectionForegroundColors(OptionSet<StyleColorOptions>) const { return true; }
 
-#if PLATFORM(IOS_FAMILY)
     // Methods for each appearance value.
     virtual void adjustCheckboxStyle(RenderStyle&, const Element*) const;
     virtual bool paintCheckbox(const RenderObject&, const PaintInfo&, const FloatRect&) { return true; }
@@ -300,18 +301,16 @@ protected:
     virtual void adjustRadioStyle(RenderStyle&, const Element*) const;
     virtual bool paintRadio(const RenderObject&, const PaintInfo&, const FloatRect&) { return true; }
 
-    virtual void adjustButtonStyle(RenderStyle&, const Element*) const { }
+    virtual void adjustButtonStyle(RenderStyle&, const Element*) const;
     virtual bool paintButton(const RenderObject&, const PaintInfo&, const IntRect&) { return true; }
 
 #if ENABLE(INPUT_TYPE_COLOR)
     virtual void adjustColorWellStyle(RenderStyle&, const Element*) const;
-    virtual bool paintColorWell(const RenderObject&, const PaintInfo&, const IntRect&);
-#endif
-#endif // PLATFORM(IOS_FAMILY)
-
-#if ENABLE(INPUT_TYPE_COLOR)
+    virtual bool paintColorWell(const RenderObject&, const PaintInfo&, const IntRect&) { return true; }
     virtual void paintColorWellDecorations(const RenderObject&, const PaintInfo&, const FloatRect&) { }
 #endif
+
+    virtual void adjustInnerSpinButtonStyle(RenderStyle&, const Element*) const;
 
     virtual void adjustTextFieldStyle(RenderStyle&, const Element*) const { }
     virtual bool paintTextField(const RenderObject&, const PaintInfo&, const FloatRect&) { return true; }
@@ -381,6 +380,13 @@ protected:
 
     virtual void adjustSearchFieldResultsButtonStyle(RenderStyle&, const Element*) const { }
     virtual bool paintSearchFieldResultsButton(const RenderBox&, const PaintInfo&, const IntRect&) { return true; }
+
+    virtual void adjustSwitchStyle(RenderStyle&, const Element*) const;
+    virtual bool paintSwitchThumb(const RenderObject&, const PaintInfo&, const FloatRect&) { return true; }
+    virtual bool paintSwitchTrack(const RenderObject&, const PaintInfo&, const FloatRect&) { return true; }
+
+private:
+    void adjustButtonOrCheckboxOrColorWellOrInnerSpinButtonOrRadioOrSwitchStyle(RenderStyle&, const Element*) const;
 
 public:
     void updateControlStatesForRenderer(const RenderBox&, ControlStates&) const;

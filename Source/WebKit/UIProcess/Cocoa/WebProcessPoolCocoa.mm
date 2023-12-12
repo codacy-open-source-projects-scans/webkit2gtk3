@@ -32,9 +32,11 @@
 #import "ArgumentCodersCocoa.h"
 #import "CookieStorageUtilsCF.h"
 #import "DefaultWebBrowserChecks.h"
+#import "ExtensionCapabilityGranter.h"
 #import "LegacyCustomProtocolManagerClient.h"
 #import "LockdownModeObserver.h"
 #import "Logging.h"
+#import "MediaCapability.h"
 #import "NetworkProcessCreationParameters.h"
 #import "NetworkProcessMessages.h"
 #import "NetworkProcessProxy.h"
@@ -48,6 +50,7 @@
 #import "WebMemoryPressureHandler.h"
 #import "WebPageGroup.h"
 #import "WebPreferencesKeys.h"
+#import "WebPrivacyHelpers.h"
 #import "WebProcessCache.h"
 #import "WebProcessCreationParameters.h"
 #import "WebProcessMessages.h"
@@ -419,7 +422,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     auto metalFEDirectory = WebsiteDataStore::cacheDirectoryInContainerOrHomeDirectory("/Library/Caches/com.apple.WebKit.WebContent/com.apple.metalfe"_s);
     if (auto metalFEDirectoryHandle = SandboxExtension::createHandleForReadWriteDirectory(metalFEDirectory))
         parameters.metalCacheDirectoryExtensionHandles.append(WTFMove(*metalFEDirectoryHandle));
-    auto gpuArchiverDirectory = WebsiteDataStore::cacheDirectoryInContainerOrHomeDirectory("Library/Caches/com.apple.WebKit.WebContent/com.apple.gpuarchiver"_s);
+    auto gpuArchiverDirectory = WebsiteDataStore::cacheDirectoryInContainerOrHomeDirectory("/Library/Caches/com.apple.WebKit.WebContent/com.apple.gpuarchiver"_s);
     if (auto gpuArchiverDirectoryHandle = SandboxExtension::createHandleForReadWriteDirectory(gpuArchiverDirectory))
         parameters.metalCacheDirectoryExtensionHandles.append(WTFMove(*gpuArchiverDirectoryHandle));
 #endif
@@ -482,6 +485,16 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 #if PLATFORM(IOS_FAMILY)
     parameters.applicationAccessibilityEnabled = _AXSApplicationAccessibilityEnabled();
 #endif
+
+#if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
+    // FIXME: Filter by process's site when site isolation is enabled
+    parameters.storageAccessUserAgentStringQuirksData = StorageAccessUserAgentStringQuirkController::shared().cachedQuirks();
+
+    for (auto&& entry : StorageAccessPromptQuirkController::shared().cachedQuirks()) {
+        for (auto&& domain : entry.domainPairings.keys())
+            parameters.storageAccessPromptQuirksDomains.add(domain);
+    }
+#endif
 }
 
 void WebProcessPool::platformInitializeNetworkProcess(NetworkProcessCreationParameters& parameters)
@@ -502,6 +515,10 @@ void WebProcessPool::platformInitializeNetworkProcess(NetworkProcessCreationPara
 
     parameters.enablePrivateClickMeasurement = ![defaults objectForKey:WebPreferencesKey::privateClickMeasurementEnabledKey()] || [defaults boolForKey:WebPreferencesKey::privateClickMeasurementEnabledKey()];
     parameters.ftpEnabled = [defaults objectForKey:WebPreferencesKey::ftpEnabledKey()] && [defaults boolForKey:WebPreferencesKey::ftpEnabledKey()];
+
+#if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
+    parameters.storageAccessPromptQuirksData = StorageAccessPromptQuirkController::shared().cachedQuirks();
+#endif
 }
 
 void WebProcessPool::platformInvalidateContext()
@@ -1196,5 +1213,38 @@ void WebProcessPool::registerHighDynamicRangeChangeCallback()
     } };
 }
 #endif // PLATFORM(IOS) || PLATFORM(VISION)
+
+#if ENABLE(EXTENSION_CAPABILITIES)
+ExtensionCapabilityGranter& WebProcessPool::extensionCapabilityGranter()
+{
+    if (!m_extensionCapabilityGranter)
+        m_extensionCapabilityGranter = ExtensionCapabilityGranter::create(*this).moveToUniquePtr();
+    return *m_extensionCapabilityGranter;
+}
+
+RefPtr<GPUProcessProxy> WebProcessPool::gpuProcessForCapabilityGranter(const ExtensionCapabilityGranter& extensionCapabilityGranter)
+{
+    ASSERT_UNUSED(extensionCapabilityGranter, m_extensionCapabilityGranter.get() == &extensionCapabilityGranter);
+    return gpuProcess();
+}
+
+RefPtr<WebProcessProxy> WebProcessPool::webProcessForCapabilityGranter(const ExtensionCapabilityGranter& extensionCapabilityGranter, const String& environmentIdentifier)
+{
+    ASSERT_UNUSED(extensionCapabilityGranter, m_extensionCapabilityGranter.get() == &extensionCapabilityGranter);
+
+    auto index = processes().findIf([&](auto& process) {
+        return process->pages().containsIf([&](auto& page) {
+            if (auto& mediaCapability = page->mediaCapability())
+                return mediaCapability->environmentIdentifier() == environmentIdentifier;
+            return false;
+        });
+    });
+
+    if (index == notFound)
+        return nullptr;
+
+    return processes()[index].ptr();
+}
+#endif
 
 } // namespace WebKit

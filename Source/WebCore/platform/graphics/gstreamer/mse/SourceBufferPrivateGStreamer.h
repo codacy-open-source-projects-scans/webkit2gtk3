@@ -63,16 +63,14 @@ public:
     Ref<MediaPromise> appendInternal(Ref<SharedBuffer>&&) final;
     void resetParserStateInternal() final;
     void removedFromMediaSource() final;
-    MediaPlayer::ReadyState readyState() const final;
-    void setReadyState(MediaPlayer::ReadyState) final;
 
     void flush(TrackID) final;
     void enqueueSample(Ref<MediaSample>&&, TrackID) final;
     void allSamplesInTrackEnqueued(TrackID) final;
     bool isReadyForMoreSamples(TrackID) final;
 
-    bool precheckInitialisationSegment(const InitializationSegment&) final;
-    void processInitialisationSegment(std::optional<InitializationSegment>&&) final;
+    bool precheckInitializationSegment(const InitializationSegment&) final;
+    void processInitializationSegment(std::optional<InitializationSegment>&&) final;
 
     void didReceiveAllPendingSamples();
     void appendParsingFailed();

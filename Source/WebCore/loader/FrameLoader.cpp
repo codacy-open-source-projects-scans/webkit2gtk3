@@ -105,6 +105,7 @@
 #include "PluginDocument.h"
 #include "PolicyChecker.h"
 #include "ProgressTracker.h"
+#include "Quirks.h"
 #include "ReportingScope.h"
 #include "ResourceLoadInfo.h"
 #include "ResourceLoadObserver.h"
@@ -314,7 +315,7 @@ public:
     }
 
 private:
-    CheckedRef<LocalFrame> m_frame;
+    WeakRef<LocalFrame> m_frame;
     bool m_inProgress { false };
 };
 
@@ -2446,11 +2447,13 @@ void FrameLoader::open(CachedFrameBase& cachedFrame)
     
     // When navigating to a CachedFrame its FrameView should never be null.  If it is we'll crash in creative ways downstream.
     ASSERT(view);
-    view->setWasScrolledByUser(false);
+    if (RefPtr localView = dynamicDowncast<LocalFrameView>(view.get()))
+        localView->setWasScrolledByUser(false);
 
     Ref frame = m_frame.get();
     std::optional<IntRect> previousViewFrameRect = frame->view() ?  frame->view()->frameRect() : std::optional<IntRect>(std::nullopt);
-    frame->setView(view.copyRef());
+    if (RefPtr localView = dynamicDowncast<LocalFrameView>(view.get()))
+        frame->setView(localView.releaseNonNull());
 
     // Use the previous ScrollView's frame rect.
     if (previousViewFrameRect)
@@ -2712,6 +2715,7 @@ void FrameLoader::checkLoadCompleteForThisFrame()
             if (m_frame->isMainFrame()) {
                 tracePoint(MainResourceLoadDidEnd, PAGE_ID);
                 page->didFinishLoad();
+                m_client->loadStorageAccessQuirksIfNeeded();
             }
         }
 
@@ -2937,7 +2941,12 @@ int FrameLoader::numPendingOrLoadingRequests(bool recurse) const
 String FrameLoader::userAgent(const URL& url) const
 {
     String userAgent;
-    if (RefPtr localFrame = dynamicDowncast<LocalFrame>(m_frame->mainFrame())) {
+    if (RefPtr document = m_frame->document()) {
+        if (auto userAgentQuirk = document->quirks().storageAccessUserAgentStringQuirkForDomain(url); !userAgentQuirk.isEmpty())
+            userAgent = userAgentQuirk;
+    }
+
+    if (RefPtr localFrame = dynamicDowncast<LocalFrame>(m_frame->mainFrame()); userAgent.isEmpty() && localFrame) {
         if (RefPtr documentLoader = localFrame->loader().activeDocumentLoader()) {
             if (m_frame->settings().needsSiteSpecificQuirks())
                 userAgent = documentLoader->customUserAgentAsSiteSpecificQuirks();
@@ -3154,8 +3163,10 @@ void FrameLoader::updateRequestAndAddExtraFields(ResourceRequest& request, IsMai
     if (shouldUpdate == ShouldUpdateAppInitiatedValue::Yes && localFrame->loader().documentLoader())
         request.setIsAppInitiated(localFrame->loader().documentLoader()->lastNavigationWasAppInitiated());
 
-    if (page && isMainResource)
-        request.setURL(page->chrome().client().applyLinkDecorationFiltering(request.url(), LinkDecorationFilteringTrigger::Navigation));
+    if (page && isMainResource) {
+        auto [filteredURL, didFilter] = page->chrome().client().applyLinkDecorationFilteringWithResult(request.url(), LinkDecorationFilteringTrigger::Navigation);
+        request.setURL(filteredURL, didFilter == DidFilterLinkDecoration::Yes);
+    }
 }
 
 void FrameLoader::scheduleRefreshIfNeeded(Document& document, const String& content, IsMetaRefresh isMetaRefresh)

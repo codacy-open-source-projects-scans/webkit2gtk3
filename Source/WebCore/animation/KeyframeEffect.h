@@ -174,7 +174,8 @@ public:
     bool preventsAcceleration() const;
     void effectStackNoLongerPreventsAcceleration();
     void effectStackNoLongerAllowsAcceleration();
-    void wasRemovedFromStack();
+    void wasAddedToEffectStack();
+    void wasRemovedFromEffectStack();
 
     void lastStyleChangeEventStyleDidChange(const RenderStyle* previousStyle, const RenderStyle* currentStyle);
     void acceleratedPropertiesOverriddenByCascadeDidChange();
@@ -261,7 +262,7 @@ private:
     void animationDidFinish() final;
     void setAnimation(WebAnimation*) final;
     Seconds timeToNextTick(const BasicEffectTiming&) const final;
-    bool ticksContinouslyWhileActive() const final;
+    bool ticksContinuouslyWhileActive() const final;
     std::optional<double> progressUntilNextStep(double) const final;
     bool preventsAnimationReadiness() const final;
 

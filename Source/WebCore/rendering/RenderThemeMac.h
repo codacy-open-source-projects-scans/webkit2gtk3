@@ -91,8 +91,6 @@ public:
 
     WEBCORE_EXPORT static RetainPtr<NSImage> iconForAttachment(const String& fileName, const String& attachmentType, const String& title);
 
-    Seconds switchCheckedChangeAnimationDuration() const final { return 300_ms; }
-
 private:
     RenderThemeMac();
 
@@ -100,6 +98,8 @@ private:
     bool canCreateControlPartForRenderer(const RenderObject&) const final;
     bool canCreateControlPartForBorderOnly(const RenderObject&) const final;
     bool canCreateControlPartForDecorations(const RenderObject&) const final;
+
+    int baselinePosition(const RenderBox&) const final;
 
     bool useFormSemanticContext() const final;
     bool supportsLargeFormControls() const final;
@@ -127,6 +127,8 @@ private:
     void adjustSearchFieldResultsDecorationPartStyle(RenderStyle&, const Element*) const final;
 
     void adjustSearchFieldResultsButtonStyle(RenderStyle&, const Element*) const final;
+
+    Seconds switchAnimationVisuallyOnDuration() const final { return 300_ms; }
 
 #if ENABLE(DATALIST_ELEMENT)
     void adjustListButtonStyle(RenderStyle&, const Element*) const final;
@@ -160,7 +162,6 @@ private:
 
     void updateCheckedState(NSCell*, const RenderObject&);
     void updateEnabledState(NSCell*, const RenderObject&);
-    void updateFocusedState(NSCell *, const RenderObject*);
     void updatePressedState(NSCell*, const RenderObject&);
 
     // Helpers for adjusting appearance and for painting

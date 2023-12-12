@@ -1159,11 +1159,9 @@ void KeyframeEffect::animationTimelineDidChange(AnimationTimeline* timeline)
 #endif
 
     if (timeline)
-        m_inTargetEffectStack = target->ensureKeyframeEffectStack().addEffect(*this);
-    else {
+        target->ensureKeyframeEffectStack().addEffect(*this);
+    else
         target->ensureKeyframeEffectStack().removeEffect(*this);
-        m_inTargetEffectStack = false;
-    }
 }
 
 void KeyframeEffect::animationTimingDidChange()
@@ -1191,11 +1189,9 @@ void KeyframeEffect::updateEffectStackMembership()
 
     bool isRelevant = animation() && animation()->isRelevant();
     if (isRelevant && !m_inTargetEffectStack)
-        m_inTargetEffectStack = target->ensureKeyframeEffectStack().addEffect(*this);
-    else if (!isRelevant && m_inTargetEffectStack) {
+        target->ensureKeyframeEffectStack().addEffect(*this);
+    else if (!isRelevant && m_inTargetEffectStack)
         target->ensureKeyframeEffectStack().removeEffect(*this);
-        m_inTargetEffectStack = false;
-    }
 }
 
 void KeyframeEffect::setAnimation(WebAnimation* animation)
@@ -1284,13 +1280,11 @@ void KeyframeEffect::didChangeTargetStyleable(const std::optional<const Styleabl
     StackMembershipMutationScope stackMembershipMutationScope(this);
 #endif
 
-    if (previousTargetStyleable) {
+    if (previousTargetStyleable)
         previousTargetStyleable->ensureKeyframeEffectStack().removeEffect(*this);
-        m_inTargetEffectStack = false;
-    }
 
     if (newTargetStyleable)
-        m_inTargetEffectStack = newTargetStyleable->ensureKeyframeEffectStack().addEffect(*this);
+        newTargetStyleable->ensureKeyframeEffectStack().addEffect(*this);
 }
 
 void KeyframeEffect::apply(RenderStyle& targetStyle, const Style::ResolutionContext& resolutionContext, std::optional<Seconds> startTime)
@@ -1861,8 +1855,19 @@ void KeyframeEffect::animationWasCanceled()
         addPendingAcceleratedAction(AcceleratedAction::Stop);
 }
 
-void KeyframeEffect::wasRemovedFromStack()
+void KeyframeEffect::wasAddedToEffectStack()
 {
+    m_inTargetEffectStack = true;
+    invalidate();
+}
+
+void KeyframeEffect::wasRemovedFromEffectStack()
+{
+    m_inTargetEffectStack = false;
+
+    if (!canBeAccelerated())
+        return;
+
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
     if (threadedAnimationResolutionEnabled())
         return;
@@ -2285,10 +2290,14 @@ std::optional<double> KeyframeEffect::progressUntilNextStep(double iterationProg
     return std::nullopt;
 }
 
-bool KeyframeEffect::ticksContinouslyWhileActive() const
+bool KeyframeEffect::ticksContinuouslyWhileActive() const
 {
     auto doesNotAffectStyles = m_blendingKeyframes.isEmpty() || m_blendingKeyframes.properties().isEmpty();
     if (doesNotAffectStyles)
+        return false;
+
+    auto targetHasDisplayContents = [&]() { return m_target && m_pseudoId == PseudoId::None && m_target->hasDisplayContents(); };
+    if (!renderer() && !targetHasDisplayContents())
         return false;
 
     if (isCompletelyAccelerated() && isRunningAccelerated())
@@ -2299,13 +2308,17 @@ bool KeyframeEffect::ticksContinouslyWhileActive() const
 
 Seconds KeyframeEffect::timeToNextTick(const BasicEffectTiming& timing) const
 {
-    if (timing.phase == AnimationEffectPhase::Active) {
-        // CSS Animations need to trigger "animationiteration" events even if there is no need to
-        // update styles while animating, so if we're dealing with one we must wait until the next iteration.
-        if (!ticksContinouslyWhileActive() && is<CSSAnimation>(animation())) {
-            if (auto iterationProgress = getComputedTiming().simpleIterationProgress)
-                return iterationDuration() * (1 - *iterationProgress);
-        }
+    // CSS Animations need to trigger "animationiteration" events even if there is no need to
+    // update styles while animating, so if we're dealing with one we must wait until the next iteration.
+    // We only do this in case any CSS Animation event was registered since, in the general case, there's
+    // a good chance that no such event listeners were registered and we can avoid some unnecessary
+    // animation resolution scheduling.
+    ASSERT(document());
+    if (timing.phase == AnimationEffectPhase::Active && is<CSSAnimation>(animation())
+        && document()->hasListenerType(Document::ListenerType::CSSAnimation)
+        && !ticksContinuouslyWhileActive()) {
+        if (auto iterationProgress = getComputedTiming().simpleIterationProgress)
+            return iterationDuration() * (1 - *iterationProgress);
     }
 
     return AnimationEffect::timeToNextTick(timing);

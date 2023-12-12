@@ -1134,7 +1134,7 @@ uint32_t Page::replaceSelectionWithText(const String& replacementText)
 void Page::unmarkAllTextMatches()
 {
     forEachDocument([] (Document& document) {
-        document.markers().removeMarkers(DocumentMarker::TextMatch);
+        document.markers().removeMarkers(DocumentMarker::Type::TextMatch);
     });
 }
 
@@ -3818,7 +3818,7 @@ void Page::setFullscreenControlsHidden(bool hidden)
 Document* Page::outermostFullscreenDocument() const
 {
 #if ENABLE(FULLSCREEN_API)
-    CheckedPtr localMainFrame = dynamicDowncast<LocalFrame>(m_mainFrame.get());
+    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_mainFrame.get());
     if (!localMainFrame)
         return nullptr;
 
