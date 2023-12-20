@@ -248,12 +248,12 @@ size_t RubyFormattingContext::applyRubyAlignOnBaseContent(size_t rubyBaseStart, 
     }
     auto* annotationBox = rubyBaseLayoutBox.associatedRubyAnnotationBox();
     if (!annotationBox)
-        return rubyBaseEnd;
+        return rubyBaseStart + 1;
 
     auto annotationBoxLogicalWidth = InlineLayoutUnit { inlineFormattingContext.geometryForBox(*annotationBox).marginBoxWidth() };
     auto baseContentLogicalWidth = runs[rubyBaseEnd].logicalLeft() - runs[rubyBaseStart].logicalRight();
     if (annotationBoxLogicalWidth <= baseContentLogicalWidth)
-        return rubyBaseEnd;
+        return rubyBaseStart + 1;
 
     // FIXME: ruby-align: space-around only
     auto spaceToDistribute = annotationBoxLogicalWidth - baseContentLogicalWidth;
@@ -283,6 +283,11 @@ HashMap<const Box*, InlineLayoutUnit> RubyFormattingContext::applyRubyAlign(Line
     return alignmentOffsetList;
 }
 
+InlineLayoutUnit RubyFormattingContext::applyRubyAlignOnAnnotationBox(Line& line, InlineLayoutUnit spaceToDistribute, const InlineFormattingContext&)
+{
+    return InlineContentAligner::applyRubyAlignSpaceAround(line.runs(), { 0, line.runs().size() }, spaceToDistribute);
+}
+
 void RubyFormattingContext::applyAlignmentOffsetList(InlineDisplay::Boxes& displayBoxes, const HashMap<const Box*, InlineLayoutUnit>& alignmentOffsetList, RubyBasesMayNeedResizing rubyBasesMayNeedResizing, InlineFormattingContext& inlineFormattingContext)
 {
     if (alignmentOffsetList.isEmpty())
@@ -290,11 +295,24 @@ void RubyFormattingContext::applyAlignmentOffsetList(InlineDisplay::Boxes& displ
     InlineContentAligner::applyRubyBaseAlignmentOffset(displayBoxes, alignmentOffsetList, rubyBasesMayNeedResizing == RubyBasesMayNeedResizing::No ? InlineContentAligner::AdjustContentOnlyInsideRubyBase::Yes : InlineContentAligner::AdjustContentOnlyInsideRubyBase::No, inlineFormattingContext);
 }
 
-InlineLayoutUnit RubyFormattingContext::baseEndAdditionalVisualWidth(const Box& rubyBaseLayoutBox, const InlineFormattingContext& inlineFormattingContext)
+void RubyFormattingContext::applyAnnotationAlignmentOffset(InlineDisplay::Boxes& displayBoxes, InlineLayoutUnit alignmentOffset, InlineFormattingContext& inlineFormattingContext)
+{
+    if (!alignmentOffset)
+        return;
+    InlineContentAligner::applyRubyAnnotationAlignmentOffset(displayBoxes, alignmentOffset, inlineFormattingContext);
+}
+
+InlineLayoutUnit RubyFormattingContext::baseEndAdditionalVisualWidth(const Box& rubyBaseLayoutBox, const InlineDisplay::Box&, InlineLayoutUnit baseContentWidth, const InlineFormattingContext& inlineFormattingContext)
 {
     if (!hasInterCharacterAnnotation(rubyBaseLayoutBox)) {
         // FIXME: We may want to include interlinear annotations here too so that applyAlignmentOffsetList would not need to initiate resizing (only moving base content).
-        return { };
+        if (baseContentWidth)
+            return { };
+        auto* annotationBox = rubyBaseLayoutBox.associatedRubyAnnotationBox();
+        if (!annotationBox)
+            return { };
+        auto& annotationBoxGeometry = inlineFormattingContext.geometryForBox(*annotationBox);
+        return annotationBoxGeometry.marginBoxWidth();
     }
     // Note that intercharacter annotation stays vertical even when the ruby itself is vertical (which makes it look like interlinear).
     return annotationBoxLogicalWidth(rubyBaseLayoutBox, inlineFormattingContext);

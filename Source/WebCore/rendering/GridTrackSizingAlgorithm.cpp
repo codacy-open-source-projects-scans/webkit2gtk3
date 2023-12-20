@@ -1148,7 +1148,10 @@ double IndefiniteSizeStrategy::findUsedFlexFraction(Vector<unsigned>& flexibleSi
     }
 
     const Grid& grid = m_algorithm.grid();
-    if (!grid.hasGridItems())
+    // If we are computing the flex fraction of the grid while under the "Sizing as if empty," phase,
+    // then we should use the flex fraction computed up to this point since we do not want to avoid
+    // taking into consideration the grid items.
+    if (!grid.hasGridItems() || (isComputingSizeOrInlineSizeContainment() && !m_algorithm.renderGrid()->explicitIntrinsicInnerLogicalSize(direction)))
         return flexFraction;
 
     SingleThreadWeakHashSet<RenderBox> itemsSet;
@@ -1724,8 +1727,6 @@ void GridTrackSizingAlgorithm::run()
 
     // Step 3.
     m_strategy->maximizeTracks(tracks(m_direction), m_direction == GridTrackSizingDirection::ForColumns ? m_freeSpaceColumns : m_freeSpaceRows);
-    if (m_strategy->isComputingSizeOrInlineSizeContainment() && !m_renderGrid->explicitIntrinsicInnerLogicalSize(m_direction))
-        return;
 
     // Step 4.
     stretchFlexibleTracks(initialFreeSpace);

@@ -55,14 +55,18 @@ namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(RenderSVGModelObject);
 
-RenderSVGModelObject::RenderSVGModelObject(Type type, Document& document, RenderStyle&& style)
-    : RenderLayerModelObject(type, document, WTFMove(style), 0)
+RenderSVGModelObject::RenderSVGModelObject(Type type, Document& document, RenderStyle&& style, OptionSet<SVGModelObjectFlag> typeFlags)
+    : RenderLayerModelObject(type, document, WTFMove(style), TypeFlag::IsSVGModelObject, typeFlags)
 {
+    ASSERT(!isLegacyRenderSVGModelObject());
+    ASSERT(isRenderSVGModelObject());
 }
 
-RenderSVGModelObject::RenderSVGModelObject(Type type, SVGElement& element, RenderStyle&& style)
-    : RenderLayerModelObject(type, element, WTFMove(style), 0)
+RenderSVGModelObject::RenderSVGModelObject(Type type, SVGElement& element, RenderStyle&& style, OptionSet<SVGModelObjectFlag> typeFlags)
+    : RenderLayerModelObject(type, element, WTFMove(style), TypeFlag::IsSVGModelObject, typeFlags)
 {
+    ASSERT(!isLegacyRenderSVGModelObject());
+    ASSERT(isRenderSVGModelObject());
 }
 
 void RenderSVGModelObject::updateFromStyle()

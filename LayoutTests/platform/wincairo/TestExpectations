@@ -693,6 +693,8 @@ http/tests/fileapi [ Skip ]
 http/tests/frame-throttling [ Skip ]
 http/tests/fullscreen [ Skip ]
 
+http/tests/gamepad [ Skip ]
+  
 http/tests/globalhistory/history-delegate-basic-refresh-redirect.html [ Failure ]
 http/tests/globalhistory/history-delegate-basic-visited-links.html [ Failure ]
 
@@ -2316,6 +2318,7 @@ compositing/layer-creation/overlap-transformed-preserved-3d.html [ Skip ]
 compositing/layer-creation/overlap-transforms.html [ Skip ]
 compositing/layer-creation/rotate3d-overlap.html [ Skip ]
 compositing/layer-creation/scale-rotation-animation-overlap.html [ Skip ]
+compositing/layer-creation/scale-rotation-transition-overlap.html [ Skip ]
 compositing/layer-creation/scroll-partial-update.html [ Skip ]
 compositing/layer-creation/spanOverlapsCanvas.html [ Skip ]
 compositing/layer-creation/stacking-context-overlap-nested.html [ Skip ]
@@ -2664,7 +2667,6 @@ fast/text/font-face-fall-off-end.html [ ImageOnlyFailure ]
 fast/text/ipa-tone-letters.html [ Failure ]
 fast/text/newline-width.html [ ImageOnlyFailure ]
 fast/text/otsvg-spacing.html [ ImageOnlyFailure ]
-fast/text/ruby-justify-tatechuyoko.html [ ImageOnlyFailure ]
 fast/text/simple-line-layout-fallback-space-glyph.html [ ImageOnlyFailure ]
 fast/text/simple-line-layout-line-box-contain-glyphs.html [ ImageOnlyFailure ]
 fast/text/tab-stops-with-offset-from-parent.html [ ImageOnlyFailure ]
@@ -2712,16 +2714,30 @@ imported/w3c/web-platform-tests/css/css-view-transitions/massive-element-right-o
 imported/w3c/web-platform-tests/css/css-view-transitions/massive-element-below-viewport-partially-onscreen-new.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-view-transitions/massive-element-below-viewport-partially-onscreen-old.html [ ImageOnlyFailure ]
 
-[ Debug ] imported/w3c/web-platform-tests/scroll-animations/css/animation-inactive-outside-range-test.html [ Skip ] # Crash
-[ Debug ] imported/w3c/web-platform-tests/scroll-animations/css/printing/scroll-timeline-default-print.tentative.html [ Skip ] # Crash
-[ Debug ] imported/w3c/web-platform-tests/scroll-animations/css/scroll-timeline-default-quirks-mode.html [ Skip ] # Crash
-[ Debug ] imported/w3c/web-platform-tests/scroll-animations/css/scroll-timeline-default-writing-mode-rl.html [ Skip ] # Crash
-[ Debug ] imported/w3c/web-platform-tests/scroll-animations/css/scroll-timeline-default.html [ Skip ] # Crash
-[ Debug ] imported/w3c/web-platform-tests/scroll-animations/css/scroll-timeline-frame-size-changed.html [ Skip ] # Crash
-[ Debug ] imported/w3c/web-platform-tests/scroll-animations/css/scroll-timeline-inline-orientation.html [ Skip ] # Crash
+webkit.org/b/266204 [ Debug ] imported/w3c/web-platform-tests/scroll-animations/css/animation-inactive-outside-range-test.html [ Skip ] # Crash
+
+[ Debug ] imported/w3c/web-platform-tests/scroll-animations/css/animation-fill-outside-range-test.html [ Skip ] # Crash
+
+webkit.org/b/266205 [ Debug ] imported/w3c/web-platform-tests/scroll-animations/css/printing/scroll-timeline-default-print.tentative.html [ Skip ] # Crash
+webkit.org/b/266205 [ Debug ] imported/w3c/web-platform-tests/scroll-animations/css/scroll-timeline-default-quirks-mode.html [ Skip ] # Crash
+webkit.org/b/266205 [ Debug ] imported/w3c/web-platform-tests/scroll-animations/css/scroll-timeline-default-writing-mode-rl.html [ Skip ] # Crash
+webkit.org/b/266205 [ Debug ] imported/w3c/web-platform-tests/scroll-animations/css/scroll-timeline-default.html [ Skip ] # Crash
+webkit.org/b/266205 [ Debug ] imported/w3c/web-platform-tests/scroll-animations/css/scroll-timeline-frame-size-changed.html [ Skip ] # Crash
+webkit.org/b/266205 [ Debug ] imported/w3c/web-platform-tests/scroll-animations/css/scroll-timeline-inline-orientation.html [ Skip ] # Crash
 
 imported/w3c/web-platform-tests/scroll-animations/view-timelines/animation-events.html [ Failure Pass ]
 
 webkit.org/b/48997 animations/animation-iteration-event-destroy-renderer.html [ Pass Timeout ]
 
 webkit.org/b/229584 animations/fill-mode-forwards.html [ Pass Failure Timeout ]
+
+imported/w3c/web-platform-tests/css/selectors/selectors-4/lang-020.html [ Pass ]
+
+# UIHelper.initiateUserScroll() doesn't resolve the promise
+http/tests/scroll-to-text-fragment/no-scroll-after-stylesheet-load.html [ Skip ] # Timeout
+
+webkit.org/b/229764 animations/background-position.html [ Pass ImageOnlyFailure ]
+
+fast/css/bidi-override-in-anonymous-block.html [ Failure ]
+
+webkit.org/b/227753 [ Debug ] fast/dom/Window/post-message-large-array-buffer-should-not-crash.html [ Pass Failure ]

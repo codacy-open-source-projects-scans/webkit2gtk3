@@ -348,7 +348,7 @@ AccessibilityRole AccessibilityNodeObject::determineAccessibilityRoleFromNode(Tr
     if (!node())
         return AccessibilityRole::Unknown;
 
-    if (node()->isLink())
+    if (RefPtr element = dynamicDowncast<Element>(*node()); element && element->isLink())
         return AccessibilityRole::WebCoreLink;
     if (node()->isTextNode())
         return AccessibilityRole::StaticText;
@@ -2814,7 +2814,7 @@ AccessibilityRole AccessibilityNodeObject::determineAriaRoleAttribute() const
     if ((role == AccessibilityRole::LandmarkRegion || role == AccessibilityRole::Form) && getAttribute(aria_labelAttr).isEmpty() && getAttribute(aria_labelledbyAttr).isEmpty() && getAttribute(aria_labeledbyAttr).isEmpty())
         role = AccessibilityRole::Unknown;
 
-    if (static_cast<int>(role))
+    if (enumToUnderlyingType(role))
         return role;
 
     return AccessibilityRole::Unknown;

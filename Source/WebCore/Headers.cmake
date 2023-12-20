@@ -573,6 +573,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     Modules/system-preview/ARKitBadgeSystemImage.h
 
+    Modules/web-locks/WebLock.h
     Modules/web-locks/WebLockIdentifier.h
     Modules/web-locks/WebLockManagerSnapshot.h
     Modules/web-locks/WebLockMode.h
@@ -915,6 +916,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     dom/Comment.h
     dom/ContainerNode.h
     dom/ContextDestructionObserver.h
+    dom/ContextDestructionObserverInlines.h
     dom/CrossOriginMode.h
     dom/CustomElementReactionQueue.h
     dom/DOMException.h
@@ -1638,7 +1640,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/ContentType.h
     platform/ContextMenu.h
     platform/ContextMenuItem.h
-    platform/ControlStates.h
     platform/Cookie.h
     platform/CountedUserActivity.h
     platform/Cursor.h

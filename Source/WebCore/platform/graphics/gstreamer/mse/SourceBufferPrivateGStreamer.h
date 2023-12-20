@@ -38,19 +38,21 @@
 
 #include "ContentType.h"
 #include "MediaPlayerPrivateGStreamerMSE.h"
+#include "MediaSourceTrackGStreamer.h"
 #include "SourceBufferPrivate.h"
 #include "SourceBufferPrivateClient.h"
 #include "TrackPrivateBaseGStreamer.h"
 #include "WebKitMediaSourceGStreamer.h"
 #include <optional>
-#include <ranges>
 #include <wtf/LoggerHelper.h>
+#include <wtf/StdUnorderedMap.h>
 
 namespace WebCore {
 
+using TrackID = uint64_t;
+
 class AppendPipeline;
 class MediaSourcePrivateGStreamer;
-class MediaSourceTrackGStreamer;
 
 class SourceBufferPrivateGStreamer final : public SourceBufferPrivate {
 public:
@@ -75,7 +77,7 @@ public:
     void didReceiveAllPendingSamples();
     void appendParsingFailed();
 
-    auto tracks() { return std::views::values(m_tracks); }
+    auto& tracks() const { return m_tracks; }
 
     ContentType type() const { return m_type; }
 

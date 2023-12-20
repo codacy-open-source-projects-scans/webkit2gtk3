@@ -21,7 +21,6 @@
 #pragma once
 
 #include "ColorHash.h"
-#include "ControlStates.h"
 #include "GraphicsContext.h"
 #include "PaintInfo.h"
 #include "PopupMenuStyle.h"
@@ -78,14 +77,11 @@ public:
 
     void updateControlPartForRenderer(ControlPart&, const RenderObject&) const;
 
-    OptionSet<ControlStyle::State> extractControlStyleStatesForRenderer(const RenderObject&) const;
-    ControlStyle extractControlStyleForRenderer(const RenderBox&) const;
-
     // These methods are called to paint the widget as a background of the RenderObject. A widget's foreground, e.g., the
     // text of a button, is always rendered by the engine itself. The boolean return value indicates
     // whether the CSS border/background should also be painted.
     bool paint(const RenderBox&, ControlPart&, const PaintInfo&, const LayoutRect&);
-    bool paint(const RenderBox&, ControlStates&, const PaintInfo&, const LayoutRect&);
+    bool paint(const RenderBox&, const PaintInfo&, const LayoutRect&);
     
     bool paintBorderOnly(const RenderBox&, const PaintInfo&, const LayoutRect&);
     void paintDecorations(const RenderBox&, const PaintInfo&, const LayoutRect&);
@@ -143,7 +139,7 @@ public:
 
     // This method is called whenever a relevant state changes on a particular themed object, e.g., the mouse becomes pressed
     // or a control becomes disabled.
-    virtual bool stateChanged(const RenderObject&, ControlStates::States) const;
+    bool stateChanged(const RenderObject&, ControlStyle::State) const;
 
     // This method is called whenever the theme changes on the system in order to flush cached resources from the
     // old theme.
@@ -211,7 +207,7 @@ public:
 
     virtual LengthBox popupInternalPaddingBox(const RenderStyle&) const { return { 0, 0, 0, 0 }; }
     virtual bool popupOptionSupportsTextIndent() const { return false; }
-    virtual PopupMenuStyle::PopupMenuSize popupMenuSize(const RenderStyle&, IntRect&) const { return PopupMenuStyle::PopupMenuSizeNormal; }
+    virtual PopupMenuStyle::Size popupMenuSize(const RenderStyle&, IntRect&) const { return PopupMenuStyle::Size::Normal; }
 
     virtual ScrollbarWidth scrollbarWidthStyleForPart(StyleAppearance) { return ScrollbarWidth::Auto; }
 
@@ -268,6 +264,9 @@ public:
     float switchPointerTrackingMagnitudeProportion() const { return 0.4f; }
 
 protected:
+    OptionSet<ControlStyle::State> extractControlStyleStatesForRenderer(const RenderObject&) const;
+    ControlStyle extractControlStyleForRenderer(const RenderObject&) const;
+
     virtual bool canPaint(const PaintInfo&, const Settings&, StyleAppearance) const { return true; }
 
     // The platform selection color.
@@ -386,11 +385,11 @@ protected:
     virtual bool paintSwitchTrack(const RenderObject&, const PaintInfo&, const FloatRect&) { return true; }
 
 private:
+    OptionSet<ControlStyle::State> extractControlStyleStatesForRendererInternal(const RenderObject&) const;
+
     void adjustButtonOrCheckboxOrColorWellOrInnerSpinButtonOrRadioOrSwitchStyle(RenderStyle&, const Element*) const;
 
 public:
-    void updateControlStatesForRenderer(const RenderBox&, ControlStates&) const;
-    OptionSet<ControlStates::States> extractControlStatesForRenderer(const RenderObject&) const;
     bool isWindowActive(const RenderObject&) const;
     bool isChecked(const RenderObject&) const;
     bool isIndeterminate(const RenderObject&) const;

@@ -172,6 +172,9 @@ webkit.org/b/235941 accessibility/gtk/caret-offsets.html [ Timeout ]
 
 # CSS
 webkit.org/b/216161 imported/w3c/web-platform-tests/css/css-pseudo/text-selection.html [ Failure Pass ]
+# Scrollbar displays are different.
+webkit.org/b/266349 imported/w3c/web-platform-tests/css/css-contain/contain-size-block-003.html [ ImageOnlyFailure ]
+webkit.org/b/266349 imported/w3c/web-platform-tests/css/css-contain/contain-size-inline-block-003.html [ ImageOnlyFailure ]
 
 # Download
 webkit.org/b/219530 fast/dom/HTMLAnchorElement/anchor-download-user-triggered-synthetic-click.html [ Failure ]
@@ -2645,6 +2648,8 @@ fast/canvas/font-family-system-ui-canvas.html [ Skip ]
 
 fast/line-grid [ Skip ]
 
+http/tests/scroll-to-text-fragment/no-scroll-after-stylesheet-load.html [ Skip ]
+
 # Flaky tests Nov2023
 webkit.org/b/264680 compositing/transitions/transform-on-large-layer.html [ ImageOnlyFailure Pass ]
 webkit.org/b/264680 fast/canvas/offscreen-backing-store-attached.html [ ImageOnlyFailure Pass ]
@@ -2669,3 +2674,8 @@ webkit.org/b/264680 media/video-seek-past-end-playing.html [ Pass Timeout ]
 webkit.org/b/264680 scrollbars/scrollbar-selectors.html [ Missing Pass Timeout ]
 webkit.org/b/264680 webanimations/accelerated-animation-opacity-animation-begin-time-after-scale-animation-ends.html [ ImageOnlyFailure Pass ]
 webkit.org/b/264680 webrtc/peer-connection-audio-mute2.html [ Failure Pass Timeout ]
+
+webkit.org/b/266204 [ Debug ] imported/w3c/web-platform-tests/scroll-animations/css/animation-inactive-outside-range-test.html [ Crash ]
+[ Debug ] imported/w3c/web-platform-tests/scroll-animations/css/animation-fill-outside-range-test.html [ Crash ]
+
+imported/w3c/web-platform-tests/css/css-masking/clip-path-svg-content/mask-and-nested-clip-path.svg [ Failure ]

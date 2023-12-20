@@ -26,7 +26,6 @@
 #include "ColorBlending.h"
 #include "ColorLuminance.h"
 #include "ColorWellPart.h"
-#include "ControlStates.h"
 #include "DeprecatedGlobalSettings.h"
 #include "Document.h"
 #include "FileList.h"
@@ -652,7 +651,7 @@ void RenderTheme::updateControlPartForRenderer(ControlPart& part, const RenderOb
 #endif
 }
 
-OptionSet<ControlStyle::State> RenderTheme::extractControlStyleStatesForRenderer(const RenderObject& renderer) const
+OptionSet<ControlStyle::State> RenderTheme::extractControlStyleStatesForRendererInternal(const RenderObject& renderer) const
 {
     OptionSet<ControlStyle::State> states;
     if (isHovered(renderer)) {
@@ -701,25 +700,39 @@ OptionSet<ControlStyle::State> RenderTheme::extractControlStyleStatesForRenderer
     return states;
 }
 
-ControlStyle RenderTheme::extractControlStyleForRenderer(const RenderBox& box) const
+static const RenderObject* effectiveRendererForAppearance(const RenderObject& renderObject)
 {
-    const RenderObject* renderer = &box;
-    auto type = box.style().effectiveAppearance();
+    const RenderObject* renderer = &renderObject;
+    auto type = renderObject.style().effectiveAppearance();
 
     if (type == StyleAppearance::SearchFieldCancelButton
         || type == StyleAppearance::SwitchTrack
         || type == StyleAppearance::SwitchThumb) {
-        auto* input = box.element()->shadowHost();
+        RefPtr<Node> input = renderObject.node()->shadowHost();
         if (!input)
-            input = box.element();
+            input = renderObject.node();
 
         renderer = dynamicDowncast<RenderBox>(input->renderer());
-        if (!renderer)
-            return { };
     }
+    return renderer;
+}
+
+OptionSet<ControlStyle::State> RenderTheme::extractControlStyleStatesForRenderer(const RenderObject& renderObject) const
+{
+    auto renderer = effectiveRendererForAppearance(renderObject);
+    if (!renderer)
+        return { };
+    return extractControlStyleStatesForRendererInternal(*renderer);
+}
+
+ControlStyle RenderTheme::extractControlStyleForRenderer(const RenderObject& renderObject) const
+{
+    auto renderer = effectiveRendererForAppearance(renderObject);
+    if (!renderer)
+        return { };
 
     return {
-        extractControlStyleStatesForRenderer(*renderer),
+        extractControlStyleStatesForRendererInternal(*renderer),
         renderer->style().computedFontSize(),
         renderer->style().effectiveZoom(),
         renderer->style().effectiveAccentColor(),
@@ -754,7 +767,7 @@ bool RenderTheme::paint(const RenderBox& box, ControlPart& part, const PaintInfo
     return false;
 }
 
-bool RenderTheme::paint(const RenderBox& box, ControlStates& controlStates, const PaintInfo& paintInfo, const LayoutRect& rect)
+bool RenderTheme::paint(const RenderBox& box, const PaintInfo& paintInfo, const LayoutRect& rect)
 {
     // If painting is disabled, but we aren't updating control tints, then just bail.
     // If we are updating control tints, just schedule a repaint if the theme supports tinting
@@ -776,11 +789,6 @@ bool RenderTheme::paint(const RenderBox& box, ControlStates& controlStates, cons
     float deviceScaleFactor = box.document().deviceScaleFactor();
     FloatRect devicePixelSnappedRect = snapRectToDevicePixels(rect, deviceScaleFactor);
 
-
-#if !USE(THEME_ADWAITA)
-    UNUSED_PARAM(controlStates);
-#endif
-
     switch (appearance) {
 #if USE(THEME_ADWAITA)
     case StyleAppearance::Checkbox:
@@ -792,10 +800,11 @@ bool RenderTheme::paint(const RenderBox& box, ControlStates& controlStates, cons
 #endif
     case StyleAppearance::DefaultButton:
     case StyleAppearance::Button:
-    case StyleAppearance::InnerSpinButton:
-        updateControlStatesForRenderer(box, controlStates);
-        Theme::singleton().paint(appearance, controlStates, paintInfo.context(), devicePixelSnappedRect, box.useDarkAppearance(), box.style().effectiveAccentColor());
+    case StyleAppearance::InnerSpinButton: {
+        auto states = extractControlStyleStatesForRenderer(box);
+        Theme::singleton().paint(appearance, states, paintInfo.context(), devicePixelSnappedRect, box.useDarkAppearance(), box.style().effectiveAccentColor());
         return false;
+    }
 #else // !USE(THEME_ADWAITA)
     case StyleAppearance::Checkbox:
         return paintCheckbox(box, paintInfo, devicePixelSnappedRect);
@@ -1133,57 +1142,16 @@ bool RenderTheme::supportsFocusRing(const RenderStyle& style) const
         && style.effectiveAppearance() != StyleAppearance::Listbox;
 }
 
-bool RenderTheme::stateChanged(const RenderObject& o, ControlStates::States state) const
+bool RenderTheme::stateChanged(const RenderObject& renderer, ControlStyle::State state) const
 {
-    // Default implementation assumes the controls don't respond to changes in :hover state
-    if (state == ControlStates::States::Hovered && !supportsHover(o.style()))
+    if (state == ControlStyle::State::Hovered && !supportsHover(renderer.style()))
         return false;
 
-    // Assume pressed state is only responded to if the control is enabled.
-    if (state == ControlStates::States::Pressed && !isEnabled(o))
+    if (state == ControlStyle::State::Pressed && !isEnabled(renderer))
         return false;
 
-    // Repaint the control.
-    o.repaint();
+    renderer.repaint();
     return true;
-}
-
-void RenderTheme::updateControlStatesForRenderer(const RenderBox& box, ControlStates& controlStates) const
-{
-    ControlStates newStates = extractControlStatesForRenderer(box);
-    controlStates.setStates(newStates.states());
-    if (isFocused(box))
-        controlStates.setTimeSinceControlWasFocused(box.page().focusController().timeSinceFocusWasSet());
-}
-
-OptionSet<ControlStates::States> RenderTheme::extractControlStatesForRenderer(const RenderObject& o) const
-{
-    OptionSet<ControlStates::States> states;
-    if (isHovered(o)) {
-        states.add(ControlStates::States::Hovered);
-        if (isSpinUpButtonPartHovered(o))
-            states.add(ControlStates::States::SpinUp);
-    }
-    if (isPressed(o)) {
-        states.add(ControlStates::States::Pressed);
-        if (isSpinUpButtonPartPressed(o))
-            states.add(ControlStates::States::SpinUp);
-    }
-    if (isFocused(o) && o.style().outlineStyleIsAuto() == OutlineIsAuto::On)
-        states.add(ControlStates::States::Focused);
-    if (isEnabled(o))
-        states.add(ControlStates::States::Enabled);
-    if (isChecked(o))
-        states.add(ControlStates::States::Checked);
-    if (isDefault(o))
-        states.add(ControlStates::States::Default);
-    if (isWindowActive(o))
-        states.add(ControlStates::States::WindowActive);
-    if (isIndeterminate(o))
-        states.add(ControlStates::States::Indeterminate);
-    if (isPresenting(o))
-        states.add(ControlStates::States::Presenting);
-    return states;
 }
 
 bool RenderTheme::isWindowActive(const RenderObject& renderer) const

@@ -868,6 +868,10 @@ AccessibilityObject* AXObjectCache::getOrCreate(Node* node, IsPartOfRelation isP
             return nullptr;
     }
 
+    // The object may have already been created during relations update
+    if (auto* object = get(node))
+        return object;
+
     // Fallback content is only focusable as long as the canvas is displayed and visible.
     // Update the style before Element::isFocusable() gets called.
     if (inCanvasSubtree)
@@ -4614,7 +4618,18 @@ void AXObjectCache::addRelation(Element* origin, Element* target, AXRelationType
         ASSERT_NOT_REACHED();
         return;
     }
-    addRelation(getOrCreate(origin, IsPartOfRelation::Yes), getOrCreate(target, IsPartOfRelation::Yes), relationType);
+    RefPtr relationOrigin = getOrCreate(origin, IsPartOfRelation::Yes);
+    RefPtr relationTarget = getOrCreate(target, IsPartOfRelation::Yes);
+    addRelation(relationOrigin.get(), relationTarget.get(), relationType);
+
+#if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
+    if (auto tree = AXIsolatedTree::treeForPageID(m_pageID)) {
+        if (relationOrigin && relationOrigin->accessibilityIsIgnored())
+            tree->addUnconnectedNode(relationOrigin.releaseNonNull());
+        if (relationTarget && relationTarget->accessibilityIsIgnored())
+            tree->addUnconnectedNode(relationTarget.releaseNonNull());
+    }
+#endif
 }
 
 static bool canHaveRelations(Element& element)
@@ -4651,10 +4666,10 @@ void AXObjectCache::addRelation(AccessibilityObject* origin, AccessibilityObject
     auto relationsIterator = m_relations.find(origin->objectID());
     if (relationsIterator == m_relations.end()) {
         // No relations for this object, add the first one.
-        m_relations.add(origin->objectID(), AXRelations { { static_cast<uint8_t>(relationType), { target->objectID() } } });
-    } else if (auto targetsIterator = relationsIterator->value.find(static_cast<uint8_t>(relationType)); targetsIterator == relationsIterator->value.end()) {
+        m_relations.add(origin->objectID(), AXRelations { { enumToUnderlyingType(relationType), { target->objectID() } } });
+    } else if (auto targetsIterator = relationsIterator->value.find(enumToUnderlyingType(relationType)); targetsIterator == relationsIterator->value.end()) {
         // No relation of this type for this object, add the first one.
-        relationsIterator->value.add(static_cast<uint8_t>(relationType), ListHashSet { target->objectID() });
+        relationsIterator->value.add(enumToUnderlyingType(relationType), ListHashSet { target->objectID() });
     } else {
         // There are already relations of this type for the object. Add the new relation.
         if (relationType == AXRelationType::ActiveDescendant
@@ -4700,7 +4715,7 @@ void AXObjectCache::removeRelations(Element& origin, AXRelationType relationType
     if (relationsIterator == m_relations.end())
         return;
 
-    auto targetIDs = relationsIterator->value.take(static_cast<uint8_t>(relationType));
+    auto targetIDs = relationsIterator->value.take(enumToUnderlyingType(relationType));
     auto symmetric = symmetricRelation(relationType);
     if (symmetric == AXRelationType::None)
         return;
@@ -4718,7 +4733,7 @@ void AXObjectCache::removeRelationByID(AXID originID, AXID targetID, AXRelationT
     if (relationsIterator == m_relations.end())
         return;
 
-    auto targetsIterator = relationsIterator->value.find(static_cast<uint8_t>(relationType));
+    auto targetsIterator = relationsIterator->value.find(enumToUnderlyingType(relationType));
     if (targetsIterator == relationsIterator->value.end())
         return;
     targetsIterator->value.remove(targetID);
@@ -4821,6 +4836,7 @@ void AXObjectCache::relationsNeedUpdate(bool needUpdate)
     if (m_relationsNeedUpdate) {
         if (auto tree = AXIsolatedTree::treeForPageID(m_pageID))
             tree->relationsNeedUpdate(true);
+        startUpdateTreeSnapshotTimer();
     }
 #endif
 }
@@ -4855,7 +4871,7 @@ std::optional<ListHashSet<AXID>> AXObjectCache::relatedObjectIDsFor(const AXCore
     if (relationsIterator == m_relations.end())
         return std::nullopt;
 
-    auto targetsIterator = relationsIterator->value.find(static_cast<uint8_t>(relationType));
+    auto targetsIterator = relationsIterator->value.find(enumToUnderlyingType(relationType));
     if (targetsIterator == relationsIterator->value.end())
         return std::nullopt;
     return targetsIterator->value;

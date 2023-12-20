@@ -27,7 +27,7 @@
 #pragma once
 
 #include <WebCore/ChromeClient.h>
-#include <wtf/CheckedRef.h>
+#include <wtf/WeakRef.h>
 
 namespace WebCore {
 class HTMLImageElement;
@@ -107,7 +107,10 @@ private:
     bool runBeforeUnloadConfirmPanel(const String& message, WebCore::LocalFrame&) final;
     
     void closeWindow() final;
-    
+
+    void rootFrameAdded(const WebCore::LocalFrame&) final;
+    void rootFrameRemoved(const WebCore::LocalFrame&) final;
+
     void runJavaScriptAlert(WebCore::LocalFrame&, const String&) final;
     bool runJavaScriptConfirm(WebCore::LocalFrame&, const String&) final;
     bool runJavaScriptPrompt(WebCore::LocalFrame&, const String& message, const String& defaultValue, String& result) final;
@@ -499,7 +502,7 @@ private:
     mutable bool m_cachedMainFrameHasHorizontalScrollbar { false };
     mutable bool m_cachedMainFrameHasVerticalScrollbar { false };
 
-    CheckedRef<WebPage> m_page;
+    WeakRef<WebPage> m_page;
 };
 
 class AXRelayProcessSuspendedNotification {
@@ -511,7 +514,7 @@ public:
 
     void sendProcessSuspendMessage(bool suspended);
 private:
-    CheckedRef<WebPage> m_page;
+    WeakRef<WebPage> m_page;
     AutomaticallySend m_automaticallySend;
 };
 

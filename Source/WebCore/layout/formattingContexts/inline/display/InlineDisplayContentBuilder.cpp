@@ -582,9 +582,9 @@ struct AncestorStack {
         return m_stack.last();
     }
 
-    void push(size_t displayBoxNodeIndexForelementBox, const ElementBox& elementBox)
+    void push(size_t displayBoxNodeIndexForContainer, const ElementBox& elementBox)
     {
-        m_stack.append(displayBoxNodeIndexForelementBox);
+        m_stack.append(displayBoxNodeIndexForContainer);
         ASSERT(!m_set.contains(&elementBox));
         m_set.add(&elementBox);
     }
@@ -594,7 +594,7 @@ private:
     ListHashSet<const ElementBox*> m_set;
 };
 
-static inline size_t createdDisplayBoxNodeForElementBoxAndPushToAncestorStack(const ElementBox& elementBox, size_t displayBoxIndex, size_t parentDisplayBoxNodeIndex, DisplayBoxTree& displayBoxTree, AncestorStack& ancestorStack)
+static inline size_t createDisplayBoxNodeForContainerAndPushToAncestorStack(const ElementBox& elementBox, size_t displayBoxIndex, size_t parentDisplayBoxNodeIndex, DisplayBoxTree& displayBoxTree, AncestorStack& ancestorStack)
 {
     auto displayBoxNodeIndex = displayBoxTree.append(parentDisplayBoxNodeIndex, displayBoxIndex);
     ancestorStack.push(displayBoxNodeIndex, elementBox);
@@ -608,7 +608,7 @@ size_t InlineDisplayContentBuilder::ensureDisplayBoxForContainer(const ElementBo
         return *lowestCommonAncestorIndex;
     auto enclosingDisplayBoxNodeIndexForContainer = ensureDisplayBoxForContainer(elementBox.parent(), displayBoxTree, ancestorStack, boxes);
     appendInlineDisplayBoxAtBidiBoundary(elementBox, boxes);
-    return createdDisplayBoxNodeForElementBoxAndPushToAncestorStack(elementBox, boxes.size() - 1, enclosingDisplayBoxNodeIndexForContainer, displayBoxTree, ancestorStack);
+    return createDisplayBoxNodeForContainerAndPushToAncestorStack(elementBox, boxes.size() - 1, enclosingDisplayBoxNodeIndexForContainer, displayBoxTree, ancestorStack);
 }
 
 struct IsFirstLastIndex {
@@ -676,7 +676,7 @@ void InlineDisplayContentBuilder::adjustVisualGeometryForDisplayBox(size_t displ
             return setRightForWritingMode(displayBox, contentRightInInlineDirectionVisualOrder, writingMode);
 
         contentRightInInlineDirectionVisualOrder += borderRightInInlineDirection(boxGeometry, isLeftToRightDirection) + paddingRightInInlineDirection(boxGeometry, isLeftToRightDirection);
-        contentRightInInlineDirectionVisualOrder += layoutBox.isRubyBase() ? RubyFormattingContext::baseEndAdditionalVisualWidth(layoutBox, formattingContext()) : 0.f;
+        contentRightInInlineDirectionVisualOrder += layoutBox.isRubyBase() ? RubyFormattingContext::baseEndAdditionalVisualWidth(layoutBox, displayBox, contentRightInInlineDirectionVisualOrder - displayBox.left(), formattingContext()) : 0.f;
         setRightForWritingMode(displayBox, contentRightInInlineDirectionVisualOrder, writingMode);
         contentRightInInlineDirectionVisualOrder += marginRightInInlineDirection(boxGeometry, isLeftToRightDirection);
     };
@@ -791,9 +791,31 @@ void InlineDisplayContentBuilder::processBidiContent(const LineLayoutResult& lin
                 if (!lineBox.hasContent()) {
                     // FIXME: It's expected to not have any inline boxes on empty lines. They make the line taller. We should reconsider this.
                     setInlineBoxGeometry(layoutBox, { { }, { } }, true);
-                } else if (!lineBox.inlineLevelBoxFor(lineRun).hasContent()) {
+                    continue;
+                }
+                auto isEmptyInlineBox = [&] {
+                    // FIXME: Maybe we should not tag ruby bases with annotation boxes only contentful?
+                    if (!lineBox.inlineLevelBoxFor(lineRun).hasContent())
+                        return true;
+                    if (!layoutBox.isRubyBase() || !is<ElementBox>(layoutBox))
+                        return false;
+                    auto& rubyBaseLayoutBox = downcast<ElementBox>(layoutBox);
+                    // Let's create empty inline boxes for ruby bases with annotation only.
+                    if (!rubyBaseLayoutBox.firstChild() || (rubyBaseLayoutBox.firstChild() == rubyBaseLayoutBox.lastChild() && rubyBaseLayoutBox.firstChild()->isRubyAnnotationBox()))
+                        return true;
+                    // Let's check if we actually don't have a contentful run inside this ruby base.
+                    for (size_t nextLogicalRunIndex = logicalIndex + 1; nextLogicalRunIndex < inlineContent.size(); ++nextLogicalRunIndex) {
+                        auto& lineRun = inlineContent[nextLogicalRunIndex];
+                        if (lineRun.isInlineBoxEnd() && &lineRun.layoutBox() == &rubyBaseLayoutBox)
+                            break;
+                        if (lineRun.isContentful())
+                            return false;
+                    }
+                    return true;
+                };
+                if (isEmptyInlineBox()) {
                     appendInlineDisplayBoxAtBidiBoundary(layoutBox, boxes);
-                    createdDisplayBoxNodeForElementBoxAndPushToAncestorStack(downcast<ElementBox>(layoutBox), boxes.size() - 1, parentDisplayBoxNodeIndex, displayBoxTree, ancestorStack);
+                    createDisplayBoxNodeForContainerAndPushToAncestorStack(downcast<ElementBox>(layoutBox), boxes.size() - 1, parentDisplayBoxNodeIndex, displayBoxTree, ancestorStack);
                 }
                 continue;
             }
@@ -1099,7 +1121,14 @@ size_t InlineDisplayContentBuilder::processRubyBase(size_t rubyBaseStart, Inline
 
     if (annotationBox) {
         auto placeAndSizeAnnotationBox = [&] {
-            auto visualBorderBoxTopLeft = RubyFormattingContext::placeAnnotationBox(rubyBaseLayoutBox, baseMarginBoxRect, formattingContext);
+            auto adjustedBaseMarginBoxRect = baseMarginBoxRect;
+            if (RubyFormattingContext::hasInterCharacterAnnotation(rubyBaseLayoutBox)) {
+                auto letterSpacing = LayoutUnit { rubyBaseLayoutBox.style().letterSpacing() };
+                // FIXME: Consult the LineBox to see if letter spacing indeed applies.
+                adjustedBaseMarginBoxRect.setWidth(std::max(0_lu, adjustedBaseMarginBoxRect.width() - letterSpacing));
+            }
+
+            auto visualBorderBoxTopLeft = RubyFormattingContext::placeAnnotationBox(rubyBaseLayoutBox, adjustedBaseMarginBoxRect, formattingContext);
             auto visualContentBoxSize = RubyFormattingContext::sizeAnnotationBox(rubyBaseLayoutBox, formattingContext);
             auto& annotationBoxGeometry = formattingContext.geometryForBox(*annotationBox);
             annotationBoxGeometry.setTopLeft(toLayoutPoint(visualBorderBoxTopLeft));
@@ -1112,11 +1141,14 @@ size_t InlineDisplayContentBuilder::processRubyBase(size_t rubyBaseStart, Inline
 
 void InlineDisplayContentBuilder::processRubyContent(InlineDisplay::Boxes& displayBoxes, const LineLayoutResult& lineLayoutResult)
 {
+    if (root().isRubyAnnotationBox())
+        RubyFormattingContext::applyAnnotationAlignmentOffset(displayBoxes, lineLayoutResult.ruby.annotationAlignmentOffset, formattingContext());
+
     if (!m_hasSeenRubyBase)
         return;
 
     auto rubyBasesMayHaveCollapsed = !lineLayoutResult.directionality.visualOrderList.isEmpty();
-    RubyFormattingContext::applyAlignmentOffsetList(displayBoxes, lineLayoutResult.rubyAlignemntOffsetList, rubyBasesMayHaveCollapsed ? RubyFormattingContext::RubyBasesMayNeedResizing::Yes : RubyFormattingContext::RubyBasesMayNeedResizing::No, formattingContext());
+    RubyFormattingContext::applyAlignmentOffsetList(displayBoxes, lineLayoutResult.ruby.baseAlignmentOffsetList, rubyBasesMayHaveCollapsed ? RubyFormattingContext::RubyBasesMayNeedResizing::Yes : RubyFormattingContext::RubyBasesMayNeedResizing::No, formattingContext());
 
     Vector<WTF::Range<size_t>> interlinearRubyColumnRangeList;
     Vector<size_t> rubyBaseStartIndexListWithAnnotation;
@@ -1171,8 +1203,26 @@ void InlineDisplayContentBuilder::applyRubyOverhang(InlineDisplay::Boxes& displa
         };
         if (beforeOverhang)
             moveBoxRangeToVisualLeft(rubyBaseStart, displayBoxes.size() - 1, beforeOverhang);
-        if (afterOverhang)
+        if (afterOverhang) {
+            auto hasJustifiedAdjacentAfterContent = [&] {
+                if (startEndPair.end() == displayBoxes.size())
+                    return false;
+                auto& afterRubyBaseDisplayBox = displayBoxes[startEndPair.end()];
+                if (afterRubyBaseDisplayBox.layoutBox().isRubyBase()) {
+                    // Adjacent content is also a ruby base.
+                    return false;
+                }
+                return !!afterRubyBaseDisplayBox.expansion().horizontalExpansion;
+            };
+            if (hasJustifiedAdjacentAfterContent()) {
+                auto& afterRubyBaseDisplayBox = displayBoxes[startEndPair.end()];
+                auto expansion = afterRubyBaseDisplayBox.expansion();
+                auto inflateValue = afterOverhang + beforeOverhang;
+                afterRubyBaseDisplayBox.setExpansion({ expansion.behavior, expansion.horizontalExpansion + inflateValue });
+                afterRubyBaseDisplayBox.expandHorizontally(inflateValue);
+            }
             moveBoxRangeToVisualLeft(startEndPair.end(), displayBoxes.size() - 1, afterOverhang);
+        }
     }
 }
 

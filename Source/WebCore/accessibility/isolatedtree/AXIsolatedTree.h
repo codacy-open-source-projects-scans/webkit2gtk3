@@ -355,6 +355,7 @@ public:
     // Relationships between objects.
     std::optional<ListHashSet<AXID>> relatedObjectIDsFor(const AXIsolatedObject&, AXRelationType);
     void relationsNeedUpdate(bool needUpdate) { m_relationsNeedUpdate = needUpdate; }
+    void updateRelations(const HashMap<AXID, AXRelations>&);
 
     // Called on AX thread from WebAccessibilityObjectWrapper methods.
     // During layout tests, it is called on the main thread.
@@ -431,6 +432,10 @@ private:
     HashMap<AXID, ParentChildrenIDs> m_nodeMap;
 
     // Only accessed on the main thread.
+    // Stores all nodes that are added via addUnconnectedNode, which do not get stored in m_nodeMap.
+    HashSet<AXID> m_unconnectedNodes;
+
+    // Only accessed on the main thread.
     // The key is the ID of the object that will be resolved into an m_pendingAppends NodeChange.
     // The value is whether the wrapper should be attached on the main thread or the AX thread.
     HashMap<AXID, AttachWrapper> m_unresolvedPendingAppends;
@@ -463,11 +468,9 @@ private:
     std::atomic<double> m_loadingProgress { 0 };
 
     // Relationships between objects.
-    // Accessed only on the AX thread.
-    HashMap<AXID, AXRelations> m_relations;
-    // Set to true by the AXObjectCache on the main thread.
-    // Set to false on the AX thread by relatedObjectIDsFor.
-    std::atomic<bool> m_relationsNeedUpdate { true };
+    HashMap<AXID, AXRelations> m_relations WTF_GUARDED_BY_LOCK(m_changeLogLock);
+    // Set to true by the AXObjectCache and false by AXIsolatedTree.
+    bool m_relationsNeedUpdate { true };
 
     Lock m_changeLogLock;
     AXTextMarkerRange m_selectedTextMarkerRange WTF_GUARDED_BY_LOCK(m_changeLogLock);

@@ -29,7 +29,6 @@
 #include "BackgroundPainter.h"
 #include "BorderPainter.h"
 #include "CSSFontSelector.h"
-#include "ControlStates.h"
 #include "Document.h"
 #include "Editing.h"
 #include "EventHandler.h"
@@ -131,38 +130,17 @@ static OverrideOptionalSizeMap* gOverridingContainingBlockContentLogicalWidthMap
 static const int autoscrollBeltSize = 20;
 static const unsigned backgroundObscurationTestMaxDepth = 4;
 
-using ControlStatesRendererMap = HashMap<const RenderObject*, std::unique_ptr<ControlStates>>;
-static ControlStatesRendererMap& controlStatesRendererMap()
-{
-    static NeverDestroyed<ControlStatesRendererMap> map;
-    return map;
-}
-
-static ControlStates* controlStatesForRenderer(const RenderBox& renderer)
-{
-    return controlStatesRendererMap().ensure(&renderer, [] {
-        return makeUnique<ControlStates>();
-    }).iterator->value.get();
-}
-
-static void removeControlStatesForRenderer(const RenderBox& renderer)
-{
-    controlStatesRendererMap().remove(&renderer);
-}
-
 bool RenderBox::s_hadNonVisibleOverflow = false;
 
-RenderBox::RenderBox(Type type, Element& element, RenderStyle&& style, BaseTypeFlags baseTypeFlags)
-    : RenderBoxModelObject(type, element, WTFMove(style), baseTypeFlags)
+RenderBox::RenderBox(Type type, Element& element, RenderStyle&& style, OptionSet<TypeFlag> flags, TypeSpecificFlags typeSpecificFlags)
+    : RenderBoxModelObject(type, element, WTFMove(style), flags | TypeFlag::IsBox, typeSpecificFlags)
 {
-    setIsRenderBox();
     ASSERT(isRenderBox());
 }
 
-RenderBox::RenderBox(Type type, Document& document, RenderStyle&& style, BaseTypeFlags baseTypeFlags)
-    : RenderBoxModelObject(type, document, WTFMove(style), baseTypeFlags)
+RenderBox::RenderBox(Type type, Document& document, RenderStyle&& style, OptionSet<TypeFlag> flags, TypeSpecificFlags typeSpecificFlags)
+    : RenderBoxModelObject(type, document, WTFMove(style), flags | TypeFlag::IsBox, typeSpecificFlags)
 {
-    setIsRenderBox();
     ASSERT(isRenderBox());
 }
 
@@ -182,9 +160,6 @@ void RenderBox::willBeDestroyed()
     RenderBlock::removePercentHeightDescendantIfNeeded(*this);
 
     ShapeOutsideInfo::removeInfo(*this);
-
-    view().unscheduleLazyRepaint(*this);
-    removeControlStatesForRenderer(*this);
 
     if (hasInitializedStyle()) {
         if (style().hasSnapPosition())
@@ -1730,12 +1705,8 @@ void RenderBox::paintBoxDecorations(PaintInfo& paintInfo, const LayoutPoint& pai
     if (style().hasEffectiveAppearance()) {
         if (auto* control = ensureControlPartForRenderer())
             borderOrBackgroundPaintingIsNeeded = theme().paint(*this, *control, paintInfo, paintRect);
-        else {
-            ControlStates* controlStates = controlStatesForRenderer(*this);
-            borderOrBackgroundPaintingIsNeeded = theme().paint(*this, *controlStates, paintInfo, paintRect);
-            if (controlStates->needsRepaint())
-                view().scheduleLazyRepaint(*this);
-        }
+        else
+            borderOrBackgroundPaintingIsNeeded = theme().paint(*this, paintInfo, paintRect);
     }
 
     BorderPainter borderPainter { *this, paintInfo };

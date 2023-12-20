@@ -80,8 +80,7 @@ StyleSheetContents::StyleSheetContents(StyleRuleImport* ownerRule, const String&
 }
 
 StyleSheetContents::StyleSheetContents(const StyleSheetContents& o)
-    : CanMakeCheckedPtr()
-    , m_originalURL(o.m_originalURL)
+    : m_originalURL(o.m_originalURL)
     , m_encodingFromCharsetRule(o.m_encodingFromCharsetRule)
     , m_layerRulesBeforeImportRules(o.m_layerRulesBeforeImportRules.size())
     , m_importRules(o.m_importRules.size())
@@ -302,7 +301,7 @@ bool StyleSheetContents::wrapperInsertRule(Ref<StyleRuleBase>&& rule, unsigned i
             return false;
         // Inserting @namespace rule when rules other than import/namespace/charset
         // are present is not allowed.
-        if (!m_childRules.isEmpty())
+        if (!m_childRules.isEmpty() || !m_layerRulesBeforeImportRules.isEmpty())
             return false;
 
         m_namespaceRules.insert(index, *namespaceRule);
@@ -519,13 +518,13 @@ bool StyleSheetContents::traverseSubresources(const Function<bool(const CachedRe
     return traverseRules([&] (const StyleRuleBase& rule) {
         switch (rule.type()) {
         case StyleRuleType::Style:
-            return downcast<StyleRule>(rule).properties().traverseSubresources(handler);
+            return uncheckedDowncast<StyleRule>(rule).properties().traverseSubresources(handler);
         case StyleRuleType::StyleWithNesting:
-            return downcast<StyleRuleWithNesting>(rule).properties().traverseSubresources(handler);
+            return uncheckedDowncast<StyleRuleWithNesting>(rule).properties().traverseSubresources(handler);
         case StyleRuleType::FontFace:
-            return downcast<StyleRuleFontFace>(rule).properties().traverseSubresources(handler);
+            return uncheckedDowncast<StyleRuleFontFace>(rule).properties().traverseSubresources(handler);
         case StyleRuleType::Import:
-            if (auto* cachedResource = downcast<StyleRuleImport>(rule).cachedCSSStyleSheet())
+            if (auto* cachedResource = uncheckedDowncast<StyleRuleImport>(rule).cachedCSSStyleSheet())
                 return handler(*cachedResource);
             return false;
         case StyleRuleType::CounterStyle:

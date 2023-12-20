@@ -250,11 +250,10 @@ bool RenderThemeMac::supportsLargeFormControls() const
     return ThemeMac::supportsLargeFormControls();
 }
 
-NSView *RenderThemeMac::documentViewFor(const RenderObject& o) const
+NSView *RenderThemeMac::documentViewFor(const RenderObject& renderer) const
 {
-    LocalDefaultSystemAppearance localAppearance(o.useDarkAppearance());
-    ControlStates states(extractControlStatesForRenderer(o));
-    return ThemeMac::ensuredView(&o.view().frameView(), states);
+    LocalDefaultSystemAppearance localAppearance(renderer.useDarkAppearance());
+    return ThemeMac::ensuredView(&renderer.view().frameView(), extractControlStyleStatesForRenderer(renderer));
 }
 
 Color RenderThemeMac::platformActiveSelectionBackgroundColor(OptionSet<StyleColorOptions> options) const
@@ -741,19 +740,13 @@ void RenderThemeMac::adjustRepaintRect(const RenderObject& renderer, FloatRect& 
     switch (appearance) {
     case StyleAppearance::Button:
     case StyleAppearance::Checkbox:
-#if ENABLE(INPUT_TYPE_COLOR)
-    case StyleAppearance::ColorWell:
-#endif
     case StyleAppearance::DefaultButton:
     case StyleAppearance::InnerSpinButton:
     case StyleAppearance::PushButton:
     case StyleAppearance::Radio:
-    case StyleAppearance::SquareButton:
-    case StyleAppearance::Switch: {
-        ControlStates states(extractControlStatesForRenderer(renderer));
-        Theme::singleton().inflateControlPaintRect(renderer.style().effectiveAppearance(), states, rect, renderer.style().effectiveZoom());
+    case StyleAppearance::Switch:
+        Theme::singleton().inflateControlPaintRect(renderer.style().effectiveAppearance(), rect, renderer.style().effectiveZoom());
         break;
-    }
     case StyleAppearance::Menulist: {
         auto zoomLevel = renderer.style().effectiveZoom();
         setPopupButtonCellState(renderer, IntSize(rect.size()));
@@ -1071,21 +1064,21 @@ LengthBox RenderThemeMac::popupInternalPaddingBox(const RenderStyle& style) cons
     return { 0, 0, 0, 0 };
 }
 
-PopupMenuStyle::PopupMenuSize RenderThemeMac::popupMenuSize(const RenderStyle& style, IntRect& rect) const
+PopupMenuStyle::Size RenderThemeMac::popupMenuSize(const RenderStyle& style, IntRect& rect) const
 {
     NSPopUpButtonCell* popupButton = this->popupButton();
     NSControlSize size = controlSizeForCell(popupButton, popupButtonSizes(), rect.size(), style.effectiveZoom());
     switch (size) {
     case NSControlSizeRegular:
-        return PopupMenuStyle::PopupMenuSizeNormal;
+        return PopupMenuStyle::Size::Normal;
     case NSControlSizeSmall:
-        return PopupMenuStyle::PopupMenuSizeSmall;
+        return PopupMenuStyle::Size::Small;
     case NSControlSizeMini:
-        return PopupMenuStyle::PopupMenuSizeMini;
+        return PopupMenuStyle::Size::Mini;
     case NSControlSizeLarge:
-        return ThemeMac::supportsLargeFormControls() ? PopupMenuStyle::PopupMenuSizeLarge : PopupMenuStyle::PopupMenuSizeNormal;
+        return ThemeMac::supportsLargeFormControls() ? PopupMenuStyle::Size::Large : PopupMenuStyle::Size::Normal;
     default:
-        return PopupMenuStyle::PopupMenuSizeNormal;
+        return PopupMenuStyle::Size::Normal;
     }
 }
 

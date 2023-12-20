@@ -104,7 +104,7 @@ void RemoteImageBufferSet::flush()
 }
 
 // This is the GPU Process version of RemoteLayerBackingStore::prepareBuffers().
-void RemoteImageBufferSet::ensureBufferForDisplay(const ImageBufferSetPrepareBufferForDisplayInputData& inputData, ImageBufferSetPrepareBufferForDisplayOutputData& outputData)
+void RemoteImageBufferSet::ensureBufferForDisplay(ImageBufferSetPrepareBufferForDisplayInputData& inputData, ImageBufferSetPrepareBufferForDisplayOutputData& outputData)
 {
     assertIsCurrent(workQueue());
     auto bufferIdentifier = [](RefPtr<WebCore::ImageBuffer> buffer) -> std::optional<RenderingResourceIdentifier> {
@@ -123,8 +123,10 @@ void RemoteImageBufferSet::ensureBufferForDisplay(const ImageBufferSetPrepareBuf
     bool needsFullDisplay = false;
     if (m_frontBuffer) {
         auto previousState = m_frontBuffer->setNonVolatile();
-        if (previousState == SetNonVolatileResult::Empty)
+        if (previousState == SetNonVolatileResult::Empty) {
             needsFullDisplay = true;
+            inputData.dirtyRegion = IntRect { { }, expandedIntSize(m_logicalSize) };
+        }
     }
 
     if (!m_frontBuffer || !inputData.supportsPartialRepaint || isSmallLayerBacking(m_frontBuffer->parameters()))
@@ -151,9 +153,11 @@ void RemoteImageBufferSet::ensureBufferForDisplay(const ImageBufferSetPrepareBuf
         std::swap(m_frontBuffer, m_backBuffer);
     }
 
-    if (m_frontBuffer)
-        m_frontBuffer->setNonVolatile();
-    else {
+    if (m_frontBuffer) {
+        auto previousState = m_frontBuffer->setNonVolatile();
+        if (previousState == SetNonVolatileResult::Empty)
+            m_previouslyPaintedRect = std::nullopt;
+    } else {
         m_frontBuffer = m_backend->allocateImageBuffer(m_logicalSize, m_renderingMode, WebCore::RenderingPurpose::LayerBacking, m_resolutionScale, m_colorSpace, m_pixelFormat, RenderingResourceIdentifier::generate());
         m_frontBufferIsCleared = true;
     }
@@ -255,7 +259,9 @@ bool RemoteImageBufferSet::makeBuffersVolatile(OptionSet<BufferInSetType> reques
 #if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
 void RemoteImageBufferSet::dynamicContentScalingDisplayList(CompletionHandler<void(std::optional<WebCore::DynamicContentScalingDisplayList>&&)>&& completionHandler)
 {
-    auto displayList = m_frontBuffer->dynamicContentScalingDisplayList();
+    std::optional<WebCore::DynamicContentScalingDisplayList> displayList;
+    if (m_frontBuffer)
+        displayList = m_frontBuffer->dynamicContentScalingDisplayList();
     completionHandler({ WTFMove(displayList) });
 }
 #endif

@@ -896,17 +896,17 @@ CSS3DTransformInteroperabilityEnabled:
 
 CSSBasedRubyEnabled:
   type: bool
-  status: unstable
+  status: stable
   category: css
   humanReadableName: "CSS based Ruby implementation in IFC"
   humanReadableDescription: "CSS based Ruby implementation in IFC"
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 CSSCascadeLayersEnabled:
   type: bool
@@ -4060,7 +4060,7 @@ ManagedMediaSourceEnabled:
   category: media
   humanReadableName: "Managed Media Source API"
   humanReadableDescription: "Managed Media Source API"
-  condition: ENABLE(MANAGED_MEDIA_SOURCE)
+  condition: ENABLE(MEDIA_SOURCE)
   defaultValue:
     WebKitLegacy:
       default: false
@@ -4072,7 +4072,7 @@ ManagedMediaSourceEnabled:
 ManagedMediaSourceHighThreshold:
   type: double
   status: embedder
-  condition: ENABLE(MANAGED_MEDIA_SOURCE)
+  condition: ENABLE(MEDIA_SOURCE)
   defaultValue:
     WebKit:
       default: 30
@@ -4082,7 +4082,7 @@ ManagedMediaSourceHighThreshold:
 ManagedMediaSourceLowThreshold:
   type: double
   status: embedder
-  condition: ENABLE(MANAGED_MEDIA_SOURCE)
+  condition: ENABLE(MEDIA_SOURCE)
   defaultValue:
     WebKit:
       default: 10
@@ -4095,7 +4095,7 @@ ManagedMediaSourceNeedsAirPlay:
   category: media
   humanReadableName: "Managed Media Source Requires AirPlay source"
   humanReadableDescription: "Managed Media Source Requires AirPlay source"
-  condition: ENABLE(MANAGED_MEDIA_SOURCE) && ENABLE(WIRELESS_PLAYBACK_TARGET)
+  condition: ENABLE(MEDIA_SOURCE) && ENABLE(WIRELESS_PLAYBACK_TARGET)
   defaultValue:
     WebKitLegacy:
       default: false
@@ -4202,9 +4202,9 @@ MediaCapabilityGrantsEnabled:
     WebKitLegacy:
       default: false
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 MediaCaptionFormatTypesAllowedInLockdownMode:
   type: String
@@ -5528,10 +5528,13 @@ SampleBufferContentKeySessionSupportEnabled:
   condition: HAVE(AVCONTENTKEYSPECIFIER)
   defaultValue:
     WebKitLegacy:
+      "PLATFORM(IOS_FAMILY)": true
       default: false
     WebKit:
+      "PLATFORM(IOS_FAMILY)": true
       default: false
     WebCore:
+      "PLATFORM(IOS_FAMILY)": true
       default: false
 
 SampledPageTopColorMaxDifference:
@@ -8007,7 +8010,7 @@ WriteRichTextDataWhenCopyingOrDragging:
     WebKitLegacy:
       default: true
     WebKit:
-      "HAVE(PASTEBOARD_CONVERSION_FROM_HTML_TO_RTF)" : false
+      "PLATFORM(IOS_FAMILY)": WebKit::defaultWriteRichTextDataWhenCopyingOrDragging()
       default: true
     WebCore:
       default: true

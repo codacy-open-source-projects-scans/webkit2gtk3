@@ -57,8 +57,8 @@ static_assert(sizeof(CSSSelector) == sizeof(SameSizeAsCSSSelector), "CSSSelector
 DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(CSSSelectorRareData);
 
 CSSSelector::CSSSelector(const QualifiedName& tagQName, bool tagIsForNamespaceRule)
-    : m_relation(static_cast<unsigned>(RelationType::DescendantSpace))
-    , m_match(static_cast<unsigned>(Match::Tag))
+    : m_relation(enumToUnderlyingType(RelationType::DescendantSpace))
+    , m_match(enumToUnderlyingType(Match::Tag))
     , m_tagIsForNamespaceRule(tagIsForNamespaceRule)
 {
     m_data.tagQName = tagQName.impl();
@@ -112,7 +112,7 @@ SelectorSpecificity::SelectorSpecificity(unsigned specificity)
 }
 
 SelectorSpecificity::SelectorSpecificity(SelectorSpecificityIncrement specificity)
-    : specificity(static_cast<unsigned>(specificity))
+    : specificity(enumToUnderlyingType(specificity))
 {
 }
 
@@ -454,6 +454,11 @@ String CSSSelector::selectorText(StringView separator, StringView rightSide) con
 
     const CSSSelector* cs = this;
     while (true) {
+        if (cs->isImplicit()) {
+            // Remove the space before the implicit selector.
+            separator = separator.substring(1);
+            break;
+        }
         if (cs->match() == Match::Id) {
             builder.append('#');
             serializeIdentifier(cs->serializingValue(), builder);

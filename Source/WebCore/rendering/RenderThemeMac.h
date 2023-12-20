@@ -75,7 +75,7 @@ public:
 #endif
 
     LengthBox popupInternalPaddingBox(const RenderStyle&) const final;
-    PopupMenuStyle::PopupMenuSize popupMenuSize(const RenderStyle&, IntRect&) const final;
+    PopupMenuStyle::Size popupMenuSize(const RenderStyle&, IntRect&) const final;
 
     bool popsMenuByArrowKeys() const final { return true; }
 
@@ -185,9 +185,6 @@ private:
 #endif
 
     mutable RetainPtr<NSPopUpButtonCell> m_popupButton;
-
-    bool m_isSliderThumbHorizontalPressed { false };
-    bool m_isSliderThumbVerticalPressed { false };
 
     RetainPtr<WebCoreRenderThemeNotificationObserver> m_notificationObserver;
 };

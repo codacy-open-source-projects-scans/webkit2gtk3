@@ -471,6 +471,7 @@ void WebLocalFrameLoaderClient::didSameDocumentNavigationForFrameViaJSHistoryAPI
         { }, /* downloadAttribute */
         { }, /* clickLocationInRootViewCoordinates */
         { }, /* redirectResponse */
+        false, /* isRequestFromClientOrUserInput */
         true, /* treatAsSameOriginNavigation */
         false, /* hasOpenedFrames */
         false, /* openedByDOMWithOpener */
@@ -639,6 +640,12 @@ void WebLocalFrameLoaderClient::dispatchDidFailProvisionalLoad(const ResourceErr
 
     // Notify the bundle client.
     webPage->injectedBundleLoaderClient().didFailProvisionalLoadWithErrorForFrame(*webPage, m_frame, error, userData);
+
+#if ENABLE(WK_WEB_EXTENSIONS)
+    // Notify the extensions controller.
+    if (RefPtr extensionControllerProxy = webPage->webExtensionControllerProxy())
+        extensionControllerProxy->didFailLoadForFrame(*webPage, m_frame, m_frame->coreLocalFrame()->loader().provisionalLoadErrorBeingHandledURL());
+#endif
 
     webPage->sandboxExtensionTracker().didFailProvisionalLoad(m_frame.ptr());
 
@@ -935,6 +942,7 @@ void WebLocalFrameLoaderClient::dispatchDecidePolicyForNewWindowAction(const Nav
         navigationAction.downloadAttribute(),
         mouseEventData ? mouseEventData->locationInRootViewCoordinates : FloatPoint(),
         { }, /* redirectResponse */
+        false, /* isRequestFromClientOrUserInput */
         false, /* treatAsSameOriginNavigation */
         false, /* hasOpenedFrames */
         false, /* openedByDOMWithOpener */
