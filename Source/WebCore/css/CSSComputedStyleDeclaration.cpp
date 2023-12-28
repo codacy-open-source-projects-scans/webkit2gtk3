@@ -51,12 +51,9 @@ CSSComputedStyleDeclaration::CSSComputedStyleDeclaration(Element& element, bool 
     : m_element(element)
     , m_allowVisitedStyle(allowVisitedStyle)
 {
-    StringView name = pseudoElementName;
-    if (name.startsWith(':'))
-        name = name.substring(1);
-    if (name.startsWith(':'))
-        name = name.substring(1);
-    m_pseudoElementSpecifier = CSSSelector::pseudoId(CSSSelector::parsePseudoElementType(name, CSSSelectorParserContext { element.document() }));
+    // FIXME: This should return a style with initial values if the pseudo-element is invalid (webkit.org/b/243539).
+    auto pseudoId = CSSSelector::parseStandalonePseudoElement(pseudoElementName, CSSSelectorParserContext { element.document() });
+    m_pseudoElementSpecifier = pseudoId ? *pseudoId : PseudoId::None;
 }
 
 CSSComputedStyleDeclaration::~CSSComputedStyleDeclaration() = default;

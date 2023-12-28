@@ -390,11 +390,12 @@ inline void NodeRareData::operator delete(NodeRareData* nodeRareData, std::destr
         destroyAndFree(*nodeRareData);
 }
 
-Node::Node(Document& document, ConstructionType type)
+Node::Node(Document& document, NodeType type, OptionSet<TypeFlag> flags)
     : EventTarget(ConstructNode)
-    , m_nodeFlags(type)
+    , m_typeBitFields(constructBitFieldsFromNodeTypeAndFlags(type, flags))
     , m_treeScope((isDocumentNode() || isShadowRoot()) ? nullptr : &document)
 {
+    ASSERT(nodeType() == type);
     ASSERT(isMainThread());
 
     // Allow code to ref the Document while it is being constructed to make our life easier.
@@ -966,7 +967,7 @@ void Node::invalidateStyle(Style::Validity validity, Style::InvalidationMode mod
         return;
 
     if (validity != Style::Validity::Valid)
-        setNodeFlag(NodeFlag::IsComputedStyleInvalidFlag);
+        setStateFlag(StateFlag::IsComputedStyleInvalidFlag);
 
     bool markAncestors = styleValidity() == Style::Validity::Valid || mode == Style::InvalidationMode::InsertedIntoAncestor;
 
@@ -1426,9 +1427,9 @@ void Node::queueTaskToDispatchEvent(TaskSource source, Ref<Event>&& event)
 Node::InsertedIntoAncestorResult Node::insertedIntoAncestor(InsertionType insertionType, ContainerNode& parentOfInsertedTree)
 {
     if (insertionType.connectedToDocument)
-        setNodeFlag(NodeFlag::IsConnected);
+        setEventTargetFlag(EventTargetFlag::IsConnected);
     if (parentOfInsertedTree.isInShadowTree())
-        setNodeFlag(NodeFlag::IsInShadowTree);
+        setEventTargetFlag(EventTargetFlag::IsInShadowTree);
 
     invalidateStyle(Style::Validity::SubtreeInvalid, Style::InvalidationMode::InsertedIntoAncestor);
 
@@ -1438,9 +1439,9 @@ Node::InsertedIntoAncestorResult Node::insertedIntoAncestor(InsertionType insert
 void Node::removedFromAncestor(RemovalType removalType, ContainerNode& oldParentOfRemovedTree)
 {
     if (removalType.disconnectedFromDocument)
-        clearNodeFlag(NodeFlag::IsConnected);
+        clearEventTargetFlag(EventTargetFlag::IsConnected);
     if (isInShadowTree() && !treeScope().rootNode().isShadowRoot())
-        clearNodeFlag(NodeFlag::IsInShadowTree);
+        clearEventTargetFlag(EventTargetFlag::IsInShadowTree);
     if (removalType.disconnectedFromDocument) {
         if (auto* cache = oldParentOfRemovedTree.document().existingAXObjectCache())
             cache->remove(*this);
@@ -2150,7 +2151,7 @@ void Node::moveTreeToNewScope(Node& root, TreeScope& oldScope, TreeScope& newSco
             ASSERT(!node.isTreeScope());
             RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(&node.treeScope() == &oldScope);
             if (newScopeIsUAShadowTree)
-                node.setNodeFlag(NodeFlag::HasBeenInUserAgentShadowTree);
+                node.setEventTargetFlag(EventTargetFlag::HasBeenInUserAgentShadowTree);
             node.setTreeScope(newScope);
             node.moveNodeToNewDocument(oldDocument, newDocument);
         }, [&](ShadowRoot& shadowRoot) {
@@ -2165,7 +2166,7 @@ void Node::moveTreeToNewScope(Node& root, TreeScope& oldScope, TreeScope& newSco
             ASSERT(!node.isTreeScope());
             RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(&node.treeScope() == &oldScope);
             if (newScopeIsUAShadowTree)
-                node.setNodeFlag(NodeFlag::HasBeenInUserAgentShadowTree);
+                node.setEventTargetFlag(EventTargetFlag::HasBeenInUserAgentShadowTree);
             node.setTreeScope(newScope);
             if (UNLIKELY(!node.hasRareData()))
                 return;

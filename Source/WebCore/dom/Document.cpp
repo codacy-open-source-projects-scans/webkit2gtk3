@@ -592,7 +592,7 @@ static Ref<CachedResourceLoader> createCachedResourceLoader(LocalFrame* frame)
 }
 
 Document::Document(LocalFrame* frame, const Settings& settings, const URL& url, DocumentClasses documentClasses, OptionSet<ConstructionFlag> constructionFlags, ScriptExecutionContextIdentifier identifier)
-    : ContainerNode(*this, CreateDocument)
+    : ContainerNode(*this, DOCUMENT_NODE)
     , TreeScope(*this)
     , ScriptExecutionContext(identifier)
     , FrameDestructionObserver(frame)
@@ -650,6 +650,7 @@ Document::Document(LocalFrame* frame, const Settings& settings, const URL& url, 
     , m_isNonRenderedPlaceholder(constructionFlags.contains(ConstructionFlag::NonRenderedPlaceholder))
     , m_frameIdentifier(frame ? std::optional(frame->frameID()) : std::nullopt)
 {
+    setEventTargetFlag(EventTargetFlag::IsConnected);
     addToDocumentsMap();
 
     // We depend on the url getting immediately set in subframes, but we
@@ -2075,11 +2076,6 @@ void Document::forEachMediaElement(const Function<void(HTMLMediaElement&)>& func
 String Document::nodeName() const
 {
     return "#document"_s;
-}
-
-Node::NodeType Document::nodeType() const
-{
-    return DOCUMENT_NODE;
 }
 
 WakeLockManager& Document::wakeLockManager()
@@ -5326,11 +5322,11 @@ void Document::setCSSTarget(Element* newTarget)
 
     std::optional<Style::PseudoClassChangeInvalidation> oldInvalidation;
     if (m_cssTarget)
-        emplace(oldInvalidation, *m_cssTarget, { { CSSSelector::PseudoClassType::Target, false } });
+        emplace(oldInvalidation, *m_cssTarget, { { CSSSelector::PseudoClass::Target, false } });
 
     std::optional<Style::PseudoClassChangeInvalidation> newInvalidation;
     if (newTarget)
-        emplace(newInvalidation, *newTarget, { { CSSSelector::PseudoClassType::Target, true } });
+        emplace(newInvalidation, *newTarget, { { CSSSelector::PseudoClass::Target, true } });
     m_cssTarget = newTarget;
 }
 
@@ -8056,33 +8052,33 @@ void Document::updateHoverActiveState(const HitTestRequest& request, Element* in
             elementsToSetHover.append(element);
     }
 
-    auto changeState = [](auto& elements, auto pseudoClassType, auto value, auto&& setter) {
+    auto changeState = [](auto& elements, auto pseudoClass, auto value, auto&& setter) {
         if (elements.isEmpty())
             return;
 
-        Style::PseudoClassChangeInvalidation styleInvalidation { *elements.last(), pseudoClassType, value, Style::InvalidationScope::Descendants };
+        Style::PseudoClassChangeInvalidation styleInvalidation { *elements.last(), pseudoClass, value, Style::InvalidationScope::Descendants };
 
         // We need to do descendant invalidation for each shadow tree separately as the style is per-scope.
         Vector<Style::PseudoClassChangeInvalidation> shadowDescendantStyleInvalidations;
         for (auto& element : elements) {
             if (hasShadowRootParent(*element))
-                shadowDescendantStyleInvalidations.append({ *element, pseudoClassType, value, Style::InvalidationScope::Descendants });
+                shadowDescendantStyleInvalidations.append({ *element, pseudoClass, value, Style::InvalidationScope::Descendants });
         }
 
         for (auto& element : elements)
             setter(*element);
     };
 
-    changeState(elementsToClearActive, CSSSelector::PseudoClassType::Active, false, [](auto& element) {
+    changeState(elementsToClearActive, CSSSelector::PseudoClass::Active, false, [](auto& element) {
         element.setActive(false, Style::InvalidationScope::SelfChildrenAndSiblings);
     });
-    changeState(elementsToSetActive, CSSSelector::PseudoClassType::Active, true, [](auto& element) {
+    changeState(elementsToSetActive, CSSSelector::PseudoClass::Active, true, [](auto& element) {
         element.setActive(true, Style::InvalidationScope::SelfChildrenAndSiblings);
     });
-    changeState(elementsToClearHover, CSSSelector::PseudoClassType::Hover, false, [request](auto& element) {
+    changeState(elementsToClearHover, CSSSelector::PseudoClass::Hover, false, [request](auto& element) {
         element.setHovered(false, Style::InvalidationScope::SelfChildrenAndSiblings, request);
     });
-    changeState(elementsToSetHover, CSSSelector::PseudoClassType::Hover, true, [request](auto& element) {
+    changeState(elementsToSetHover, CSSSelector::PseudoClass::Hover, true, [request](auto& element) {
         element.setHovered(true, Style::InvalidationScope::SelfChildrenAndSiblings, request);
     });
 }
@@ -8122,10 +8118,9 @@ Document& Document::ensureTemplateDocument()
 
 Ref<DocumentFragment> Document::documentFragmentForInnerOuterHTML()
 {
-    if (UNLIKELY(!m_documentFragmentForInnerOuterHTML)) {
-        m_documentFragmentForInnerOuterHTML = DocumentFragment::create(*this);
-        m_documentFragmentForInnerOuterHTML->setIsDocumentFragmentForInnerOuterHTML();
-    } else if (UNLIKELY(m_documentFragmentForInnerOuterHTML->hasChildNodes()))
+    if (UNLIKELY(!m_documentFragmentForInnerOuterHTML))
+        m_documentFragmentForInnerOuterHTML = DocumentFragment::createForInnerOuterHTML(*this);
+    else if (UNLIKELY(m_documentFragmentForInnerOuterHTML->hasChildNodes()))
         Ref { *m_documentFragmentForInnerOuterHTML }->removeChildren();
     return *m_documentFragmentForInnerOuterHTML;
 }
@@ -9538,11 +9533,11 @@ void Document::setPictureInPictureElement(HTMLVideoElement* element)
 
     std::optional<Style::PseudoClassChangeInvalidation> oldInvalidation;
     if (oldElement)
-        emplace(oldInvalidation, *oldElement, { { CSSSelector::PseudoClassType::PictureInPicture, false } });
+        emplace(oldInvalidation, *oldElement, { { CSSSelector::PseudoClass::PictureInPicture, false } });
 
     std::optional<Style::PseudoClassChangeInvalidation> newInvalidation;
     if (element)
-        emplace(newInvalidation, *element, { { CSSSelector::PseudoClassType::PictureInPicture, true } });
+        emplace(newInvalidation, *element, { { CSSSelector::PseudoClass::PictureInPicture, true } });
 
     m_pictureInPictureElement = element;
 }
