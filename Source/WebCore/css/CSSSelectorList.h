@@ -31,7 +31,8 @@
 
 namespace WebCore {
 
-class CSSParserSelector;
+class MutableCSSSelector;
+using MutableCSSSelectorList = Vector<std::unique_ptr<MutableCSSSelector>>;
 
 class CSSSelectorList {
     WTF_MAKE_FAST_ALLOCATED;
@@ -39,7 +40,7 @@ public:
     CSSSelectorList() = default;
     CSSSelectorList(const CSSSelectorList&);
     CSSSelectorList(CSSSelectorList&&) = default;
-    explicit CSSSelectorList(Vector<std::unique_ptr<CSSParserSelector>>&&);
+    explicit CSSSelectorList(MutableCSSSelectorList&&);
     explicit CSSSelectorList(UniqueArray<CSSSelector>&& array)
         : m_selectorArray(WTFMove(array)) { }
 

@@ -321,7 +321,8 @@ static auto convertToBacking(const ComputePipelineDescriptor& descriptor, Conver
     auto entryPoint = descriptor.compute.entryPoint.utf8();
 
     auto constantNames = descriptor.compute.constants.map([](const auto& constant) {
-        return constant.key.utf8();
+        bool lengthsMatch = constant.key.length() == String::fromUTF8(constant.key.utf8().data()).length();
+        return lengthsMatch ? constant.key.utf8() : "";
     });
 
     Vector<WGPUConstantEntry> backingConstantEntries(descriptor.compute.constants.size(), [&](size_t i) {
@@ -356,14 +357,15 @@ Ref<ComputePipeline> DeviceImpl::createComputePipeline(const ComputePipelineDesc
 }
 
 template <typename T>
-static auto convertToBacking(const RenderPipelineDescriptor& descriptor, bool depthClipControlIsEnabled, ConvertToBackingContext& convertToBackingContext, T&& callback)
+static auto convertToBacking(const RenderPipelineDescriptor& descriptor, ConvertToBackingContext& convertToBackingContext, T&& callback)
 {
     auto label = descriptor.label.utf8();
 
     auto vertexEntryPoint = descriptor.vertex.entryPoint.utf8();
 
     auto vertexConstantNames = descriptor.vertex.constants.map([](const auto& constant) {
-        return constant.key.utf8();
+        bool lengthsMatch = constant.key.length() == String::fromUTF8(constant.key.utf8().data()).length();
+        return lengthsMatch ? constant.key.utf8() : "";
     });
 
     Vector<WGPUConstantEntry> vertexConstantEntries(descriptor.vertex.constants.size(), [&](size_t i) {
@@ -402,18 +404,18 @@ static auto convertToBacking(const RenderPipelineDescriptor& descriptor, bool de
         .nextInChain = nullptr,
         .format = descriptor.depthStencil ? convertToBackingContext.convertToBacking(descriptor.depthStencil->format) : WGPUTextureFormat_Undefined,
         .depthWriteEnabled = descriptor.depthStencil ? descriptor.depthStencil->depthWriteEnabled : false,
-        .depthCompare = descriptor.depthStencil ? convertToBackingContext.convertToBacking(descriptor.depthStencil->depthCompare) : WGPUCompareFunction_Undefined,
+        .depthCompare = (descriptor.depthStencil && descriptor.depthStencil->depthCompare) ? convertToBackingContext.convertToBacking(*descriptor.depthStencil->depthCompare) : WGPUCompareFunction_Undefined,
         .stencilFront = {
-            descriptor.depthStencil ? convertToBackingContext.convertToBacking(descriptor.depthStencil->stencilFront.compare) : WGPUCompareFunction_Undefined,
-            descriptor.depthStencil ? convertToBackingContext.convertToBacking(descriptor.depthStencil->stencilFront.failOp) : WGPUStencilOperation_Keep,
-            descriptor.depthStencil ? convertToBackingContext.convertToBacking(descriptor.depthStencil->stencilFront.depthFailOp) : WGPUStencilOperation_Keep,
-            descriptor.depthStencil ? convertToBackingContext.convertToBacking(descriptor.depthStencil->stencilFront.passOp) : WGPUStencilOperation_Keep,
+            .compare = descriptor.depthStencil ? convertToBackingContext.convertToBacking(descriptor.depthStencil->stencilFront.compare) : WGPUCompareFunction_Undefined,
+            .failOp = descriptor.depthStencil ? convertToBackingContext.convertToBacking(descriptor.depthStencil->stencilFront.failOp) : WGPUStencilOperation_Keep,
+            .depthFailOp = descriptor.depthStencil ? convertToBackingContext.convertToBacking(descriptor.depthStencil->stencilFront.depthFailOp) : WGPUStencilOperation_Keep,
+            .passOp = descriptor.depthStencil ? convertToBackingContext.convertToBacking(descriptor.depthStencil->stencilFront.passOp) : WGPUStencilOperation_Keep,
         },
         .stencilBack = {
-            descriptor.depthStencil ? convertToBackingContext.convertToBacking(descriptor.depthStencil->stencilBack.compare) : WGPUCompareFunction_Undefined,
-            descriptor.depthStencil ? convertToBackingContext.convertToBacking(descriptor.depthStencil->stencilBack.failOp) : WGPUStencilOperation_Keep,
-            descriptor.depthStencil ? convertToBackingContext.convertToBacking(descriptor.depthStencil->stencilBack.depthFailOp) : WGPUStencilOperation_Keep,
-            descriptor.depthStencil ? convertToBackingContext.convertToBacking(descriptor.depthStencil->stencilBack.passOp) : WGPUStencilOperation_Keep,
+            .compare = descriptor.depthStencil ? convertToBackingContext.convertToBacking(descriptor.depthStencil->stencilBack.compare) : WGPUCompareFunction_Undefined,
+            .failOp = descriptor.depthStencil ? convertToBackingContext.convertToBacking(descriptor.depthStencil->stencilBack.failOp) : WGPUStencilOperation_Keep,
+            .depthFailOp = descriptor.depthStencil ? convertToBackingContext.convertToBacking(descriptor.depthStencil->stencilBack.depthFailOp) : WGPUStencilOperation_Keep,
+            .passOp = descriptor.depthStencil ? convertToBackingContext.convertToBacking(descriptor.depthStencil->stencilBack.passOp) : WGPUStencilOperation_Keep,
         },
         .stencilReadMask = descriptor.depthStencil && descriptor.depthStencil->stencilReadMask ? *descriptor.depthStencil->stencilReadMask : 0,
         .stencilWriteMask = descriptor.depthStencil && descriptor.depthStencil->stencilWriteMask ? *descriptor.depthStencil->stencilWriteMask : 0,
@@ -427,7 +429,8 @@ static auto convertToBacking(const RenderPipelineDescriptor& descriptor, bool de
     Vector<CString> fragmentConstantNames;
     if (descriptor.fragment) {
         fragmentConstantNames = descriptor.fragment->constants.map([](const auto& constant) {
-            return constant.key.utf8();
+            bool lengthsMatch = constant.key.length() == String::fromUTF8(constant.key.utf8().data()).length();
+            return lengthsMatch ? constant.key.utf8() : "";
         });
     }
 
@@ -513,7 +516,7 @@ static auto convertToBacking(const RenderPipelineDescriptor& descriptor, bool de
             static_cast<uint32_t>(backingBuffers.size()),
             backingBuffers.data(),
         }, {
-            descriptor.primitive && depthClipControlIsEnabled ? &depthClipControl.chain : nullptr,
+            descriptor.primitive && descriptor.primitive->unclippedDepth ? &depthClipControl.chain : nullptr,
             descriptor.primitive ? convertToBackingContext.convertToBacking(descriptor.primitive->topology) : WGPUPrimitiveTopology_TriangleList,
             descriptor.primitive && descriptor.primitive->stripIndexFormat ? convertToBackingContext.convertToBacking(*descriptor.primitive->stripIndexFormat) : WGPUIndexFormat_Undefined,
             descriptor.primitive ? convertToBackingContext.convertToBacking(descriptor.primitive->frontFace) : WGPUFrontFace_CCW,
@@ -533,8 +536,7 @@ static auto convertToBacking(const RenderPipelineDescriptor& descriptor, bool de
 
 Ref<RenderPipeline> DeviceImpl::createRenderPipeline(const RenderPipelineDescriptor& descriptor)
 {
-    bool depthClipControlIsEnabled = wgpuDeviceHasFeature(m_backing.get(), WGPUFeatureName_DepthClipControl);
-    return convertToBacking(descriptor, depthClipControlIsEnabled, m_convertToBackingContext, [backing = m_backing.copyRef(), &convertToBackingContext = m_convertToBackingContext.get()](const WGPURenderPipelineDescriptor& backingDescriptor) {
+    return convertToBacking(descriptor, m_convertToBackingContext, [backing = m_backing.copyRef(), &convertToBackingContext = m_convertToBackingContext.get()](const WGPURenderPipelineDescriptor& backingDescriptor) {
         return RenderPipelineImpl::create(adoptWebGPU(wgpuDeviceCreateRenderPipeline(backing.get(), &backingDescriptor)), convertToBackingContext);
     });
 }
@@ -568,8 +570,7 @@ static void createRenderPipelineAsyncCallback(WGPUCreatePipelineAsyncStatus stat
 
 void DeviceImpl::createRenderPipelineAsync(const RenderPipelineDescriptor& descriptor, CompletionHandler<void(RefPtr<RenderPipeline>&&)>&& callback)
 {
-    bool depthClipControlIsEnabled = wgpuDeviceHasFeature(m_backing.get(), WGPUFeatureName_DepthClipControl);
-    convertToBacking(descriptor, depthClipControlIsEnabled, m_convertToBackingContext, [backing = m_backing.copyRef(), convertToBackingContext = m_convertToBackingContext.copyRef(), callback = WTFMove(callback)](const WGPURenderPipelineDescriptor& backingDescriptor) mutable {
+    convertToBacking(descriptor, m_convertToBackingContext, [backing = m_backing.copyRef(), convertToBackingContext = m_convertToBackingContext.copyRef(), callback = WTFMove(callback)](const WGPURenderPipelineDescriptor& backingDescriptor) mutable {
         auto blockPtr = makeBlockPtr([convertToBackingContext = convertToBackingContext.copyRef(), callback = WTFMove(callback)](WGPUCreatePipelineAsyncStatus status, WGPURenderPipeline pipeline, const char*) mutable {
             if (status == WGPUCreatePipelineAsyncStatus_Success)
                 callback(RenderPipelineImpl::create(adoptWebGPU(pipeline), convertToBackingContext));

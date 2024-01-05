@@ -842,8 +842,6 @@ webkit.org/b/129758 js/dom/create-lots-of-workers.html [ Timeout Pass ]
 
 webkit.org/b/177530 imported/w3c/web-platform-tests/xhr/setrequestheader-header-allowed.htm [ Pass Failure ]
 
-webkit.org/b/179898 svg/animations/svglengthlist-animation-3.html [ Pass Failure ]
-
 webkit.org/b/181534 perf/show-hide-table-rows.html [ Pass Failure ]
 
 webkit.org/b/187590 imported/w3c/web-platform-tests/web-animations/timing-model/timelines/document-timelines.html [ Failure Pass ]
@@ -1547,6 +1545,7 @@ fast/encoding/backslash-encoding-jp.html [ Skip ] # Timeout.
 fast/encoding/char-encoding-mac.html [ Skip ] # Timeout.
 fast/encoding/char-encoding.html [ Skip ] # Timeout.
 fast/html/transient-activation.html [ Skip ] # Timeout.
+fast/html/history-action-user-activation.html [ Skip ] # Timeout.
 fast/mediastream/video-srcObject-set-twice.html [ Skip ] # Timeout.
 fast/replaced/pdf-as-embed-with-no-mime-type-is-not-blank.html [ Skip ] # Timeout.
 fast/text/large-synthetic-bold-with-scale-transform.html [ Skip ] # Timeout.

@@ -1812,8 +1812,6 @@ displaylists/layer-dispay-list.html [ Failure ]
 
 webkit.org/b/184611 compositing/layer-creation/fixed-overlap-extent.html [ Pass Failure ]
 
-webkit.org/b/189087 svg/animations/animate-end-attribute-numeric-precision.html [ Pass Failure ]
-
 webkit.org/b/189594 imported/w3c/web-platform-tests/css/css-animations/pending-style-changes-001.html [ Pass Failure ]
 
 webkit.org/b/189756 compositing/filters/opacity-change-on-filtered-paints-into-ancestor.html [ Pass ImageOnlyFailure ]
@@ -2605,6 +2603,7 @@ imported/w3c/web-platform-tests/html/semantics/embedded-content/the-iframe-eleme
 
 # rdar://111704637 - 'mousemove' not emitted from 'eventSender.moveMouseTo()'
 fast/html/transient-activation.html [ Skip ]
+fast/html/history-action-user-activation.html [ Skip ]
 
 webkit.org/b/259485 [ Ventura+ ] http/tests/media/hls/track-in-band-multiple-cues.html [ Crash ]
 

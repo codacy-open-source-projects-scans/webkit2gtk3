@@ -69,8 +69,8 @@ namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(SVGElement);
 
-SVGElement::SVGElement(const QualifiedName& tagName, Document& document, UniqueRef<SVGPropertyRegistry>&& propertyRegistry, OptionSet<TypeFlag> constructionType)
-    : StyledElement(tagName, document, constructionType)
+SVGElement::SVGElement(const QualifiedName& tagName, Document& document, UniqueRef<SVGPropertyRegistry>&& propertyRegistry, OptionSet<TypeFlag> typeFlags)
+    : StyledElement(tagName, document, typeFlags | TypeFlag::IsSVGElement | TypeFlag::HasCustomStyleResolveCallbacks)
     , m_propertyAnimatorFactory(makeUnique<SVGPropertyAnimatorFactory>())
     , m_propertyRegistry(WTFMove(propertyRegistry))
 {
@@ -452,16 +452,19 @@ static inline bool isSVGLayerAwareElement(const SVGElement& element)
     case SVG::g:
     case SVG::image:
     case SVG::line:
+    case SVG::linearGradient:
     case SVG::mask:
     case SVG::path:
     case SVG::polygon:
     case SVG::polyline:
+    case SVG::radialGradient:
     case SVG::rect:
+    case SVG::stop:
     case SVG::svg:
     case SVG::switch_:
     case SVG::symbol:
-    case SVG::textPath:
     case SVG::text:
+    case SVG::textPath:
     case SVG::tref:
     case SVG::tspan:
     case SVG::use:

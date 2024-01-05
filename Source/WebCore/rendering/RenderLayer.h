@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003, 2009, 2012, 2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2003-2024 Apple Inc. All rights reserved.
  * Copyright (c) 2020 Igalia S.L.
  *
  * Portions are Copyright (C) 1998 Netscape Communications Corporation.
@@ -897,7 +897,6 @@ private:
 
     void setNextSibling(RenderLayer* next) { m_next = next; }
     void setPreviousSibling(RenderLayer* prev) { m_previous = prev; }
-    void setParent(RenderLayer*);
     void setFirstChild(RenderLayer* first) { m_first = first; }
     void setLastChild(RenderLayer* last) { m_last = last; }
 
@@ -1164,7 +1163,6 @@ private:
     bool shouldBeSelfPaintingLayer() const;
 
     void dirtyAncestorChainVisibleDescendantStatus();
-    void setAncestorChainHasVisibleDescendant();
     
     bool computeHasVisibleContent() const;
 

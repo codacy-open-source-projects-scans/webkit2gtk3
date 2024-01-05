@@ -351,9 +351,9 @@ public:
     bool hasInvalidRenderer() const { return hasStyleFlag(NodeStyleFlag::HasInvalidRenderer); }
     bool styleResolutionShouldRecompositeLayer() const { return hasStyleFlag(NodeStyleFlag::StyleResolutionShouldRecompositeLayer); }
     bool childNeedsStyleRecalc() const { return hasStyleFlag(NodeStyleFlag::DescendantNeedsStyleResolution); }
-    bool isEditingText() const { return hasTypeFlag(TypeFlag::IsEditingText); }
+    bool isEditingText() const { return isTextNode() && hasTypeFlag(TypeFlag::IsSpecialInternalNode); }
 
-    bool isDocumentFragmentForInnerOuterHTML() const { return hasTypeFlag(TypeFlag::IsDocumentFragmentForInnerOuterHTML); }
+    bool isDocumentFragmentForInnerOuterHTML() const { return isDocumentFragment() && hasTypeFlag(TypeFlag::IsSpecialInternalNode); }
 
     void setChildNeedsStyleRecalc() { setStyleFlag(NodeStyleFlag::DescendantNeedsStyleResolution); }
     void clearChildNeedsStyleRecalc();
@@ -586,9 +586,9 @@ protected:
         IsMathMLElement = 1 << 6,
         IsShadowRoot = 1 << 7,
         IsUnknownElement = 1 << 8,
-        IsDocumentFragmentForInnerOuterHTML = 1 << 9,
-        IsEditingText = 1 << 10,
-        HasCustomStyleResolveCallbacks = 1 << 11,
+        IsSpecialInternalNode = 1 << 9, // DocumentFragment node for innerHTML/outerHTML or EditingText node.
+        HasCustomStyleResolveCallbacks = 1 << 10,
+        // 1 free bit.
     };
     static constexpr auto typeFlagBitCount = 12;
 
@@ -651,19 +651,6 @@ protected:
     void setIsParsingChildrenFinished() { clearStateFlag(StateFlag::IsParsingChildren); }
     void clearIsParsingChildrenFinished() { setStateFlag(StateFlag::IsParsingChildren); }
 
-    static constexpr auto DefaultTypeFlags = OptionSet<TypeFlag> { };
-    static constexpr auto CreateAttr = DefaultTypeFlags;
-    static constexpr auto CreateDocumentType = DefaultTypeFlags;
-    static constexpr auto CreateCharacterData = DefaultTypeFlags | TypeFlag::IsCharacterData;
-    static constexpr auto CreateText = CreateCharacterData | TypeFlag::IsText;
-    static constexpr auto CreateContainer = DefaultTypeFlags | TypeFlag::IsContainerNode;
-    static constexpr auto CreateElement = CreateContainer | TypeFlag::IsElement;
-    static constexpr auto CreatePseudoElement = CreateElement | TypeFlag::HasCustomStyleResolveCallbacks;
-    static constexpr auto CreateShadowRoot = CreateContainer | TypeFlag::IsShadowRoot;
-    static constexpr auto CreateHTMLElement = CreateElement | TypeFlag::IsHTMLElement;
-    static constexpr auto CreateSVGElement = CreateElement | TypeFlag::IsSVGElement | TypeFlag::HasCustomStyleResolveCallbacks;
-    static constexpr auto CreateMathMLElement = CreateElement | TypeFlag::IsMathMLElement;
-    static constexpr auto CreateEditingText = CreateText | TypeFlag::IsEditingText;
     Node(Document&, NodeType, OptionSet<TypeFlag>);
 
     static constexpr uint32_t s_refCountIncrement = 2;

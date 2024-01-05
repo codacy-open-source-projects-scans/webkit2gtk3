@@ -2544,23 +2544,19 @@ list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/CSSValueKeywords.cpp)
 ADD_SOURCE_WEBCORE_DERIVED_DEPENDENCIES(${WEBCORE_DIR}/css/parser/CSSParser.cpp CSSValueKeywords.h)
 ADD_SOURCE_WEBCORE_DERIVED_DEPENDENCIES(${WEBCORE_DIR}/css/CSSPrimitiveValueMappings.h CSSValueKeywords.h)
 
-# Generate CSS Selector pseudo type name to value maps.
+# Generate code and maps for CSS pseudo class & element selectors.
 add_custom_command(
-    OUTPUT ${WebCore_DERIVED_SOURCES_DIR}/SelectorPseudoClassAndCompatibilityElementMap.gperf ${WebCore_DERIVED_SOURCES_DIR}/SelectorPseudoClassAndCompatibilityElementMap.cpp
-    MAIN_DEPENDENCY ${WEBCORE_DIR}/css/SelectorPseudoClassAndCompatibilityElementMap.in
-    DEPENDS ${WEBCORE_DIR}/css/makeSelectorPseudoClassAndCompatibilityElementMap.py
+    OUTPUT ${WebCore_DERIVED_SOURCES_DIR}/CSSSelectorEnums.h ${WebCore_DERIVED_SOURCES_DIR}/CSSSelectorInlines.h ${WebCore_DERIVED_SOURCES_DIR}/SelectorPseudoClassAndCompatibilityElementMap.gperf ${WebCore_DERIVED_SOURCES_DIR}/SelectorPseudoClassAndCompatibilityElementMap.cpp ${WebCore_DERIVED_SOURCES_DIR}/SelectorPseudoElementMap.gperf ${WebCore_DERIVED_SOURCES_DIR}/SelectorPseudoElementMap.cpp
+    MAIN_DEPENDENCY ${WEBCORE_DIR}/css/CSSPseudoSelectors.json
+    DEPENDS ${WEBCORE_DIR}/css/process-css-pseudo-selectors.py
     WORKING_DIRECTORY ${WebCore_DERIVED_SOURCES_DIR}
-    COMMAND ${PYTHON_EXECUTABLE} ${WEBCORE_DIR}/css/makeSelectorPseudoClassAndCompatibilityElementMap.py ${WEBCORE_DIR}/css/SelectorPseudoClassAndCompatibilityElementMap.in "${GPERF_EXECUTABLE}" "${FEATURE_DEFINES_WITH_SPACE_SEPARATOR}"
+    COMMAND ${PYTHON_EXECUTABLE} ${WEBCORE_DIR}/css/process-css-pseudo-selectors.py ${WEBCORE_DIR}/css/CSSPseudoSelectors.json "${GPERF_EXECUTABLE}" "${FEATURE_DEFINES_WITH_SPACE_SEPARATOR}"
     VERBATIM)
 list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/SelectorPseudoClassAndCompatibilityElementMap.cpp)
-add_custom_command(
-    OUTPUT ${WebCore_DERIVED_SOURCES_DIR}/SelectorPseudoElementMap.gperf ${WebCore_DERIVED_SOURCES_DIR}/SelectorPseudoElementMap.cpp
-    MAIN_DEPENDENCY ${WEBCORE_DIR}/css/SelectorPseudoElementMap.in
-    DEPENDS ${WEBCORE_DIR}/css/makeSelectorPseudoElementsMap.py
-    WORKING_DIRECTORY ${WebCore_DERIVED_SOURCES_DIR}
-    COMMAND ${PYTHON_EXECUTABLE} ${WEBCORE_DIR}/css/makeSelectorPseudoElementsMap.py ${WEBCORE_DIR}/css/SelectorPseudoElementMap.in "${GPERF_EXECUTABLE}" "${FEATURE_DEFINES_WITH_SPACE_SEPARATOR}"
-    VERBATIM)
 list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/SelectorPseudoElementMap.cpp)
+ADD_SOURCE_WEBCORE_DERIVED_DEPENDENCIES(${WEBCORE_DIR}/css/CSSSelector.cpp CSSSelectorEnums.h)
+ADD_SOURCE_WEBCORE_DERIVED_DEPENDENCIES(${WEBCORE_DIR}/css/CSSSelector.cpp CSSSelectorInlines.h)
+ADD_SOURCE_WEBCORE_DERIVED_DEPENDENCIES(${WEBCORE_DIR}/css/parser/CSSSelectorParser.cpp CSSSelectorInlines.h)
 
 # Generate user agent styles
 add_custom_command(
@@ -2737,14 +2733,12 @@ list(APPEND WebCore_SOURCES
     ${WebCore_DERIVED_SOURCES_DIR}/WebCoreJSBuiltins.cpp
     ${WebCore_DERIVED_SOURCES_DIR}/WebCoreJSBuiltinInternals.cpp)
 
-ADD_SOURCE_WEBCORE_DERIVED_DEPENDENCIES(${WEBCORE_DIR}/html/parser/HTMLTreeBuilder.cpp MathMLNames.cpp)
-
 
 GENERATE_DOM_NAMES(HTML ${WEBCORE_DIR}/html/HTMLAttributeNames.in ${WEBCORE_DIR}/html/HTMLTagNames.in)
 list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/HTMLNames.cpp ${WebCore_DERIVED_SOURCES_DIR}/HTMLElementFactory.cpp ${WebCore_DERIVED_SOURCES_DIR}/JSHTMLElementWrapperFactory.cpp)
 
 
-GENERATE_EVENT_FACTORY(${WEBCORE_DIR}/dom/EventNames.in Event)
+GENERATE_EVENT_FACTORY(${WEBCORE_DIR}/dom/EventInterfaces.in Event)
 list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/EventInterfaces.h)
 list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/EventFactory.cpp)
 
@@ -2759,6 +2753,7 @@ list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/WebKitFontFamilyNames
 
 
 GENERATE_DOM_NAMES(MathML ${WEBCORE_DIR}/mathml/mathattrs.in ${WEBCORE_DIR}/mathml/mathtags.in)
+ADD_SOURCE_WEBCORE_DERIVED_DEPENDENCIES(${WEBCORE_DIR}/html/parser/HTMLTreeBuilder.cpp MathMLNames.cpp)
 list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/MathMLNames.cpp)
 if (ENABLE_MATHML)
     list(APPEND WebCore_SOURCES ${WebCore_DERIVED_SOURCES_DIR}/MathMLElementFactory.cpp)

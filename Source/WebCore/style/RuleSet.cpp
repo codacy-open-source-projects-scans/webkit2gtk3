@@ -187,8 +187,8 @@ void RuleSet::addRule(RuleData&& ruleData, CascadeLayerIdentifier cascadeLayerId
             break;
         case CSSSelector::Match::PseudoElement:
             switch (selector->pseudoElement()) {
-            case CSSSelector::PseudoElement::WebKitCustom:
-            case CSSSelector::PseudoElement::WebKitCustomLegacyPrefixed:
+            case CSSSelector::PseudoElement::UserAgentPart:
+            case CSSSelector::PseudoElement::UserAgentPartLegacyAlias:
                 customPseudoElementSelector = selector;
                 break;
             case CSSSelector::PseudoElement::Slotted:
@@ -211,7 +211,6 @@ void RuleSet::addRule(RuleData&& ruleData, CascadeLayerIdentifier cascadeLayerId
             case CSSSelector::PseudoClass::Link:
             case CSSSelector::PseudoClass::Visited:
             case CSSSelector::PseudoClass::AnyLink:
-            case CSSSelector::PseudoClass::AnyLinkDeprecated:
                 linkSelector = selector;
                 break;
             case CSSSelector::PseudoClass::Focus:
@@ -228,6 +227,7 @@ void RuleSet::addRule(RuleData&& ruleData, CascadeLayerIdentifier cascadeLayerId
         case CSSSelector::Match::Unknown:
         case CSSSelector::Match::ForgivingUnknown:
         case CSSSelector::Match::ForgivingUnknownNestContaining:
+        case CSSSelector::Match::HasScope:
         case CSSSelector::Match::NestingParent:
         case CSSSelector::Match::PagePseudoClass:
             break;

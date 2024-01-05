@@ -46,12 +46,14 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(Text);
 
 Ref<Text> Text::create(Document& document, String&& data)
 {
-    return adoptRef(*new Text(document, WTFMove(data), TEXT_NODE, CreateText));
+    return adoptRef(*new Text(document, WTFMove(data), TEXT_NODE, { }));
 }
 
 Ref<Text> Text::createEditingText(Document& document, String&& data)
 {
-    return adoptRef(*new Text(document, WTFMove(data), TEXT_NODE, CreateEditingText));
+    auto node = adoptRef(*new Text(document, WTFMove(data), TEXT_NODE, { TypeFlag::IsSpecialInternalNode }));
+    ASSERT(node->isEditingText());
+    return node;
 }
 
 Text::~Text() = default;

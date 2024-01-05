@@ -6661,6 +6661,11 @@ Ref<HTMLCollection> Document::documentNamedItems(const AtomString& name)
     return ensureRareData().ensureNodeLists().addCachedCollection<DocumentNameCollection>(*this, CollectionType::DocumentNamedItems, name);
 }
 
+Ref<NodeList> Document::getElementsByName(const AtomString& elementName)
+{
+    return ensureRareData().ensureNodeLists().addCacheWithAtomName<NameNodeList>(*this, elementName);
+}
+
 void Document::finishedParsing()
 {
     ASSERT(!scriptableDocumentParser() || !m_parser->isParsing());
@@ -8289,8 +8294,6 @@ void Document::ensurePlugInsInjectedScript(DOMWrapperWorld& world)
     m_hasInjectedPlugInsScript = true;
 }
 
-#if ENABLE(WEB_CRYPTO)
-
 bool Document::wrapCryptoKey(const Vector<uint8_t>& key, Vector<uint8_t>& wrappedKey)
 {
     RefPtr page = this->page();
@@ -8302,8 +8305,6 @@ bool Document::unwrapCryptoKey(const Vector<uint8_t>& wrappedKey, Vector<uint8_t
     RefPtr page = this->page();
     return page && page->chrome().client().unwrapCryptoKey(wrappedKey, key);
 }
-
-#endif // ENABLE(WEB_CRYPTO)
 
 Element* Document::activeElement()
 {
@@ -9805,7 +9806,6 @@ void Document::scheduleContentRelevancyUpdate(ContentRelevancy contentRelevancy)
     scheduleRenderingUpdate(RenderingUpdateStep::UpdateContentRelevancy);
 }
 
-// FIXME: remove when scroll anchoring is implemented (https://bugs.webkit.org/show_bug.cgi?id=259269).
 void Document::updateContentRelevancyForScrollIfNeeded(const Element& scrollAnchor)
 {
     if (!m_contentVisibilityDocumentState)

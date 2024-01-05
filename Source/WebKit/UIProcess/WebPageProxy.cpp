@@ -6025,10 +6025,8 @@ void WebPageProxy::didFailProvisionalLoadForFrameShared(Ref<WebProcessProxy>&& p
     if (m_provisionalPage && m_provisionalPage->mainFrame() == &frame && willContinueLoading == WillContinueLoading::No)
         m_provisionalPage = nullptr;
 
-    if (auto provisionalFrame = frame.takeProvisionalFrame()) {
-        if (frame.parentFrame())
-            frame.parentFrame()->protectedProcess()->send(Messages::WebPage::DidFinishLoadInAnotherProcess(frame.frameID()), webPageID());
-    }
+    if (frame.takeProvisionalFrame())
+        frame.notifyParentOfLoadCompletion(process);
 }
 
 void WebPageProxy::didFinishServiceWorkerPageRegistration(bool success)
@@ -6323,10 +6321,7 @@ void WebPageProxy::didFinishLoadForFrame(FrameIdentifier frameID, FrameInfoData&
 
         frame->didFinishLoad();
 
-        if (RefPtr parentFrame = frame->parentFrame()) {
-            if (parentFrame->process().coreProcessIdentifier() != frame->process().coreProcessIdentifier())
-                parentFrame->protectedProcess()->send(Messages::WebPage::DidFinishLoadInAnotherProcess(frameID), webPageID());
-        }
+        frame->notifyParentOfLoadCompletion(frame->process());
 
         internals().pageLoadState.commitChanges();
     }
@@ -10969,7 +10964,6 @@ void WebPageProxy::setOverlayScrollbarStyle(std::optional<WebCore::ScrollbarOver
         send(Messages::WebPage::SetScrollbarOverlayStyle(scrollbarStyleForMessage), internals().webPageID);
 }
 
-#if ENABLE(WEB_CRYPTO)
 void WebPageProxy::wrapCryptoKey(const Vector<uint8_t>& key, CompletionHandler<void(bool, Vector<uint8_t>&&)>&& completionHandler)
 {
     PageClientProtector protector(pageClient());
@@ -10997,7 +10991,6 @@ void WebPageProxy::unwrapCryptoKey(const Vector<uint8_t>& wrappedKey, Completion
     bool succeeded = unwrapSerializedCryptoKey(masterKey, wrappedKey, key);
     completionHandler(succeeded, WTFMove(key));
 }
-#endif
 
 void WebPageProxy::addMIMETypeWithCustomContentProvider(const String& mimeType)
 {

@@ -323,11 +323,11 @@ static NSArray<NSString *> *supportedPlainTextPasteboardTypes()
     return supportedTypes.get().get();
 }
 
-static NSArray<NSString *> *supportedRichTextPasteboardTypes()
+static NSArray<NSString *> *supportedRichTextPasteboardTypesForPasteConfiguration()
 {
     static NeverDestroyed supportedTypes = [] {
         auto types = adoptNS([[NSMutableArray alloc] init]);
-        [types addObject:WebCore::WebArchivePboardType];
+        [types addObject:UTTypeWebArchive.identifier];
         [types addObjectsFromArray:UIPasteboardTypeListImage];
         [types addObjectsFromArray:supportedPlainTextPasteboardTypes()];
         return types;
@@ -335,13 +335,24 @@ static NSArray<NSString *> *supportedRichTextPasteboardTypes()
     return supportedTypes.get().get();
 }
 
-#if HAVE(UI_PASTE_CONFIGURATION)
-
-static NSArray<NSString *> *supportedRichTextPasteboardTypesWithAttachments()
+static NSArray<NSString *> *supportedRichTextPasteboardTypes()
 {
     static NeverDestroyed supportedTypes = [] {
         auto types = adoptNS([[NSMutableArray alloc] init]);
-        [types addObjectsFromArray:supportedRichTextPasteboardTypes()];
+        [types addObject:WebCore::WebArchivePboardType];
+        [types addObjectsFromArray:supportedRichTextPasteboardTypesForPasteConfiguration()];
+        return types;
+    }();
+    return supportedTypes.get().get();
+}
+
+#if HAVE(UI_PASTE_CONFIGURATION)
+
+static NSArray<NSString *> *supportedRichTextPasteboardTypesWithAttachmentsForPasteConfiguration()
+{
+    static NeverDestroyed supportedTypes = [] {
+        auto types = adoptNS([[NSMutableArray alloc] init]);
+        [types addObjectsFromArray:supportedRichTextPasteboardTypesForPasteConfiguration()];
         [types addObjectsFromArray:WebCore::Pasteboard::supportedFileUploadPasteboardTypes()];
         return types;
     }();
@@ -1377,8 +1388,8 @@ static WKDragSessionContext *ensureLocalDragSessionContext(id <UIDragSession> se
 #if HAVE(UI_PASTE_CONFIGURATION)
     self.pasteConfiguration = adoptNS([[UIPasteConfiguration alloc] initWithAcceptableTypeIdentifiers:[&] {
         if (_page->preferences().attachmentElementEnabled())
-            return WebKit::supportedRichTextPasteboardTypesWithAttachments();
-        return WebKit::supportedRichTextPasteboardTypes();
+            return WebKit::supportedRichTextPasteboardTypesWithAttachmentsForPasteConfiguration();
+        return WebKit::supportedRichTextPasteboardTypesForPasteConfiguration();
     }()]).get();
 #endif
 
@@ -2699,13 +2710,14 @@ static inline WebCore::FloatSize tapHighlightBorderRadius(WebCore::FloatSize bor
 
 - (BOOL)_requiresKeyboardWhenFirstResponder
 {
-    if ([_webView _isEditable] && !self._disableAutomaticKeyboardUI)
-        return YES;
-
+    BOOL webViewIsEditable = [_webView _isEditable];
 #if HAVE(UI_ASYNC_TEXT_INTERACTION)
-    if (self.shouldUseAsyncInteractions)
+    if (!webViewIsEditable && self.shouldUseAsyncInteractions)
         return [super _requiresKeyboardWhenFirstResponder];
 #endif
+
+    if (webViewIsEditable && !self._disableAutomaticKeyboardUI)
+        return YES;
 
     // FIXME: We should add the logic to handle keyboard visibility during focus redirects.
     return [self _shouldShowAutomaticKeyboardUIIgnoringInputMode] || _seenHardwareKeyDownInNonEditableElement;
@@ -5925,9 +5937,9 @@ static void logTextInteraction(const char* methodName, UIGestureRecognizer *loup
 {
     [self _updateInternalStateBeforeSelectionChange];
 
-#if HAVE(UI_ASYNC_TEXT_INPUT_DELEGATE)
+#if HAVE(UI_ASYNC_TEXT_INTERACTION_DELEGATE)
     if (self.shouldUseAsyncInteractions)
-        [_asyncSystemInputDelegate selectionWillChange:self];
+        [_asyncSystemInputDelegate selectionWillChange:static_cast<id<UIAsyncTextInputClient>>(self)];
     else
 #endif
         [self.inputDelegate selectionWillChange:self];
@@ -5948,9 +5960,9 @@ static void logTextInteraction(const char* methodName, UIGestureRecognizer *loup
 
 - (void)_internalEndSelectionChange
 {
-#if HAVE(UI_ASYNC_TEXT_INPUT_DELEGATE)
+#if HAVE(UI_ASYNC_TEXT_INTERACTION_DELEGATE)
     if (self.shouldUseAsyncInteractions)
-        [_asyncSystemInputDelegate selectionDidChange:self];
+        [_asyncSystemInputDelegate selectionDidChange:static_cast<id<UIAsyncTextInputClient>>(self)];
     else
 #endif
         [self.inputDelegate selectionDidChange:self];
@@ -6816,13 +6828,13 @@ static UITextAutocapitalizationType toUITextAutocapitalize(WebCore::Autocapitali
 
     auto extendedTraits = dynamic_objc_cast<WKExtendedTextInputTraits>(traits);
     auto privateTraits = (id <UITextInputTraits_Private>)traits;
-    if ([privateTraits respondsToSelector:@selector(setIsSingleLineDocument:)]) {
+
+    BOOL isSingleLineDocument = ^{
         switch (_focusedElementInformation.elementType) {
         case WebKit::InputType::ContentEditable:
         case WebKit::InputType::TextArea:
-            extendedTraits.singleLineDocument = NO;
-            privateTraits.isSingleLineDocument = NO;
-            break;
+        case WebKit::InputType::None:
+            return NO;
 #if ENABLE(INPUT_TYPE_COLOR)
         case WebKit::InputType::Color:
 #endif
@@ -6841,13 +6853,14 @@ static UITextAutocapitalizationType toUITextAutocapitalize(WebCore::Autocapitali
         case WebKit::InputType::Time:
         case WebKit::InputType::URL:
         case WebKit::InputType::Week:
-            extendedTraits.singleLineDocument = YES;
-            privateTraits.isSingleLineDocument = YES;
-            break;
-        case WebKit::InputType::None:
-            break;
+            return YES;
         }
-    }
+    }();
+
+    if ([extendedTraits respondsToSelector:@selector(setSingleLineDocument:)])
+        extendedTraits.singleLineDocument = isSingleLineDocument;
+    else if ([privateTraits respondsToSelector:@selector(setIsSingleLineDocument:)])
+        privateTraits.isSingleLineDocument = isSingleLineDocument;
 
     if (_focusedElementInformation.hasEverBeenPasswordField) {
         if ([privateTraits respondsToSelector:@selector(setLearnsCorrections:)])
@@ -12627,7 +12640,7 @@ static BOOL shouldUseMachineReadableCodeMenuFromImageAnalysisResult(CocoaImageAn
             };
             break;
         }
-        completion(context.toPlatformContext({ }));
+        completion(context.toPlatformContext({ WebKit::DocumentEditingContextRequest::Options::Text }));
     }];
 }
 

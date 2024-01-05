@@ -1722,7 +1722,7 @@ ADDITIONAL_BINDING_IDLS = \
 
 vpath %.in $(WEBKITADDITIONS_HEADER_SEARCH_PATHS)
 
-ADDITIONAL_EVENT_NAMES =
+ADDITIONAL_EVENT_INTERFACES =
 ADDITIONAL_EVENT_TARGET_FACTORY =
 
 -include WebCoreDerivedSourcesAdditions.make
@@ -1779,6 +1779,8 @@ all : \
     CSSPropertyNames.h \
     CSSPropertyParsing.cpp \
     CSSPropertyParsing.h \
+    CSSSelectorEnums.h \
+    CSSSelectorInlines.h \
     CSSValueKeywords.cpp \
     CSSValueKeywords.h \
     ColorData.cpp \
@@ -1862,13 +1864,18 @@ $(CSS_VALUE_KEYWORD_FILES_PATTERNS) : $(WEBCORE_CSS_VALUE_KEYWORDS) $(WebCore)/c
 
 # --------
 
-# CSS Selector pseudo type name to value map.
+# CSS pseudo class & element selector code and maps.
 
-SelectorPseudoClassAndCompatibilityElementMap.cpp : $(WebCore)/css/makeSelectorPseudoClassAndCompatibilityElementMap.py $(WebCore)/css/SelectorPseudoClassAndCompatibilityElementMap.in $(FEATURE_AND_PLATFORM_DEFINE_DEPENDENCIES)
-	$(PYTHON) "$(WebCore)/css/makeSelectorPseudoClassAndCompatibilityElementMap.py" $(WebCore)/css/SelectorPseudoClassAndCompatibilityElementMap.in $(GPERF) "$(FEATURE_AND_PLATFORM_DEFINES)"
-
-SelectorPseudoElementMap.cpp : $(WebCore)/css/makeSelectorPseudoElementsMap.py $(WebCore)/css/SelectorPseudoElementMap.in $(FEATURE_AND_PLATFORM_DEFINE_DEPENDENCIES)
-	$(PYTHON) "$(WebCore)/css/makeSelectorPseudoElementsMap.py" $(WebCore)/css/SelectorPseudoElementMap.in $(GPERF) "$(FEATURE_AND_PLATFORM_DEFINES)"
+CSS_PSEUDO_SELECTOR_FILES = \
+    CSSSelectorEnums.h \
+    CSSSelectorInlines.h \
+    SelectorPseudoClassAndCompatibilityElementMap.cpp \
+    SelectorPseudoElementMap.cpp \
+#
+CSS_PSEUDO_SELECTOR_FILES_PATTERNS = $(subst .,%,$(CSS_PSEUDO_SELECTOR_FILES))
+all : $(CSS_PSEUDO_SELECTOR_FILES)
+$(CSS_PSEUDO_SELECTOR_FILES_PATTERNS) : $(WebCore)/css/process-css-pseudo-selectors.py $(WebCore)/css/CSSPseudoSelectors.json $(FEATURE_AND_PLATFORM_DEFINE_DEPENDENCIES)
+	$(PYTHON) "$(WebCore)/css/process-css-pseudo-selectors.py" $(WebCore)/css/CSSPseudoSelectors.json $(GPERF) "$(FEATURE_AND_PLATFORM_DEFINES)"
 
 # --------
 
@@ -2214,7 +2221,7 @@ $(XLINK_NAMES_FILES_PATTERNS) : $(WebCore)/dom/make_names.pl $(WebCore)/bindings
 
 # Register event constructors and targets
 
-EVENT_NAMES = $(WebCore)/dom/EventNames.in $(ADDITIONAL_EVENT_NAMES)
+EVENT_INTERFACES = $(WebCore)/dom/EventInterfaces.in $(ADDITIONAL_EVENT_INTERFACES)
 
 EVENT_FACTORY_FILES = \
     EventFactory.cpp \
@@ -2224,7 +2231,7 @@ EVENT_FACTORY_FILES = \
 EVENT_FACTORY_PATTERNS = $(subst .,%,$(EVENT_FACTORY_FILES))
 
 all : $(EVENT_FACTORY_FILES)
-$(EVENT_FACTORY_PATTERNS) : $(WebCore)/dom/make_event_factory.pl $(EVENT_NAMES)
+$(EVENT_FACTORY_PATTERNS) : $(WebCore)/dom/make_event_factory.pl $(EVENT_INTERFACES)
 	$(PERL) $< $(addprefix --input , $(filter-out $(WebCore)/dom/make_event_factory.pl, $^))
 
 EVENT_TARGET_FACTORY = $(WebCore)/dom/EventTargetFactory.in $(ADDITIONAL_EVENT_TARGET_FACTORY)

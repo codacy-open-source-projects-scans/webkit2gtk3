@@ -45,11 +45,11 @@
 #include "ResolvedStyle.h"
 #include "ScriptController.h"
 #include "ScriptDisallowedScope.h"
-#include "ShadowPseudoIds.h"
 #include "ShadowRoot.h"
 #include "StyleResolver.h"
 #include "TextEvent.h"
 #include "TextEventInputType.h"
+#include "UserAgentPartIds.h"
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/Ref.h>
 #include <wtf/SetForScope.h>
@@ -66,7 +66,7 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(SearchFieldCancelButtonElement);
 using namespace HTMLNames;
 
 TextControlInnerContainer::TextControlInnerContainer(Document& document)
-    : HTMLDivElement(divTag, document, CreateTextControlInnerContainer)
+    : HTMLDivElement(divTag, document, TypeFlag::HasCustomStyleResolveCallbacks)
 {
 }
 
@@ -98,7 +98,7 @@ std::optional<Style::ResolvedStyle> TextControlInnerContainer::resolveCustomStyl
 }
 
 TextControlInnerElement::TextControlInnerElement(Document& document)
-    : HTMLDivElement(divTag, document, CreateTextControlInnerElement)
+    : HTMLDivElement(divTag, document, TypeFlag::HasCustomStyleResolveCallbacks)
 {
 }
 
@@ -144,7 +144,7 @@ std::optional<Style::ResolvedStyle> TextControlInnerElement::resolveCustomStyle(
 // MARK: TextControlInnerTextElement
 
 inline TextControlInnerTextElement::TextControlInnerTextElement(Document& document)
-    : HTMLDivElement(divTag, document, CreateTextControlInnerTextElement)
+    : HTMLDivElement(divTag, document, TypeFlag::HasCustomStyleResolveCallbacks )
 {
 }
 
@@ -204,7 +204,7 @@ std::optional<Style::ResolvedStyle> TextControlInnerTextElement::resolveCustomSt
 // MARK: TextControlPlaceholderElement
 
 inline TextControlPlaceholderElement::TextControlPlaceholderElement(Document& document)
-    : HTMLDivElement(divTag, document, CreateTextControlPlaceholderElement)
+    : HTMLDivElement(divTag, document, TypeFlag::HasCustomStyleResolveCallbacks)
 {
 }
 
@@ -212,7 +212,7 @@ Ref<TextControlPlaceholderElement> TextControlPlaceholderElement::create(Documen
 {
     auto element = adoptRef(*new TextControlPlaceholderElement(document));
     ScriptDisallowedScope::EventAllowedScope eventAllowedScope { element };
-    element->setPseudo(ShadowPseudoIds::placeholder());
+    element->setPseudo(UserAgentPartIds::placeholder());
     return element;
 }
 
@@ -240,7 +240,7 @@ static inline bool searchFieldStyleHasExplicitlySpecifiedTextFieldAppearance(con
 }
 
 inline SearchFieldResultsButtonElement::SearchFieldResultsButtonElement(Document& document)
-    : HTMLDivElement(divTag, document, CreateSearchFieldResultsButtonElement)
+    : HTMLDivElement(divTag, document, TypeFlag::HasCustomStyleResolveCallbacks)
 {
     if (document.quirks().shouldHideSearchFieldResultsButton())
         setInlineStyleProperty(CSSPropertyDisplay, CSSValueNone);
@@ -314,7 +314,7 @@ bool SearchFieldResultsButtonElement::willRespondToMouseClickEventsWithEditabili
 // MARK: SearchFieldCancelButtonElement
 
 inline SearchFieldCancelButtonElement::SearchFieldCancelButtonElement(Document& document)
-    : HTMLDivElement(divTag, document, CreateSearchFieldCancelButtonElement)
+    : HTMLDivElement(divTag, document, TypeFlag::HasCustomStyleResolveCallbacks)
 {
 }
 
@@ -323,7 +323,7 @@ Ref<SearchFieldCancelButtonElement> SearchFieldCancelButtonElement::create(Docum
     auto element = adoptRef(*new SearchFieldCancelButtonElement(document));
 
     ScriptDisallowedScope::EventAllowedScope eventAllowedScope { element };
-    element->setPseudo(ShadowPseudoIds::webkitSearchCancelButton());
+    element->setPseudo(UserAgentPartIds::webkitSearchCancelButton());
 #if !PLATFORM(IOS_FAMILY)
     element->setAttributeWithoutSynchronization(aria_labelAttr, AtomString { AXSearchFieldCancelButtonText() });
 #endif

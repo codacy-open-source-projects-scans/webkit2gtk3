@@ -242,11 +242,11 @@ static HashMap<CheckedRef<Element>, ElementIdentifier>& elementIdentifiersMap()
 
 Ref<Element> Element::create(const QualifiedName& tagName, Document& document)
 {
-    return adoptRef(*new Element(tagName, document, CreateElement));
+    return adoptRef(*new Element(tagName, document, { }));
 }
 
-Element::Element(const QualifiedName& tagName, Document& document, OptionSet<TypeFlag> type)
-    : ContainerNode(document, ELEMENT_NODE, type)
+Element::Element(const QualifiedName& tagName, Document& document, OptionSet<TypeFlag> typeFlags)
+    : ContainerNode(document, ELEMENT_NODE, typeFlags | TypeFlag::IsElement)
     , m_tagName(tagName)
 {
 }
@@ -944,7 +944,7 @@ void Element::setBeingDragged(bool value)
     if (value == isBeingDragged())
         return;
 
-    Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClass::Drag, value);
+    Style::PseudoClassChangeInvalidation styleInvalidation(*this, CSSSelector::PseudoClass::WebKitDrag, value);
     protectedDocument()->userActionElements().setBeingDragged(*this, value);
 }
 
@@ -2148,7 +2148,7 @@ void Element::attributeChanged(const QualifiedName& name, const AtomString& oldV
             setNonce(newValue.isNull() ? emptyAtom() : newValue);
         break;
     case AttributeNames::pseudoAttr:
-        if (needsStyleInvalidation() && isInShadowTree())
+        if (needsStyleInvalidation() && isInUserAgentShadowTree())
             invalidateStyleForSubtree();
         break;
     case AttributeNames::slotAttr:
@@ -2372,7 +2372,6 @@ void Element::setIsLink(bool flag)
         return;
     Style::PseudoClassChangeInvalidation styleInvalidation(*this, {
         { CSSSelector::PseudoClass::AnyLink, flag },
-        { CSSSelector::PseudoClass::AnyLinkDeprecated, flag },
         { CSSSelector::PseudoClass::Link, flag }
     });
     setStateFlag(StateFlag::IsLink, flag);
@@ -3125,11 +3124,6 @@ CustomElementDefaultARIA* Element::customElementDefaultARIAIfExists()
     return isPrecustomizedOrDefinedCustomElement() && hasRareData() ? elementRareData()->customElementDefaultARIA() : nullptr;
 }
 
-const AtomString& Element::shadowPseudoId() const
-{
-    return pseudo();
-}
-
 bool Element::childTypeAllowed(NodeType type) const
 {
     switch (type) {
@@ -3595,8 +3589,6 @@ void Element::focus(const FocusOptions& options)
             page->chrome().client().elementDidRefocus(*this, options);
         return;
     }
-
-    document->updateContentRelevancyForScrollIfNeeded(*this);
 
     RefPtr newTarget { this };
 
