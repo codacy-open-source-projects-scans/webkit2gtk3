@@ -439,6 +439,8 @@ bool RenderBlockFlow::willCreateColumns(std::optional<unsigned> desiredColumnCou
         return false;
     if (isRenderSVGBlock() || isRenderRubyRun() || isRenderRubyAsBlock() || isRenderRubyAsInline() || isRenderRubyBase())
         return false;
+    if (style().display() == DisplayType::RubyBlock || style().display() == DisplayType::RubyAnnotation)
+        return false;
 #if ENABLE(MATHML)
     if (isRenderMathMLBlock())
         return false;
@@ -512,7 +514,12 @@ void RenderBlockFlow::layoutBlock(bool relayoutChildren, LayoutUnit pageLogicalH
     LayoutUnit repaintLogicalBottom;
     LayoutUnit maxFloatLogicalBottom;
     LayoutUnit pageRemaining;
-    bool isPaginated = view().frameView().layoutContext().layoutState()->isPaginated();
+    auto isPaginated = [&] {
+        // FIXME: Grid calls into layout outside of regular layout phase (during preferred width computation).
+        if (auto* layoutState = view().frameView().layoutContext().layoutState())
+            return layoutState->isPaginated();
+        return false;
+    }();
     const RenderStyle& styleToUse = style();
     do {
         LayoutStateMaintainer statePusher(*this, locationOffset(), isTransformed() || hasReflection() || styleToUse.isFlippedBlocksWritingMode(), pageLogicalHeight, pageLogicalHeightChanged);

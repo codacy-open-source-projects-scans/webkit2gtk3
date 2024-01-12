@@ -113,6 +113,12 @@ void AccessibilityObject::init()
     m_role = determineAccessibilityRole();
 }
 
+AXID AccessibilityObject::treeID() const
+{
+    auto* cache = axObjectCache();
+    return cache ? cache->treeID() : AXID();
+}
+
 inline ProcessID AccessibilityObject::processID() const
 {
     return presentingApplicationPID();
@@ -1276,7 +1282,7 @@ IntRect AccessibilityObject::boundingBoxForQuads(RenderObject* obj, const Vector
         FloatRect r = quad.enclosingBoundingBox();
         if (!r.isEmpty()) {
             if (obj->style().hasEffectiveAppearance())
-                obj->theme().adjustRepaintRect(*obj, r);
+                obj->theme().inflateRectForControlRenderer(*obj, r);
             result.unite(r);
         }
     }

@@ -111,6 +111,21 @@ public:
     bool usesSampleMask() const { return m_usesSampleMask; }
     void setUsesSampleMask() { m_usesSampleMask = true; }
 
+    bool usesFrontFacing() const { return m_usesFrontFacing; }
+    void setUsesFrontFacing() { m_usesFrontFacing = true; }
+
+    bool usesSampleIndex() const { return m_usesSampleIndex; }
+    void setUsesSampleIndex() { m_usesSampleIndex = true; }
+
+    bool usesDot4I8Packed() const { return m_usesDot4I8Packed; }
+    void setUsesDot4I8Packed() { m_usesDot4I8Packed = true; }
+
+    bool usesDot4U8Packed() const { return m_usesDot4U8Packed; }
+    void setUsesDot4U8Packed() { m_usesDot4U8Packed = true; }
+
+    bool usesExtractBits() const { return m_usesExtractBits; }
+    void setUsesExtractBits() { m_usesExtractBits = true; }
+
     template<typename T>
     std::enable_if_t<std::is_base_of_v<AST::Node, T>, void> replace(T* current, T&& replacement)
     {
@@ -272,6 +287,11 @@ private:
     bool m_usesFirstTrailingBit { false };
     bool m_usesSign { false };
     bool m_usesSampleMask { false };
+    bool m_usesFrontFacing { false };
+    bool m_usesSampleIndex { false };
+    bool m_usesDot4I8Packed { false };
+    bool m_usesDot4U8Packed { false };
+    bool m_usesExtractBits { false };
     OptionSet<Extension> m_enabledExtensions;
     OptionSet<LanguageFeature> m_requiredFeatures;
     Configuration m_configuration;

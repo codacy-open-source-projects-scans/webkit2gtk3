@@ -1395,7 +1395,9 @@ void AXObjectCache::childrenChanged(AccessibilityObject* object)
     m_deferredChildrenChangedList.add(object);
 
     // Adding or removing rows from a table can cause it to change from layout table to AX data table and vice versa, so queue up recomputation of that for the parent table.
-    if (auto* tableSectionElement = dynamicDowncast<HTMLTableSectionElement>(object->element()))
+    if (auto* tableElement = dynamicDowncast<HTMLTableElement>(object->element()))
+        deferRecomputeTableIsExposed(const_cast<HTMLTableElement*>(tableElement));
+    else if (auto* tableSectionElement = dynamicDowncast<HTMLTableSectionElement>(object->element()))
         deferRecomputeTableIsExposed(const_cast<HTMLTableElement*>(tableSectionElement->findParentTable().get()));
 
     if (!m_performCacheUpdateTimer.isActive())
@@ -4646,6 +4648,11 @@ static bool relationCausesCycle(AccessibilityObject* origin, AccessibilityObject
 
 void AXObjectCache::addRelation(AccessibilityObject* origin, AccessibilityObject* target, AXRelationType relationType, AddSymmetricRelation addSymmetricRelation)
 {
+    AXTRACE("AXObjectCache::addRelation"_s);
+    AXLOG(origin);
+    AXLOG(target);
+    AXLOG(relationType);
+
     if (!validRelation(origin, target, relationType))
         return;
 
@@ -4708,6 +4715,8 @@ void AXObjectCache::addRelation(AccessibilityObject* origin, AccessibilityObject
 
 void AXObjectCache::removeRelations(Element& origin, AXRelationType relationType)
 {
+    AXTRACE("AXObjectCache::removeRelations"_s);
+
     auto* object = get(&origin);
     if (!object)
         return;

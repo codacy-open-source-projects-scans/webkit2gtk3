@@ -1956,7 +1956,6 @@ imported/w3c/web-platform-tests/html/semantics/embedded-content/the-video-elemen
 
 imported/w3c/web-platform-tests/css/css-conditional/at-supports-namespace-001.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-conditional/at-supports-namespace-002.html [ ImageOnlyFailure ]
-webkit.org/b/266947 imported/w3c/web-platform-tests/css/css-conditional/at-supports-selector-webkit-slider-thumb.tentative.html [ ImageOnlyFailure ]
 
 transitions/svg-text-shadow-transition.html [ Failure ]
 webkit.org/b/137883 transitions/background-transitions.html [ Failure Pass ]
@@ -7446,3 +7445,6 @@ http/wpt/opener/parent-access-child-via-windowproxy.html [ Skip ]
 webkit.org/b/266477 compositing/layer-creation/scale-rotation-transition-overlap.html [ Failure Timeout ]
 
 webkit.org/b/266986 imported/w3c/web-platform-tests/css/css-pseudo/highlight-pseudos-computed.html [ Failure ]
+
+# At the time of writing this test consumes all available IOSurfaces. If the next test is image-buffer-backend-variants.html, that will fail.
+fast/canvas/2d.context.many.small.html [ Slow Skip ]

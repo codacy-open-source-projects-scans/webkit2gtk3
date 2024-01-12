@@ -2817,6 +2817,21 @@ FullScreenEnabled:
     WebCore:
       default: false
 
+FullScreenKeyboardLock:
+  type: bool
+  status: testable
+  category: dom
+  humanReadableName: "Fullscreen API based Keyboard Lock"
+  humanReadableDescription: "Fullscreen API based Keyboard Lock"
+  condition: ENABLE(FULLSCREEN_API)
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 FullscreenRequirementForScreenOrientationLockingEnabled:
   type: bool
   status: embedder
@@ -4222,7 +4237,7 @@ MediaCapabilitiesExtensionsEnabled:
 
 MediaCapabilityGrantsEnabled:
   type: bool
-  status: unstable
+  status: embedder
   condition: ENABLE(EXTENSION_CAPABILITIES)
   humanReadableName: "Media Capability Grants"
   humanReadableDescription: "Enable granting and revoking of media capabilities"
@@ -4230,8 +4245,10 @@ MediaCapabilityGrantsEnabled:
     WebKitLegacy:
       default: false
     WebKit:
+      "PLATFORM(IOS_FAMILY_SIMULATOR)": false
       default: true
     WebCore:
+      "PLATFORM(IOS_FAMILY_SIMULATOR)": false
       default: true
 
 MediaCaptionFormatTypesAllowedInLockdownMode:
@@ -4488,6 +4505,21 @@ MediaStreamEnabled:
       default: true
     WebCore:
       default: true
+
+MediaStreamTrackProcessingEnabled:
+  type: bool
+  status: testable
+  category: media
+  humanReadableName: "MediaStreamTrack Processing"
+  humanReadableDescription: "Enable MediaStreamTrack Processing"
+  condition: ENABLE(MEDIA_STREAM)
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
 
 MediaUserGestureInheritsFromDocument:
   type: bool
@@ -5110,7 +5142,7 @@ PluginsEnabled:
   webcoreOnChange: pluginsEnabledChanged
   defaultValue:
     WebKitLegacy:
-      default: true
+      default: false
     WebKit:
       default: false
     WebCore:
@@ -6128,7 +6160,7 @@ ShouldTakeNearSuspendedAssertions:
     WebKitLegacy:
       default: true
     WebKit:
-      default: true
+      default: defaultShouldTakeNearSuspendedAssertion()
     WebCore:
       default: true
 

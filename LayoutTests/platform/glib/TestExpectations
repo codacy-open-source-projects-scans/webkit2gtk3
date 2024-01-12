@@ -1033,8 +1033,6 @@ webkit.org/b/177294 fast/text/fitzpatrick-combination.html [ ImageOnlyFailure ]
 # GStreamer-related bugs
 #////////////////////////////////////////////////////////////////////////////////////////
 
-webkit.org/b/132262 http/tests/media/video-redirect.html [ Crash Timeout Pass ]
-
 webkit.org/b/254520 media/video-ended-event-negative-playback.html [ Failure Timeout Pass ]
 webkit.org/b/254519 media/media-continues-playing-after-replace-source.html [ Failure Pass ]
 webkit.org/b/254518 imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/autoplay-allowed-by-feature-policy.https.sub.html [ Crash Failure Timeout Pass ]
@@ -1046,11 +1044,13 @@ media/video-seek-to-current-time.html [ Failure ]
 
 webkit.org/b/213699 http/wpt/mediarecorder/mimeType.html [ Failure ]
 webkit.org/b/213699 http/wpt/mediarecorder/mute-tracks.html [ Failure Crash ]
-webkit.org/b/213699 http/wpt/mediarecorder/video-rotation.html [ Failure ]
+# Uncomment when webkit.org/b/267411 is fixed
+#webkit.org/b/213699 http/wpt/mediarecorder/video-rotation.html [ Failure ]
 webkit.org/b/213699 imported/w3c/web-platform-tests/mediacapture-record/MediaRecorder-mimetype.html [ Pass Timeout ]
 webkit.org/b/213699 imported/w3c/web-platform-tests/mediacapture-record/MediaRecorder-no-sink.https.html [ Failure ]
-webkit.org/b/213699 imported/w3c/web-platform-tests/mediacapture-record/MediaRecorder-peerconnection.https.html [ Failure ]
-webkit.org/b/213699 http/wpt/mediarecorder/set-srcObject-MediaStream-Blob.html [ Pass Failure ]
+# Uncomment when webkit.org/b/267411 is fixed
+#webkit.org/b/213699 imported/w3c/web-platform-tests/mediacapture-record/MediaRecorder-peerconnection.https.html [ Failure ]
+#webkit.org/b/213699 http/wpt/mediarecorder/set-srcObject-MediaStream-Blob.html [ Pass Failure ]
 webkit.org/b/213699 http/wpt/mediarecorder/MediaRecorder-audio-bitrate.html [ Pass Failure ]
 webkit.org/b/213699 http/wpt/mediarecorder/MediaRecorder-AV-audio-video-dataavailable.html [ Timeout Failure ]
 
@@ -1235,9 +1235,6 @@ webkit.org/b/264708 [ Debug ] imported/w3c/web-platform-tests/media-source/media
 
 webkit.org/b/264708 media/media-source/media-webm-opus-partial-abort.html [ Pass Crash Failure ]
 
-webkit.org/b/264934 imported/w3c/web-platform-tests/webaudio/the-audio-api/the-audioworklet-interface/audioworklet-registerprocessor-called-on-globalthis.https.html [ Pass Crash ]
-webkit.org/b/264934 http/wpt/webaudio/the-audio-api/the-audioworklet-interface/exposed-properties.https.html [ Pass Crash ]
-
 webkit.org/b/265205 imported/w3c/web-platform-tests/media-source/mediasource-remove-preserves-currentTime.html [ Pass Crash ]
 
 webkit.org/b/265206 media/encrypted-media/encrypted-media-append-encrypted-unencrypted.html [ Pass Crash ]
@@ -1395,6 +1392,7 @@ webkit.org/b/245334 [ Debug ] imported/w3c/web-platform-tests/html/canvas/offscr
 # This failure is related with (incomplete?) webgl support for OffscreenCanvas.
 webkit.org/b/245952 [ Debug ] imported/w3c/web-platform-tests/webcodecs/videoFrame-texImage.any.worker.html [ Failure Crash ]
 webgl/1.0.x/conformance/offscreencanvas/offscreencanvas-transfer-image-bitmap.html [ Failure Timeout Pass ]
+webkit.org/b/267218 webgl/webgl-worker.html [ Failure ]
 
 #////////////////////////////////////////////////////////////////////////////////////////
 # End of OffscreenCanvas-related bugs
@@ -1885,16 +1883,20 @@ webkit.org/b/79203 fast/mediastream/RTCPeerConnection-ice.html [ Failure Timeout
 webkit.org/b/79203 fast/mediastream/RTCPeerConnection-inspect-offer-bundlePolicy-bundle-only.html [ Failure Crash ]
 webkit.org/b/79203 fast/mediastream/RTCPeerConnection-stats.html [ Timeout Crash ]
 webkit.org/b/79203 fast/mediastream/video-srcObject-fit-fill.html [ Pass Timeout ]
-webkit.org/b/230415 fast/mediastream/RTCPeerConnection-iceconnectionstatechange-event.html [ Timeout ]
+# Uncomment when webkit.org/b/267411 is fixed
+#webkit.org/b/230415 fast/mediastream/RTCPeerConnection-iceconnectionstatechange-event.html [ Timeout ]
 webkit.org/b/187603 fast/mediastream/media-stream-track-source-failure.html [ Timeout Failure Pass ]
 
 webkit.org/b/264803 fast/mediastream/mediastreamtrack-video-resize-event.html [ Failure ]
 
-webkit.org/b/262989 imported/w3c/web-platform-tests/webrtc-stats/getStats-remote-candidate-address.html [ Failure ]
-webkit.org/b/262989 imported/w3c/web-platform-tests/webrtc-stats/outbound-rtp.https.html [ Failure ]
-webkit.org/b/262989 imported/w3c/web-platform-tests/webrtc-stats/rtp-stats-creation.html [ Failure ]
-webkit.org/b/262989 imported/w3c/web-platform-tests/webrtc-stats/supported-stats.https.html [ Failure ]
-webkit.org/b/262989 imported/w3c/web-platform-tests/webrtc-stats/hardware-capability-stats.https.html [ Failure ]
+# Adding transceivers without tracks is broken.
+webkit.org/b/265865 imported/w3c/web-platform-tests/webrtc-stats/rtp-stats-creation.html [ Skip ]
+
+# [GStreamer][WebRTC] Missing support for non-trickle ICE handshake
+webkit.org/b/265860 imported/w3c/web-platform-tests/webrtc-stats/supported-stats.https.html [ Skip ]
+
+# Pass Slow Failure with GStreamer 1.23. Skip (too many bugs) with GStreamer 1.22.
+webkit.org/b/262989 imported/w3c/web-platform-tests/webrtc-stats/hardware-capability-stats.https.html [ Skip ]
 
 # This ends up calling WKPageTriggerMockMicrophoneConfigurationChange which is specific to GPUProcess.
 fast/mediastream/mediastreamtrack-configurationchange.html [ Skip ]
@@ -1998,18 +2000,23 @@ webkit.org/b/235885 webrtc/video.html [ Failure ]
 
 # webrtcbin emits no ICE candidate stats for a PeerConnection managing only one data-channel.
 webkit.org/b/235885 webrtc/candidate-stats.html [ Failure ]
+webkit.org/b/262989 imported/w3c/web-platform-tests/webrtc-stats/getStats-remote-candidate-address.html [ Failure ]
 
 # Pending investigation.
-webkit.org/b/235885 fast/mediastream/RTCPeerConnection-addIceCandidate.html [ Failure ]
+# Uncomment when webkit.org/b/267411 is fixed
+#webkit.org/b/235885 fast/mediastream/RTCPeerConnection-addIceCandidate.html [ Failure ]
 webkit.org/b/235885 fast/mediastream/RTCPeerConnection-addTrack-reuse-sender.html [ Failure ]
 webkit.org/b/235885 fast/mediastream/RTCPeerConnection-have-local-pranswer.html [ Failure ]
 webkit.org/b/235885 fast/mediastream/RTCPeerConnection-have-remote-offer.html [ Failure ]
 webkit.org/b/235885 fast/mediastream/RTCPeerConnection-have-remote-pranswer.html [ Failure ]
-webkit.org/b/235885 fast/mediastream/RTCPeerConnection-icecandidate-event.html [ Failure ]
+# Uncomment when webkit.org/b/267411 is fixed
+#webkit.org/b/235885 fast/mediastream/RTCPeerConnection-icecandidate-event.html [ Failure ]
 webkit.org/b/235885 fast/mediastream/RTCPeerConnection-media-setup-callbacks-single-dialog.html [ Failure ]
-webkit.org/b/235885 fast/mediastream/RTCPeerConnection-media-setup-two-dialogs.html [ Failure Timeout ]
+# Uncomment when webkit.org/b/267411 is fixed
+#webkit.org/b/235885 fast/mediastream/RTCPeerConnection-media-setup-two-dialogs.html [ Failure Timeout ]
 webkit.org/b/235885 fast/mediastream/RTCPeerConnection-onnegotiationneeded.html [ Skip ] # Timeout.
-webkit.org/b/235885 fast/mediastream/RTCPeerConnection-remotely-assigned-transceiver-mid.html [ Pass Failure Timeout ]
+# Uncomment when webkit.org/b/267411 is fixed
+#webkit.org/b/235885 fast/mediastream/RTCPeerConnection-remotely-assigned-transceiver-mid.html [ Pass Failure Timeout ]
 webkit.org/b/235885 fast/mediastream/RTCPeerConnection-setLocalDescription-offer.html [ Failure ]
 webkit.org/b/235885 imported/w3c/web-platform-tests/webrtc-extensions/RTCRtpParameters-maxFramerate.html [ Failure ]
 webkit.org/b/235885 imported/w3c/web-platform-tests/webrtc-priority/RTCRtpParameters-encodings.html [ Failure ]
@@ -2664,11 +2671,10 @@ http/tests/webshare [ Skip ]
 http/tests/privateClickMeasurement [ Skip ]
 inspector/page/overrideSetting-PrivateClickMeasurementDebugModeEnabled.html [ Skip ]
 
-# The attachment element is not stadandard and not currently supported on glib
+# The attachment element is not standard and not currently supported on glib
 fast/attachment [ Skip ]
 editing/pasteboard/copy-paste-attachment.html [ Skip ]
 editing/text-iterator/backwards-text-iterator-attachment.html [ Skip ]
-fast/css/has-attachment.html [ Skip ]
 
 # <model> is not supported by GTK/WPE
 http/tests/model/ [ Skip ]
@@ -3754,11 +3760,27 @@ webkit.org/b/266465 [ Debug ] imported/w3c/web-platform-tests/editing/run/delete
 
 webkit.org/b/266636 fast/multicol/last-set-crash.html [ Skip ]
 
-webkit.org/b/266708 imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/loading-the-media-resource/resource-selection-currentSrc.html [ Pass Crash ]
-
 webkit.org/b/266719 fast/canvas/offscreen-giant.html [ ImageOnlyFailure ]
 
 webkit.org/b/266713 webrtc/processIceTransportStateChange-gc.html [ Skip ]
+
+webkit.org/b/267411 fast/mediastream/RTCPeerConnection-addIceCandidate.html [ Failure Crash ]
+webkit.org/b/267411 fast/mediastream/RTCPeerConnection-addTransceiver.html [ Pass Crash ]
+webkit.org/b/267411 fast/mediastream/RTCPeerConnection-icecandidate-event.html [ Failure Crash ]
+webkit.org/b/267411 fast/mediastream/RTCPeerConnection-iceconnectionstatechange-event.html [ Timeout Crash ]
+webkit.org/b/267411 fast/mediastream/RTCPeerConnection-localDescription.html [ Pass Crash ]
+webkit.org/b/267411 fast/mediastream/RTCPeerConnection-media-setup-two-dialogs.html [ Failure Timeout Crash ]
+webkit.org/b/267411 fast/mediastream/RTCPeerConnection-remotely-assigned-transceiver-mid.html [ Pass Failure Timeout Crash ]
+webkit.org/b/267411 http/wpt/mediarecorder/MediaRecorder-multiple-start-stop.html [ Pass Crash ]
+webkit.org/b/267411 http/wpt/mediarecorder/MediaRecorder-video-bitrate.html [ Pass Crash ]
+webkit.org/b/267411 http/wpt/mediarecorder/MediaRecorder-video-h264-profiles.html [ Crash Pass Timeout Crash ]
+webkit.org/b/267411 http/wpt/mediarecorder/pause-recording-timeSlice.html [ Pass Crash ]
+webkit.org/b/267411 http/wpt/mediarecorder/pause-recording.html [ Pass Failure Crash ]
+webkit.org/b/267411 http/wpt/mediarecorder/set-srcObject-MediaStream-Blob.html [ Pass Failure Crash ]
+webkit.org/b/267411 http/wpt/mediarecorder/video-rotation.html [ Failure Crash ]
+webkit.org/b/267411 imported/w3c/web-platform-tests/mediacapture-record/MediaRecorder-peerconnection.https.html [ Failure Crash ]
+webkit.org/b/267411 imported/w3c/web-platform-tests/webrtc-stats/outbound-rtp.https.html [ Pass Crash ]
+webkit.org/b/267411 media/now-playing-status-for-video-conference-web-page.html [ Pass Crash ]
 
 # End: Common failures between GTK and WPE.
 

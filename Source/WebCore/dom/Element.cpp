@@ -1263,32 +1263,6 @@ void Element::scrollTo(double x, double y)
     scrollTo(ScrollToOptions(x, y));
 }
 
-void Element::scrollByUnits(int units, ScrollGranularity granularity)
-{
-    protectedDocument()->updateLayoutIgnorePendingStylesheets(LayoutOptions::UpdateCompositingLayers);
-
-    CheckedPtr renderer = this->renderer();
-    if (!renderer)
-        return;
-
-    if (!renderer->hasNonVisibleOverflow())
-        return;
-
-    auto direction = units < 0 ? ScrollDirection::ScrollUp : ScrollDirection::ScrollDown;
-    auto* stopElement = this;
-    downcast<RenderBox>(*renderer).scroll(direction, granularity, std::abs(units), &stopElement);
-}
-
-void Element::scrollByLines(int lines)
-{
-    scrollByUnits(lines, ScrollGranularity::Line);
-}
-
-void Element::scrollByPages(int pages)
-{
-    scrollByUnits(pages, ScrollGranularity::Page);
-}
-
 static double localZoomForRenderer(const RenderElement& renderer)
 {
     // FIXME: This does the wrong thing if two opposing zooms are in effect and canceled each
@@ -2147,7 +2121,7 @@ void Element::attributeChanged(const QualifiedName& name, const AtomString& oldV
         if (is<HTMLElement>(*this) || is<SVGElement>(*this))
             setNonce(newValue.isNull() ? emptyAtom() : newValue);
         break;
-    case AttributeNames::pseudoAttr:
+    case AttributeNames::useragentpartAttr:
         if (needsStyleInvalidation() && isInUserAgentShadowTree())
             invalidateStyleForSubtree();
         break;
@@ -3894,14 +3868,17 @@ String Element::title() const
     return String();
 }
 
-const AtomString& Element::pseudo() const
+const AtomString& Element::userAgentPart() const
 {
-    return attributeWithoutSynchronization(pseudoAttr);
+    ASSERT(isInUserAgentShadowTree());
+    return attributeWithoutSynchronization(useragentpartAttr);
 }
 
-void Element::setPseudo(const AtomString& value)
+void Element::setUserAgentPart(const AtomString& value)
 {
-    setAttributeWithoutSynchronization(pseudoAttr, value);
+    // We may set the useragentpart attribute on elements before appending them to the shadow tree.
+    ASSERT(!isConnected() || isInUserAgentShadowTree());
+    setAttributeWithoutSynchronization(useragentpartAttr, value);
 }
 
 void Element::willBecomeFullscreenElement()
@@ -5005,6 +4982,7 @@ void Element::resetComputedStyle()
 void Element::resetStyleRelations()
 {
     clearStyleFlags(NodeStyleFlag::StyleAffectedByEmpty);
+    clearStyleFlags(NodeStyleFlag::AffectedByHasWithPositionalPseudoClass);
     if (!hasRareData())
         return;
     elementRareData()->setChildIndex(0);

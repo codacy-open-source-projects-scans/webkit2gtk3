@@ -213,16 +213,16 @@ bool CSSSelectorParser::supportsComplexSelector(CSSParserTokenRange range, const
     // @supports requires that all arguments parse.
     parser.m_disableForgivingParsing = true;
 
-    std::unique_ptr<MutableCSSSelector> parserSelector;
+    std::unique_ptr<MutableCSSSelector> mutableSelector;
     if (isNestedContext == CSSParserEnum::IsNestedContext::Yes)
-        parserSelector = parser.consumeNestedComplexSelector(range);
+        mutableSelector = parser.consumeNestedComplexSelector(range);
     else
-        parserSelector = parser.consumeComplexSelector(range);
+        mutableSelector = parser.consumeComplexSelector(range);
 
-    if (parser.m_failedParsing || !range.atEnd() || !parserSelector)
+    if (parser.m_failedParsing || !range.atEnd() || !mutableSelector)
         return false;
 
-    auto complexSelector = parserSelector->releaseSelector();
+    auto complexSelector = mutableSelector->releaseSelector();
     ASSERT(complexSelector);
 
     return !containsUnknownWebKitPseudoElements(*complexSelector);
@@ -431,6 +431,8 @@ static bool isUserActionPseudoClass(CSSSelector::PseudoClass pseudo)
 
 static bool isPseudoClassValidAfterPseudoElement(CSSSelector::PseudoClass pseudoClass, CSSSelector::PseudoElement compoundPseudoElement)
 {
+    // FIXME: https://drafts.csswg.org/selectors-4/#pseudo-element-states states all pseudo-elements
+    // can be followed by isUserActionPseudoClass().
     // Validity of these is determined by their content.
     if (isLogicalCombinationPseudoClass(pseudoClass))
         return true;
@@ -452,6 +454,7 @@ static bool isPseudoClassValidAfterPseudoElement(CSSSelector::PseudoClass pseudo
         return pseudoClass == CSSSelector::PseudoClass::WindowInactive;
     case CSSSelector::PseudoElement::UserAgentPart:
     case CSSSelector::PseudoElement::UserAgentPartLegacyAlias:
+    case CSSSelector::PseudoElement::WebKitUnknown:
         return isUserActionPseudoClass(pseudoClass);
     default:
         return false;
@@ -625,10 +628,8 @@ std::unique_ptr<MutableCSSSelector> CSSSelectorParser::consumeId(CSSParserTokenR
 
     auto selector = makeUnique<MutableCSSSelector>();
     selector->setMatch(CSSSelector::Match::Id);
-    
-    // FIXME-NEWPARSER: Avoid having to do this, but the old parser does and we need
-    // to be compatible for now.
-    CSSParserToken token = range.consume();
+
+    auto token = range.consume();
     selector->setValue(token.value().toAtomString(), m_context.mode == HTMLQuirksMode);
     return selector;
 }
@@ -643,10 +644,8 @@ std::unique_ptr<MutableCSSSelector> CSSSelectorParser::consumeClass(CSSParserTok
 
     auto selector = makeUnique<MutableCSSSelector>();
     selector->setMatch(CSSSelector::Match::Class);
-    
-    // FIXME-NEWPARSER: Avoid having to do this, but the old parser does and we need
-    // to be compatible for now.
-    CSSParserToken token = range.consume();
+
+    auto token = range.consume();
     selector->setValue(token.value().toAtomString(), m_context.mode == HTMLQuirksMode);
 
     return selector;
@@ -1180,17 +1179,9 @@ std::unique_ptr<MutableCSSSelector> CSSSelectorParser::splitCompoundAtImplicitSh
 bool CSSSelectorParser::containsUnknownWebKitPseudoElements(const CSSSelector& complexSelector)
 {
     for (auto current = &complexSelector; current; current = current->tagHistory()) {
-        if (current->match() == CSSSelector::Match::PseudoElement) {
-            // FIXME: Check against a different type for unknown "-webkit-" pseudo-elements. (webkit.org/b/266947)
-            if (current->pseudoElement() != CSSSelector::PseudoElement::UserAgentPart)
-                continue;
-
-            // FIXME: Stop attempting parsing once the unknown "-webkit" pseudo-elements are behind a different type. (webkit.org/b/266947)
-            if (!parsePseudoElementString(StringView(current->value())))
-                return true;
-        }
+        if (current->match() == CSSSelector::Match::PseudoElement && current->pseudoElement() == CSSSelector::PseudoElement::WebKitUnknown)
+            return true;
     }
-
     return false;
 }
 
@@ -1207,8 +1198,8 @@ CSSSelectorList CSSSelectorParser::resolveNestingParent(const CSSSelectorList& n
             // It's top-level, the nesting parent selector should be replaced by :scope
             const_cast<CSSSelector*>(selector)->replaceNestingParentByPseudoClassScope();
         }
-        auto parserSelector = makeUnique<MutableCSSSelector>(*selector);
-        result.append(WTFMove(parserSelector));
+        auto mutableSelector = makeUnique<MutableCSSSelector>(*selector);
+        result.append(WTFMove(mutableSelector));
         selector = copiedSelectorList.next(selector);
     }
 

@@ -1740,6 +1740,11 @@ void LocalFrameView::setLayoutViewportOverrideRect(std::optional<LayoutRect> rec
     m_layoutViewportOverrideRect = rect;
     LayoutRect newRect = layoutViewportRect();
 
+    if (oldRect != newRect) {
+        invalidateScrollAnchoringElement();
+        updateScrollAnchoringElement();
+    }
+
     // Triggering layout on height changes is necessary to make bottom-fixed elements behave correctly.
     if (oldRect.height() != newRect.height())
         layoutTriggering = TriggerLayoutOrNot::Yes;
@@ -2370,7 +2375,7 @@ void LocalFrameView::maintainScrollPositionAtAnchor(ContainerNode* anchorNode)
     cancelScheduledScrolls();
 
     if (is<Element>(anchorNode))
-        m_frame->document()->contentVisibilityDocumentState().updateContentRelevancyForScrollIfNeeded(downcast<Element>(*anchorNode));
+        m_frame->document()->updateContentRelevancyForScrollIfNeeded(downcast<Element>(*anchorNode));
 
     // We need to update the layout before scrolling, otherwise we could
     // really mess things up if an anchor scroll comes at a bad moment.

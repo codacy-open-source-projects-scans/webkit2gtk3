@@ -35,6 +35,8 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/ElementName.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/EventFactory.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/EventHeaders.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/EventInterfaces.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/EventNames.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/EventNames.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/EventTargetFactory.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/EventTargetHeaders.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/EventTargetInterfaces.h
@@ -2994,6 +2996,8 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSVideoTrack.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSVideoTrack.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSVideoTrackConfiguration.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSVideoTrackConfiguration.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSVideoTrackGenerator.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSVideoTrackGenerator.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSVideoTrackList.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSVideoTrackList.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSVideoTrackMediaSource.cpp
@@ -3460,6 +3464,8 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/TransformStreamDefaultControllerBui
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/TransformStreamDefaultControllerBuiltins.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/TransformStreamInternalsBuiltins.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/TransformStreamInternalsBuiltins.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/UserAgentParts.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/UserAgentParts.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/UserAgentScripts.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/UserAgentScriptsData.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/UserAgentStyleSheets.h

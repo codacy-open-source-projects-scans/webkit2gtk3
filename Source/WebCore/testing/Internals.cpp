@@ -1423,14 +1423,14 @@ ExceptionOr<String> Internals::shadowRootType(const Node& root) const
     }
 }
 
-const AtomString& Internals::userAgentPartId(Element& element)
+const AtomString& Internals::userAgentPart(Element& element)
 {
-    return element.pseudo();
+    return element.userAgentPart();
 }
 
-void Internals::setUserAgentPartId(Element& element, const AtomString& id)
+void Internals::setUserAgentPart(Element& element, const AtomString& part)
 {
-    return element.setPseudo(id);
+    return element.setUserAgentPart(part);
 }
 
 ExceptionOr<bool> Internals::isTimerThrottled(int timeoutId)
@@ -6184,7 +6184,7 @@ void Internals::whenServiceWorkerIsTerminated(ServiceWorker& worker, DOMPromiseD
     });
 }
 
-NO_RETURN_DUE_TO_CRASH void Internals::terminateWebContentProcess()
+void Internals::terminateWebContentProcess()
 {
     exit(0);
 }

@@ -1565,7 +1565,7 @@
       ],
       "github" : "charliewolfe",
       "name" : "Charlie Wolfe",
-      "status" : "committer"
+      "status" : "reviewer"
    },
    {
       "emails" : [
@@ -1987,6 +1987,18 @@
       "name" : "Darin Fisher",
       "nicks" : [
          "fishd"
+      ]
+   },
+   {
+      "emails" : [
+         "d_parkinson@apple.com"
+      ],
+      "expertise" : "Security",
+      "github" : "darryl-apple",
+      "name" : "Darryl Parkinson",
+      "nicks" : [
+         "darryl-apple",
+         "darryl.p"
       ]
    },
    {
@@ -5430,7 +5442,7 @@
       ],
       "github" : "mdubet",
       "name" : "Matthieu Dubet",
-      "status" : "committer"
+      "status" : "reviewer"
    },
    {
       "emails" : [
@@ -5733,6 +5745,14 @@
       "expertise" : "WebKit on macOS",
       "github" : "MoeBazziGIT",
       "name" : "Moe Bazzi"
+   },
+   {
+      "emails" : [
+         "mohsinq@apple.com"
+      ],
+      "github" : "mogey",
+      "name" : "Mohsin Qureshi",
+      "status" : "committer"
    },
    {
       "emails" : [

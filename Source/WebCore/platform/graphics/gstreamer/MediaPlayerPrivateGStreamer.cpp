@@ -175,6 +175,9 @@ MediaPlayerPrivateGStreamer::MediaPlayerPrivateGStreamer(MediaPlayer* player)
             if (webKitDMABufVideoSinkIsEnabled() && webKitDMABufVideoSinkProbePlatform())
                 return adoptRef(*new TextureMapperPlatformLayerProxyDMABuf);
 #endif
+#if USE(GSTREAMER_HOLEPUNCH)
+            return adoptRef(*new TextureMapperPlatformLayerProxyGL(true));
+#endif
             return adoptRef(*new TextureMapperPlatformLayerProxyGL);
         }());
 #endif
@@ -2723,7 +2726,7 @@ bool MediaPlayerPrivateGStreamer::loadNextLocation()
 
         changePipelineState(GST_STATE_READY);
         auto securityOrigin = SecurityOrigin::create(m_url);
-        if (securityOrigin->canRequest(newUrl, EmptyOriginAccessPatterns::singleton())) {
+        if (securityOrigin->canRequest(newUrl, originAccessPatternsForWebProcessOrEmpty())) {
             GST_INFO_OBJECT(pipeline(), "New media url: %s", newUrl.string().utf8().data());
 
             RefPtr player = m_player.get();
@@ -3132,14 +3135,7 @@ void MediaPlayerPrivateGStreamer::configureVideoDecoder(GstElement* decoder)
     if (!isMediaStreamPlayer())
         return;
 
-    if (gstObjectHasProperty(decoder, "automatic-request-sync-points"))
-        g_object_set(decoder, "automatic-request-sync-points", TRUE, nullptr);
-    if (gstObjectHasProperty(decoder, "discard-corrupted-frames"))
-        g_object_set(decoder, "discard-corrupted-frames", TRUE, nullptr);
-    if (gstObjectHasProperty(decoder, "output-corrupt"))
-        g_object_set(decoder, "output-corrupt", FALSE, nullptr);
-    if (gstObjectHasProperty(decoder, "max-errors"))
-        g_object_set(decoder, "max-errors", -1, nullptr);
+    configureMediaStreamVideoDecoder(decoder);
 
     auto pad = adoptGRef(gst_element_get_static_pad(decoder, "src"));
     gst_pad_add_probe(pad.get(), static_cast<GstPadProbeType>(GST_PAD_PROBE_TYPE_QUERY_DOWNSTREAM | GST_PAD_PROBE_TYPE_BUFFER), [](GstPad*, GstPadProbeInfo* info, gpointer userData) -> GstPadProbeReturn {
@@ -3249,9 +3245,6 @@ PlatformLayer* MediaPlayerPrivateGStreamer::platformLayer() const
 #if USE(NICOSIA)
 void MediaPlayerPrivateGStreamer::swapBuffersIfNeeded()
 {
-#if USE(GSTREAMER_HOLEPUNCH)
-    pushNextHolePunchBuffer();
-#endif
 }
 #else
 RefPtr<TextureMapperPlatformLayerProxy> MediaPlayerPrivateGStreamer::proxy() const

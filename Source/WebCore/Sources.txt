@@ -275,6 +275,7 @@ Modules/mediastream/SFrameUtils.cpp
 Modules/mediastream/STUNMessageParsing.cpp
 Modules/mediastream/UserMediaController.cpp
 Modules/mediastream/UserMediaRequest.cpp
+Modules/mediastream/VideoTrackGenerator.cpp
 Modules/model-element/HTMLModelElement.cpp
 Modules/model-element/ModelPlayer.cpp
 Modules/model-element/ModelPlayerClient.cpp
@@ -522,6 +523,7 @@ accessibility/AXImage.cpp
 accessibility/AXLogger.cpp
 accessibility/AXObjectCache.cpp
 accessibility/AXTextMarker.cpp
+accessibility/AXTextRun.cpp
 accessibility/AccessibilityARIAGrid.cpp
 accessibility/AccessibilityARIAGridCell.cpp
 accessibility/AccessibilityARIAGridRow.cpp
@@ -1099,7 +1101,6 @@ dom/EventContext.cpp
 dom/EventDispatcher.cpp
 dom/EventListenerMap.cpp
 dom/EventLoop.cpp
-dom/EventNames.cpp
 dom/EventPath.cpp
 dom/EventTarget.cpp
 dom/EventTargetConcrete.cpp
@@ -1608,7 +1609,6 @@ html/shadow/SwitchThumbElement.cpp
 html/shadow/SwitchTrackElement.cpp
 html/shadow/TextControlInnerElements.cpp
 html/shadow/TextPlaceholderElement.cpp
-html/shadow/UserAgentPartIds.cpp
 html/track/AudioTrack.cpp
 html/track/AudioTrackList.cpp
 html/track/BufferedLineReader.cpp
@@ -2351,7 +2351,7 @@ platform/graphics/controls/ProgressBarPart.cpp
 platform/graphics/controls/SliderTrackPart.cpp
 platform/graphics/cpu/arm/filters/FEBlendNeonApplier.cpp
 platform/graphics/cpu/arm/filters/FECompositeNeonArithmeticApplier.cpp
-platform/graphics/cpu/arm/filters/FELightingNEON.cpp
+platform/graphics/cpu/arm/filters/FELightingNeonParallelApplier.cpp
 platform/graphics/displaylists/DisplayList.cpp
 platform/graphics/displaylists/DisplayListDrawingContext.cpp
 platform/graphics/displaylists/DisplayListItem.cpp
@@ -2404,6 +2404,7 @@ platform/graphics/filters/software/FEFloodSoftwareApplier.cpp
 platform/graphics/filters/software/FEGaussianBlurSoftwareApplier.cpp
 platform/graphics/filters/software/FEImageSoftwareApplier.cpp
 platform/graphics/filters/software/FELightingSoftwareApplier.cpp
+platform/graphics/filters/software/FELightingSoftwareParallelApplier.cpp
 platform/graphics/filters/software/FEMergeSoftwareApplier.cpp
 platform/graphics/filters/software/FEMorphologySoftwareApplier.cpp
 platform/graphics/filters/software/FEOffsetSoftwareApplier.cpp
@@ -3148,6 +3149,7 @@ CSSPropertyParsing.cpp
 CSSValueKeywords.cpp
 ColorData.cpp
 EventFactory.cpp
+EventNames.cpp
 EventTargetFactory.cpp
 HTMLElementFactory.cpp
 HTMLEntityTable.cpp
@@ -4415,6 +4417,7 @@ JSVideoPixelFormat.cpp
 JSVideoPlaybackQuality.cpp
 JSVideoTrack.cpp
 JSVideoTrackConfiguration.cpp
+JSVideoTrackGenerator.cpp
 JSVideoTrackList.cpp
 JSVideoTransferCharacteristics.cpp
 JSViewTimeline.cpp

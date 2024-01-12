@@ -260,8 +260,8 @@ public:
     Node* ensureUserAgentShadowRoot(Element& host);
     Node* shadowRoot(Element& host);
     ExceptionOr<String> shadowRootType(const Node&) const;
-    const AtomString& userAgentPartId(Element&);
-    void setUserAgentPartId(Element&, const AtomString&);
+    const AtomString& userAgentPart(Element&);
+    void setUserAgentPart(Element&, const AtomString&);
 
     // DOMTimers throttling testing.
     ExceptionOr<bool> isTimerThrottled(int timeoutId);
@@ -1016,7 +1016,7 @@ public:
     void hasServiceWorkerRegistration(const String& clientURL, HasRegistrationPromise&&);
     void terminateServiceWorker(ServiceWorker&, DOMPromiseDeferred<void>&&);
     void whenServiceWorkerIsTerminated(ServiceWorker&, DOMPromiseDeferred<void>&&);
-    void terminateWebContentProcess();
+    NO_RETURN_DUE_TO_CRASH void terminateWebContentProcess();
 
 #if ENABLE(APPLE_PAY)
     MockPaymentCoordinator& mockPaymentCoordinator(Document&);

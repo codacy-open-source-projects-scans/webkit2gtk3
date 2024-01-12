@@ -206,6 +206,7 @@
 #include <WebCore/PermissionState.h>
 #include <WebCore/PlatformEvent.h>
 #include <WebCore/PublicSuffix.h>
+#include <WebCore/Quirks.h>
 #include <WebCore/RealtimeMediaSourceCenter.h>
 #include <WebCore/RemoteUserInputEventData.h>
 #include <WebCore/RenderEmbeddedObject.h>
@@ -12444,13 +12445,13 @@ WebContentMode WebPageProxy::effectiveContentModeAfterAdjustingPolicies(API::Web
 
 void WebPageProxy::addDidMoveToWindowObserver(WebViewDidMoveToWindowObserver& observer)
 {
-    auto result = m_webViewDidMoveToWindowObservers.add(&observer, observer);
+    auto result = m_webViewDidMoveToWindowObservers.add(observer);
     ASSERT_UNUSED(result, result.isNewEntry);
 }
 
 void WebPageProxy::removeDidMoveToWindowObserver(WebViewDidMoveToWindowObserver& observer)
 {
-    auto result = m_webViewDidMoveToWindowObservers.remove(&observer);
+    auto result = m_webViewDidMoveToWindowObservers.remove(observer);
     ASSERT_UNUSED(result, result);
 }
 
@@ -12461,12 +12462,9 @@ WindowKind WebPageProxy::windowKind() const
 
 void WebPageProxy::webViewDidMoveToWindow()
 {
-    auto observersCopy = m_webViewDidMoveToWindowObservers;
-    for (const auto& observer : observersCopy) {
-        if (!observer.value)
-            continue;
-        observer.value->webViewDidMoveToWindow();
-    }
+    m_webViewDidMoveToWindowObservers.forEach([](auto& observer) {
+        observer.webViewDidMoveToWindow();
+    });
 
     auto newWindowKind = pageClient().windowKind();
     if (internals().windowKind != newWindowKind) {
@@ -12654,8 +12652,8 @@ void WebPageProxy::gpuProcessDidFinishLaunching()
     pageClient().gpuProcessDidFinishLaunching();
 #if ENABLE(EXTENSION_CAPABILITIES)
     if (auto& mediaCapability = this->mediaCapability()) {
-        WEBPAGEPROXY_RELEASE_LOG(ProcessCapabilities, "gpuProcessDidFinishLaunching: [envID=%{public}s] granting media capability", mediaCapability->environmentIdentifier().utf8().data());
-        protectedProcess()->protectedProcessPool()->extensionCapabilityGranter().grant(*mediaCapability);
+        WEBPAGEPROXY_RELEASE_LOG(ProcessCapabilities, "gpuProcessDidFinishLaunching[envID=%{public}s]: updating media capability", mediaCapability->environmentIdentifier().utf8().data());
+        updateMediaCapability();
     }
 #endif
 }

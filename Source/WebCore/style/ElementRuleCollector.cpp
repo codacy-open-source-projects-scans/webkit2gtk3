@@ -186,7 +186,7 @@ void ElementRuleCollector::collectMatchingRules(CascadeLevel level)
         matchHostPseudoClassRules(level);
 
     if (element().isInShadowTree()) {
-        matchShadowPseudoElementRules(level);
+        matchUserAgentPartRules(level);
         matchPartPseudoElementRules(level);
     }
 }
@@ -198,7 +198,7 @@ void ElementRuleCollector::collectMatchingRules(const MatchRequest& matchRequest
     auto& element = this->element();
     auto* shadowRoot = element.containingShadowRoot();
     if (shadowRoot && shadowRoot->mode() == ShadowRootMode::UserAgent)
-        collectMatchingShadowPseudoElementRules(matchRequest);
+        collectMatchingUserAgentPartRules(matchRequest);
 
     bool isHTML = element.isHTMLElement() && element.document().isHTMLDocument();
 
@@ -295,20 +295,20 @@ bool ElementRuleCollector::matchesAnyAuthorRules()
     return !m_matchedRules.isEmpty();
 }
 
-void ElementRuleCollector::matchShadowPseudoElementRules(CascadeLevel level)
+void ElementRuleCollector::matchUserAgentPartRules(CascadeLevel level)
 {
     ASSERT(element().isInShadowTree());
     auto* shadowRoot = element().containingShadowRoot();
     if (!shadowRoot || shadowRoot->mode() != ShadowRootMode::UserAgent)
         return;
 
-    // Look up shadow pseudo elements also from the host scope style as they are web-exposed.
+    // Look up user agent parts also from the host scope style as they are web-exposed.
     auto* hostRules = Scope::forNode(*shadowRoot->host()).resolver().ruleSets().styleForCascadeLevel(level);
     if (!hostRules)
         return;
 
     MatchRequest hostRequest { *hostRules, ScopeOrdinal::ContainingHost };
-    collectMatchingShadowPseudoElementRules(hostRequest);
+    collectMatchingUserAgentPartRules(hostRequest);
 }
 
 void ElementRuleCollector::matchHostPseudoClassRules(CascadeLevel level)
@@ -355,9 +355,9 @@ void ElementRuleCollector::matchPartPseudoElementRules(CascadeLevel level)
     if (!element().containingShadowRoot())
         return;
 
-    bool isUAShadowPseudoElement = element().containingShadowRoot()->mode() == ShadowRootMode::UserAgent && !element().pseudo().isNull();
+    bool isUserAgentPart = element().containingShadowRoot()->mode() == ShadowRootMode::UserAgent && !element().userAgentPart().isNull();
 
-    auto& partMatchingElement = isUAShadowPseudoElement ? *element().shadowHost() : element();
+    auto& partMatchingElement = isUserAgentPart ? *element().shadowHost() : element();
     if (partMatchingElement.partNames().isEmpty() || !partMatchingElement.isInShadowTree())
         return;
 
@@ -392,9 +392,9 @@ void ElementRuleCollector::matchPartPseudoElementRulesForScope(const Element& pa
     }
 }
 
-void ElementRuleCollector::collectMatchingShadowPseudoElementRules(const MatchRequest& matchRequest)
+void ElementRuleCollector::collectMatchingUserAgentPartRules(const MatchRequest& matchRequest)
 {
-    ASSERT(element().containingShadowRoot()->mode() == ShadowRootMode::UserAgent);
+    ASSERT(element().isInUserAgentShadowTree());
 
     auto& rules = matchRequest.ruleSet;
 #if ENABLE(VIDEO)
@@ -402,9 +402,8 @@ void ElementRuleCollector::collectMatchingShadowPseudoElementRules(const MatchRe
     if (element().isWebVTTElement() || element().isWebVTTRubyElement() || element().isWebVTTRubyTextElement())
         collectMatchingRulesForList(&rules.cuePseudoRules(), matchRequest);
 #endif
-    auto& partId = element().pseudo();
-    if (!partId.isEmpty())
-        collectMatchingRulesForList(rules.shadowPseudoElementRules(partId), matchRequest);
+    if (auto& part = element().userAgentPart(); !part.isEmpty())
+        collectMatchingRulesForList(rules.userAgentPartRules(part), matchRequest);
 }
 
 void ElementRuleCollector::matchUserRules()

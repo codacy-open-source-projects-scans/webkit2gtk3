@@ -626,7 +626,7 @@ void PluginView::handleEvent(Event& event)
             frame->eventHandler().setCapturingMouseEventsElement(nullptr);
 
         didHandleEvent = m_plugin->handleMouseEvent(static_cast<const WebMouseEvent&>(*currentEvent));
-    } else if (eventNames().isWheelEventType(event.type()) && currentEvent->type() == WebEventType::Wheel)
+    } else if ((event.type() == eventNames().wheelEvent || event.type() == eventNames().mousewheelEvent) && currentEvent->type() == WebEventType::Wheel)
         didHandleEvent = m_plugin->handleWheelEvent(static_cast<const WebWheelEvent&>(*currentEvent));
     else if (event.type() == eventNames().mouseoverEvent && currentEvent->type() == WebEventType::MouseMove)
         didHandleEvent = m_plugin->handleMouseEnterEvent(static_cast<const WebMouseEvent&>(*currentEvent));
@@ -642,12 +642,12 @@ void PluginView::handleEvent(Event& event)
         event.setDefaultHandled();
 }
 
-bool PluginView::handleEditingCommand(const String& commandName, const String&)
+bool PluginView::handleEditingCommand(const String& commandName, const String& argument)
 {
     if (!m_isInitialized)
         return false;
 
-    return m_plugin->handleEditingCommand(commandName);
+    return m_plugin->handleEditingCommand(commandName, argument);
 }
     
 bool PluginView::isEditingCommandEnabled(const String& commandName)

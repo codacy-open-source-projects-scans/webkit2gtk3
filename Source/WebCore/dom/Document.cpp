@@ -910,30 +910,30 @@ void Document::commonTeardown()
 #endif
 }
 
-void Document::parseMarkupUnsafe(const String& markup, OptionSet<ParserContentPolicy> parserContentPolicy)
+void Document::setMarkupUnsafe(const String& markup, OptionSet<ParserContentPolicy> parserContentPolicy)
 {
     auto policy = OptionSet<ParserContentPolicy> { ParserContentPolicy::AllowScriptingContent } | parserContentPolicy;
     setParserContentPolicy(policy);
-    bool usedFastPath = false;
     if (this->contentType() == "text/html"_s) {
         auto body = HTMLBodyElement::create(*this);
-        usedFastPath = tryFastParsingHTMLFragment(StringView { markup }.substring(markup.find(isNotASCIIWhitespace<UChar>)), *this, body, body, policy);
-        if (LIKELY(usedFastPath)) {
+        if (LIKELY(tryFastParsingHTMLFragment(StringView { markup }.substring(markup.find(isNotASCIIWhitespace<UChar>)), *this, body, body, policy))) {
             auto html = HTMLHtmlElement::create(*this);
             auto head = HTMLHeadElement::create(*this);
             html->appendChild(head);
             html->appendChild(body);
             appendChild(html);
+            return;
         }
     }
-    if (!usedFastPath)
-        setContent(markup);
+    open();
+    protectedParser()->appendSynchronously(markup.impl());
+    close();
 }
 
 Ref<Document> Document::parseHTMLUnsafe(Document& context, const String& html)
 {
     Ref document = HTMLDocument::create(nullptr, context.protectedSettings(), URL { });
-    document->parseMarkupUnsafe(html, { ParserContentPolicy::AllowDeclarativeShadowRoots });
+    document->setMarkupUnsafe(html, { ParserContentPolicy::AllowDeclarativeShadowRoots });
     return document;
 }
 
@@ -1683,13 +1683,6 @@ void Document::setDocumentURI(const String& uri)
     // This property is read-only from JavaScript, but writable from Objective-C.
     m_documentURI = uri;
     updateBaseURL();
-}
-
-void Document::setContent(const String& content)
-{
-    open();
-    protectedParser()->appendSynchronously(content.impl());
-    close();
 }
 
 String Document::suggestedMIMEType() const
@@ -2941,6 +2934,7 @@ void Document::removeAllEventListeners()
 #if ENABLE(IOS_TOUCH_EVENTS)
     clearTouchEventHandlersAndListeners();
 #endif
+    // FIXME: What about disconnected nodes.
     for (RefPtr node = firstChild(); node; node = NodeTraversal::next(*node))
         node->removeAllEventListeners();
 
@@ -2948,6 +2942,7 @@ void Document::removeAllEventListeners()
     m_touchEventTargets = nullptr;
 #endif
     m_wheelEventTargets = nullptr;
+    invalidateEventListenerRegions();
 }
 
 void Document::suspendDeviceMotionAndOrientationUpdates()
@@ -5730,38 +5725,73 @@ bool Document::hasListenerTypeForEventType(PlatformEvent::Type eventType) const
 void Document::addListenerTypeIfNeeded(const AtomString& eventType)
 {
     auto& eventNames = WebCore::eventNames();
-    if (eventType == eventNames.DOMSubtreeModifiedEvent)
+    auto typeInfo = eventNames.typeInfoForEvent(eventType);
+    switch (typeInfo.type()) {
+    case EventType::DOMSubtreeModified:
         addListenerType(ListenerType::DOMSubtreeModified);
-    else if (eventType == eventNames.DOMNodeInsertedEvent)
+        break;
+    case EventType::DOMNodeInserted:
         addListenerType(ListenerType::DOMNodeInserted);
-    else if (eventType == eventNames.DOMNodeRemovedEvent)
+        break;
+    case EventType::DOMNodeRemoved:
         addListenerType(ListenerType::DOMNodeRemoved);
-    else if (eventType == eventNames.DOMNodeRemovedFromDocumentEvent)
+        break;
+    case EventType::DOMNodeRemovedFromDocument:
         addListenerType(ListenerType::DOMNodeRemovedFromDocument);
-    else if (eventType == eventNames.DOMNodeInsertedIntoDocumentEvent)
+        break;
+    case EventType::DOMNodeInsertedIntoDocument:
         addListenerType(ListenerType::DOMNodeInsertedIntoDocument);
-    else if (eventType == eventNames.DOMCharacterDataModifiedEvent)
+        break;
+    case EventType::DOMCharacterDataModified:
         addListenerType(ListenerType::DOMCharacterDataModified);
-    else if (eventType == eventNames.overflowchangedEvent)
+        break;
+    case EventType::overflowchanged:
         addListenerType(ListenerType::OverflowChanged);
-    else if (eventType == eventNames.scrollEvent)
+        break;
+    case EventType::scroll:
         addListenerType(ListenerType::Scroll);
-    else if (eventType == eventNames.webkitmouseforcewillbeginEvent)
+        break;
+    case EventType::webkitmouseforcewillbegin:
         addListenerType(ListenerType::ForceWillBegin);
-    else if (eventType == eventNames.webkitmouseforcechangedEvent)
+        break;
+    case EventType::webkitmouseforcechanged:
         addListenerType(ListenerType::ForceChanged);
-    else if (eventType == eventNames.webkitmouseforcedownEvent)
+        break;
+    case EventType::webkitmouseforcedown:
         addListenerType(ListenerType::ForceDown);
-    else if (eventType == eventNames.webkitmouseforceupEvent)
+        break;
+    case EventType::webkitmouseforceup:
         addListenerType(ListenerType::ForceUp);
-    else if (eventType == eventNames.focusinEvent)
+        break;
+    case EventType::focusin:
         addListenerType(ListenerType::FocusIn);
-    else if (eventType == eventNames.focusoutEvent)
+        break;
+    case EventType::focusout:
         addListenerType(ListenerType::FocusOut);
-    else if (eventNames.isCSSTransitionEventType(eventType))
-        addListenerType(ListenerType::CSSTransition);
-    else if (eventNames.isCSSAnimationEventType(eventType))
-        addListenerType(ListenerType::CSSAnimation);
+        break;
+    default:
+        if (typeInfo.isInCategory(EventCategory::CSSTransition))
+            addListenerType(ListenerType::CSSTransition);
+        else if (typeInfo.isInCategory(EventCategory::CSSAnimation))
+            addListenerType(ListenerType::CSSAnimation);
+    }
+}
+
+void Document::didAddEventListenersOfType(const AtomString& eventType, unsigned count)
+{
+    ASSERT(count);
+    addListenerTypeIfNeeded(eventType);
+    auto result = m_eventListenerCounts.fastAdd(eventType, 0);
+    result.iterator->value += count;
+}
+
+void Document::didRemoveEventListenersOfType(const AtomString& eventType, unsigned count)
+{
+    ASSERT(count);
+    ASSERT(m_eventListenerCounts.contains(eventType));
+    auto it = m_eventListenerCounts.find(eventType);
+    ASSERT(it->value >= count);
+    it->value -= count;
 }
 
 HTMLFrameOwnerElement* Document::ownerElement() const
@@ -8538,6 +8568,11 @@ void Document::removeIntersectionObserver(IntersectionObserver& observer)
 
 void Document::updateIntersectionObservations()
 {
+    updateIntersectionObservations(m_intersectionObservers);
+}
+
+void Document::updateIntersectionObservations(const Vector<WeakPtr<IntersectionObserver>>& intersectionObservers)
+{
     RefPtr frameView = view();
     if (!frameView)
         return;
@@ -8546,12 +8581,6 @@ void Document::updateIntersectionObservations()
     if (needsLayout || hasPendingStyleRecalc())
         return;
 
-    updateIntersectionObservations(m_intersectionObservers);
-}
-
-void Document::updateIntersectionObservations(const Vector<WeakPtr<IntersectionObserver>>& intersectionObservers)
-{
-    RELEASE_ASSERT(view() && !(view()->layoutContext().isLayoutPending() || (renderView() && renderView()->needsLayout())) && !hasPendingStyleRecalc());
     Vector<WeakPtr<IntersectionObserver>> intersectionObserversWithPendingNotifications;
 
     for (auto& weakObserver : intersectionObservers) {
@@ -9833,8 +9862,11 @@ void Document::setHasViewTransitionPseudoElementTree(bool value)
     m_hasViewTransitionPseudoElementTree = value;
 }
 
-Ref<ViewTransition> Document::startViewTransition(RefPtr<ViewTransitionUpdateCallback>&& updateCallback)
+RefPtr<ViewTransition> Document::startViewTransition(RefPtr<ViewTransitionUpdateCallback>&& updateCallback)
 {
+    if (!globalObject())
+        return nullptr;
+
     Ref viewTransition = ViewTransition::create(*this, WTFMove(updateCallback));
 
     if (RefPtr activeViewTransition = m_activeViewTransition)
@@ -9842,7 +9874,7 @@ Ref<ViewTransition> Document::startViewTransition(RefPtr<ViewTransitionUpdateCal
 
     setActiveViewTransition(WTFMove(viewTransition));
     scheduleRenderingUpdate(RenderingUpdateStep::PerformPendingViewTransitions);
-    return *m_activeViewTransition;
+    return m_activeViewTransition;
 }
 
 void Document::performPendingViewTransitions()

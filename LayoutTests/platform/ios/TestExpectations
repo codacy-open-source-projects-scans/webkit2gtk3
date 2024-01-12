@@ -866,6 +866,7 @@ imported/w3c/web-platform-tests/css/css-shadow-parts/invalidation-part-pseudo.ht
 
 # No test_driver.click() support for iOS testing
 webkit.org/b/264285 imported/w3c/web-platform-tests/html/semantics/interactive-elements/the-summary-element/interactive-content.html [ Skip ]
+webkit.org/b/266665 imported/w3c/web-platform-tests/html/semantics/invokers/invoketarget-button-event-dispatch.tentative.html [ Skip ]
 
 # Overscroll-behavior on iOS needs SkyEcho19E179/StarE21E168a: https://bugs.webkit.org/show_bug.cgi?id=235852
 fast/scrolling/sync-scroll-overscroll-behavior-element.html [ Skip ]
@@ -3288,10 +3289,6 @@ webkit.org/b/261703 fast/forms/datalist/datalist-show-picker.html [ Skip ]
 # <rdar://problem/59636115> REGRESSION: [ iOS & macOS ] two imported/w3c/web-platform-tests/WebCryptoAPI are failing
 imported/w3c/web-platform-tests/WebCryptoAPI/import_export/rsa_importKey.https.worker.html [ Failure ]
 
-# <rdar://problem/57029120> Reenable crypto/workers/subtle/rsa-postMessage-worker.html and crypto/subtle/aes-cbc-import-key-wrap-jwk-rsa-key-private.html for iOS
-crypto/workers/subtle/rsa-postMessage-worker.html [ Skip ]
-crypto/subtle/aes-cbc-import-key-wrap-jwk-rsa-key-private.html [ Skip ]
-
 # <rdar://problem/63448168> [ macOS iOS  Debug ] media/video-source-moved.html is a super flkay timeout
 media/video-source-moved.html [ Pass Timeout ]
 
@@ -4602,16 +4599,6 @@ imported/w3c/web-platform-tests/css/css-transforms/transform-table-010.html [ Im
 imported/w3c/web-platform-tests/css/css-transforms/transform-table-011.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-transforms/transform3d-preserve3d-011.html [ ImageOnlyFailure ]
 
-# webkit.org/b/262663 (REGRESSION(iOS17/Sonoma): 8 WebCryptoAPI tests are constantly crashing.)
-imported/w3c/web-platform-tests/WebCryptoAPI/generateKey/failures_X25519.https.any.html [ Crash ]
-imported/w3c/web-platform-tests/WebCryptoAPI/generateKey/failures_X25519.https.any.worker.html [ Crash ]
-imported/w3c/web-platform-tests/WebCryptoAPI/generateKey/successes_X25519.https.any.html [ Crash ]
-imported/w3c/web-platform-tests/WebCryptoAPI/generateKey/successes_X25519.https.any.worker.html [ Crash ]
-imported/w3c/web-platform-tests/WebCryptoAPI/import_export/okp_importKey.https.any.html [ Crash ]
-imported/w3c/web-platform-tests/WebCryptoAPI/import_export/okp_importKey.https.any.worker.html [ Crash ]
-imported/w3c/web-platform-tests/WebCryptoAPI/import_export/okp_importKey_failures_X25519.https.any.html [ Crash ]
-imported/w3c/web-platform-tests/WebCryptoAPI/import_export/okp_importKey_failures_X25519.https.any.worker.html  [ Crash ]
-
 webkit.org/b/263136 imported/w3c/web-platform-tests/css/css-text/line-break/line-break-anywhere-overrides-uax-behavior-011.html [ ImageOnlyFailure ]
 
 webkit.org/b/263466 fast/mediastream/getDisplayMedia-max-constraints4.html [ Failure ]
@@ -4686,8 +4673,6 @@ imported/w3c/web-platform-tests/css/css-view-transitions/massive-element-below-v
 imported/w3c/web-platform-tests/css/selectors/invalidation/user-valid-user-invalid.html [ Failure ]
 imported/w3c/web-platform-tests/css/selectors/user-invalid.html [ Failure ]
 imported/w3c/web-platform-tests/css/selectors/valid-invalid-form-fieldset.html [ Failure ]
-
-webkit.org/b/266665 imported/w3c/web-platform-tests/html/semantics/invokers/invoketarget-button-event-dispatch.tentative.html [ Failure ]
 
 webkit.org/b/266669 imported/w3c/web-platform-tests/webrtc-extensions/RTCRtpSynchronizationSource-captureTimestamp.html [ Pass Failure ]
 

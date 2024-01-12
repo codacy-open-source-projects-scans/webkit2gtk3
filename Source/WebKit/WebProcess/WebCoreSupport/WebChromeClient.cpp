@@ -1012,7 +1012,7 @@ RefPtr<ImageBuffer> WebChromeClient::sinkIntoImageBuffer(std::unique_ptr<Seriali
 
 std::unique_ptr<WebCore::WorkerClient> WebChromeClient::createWorkerClient(SerialFunctionDispatcher& dispatcher)
 {
-    return makeUnique<WebWorkerClient>(protectedPage().ptr(), dispatcher);
+    return WebWorkerClient::create(protectedPage(), dispatcher).moveToUniquePtr();
 }
 
 #if ENABLE(WEBGL)
@@ -1034,7 +1034,7 @@ RefPtr<GraphicsContextGL> WebChromeClient::createGraphicsContextGL(const Graphic
 RefPtr<WebCore::WebGPU::GPU> WebChromeClient::createGPUForWebGPU() const
 {
 #if ENABLE(GPU_PROCESS)
-    return RemoteGPUProxy::create(WebProcess::singleton().ensureGPUProcessConnection(), WebGPU::DowncastConvertToBackingContext::create(), WebGPUIdentifier::generate(), protectedPage()->ensureRemoteRenderingBackendProxy().ensureBackendCreated());
+    return RemoteGPUProxy::create(WebProcess::singleton().ensureGPUProcessConnection().connection(), WebGPU::DowncastConvertToBackingContext::create(), WebGPUIdentifier::generate(), protectedPage()->ensureRemoteRenderingBackendProxy().ensureBackendCreated());
 #else
     return WebCore::WebGPU::create([](WebCore::WebGPU::WorkItem&& workItem) {
         callOnMainRunLoop(WTFMove(workItem));
@@ -1692,6 +1692,23 @@ void WebChromeClient::setUserIsInteracting(bool userIsInteracting)
 void WebChromeClient::setMockWebAuthenticationConfiguration(const MockWebAuthenticationConfiguration& configuration)
 {
     protectedPage()->send(Messages::WebPageProxy::SetMockWebAuthenticationConfiguration(configuration));
+}
+#endif
+
+#if PLATFORM(PLAYSTATION)
+void WebChromeClient::postAccessibilityNotification(WebCore::AccessibilityObject&, WebCore::AXObjectCache::AXNotification)
+{
+    notImplemented();
+}
+
+void WebChromeClient::postAccessibilityNodeTextChangeNotification(WebCore::AccessibilityObject*, WebCore::AXTextChange, unsigned, const String&)
+{
+    notImplemented();
+}
+
+void WebChromeClient::postAccessibilityFrameLoadingEventNotification(WebCore::AccessibilityObject*, WebCore::AXObjectCache::AXLoadingEvent)
+{
+    notImplemented();
 }
 #endif
 

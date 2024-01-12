@@ -105,6 +105,8 @@ public:
     WEBCORE_EXPORT virtual void dispatchEvent(Event&);
     WEBCORE_EXPORT virtual void uncaughtExceptionInEventHandler();
 
+    static const AtomString& legacyTypeForEvent(const Event&);
+
     // Used for legacy "onevent" attributes.
     template<typename JSMaybeErrorEventListener>
     void setAttributeEventListener(const AtomString& eventType, JSC::JSValue listener, JSC::JSObject& jsEventTarget);
@@ -146,6 +148,21 @@ public:
         if (flag)
             return &fencedFlag.consume(this)->weakPtrFactory().impl()->eventTargetData();
         return nullptr;
+    }
+
+    template<typename CallbackType>
+    void enumerateEventListenerTypes(CallbackType callback) const
+    {
+        if (auto* data = eventTargetData())
+            data->eventListenerMap.enumerateEventListenerTypes(callback);
+    }
+
+    template<typename CallbackType>
+    bool containsMatchingEventListener(CallbackType callback) const
+    {
+        if (auto* data = eventTargetData())
+            return data->eventListenerMap.containsMatchingEventListener(callback);
+        return false;
     }
 
     bool hasEventTargetData() const { return hasEventTargetFlag(EventTargetFlag::HasEventTargetData); }
@@ -207,7 +224,6 @@ private:
     virtual void derefEventTarget() = 0;
 
     void innerInvokeEventListeners(Event&, EventListenerVector, EventInvokePhase);
-    void invalidateEventListenerRegions();
 };
 
 inline bool EventTarget::hasEventListeners() const

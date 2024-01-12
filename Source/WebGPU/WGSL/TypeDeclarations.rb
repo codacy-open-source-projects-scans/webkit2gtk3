@@ -297,7 +297,7 @@ constructor :bool, {
     must_use: true,
     const: true,
 
-    [T < ConcreteScalar].(T) => bool,
+    [T < Scalar].(T) => bool,
 }
 
 # 16.1.2.3.
@@ -305,7 +305,7 @@ constructor :f16, {
     must_use: true,
     const: true,
 
-    [T < ConcreteScalar].(T) => f16,
+    [T < Scalar].(T) => f16,
 }
 
 # 16.1.2.4.
@@ -313,7 +313,7 @@ constructor :f32, {
     must_use: true,
     const: true,
 
-    [T < ConcreteScalar].(T) => f32,
+    [T < Scalar].(T) => f32,
 }
 
 # 16.1.2.5.
@@ -321,7 +321,7 @@ constructor :i32, {
     must_use: true,
     const: true,
 
-    [T < ConcreteScalar].(T) => i32,
+    [T < Scalar].(T) => i32,
 }
 
 # 16.1.2.6 - 14: matCxR
@@ -347,8 +347,7 @@ constructor :u32, {
     must_use: true,
     const: true,
 
-    [T < ConcreteScalar].(T) => u32,
-    [].(abstract_int) => u32,
+    [T < Scalar].(T) => u32,
 }
 
 # 16.1.2.17.
@@ -548,6 +547,23 @@ function :dot, {
     const: true,
 
     [T < Number, N].(vec[N][T], vec[N][T]) => T
+}
+
+# FIXME: new functions were added so the spec numbers changed
+# 16.5.21
+function :dot4U8Packed, {
+    must_use: true,
+    const: true,
+
+    [].(u32, u32) => u32
+}
+
+# 16.5.22
+function :dot4I8Packed, {
+    must_use: true,
+    const: true,
+
+    [].(u32, u32) => i32
 }
 
 # 16.5.21 & 16.5.22

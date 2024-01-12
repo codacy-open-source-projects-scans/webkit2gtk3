@@ -1171,7 +1171,7 @@ static inline FunctionType addPseudoClassType(const CSSSelector& selector, Selec
 #endif
 
 #if ENABLE(ATTACHMENT_ELEMENT)
-    case CSSSelector::PseudoClass::HasAttachment:
+    case CSSSelector::PseudoClass::AppleHasAttachment:
         fragment.unoptimizedPseudoClasses.append(CodePtr<JSC::OperationPtrTag>(operationHasAttachment));
         return FunctionType::SimpleSelectorChecker;
 #endif
@@ -1478,6 +1478,8 @@ static FunctionType constructFragmentsInternal(const CSSSelector* rootSelector, 
                 ASSERT(!fragment->pseudoElementSelector);
                 fragment->pseudoElementSelector = selector;
                 break;
+            case CSSSelector::PseudoElement::WebKitUnknown:
+                return FunctionType::CannotMatchAnything;
 #if ENABLE(VIDEO)
             case CSSSelector::PseudoElement::Cue:
 #endif

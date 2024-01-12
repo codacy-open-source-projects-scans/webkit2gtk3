@@ -281,20 +281,26 @@ SelectorChecker::MatchResult SelectorChecker::matchRecursively(CheckingContext& 
         return MatchResult::fails(Match::SelectorFailsLocally);
 
     if (context.selector->match() == CSSSelector::Match::PseudoElement) {
-        if (context.selector->isUserAgentPartPseudoElement()) {
+        switch (context.selector->pseudoElement()) {
+        case CSSSelector::PseudoElement::UserAgentPart:
+        case CSSSelector::PseudoElement::UserAgentPartLegacyAlias: {
             // In functional pseudo class, custom pseudo elements are always disabled.
             // FIXME: We should accept custom pseudo elements inside :is()/:matches().
             if (context.inFunctionalPseudoClass)
                 return MatchResult::fails(Match::SelectorFailsCompletely);
             if (ShadowRoot* root = context.element->containingShadowRoot()) {
-                if (context.element->pseudo() != context.selector->value())
+                if (root->mode() != ShadowRootMode::UserAgent)
                     return MatchResult::fails(Match::SelectorFailsLocally);
 
-                if (root->mode() != ShadowRootMode::UserAgent)
+                if (context.element->userAgentPart() != context.selector->value())
                     return MatchResult::fails(Match::SelectorFailsLocally);
             } else
                 return MatchResult::fails(Match::SelectorFailsLocally);
-        } else {
+            break;
+        }
+        case CSSSelector::PseudoElement::WebKitUnknown:
+            return MatchResult::fails(Match::SelectorFailsLocally);
+        default: {
             if (!context.pseudoElementEffective)
                 return MatchResult::fails(Match::SelectorFailsCompletely);
 
@@ -305,6 +311,8 @@ SelectorChecker::MatchResult SelectorChecker::matchRecursively(CheckingContext& 
             if (pseudoId != PseudoId::None)
                 dynamicPseudoIdSet.add(pseudoId);
             matchType = MatchType::VirtualPseudoElementOnly;
+            break;
+        }
         }
     }
 
@@ -1115,7 +1123,7 @@ bool SelectorChecker::checkOne(CheckingContext& checkingContext, const LocalCont
             return matchesDirPseudoClass(element, selector.argument());
 
 #if ENABLE(ATTACHMENT_ELEMENT)
-        case CSSSelector::PseudoClass::HasAttachment:
+        case CSSSelector::PseudoClass::AppleHasAttachment:
             return hasAttachment(element);
 #endif
         case CSSSelector::PseudoClass::InternalHTMLDocument:
@@ -1423,13 +1431,16 @@ bool SelectorChecker::matchHasPseudoClass(CheckingContext& checkingContext, cons
     if (cache)
         cache->add(Style::makeHasPseudoClassCacheKey(element, hasSelector), matchTypeForCache());
 
-    auto relationNeededForHasInvalidation = [](Style::Relation::Type type) {
-        switch (type) {
+    auto forwardStyleRelation = [&](const Style::Relation& relation) {
+        switch (relation.type) {
         case Style::Relation::ChildrenAffectedByForwardPositionalRules:
         case Style::Relation::ChildrenAffectedByBackwardPositionalRules:
+            checkingContext.styleRelations.append(Style::Relation { *relation.element, Style::Relation::AffectedByHasWithPositionalPseudoClass });
+            return;
         case Style::Relation::ChildrenAffectedByFirstChildRules:
         case Style::Relation::ChildrenAffectedByLastChildRules:
-            return true;
+            checkingContext.styleRelations.append(relation);
+            return;
         case Style::Relation::AffectedByEmpty:
         case Style::Relation::AffectedByPreviousSibling:
         case Style::Relation::DescendantsAffectedByPreviousSibling:
@@ -1440,16 +1451,15 @@ bool SelectorChecker::matchHasPseudoClass(CheckingContext& checkingContext, cons
         case Style::Relation::LastChild:
         case Style::Relation::NthChildIndex:
         case Style::Relation::Unique:
-            return false;
+            return;
+        case Style::Relation::AffectedByHasWithPositionalPseudoClass:
+            ASSERT_NOT_REACHED();
+            return;
         }
-        ASSERT_NOT_REACHED();
-        return false;
     };
 
-    for (auto& relation : hasCheckingContext.styleRelations) {
-        if (relationNeededForHasInvalidation(relation.type))
-            checkingContext.styleRelations.append(relation);
-    }
+    for (auto& relation : hasCheckingContext.styleRelations)
+        forwardStyleRelation(relation);
 
     return result;
 }

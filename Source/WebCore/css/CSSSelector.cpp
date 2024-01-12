@@ -309,6 +309,7 @@ PseudoId CSSSelector::pseudoId(PseudoElement type)
     case PseudoElement::Part:
     case PseudoElement::UserAgentPart:
     case PseudoElement::UserAgentPartLegacyAlias:
+    case PseudoElement::WebKitUnknown:
         return PseudoId::None;
     }
 
@@ -316,27 +317,26 @@ PseudoId CSSSelector::pseudoId(PseudoElement type)
     return PseudoId::None;
 }
 
-std::optional<CSSSelector::PseudoElement> CSSSelector::parsePseudoElement(StringView name, const CSSSelectorParserContext& context)
+std::optional<CSSSelector::PseudoElement> CSSSelector::parsePseudoElementName(StringView name, const CSSSelectorParserContext& context)
 {
     if (name.isEmpty())
         return std::nullopt;
 
-    auto type = parsePseudoElementString(name);
+    auto type = findPseudoElementName(name);
     if (!type) {
-        // FIXME: Put all known UA parts in CSSPseudoSelectors.json and split out the unknown case (webkit.org/b/266947).
         if (name.startsWithIgnoringASCIICase("-webkit-"_s))
-            return PseudoElement::UserAgentPart;
+            return PseudoElement::WebKitUnknown;
         return type;
     }
 
     if (!CSSSelector::isPseudoElementEnabled(*type, name, context))
         return std::nullopt;
 
-    return type;
+    return *type;
 }
 
 // FIXME: We should eventually deduplicate this with CSSSelectorParser::consumePseudo() somehow.
-std::optional<PseudoId> CSSSelector::parseStandalonePseudoElement(const String& input, const CSSSelectorParserContext& context)
+std::optional<PseudoId> CSSSelector::parsePseudoElement(const String& input, const CSSSelectorParserContext& context)
 {
     // FIXME: Add support for FunctionToken (webkit.org/b/264103).
     auto tokenizer = CSSTokenizer { input };
@@ -348,7 +348,7 @@ std::optional<PseudoId> CSSSelector::parseStandalonePseudoElement(const String& 
     if (token.type() == IdentToken) {
         if (!range.atEnd())
             return std::nullopt;
-        auto pseudoClassOrElement = parsePseudoClassAndCompatibilityElementString(token.value());
+        auto pseudoClassOrElement = findPseudoClassAndCompatibilityElementName(token.value());
         if (!pseudoClassOrElement.compatibilityPseudoElement)
             return std::nullopt;
         ASSERT(CSSSelector::isPseudoElementEnabled(*pseudoClassOrElement.compatibilityPseudoElement, token.value(), context));
@@ -359,7 +359,7 @@ std::optional<PseudoId> CSSSelector::parseStandalonePseudoElement(const String& 
     token = range.consume();
     if (token.type() != IdentToken || !range.atEnd())
         return std::nullopt;
-    if (auto pseudoElement = parsePseudoElement(token.value(), context))
+    if (auto pseudoElement = parsePseudoElementName(token.value(), context))
         return pseudoId(*pseudoElement);
     return std::nullopt;
 }

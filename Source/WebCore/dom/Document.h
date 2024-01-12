@@ -57,6 +57,7 @@
 #include <wtf/Logger.h>
 #include <wtf/ObjectIdentifier.h>
 #include <wtf/Observer.h>
+#include <wtf/RobinHoodHashMap.h>
 #include <wtf/UniqueRef.h>
 #include <wtf/WeakHashSet.h>
 #include <wtf/WeakListHashSet.h>
@@ -457,7 +458,7 @@ public:
     bool shouldNotFireMutationEvents() const { return m_shouldNotFireMutationEvents; }
     void setShouldNotFireMutationEvents(bool fire) { m_shouldNotFireMutationEvents = fire; }
 
-    void parseMarkupUnsafe(const String&, OptionSet<ParserContentPolicy>);
+    void setMarkupUnsafe(const String&, OptionSet<ParserContentPolicy>);
     static Ref<Document> parseHTMLUnsafe(Document&, const String&);
 
     Element* elementForAccessKey(const String& key);
@@ -519,8 +520,6 @@ public:
     WEBCORE_EXPORT AtomString encoding() const;
 
     WEBCORE_EXPORT void setCharset(const String&); // Used by ObjC / GOBject bindings only.
-
-    void setContent(const String&);
 
     String suggestedMIMEType() const;
 
@@ -1019,6 +1018,14 @@ public:
     bool hasAnyListenerOfType(OptionSet<ListenerType> listenerTypes) const { return m_listenerTypes.containsAny(listenerTypes); }
     bool hasListenerTypeForEventType(PlatformEventType) const;
     void addListenerTypeIfNeeded(const AtomString& eventType);
+
+    void didAddEventListenersOfType(const AtomString&, unsigned = 1);
+    void didRemoveEventListenersOfType(const AtomString&, unsigned = 1);
+    bool hasEventListnersOfType(const AtomString& type) const { return m_eventListenerCounts.inlineGet(type); }
+
+    bool hasConnectedPluginElements() { return m_connectedPluginElementCount; }
+    void didConnectPluginElement() { ++m_connectedPluginElementCount; }
+    void didDisconnectPluginElement() { ASSERT(m_connectedPluginElementCount); --m_connectedPluginElementCount; }
 
     inline bool hasMutationObserversOfType(MutationObserverOptionType) const;
     bool hasMutationObservers() const { return !m_mutationObserverTypes.isEmpty(); }
@@ -1618,7 +1625,7 @@ public:
     void unobserveForContainIntrinsicSize(Element&);
     void resetObservationSizeForContainIntrinsicSize(Element&);
 
-    Ref<ViewTransition> startViewTransition(RefPtr<ViewTransitionUpdateCallback>&& = nullptr);
+    RefPtr<ViewTransition> startViewTransition(RefPtr<ViewTransitionUpdateCallback>&& = nullptr);
     ViewTransition* activeViewTransition() const;
     void setActiveViewTransition(RefPtr<ViewTransition>&&);
 
@@ -2343,6 +2350,9 @@ private:
     unsigned m_dataListElementCount { 0 };
 
     OptionSet<ListenerType> m_listenerTypes;
+    MemoryCompactRobinHoodHashMap<AtomString, unsigned> m_eventListenerCounts;
+    unsigned m_connectedPluginElementCount { 0 };
+
     unsigned m_referencingNodeCount { 0 };
     int m_loadEventDelayCount { 0 };
     unsigned m_lastStyleUpdateSizeForTesting { 0 };
