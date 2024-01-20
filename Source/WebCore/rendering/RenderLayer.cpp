@@ -1931,7 +1931,8 @@ RenderLayer* RenderLayer::enclosingScrollableLayer(IncludeSelfOrNot includeSelf,
     RenderTreeMutationDisallowedScope renderTreeMutationDisallowedScope;
 
     auto isConsideredScrollable = [](const RenderLayer& layer) {
-        return is<RenderBox>(layer.renderer()) && downcast<RenderBox>(layer.renderer()).canBeScrolledAndHasScrollableArea();
+        auto* box = dynamicDowncast<RenderBox>(layer.renderer());
+        return box && box->canBeScrolledAndHasScrollableArea();
     };
 
     if (includeSelf == IncludeSelfOrNot::IncludeSelf && isConsideredScrollable(*this))
@@ -2344,17 +2345,12 @@ static inline const RenderLayer* accumulateOffsetTowardsAncestor(const RenderLay
     const auto& renderer = layer->renderer();
     auto position = renderer.style().position();
 
-    // FIXME: Special casing RenderFragmentedFlow so much for fixed positioning here is not great.
-    auto* fixedFragmentedFlowContainer = position == PositionType::Fixed ? renderer.enclosingFragmentedFlow() : nullptr;
-    if (fixedFragmentedFlowContainer && !fixedFragmentedFlowContainer->isOutOfFlowPositioned())
-        fixedFragmentedFlowContainer = nullptr;
-
     // FIXME: Positioning of out-of-flow(fixed, absolute) elements collected in a RenderFragmentedFlow
     // may need to be revisited in a future patch.
     // If the fixed renderer is inside a RenderFragmentedFlow, we should not compute location using localToAbsolute,
     // since localToAbsolute maps the coordinates from named flow to regions coordinates and regions can be
     // positioned in a completely different place in the viewport (RenderView).
-    if (position == PositionType::Fixed && !fixedFragmentedFlowContainer && (!ancestorLayer || ancestorLayer == renderer.view().layer())) {
+    if (position == PositionType::Fixed && (!ancestorLayer || ancestorLayer == renderer.view().layer())) {
         // If the fixed layer's container is the root, just add in the offset of the view. We can obtain this by calling
         // localToAbsolute() on the RenderView.
         location.moveBy(LayoutPoint(renderer.localToAbsolute({ }, IsFixed)));
@@ -2364,10 +2360,11 @@ static inline const RenderLayer* accumulateOffsetTowardsAncestor(const RenderLay
     // For the fixed positioned elements inside a render flow thread, we should also skip the code path below
     // Otherwise, for the case of ancestorLayer == rootLayer and fixed positioned element child of a transformed
     // element in render flow thread, we will hit the fixed positioned container before hitting the ancestor layer.
-    if (position == PositionType::Fixed && !fixedFragmentedFlowContainer) {
+    if (position == PositionType::Fixed) {
         // For a fixed layers, we need to walk up to the root to see if there's a fixed position container
         // (e.g. a transformed layer). It's an error to call offsetFromAncestor() across a layer with a transform,
-        // so we should always find the ancestor at or before we find the fixed position container.
+        // so we should always find the ancestor at or before we find the fixed position container, if
+        // the container is transformed.
         RenderLayer* fixedPositionContainerLayer = nullptr;
         bool foundAncestor = false;
         for (auto* currLayer = layer->parent(); currLayer; currLayer = currLayer->parent()) {
@@ -2376,7 +2373,11 @@ static inline const RenderLayer* accumulateOffsetTowardsAncestor(const RenderLay
 
             if (isContainerForPositioned(*currLayer, PositionType::Fixed, layer->establishesTopLayer())) {
                 fixedPositionContainerLayer = currLayer;
-                ASSERT_UNUSED(foundAncestor, foundAncestor);
+                // A layer that has a transform-related property but not a
+                // transform still acts as a fixed-position container.
+                // Accumulating offsets across such layers is allowed.
+                if (currLayer->transform())
+                    ASSERT_UNUSED(foundAncestor, foundAncestor);
                 break;
             }
         }
@@ -2385,13 +2386,13 @@ static inline const RenderLayer* accumulateOffsetTowardsAncestor(const RenderLay
 
         if (fixedPositionContainerLayer != ancestorLayer) {
             auto fixedContainerCoords = layer->offsetFromAncestor(fixedPositionContainerLayer);
-            auto ancestorCoords = ancestorLayer->offsetFromAncestor(fixedPositionContainerLayer);
+            auto ancestorCoords = foundAncestor ? ancestorLayer->offsetFromAncestor(fixedPositionContainerLayer) : LayoutSize { };
             location.move(fixedContainerCoords - ancestorCoords);
-            return ancestorLayer;
+            return foundAncestor ? ancestorLayer : fixedPositionContainerLayer;
         }
     }
 
-    if (position == PositionType::Fixed && fixedFragmentedFlowContainer) {
+    if (position == PositionType::Fixed) {
         ASSERT(ancestorLayer);
         if (ancestorLayer == renderer.view().layer()) {
             // Add location in flow thread coordinates.
@@ -2611,7 +2612,6 @@ RenderLayer::OverflowControlRects RenderLayer::overflowControlsRects() const
     if (m_scrollableArea)
         return m_scrollableArea->overflowControlsRects();
 
-    ASSERT(is<RenderBox>(renderer()));
     auto& renderBox = downcast<RenderBox>(renderer());
     // Scrollbars sit inside the border box.
     auto overflowControlsPositioningRect = snappedIntRect(renderBox.paddingBoxRectIncludingScrollbar());
@@ -2841,7 +2841,7 @@ void RenderLayer::paintSVGResourceLayer(GraphicsContext& context, GraphicsContex
     auto* rootPaintingLayer = enclosingSVGRootLayer();
     ASSERT(rootPaintingLayer);
 
-    LayerPaintingInfo paintingInfo(rootPaintingLayer, localPaintDirtyRect, PaintBehavior::Normal, LayoutSize(), 0);
+    LayerPaintingInfo paintingInfo(rootPaintingLayer, localPaintDirtyRect, PaintBehavior::Normal, LayoutSize());
     paintingInfo.clipToDirtyRect = false;
 
     OptionSet<PaintLayerFlag> flags { PaintLayerFlag::TemporaryClipRects };
@@ -2955,10 +2955,9 @@ void RenderLayer::paintLayerWithEffects(GraphicsContext& context, const LayerPai
 
 #if ENABLE(LAYER_BASED_SVG_ENGINE)
             // Always apply SVG viewport clipping in coordinate system before the SVG viewBox transformation is applied.
-            if (is<RenderSVGRoot>(renderer())) {
-                auto& svgRoot = downcast<RenderSVGRoot>(renderer());
-                if (svgRoot.shouldApplyViewportClip()) {
-                    auto newRect = svgRoot.borderBoxRect();
+            if (CheckedPtr svgRoot = dynamicDowncast<RenderSVGRoot>(renderer())) {
+                if (svgRoot->shouldApplyViewportClip()) {
+                    auto newRect = svgRoot->borderBoxRect();
 
                     auto offsetFromParent = offsetFromAncestor(clipRectsContext.rootLayer);
                     auto offsetForThisLayer = offsetFromParent + paintingInfo.subpixelOffset;
@@ -3026,20 +3025,19 @@ std::pair<Path, WindRule> RenderLayer::computeClipPath(const LayoutSize& offsetF
 {
     const RenderStyle& style = renderer().style();
 
-    if (is<ShapePathOperation>(*style.clipPath())) {
-        auto& clipPath = downcast<ShapePathOperation>(*style.clipPath());
-        auto referenceBoxRect = referenceBoxRectForClipPath(clipPath.referenceBox(), offsetFromRoot, rootRelativeBoundsForNonBoxes);
+    if (RefPtr clipPath = dynamicDowncast<ShapePathOperation>(*style.clipPath())) {
+        auto referenceBoxRect = referenceBoxRectForClipPath(clipPath->referenceBox(), offsetFromRoot, rootRelativeBoundsForNonBoxes);
         auto snappedReferenceBoxRect = snapRectToDevicePixelsIfNeeded(referenceBoxRect, renderer());
-        return { clipPath.pathForReferenceRect(snappedReferenceBoxRect), clipPath.windRule() };
+        return { clipPath->pathForReferenceRect(snappedReferenceBoxRect), clipPath->windRule() };
     }
 
-    if (is<BoxPathOperation>(*style.clipPath()) && is<RenderBox>(renderer())) {
-        auto& clipPath = downcast<BoxPathOperation>(*style.clipPath());
-
-        auto shapeRect = computeRoundedRectForBoxShape(clipPath.referenceBox(), downcast<RenderBox>(renderer())).pixelSnappedRoundedRectForPainting(renderer().document().deviceScaleFactor());
+    RefPtr clipPath = dynamicDowncast<BoxPathOperation>(*style.clipPath());
+    CheckedPtr box = dynamicDowncast<RenderBox>(renderer());
+    if (clipPath && box) {
+        auto shapeRect = computeRoundedRectForBoxShape(clipPath->referenceBox(), *box).pixelSnappedRoundedRectForPainting(renderer().document().deviceScaleFactor());
         shapeRect.move(offsetFromRoot);
 
-        return { clipPath.pathForReferenceRect(shapeRect), WindRule::NonZero };
+        return { clipPath->pathForReferenceRect(shapeRect), WindRule::NonZero };
     }
 
     return { Path(), WindRule::NonZero };
@@ -3085,8 +3083,7 @@ void RenderLayer::setupClipPath(GraphicsContext& context, GraphicsContextStateSa
         return;
     }
 
-    if (is<ReferencePathOperation>(style.clipPath())) {
-        auto& referenceClipPathOperation = downcast<ReferencePathOperation>(*style.clipPath());
+    if (RefPtr referenceClipPathOperation = dynamicDowncast<ReferencePathOperation>(style.clipPath())) {
 #if ENABLE(LAYER_BASED_SVG_ENGINE)
         if (auto* svgClipper = renderer().svgClipperResourceFromStyle()) {
             auto* graphicsElement = svgClipper->shouldApplyPathClipping();
@@ -3119,7 +3116,7 @@ void RenderLayer::setupClipPath(GraphicsContext& context, GraphicsContextStateSa
         }
 #endif // ENABLE(LAYER_BASED_SVG_ENGINE)
 
-        if (auto* clipperRenderer = ReferencedSVGResources::referencedClipperRenderer(renderer().treeScopeForSVGReferences(), referenceClipPathOperation)) {
+        if (auto* clipperRenderer = ReferencedSVGResources::referencedClipperRenderer(renderer().treeScopeForSVGReferences(), *referenceClipPathOperation)) {
             // Use the border box as the reference box, even though this is not clearly specified: https://github.com/w3c/csswg-drafts/issues/5786.
             // clippedContentBounds is used as the reference box for inlines, which is also poorly specified: https://github.com/w3c/csswg-drafts/issues/6383.
             auto referenceBox = referenceBoxRectForClipPath(CSSBoxType::BorderBox, offsetFromRoot, clippedContentBounds);
@@ -3493,7 +3490,8 @@ void RenderLayer::paintLayerByApplyingTransform(GraphicsContext& context, const 
     // Now do a paint with the root layer shifted to be us.
     LayerPaintingInfo transformedPaintingInfo(paintingInfo);
     transformedPaintingInfo.rootLayer = this;
-    transformedPaintingInfo.paintDirtyRect = LayoutRect(encloseRectToDevicePixels(valueOrDefault(transform.inverse()).mapRect(paintingInfo.paintDirtyRect), deviceScaleFactor));
+    if (!transformedPaintingInfo.paintDirtyRect.isInfinite())
+        transformedPaintingInfo.paintDirtyRect = LayoutRect(encloseRectToDevicePixels(valueOrDefault(transform.inverse()).mapRect(paintingInfo.paintDirtyRect), deviceScaleFactor));
     transformedPaintingInfo.subpixelOffset = adjustedSubpixelOffset;
     paintLayerContentsAndReflection(context, transformedPaintingInfo, paintFlags);
 
@@ -4003,8 +4001,11 @@ Vector<RenderLayer*> RenderLayer::topLayerRenderLayers(const RenderView& renderV
         if (backdropRenderer && backdropRenderer->hasLayer() && backdropRenderer->layer()->parent())
             layers.append(backdropRenderer->layer());
 
-        if (renderer->hasLayer() && downcast<RenderLayerModelObject>(*renderer).layer()->parent())
-            layers.append(downcast<RenderLayerModelObject>(*renderer).layer());
+        if (renderer->hasLayer()) {
+            auto& modelObject = downcast<RenderLayerModelObject>(*renderer);
+            if (modelObject.layer()->parent())
+                layers.append(modelObject.layer());
+        }
     }
     return layers;
 }
@@ -4673,14 +4674,16 @@ void RenderLayer::calculateClipRects(const ClipRectsContext& clipRectsContext, C
             if (renderer().canContainFixedPositionObjects())
                 clipRects.setFixedClipRect(intersection(newOverflowClip, clipRects.fixedClipRect()));
         }
-        if (renderer().hasClip() && is<RenderBox>(renderer())) {
-            LayoutRect newPosClip = downcast<RenderBox>(renderer()).clipRect({ }, nullptr);
-            if (needsTransform)
-                newPosClip = LayoutRect(renderer().localToContainerQuad(FloatRect(newPosClip), &clipRectsContext.rootLayer->renderer()).boundingBox());
-            newPosClip.moveBy(offset);
-            clipRects.setPosClipRect(intersection(newPosClip, clipRects.posClipRect()));
-            clipRects.setOverflowClipRect(intersection(newPosClip, clipRects.overflowClipRect()));
-            clipRects.setFixedClipRect(intersection(newPosClip, clipRects.fixedClipRect()));
+        if (renderer().hasClip()) {
+            if (CheckedPtr box = dynamicDowncast<RenderBox>(renderer())) {
+                LayoutRect newPosClip = box->clipRect({ }, nullptr);
+                if (needsTransform)
+                    newPosClip = LayoutRect(renderer().localToContainerQuad(FloatRect(newPosClip), &clipRectsContext.rootLayer->renderer()).boundingBox());
+                newPosClip.moveBy(offset);
+                clipRects.setPosClipRect(intersection(newPosClip, clipRects.posClipRect()));
+                clipRects.setOverflowClipRect(intersection(newPosClip, clipRects.overflowClipRect()));
+                clipRects.setFixedClipRect(intersection(newPosClip, clipRects.fixedClipRect()));
+            }
         }
     } else if (renderer().hasNonVisibleOverflow() && transform() && renderer().style().hasBorderRadius())
         clipRects.setOverflowClipRectAffectedByRadius();
@@ -4763,11 +4766,13 @@ void RenderLayer::calculateRects(const ClipRectsContext& clipRectsContext, const
                 foregroundRect.setAffectedByRadius(true);
         }
 
-        if (renderer().hasClip() && is<RenderBox>(renderer())) {
-            // Clip applies to *us* as well, so update the damageRect.
-            LayoutRect newPosClip = downcast<RenderBox>(renderer()).clipRect(toLayoutPoint(offsetFromRootLocal), nullptr);
-            backgroundRect.intersect(newPosClip);
-            foregroundRect.intersect(newPosClip);
+        if (renderer().hasClip()) {
+            if (CheckedPtr box = dynamicDowncast<RenderBox>(renderer())) {
+                // Clip applies to *us* as well, so update the damageRect.
+                LayoutRect newPosClip = box->clipRect(toLayoutPoint(offsetFromRootLocal), nullptr);
+                backgroundRect.intersect(newPosClip);
+                foregroundRect.intersect(newPosClip);
+            }
         }
 
         // If we establish a clip at all, then make sure our background rect is intersected with our layer's bounds including our visual overflow,
@@ -4841,10 +4846,12 @@ LayoutRect RenderLayer::localClipRect(bool& clipExceedsBounds) const
     if (clipRect.isInfinite())
         return clipRect;
 
-    if (renderer().hasClip() && is<RenderBox>(renderer())) {
-        // CSS clip may be larger than our border box.
-        LayoutRect cssClipRect = downcast<RenderBox>(renderer()).clipRect({ }, nullptr);
-        clipExceedsBounds = !cssClipRect.isEmpty() && (clipRect.width() < cssClipRect.width() || clipRect.height() < cssClipRect.height());
+    if (renderer().hasClip()) {
+        if (CheckedPtr box = dynamicDowncast<RenderBox>(renderer())) {
+            // CSS clip may be larger than our border box.
+            LayoutRect cssClipRect = box->clipRect({ }, nullptr);
+            clipExceedsBounds = !cssClipRect.isEmpty() && (clipRect.width() < cssClipRect.width() || clipRect.height() < cssClipRect.height());
+        }
     }
 
     clipRect.move(-offsetFromRoot);
@@ -4921,19 +4928,18 @@ LayoutRect RenderLayer::localBoundingBox(OptionSet<CalculateLayerBoundsFlag> fla
     // as part of our bounding box.  We do this because we are the responsible layer for both hit testing and painting those
     // floats.
     LayoutRect result;
-    if (renderer().isInline() && is<RenderInline>(renderer()))
-        result = downcast<RenderInline>(renderer()).linesVisualOverflowBoundingBox();
+    if (CheckedPtr renderInline = dynamicDowncast<RenderInline>(renderer()); renderInline && renderer().isInline())
+        result = renderInline->linesVisualOverflowBoundingBox();
 #if ENABLE(LAYER_BASED_SVG_ENGINE)
-    else if (is<RenderSVGModelObject>(renderer()))
-        result = downcast<RenderSVGModelObject>(renderer()).visualOverflowRectEquivalent();
+    else if (CheckedPtr modelObject = dynamicDowncast<RenderSVGModelObject>(renderer()))
+        result = modelObject->visualOverflowRectEquivalent();
 #endif
-    else if (is<RenderTableRow>(renderer())) {
-        auto& tableRow = downcast<RenderTableRow>(renderer());
+    else if (CheckedPtr tableRow = dynamicDowncast<RenderTableRow>(renderer())) {
         // Our bounding box is just the union of all of our cells' border/overflow rects.
-        for (RenderTableCell* cell = tableRow.firstCell(); cell; cell = cell->nextCell()) {
+        for (RenderTableCell* cell = tableRow->firstCell(); cell; cell = cell->nextCell()) {
             LayoutRect bbox = cell->borderBoxRect();
             result.unite(bbox);
-            LayoutRect overflowRect = tableRow.visualOverflowRect();
+            LayoutRect overflowRect = tableRow->visualOverflowRect();
             if (bbox != overflowRect)
                 result.unite(overflowRect);
         }
@@ -5053,8 +5059,8 @@ LayoutRect RenderLayer::calculateLayerBounds(const RenderLayer* ancestorLayer, c
 
     LayoutRect boundingBoxRect = localBoundingBox(flags | IncludeRootBackgroundPaintingArea);
     if (renderer().view().frameView().hasFlippedBlockRenderers()) {
-        if (is<RenderBox>(renderer()))
-            downcast<RenderBox>(renderer()).flipForWritingMode(boundingBoxRect);
+        if (CheckedPtr box = dynamicDowncast<RenderBox>(renderer()))
+            box->flipForWritingMode(boundingBoxRect);
         else
             renderer().containingBlock()->flipForWritingMode(boundingBoxRect);
     }
@@ -5393,43 +5399,41 @@ static void determineNonLayerDescendantsPaintedContent(const RenderElement& rend
             return;
         }
 
-        if (is<RenderText>(child)) {
-            const auto& renderText = downcast<RenderText>(child);
-            if (!renderText.hasRenderedText())
+        if (CheckedPtr renderText = dynamicDowncast<RenderText>(child)) {
+            if (!renderText->hasRenderedText())
                 continue;
 
             if (renderer.style().effectiveUserSelect() != UserSelect::None)
                 request.setHasPaintedContent();
 
-            if (!renderText.text().containsOnly<isASCIIWhitespace>())
+            if (!renderText->text().containsOnly<isASCIIWhitespace>())
                 request.setHasPaintedContent();
 
             if (request.isSatisfied())
                 return;
         }
         
-        if (!is<RenderElement>(child))
-            continue;
-        
-        const RenderElement& renderElementChild = downcast<RenderElement>(child);
-
-        if (is<RenderLayerModelObject>(renderElementChild) && downcast<RenderLayerModelObject>(renderElementChild).hasSelfPaintingLayer())
+        CheckedPtr childElement = dynamicDowncast<RenderElement>(child);
+        if (!childElement)
             continue;
 
-        if (hasVisibleBoxDecorationsOrBackground(renderElementChild)) {
+        if (auto* modelObject = dynamicDowncast<RenderLayerModelObject>(*childElement); modelObject && modelObject->hasSelfPaintingLayer())
+            continue;
+
+        if (hasVisibleBoxDecorationsOrBackground(*childElement)) {
             request.setHasPaintedContent();
             if (request.isSatisfied())
                 return;
         }
         
-        if (is<RenderReplaced>(renderElementChild)) {
+        if (is<RenderReplaced>(*childElement)) {
             request.setHasPaintedContent();
 
             if (request.isSatisfied())
                 return;
         }
 
-        determineNonLayerDescendantsPaintedContent(renderElementChild, renderersTraversed, request);
+        determineNonLayerDescendantsPaintedContent(*childElement, renderersTraversed, request);
         if (request.isSatisfied())
             return;
     }
@@ -5691,7 +5695,10 @@ void RenderLayer::updateFiltersAfterStyleChange(StyleDifference diff, const Rend
 void RenderLayer::updateLayerScrollableArea()
 {
     bool hasScrollableArea = scrollableArea();
-    bool needsScrollableArea = is<RenderBox>(renderer()) && downcast<RenderBox>(renderer()).requiresLayerWithScrollableArea();
+    bool needsScrollableArea = [&] {
+        auto* box = dynamicDowncast<RenderBox>(renderer());
+        return box && box->requiresLayerWithScrollableArea();
+    }();
 
     if (needsScrollableArea == hasScrollableArea)
         return;
@@ -5767,12 +5774,11 @@ bool RenderLayer::isBitmapOnly() const
     if (is<RenderHTMLCanvas>(renderer()))
         return true;
 
-    if (is<RenderImage>(renderer())) {
-        auto& imageRenderer = downcast<RenderImage>(renderer());
-        if (auto* cachedImage = imageRenderer.cachedImage()) {
+    if (CheckedPtr imageRenderer = dynamicDowncast<RenderImage>(renderer())) {
+        if (auto* cachedImage = imageRenderer->cachedImage()) {
             if (!cachedImage->hasImage())
                 return false;
-            return is<BitmapImage>(cachedImage->imageForRenderer(&imageRenderer));
+            return is<BitmapImage>(cachedImage->imageForRenderer(imageRenderer.get()));
         }
         return false;
     }
@@ -5783,6 +5789,18 @@ bool RenderLayer::isBitmapOnly() const
 void RenderLayer::simulateFrequentPaint()
 {
     m_paintFrequencyTracker.track(page().lastRenderingUpdateTimestamp());
+}
+
+void RenderLayer::purgeFrontBufferForTesting()
+{
+    if (backing())
+        backing()->purgeFrontBufferForTesting();
+}
+
+void RenderLayer::purgeBackBufferForTesting()
+{
+    if (backing())
+        backing()->purgeBackBufferForTesting();
 }
 
 RenderLayerScrollableArea* RenderLayer::scrollableArea() const

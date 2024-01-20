@@ -233,6 +233,7 @@ Modules/mediastream/MediaDevices.cpp
 Modules/mediastream/MediaStream.cpp
 Modules/mediastream/MediaStreamTrack.cpp
 Modules/mediastream/MediaStreamTrackEvent.cpp
+Modules/mediastream/MediaStreamTrackProcessor.cpp
 Modules/mediastream/MediaTrackCapabilities.cpp
 Modules/mediastream/MediaTrackConstraints.cpp
 Modules/mediastream/NavigatorMediaDevices.cpp
@@ -420,7 +421,6 @@ Modules/webauthn/AuthenticatorAttestationResponse.cpp
 Modules/webauthn/AuthenticatorCoordinator.cpp
 Modules/webauthn/AuthenticatorResponse.cpp
 Modules/webauthn/PublicKeyCredential.cpp
-Modules/webauthn/PublicKeyCredentialClientCapabilities.cpp
 Modules/webauthn/WebAuthenticationUtils.cpp
 Modules/webauthn/apdu/ApduCommand.cpp
 Modules/webauthn/apdu/ApduResponse.cpp
@@ -571,8 +571,6 @@ animation/CSSTransition.cpp
 animation/CSSTransitionEvent.cpp
 animation/CompositeOperation.cpp
 animation/CustomEffect.cpp
-animation/DeclarativeAnimation.cpp
-animation/DeclarativeAnimationEvent.cpp
 animation/DocumentTimeline.cpp
 animation/DocumentTimelinesController.cpp
 animation/ElementAnimationRareData.cpp
@@ -581,6 +579,8 @@ animation/KeyframeEffect.cpp
 animation/KeyframeEffectStack.cpp
 animation/KeyframeInterpolation.cpp
 animation/ScrollTimeline.cpp
+animation/StyleOriginatedAnimation.cpp
+animation/StyleOriginatedAnimationEvent.cpp
 animation/ViewTimeline.cpp
 animation/WebAnimation.cpp
 animation/WebAnimationUtilities.cpp
@@ -1430,7 +1430,6 @@ html/HTMLVideoElement.cpp
 html/HTMLWBRElement.cpp
 html/HiddenInputType.cpp
 html/ImageBitmap.cpp
-html/ImageBitmapBacking.cpp
 html/ImageData.cpp
 html/ImageDocument.cpp
 html/ImageInputType.cpp
@@ -1488,7 +1487,6 @@ html/canvas/CanvasRenderingContext.cpp
 html/canvas/CanvasRenderingContext2D.cpp
 html/canvas/CanvasRenderingContext2DBase.cpp
 html/canvas/CanvasStyle.cpp
-html/canvas/EXTBlendFuncExtended.cpp
 html/canvas/EXTBlendMinMax.cpp
 html/canvas/EXTClipControl.cpp
 html/canvas/EXTColorBufferFloat.cpp
@@ -1530,6 +1528,7 @@ html/canvas/Path2D.cpp
 html/canvas/PlaceholderRenderingContext.cpp
 html/canvas/PredefinedColorSpace.cpp
 html/canvas/WebGL2RenderingContext.cpp
+html/canvas/WebGLBlendFuncExtended.cpp
 html/canvas/WebGLBuffer.cpp
 html/canvas/WebGLClipCullDistance.cpp
 html/canvas/WebGLColorBufferFloat.cpp
@@ -3452,7 +3451,6 @@ JSDoubleRange.cpp
 JSDragEvent.cpp
 JSDynamicsCompressorNode.cpp
 JSDynamicsCompressorOptions.cpp
-JSEXTBlendFuncExtended.cpp
 JSEXTBlendMinMax.cpp
 JSEXTClipControl.cpp
 JSEXTColorBufferFloat.cpp
@@ -3881,6 +3879,7 @@ JSMediaStreamAudioSourceNode.cpp
 JSMediaStreamAudioSourceOptions.cpp
 JSMediaStreamTrack.cpp
 JSMediaStreamTrackEvent.cpp
+JSMediaStreamTrackProcessor.cpp
 JSMediaTrackCapabilities.cpp
 JSMediaTrackConstraints.cpp
 JSMediaTrackSupportedConstraints.cpp
@@ -4018,7 +4017,6 @@ JSProcessingInstruction.cpp
 JSProgressEvent.cpp
 JSPromiseRejectionEvent.cpp
 JSPublicKeyCredential.cpp
-JSPublicKeyCredentialClientCapabilities.cpp
 JSPublicKeyCredentialCreationOptions.cpp
 JSPublicKeyCredentialDescriptor.cpp
 JSPublicKeyCredentialRequestOptions.cpp
@@ -4464,6 +4462,7 @@ JSWebCodecsVideoFrameOutputCallback.cpp
 JSWebCodecsVideoFrame.cpp
 JSWebGL2RenderingContext.cpp
 JSWebGLActiveInfo.cpp
+JSWebGLBlendFuncExtended.cpp
 JSWebGLBuffer.cpp
 JSWebGLClipCullDistance.cpp
 JSWebGLColorBufferFloat.cpp

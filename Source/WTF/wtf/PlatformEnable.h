@@ -108,10 +108,6 @@
 #define ENABLE_3D_TRANSFORMS 0
 #endif
 
-#if !defined(ENABLE_ACCESSIBILITY)
-#define ENABLE_ACCESSIBILITY 1
-#endif
-
 #if !defined(ENABLE_ACCESSIBILITY_ANIMATION_CONTROL)
 #define ENABLE_ACCESSIBILITY_ANIMATION_CONTROL 0
 #endif
@@ -742,11 +738,11 @@
 
 #if ENABLE(WEBASSEMBLY) && ENABLE(JIT) && CPU(ARM)
 #undef ENABLE_B3_JIT
-#define ENABLE_B3_JIT 0
+#define ENABLE_B3_JIT 1
 #undef ENABLE_WEBASSEMBLY_OMGJIT
 #define ENABLE_WEBASSEMBLY_OMGJIT 0
 #undef ENABLE_WEBASSEMBLY_BBQJIT
-#define ENABLE_WEBASSEMBLY_BBQJIT 0
+#define ENABLE_WEBASSEMBLY_BBQJIT 1
 #endif
 
 #if !defined(ENABLE_WEBASSEMBLY) && (ENABLE(B3_JIT) && PLATFORM(COCOA) && CPU(ADDRESS64))
@@ -788,6 +784,15 @@
 /* Determine if we need to enable Computed Goto Opcodes or not: */
 #if HAVE(COMPUTED_GOTO) || !ENABLE(C_LOOP)
 #define ENABLE_COMPUTED_GOTO_OPCODES 1
+#endif
+
+#if (PLATFORM(MAC) && __MAC_OS_X_VERSION_MAX_ALLOWED >= 150000) \
+    || (PLATFORM(MACCATALYST) && __IPHONE_OS_VERSION_MAX_ALLOWED >= 180000) \
+    || (PLATFORM(IOS) && __IPHONE_OS_VERSION_MAX_ALLOWED >= 180000) \
+    || (PLATFORM(APPLETV) && __TV_OS_VERSION_MAX_ALLOWED >= 180000) \
+    || (PLATFORM(WATCHOS) && __WATCH_OS_VERSION_MAX_ALLOWED >= 110000)
+// Linkers from older SDKs causes wrong linking. ref: rdar://96556827
+#define ENABLE_OFFLINE_ASM_ALT_ENTRY 1
 #endif
 
 /* Regular Expression Tracing - Set to 1 to trace RegExp's in jsc.  Results dumped at exit */

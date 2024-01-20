@@ -3123,7 +3123,7 @@ HandleUserInputEventResult EventHandler::handleWheelEventInternal(const Platform
     }
 #endif
 
-#if PLATFORM(COCOA)
+#if PLATFORM(COCOA) || PLATFORM(WIN)
     LOG_WITH_STREAM(Scrolling, stream << "EventHandler::handleWheelEvent " << event << " processing steps " << processingSteps);
     auto monitor = frame->page()->wheelEventTestMonitor();
     if (monitor)
@@ -5013,9 +5013,10 @@ HandleUserInputEventResult EventHandler::handleTouchEvent(const PlatformTouchEve
             pointerTarget = result.targetElement();
         }
 
-        if (!is<Node>(touchTarget))
+        RefPtr touchTargetNode = dynamicDowncast<Node>(touchTarget);
+        if (!touchTargetNode)
             continue;
-        auto& document = downcast<Node>(*touchTarget).document();
+        auto& document = touchTargetNode->document();
         if (!document.hasTouchEventHandlers())
             continue;
         RefPtr targetFrame = document.frame();

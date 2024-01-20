@@ -43,11 +43,13 @@
 #include "RenderSVGModelObjectInlines.h"
 #include "RenderView.h"
 #include "SVGElementInlines.h"
+#include "SVGElementTypeHelpers.h"
 #include "SVGGraphicsElement.h"
 #include "SVGLocatable.h"
 #include "SVGNames.h"
 #include "SVGPathData.h"
 #include "SVGResourcesCache.h"
+#include "SVGUseElement.h"
 #include "TransformState.h"
 #include <wtf/IsoMallocInlines.h>
 
@@ -284,6 +286,11 @@ Path RenderSVGModelObject::computeClipPath(AffineTransform& transform) const
 {
     if (layer()->isTransformed())
         transform.multiply(layer()->currentTransform(RenderStyle::individualTransformOperations()).toAffineTransform());
+
+    if (auto* useElement = dynamicDowncast<SVGUseElement>(element())) {
+        if (auto* clipChild = useElement->rendererClipChild())
+            transform.multiply(downcast<RenderLayerModelObject>(*clipChild).checkedLayer()->currentTransform(RenderStyle::individualTransformOperations()).toAffineTransform());
+    }
 
     return pathFromGraphicsElement(downcast<SVGGraphicsElement>(element()));
 }

@@ -455,6 +455,18 @@ RealtimeMediaSource& MediaStreamTrackPrivate::source()
     return m_sourceObserver->source();
 }
 
+const RealtimeMediaSource& MediaStreamTrackPrivate::source() const
+{
+    ASSERT(isMainThread());
+    return m_sourceObserver->source();
+}
+
+RealtimeMediaSource& MediaStreamTrackPrivate::sourceForProcessor()
+{
+    ASSERT(isOnCreationThread());
+    return m_sourceObserver->source();
+}
+
 bool MediaStreamTrackPrivate::hasSource(const RealtimeMediaSource* source) const
 {
     ASSERT(isMainThread());

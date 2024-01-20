@@ -199,6 +199,8 @@ public:
     bool isFullyActive(Document&);
     bool isPaintingFrequently(Element&);
     void incrementFrequentPaintCounter(Element&);
+    void purgeFrontBuffer(Element&);
+    void purgeBackBuffer(Element&);
 
     String address(Node&);
     bool nodeNeedsStyleRecalc(Node&);
@@ -1422,6 +1424,8 @@ public:
     bool readyToRetrieveComputedRoleOrLabel(Element&) const;
     String getComputedLabel(Element&) const;
     String getComputedRole(Element&) const;
+
+    bool hasScopeBreakingHasSelectors() const;
 
 private:
     explicit Internals(Document&);

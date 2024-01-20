@@ -70,8 +70,8 @@ static inline std::pair<LayoutRect, LayoutRect> toMarginAndBorderBoxVisualRect(c
     auto isHorizontalWritingMode = WebCore::isHorizontalWritingMode(writingMode);
 
     auto borderBoxLogicalRect = Layout::BoxGeometry::borderBoxRect(logicalGeometry);
-    auto horizontalMargin = Layout::BoxGeometry::HorizontalMargin { logicalGeometry.marginStart(), logicalGeometry.marginEnd() };
-    auto verticalMargin = Layout::BoxGeometry::VerticalMargin { logicalGeometry.marginBefore(), logicalGeometry.marginAfter() };
+    auto horizontalMargin = Layout::BoxGeometry::HorizontalEdges { logicalGeometry.marginStart(), logicalGeometry.marginEnd() };
+    auto verticalMargin = Layout::BoxGeometry::VerticalEdges { logicalGeometry.marginBefore(), logicalGeometry.marginAfter() };
 
     auto flipMarginsIfApplicable = [&] {
         if (isHorizontalWritingMode && isLeftToRightDirection && !isFlippedBlocksWritingMode)
@@ -79,7 +79,7 @@ static inline std::pair<LayoutRect, LayoutRect> toMarginAndBorderBoxVisualRect(c
 
         if (!isHorizontalWritingMode) {
             auto logicalHorizontalMargin = horizontalMargin;
-            horizontalMargin = !isFlippedBlocksWritingMode ? Layout::BoxGeometry::HorizontalMargin { verticalMargin.after, verticalMargin.before } : Layout::BoxGeometry::HorizontalMargin { verticalMargin.before, verticalMargin.after };
+            horizontalMargin = !isFlippedBlocksWritingMode ? Layout::BoxGeometry::HorizontalEdges { verticalMargin.after, verticalMargin.before } : Layout::BoxGeometry::HorizontalEdges { verticalMargin.before, verticalMargin.after };
             verticalMargin = { logicalHorizontalMargin.start, logicalHorizontalMargin.end };
         }
         if (!isLeftToRightDirection) {
@@ -419,8 +419,7 @@ void LineLayout::updateRenderTreePositions(const Vector<LineAdjustment>& lineAdj
             auto needsResizing = layoutBox.isInterlinearRubyAnnotationBox() || !isHorizontalWritingMode;
             if (!needsResizing)
                 return;
-            auto visualMarginBoxSize = Layout::BoxGeometry::marginBoxRect(layoutState().geometryForBox(layoutBox)).size();
-            auto logicalMarginBoxSize = isHorizontalWritingMode ? visualMarginBoxSize : visualMarginBoxSize.transposedSize();
+            auto logicalMarginBoxSize = Layout::BoxGeometry::marginBoxRect(layoutState().geometryForBox(layoutBox)).size();
             if (logicalMarginBoxSize == renderer.size())
                 return;
             renderer.setSize(logicalMarginBoxSize);
@@ -1003,11 +1002,18 @@ void LineLayout::shiftLinesBy(LayoutUnit blockShift)
     for (auto& line : m_inlineContent->displayContent().lines)
         line.moveInBlockDirection(blockShift, isHorizontalWritingMode);
 
+    LayoutUnit deltaX = isHorizontalWritingMode ? 0_lu : blockShift;
+    LayoutUnit deltaY = isHorizontalWritingMode ? blockShift : 0_lu;
     for (auto& box : m_inlineContent->displayContent().boxes) {
         if (isHorizontalWritingMode)
             box.moveVertically(blockShift);
         else
             box.moveHorizontally(blockShift);
+
+        if (box.isAtomicInlineLevelBox()) {
+            CheckedRef renderer = downcast<RenderBox>(m_boxTree.rendererForLayoutBox(box.layoutBox()));
+            renderer->move(deltaX, deltaY);
+        }
     }
 
     for (auto& object : m_boxTree.renderers()) {
@@ -1119,7 +1125,7 @@ bool LineLayout::contentNeedsVisualReordering() const
 #if ENABLE(TREE_DEBUGGING)
 void LineLayout::outputLineTree(WTF::TextStream& stream, size_t depth) const
 {
-    showInlineContent(stream, *m_inlineContent, depth);
+    showInlineContent(stream, *m_inlineContent, depth, isDamaged());
 }
 #endif
 

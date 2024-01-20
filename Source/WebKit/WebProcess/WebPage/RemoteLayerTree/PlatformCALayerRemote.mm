@@ -208,7 +208,7 @@ void PlatformCALayerRemote::recursiveBuildTransaction(RemoteLayerTreeContext& co
         // Once that setting is made unnecessary, remove this entire conditional as well.
         if (type() == PlatformCALayer::Type::RemoteCustom
             && !downcast<PlatformCALayerRemoteCustom>(*this).hasVideo()) {
-            RemoteLayerTreePropertyApplier::applyPropertiesToLayer(platformLayer(), nullptr, nullptr, m_properties, RemoteLayerBackingStoreProperties::LayerContentsType::CAMachPort);
+            RemoteLayerTreePropertyApplier::applyPropertiesToLayer(platformLayer(), nullptr, nullptr, m_properties, LayerContentsType::CAMachPort);
             didCommit();
             return;
         }
@@ -1088,5 +1088,18 @@ void PlatformCALayerRemote::setAcceleratedEffectsAndBaseValues(const Accelerated
     m_properties.notePropertiesChanged(LayerChange::AnimationsChanged);
 }
 #endif
+
+void PlatformCALayerRemote::purgeFrontBufferForTesting()
+{
+    if (m_properties.backingStoreOrProperties.store)
+        return m_properties.backingStoreOrProperties.store->purgeFrontBufferForTesting();
+}
+
+void PlatformCALayerRemote::purgeBackBufferForTesting()
+{
+    if (m_properties.backingStoreOrProperties.store)
+        return m_properties.backingStoreOrProperties.store->purgeBackBufferForTesting();
+}
+
 
 } // namespace WebKit

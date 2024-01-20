@@ -236,6 +236,7 @@ bytecode/ExitFlag.cpp
 bytecode/ExitKind.cpp
 bytecode/ExitingInlineKind.cpp
 bytecode/ExitingJITType.cpp
+bytecode/ExpressionInfo.cpp
 bytecode/FullCodeOrigin.cpp
 bytecode/FunctionCodeBlock.cpp
 bytecode/GetByStatus.cpp
@@ -1112,12 +1113,15 @@ tools/VMInspector.cpp
 wasm/WasmB3IRGenerator.cpp
 wasm/WasmBBQDisassembler.cpp
 wasm/WasmBBQJIT.cpp @no-unify
+wasm/WasmBBQJIT32_64.cpp @no-unify
+wasm/WasmBBQJIT64.cpp @no-unify
 wasm/WasmBBQPlan.cpp
 wasm/WasmBinding.cpp
 wasm/WasmBranchHintsSectionParser.cpp
 wasm/WasmCallee.cpp
 wasm/WasmCalleeGroup.cpp
 wasm/WasmCallingConvention.cpp
+wasm/WasmCompilationContext.cpp
 wasm/WasmCompilationMode.cpp
 wasm/WasmConstExprGenerator.cpp
 wasm/WasmContext.cpp

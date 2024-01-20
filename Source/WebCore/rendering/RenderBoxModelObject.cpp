@@ -119,7 +119,7 @@ void RenderBoxModelObject::ContinuationChainNode::insertAfter(ContinuationChainN
     after.next = this;
 }
 
-using ContinuationChainNodeMap = HashMap<const RenderBoxModelObject*, std::unique_ptr<RenderBoxModelObject::ContinuationChainNode>>;
+using ContinuationChainNodeMap = HashMap<SingleThreadWeakRef<const RenderBoxModelObject>, std::unique_ptr<RenderBoxModelObject::ContinuationChainNode>>;
 
 static ContinuationChainNodeMap& continuationChainNodeMap()
 {
@@ -127,7 +127,7 @@ static ContinuationChainNodeMap& continuationChainNodeMap()
     return map;
 }
 
-using FirstLetterRemainingTextMap = HashMap<const RenderBoxModelObject*, SingleThreadWeakPtr<RenderTextFragment>>;
+using FirstLetterRemainingTextMap = HashMap<SingleThreadWeakRef<const RenderBoxModelObject>, SingleThreadWeakPtr<RenderTextFragment>>;
 
 static FirstLetterRemainingTextMap& firstLetterRemainingTextMap()
 {
@@ -225,9 +225,12 @@ static LayoutSize accumulateInFlowPositionOffsets(const RenderObject* child)
     if (!child->isAnonymousBlock() || !child->isInFlowPositioned())
         return LayoutSize();
     LayoutSize offset;
-    for (RenderElement* parent = downcast<RenderBlock>(*child).inlineContinuation(); is<RenderInline>(parent); parent = parent->parent()) {
+    for (RenderElement* parent = downcast<RenderBlock>(*child).inlineContinuation(); parent; parent = parent->parent()) {
+        auto* parentRenderInline = dynamicDowncast<RenderInline>(*parent);
+        if (!parentRenderInline)
+            break;
         if (parent->isInFlowPositioned())
-            offset += downcast<RenderInline>(*parent).offsetForInFlowPosition();
+            offset += parentRenderInline->offsetForInFlowPosition();
     }
     return offset;
 }
@@ -547,8 +550,8 @@ void RenderBoxModelObject::computeStickyPositionConstraints(StickyPositionViewpo
     // have already done a similar call to move from the containing block to the scrolling
     // ancestor above, but localToContainerQuad takes care of a lot of complex situations
     // involving inlines, tables, and transformations.
-    if (parent()->isRenderBox())
-        downcast<RenderBox>(parent())->flipForWritingMode(stickyBoxRect);
+    if (CheckedPtr parentBox = dynamicDowncast<RenderBox>(*parent()))
+        parentBox->flipForWritingMode(stickyBoxRect);
     auto stickyBoxRelativeToScrollingAncestor = parent()->localToContainerQuad(FloatRect(stickyBoxRect), &enclosingClippingBox, { } /* ignore transforms */).boundingBox();
 
     if (enclosingClippingLayer) {
@@ -833,7 +836,7 @@ RenderBoxModelObject* RenderBoxModelObject::continuation() const
     if (!hasContinuationChainNode())
         return nullptr;
 
-    auto& continuationChainNode = *continuationChainNodeMap().get(this);
+    auto& continuationChainNode = *continuationChainNodeMap().get(*this);
     if (!continuationChainNode.next)
         return nullptr;
     return continuationChainNode.next->renderer.get();
@@ -844,7 +847,7 @@ RenderInline* RenderBoxModelObject::inlineContinuation() const
     if (!hasContinuationChainNode())
         return nullptr;
 
-    for (auto* next = continuationChainNodeMap().get(this)->next; next; next = next->next) {
+    for (auto* next = continuationChainNodeMap().get(*this)->next; next; next = next->next) {
         if (auto* renderInline = dynamicDowncast<RenderInline>(*next->renderer))
             return renderInline;
     }
@@ -857,7 +860,7 @@ void RenderBoxModelObject::forRendererAndContinuations(RenderBoxModelObject& ren
     if (!renderer.hasContinuationChainNode())
         return;
 
-    for (auto* next = continuationChainNodeMap().get(&renderer)->next; next; next = next->next) {
+    for (auto* next = continuationChainNodeMap().get(renderer)->next; next; next = next->next) {
         if (!next->renderer)
             continue;
         function(*next->renderer);
@@ -866,13 +869,13 @@ void RenderBoxModelObject::forRendererAndContinuations(RenderBoxModelObject& ren
 
 RenderBoxModelObject::ContinuationChainNode* RenderBoxModelObject::continuationChainNode() const
 {
-    return continuationChainNodeMap().get(this);
+    return continuationChainNodeMap().get(*this);
 }
 
 void RenderBoxModelObject::insertIntoContinuationChainAfter(RenderBoxModelObject& afterRenderer)
 {
     ASSERT(isContinuation());
-    ASSERT(!continuationChainNodeMap().contains(this));
+    ASSERT(!continuationChainNodeMap().contains(*this));
 
     auto& after = afterRenderer.ensureContinuationChainNode();
     ensureContinuationChainNode().insertAfter(after);
@@ -881,15 +884,15 @@ void RenderBoxModelObject::insertIntoContinuationChainAfter(RenderBoxModelObject
 void RenderBoxModelObject::removeFromContinuationChain()
 {
     ASSERT(hasContinuationChainNode());
-    ASSERT(continuationChainNodeMap().contains(this));
+    ASSERT(continuationChainNodeMap().contains(*this));
     setHasContinuationChainNode(false);
-    continuationChainNodeMap().remove(this);
+    continuationChainNodeMap().remove(*this);
 }
 
 auto RenderBoxModelObject::ensureContinuationChainNode() -> ContinuationChainNode&
 {
     setHasContinuationChainNode(true);
-    return *continuationChainNodeMap().ensure(this, [&] {
+    return *continuationChainNodeMap().ensure(*this, [&] {
         return makeUnique<ContinuationChainNode>(*this);
     }).iterator->value;
 }
@@ -898,19 +901,19 @@ RenderTextFragment* RenderBoxModelObject::firstLetterRemainingText() const
 {
     if (!isFirstLetter())
         return nullptr;
-    return firstLetterRemainingTextMap().get(this).get();
+    return firstLetterRemainingTextMap().get(*this).get();
 }
 
 void RenderBoxModelObject::setFirstLetterRemainingText(RenderTextFragment& remainingText)
 {
     ASSERT(isFirstLetter());
-    firstLetterRemainingTextMap().set(this, remainingText);
+    firstLetterRemainingTextMap().set(*this, remainingText);
 }
 
 void RenderBoxModelObject::clearFirstLetterRemainingText()
 {
     ASSERT(isFirstLetter());
-    firstLetterRemainingTextMap().remove(this);
+    firstLetterRemainingTextMap().remove(*this);
 }
 
 void RenderBoxModelObject::mapAbsoluteToLocalPoint(OptionSet<MapCoordinatesMode> mode, TransformState& transformState) const

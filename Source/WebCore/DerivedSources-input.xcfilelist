@@ -574,6 +574,7 @@ $(PROJECT_DIR)/Modules/mediastream/MediaSettingsRange.idl
 $(PROJECT_DIR)/Modules/mediastream/MediaStream.idl
 $(PROJECT_DIR)/Modules/mediastream/MediaStreamTrack.idl
 $(PROJECT_DIR)/Modules/mediastream/MediaStreamTrackEvent.idl
+$(PROJECT_DIR)/Modules/mediastream/MediaStreamTrackProcessor.idl
 $(PROJECT_DIR)/Modules/mediastream/MediaTrackCapabilities.idl
 $(PROJECT_DIR)/Modules/mediastream/MediaTrackConstraints.idl
 $(PROJECT_DIR)/Modules/mediastream/MediaTrackSupportedConstraints.idl
@@ -977,7 +978,6 @@ $(PROJECT_DIR)/Modules/webauthn/AuthenticatorAttestationResponse.idl
 $(PROJECT_DIR)/Modules/webauthn/AuthenticatorResponse.idl
 $(PROJECT_DIR)/Modules/webauthn/AuthenticatorTransport.idl
 $(PROJECT_DIR)/Modules/webauthn/PublicKeyCredential.idl
-$(PROJECT_DIR)/Modules/webauthn/PublicKeyCredentialClientCapabilities.idl
 $(PROJECT_DIR)/Modules/webauthn/PublicKeyCredentialCreationOptions.idl
 $(PROJECT_DIR)/Modules/webauthn/PublicKeyCredentialDescriptor.idl
 $(PROJECT_DIR)/Modules/webauthn/PublicKeyCredentialRequestOptions.idl
@@ -1615,7 +1615,6 @@ $(PROJECT_DIR)/html/canvas/CanvasTextBaseline.idl
 $(PROJECT_DIR)/html/canvas/CanvasTextDrawingStyles.idl
 $(PROJECT_DIR)/html/canvas/CanvasTransform.idl
 $(PROJECT_DIR)/html/canvas/CanvasUserInterface.idl
-$(PROJECT_DIR)/html/canvas/EXTBlendFuncExtended.idl
 $(PROJECT_DIR)/html/canvas/EXTBlendMinMax.idl
 $(PROJECT_DIR)/html/canvas/EXTClipControl.idl
 $(PROJECT_DIR)/html/canvas/EXTColorBufferFloat.idl
@@ -1658,6 +1657,7 @@ $(PROJECT_DIR)/html/canvas/Path2D.idl
 $(PROJECT_DIR)/html/canvas/PredefinedColorSpace.idl
 $(PROJECT_DIR)/html/canvas/WebGL2RenderingContext.idl
 $(PROJECT_DIR)/html/canvas/WebGLActiveInfo.idl
+$(PROJECT_DIR)/html/canvas/WebGLBlendFuncExtended.idl
 $(PROJECT_DIR)/html/canvas/WebGLBuffer.idl
 $(PROJECT_DIR)/html/canvas/WebGLClipCullDistance.idl
 $(PROJECT_DIR)/html/canvas/WebGLColorBufferFloat.idl

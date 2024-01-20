@@ -412,6 +412,7 @@ set(WebKit_SERIALIZATION_IN_FILES
     Shared/MediaPlaybackState.serialization.in
     Shared/Model.serialization.in
     Shared/NavigationActionData.serialization.in
+    Shared/NavigationActionPolicyParameters.serialization.in
     Shared/NetworkProcessConnectionParameters.serialization.in
     Shared/Pasteboard.serialization.in
     Shared/PlatformPopupMenuData.serialization.in
@@ -584,6 +585,8 @@ set(WebKit_SERIALIZATION_IN_FILES
 
     WebProcess/Network/NetworkProcessConnectionInfo.serialization.in
 
+    WebProcess/UserContent/InjectUserScriptImmediately.serialization.in
+
     WebProcess/WebCoreSupport/WebSpeechSynthesisVoice.serialization.in
 )
 
@@ -627,13 +630,7 @@ set(PluginProcess_LIBRARIES WebKit)
 # these include directories, libraries or definitions need to be
 # added before the ANGLE directories.
 if (USE_LIBEPOXY)
-    list(APPEND WebKit_SYSTEM_INCLUDE_DIRECTORIES
-        ${LIBEPOXY_INCLUDE_DIRS}
-    )
-    list(APPEND WebKit_PRIVATE_LIBRARIES
-        ${LIBEPOXY_LIBRARIES}
-    )
-    add_definitions(${LIBEPOXY_DEFINITIONS})
+    list(APPEND WebKit_PRIVATE_LIBRARIES Epoxy::Epoxy)
 elseif (USE_ANGLE_EGL)
     # Prepend to make sure the ANGLE headers are found before system headers
     list(PREPEND WebKit_PRIVATE_LIBRARIES

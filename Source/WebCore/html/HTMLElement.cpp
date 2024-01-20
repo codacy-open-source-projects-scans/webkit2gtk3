@@ -79,6 +79,7 @@
 #include "NodeTraversal.h"
 #include "PopoverData.h"
 #include "PseudoClassChangeInvalidation.h"
+#include "Quirks.h"
 #include "RenderElement.h"
 #include "ScriptController.h"
 #include "ScriptDisallowedScope.h"
@@ -1450,10 +1451,8 @@ ExceptionOr<void> HTMLElement::showPopover(const HTMLFormControlElement* invoker
 
     queuePopoverToggleEventTask(PopoverVisibilityState::Hidden, PopoverVisibilityState::Showing);
 
-#if ENABLE(ACCESSIBILITY)
     if (CheckedPtr cache = document->existingAXObjectCache())
         cache->onPopoverToggle(*this);
-#endif
 
     return { };
 }
@@ -1513,10 +1512,8 @@ ExceptionOr<void> HTMLElement::hidePopoverInternal(FocusPreviousElement focusPre
         popoverData()->setPreviouslyFocusedElement(nullptr);
     }
 
-#if ENABLE(ACCESSIBILITY)
     if (CheckedPtr cache = document().existingAXObjectCache())
         cache->onPopoverToggle(*this);
-#endif
 
     return { };
 }

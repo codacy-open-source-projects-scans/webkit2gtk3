@@ -2681,13 +2681,9 @@ class WebCore::TransformOperations {
     WebCore::Pattern::Parameters parameters();
 }
 
-[Nested, AdditionalEncoder=StreamConnectionEncoder] class WebCore::SourceBrush::Brush {
-    std::variant<WebCore::SourceBrush::Brush::LogicalGradient, Ref<WebCore::Pattern>> brush;
-}
-
 [AdditionalEncoder=StreamConnectionEncoder] class WebCore::SourceBrush {
     WebCore::Color color();
-    std::optional<WebCore::SourceBrush::Brush> brush();
+    WebCore::SourceBrush::OptionalPatternGradient patternGradient();
 }
 
 header: <WebCore/ThreadSafeDataBuffer.h>
@@ -6561,11 +6557,11 @@ header: <WebCore/GraphicsContextState.h>
 };
 
 [LegacyPopulateFromEmptyConstructor, AdditionalEncoder=StreamConnectionEncoder] class WebCore::GraphicsContextState {
-    OptionSet<WebCore::GraphicsContextState::Change> m_changeFlags;
     WebCore::SourceBrush m_fillBrush;
-    WebCore::WindRule m_fillRule;
     WebCore::SourceBrush m_strokeBrush;
+    OptionSet<WebCore::GraphicsContextState::Change> m_changeFlags;
     float m_strokeThickness;
+    WebCore::WindRule m_fillRule;
     WebCore::StrokeStyle m_strokeStyle;
     WebCore::CompositeMode m_compositeMode;
     std::optional<WebCore::GraphicsDropShadow> m_dropShadow;
@@ -6914,7 +6910,7 @@ header: <WebCore/WebCodecsEncodedAudioChunk.h>
 };
 #endif
 
-headers: <JavaScriptCore/WasmModule.h> <WebCore/ImageBitmapBacking.h> <WebCore/MessagePort.h> <WebCore/OffscreenCanvas.h>
+headers: <JavaScriptCore/WasmModule.h> <WebCore/ImageBitmap.h> <WebCore/MessagePort.h> <WebCore/OffscreenCanvas.h>
 [Nested] class WebCore::SerializedScriptValue::Internals {
     Vector<uint8_t> data;
     std::unique_ptr<Vector<JSC::ArrayBufferContents>> arrayBufferContentsArray;
@@ -6928,7 +6924,7 @@ headers: <JavaScriptCore/WasmModule.h> <WebCore/ImageBitmapBacking.h> <WebCore/M
     [NotSerialized] Vector<WebCore::WebCodecsAudioInternalData> serializedAudioData;
 #endif
     [NotSerialized] std::unique_ptr<Vector<JSC::ArrayBufferContents>> sharedBufferContentsArray;
-    [NotSerialized] Vector<std::optional<WebCore::ImageBitmapBacking>> backingStores;
+    [NotSerialized] Vector<std::optional<WebCore::DetachedImageBitmap>> detachedImageBitmaps;
 #if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
     [NotSerialized] Vector<std::unique_ptr<WebCore::DetachedOffscreenCanvas>> detachedOffscreenCanvases;
     [NotSerialized] Vector<RefPtr<WebCore::OffscreenCanvas>> inMemoryOffscreenCanvases;
@@ -7309,3 +7305,129 @@ header: <WebCore/VideoTrackPrivate.h>
 };
 
 #endif
+header: <WebCore/FEComposite.h>
+enum class WebCore::CompositeOperationType : uint8_t {
+    FECOMPOSITE_OPERATOR_UNKNOWN,
+    FECOMPOSITE_OPERATOR_OVER,
+    FECOMPOSITE_OPERATOR_IN,
+    FECOMPOSITE_OPERATOR_OUT,
+    FECOMPOSITE_OPERATOR_ATOP,
+    FECOMPOSITE_OPERATOR_XOR,
+    FECOMPOSITE_OPERATOR_ARITHMETIC,
+    FECOMPOSITE_OPERATOR_LIGHTER
+};
+
+header: <WebCore/FEColorMatrix.h>
+enum class WebCore::ColorMatrixType : uint8_t {
+    FECOLORMATRIX_TYPE_UNKNOWN,
+    FECOLORMATRIX_TYPE_MATRIX,
+    FECOLORMATRIX_TYPE_SATURATE,
+    FECOLORMATRIX_TYPE_HUEROTATE,
+    FECOLORMATRIX_TYPE_LUMINANCETOALPHA
+};
+
+header: <WebCore/FETurbulence.h>
+enum class WebCore::TurbulenceType : uint8_t {
+    Unknown,
+    FractalNoise,
+    Turbulence
+};
+
+header: <WebCore/FilterRenderingMode.h>
+[OptionSet] enum class WebCore::FilterRenderingMode : uint8_t {
+    Software,
+    Accelerated,
+    GraphicsContext
+};
+
+header: <WebCore/LightSource.h>
+enum class WebCore::LightType : uint8_t {
+    LS_DISTANT,
+    LS_POINT,
+    LS_SPOT
+};
+
+header: <WebCore/FEComponentTransfer.h>
+enum class WebCore::ComponentTransferType : uint8_t {
+    FECOMPONENTTRANSFER_TYPE_UNKNOWN,
+    FECOMPONENTTRANSFER_TYPE_IDENTITY,
+    FECOMPONENTTRANSFER_TYPE_TABLE,
+    FECOMPONENTTRANSFER_TYPE_DISCRETE,
+    FECOMPONENTTRANSFER_TYPE_LINEAR,
+    FECOMPONENTTRANSFER_TYPE_GAMMA
+};
+
+enum class WebCore::ComponentTransferChannel : uint8_t {
+    Red,
+    Green,
+    Blue,
+    Alpha
+};
+
+header: <WebCore/FEMorphology.h>
+enum class WebCore::MorphologyOperatorType : uint8_t {
+    Unknown,
+    Erode,
+    Dilate
+};
+
+header: <WebCore/FEDisplacementMap.h>
+enum class WebCore::ChannelSelectorType : uint8_t {
+    CHANNEL_UNKNOWN,
+    CHANNEL_R,
+    CHANNEL_G,
+    CHANNEL_B,
+    CHANNEL_A
+};
+
+header: <WebCore/FEConvolveMatrix.h>
+enum class WebCore::EdgeModeType : uint8_t {
+    Unknown,
+    Duplicate,
+    Wrap,
+    None
+};
+
+header: <WebCore/FilterOperation.h>
+[Nested] enum class WebCore::FilterOperation::Type : uint8_t {
+    Reference,
+    Grayscale,
+    Sepia,
+    Saturate,
+    HueRotate,
+    Invert,
+    AppleInvertLightness,
+    Opacity,
+    Brightness,
+    Contrast,
+    Blur,
+    DropShadow,
+    Passthrough,
+    Default,
+    None
+};
+
+header: <WebCore/FilterFunction.h>
+[Nested] enum class WebCore::FilterFunction::Type : uint8_t {
+    CSSFilter,
+    SVGFilter,
+    FEBlend,
+    FEColorMatrix,
+    FEComponentTransfer,
+    FEComposite,
+    FEConvolveMatrix,
+    FEDiffuseLighting,
+    FEDisplacementMap,
+    FEDropShadow,
+    FEFlood,
+    FEGaussianBlur,
+    FEImage,
+    FEMerge,
+    FEMorphology,
+    FEOffset,
+    FESpecularLighting,
+    FETile,
+    FETurbulence,
+    SourceAlpha,
+    SourceGraphic
+};

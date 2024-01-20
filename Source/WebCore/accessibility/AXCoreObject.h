@@ -756,7 +756,7 @@ enum class AXRelationType : uint8_t {
     FlowsTo,
     Headers,
     HeaderFor,
-    LabelledBy,
+    LabeledBy,
     LabelFor,
     OwnedBy,
     OwnerFor,
@@ -1020,7 +1020,7 @@ public:
     AccessibilityChildrenVector errorMessageForObjects() const { return relatedObjects(AXRelationType::ErrorMessageFor); }
     AccessibilityChildrenVector flowToObjects() const { return relatedObjects(AXRelationType::FlowsTo); }
     AccessibilityChildrenVector flowFromObjects() const { return relatedObjects(AXRelationType::FlowsFrom); }
-    AccessibilityChildrenVector labelledByObjects() const { return relatedObjects(AXRelationType::LabelledBy); }
+    AccessibilityChildrenVector labeledByObjects() const { return relatedObjects(AXRelationType::LabeledBy); }
     AccessibilityChildrenVector labelForObjects() const { return relatedObjects(AXRelationType::LabelFor); }
     AccessibilityChildrenVector ownedObjects() const { return relatedObjects(AXRelationType::OwnerFor); }
     AccessibilityChildrenVector owners() const { return relatedObjects(AXRelationType::OwnedBy); }
@@ -1083,9 +1083,7 @@ public:
     virtual Vector<String> performTextOperation(const AccessibilityTextOperation&) = 0;
 
     virtual AccessibilityChildrenVector linkedObjects() const = 0;
-    virtual AXCoreObject* titleUIElement() const = 0;
-    virtual AXCoreObject* correspondingLabelForControlElement() const = 0;
-    virtual AXCoreObject* correspondingControlForLabelElement() const = 0;
+    virtual AXCoreObject* titleUIElement() const;
     virtual AXCoreObject* scrollBar(AccessibilityOrientation) = 0;
 
     virtual bool inheritsPresentationalRole() const = 0;
@@ -1357,15 +1355,9 @@ public:
     virtual void mathPrescripts(AccessibilityMathMultiscriptPairs&) = 0;
     virtual void mathPostscripts(AccessibilityMathMultiscriptPairs&) = 0;
 
-#if ENABLE(ACCESSIBILITY)
     AccessibilityObjectWrapper* wrapper() const { return m_wrapper.get(); }
     void setWrapper(AccessibilityObjectWrapper* wrapper) { m_wrapper = wrapper; }
     void detachWrapper(AccessibilityDetachmentType);
-#else
-    AccessibilityObjectWrapper* wrapper() const { return nullptr; }
-    void setWrapper(AccessibilityObjectWrapper*) { }
-    void detachWrapper(AccessibilityDetachmentType) { }
-#endif
 
 #if PLATFORM(IOS_FAMILY)
     virtual int accessibilitySecureFieldLength() = 0;
@@ -1495,13 +1487,11 @@ inline void AXCoreObject::detach(AccessibilityDetachmentType detachmentType)
         detachRemoteParts(detachmentType);
 }
 
-#if ENABLE(ACCESSIBILITY)
 inline void AXCoreObject::detachWrapper(AccessibilityDetachmentType detachmentType)
 {
     detachPlatformWrapper(detachmentType);
     m_wrapper = nullptr;
 }
-#endif
 
 inline Vector<AXID> AXCoreObject::childrenIDs(bool updateChildrenIfNecessary)
 {

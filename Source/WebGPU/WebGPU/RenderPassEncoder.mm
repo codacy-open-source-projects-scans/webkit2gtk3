@@ -28,6 +28,7 @@
 
 #import "APIConversions.h"
 #import "BindGroup.h"
+#import "BindableResource.h"
 #import "Buffer.h"
 #import "CommandEncoder.h"
 #import "QuerySet.h"
@@ -37,7 +38,7 @@
 
 namespace WebGPU {
 
-RenderPassEncoder::RenderPassEncoder(id<MTLRenderCommandEncoder> renderCommandEncoder, const WGPURenderPassDescriptor& descriptor, NSUInteger visibilityResultBufferSize, bool depthReadOnly, bool stencilReadOnly, CommandEncoder& parentEncoder, id<MTLBuffer> visibilityResultBuffer, MTLRenderPassDescriptor* renderPassDescriptor, Device& device)
+RenderPassEncoder::RenderPassEncoder(id<MTLRenderCommandEncoder> renderCommandEncoder, const WGPURenderPassDescriptor& descriptor, NSUInteger visibilityResultBufferSize, bool depthReadOnly, bool stencilReadOnly, CommandEncoder& parentEncoder, id<MTLBuffer> visibilityResultBuffer, Device& device)
     : m_renderCommandEncoder(renderCommandEncoder)
     , m_device(device)
     , m_visibilityResultBufferSize(visibilityResultBufferSize)
@@ -45,8 +46,18 @@ RenderPassEncoder::RenderPassEncoder(id<MTLRenderCommandEncoder> renderCommandEn
     , m_stencilReadOnly(stencilReadOnly)
     , m_parentEncoder(parentEncoder)
     , m_visibilityResultBuffer(visibilityResultBuffer)
-    , m_renderPassDescriptor(renderPassDescriptor)
+    , m_descriptor(descriptor)
+    , m_descriptorColorAttachments(descriptor.colorAttachmentCount ? Vector<WGPURenderPassColorAttachment>(descriptor.colorAttachments, descriptor.colorAttachmentCount) : Vector<WGPURenderPassColorAttachment>())
+    , m_descriptorDepthStencilAttachment(descriptor.depthStencilAttachment ? *descriptor.depthStencilAttachment : WGPURenderPassDepthStencilAttachment())
+    , m_descriptorTimestampWrites(descriptor.timestampWrites ? *descriptor.timestampWrites : WGPURenderPassTimestampWrites())
 {
+    if (m_descriptorColorAttachments.size())
+        m_descriptor.colorAttachments = &m_descriptorColorAttachments[0];
+    if (descriptor.depthStencilAttachment)
+        m_descriptor.depthStencilAttachment = &m_descriptorDepthStencilAttachment;
+    if (descriptor.timestampWrites)
+        m_descriptor.timestampWrites = &m_descriptorTimestampWrites;
+
     m_parentEncoder->lock(true);
 
     if (m_device->baseCapabilities().counterSamplingAPI == HardwareCapabilities::BaseCapabilities::CounterSamplingAPI::CommandBoundary) {
@@ -68,6 +79,12 @@ RenderPassEncoder::RenderPassEncoder(id<MTLRenderCommandEncoder> renderCommandEn
         m_renderTargetWidth = texture.width();
         m_renderTargetHeight = texture.height();
         texture.setPreviouslyCleared();
+        addResourceToActiveResources(texture, BindGroupEntryUsage::Attachment);
+
+        if (attachment.resolveTarget) {
+            auto& texture = fromAPI(attachment.resolveTarget);
+            addResourceToActiveResources(texture, BindGroupEntryUsage::Attachment);
+        }
 
         id<MTLTexture> textureToClear = texture.texture();
         if (!textureToClear)
@@ -92,16 +109,21 @@ RenderPassEncoder::RenderPassEncoder(id<MTLRenderCommandEncoder> renderCommandEn
         }
 
         id<MTLTexture> depthTexture = textureView.texture();
+        std::optional<bool> isReadOnly = std::nullopt;
         if (!Device::isStencilOnlyFormat(depthTexture.pixelFormat)) {
             m_clearDepthAttachment = depthTexture && attachment->depthStoreOp == WGPUStoreOp_Discard;
             m_depthStencilAttachmentToClear = depthTexture;
+            isReadOnly = attachment->depthReadOnly;
         }
 
         m_stencilClearValue = attachment->stencilStoreOp == WGPUStoreOp_Discard ? 0 : attachment->stencilClearValue;
         if (Texture::stencilOnlyAspectMetalFormat(textureView.descriptor().format)) {
             m_clearStencilAttachment = depthTexture && attachment->stencilStoreOp == WGPUStoreOp_Discard;
             m_depthStencilAttachmentToClear = depthTexture;
+            isReadOnly = isReadOnly ? (*isReadOnly && attachment->stencilReadOnly) : attachment->stencilReadOnly;
         }
+
+        addResourceToActiveResources(textureView, (isReadOnly && *isReadOnly) ? BindGroupEntryUsage::AttachmentRead : BindGroupEntryUsage::Attachment);
     }
 }
 
@@ -139,10 +161,63 @@ static void setViewportMinMaxDepthIntoBuffer(auto& fragmentDynamicOffsets, float
     fragmentDynamicOffsets[1] = bitwise_cast<destType>(maxDepth);
 }
 
-void RenderPassEncoder::executePreDrawCommands()
+void RenderPassEncoder::addResourceToActiveResources(id<MTLResource> mtlResource, OptionSet<BindGroupEntryUsage> initialUsage, uint32_t baseMipLevel, uint32_t baseArrayLayer, WGPUTextureAspect aspect)
 {
-    if (!m_pipeline)
+    if (isTextureBindGroupEntryUsage(initialUsage)) {
+        ASSERT([mtlResource conformsToProtocol:@protocol(MTLTexture)]);
+        id<MTLTexture> textureView = (id<MTLTexture>)mtlResource;
+        if (id<MTLTexture> parentTexture = textureView.parentTexture) {
+            mtlResource = parentTexture;
+            ASSERT(textureView.parentRelativeLevel <= std::numeric_limits<uint32_t>::max() && textureView.parentRelativeSlice <= std::numeric_limits<uint32_t>::max());
+            if (baseMipLevel || baseArrayLayer) {
+                ASSERT(textureView.parentRelativeLevel == baseMipLevel);
+                ASSERT(textureView.parentRelativeSlice == baseArrayLayer);
+            }
+            baseMipLevel = static_cast<uint32_t>(textureView.parentRelativeLevel);
+            baseArrayLayer = static_cast<uint32_t>(textureView.parentRelativeSlice);
+        }
+    }
+
+    auto mapKey = BindGroup::makeEntryMapKey(baseMipLevel, baseArrayLayer, aspect);
+    EntryUsage resourceUsage = initialUsage;
+    auto* mtlResourceAddr = (__bridge void*)mtlResource;
+    EntryMap* entryMap = nullptr;
+    if (auto it = m_usagesForResource.find(mtlResourceAddr); it != m_usagesForResource.end()) {
+        entryMap = &it->value;
+        if (auto innerIt = it->value.find(mapKey); innerIt != it->value.end())
+            resourceUsage.add(innerIt->value);
+    }
+
+    if (!BindGroup::allowedUsage(resourceUsage)) {
+        makeInvalid();
         return;
+    }
+    if (!entryMap) {
+        EntryMap entryMap;
+        entryMap.set(mapKey, resourceUsage);
+        m_usagesForResource.set(mtlResourceAddr, entryMap);
+    }
+}
+
+void RenderPassEncoder::addResourceToActiveResources(const TextureView& texture, BindGroupEntryUsage resourceUsage)
+{
+    return addResourceToActiveResources(texture.parentTexture(), resourceUsage, texture.baseMipLevel(), texture.baseArrayLayer(), texture.aspect());
+}
+
+void RenderPassEncoder::validateBindGroups(id<MTLBuffer> indirectBuffer)
+{
+    if (indirectBuffer)
+        addResourceToActiveResources(indirectBuffer, BindGroupEntryUsage::Input);
+}
+
+void RenderPassEncoder::executePreDrawCommands(id<MTLBuffer> indirectBuffer)
+{
+    if (!m_pipeline) {
+        makeInvalid();
+        return;
+    }
+
+    validateBindGroups(indirectBuffer);
 
     m_issuedDrawCall = true;
     m_queryBufferIndicesToClear.remove(m_visibilityResultBufferOffset);
@@ -206,16 +281,19 @@ void RenderPassEncoder::drawIndexed(uint32_t indexCount, uint32_t instanceCount,
 
 void RenderPassEncoder::drawIndexedIndirect(const Buffer& indirectBuffer, uint64_t indirectOffset)
 {
-    if (!m_indexBuffer.length || !indirectBuffer.buffer().length)
+    if (!m_indexBuffer.length || indirectBuffer.buffer().length < sizeof(MTLDrawIndexedPrimitivesIndirectArguments))
         return;
 
-    executePreDrawCommands();
+    executePreDrawCommands(indirectBuffer.buffer());
     [m_renderCommandEncoder drawIndexedPrimitives:m_primitiveType indexType:m_indexType indexBuffer:m_indexBuffer indexBufferOffset:m_indexBufferOffset indirectBuffer:indirectBuffer.buffer() indirectBufferOffset:indirectOffset];
 }
 
 void RenderPassEncoder::drawIndirect(const Buffer& indirectBuffer, uint64_t indirectOffset)
 {
-    executePreDrawCommands();
+    if (indirectBuffer.buffer().length < sizeof(MTLDrawPrimitivesIndirectArguments))
+        return;
+
+    executePreDrawCommands(indirectBuffer.buffer());
     [m_renderCommandEncoder drawPrimitives:m_primitiveType indirectBuffer:indirectBuffer.buffer() indirectBufferOffset:indirectOffset];
 }
 
@@ -226,6 +304,8 @@ void RenderPassEncoder::endOcclusionQuery()
 
 void RenderPassEncoder::endPass()
 {
+    validateBindGroups();
+
     if (m_debugGroupStackSize || !isValid()) {
         [m_renderCommandEncoder endEncoding];
         m_parentEncoder->makeInvalid();
@@ -254,7 +334,6 @@ void RenderPassEncoder::endPass()
     }
 
     m_renderCommandEncoder = nil;
-    m_renderPassDescriptor = nil;
 
     m_parentEncoder->lock(false);
 
@@ -275,8 +354,20 @@ void RenderPassEncoder::executeBundles(Vector<std::reference_wrapper<RenderBundl
 
     for (auto& bundle : bundles) {
         auto& renderBundle = bundle.get();
+        if (!renderBundle.isValid()) {
+            makeInvalid();
+            return;
+        }
         renderBundle.updateMinMaxDepths(m_minDepth, m_maxDepth);
+        if (m_device.ptr() != &renderBundle.device() || !renderBundle.validateRenderPass(m_depthReadOnly, m_stencilReadOnly, m_descriptor)) {
+            makeInvalid();
+            return;
+        }
 
+        if (!renderBundle.validatePipeline(m_pipeline)) {
+            makeInvalid();
+            return;
+        }
         for (RenderBundleICBWithResources* icb in renderBundle.renderBundlesResources()) {
             if (id<MTLDepthStencilState> depthStencilState = icb.depthStencilState)
                 [m_renderCommandEncoder setDepthStencilState:depthStencilState];
@@ -288,6 +379,10 @@ void RenderPassEncoder::executeBundles(Vector<std::reference_wrapper<RenderBundl
             for (const auto& resource : *icb.resources) {
                 if (resource.renderStages & (MTLRenderStageVertex | MTLRenderStageFragment))
                     [m_renderCommandEncoder useResources:&resource.mtlResources[0] count:resource.mtlResources.size() usage:resource.usage stages:resource.renderStages];
+
+                ASSERT(resource.mtlResources.size() == resource.resourceUsages.size());
+                for (size_t i = 0, resourceCount = resource.mtlResources.size(); i < resourceCount; ++i)
+                    addResourceToActiveResources(resource.mtlResources[i], resource.resourceUsages[i].usage);
             }
 
             id<MTLIndirectCommandBuffer> indirectCommandBuffer = icb.indirectCommandBuffer;
@@ -295,8 +390,18 @@ void RenderPassEncoder::executeBundles(Vector<std::reference_wrapper<RenderBundl
             [m_renderCommandEncoder executeCommandsInBuffer:indirectCommandBuffer withRange:NSMakeRange(0, indirectCommandBuffer.size)];
         }
 
-        renderBundle.replayCommands(m_renderCommandEncoder);
+        renderBundle.replayCommands(*this);
     }
+}
+
+bool RenderPassEncoder::colorDepthStencilTargetsMatch(const RenderPipeline& pipeline) const
+{
+    return pipeline.colorDepthStencilTargetsMatch(m_descriptor);
+}
+
+id<MTLRenderCommandEncoder> RenderPassEncoder::renderCommandEncoder() const
+{
+    return m_renderCommandEncoder;
 }
 
 void RenderPassEncoder::insertDebugMarker(String&& markerLabel)
@@ -321,7 +426,6 @@ void RenderPassEncoder::makeInvalid()
 {
     [m_renderCommandEncoder endEncoding];
     m_renderCommandEncoder = nil;
-    m_renderPassDescriptor = nil;
 }
 
 void RenderPassEncoder::popDebugGroup()
@@ -359,6 +463,10 @@ void RenderPassEncoder::setBindGroup(uint32_t groupIndex, const BindGroup& group
     for (const auto& resource : group.resources()) {
         if (resource.renderStages & (MTLRenderStageVertex | MTLRenderStageFragment))
             [m_renderCommandEncoder useResources:&resource.mtlResources[0] count:resource.mtlResources.size() usage:resource.usage stages:resource.renderStages];
+
+        ASSERT(resource.mtlResources.size() == resource.resourceUsages.size());
+        for (size_t i = 0, sz = resource.mtlResources.size(); i < sz; ++i)
+            addResourceToActiveResources(resource.mtlResources[i], resource.resourceUsages[i].usage);
     }
 
     [m_renderCommandEncoder setVertexBuffer:group.vertexArgumentBuffer() offset:0 atIndex:m_device->vertexBufferIndexForBindGroup(groupIndex)];
@@ -376,6 +484,7 @@ void RenderPassEncoder::setIndexBuffer(const Buffer& buffer, WGPUIndexFormat for
     m_indexType = format == WGPUIndexFormat_Uint32 ? MTLIndexTypeUInt32 : MTLIndexTypeUInt16;
     m_indexBufferOffset = offset;
     UNUSED_PARAM(size);
+    addResourceToActiveResources(m_indexBuffer, BindGroupEntryUsage::Input);
 }
 
 void RenderPassEncoder::setPipeline(const RenderPipeline& pipeline)
@@ -393,16 +502,16 @@ void RenderPassEncoder::setPipeline(const RenderPipeline& pipeline)
         return;
     }
 
+    if (!colorDepthStencilTargetsMatch(pipeline)) {
+        makeInvalid();
+        return;
+    }
+
     m_primitiveType = pipeline.primitiveType();
     m_pipeline = &pipeline;
 
     m_vertexDynamicOffsets.resize(pipeline.pipelineLayout().sizeOfVertexDynamicOffsets());
     m_fragmentDynamicOffsets.resize(pipeline.pipelineLayout().sizeOfFragmentDynamicOffsets() + RenderBundleEncoder::startIndexForFragmentDynamicOffsets);
-
-    if (!pipeline.colorTargetsMatch(m_renderPassDescriptor.colorAttachments, m_allColorAttachments.count) || !pipeline.depthAttachmentMatches(m_renderPassDescriptor.depthAttachment) || !pipeline.stencilAttachmentMatches(m_renderPassDescriptor.stencilAttachment)) {
-        makeInvalid();
-        return;
-    }
 
     if (pipeline.renderPipelineState())
         [m_renderCommandEncoder setRenderPipelineState:pipeline.renderPipelineState()];
@@ -431,6 +540,7 @@ void RenderPassEncoder::setStencilReference(uint32_t reference)
 void RenderPassEncoder::setVertexBuffer(uint32_t slot, const Buffer& buffer, uint64_t offset, uint64_t size)
 {
     UNUSED_PARAM(size);
+    addResourceToActiveResources(buffer.buffer(), BindGroupEntryUsage::Input);
     [m_renderCommandEncoder setVertexBuffer:buffer.buffer() offset:offset atIndex:slot];
 }
 

@@ -98,6 +98,8 @@ public:
     Ref<MediaStreamTrackPrivate> clone();
 
     WEBCORE_EXPORT RealtimeMediaSource& source();
+    const RealtimeMediaSource& source() const;
+    RealtimeMediaSource& sourceForProcessor();
     bool hasSource(const RealtimeMediaSource*) const;
 
     RealtimeMediaSource::Type type() const { return m_type; }
@@ -135,6 +137,9 @@ public:
 #endif
 
     friend class MediaStreamTrackPrivateSourceObserver;
+
+    void initializeSettings(RealtimeMediaSourceSettings&& settings) { m_settings = WTFMove(settings); }
+    void initializeCapabilities(RealtimeMediaSourceCapabilities&& capabilities) { m_capabilities = WTFMove(capabilities); }
 
 private:
     MediaStreamTrackPrivate(Ref<const Logger>&&, Ref<RealtimeMediaSource>&&, String&& id, std::function<void(Function<void()>&&)>&&);

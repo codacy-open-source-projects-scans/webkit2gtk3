@@ -490,7 +490,7 @@ public:
 #endif // ENABLE(TREE_DEBUGGING)
 
     void invalidateNodeListAndCollectionCachesInAncestors();
-    void invalidateNodeListAndCollectionCachesInAncestorsForAttribute(const QualifiedName& attrName);
+    void invalidateNodeListAndCollectionCachesInAncestorsForAttribute(const QualifiedName&);
     NodeListsNodeData* nodeLists();
     void clearNodeLists();
 
@@ -507,6 +507,7 @@ public:
 
     WEBCORE_EXPORT bool addEventListener(const AtomString& eventType, Ref<EventListener>&&, const AddEventListenerOptions&) override;
     bool removeEventListener(const AtomString& eventType, EventListener&, const EventListenerOptions&) override;
+    void removeAllEventListeners() override;
 
     using EventTarget::dispatchEvent;
     void dispatchEvent(Event&) override;

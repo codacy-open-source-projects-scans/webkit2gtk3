@@ -592,10 +592,8 @@ void Internals::resetToConsistentState(Page& page)
 #if ENABLE(VIDEO) || ENABLE(WEB_AUDIO)
     PlatformMediaSessionManager::sharedManager().setIsPlayingToAutomotiveHeadUnit(false);
 #endif
-#if ENABLE(ACCESSIBILITY)
     AXObjectCache::setEnhancedUserInterfaceAccessibility(false);
     AXObjectCache::disableAccessibility();
-#endif
 
     MockPageOverlayClient::singleton().uninstallAllOverlays();
 
@@ -1383,6 +1381,18 @@ void Internals::incrementFrequentPaintCounter(Element& element)
 {
     if (element.renderer() && element.renderer()->enclosingLayer())
         element.renderer()->enclosingLayer()->simulateFrequentPaint();
+}
+
+void Internals::purgeFrontBuffer(Element& element)
+{
+    if (element.renderer() && element.renderer()->enclosingLayer())
+        element.renderer()->enclosingLayer()->purgeFrontBufferForTesting();
+}
+
+void Internals::purgeBackBuffer(Element& element)
+{
+    if (element.renderer() && element.renderer()->enclosingLayer())
+        element.renderer()->enclosingLayer()->purgeBackBufferForTesting();
 }
 
 Ref<CSSComputedStyleDeclaration> Internals::computedStyleIncludingVisitedInfo(Element& element) const
@@ -7261,6 +7271,12 @@ bool Internals::readyToRetrieveComputedRoleOrLabel(Element& element) const
 
     // If the element needs a renderer but doesn't have one yet, we aren't ready to query the computed accessibility role or label. Doing so before the renderer has been attached will yield incorrect results.
     return !element.rendererIsNeeded(*computedStyle);
+}
+
+bool Internals::hasScopeBreakingHasSelectors() const
+{
+    contextDocument()->styleScope().flushPendingUpdate();
+    return !!contextDocument()->styleScope().resolver().ruleSets().scopeBreakingHasPseudoClassInvalidationRuleSet();
 }
 
 } // namespace WebCore

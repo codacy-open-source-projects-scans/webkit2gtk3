@@ -59,6 +59,12 @@ public:
     };
     using PDFElementTypes = OptionSet<PDFElementType>;
 
+    CGRect boundsForAnnotation(RetainPtr<PDFAnnotation>&) const final;
+    void setActiveAnnotation(RetainPtr<PDFAnnotation>&&) final;
+    void focusNextAnnotation() final;
+    void focusPreviousAnnotation() final;
+
+    void attemptToUnlockPDF(const String& password) final;
 private:
     explicit UnifiedPDFPlugin(WebCore::HTMLPlugInElement&);
     bool isUnifiedPDFPlugin() const override { return true; }
@@ -71,6 +77,7 @@ private:
     void installPDFDocument() override;
 
     CGFloat scaleFactor() const override;
+    CGSize contentSizeRespectingZoom() const final;
 
     void didBeginMagnificationGesture() override;
     void didEndMagnificationGesture() override;
@@ -212,7 +219,7 @@ private:
 
     // ScrollableArea
     bool requestScrollToPosition(const WebCore::ScrollPosition&, const WebCore::ScrollPositionChangeOptions& = WebCore::ScrollPositionChangeOptions::createProgrammatic()) override;
-    bool requestStartKeyboardScrollAnimation(const KeyboardScroll& scrollData) override;
+    bool requestStartKeyboardScrollAnimation(const WebCore::KeyboardScroll& scrollData) override;
     bool requestStopKeyboardScrollAnimation(bool immediate) override;
 
     // HUD Actions.

@@ -220,6 +220,12 @@ bool RenderObject::isHTMLMarquee() const
     return node() && node()->renderer() == this && node()->hasTagName(marqueeTag);
 }
 
+bool RenderObject::isBlockBox() const
+{
+    // A block-level box that is also a block container.
+    return isBlockLevelBox() && isBlockContainer();
+}
+
 bool RenderObject::isBlockContainer() const
 {
     auto display = style().display();
@@ -1249,7 +1255,7 @@ void RenderObject::outputRegionsInformation(TextStream& stream) const
 
     RenderFragmentContainer* startContainer = nullptr;
     RenderFragmentContainer* endContainer = nullptr;
-    fragmentedFlow->getFragmentRangeForBox(box, startContainer, endContainer);
+    fragmentedFlow->getFragmentRangeForBox(*box, startContainer, endContainer);
     stream << " [spans fragment containers in flow " << fragmentedFlow.get() << " from " << startContainer << " to " << endContainer << "]";
 }
 

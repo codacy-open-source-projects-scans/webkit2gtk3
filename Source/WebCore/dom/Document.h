@@ -59,6 +59,7 @@
 #include <wtf/Observer.h>
 #include <wtf/RobinHoodHashMap.h>
 #include <wtf/UniqueRef.h>
+#include <wtf/WeakHashMap.h>
 #include <wtf/WeakHashSet.h>
 #include <wtf/WeakListHashSet.h>
 #include <wtf/WeakPtr.h>
@@ -182,6 +183,7 @@ class MessagePortChannelProvider;
 class MouseEventWithHitTestResults;
 class NodeFilter;
 class NodeIterator;
+class NodeList;
 class Page;
 class PaintWorklet;
 class PaintWorkletGlobalScope;
@@ -192,6 +194,7 @@ class QualifiedName;
 class Quirks;
 class RTCNetworkManager;
 class Range;
+class RealtimeMediaSource;
 class Region;
 class RenderTreeBuilder;
 class RenderView;
@@ -214,6 +217,7 @@ class SelectorQueryCache;
 class SerializedScriptValue;
 class Settings;
 class SleepDisabler;
+class SpaceSplitString;
 class SpeechRecognition;
 class StorageConnection;
 class StringCallback;
@@ -257,6 +261,7 @@ struct BoundaryPoint;
 struct ClientOrigin;
 struct FocusOptions;
 struct IntersectionObserverData;
+struct QuerySelectorAllResults;
 struct SecurityPolicyViolationEventInit;
 
 #if ENABLE(TOUCH_EVENTS)
@@ -464,6 +469,12 @@ public:
     Element* elementForAccessKey(const String& key);
     void invalidateAccessKeyCache();
 
+    RefPtr<NodeList> resultForSelectorAll(ContainerNode&, const String&);
+    void addResultForSelectorAll(ContainerNode&, const String&, NodeList&, const AtomString& classNameToMatch);
+    void invalidateQuerySelectorAllResults(Node&);
+    void invalidateQuerySelectorAllResultsForClassAttributeChange(Node&, const SpaceSplitString& oldClasses, const SpaceSplitString& newClasses);
+    void clearQuerySelectorAllResults();
+
     ExceptionOr<SelectorQuery&> selectorQueryForString(const String&);
 
     void setViewportArguments(const ViewportArguments& viewportArguments) { m_viewportArguments = viewportArguments; }
@@ -552,7 +563,7 @@ public:
     WEBCORE_EXPORT void setXMLStandalone(bool);
     void setHasXMLDeclaration(bool hasXMLDeclaration) { m_hasXMLDeclaration = hasXMLDeclaration; }
 
-    String documentURI() const { return m_documentURI; }
+    WEBCORE_EXPORT String documentURI() const;
     WEBCORE_EXPORT void setDocumentURI(const String&);
 
     WEBCORE_EXPORT VisibilityState visibilityState() const;
@@ -1640,6 +1651,8 @@ public:
     void stopMediaCapture(MediaProducerMediaCaptureKind);
     void mediaStreamCaptureStateChanged();
     size_t activeMediaElementsWithMediaStreamCount() const { return m_activeMediaElementsWithMediaStreamCount; }
+    void addCaptureSource(Ref<RealtimeMediaSource>&&);
+    void updateVideoCaptureStateForMicrophoneInterruption(bool);
 #endif
 
 // FIXME: Find a better place for this functionality.
@@ -2004,6 +2017,11 @@ private:
 
     bool isObservingContentVisibilityTargets() const;
 
+#if ENABLE(MEDIA_STREAM)
+    void updateCaptureAccordingToMutedState();
+    MediaProducerMediaStateFlags computeCaptureState() const;
+#endif
+
     const Ref<const Settings> m_settings;
 
     UniqueRef<Quirks> m_quirks;
@@ -2033,7 +2051,7 @@ private:
     // takes precedence.
     //
     // This property is read-only from JavaScript, but writable from Objective C.
-    String m_documentURI;
+    std::variant<String, URL> m_documentURI;
 
     AtomString m_baseTarget;
 
@@ -2178,6 +2196,8 @@ private:
     bool m_hasViewTransitionPseudoElementTree;
 
     Timer m_loadEventDelayTimer;
+
+    WeakHashMap<Node, std::unique_ptr<QuerySelectorAllResults>, WeakPtrImplWithEventTargetData> m_querySelectorAllResults;
 
     ViewportArguments m_viewportArguments;
 
@@ -2331,6 +2351,8 @@ private:
 #if ENABLE(MEDIA_STREAM)
     String m_idHashSalt;
     size_t m_activeMediaElementsWithMediaStreamCount { 0 };
+    HashSet<Ref<RealtimeMediaSource>> m_captureSources;
+    bool m_isUpdatingCaptureAccordingToMutedState { false };
 #endif
 
     struct PendingScrollEventTargetList;

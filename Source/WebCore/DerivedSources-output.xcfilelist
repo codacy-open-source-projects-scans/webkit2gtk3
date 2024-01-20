@@ -891,8 +891,6 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSDynamicsCompressorNode.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSDynamicsCompressorNode.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSDynamicsCompressorOptions.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSDynamicsCompressorOptions.h
-$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSEXTBlendFuncExtended.cpp
-$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSEXTBlendFuncExtended.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSEXTBlendMinMax.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSEXTBlendMinMax.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSEXTClipControl.cpp
@@ -1871,6 +1869,8 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSMediaStreamTrack.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSMediaStreamTrack.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSMediaStreamTrackEvent.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSMediaStreamTrackEvent.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSMediaStreamTrackProcessor.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSMediaStreamTrackProcessor.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSMediaTrackCapabilities.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSMediaTrackCapabilities.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSMediaTrackConstraints.cpp
@@ -2234,8 +2234,6 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSPromiseRejectionEvent.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSPromiseRejectionEvent.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSPublicKeyCredential.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSPublicKeyCredential.h
-$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSPublicKeyCredentialClientCapabilities.cpp
-$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSPublicKeyCredentialClientCapabilities.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSPublicKeyCredentialCreationOptions.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSPublicKeyCredentialCreationOptions.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSPublicKeyCredentialDescriptor.cpp
@@ -3096,6 +3094,8 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSWebGL2RenderingContext.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSWebGL2RenderingContext.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSWebGLActiveInfo.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSWebGLActiveInfo.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSWebGLBlendFuncExtended.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSWebGLBlendFuncExtended.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSWebGLBuffer.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSWebGLBuffer.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSWebGLClipCullDistance.cpp

@@ -129,6 +129,10 @@
 #include <gst/allocators/gstdmabuf.h>
 #endif // USE(TEXTURE_MAPPER_DMABUF)
 
+#if USE(EXTERNAL_HOLEPUNCH)
+#include "MediaPlayerPrivateHolePunch.h"
+#endif
+
 GST_DEBUG_CATEGORY(webkit_media_player_debug);
 #define GST_CAT_DEFAULT webkit_media_player_debug
 
@@ -672,6 +676,13 @@ void MediaPlayerPrivateGStreamer::setRate(float rate)
             m_playbackRatePausedState = PlaybackRatePausedState::RatePaused;
             updateStates();
         }
+        if (m_currentState == GST_STATE_PLAYING && !m_playbackRate
+            && m_playbackRatePausedState != PlaybackRatePausedState::RatePaused) {
+            GST_INFO_OBJECT(pipeline(), "Pausing stream because of zero playback rate in setRate");
+            m_playbackRatePausedState = PlaybackRatePausedState::RatePaused;
+            changePipelineState(GST_STATE_PAUSED);
+            updatePlaybackRate();
+        }
         return;
     } else if (m_playbackRatePausedState == PlaybackRatePausedState::RatePaused) {
         m_playbackRatePausedState = PlaybackRatePausedState::ShouldMoveToPlaying;
@@ -683,7 +694,12 @@ void MediaPlayerPrivateGStreamer::setRate(float rate)
     if ((state != GST_STATE_PLAYING && state != GST_STATE_PAUSED)
         || (pending == GST_STATE_PAUSED))
         return;
-
+    if (m_currentState == GST_STATE_PAUSED && m_playbackRate
+        && m_playbackRatePausedState != PlaybackRatePausedState::Playing) {
+        m_playbackRatePausedState = PlaybackRatePausedState::Playing;
+        GST_INFO_OBJECT(pipeline(), "[Buffering] Restarting playback (because of resuming from zero playback rate) in setRate");
+        changePipelineState(GST_STATE_PLAYING);
+    }
     updatePlaybackRate();
 }
 
@@ -2831,16 +2847,24 @@ MediaPlayer::SupportsType MediaPlayerPrivateGStreamer::supportsType(const MediaE
 #endif
     }
 
-    if (!ensureGStreamerInitialized())
-        return result;
-
-    GST_DEBUG("Checking mime-type \"%s\"", parameters.type.raw().utf8().data());
     if (parameters.type.isEmpty())
         return result;
 
     // This player doesn't support pictures rendering.
     if (parameters.type.raw().startsWith("image"_s))
         return result;
+
+#if USE(EXTERNAL_HOLEPUNCH)
+    HashSet<String> externalHolePunchTypes;
+    MediaPlayerPrivateHolePunch::getSupportedTypes(externalHolePunchTypes);
+    if (externalHolePunchTypes.contains(parameters.type.containerType()))
+        return result;
+#endif
+
+    if (!ensureGStreamerInitialized())
+        return result;
+
+    GST_DEBUG("Checking mime-type \"%s\"", parameters.type.raw().utf8().data());
 
     registerWebKitGStreamerElements();
 

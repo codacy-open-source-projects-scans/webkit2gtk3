@@ -27,6 +27,22 @@ fast/events/ios [ Pass ]
 fast/events/ios/ipad [ Skip ]
 fast/forms/ios [ Pass ]
 fast/forms/ios/ipad [ Skip ]
+fast/forms/switch [ Pass ]
+
+# More work required for these tests to run on iOS
+fast/forms/switch/click-animation-disabled.html [ Skip ]
+fast/forms/switch/click-animation-interrupted-document-removed.html [ Skip ]
+fast/forms/switch/click-animation-interrupted-type-change.html [ Skip ]
+fast/forms/switch/click-animation-interrupted.html [ Skip ]
+fast/forms/switch/click-animation-preventdefault.html [ Skip ]
+fast/forms/switch/click-animation-redundant-checked.html [ Skip ]
+fast/forms/switch/click-animation-redundant-disabled.html [ Skip ]
+fast/forms/switch/click-animation-twice-fast.html [ Skip ]
+fast/forms/switch/click-animation-twice.html [ Skip ]
+fast/forms/switch/click-animation.html [ Skip ]
+fast/forms/switch/pointer-tracking-there-and-back-again-rtl.html [ Skip ]
+fast/forms/switch/pointer-tracking-there-and-back-again.html [ Skip ]
+fast/forms/switch/pointer-tracking.html [ Skip ]
 
 # These tests fail or are flaky in non-internal iOS 14 simulator
 fast/forms/ios/inputmode-none-with-hardware-keyboard.html [ Pass Failure ]
@@ -1160,6 +1176,7 @@ fast/css/resize-corner-tracking.html [ Skip ]
 fast/css/resize-orthogonal-containing-block.html [ Skip ]
 fast/css/resize-rtl.html [ Skip ]
 fast/css/resize-single-axis.html [ Skip ]
+fast/css/resize-textarea-align-content.html [ Skip ]
 fast/events/mouse-events-on-textarea-resize.html [ Skip ]
 
 # The file-wrapper part of <attachment> is not yet working on iOS
@@ -1243,9 +1260,6 @@ fast/backgrounds/gradient-background-on-subpixel-position.html [ ImageOnlyFailur
 
 # Difference of less 0.03% between images.
 svg/as-image/svg-image-with-data-uri-from-canvas.html [ ImageOnlyFailure ]
-
-# SVG
-webkit.org/b/137574 svg/dom/SVGAnimatedAngle.html [ Skip ] # Pass, Crash
 
 # HTTP tests that time out:
 http/tests/security/XFrameOptions/x-frame-options-deny-delete-frame-in-load-event.html
@@ -2226,7 +2240,6 @@ accessibility/slider-with-lost-renderer.html [ Pass ]
 accessibility/slot-default-contents-accname.html [ Pass ]
 accessibility/spinbutton-increment-decrement.html [ Pass ]
 accessibility/display-contents/text-under-element.html [ Pass ]
-accessibility/text-aria-role-disabled.html [ Pass ]
 accessibility/text-updates-after-dynamic-change.html [ Pass ]
 accessibility/table-display-block.html [ Pass ]
 accessibility/table-display-flex.html [ Pass ]
