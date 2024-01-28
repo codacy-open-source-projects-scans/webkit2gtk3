@@ -640,13 +640,13 @@ private:
     static AXRelationType attributeToRelationType(const QualifiedName&);
     enum class AddSymmetricRelation : bool { No, Yes };
     static AXRelationType symmetricRelation(AXRelationType);
-    void addRelation(Element*, Element*, AXRelationType);
-    void addRelation(AccessibilityObject*, AccessibilityObject*, AXRelationType, AddSymmetricRelation = AddSymmetricRelation::Yes);
-    void removeRelationByID(AXID originID, AXID targetID, AXRelationType);
-    void addRelations(Element&, const QualifiedName&);
+    bool addRelation(Element*, Element*, AXRelationType);
+    bool addRelation(AccessibilityObject*, AccessibilityObject*, AXRelationType, AddSymmetricRelation = AddSymmetricRelation::Yes);
+    bool addRelation(Element&, const QualifiedName&);
     void addLabelForRelation(Element&);
-    void removeRelations(Element&, AXRelationType);
-    void removeRelations(AXID);
+    bool removeRelation(Element&, AXRelationType);
+    void removeAllRelations(AXID);
+    void removeRelationByID(AXID originID, AXID targetID, AXRelationType);
     void updateLabelFor(HTMLLabelElement&);
     void updateLabeledBy(Element*);
     void updateRelationsIfNeeded();
@@ -738,6 +738,7 @@ private:
     HashMap<AXID, AXRelations> m_relations;
     bool m_relationsNeedUpdate { true };
     HashSet<AXID> m_relationTargets;
+    HashMap<AXID, AXRelations> m_recentlyRemovedRelations;
 
 #if USE(ATSPI)
     ListHashSet<RefPtr<AXCoreObject>> m_deferredParentChangedList;

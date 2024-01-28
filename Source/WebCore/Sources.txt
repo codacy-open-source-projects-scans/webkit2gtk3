@@ -112,6 +112,7 @@ Modules/cookie-store/CookieStore.cpp
 Modules/cookie-store/CookieStoreManager.cpp
 Modules/credentialmanagement/BasicCredential.cpp
 Modules/credentialmanagement/CredentialsContainer.cpp
+Modules/credentialmanagement/DigitalCredential.cpp
 Modules/credentialmanagement/NavigatorCredentials.cpp
 Modules/entriesapi/DOMFileSystem.cpp
 Modules/entriesapi/ErrorCallback.cpp
@@ -780,11 +781,11 @@ crypto/CryptoAlgorithm.cpp
 crypto/CryptoAlgorithmRegistry.cpp
 crypto/CryptoKey.cpp
 crypto/SubtleCrypto.cpp
-crypto/algorithms/CryptoAlgorithmAES_CBC.cpp
-crypto/algorithms/CryptoAlgorithmAES_CFB.cpp
-crypto/algorithms/CryptoAlgorithmAES_CTR.cpp
-crypto/algorithms/CryptoAlgorithmAES_GCM.cpp
-crypto/algorithms/CryptoAlgorithmAES_KW.cpp
+crypto/algorithms/CryptoAlgorithmAESCBC.cpp
+crypto/algorithms/CryptoAlgorithmAESCFB.cpp
+crypto/algorithms/CryptoAlgorithmAESCTR.cpp
+crypto/algorithms/CryptoAlgorithmAESGCM.cpp
+crypto/algorithms/CryptoAlgorithmAESKW.cpp
 crypto/algorithms/CryptoAlgorithmECDH.cpp
 crypto/algorithms/CryptoAlgorithmECDSA.cpp
 crypto/algorithms/CryptoAlgorithmEd25519.cpp
@@ -1604,8 +1605,6 @@ html/shadow/MediaControlTextTrackContainerElement.cpp
 html/shadow/ProgressShadowElement.cpp
 html/shadow/SliderThumbElement.cpp
 html/shadow/SpinButtonElement.cpp
-html/shadow/SwitchThumbElement.cpp
-html/shadow/SwitchTrackElement.cpp
 html/shadow/TextControlInnerElements.cpp
 html/shadow/TextPlaceholderElement.cpp
 html/track/AudioTrack.cpp
@@ -2055,6 +2054,7 @@ page/scrolling/ScrollingTreeStickyNode.cpp
 page/scrolling/ThreadedScrollingCoordinator.cpp
 page/scrolling/ThreadedScrollingTree.cpp
 page/scrolling/ThreadedScrollingTreeScrollingNodeDelegate.cpp
+page/text-extraction/TextExtraction.cpp
 platform/AudioDecoder.cpp
 platform/AudioEncoder.cpp
 platform/CaretAnimator.cpp
@@ -2444,6 +2444,7 @@ platform/mediastream/CaptureDeviceManager.cpp
 platform/mediastream/MediaConstraints.cpp
 platform/mediastream/MediaEndpointConfiguration.cpp
 platform/mediastream/MediaStreamPrivate.cpp
+platform/mediastream/MediaStreamTrackDataHolder.cpp
 platform/mediastream/MediaStreamTrackPrivate.cpp
 platform/mediastream/RTCIceCandidateDescriptor.cpp
 platform/mediastream/RTCSessionDescriptionDescriptor.cpp
@@ -2561,6 +2562,7 @@ rendering/GridLayoutFunctions.cpp
 rendering/GridMasonryLayout.cpp
 rendering/GridTrackSizingAlgorithm.cpp
 rendering/GlyphDisplayListCache.cpp
+rendering/GlyphDisplayListCacheRemoval.cpp
 rendering/HitTestLocation.cpp
 rendering/HitTestResult.cpp
 rendering/HitTestingTransformState.cpp
@@ -2845,6 +2847,7 @@ rendering/updating/RenderTreeBuilderTable.cpp
 rendering/updating/RenderTreePosition.cpp
 rendering/updating/RenderTreeUpdater.cpp
 rendering/updating/RenderTreeUpdaterGeneratedContent.cpp
+rendering/updating/RenderTreeUpdaterViewTransition.cpp
 storage/Storage.cpp
 storage/StorageEvent.cpp
 storage/StorageEventDispatcher.cpp
@@ -2887,6 +2890,7 @@ style/StyleResolver.cpp
 style/StyleScope.cpp
 style/StyleScopeRuleSets.cpp
 style/StyleSharingResolver.cpp
+style/StyleSheetContentsCache.cpp
 style/StyleTreeResolver.cpp
 style/StyleUpdate.cpp
 style/Styleable.cpp
@@ -3439,6 +3443,8 @@ JSDetectedText.cpp
 JSDeviceMotionEvent.cpp
 JSDeviceOrientationEvent.cpp
 JSDeviceOrientationOrMotionPermissionState.cpp
+JSDigitalCredential.cpp
+JSDigitalCredentialRequestOptions.cpp
 JSDistanceModelType.cpp
 JSDocument.cpp
 JSDocumentAndElementEventHandlers.cpp
@@ -3787,6 +3793,8 @@ JSIDBTransaction.cpp
 JSIDBTransactionDurability.cpp
 JSIDBTransactionMode.cpp
 JSIDBVersionChangeEvent.cpp
+JSIdentityCredentialProtocol.cpp
+JSIdentityRequestProvider.cpp
 JSIdleDeadline.cpp
 JSIdleRequestCallback.cpp
 JSIdleRequestOptions.cpp

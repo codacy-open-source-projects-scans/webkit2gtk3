@@ -2331,7 +2331,6 @@ HandleUserInputEventResult EventHandler::handleMouseReleaseEvent(const PlatformM
     return swallowMouseUpEvent || swallowClickEvent || swallowMouseReleaseEvent;
 }
 
-#if ENABLE(MOUSE_FORCE_EVENTS)
 bool EventHandler::handleMouseForceEvent(const PlatformMouseEvent& event)
 {
     Ref frame = m_frame.get();
@@ -2365,12 +2364,6 @@ bool EventHandler::handleMouseForceEvent(const PlatformMouseEvent& event)
 
     return swallowedEvent;
 }
-#else
-bool EventHandler::handleMouseForceEvent(const PlatformMouseEvent& )
-{
-    return false;
-}
-#endif // #if ENABLE(MOUSE_FORCE_EVENTS)
 
 bool EventHandler::handlePasteGlobalSelection(const PlatformMouseEvent& platformMouseEvent)
 {
@@ -3759,9 +3752,9 @@ bool EventHandler::internalKeyEvent(const PlatformKeyboardEvent& initialKeyEvent
     }
 
 #if ENABLE(FULLSCREEN_API)
-    if (frame->document()->fullscreenManager().isFullscreen()) {
+    if (CheckedPtr fullscreenManager = frame->document()->fullscreenManagerIfExists(); fullscreenManager && fullscreenManager->isFullscreen()) {
         if (initialKeyEvent.type() == PlatformEvent::Type::KeyDown && initialKeyEvent.windowsVirtualKeyCode() == VK_ESCAPE) {
-            frame->protectedDocument()->fullscreenManager().cancelFullscreen();
+            fullscreenManager->cancelFullscreen();
             return true;
         }
 
@@ -4485,7 +4478,7 @@ void EventHandler::defaultPageUpDownEventHandler(KeyboardEvent& event)
 #if PLATFORM(GTK) || PLATFORM(WPE) || PLATFORM(WIN)
     ASSERT(event.type() == eventNames().keydownEvent);
 
-    if (event.ctrlKey() || event.metaKey() || event.altKey() || event.altGraphKey() || event.shiftKey())
+    if (event.ctrlKey() || event.metaKey() || event.altKey() || event.shiftKey())
         return;
 
     ScrollLogicalDirection direction = event.keyIdentifier() == "PageUp"_s ? ScrollBlockDirectionBackward : ScrollBlockDirectionForward;
@@ -4501,7 +4494,7 @@ void EventHandler::defaultHomeEndEventHandler(KeyboardEvent& event)
 #if PLATFORM(GTK) || PLATFORM(WPE) || PLATFORM(WIN)
     ASSERT(event.type() == eventNames().keydownEvent);
 
-    if (event.ctrlKey() || event.metaKey() || event.altKey() || event.altGraphKey() || event.shiftKey())
+    if (event.ctrlKey() || event.metaKey() || event.altKey() || event.shiftKey())
         return;
 
     ScrollLogicalDirection direction = event.keyIdentifier() == "Home"_s ? ScrollBlockDirectionBackward : ScrollBlockDirectionForward;
@@ -4518,7 +4511,7 @@ void EventHandler::defaultSpaceEventHandler(KeyboardEvent& event)
 
     ASSERT(event.type() == eventNames().keypressEvent);
 
-    if (event.ctrlKey() || event.metaKey() || event.altKey() || event.altGraphKey())
+    if (event.ctrlKey() || event.metaKey() || event.altKey())
         return;
 
     ScrollLogicalDirection direction = event.shiftKey() ? ScrollBlockDirectionBackward : ScrollBlockDirectionForward;
@@ -4545,7 +4538,7 @@ void EventHandler::defaultBackspaceEventHandler(KeyboardEvent& event)
 {
     ASSERT(event.type() == eventNames().keydownEvent);
 
-    if (event.ctrlKey() || event.metaKey() || event.altKey() || event.altGraphKey())
+    if (event.ctrlKey() || event.metaKey() || event.altKey())
         return;
 
     if (!m_frame->editor().behavior().shouldNavigateBackOnBackspace())
@@ -4762,7 +4755,7 @@ void EventHandler::defaultArrowEventHandler(FocusDirection focusDirection, Keybo
         return;
     }
 
-    if (event.ctrlKey() || event.metaKey() || event.altGraphKey() || event.shiftKey())
+    if (event.ctrlKey() || event.metaKey() || event.shiftKey())
         return;
 
     RefPtr page = m_frame->page();
@@ -4785,7 +4778,7 @@ void EventHandler::defaultTabEventHandler(KeyboardEvent& event)
     ASSERT(event.type() == eventNames().keydownEvent);
 
     // We should only advance focus on tabs if no special modifier keys are held down.
-    if (event.ctrlKey() || event.metaKey() || event.altGraphKey())
+    if (event.ctrlKey() || event.metaKey())
         return;
 
     RefPtr page = frame->page();

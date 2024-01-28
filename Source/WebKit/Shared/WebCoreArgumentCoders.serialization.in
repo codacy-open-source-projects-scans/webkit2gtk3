@@ -1870,6 +1870,7 @@ header: <WebCore/ResourceRequest.h>
     [BitField] bool m_privacyProxyFailClosedForUnreachableNonMainHosts;
     [BitField] bool m_useAdvancedPrivacyProtections;
     [BitField] bool m_didFilterLinkDecoration;
+    [BitField] bool m_isPrivateTokenUsageByThirdPartyAllowed;
 };
 
 #if USE(SOUP)
@@ -5937,6 +5938,45 @@ header: <WebCore/RenderTreeAsText.h>
     ShowLayoutState
 };
 
+header: <WebCore/TextExtractionTypes.h>
+[CustomHeader] struct WebCore::TextExtraction::TextItemData {
+    String content;
+};
+
+header: <WebCore/TextExtractionTypes.h>
+[CustomHeader] struct WebCore::TextExtraction::ScrollableItemData {
+    WebCore::FloatSize contentSize;
+};
+
+header: <WebCore/TextExtractionTypes.h>
+[CustomHeader] struct WebCore::TextExtraction::EditableItemData {
+    bool isFocused;
+};
+
+header: <WebCore/TextExtractionTypes.h>
+[CustomHeader] struct WebCore::TextExtraction::ImageItemData {
+    String name;
+    String altText;
+};
+
+header: <WebCore/TextExtractionTypes.h>
+[CustomHeader] struct WebCore::TextExtraction::InteractiveItemData {
+    bool isEnabled;
+};
+
+header: <WebCore/TextExtractionTypes.h>
+[CustomHeader] enum class WebCore::TextExtraction::ContainerType : uint8_t {
+    Root,
+    ViewportConstrained
+};
+
+header: <WebCore/TextExtractionTypes.h>
+[CustomHeader] struct WebCore::TextExtraction::Item {
+    std::variant<WebCore::TextExtraction::ContainerType, WebCore::TextExtraction::TextItemData, WebCore::TextExtraction::ScrollableItemData, WebCore::TextExtraction::EditableItemData, WebCore::TextExtraction::ImageItemData, WebCore::TextExtraction::InteractiveItemData> data;
+    WebCore::FloatRect rectInRootView;
+    Vector<WebCore::TextExtraction::Item> children;
+};
+
 header: <WebCore/WebGPUTextureFormat.h>
 enum class WebCore::WebGPU::TextureFormat : uint8_t {
     R8unorm,
@@ -6923,6 +6963,9 @@ headers: <JavaScriptCore/WasmModule.h> <WebCore/ImageBitmap.h> <WebCore/MessageP
     [NotSerialized] Vector<WebCore::WebCodecsVideoFrameData> serializedVideoFrames;
     [NotSerialized] Vector<WebCore::WebCodecsAudioInternalData> serializedAudioData;
 #endif
+#if ENABLE(MEDIA_STREAM)
+    [NotSerialized] Vector<std::unique_ptr<WebCore::MediaStreamTrackDataHolder>> serializedMediaStreamTracks;
+#endif
     [NotSerialized] std::unique_ptr<Vector<JSC::ArrayBufferContents>> sharedBufferContentsArray;
     [NotSerialized] Vector<std::optional<WebCore::DetachedImageBitmap>> detachedImageBitmaps;
 #if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
@@ -7279,6 +7322,14 @@ enum class WebCore::GraphicsContextGLSurfaceBuffer : bool;
     InvalidValue,
     InvalidEnum
 };
+
+#if ENABLE(IMAGE_ANALYSIS) && ENABLE(DATA_DETECTION)
+header: <WebCore/TextRecognitionResult.h>
+[CustomHeader] struct WebCore::TextRecognitionDataDetector {
+    RetainPtr<DDScannerResult> result;
+    Vector<WebCore::FloatQuad> normalizedQuads;
+};
+#endif // ENABLE(IMAGE_ANALYSIS) && ENABLE(DATA_DETECTION)
 
 #if ENABLE(VIDEO)
 

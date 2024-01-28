@@ -1628,6 +1628,9 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/scrolling/ScrollingTreeStickyNode.h
     page/scrolling/ThreadedScrollingTree.h
 
+    page/text-extraction/TextExtraction.h
+    page/text-extraction/TextExtractionTypes.h
+
     platform/AbortableTaskQueue.h
     platform/AudioSampleFormat.h
     platform/CaretAnimator.h
@@ -2166,6 +2169,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/mediastream/MediaSettingsRange.h
     platform/mediastream/MediaStreamPrivate.h
     platform/mediastream/MediaStreamRequest.h
+    platform/mediastream/MediaStreamTrackDataHolder.h
+    platform/mediastream/MediaStreamTrackHintValue.h
     platform/mediastream/MediaStreamTrackPrivate.h
     platform/mediastream/MeteringMode.h
     platform/mediastream/PhotoCapabilities.h
@@ -2295,6 +2300,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/EventRegion.h
     rendering/FloatingObjects.h
     rendering/GapRects.h
+    rendering/GlyphDisplayListCacheRemoval.h
     rendering/HitTestLocation.h
     rendering/HitTestRequest.h
     rendering/HitTestResult.h

@@ -31,6 +31,7 @@
 #import "ImageBufferShareableMappedIOSurfaceBackend.h"
 #import "Logging.h"
 #import "PlatformCALayerRemote.h"
+#import "RemoteImageBufferSetProxy.h"
 #import "RemoteLayerBackingStoreCollection.h"
 #import "RemoteLayerTreeContext.h"
 #import "SwapBuffersDisplayRequirement.h"
@@ -134,16 +135,35 @@ void RemoteLayerWithInProcessRenderingBackingStore::createContextAndPaintContent
     m_frontBuffer.isCleared = false;
 }
 
-Vector<std::unique_ptr<WebCore::ThreadSafeImageBufferFlusher>> RemoteLayerWithInProcessRenderingBackingStore::createFlushers()
+class ImageBufferBackingStoreFlusher final : public ThreadSafeImageBufferSetFlusher {
+    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_NONCOPYABLE(ImageBufferBackingStoreFlusher);
+public:
+    static std::unique_ptr<ImageBufferBackingStoreFlusher> create(std::unique_ptr<WebCore::ThreadSafeImageBufferFlusher> imageBufferFlusher)
+    {
+        return std::unique_ptr<ImageBufferBackingStoreFlusher> { new ImageBufferBackingStoreFlusher(WTFMove(imageBufferFlusher)) };
+    }
+
+    void flushAndCollectHandles(HashMap<RemoteImageBufferSetIdentifier, std::unique_ptr<BufferSetBackendHandle>>&) final
+    {
+        m_imageBufferFlusher->flush();
+    }
+
+private:
+    ImageBufferBackingStoreFlusher(std::unique_ptr<WebCore::ThreadSafeImageBufferFlusher> imageBufferFlusher)
+        : m_imageBufferFlusher(WTFMove(imageBufferFlusher))
+    {
+    }
+    std::unique_ptr<WebCore::ThreadSafeImageBufferFlusher> m_imageBufferFlusher;
+};
+
+std::unique_ptr<ThreadSafeImageBufferSetFlusher> RemoteLayerWithInProcessRenderingBackingStore::createFlusher(ThreadSafeImageBufferSetFlusher::FlushType flushType)
 {
-    Vector<std::unique_ptr<WebCore::ThreadSafeImageBufferFlusher>> flushers;
-
+    if (flushType == ThreadSafeImageBufferSetFlusher::FlushType::BackendHandlesOnly)
+        return nullptr;
     m_frontBuffer.imageBuffer->flushDrawingContextAsync();
-    flushers.append(m_frontBuffer.imageBuffer->createFlusher());
-
-    return flushers;
+    return ImageBufferBackingStoreFlusher::create(m_frontBuffer.imageBuffer->createFlusher());
 }
-
 
 SwapBuffersDisplayRequirement RemoteLayerWithInProcessRenderingBackingStore::prepareBuffers()
 {
@@ -240,11 +260,8 @@ RefPtr<WebCore::ImageBuffer> RemoteLayerWithInProcessRenderingBackingStore::allo
     creationContext.surfacePool = &WebCore::IOSurfacePool::sharedPool();
 
 #if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
-    if (m_parameters.includeDisplayList == IncludeDisplayList::Yes) {
-        if (auto* context = m_layer->context())
-            creationContext.dynamicContentScalingResourceCache = context->ensureDynamicContentScalingResourceCache();
+    if (m_parameters.includeDisplayList == IncludeDisplayList::Yes)
         return allocateBufferInternal<DynamicContentScalingBifurcatedImageBuffer>(type(), size(), purpose, scale(), colorSpace(), pixelFormat(), creationContext);
-    }
 #endif
 
     return allocateBufferInternal<ImageBuffer>(type(), size(), purpose, scale(), colorSpace(), pixelFormat(), creationContext);

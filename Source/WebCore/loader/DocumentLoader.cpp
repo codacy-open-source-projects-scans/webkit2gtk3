@@ -193,6 +193,11 @@ FrameLoader* DocumentLoader::frameLoader() const
     return &m_frame->loader();
 }
 
+CheckedPtr<FrameLoader> DocumentLoader::checkedFrameLoader() const
+{
+    return frameLoader();
+}
+
 SubresourceLoader* DocumentLoader::mainResourceLoader() const
 {
     if (!m_mainResource)
@@ -1031,10 +1036,8 @@ void DocumentLoader::responseReceived(const ResourceResponse& response, Completi
     RefPtr<SubresourceLoader> mainResourceLoader = this->mainResourceLoader();
     if (mainResourceLoader)
         mainResourceLoader->markInAsyncResponsePolicyCheck();
-    auto requestIdentifier = PolicyCheckIdentifier::generate();
-    frameLoader()->checkContentPolicy(m_response, requestIdentifier, [this, protectedThis = Ref { *this }, mainResourceLoader = WTFMove(mainResourceLoader),
-        completionHandler = completionHandlerCaller.release(), requestIdentifier] (PolicyAction policy, PolicyCheckIdentifier responseIdentifier) mutable {
-        RELEASE_ASSERT(responseIdentifier == requestIdentifier);
+    frameLoader()->checkContentPolicy(m_response, [this, protectedThis = Ref { *this }, mainResourceLoader = WTFMove(mainResourceLoader),
+        completionHandler = completionHandlerCaller.release()] (PolicyAction policy) mutable {
         continueAfterContentPolicy(policy);
         if (mainResourceLoader)
             mainResourceLoader->didReceiveResponsePolicy();
@@ -1345,17 +1348,17 @@ void DocumentLoader::commitData(const SharedBuffer& data)
     }
 
 #if ENABLE(CONTENT_EXTENSIONS)
-    auto& extensionStyleSheets = m_frame->document()->extensionStyleSheets();
-
-    for (auto& pendingStyleSheet : m_pendingNamedContentExtensionStyleSheets)
-        extensionStyleSheets.maybeAddContentExtensionSheet(pendingStyleSheet.key, *pendingStyleSheet.value);
-    for (auto& pendingSelectorEntry : m_pendingContentExtensionDisplayNoneSelectors) {
-        for (const auto& pendingSelector : pendingSelectorEntry.value)
-            extensionStyleSheets.addDisplayNoneSelector(pendingSelectorEntry.key, pendingSelector.first, pendingSelector.second);
+    if (!m_pendingNamedContentExtensionStyleSheets.isEmpty() || !m_pendingContentExtensionDisplayNoneSelectors.isEmpty()) {
+        auto& extensionStyleSheets = m_frame->document()->extensionStyleSheets();
+        for (auto& pendingStyleSheet : m_pendingNamedContentExtensionStyleSheets)
+            extensionStyleSheets.maybeAddContentExtensionSheet(pendingStyleSheet.key, *pendingStyleSheet.value);
+        for (auto& pendingSelectorEntry : m_pendingContentExtensionDisplayNoneSelectors) {
+            for (const auto& pendingSelector : pendingSelectorEntry.value)
+                extensionStyleSheets.addDisplayNoneSelector(pendingSelectorEntry.key, pendingSelector.first, pendingSelector.second);
+        }
+        m_pendingNamedContentExtensionStyleSheets.clear();
+        m_pendingContentExtensionDisplayNoneSelectors.clear();
     }
-
-    m_pendingNamedContentExtensionStyleSheets.clear();
-    m_pendingContentExtensionDisplayNoneSelectors.clear();
 #endif
 
     ASSERT(m_frame->document()->parsing());
@@ -1495,7 +1498,7 @@ void DocumentLoader::attachToFrame()
     DOCUMENTLOADER_RELEASE_LOG("DocumentLoader::attachToFrame: m_frame=%p", m_frame.get());
 }
 
-void DocumentLoader::detachFromFrame(LoadWillContinueInAnotherProcess)
+void DocumentLoader::detachFromFrame(LoadWillContinueInAnotherProcess loadWillContinueInAnotherProcess)
 {
     DOCUMENTLOADER_RELEASE_LOG("DocumentLoader::detachFromFrame: m_frame=%p", m_frame.get());
 
@@ -1529,9 +1532,18 @@ void DocumentLoader::detachFromFrame(LoadWillContinueInAnotherProcess)
     if (!m_frame)
         return;
 
+    if (auto navigationID = std::exchange(m_navigationID, 0))
+        m_frame->loader().client().documentLoaderDetached(navigationID, loadWillContinueInAnotherProcess);
+
     InspectorInstrumentation::loaderDetachedFromFrame(*m_frame, *this);
 
     observeFrame(nullptr);
+}
+
+void DocumentLoader::setNavigationID(uint64_t navigationID)
+{
+    ASSERT(navigationID);
+    m_navigationID = navigationID;
 }
 
 void DocumentLoader::clearMainResourceLoader()
@@ -2044,7 +2056,7 @@ bool DocumentLoader::maybeLoadEmpty()
             frameLoader()->client().dispatchDidChangeProvisionalURL();
     }
 
-    String mimeType = shouldLoadEmpty ? "text/html"_s : frameLoader()->client().generatedMIMETypeForURLScheme(m_request.url().protocol());
+    String mimeType = shouldLoadEmpty ? textHTMLContentTypeAtom() : frameLoader()->client().generatedMIMETypeForURLScheme(m_request.url().protocol());
     m_response = ResourceResponse(m_request.url(), mimeType, 0, "UTF-8"_s);
 
     if (!frameLoader()->stateMachine().isDisplayingInitialEmptyDocument()) {
@@ -2062,7 +2074,7 @@ bool DocumentLoader::maybeLoadEmpty()
 
 void DocumentLoader::loadErrorDocument()
 {
-    m_response = ResourceResponse(m_request.url(), "text/html"_s, 0, "UTF-8"_s);
+    m_response = ResourceResponse(m_request.url(), textHTMLContentTypeAtom(), 0, "UTF-8"_s);
     SetForScope isInFinishedLoadingOfEmptyDocument { m_isInFinishedLoadingOfEmptyDocument, true };
 
     commitIfReady();
@@ -2614,6 +2626,11 @@ bool DocumentLoader::allowsActiveContentRuleListActionsForURL(const String& cont
 bool DocumentLoader::fingerprintingProtectionsEnabled() const
 {
     return m_advancedPrivacyProtections.contains(AdvancedPrivacyProtections::FingerprintingProtections);
+}
+
+Ref<CachedResourceLoader> DocumentLoader::protectedCachedResourceLoader() const
+{
+    return m_cachedResourceLoader;
 }
 
 } // namespace WebCore

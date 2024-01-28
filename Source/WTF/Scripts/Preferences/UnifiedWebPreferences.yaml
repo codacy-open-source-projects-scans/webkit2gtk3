@@ -482,7 +482,6 @@ AppBadgeEnabled:
   category: dom
   humanReadableName: "App Badge"
   humanReadableDescription: "Enable App Badge"
-  condition: ENABLE(BADGING)
   defaultValue:
     WebKitLegacy:
       default: false
@@ -1312,6 +1311,20 @@ CSSScrollbarWidthEnabled:
     WebCore:
       default: false
 
+CSSStartingStyleAtRuleEnabled:
+  type: bool
+  status: testable
+  category: css
+  humanReadableName: "CSS @starting-style rule"
+  humanReadableDescription: "Enable CSS @starting-style rule"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 CSSTextBoxTrimEnabled:
   type: bool
   status: preview
@@ -1640,7 +1653,6 @@ ClientBadgeEnabled:
   category: dom
   humanReadableName: "Client Badge"
   humanReadableDescription: "Enable Client Badge"
-  condition: ENABLE(BADGING)
   defaultValue:
     WebKitLegacy:
       default: false
@@ -1905,6 +1917,20 @@ CrossOriginOpenerPolicyEnabled:
       default: false
     WebKit:
       default: true
+    WebCore:
+      default: false
+
+CryptoKitEnabled:
+  type: bool
+  status: internal
+  category: security
+  humanReadableName: "Enable CryptoKit for supported Algorithms."
+  humanReadableDescription: "Enable CryptoKit for supported Algorithms."
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
     WebCore:
       default: false
 
@@ -2331,6 +2357,20 @@ DiagnosticLoggingEnabled:
   type: bool
   status: embedder
   humanReadableName: "Diagnostic logging enabled"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
+DigitalCredentialsEnabled:
+  type: bool
+  status: unstable
+  category: dom
+  humanReadableName: "Digital Credentials API"
+  humanReadableDescription: "Enable the experimental Digital Credentials API"
   defaultValue:
     WebKitLegacy:
       default: false
@@ -4503,7 +4543,7 @@ MediaStreamEnabled:
 
 MediaStreamTrackProcessingEnabled:
   type: bool
-  status: testable
+  status: stable
   category: media
   humanReadableName: "MediaStreamTrack Processing"
   humanReadableDescription: "Enable MediaStreamTrack Processing"
@@ -4512,8 +4552,10 @@ MediaStreamTrackProcessingEnabled:
     WebKitLegacy:
       default: false
     WebKit:
+      "PLATFORM(COCOA)": true
       default: false
     WebCore:
+      "PLATFORM(COCOA)": true
       default: false
 
 MediaUserGestureInheritsFromDocument:
@@ -5257,6 +5299,20 @@ PrivateClickMeasurementFraudPreventionEnabled:
     WebCore:
       "HAVE(RSA_BSSA)": true
       default: false
+
+PrivateTokenUsageByThirdPartyEnabled:
+  type: bool
+  status: stable
+  category: privacy
+  humanReadableName: "Private Token usage by third party"
+  humanReadableDescription: "Enable private token usage by third party"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: true
+    WebCore:
+      default: true
 
 ProcessSwapOnCrossSiteNavigationEnabled:
   type: bool
@@ -7371,13 +7427,12 @@ WebAudioEnabled:
     WebCore:
       default: false
 
-
 WebAuthenticationASEnabled:
   type: bool
   status: embedder
   humanReadableName: "Web Authentication AuthenticationServices"
   humanReadableDescription: "Enable Modern Web Authentication support though AuthenticationServices"
-  condition: ENABLE(WEB_AUTHN_AS_MODERN)
+  condition: HAVE(WEB_AUTHN_AS_MODERN)
   defaultValue:
     WebKitLegacy:
       default: false

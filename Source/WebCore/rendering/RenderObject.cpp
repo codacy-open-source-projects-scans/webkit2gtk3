@@ -1362,8 +1362,8 @@ void RenderObject::outputRenderObject(TextStream& stream, bool mark, int depth) 
     else
         stream << nameView;
 
-    if (style().styleType() != PseudoId::None)
-        stream << " (::" << style().styleType() << ")";
+    if (style().pseudoElementType() != PseudoId::None)
+        stream << " (::" << style().pseudoElementType() << ")";
 
     if (auto* renderBox = dynamicDowncast<RenderBox>(*this)) {
         FloatRect boxRect = renderBox->frameRect();
@@ -2163,18 +2163,18 @@ RenderObject::RareDataMap& RenderObject::rareDataMap()
 const RenderObject::RenderObjectRareData& RenderObject::rareData() const
 {
     ASSERT(hasRareData());
-    return *rareDataMap().get(this);
+    return *rareDataMap().get(*this);
 }
 
 RenderObject::RenderObjectRareData& RenderObject::ensureRareData()
 {
     m_stateBitfields.setFlag(StateFlag::HasRareData);
-    return *rareDataMap().ensure(this, [] { return makeUnique<RenderObjectRareData>(); }).iterator->value;
+    return *rareDataMap().ensure(*this, [] { return makeUnique<RenderObjectRareData>(); }).iterator->value;
 }
 
 void RenderObject::removeRareData()
 {
-    rareDataMap().remove(this);
+    rareDataMap().remove(*this);
     m_stateBitfields.clearFlag(StateFlag::HasRareData);
 }
 
@@ -2727,7 +2727,7 @@ String RenderObject::debugDescription() const
 
 bool RenderObject::isSkippedContent() const
 {
-    return parent() && parent()->style().skippedContentReason().has_value();
+    return parent() && parent()->style().hasSkippedContent();
 }
 
 bool RenderObject::isSkippedContentForLayout() const

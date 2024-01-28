@@ -463,6 +463,14 @@ bool RenderElement::repaintBeforeStyleChange(StyleDifference diff, const RenderS
             }
         }
 
+        if (diff > StyleDifference::RepaintLayer && oldStyle.effectiveContentVisibility() != newStyle.effectiveContentVisibility() && isOutOfFlowPositioned()) {
+            if (CheckedPtr enclosingLayer = this->enclosingLayer()) {
+                bool rendererWillBeHidden = isSkippedContent();
+                if (rendererWillBeHidden && enclosingLayer->hasVisibleContent() && (this == &enclosingLayer->renderer() || enclosingLayer->renderer().style().visibility() != Visibility::Visible))
+                    return RequiredRepaint::RendererOnly;
+            }
+        }
+
         return RequiredRepaint::None;
     }();
 
@@ -473,6 +481,12 @@ bool RenderElement::repaintBeforeStyleChange(StyleDifference diff, const RenderS
     }
 
     if (shouldRepaintBeforeStyleChange == RequiredRepaint::RendererOnly) {
+        if (isOutOfFlowPositioned() && downcast<RenderLayerModelObject>(*this).checkedLayer()->isSelfPaintingLayer()) {
+            if (auto cachedClippedOverflowRect = downcast<RenderLayerModelObject>(*this).checkedLayer()->cachedClippedOverflowRect()) {
+                repaintUsingContainer(containerForRepaint().renderer.get(), *cachedClippedOverflowRect);
+                return true;
+            }
+        }
         repaint();
         return true;
     }
@@ -773,7 +787,7 @@ void RenderElement::propagateStyleToAnonymousChildren(StylePropagationType propa
 {
     // FIXME: We could save this call when the change only affected non-inherited properties.
     for (CheckedRef elementChild : childrenOfType<RenderElement>(*this)) {
-        if (!elementChild->isAnonymous() || elementChild->style().styleType() != PseudoId::None)
+        if (!elementChild->isAnonymous() || elementChild->style().pseudoElementType() != PseudoId::None)
             continue;
 
         if (propagationType == PropagateToBlockChildrenOnly && !is<RenderBlock>(elementChild.get()))
@@ -850,14 +864,17 @@ void RenderElement::styleWillChange(StyleDifference diff, const RenderStyle& new
                 cache->childrenChanged(checkedParent().get(), this);
         }
 
-        // Keep layer hierarchy visibility bits up to date if visibility changes.
-        bool wasVisible = m_style.visibility() == Visibility::Visible && !m_style.skippedContentReason().has_value();
-        bool willBeVisible = newStyle.visibility() == Visibility::Visible && !newStyle.skippedContentReason().has_value();
+        // Keep layer hierarchy visibility bits up to date if visibility or skipped content state changes.
+        bool wasVisible = m_style.visibility() == Visibility::Visible && !m_style.hasSkippedContent();
+        bool willBeVisible = newStyle.visibility() == Visibility::Visible && !newStyle.hasSkippedContent();
         if (wasVisible != willBeVisible) {
             if (CheckedPtr layer = enclosingLayer()) {
-                if (willBeVisible)
-                    layer->setHasVisibleContent();
-                else if (layer->hasVisibleContent() && (this == &layer->renderer() || layer->renderer().style().visibility() != Visibility::Visible))
+                if (willBeVisible) {
+                    if (m_style.hasSkippedContent() && isSkippedContentRoot())
+                        layer->dirtyVisibleContentStatus();
+                    else
+                        layer->setHasVisibleContent();
+                } else if (layer->hasVisibleContent() && (this == &layer->renderer() || layer->renderer().style().visibility() != Visibility::Visible))
                     layer->dirtyVisibleContentStatus();
             }
         }

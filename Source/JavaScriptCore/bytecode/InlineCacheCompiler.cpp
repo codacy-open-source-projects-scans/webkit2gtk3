@@ -1499,7 +1499,7 @@ void InlineCacheCompiler::generateWithGuard(AccessCase& accessCase, CCallHelpers
             jit.load32(CCallHelpers::Address(baseGPR, JSArrayBufferView::offsetOfLength()), scratchGPR);
 #endif
             jit.loadPtr(CCallHelpers::Address(baseGPR, JSArrayBufferView::offsetOfVector()), scratch2GPR);
-            jit.cageConditionallyAndUntag(Gigacage::Primitive, scratch2GPR, scratchGPR, scratchGPR, false);
+            jit.cageConditionally(Gigacage::Primitive, scratch2GPR, scratchGPR, scratchGPR);
             jit.signExtend32ToPtr(propertyGPR, scratchGPR);
             if (isInt(type)) {
                 switch (elementSize(type)) {
@@ -1987,7 +1987,7 @@ void InlineCacheCompiler::generateWithGuard(AccessCase& accessCase, CCallHelpers
         jit.load32(CCallHelpers::Address(baseGPR, JSArrayBufferView::offsetOfLength()), scratchGPR);
 #endif
         jit.loadPtr(CCallHelpers::Address(baseGPR, JSArrayBufferView::offsetOfVector()), scratch2GPR);
-        jit.cageConditionallyAndUntag(Gigacage::Primitive, scratch2GPR, scratchGPR, scratchGPR, false);
+        jit.cageConditionally(Gigacage::Primitive, scratch2GPR, scratchGPR, scratchGPR);
         jit.signExtend32ToPtr(propertyGPR, scratchGPR);
         if (isInt(type)) {
             if (isClamped(type)) {
@@ -2588,21 +2588,22 @@ void InlineCacheCompiler::generateImpl(AccessCase& accessCase)
             // We *always* know that the getter/setter, if non-null, is a cell.
             jit.move(CCallHelpers::TrustedImm32(JSValue::CellTag), BaselineJITRegisters::Call::calleeJSR.tagGPR());
 #endif
-            auto [slowCase, dispatchLabel] = CallLinkInfo::emitFastPath(jit, callLinkInfo, BaselineJITRegisters::Call::calleeJSR.payloadGPR(), BaselineJITRegisters::Call::callLinkInfoGPR);
+            auto [slowCase, dispatchLabel] = CallLinkInfo::emitFastPath(jit, callLinkInfo, BaselineJITRegisters::Call::callLinkInfoGPR);
             auto doneLocation = jit.label();
 
             if (accessCase.m_type == AccessCase::Getter)
                 jit.setupResults(valueRegs);
             done.append(jit.jump());
 
-            slowCase.link(&jit);
-            auto slowPathStart = jit.label();
-            jit.move(CCallHelpers::TrustedImmPtr(globalObject), BaselineJITRegisters::Call::globalObjectGPR);
-            CallLinkInfo::emitSlowPath(vm, jit, callLinkInfo, BaselineJITRegisters::Call::callLinkInfoGPR);
+            CCallHelpers::Label slowPathStart = jit.label();
+            if (!slowCase.empty()) {
+                slowCase.link(&jit);
+                CallLinkInfo::emitSlowPath(vm, jit, callLinkInfo, BaselineJITRegisters::Call::callLinkInfoGPR);
 
-            if (accessCase.m_type == AccessCase::Getter)
-                jit.setupResults(valueRegs);
-            done.append(jit.jump());
+                if (accessCase.m_type == AccessCase::Getter)
+                    jit.setupResults(valueRegs);
+                done.append(jit.jump());
+            }
 
             if (returnUndefined) {
                 ASSERT(accessCase.m_type == AccessCase::Getter);
@@ -3330,22 +3331,25 @@ void InlineCacheCompiler::emitProxyObjectAccess(ProxyObjectAccessCase& accessCas
     // We *always* know that the proxy function, if non-null, is a cell.
     jit.move(CCallHelpers::TrustedImm32(JSValue::CellTag), BaselineJITRegisters::Call::calleeJSR.tagGPR());
 #endif
-    auto [slowCase, dispatchLabel] = CallLinkInfo::emitFastPath(jit, callLinkInfo, BaselineJITRegisters::Call::calleeJSR.payloadGPR(), BaselineJITRegisters::Call::callLinkInfoGPR);
+    auto [slowCase, dispatchLabel] = CallLinkInfo::emitFastPath(jit, callLinkInfo, BaselineJITRegisters::Call::callLinkInfoGPR);
     auto doneLocation = jit.label();
 
     if (accessCase.m_type != AccessCase::ProxyObjectStore)
         jit.setupResults(valueRegs);
-    auto done = jit.jump();
 
-    slowCase.link(&jit);
     auto slowPathStart = jit.label();
-    jit.move(CCallHelpers::TrustedImmPtr(globalObject), BaselineJITRegisters::Call::globalObjectGPR);
-    CallLinkInfo::emitSlowPath(vm, jit, callLinkInfo, BaselineJITRegisters::Call::callLinkInfoGPR);
+    if (!slowCase.empty()) {
+        auto done = jit.jump();
 
-    if (accessCase.m_type != AccessCase::ProxyObjectStore)
-        jit.setupResults(valueRegs);
+        slowPathStart = jit.label();
+        slowCase.link(&jit);
+        CallLinkInfo::emitSlowPath(vm, jit, callLinkInfo, BaselineJITRegisters::Call::callLinkInfoGPR);
 
-    done.link(&jit);
+        if (accessCase.m_type != AccessCase::ProxyObjectStore)
+            jit.setupResults(valueRegs);
+
+        done.link(&jit);
+    }
 
     if (codeBlock->useDataIC()) {
         jit.loadPtr(CCallHelpers::Address(GPRInfo::jitDataRegister, BaselineJITData::offsetOfStackOffset()), m_scratchGPR);

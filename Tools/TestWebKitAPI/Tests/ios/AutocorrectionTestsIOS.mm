@@ -36,10 +36,7 @@
 #import <WebKit/WKWebViewPrivate.h>
 #import <WebKit/WKWebViewPrivateForTesting.h>
 #import <WebKit/_WKProcessPoolConfiguration.h>
-
-#if USE(APPLE_INTERNAL_SDK)
-#import <WebKitAdditions/ServiceExtensionsAdditions.h>
-#endif
+#import <pal/spi/ios/BrowserEngineKitSPI.h>
 
 static void checkCGRectIsNotEmpty(CGRect rect)
 {
@@ -137,16 +134,10 @@ TEST(AutocorrectionTests, DoNotLearnCorrectionsAfterChangingInputTypeFromPasswor
     TestWebKitAPI::Util::run(&startedInputSession);
 
     auto learnsCorrections = [&]() -> BOOL {
-#if HAVE(UI_ASYNC_TEXT_INTERACTION)
-        if ([webView hasAsyncTextInput]) {
-            auto traits = [webView extendedTextInputTraits];
-#if SERVICE_EXTENSIONS_TEXT_INPUT_IS_AVAILABLE
-            return traits.typingAdaptationEnabled;
-#else
-            return !traits.typingAdaptationDisabled;
+#if USE(BROWSERENGINEKIT)
+        if ([webView hasAsyncTextInput])
+            return [webView extendedTextInputTraits].typingAdaptationEnabled;
 #endif
-        }
-#endif // HAVE(UI_ASYNC_TEXT_INTERACTION)
         return [webView effectiveTextInputTraits].learnsCorrections;
     };
     EXPECT_FALSE(learnsCorrections());
@@ -259,18 +250,24 @@ TEST(AutocorrectionTests, AutocorrectionContextBeforeAndAfterEditing)
     EXPECT_TRUE(contextBeforeInsertingText.contextBeforeSelection.isEmpty());
     EXPECT_TRUE(contextBeforeInsertingText.selectedText.isEmpty());
     EXPECT_TRUE(contextBeforeInsertingText.contextAfterSelection.isEmpty());
+    EXPECT_TRUE(contextBeforeInsertingText.markedText.isNull());
+    EXPECT_TRUE(NSEqualRanges(contextBeforeInsertingText.selectedRangeInMarkedText, NSMakeRange(NSNotFound, 0)));
 
     [contentView insertText:@"hello"];
     auto contextAfterInsertingText = [webView autocorrectionContext];
     EXPECT_WK_STREQ("hello", contextAfterInsertingText.contextBeforeSelection);
     EXPECT_TRUE(contextAfterInsertingText.selectedText.isEmpty());
     EXPECT_TRUE(contextAfterInsertingText.contextAfterSelection.isEmpty());
+    EXPECT_TRUE(contextAfterInsertingText.markedText.isNull());
+    EXPECT_TRUE(NSEqualRanges(contextAfterInsertingText.selectedRangeInMarkedText, NSMakeRange(NSNotFound, 0)));
 
     [contentView selectAll:nil];
     auto contextAfterSelecting = [webView autocorrectionContext];
     EXPECT_TRUE(contextAfterSelecting.contextBeforeSelection.isEmpty());
     EXPECT_WK_STREQ("hello", contextAfterSelecting.selectedText);
     EXPECT_TRUE(contextAfterSelecting.contextAfterSelection.isEmpty());
+    EXPECT_TRUE(contextAfterSelecting.markedText.isNull());
+    EXPECT_TRUE(NSEqualRanges(contextAfterSelecting.selectedRangeInMarkedText, NSMakeRange(NSNotFound, 0)));
 }
 
 TEST(AutocorrectionTests, AvoidDeadlockWithGPUProcessCreationInEmptyView)

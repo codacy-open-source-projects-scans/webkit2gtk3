@@ -63,13 +63,6 @@
 #import <UIKit/UIWindow_Private.h>
 #import <UIKit/_UINavigationInteractiveTransition.h>
 
-#if HAVE(UI_ASYNC_TEXT_INTERACTION)
-#import <UIKit/UIAsyncTextInput.h>
-#import <UIKit/UIAsyncTextInputClient.h>
-#import <UIKit/UIAsyncTextInteraction.h>
-#import <UIKit/UIKeyEventContext.h>
-#endif
-
 #if !__has_include(<UIKit/UIAsyncTextInput_ForWebKitOnly.h>)
 #define UITextDocumentContext UIWKDocumentContext
 #define UITextDocumentRequest UIWKDocumentRequest
@@ -238,6 +231,8 @@ typedef NS_OPTIONS(NSInteger, UIWKDocumentRequestFlags) {
 @property (nonatomic, copy) NSString *contextBeforeSelection;
 @property (nonatomic, copy) NSString *selectedText;
 @property (nonatomic, copy) NSString *contextAfterSelection;
+@property (nonatomic, copy) NSString *markedText;
+@property (nonatomic) NSRange rangeInMarkedText;
 @end
 
 typedef NS_ENUM(NSInteger, UIWKGestureType) {
@@ -620,10 +615,22 @@ typedef NS_ENUM(NSInteger, NSTextBlockLayer) {
 @end
 #endif
 
-#if HAVE(UI_ASYNC_TEXT_INTERACTION)
+#if USE(BROWSERENGINEKIT)
 @interface UIKeyEvent (Internal)
 - (instancetype)initWithWebEvent:(WebEvent *)webEvent;
 @property (nonatomic, readonly) WebEvent *webEvent;
+@end
+
+// FIXME: Replace this with BEResponderEditActions once that's in the SDK.
+@interface UIResponder (Staging_121208689)
+- (void)addShortcut:(id)sender;
+- (void)lookup:(id)sender;
+- (void)findSelected:(id)sender;
+- (void)promptForReplace:(id)sender;
+- (void)share:(id)sender;
+- (void)translate:(id)sender;
+- (void)transliterateChinese:(id)sender;
+- (void)replace:(id)sender;
 @end
 #endif
 

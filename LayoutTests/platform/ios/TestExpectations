@@ -29,20 +29,20 @@ fast/forms/ios [ Pass ]
 fast/forms/ios/ipad [ Skip ]
 fast/forms/switch [ Pass ]
 
-# More work required for these tests to run on iOS
-fast/forms/switch/click-animation-disabled.html [ Skip ]
-fast/forms/switch/click-animation-interrupted-document-removed.html [ Skip ]
-fast/forms/switch/click-animation-interrupted-type-change.html [ Skip ]
-fast/forms/switch/click-animation-interrupted.html [ Skip ]
-fast/forms/switch/click-animation-preventdefault.html [ Skip ]
-fast/forms/switch/click-animation-redundant-checked.html [ Skip ]
-fast/forms/switch/click-animation-redundant-disabled.html [ Skip ]
-fast/forms/switch/click-animation-twice-fast.html [ Skip ]
-fast/forms/switch/click-animation-twice.html [ Skip ]
-fast/forms/switch/click-animation.html [ Skip ]
-fast/forms/switch/pointer-tracking-there-and-back-again-rtl.html [ Skip ]
-fast/forms/switch/pointer-tracking-there-and-back-again.html [ Skip ]
-fast/forms/switch/pointer-tracking.html [ Skip ]
+# These require painting code to pass
+fast/forms/switch/click-animation-disabled.html [ ImageOnlyFailure ]
+fast/forms/switch/click-animation-interrupted-document-removed.html [ ImageOnlyFailure ]
+fast/forms/switch/click-animation-interrupted-type-change.html [ ImageOnlyFailure ]
+fast/forms/switch/click-animation-interrupted.html [ ImageOnlyFailure ]
+fast/forms/switch/click-animation-preventdefault.html [ ImageOnlyFailure ]
+fast/forms/switch/click-animation-redundant-checked.html [ ImageOnlyFailure ]
+fast/forms/switch/click-animation-redundant-disabled.html [ ImageOnlyFailure ]
+fast/forms/switch/click-animation-twice-fast.html [ ImageOnlyFailure ]
+fast/forms/switch/click-animation-twice.html [ ImageOnlyFailure ]
+fast/forms/switch/click-animation.html [ ImageOnlyFailure ]
+fast/forms/switch/pointer-tracking-there-and-back-again-rtl.html [ ImageOnlyFailure ]
+fast/forms/switch/pointer-tracking-there-and-back-again.html [ ImageOnlyFailure ]
+fast/forms/switch/pointer-tracking.html [ ImageOnlyFailure ]
 
 # These tests fail or are flaky in non-internal iOS 14 simulator
 fast/forms/ios/inputmode-none-with-hardware-keyboard.html [ Pass Failure ]
@@ -259,6 +259,8 @@ platform/ios/ios/touch [ Skip ]
 media/modern-media-controls/css/pointer-events-none.html [ Skip ]
 
 platform/ipad/fast/forms [ Skip ]
+
+media/media-sources-selection.html [ ImageOnlyFailure ] # Sources selection on iOS will select a different source.
 
 # Codecs not supported
 media/media-can-play-ogg.html [ WontFix ]
@@ -3364,8 +3366,7 @@ http/tests/websocket/tests/hybi/workers/worker-reload.html [ Pass Crash ]
 http/tests/workers/service/service-worker-download-async-delegates.https.html [ Pass Crash ]
 
 # rdar://80396393 ([ iOS15 ] http/wpt/mediarecorder/mute-tracks.html is a flaky failure)
-# webkit.org/b/238774 [ iOS ] http/wpt/mediarecorder/mute-tracks.html is a flaky crash
-http/wpt/mediarecorder/mute-tracks.html [ Pass Failure Crash ]
+http/wpt/mediarecorder/mute-tracks.html [ Pass Failure ]
 
 # rdar://80396502 ([ iOS15 ] http/wpt/mediarecorder/pause-recording.html is a flaky crash)
 http/wpt/mediarecorder/pause-recording.html [ Pass Crash ]
@@ -4665,6 +4666,7 @@ webkit.org/b/257698 imported/w3c/web-platform-tests/css/css-text/word-break/auto
 imported/w3c/web-platform-tests/css/css-ruby/ruby-text-combine-upright-002a.html [ ImageOnlyFailure ] 
 imported/w3c/web-platform-tests/css/css-ruby/ruby-text-combine-upright-002b.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-ruby/line-break-around-ruby-001.html [ Failure ]
+fast/ruby/annotation-with-line-gap.html [ ImageOnlyFailure ]
 
 webkit.org/b/264001 [ Debug ] imported/w3c/web-platform-tests/requestidlecallback/callback-multiple-calls.html [ Pass Failure ]
 

@@ -441,6 +441,7 @@ public:
     FileSystem::Salt mediaKeysStorageSalt() const { return m_mediaKeysStorageSalt; }
 
     bool haveStorageAccessQuirksForDomain(const WebCore::RegistrableDomain&);
+    void updateCachedCookiesEnabled();
 
 private:
     WebProcess();
@@ -826,6 +827,7 @@ private:
     bool m_hadMainFrameMainResourcePrivateRelayed { false };
     bool m_imageAnimationEnabled { true };
     bool m_hasEverHadAnyWebPages { false };
+    bool m_hasPendingAccessibilityUnsuspension { false };
 
     HashSet<WebCore::RegistrableDomain> m_allowedFirstPartiesForCookies;
     String m_mediaKeysStorageDirectory;

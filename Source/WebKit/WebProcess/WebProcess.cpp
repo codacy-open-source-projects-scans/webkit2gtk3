@@ -866,6 +866,10 @@ void WebProcess::createWebPage(PageIdentifier pageID, WebPageCreationParameters&
     } else
         result.iterator->value->reinitializeWebPage(WTFMove(parameters));
 
+    if (m_hasPendingAccessibilityUnsuspension) {
+        m_hasPendingAccessibilityUnsuspension = false;
+        accessibilityRelayProcessSuspended(false);
+    }
     ASSERT(result.iterator->value);
 }
 
@@ -1586,8 +1590,13 @@ void WebProcess::prepareToSuspend(bool isSuspensionImminent, MonotonicTime estim
 
 void WebProcess::accessibilityRelayProcessSuspended(bool suspended)
 {
-    if (m_pageMap.isEmpty())
+    if (m_pageMap.isEmpty()) {
+        // Depending on timing, we can get a call to unsuspend the process at a moment when we don't have
+        // any webpages (but may gain them soon). Set this flag so we can unsuspend when we do get a webpage,
+        // as otherwise assistive technologies may think we are permanently suspended.
+        m_hasPendingAccessibilityUnsuspension = !suspended;
         return;
+    }
 
     // Take the first webpage. We only need to have the process on the other side relay this for the WebProcess.
     AXRelayProcessSuspendedNotification(*m_pageMap.begin()->value, AXRelayProcessSuspendedNotification::AutomaticallySend::No).sendProcessSuspendMessage(suspended);
@@ -2104,7 +2113,11 @@ void WebProcess::displayDidRefresh(uint32_t displayID, const DisplayUpdate& disp
 
 void WebProcess::setThirdPartyCookieBlockingMode(ThirdPartyCookieBlockingMode thirdPartyCookieBlockingMode, CompletionHandler<void()>&& completionHandler)
 {
-    m_thirdPartyCookieBlockingMode = thirdPartyCookieBlockingMode;
+    if (m_thirdPartyCookieBlockingMode != thirdPartyCookieBlockingMode) {
+        m_thirdPartyCookieBlockingMode = thirdPartyCookieBlockingMode;
+        if (m_thirdPartyCookieBlockingMode != ThirdPartyCookieBlockingMode::All)
+            updateCachedCookiesEnabled();
+    }
     completionHandler();
 }
 
@@ -2333,6 +2346,12 @@ void WebProcess::removeWebTransportSession(WebTransportSessionIdentifier identif
 {
     ASSERT(m_webTransportSessions.contains(identifier));
     m_webTransportSessions.remove(identifier);
+}
+
+void WebProcess::updateCachedCookiesEnabled()
+{
+    for (auto& document : Document::allDocuments())
+        document->updateCachedCookiesEnabled();
 }
 
 } // namespace WebKit

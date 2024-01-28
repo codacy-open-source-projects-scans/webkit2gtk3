@@ -63,6 +63,7 @@
 #include "Event.h"
 #include "EventHandler.h"
 #include "EventNames.h"
+#include "FeaturePolicy.h"
 #include "FloatRect.h"
 #include "FormState.h"
 #include "FormSubmission.h"
@@ -92,6 +93,7 @@
 #include "Logging.h"
 #include "MemoryCache.h"
 #include "MemoryRelease.h"
+#include "Navigation.h"
 #include "NavigationDisabler.h"
 #include "NavigationScheduler.h"
 #include "Node.h"
@@ -416,7 +418,7 @@ void FrameLoader::initForSynthesizedDocument(const URL&)
     Ref frame = m_frame.get();
     Ref loader = m_client->createDocumentLoader(ResourceRequest(URL({ }, emptyString())), SubstituteData());
     loader->attachToFrame(frame);
-    loader->setResponse(ResourceResponse(URL(), "text/html"_s, 0, String()));
+    loader->setResponse(ResourceResponse(URL(), textHTMLContentTypeAtom(), 0, String()));
     loader->setCommitted(true);
     setDocumentLoader(WTFMove(loader));
 
@@ -470,16 +472,16 @@ void FrameLoader::setDefersLoading(bool defers)
     }
 }
 
-void FrameLoader::checkContentPolicy(const ResourceResponse& response, PolicyCheckIdentifier identifier, ContentPolicyDecisionFunction&& function)
+void FrameLoader::checkContentPolicy(const ResourceResponse& response, ContentPolicyDecisionFunction&& function)
 {
     if (!activeDocumentLoader()) {
         // Load was cancelled
-        function(PolicyAction::Ignore, identifier);
+        function(PolicyAction::Ignore);
         return;
     }
 
     // FIXME: Validate the policy check identifier.
-    client().dispatchDecidePolicyForResponse(response, activeDocumentLoader()->request(), identifier, activeDocumentLoader()->downloadAttribute(), WTFMove(function));
+    client().dispatchDecidePolicyForResponse(response, activeDocumentLoader()->request(), activeDocumentLoader()->downloadAttribute(), WTFMove(function));
 }
 
 bool FrameLoader::shouldUpgradeRequestforHTTPSOnly(const URL& originalURL, ResourceRequest& request) const
@@ -819,6 +821,8 @@ void FrameLoader::didBeginDocument(bool dispatch)
 
     if (dispatch)
         dispatchDidClearWindowObjectsInAllWorlds();
+
+    updateNavigationAPIEntries();
 
     updateFirstPartyForCookies();
     document->initContentSecurityPolicy();
@@ -1561,7 +1565,7 @@ SubstituteData FrameLoader::defaultSubstituteDataForURL(const URL& url)
     ASSERT(!srcdoc.isNull());
     CString encodedSrcdoc = srcdoc.string().utf8();
 
-    ResourceResponse response(URL(), "text/html"_s, encodedSrcdoc.length(), "UTF-8"_s);
+    ResourceResponse response(URL(), textHTMLContentTypeAtom(), encodedSrcdoc.length(), "UTF-8"_s);
     return SubstituteData(SharedBuffer::create(encodedSrcdoc.data(), encodedSrcdoc.length()), URL(), response, SubstituteData::SessionHistoryVisibility::Hidden);
 }
 
@@ -3059,7 +3063,7 @@ void FrameLoader::detachFromParent()
     Ref frame = m_frame.get();
 
     closeURL();
-    history().saveScrollPositionAndViewStateToItem(history().currentItem());
+    history().saveScrollPositionAndViewStateToItem(history().protectedCurrentItem().get());
     detachChildren();
     if (frame->document()->backForwardCacheState() != Document::InBackForwardCache) {
         // stopAllLoaders() needs to be called after detachChildren() if the document is not in the back/forward cache,
@@ -3198,6 +3202,9 @@ void FrameLoader::updateRequestAndAddExtraFields(ResourceRequest& request, IsMai
 
     if (isMainResource)
         request.setHTTPHeaderField(HTTPHeaderName::Accept, CachedResourceRequest::acceptHeaderValueFromType(CachedResource::Type::MainResource));
+
+    if (RefPtr document = m_frame->document(); document && frame().settings().privateTokenUsageByThirdPartyEnabled() && !frame().loader().client().isRemoteWorkerFrameLoaderClient())
+        request.setIsPrivateTokenUsageByThirdPartyAllowed(isFeaturePolicyAllowedByDocumentAndAllOwners(FeaturePolicy::Type::PrivateToken, *document, LogFeaturePolicyFailure::No));
 
     // Only set fallback array if it's still empty (later attempts may be incorrect, see bug 117818).
     if (request.responseContentDispositionEncodingFallbackArray().isEmpty()) {
@@ -4095,6 +4102,11 @@ void FrameLoader::loadSameDocumentItem(HistoryItem& item)
     history().restoreScrollPositionAndViewState();
 }
 
+CheckedRef<HistoryController> FrameLoader::checkedHistory() const
+{
+    return *m_history;
+}
+
 // FIXME: This function should really be split into a couple pieces, some of
 // which should be methods of HistoryController and some of which should be
 // methods of FrameLoader.
@@ -4414,6 +4426,11 @@ NetworkingContext* FrameLoader::networkingContext() const
     return m_networkingContext.get();
 }
 
+RefPtr<NetworkingContext> FrameLoader::protectedNetworkingContext() const
+{
+    return m_networkingContext;
+}
+
 void FrameLoader::loadProgressingStatusChanged()
 {
     if (RefPtr localFrame = dynamicDowncast<LocalFrame>(m_frame->mainFrame())) {
@@ -4626,6 +4643,36 @@ RefPtr<DocumentLoader> FrameLoader::protectedDocumentLoader() const
 RefPtr<DocumentLoader> FrameLoader::protectedProvisionalDocumentLoader() const
 {
     return m_provisionalDocumentLoader;
+}
+
+RefPtr<DocumentLoader> FrameLoader::loaderForWebsitePolicies(CanIncludeCurrentDocumentLoader canIncludeCurrentDocumentLoader) const
+{
+    RefPtr loader = policyDocumentLoader();
+    if (!loader)
+        loader = provisionalDocumentLoader();
+    if (!loader && canIncludeCurrentDocumentLoader == CanIncludeCurrentDocumentLoader::Yes)
+        loader = documentLoader();
+    return loader;
+}
+
+void FrameLoader::updateNavigationAPIEntries()
+{
+    if (!m_frame->document() || !m_frame->document()->settings().navigationAPIEnabled())
+        return;
+    RefPtr domWindow = m_frame->document()->domWindow();
+    if (!domWindow)
+        return;
+    RefPtr page = m_frame->page();
+    if (!page)
+        return;
+    if (RefPtr currentItem = page->backForward().currentItem()) {
+        Vector<Ref<HistoryItem>> historyItems;
+        for (int index = -1 * static_cast<int>(page->backForward().backCount()); index <= static_cast<int>(page->backForward().forwardCount()); index++) {
+            if (RefPtr item = page->backForward().itemAtIndex(index))
+                historyItems.append(item.releaseNonNull());
+        }
+        domWindow->protectedNavigation()->initializeEntries(*currentItem, historyItems);
+    }
 }
 
 } // namespace WebCore

@@ -584,46 +584,17 @@ macro cagePrimitive(basePtr, mask, ptr, scratch)
 end
 
 macro cagedPrimitive(ptr, length, scratch, scratch2)
-    if ARM64E
-        const source = scratch2
-        move ptr, scratch2
-    else
-        const source = ptr
-    end
+    const source = ptr
     if GIGACAGE_ENABLED
         cagePrimitive(GigacageConfig + Gigacage::Config::basePtrs + GigacagePrimitiveBasePtrOffset, constexpr Gigacage::primitiveGigacageMask, source, scratch)
-        if ARM64E
-            const maxNumberOfAllowedPACBits = constexpr MacroAssembler::maxNumberOfAllowedPACBits
-            bfiq scratch2, 0, 64 - maxNumberOfAllowedPACBits, ptr
-        end
-    end
-    if ARM64E
-        untagArrayPtr length, ptr
     end
 end
 
-macro cagedPrimitiveMayBeNull(ptr, length, scratch, scratch2)
-    if ARM64E
-        const source = scratch2
-        move ptr, scratch2
-        removeArrayPtrTag scratch2
-        btpz scratch2, .nullCase
-        move ptr, scratch2
-    else
-        # Note that we may produce non-nullptr for nullptr in non-ARM64E architecture since we add Gigacage offset.
-        # But this behavior is aligned to AssemblyHelpers::{cageConditionallyAndUntag,cageWithoutUntagging}, FTL implementation of caging etc.
-        const source = ptr
-    end
+macro cagedPrimitiveMayBeNull(ptr, scratch)
+    # Note that we may produce non-nullptr for nullptr since we add Gigacage offset.
+    # This behavior is aligned to AssemblyHelpers::{cageConditionally,cage}, FTL implementation of caging etc.
     if GIGACAGE_ENABLED
-        cagePrimitive(GigacageConfig + Gigacage::Config::basePtrs + GigacagePrimitiveBasePtrOffset, constexpr Gigacage::primitiveGigacageMask, source, scratch)
-        if ARM64E
-            const maxNumberOfAllowedPACBits = constexpr MacroAssembler::maxNumberOfAllowedPACBits
-            bfiq scratch2, 0, 64 - maxNumberOfAllowedPACBits, ptr
-        end
-    end
-    if ARM64E
-        .nullCase:
-        untagArrayPtr length, ptr
+        cagePrimitive(GigacageConfig + Gigacage::Config::basePtrs + GigacagePrimitiveBasePtrOffset, constexpr Gigacage::primitiveGigacageMask, ptr, scratch)
     end
 end
 
@@ -2572,8 +2543,6 @@ macro callHelper(opcodeName, opcodeStruct, dispatchAfterCall, valueProfileName, 
         loadp %opcodeStruct%::Metadata::m_callLinkInfo.u.dataIC.m_codeBlock[t5], t2
         storep t2, address
     end)
-    loadp %opcodeStruct%::Metadata::m_callLinkInfo.m_calleeOrCodeBlock[t5], t3
-    loadp (CodeBlock::m_globalObject - (constexpr CallLinkInfo::polymorphicCalleeMask))[t3], t3
     addp %opcodeStruct%::Metadata::m_callLinkInfo, t5, t2 # CallLinkInfo* in t2
     jmp .goPolymorphic
 
@@ -2592,13 +2561,10 @@ macro callHelper(opcodeName, opcodeStruct, dispatchAfterCall, valueProfileName, 
 .opCallSlow:
     # 64bit:t0 32bit(t0,t1) is callee
     # t2 is CallLinkInfo*
-    # t3 is caller's JSGlobalObject
     prepareCall(t2, t3, t4, t1, macro(address)
         storep 0, address
     end)
     addp %opcodeStruct%::Metadata::m_callLinkInfo, t5, t2 # CallLinkInfo* in t2
-    loadp %opcodeStruct%::Metadata::m_callLinkInfo.m_owner[t2], t3
-    loadp CodeBlock::m_globalObject[t3], t3
     if X86_64_WIN or C_LOOP_WIN
         leap JSCConfig + constexpr JSC::offsetOfJSCConfigDefaultCallThunk, t5
         loadp [t5], t5
@@ -2666,8 +2632,6 @@ macro doCallVarargs(opcodeName, size, get, opcodeStruct, valueProfileName, dstVi
                 loadp %opcodeStruct%::Metadata::m_callLinkInfo.u.dataIC.m_codeBlock[t5], t2
                 storep t2, address
             end)
-            loadp %opcodeStruct%::Metadata::m_callLinkInfo.m_calleeOrCodeBlock[t5], t3
-            loadp (CodeBlock::m_globalObject - (constexpr CallLinkInfo::polymorphicCalleeMask))[t3], t3
             addp %opcodeStruct%::Metadata::m_callLinkInfo, t5, t2 # CallLinkInfo* in t2
             jmp .goPolymorphic
 
@@ -2686,13 +2650,10 @@ macro doCallVarargs(opcodeName, size, get, opcodeStruct, valueProfileName, dstVi
         .opCallSlow:
             # 64bit:t0 32bit(t0,t1) is callee
             # t2 is CallLinkInfo*
-            # t3 is caller's JSGlobalObject
             prepareCall(t2, t3, t4, t1, macro(address)
                 storep 0, address
             end)
             addp %opcodeStruct%::Metadata::m_callLinkInfo, t5, t2 # CallLinkInfo* in t2
-            loadp %opcodeStruct%::Metadata::m_callLinkInfo.m_owner[t2], t3
-            loadp CodeBlock::m_globalObject[t3], t3
             if X86_64_WIN or C_LOOP_WIN
                 leap JSCConfig + constexpr JSC::offsetOfJSCConfigDefaultCallThunk, t5
                 loadp [t5], t5

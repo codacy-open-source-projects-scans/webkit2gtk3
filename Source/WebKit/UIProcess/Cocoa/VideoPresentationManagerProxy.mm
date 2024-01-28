@@ -41,10 +41,10 @@
 #import "WebProcessProxy.h"
 #import <QuartzCore/CoreAnimation.h>
 #import <WebCore/MediaPlayerEnums.h>
-#import <WebCore/NullVideoFullscreenInterface.h>
+#import <WebCore/NullVideoPresentationInterface.h>
 #import <WebCore/TimeRanges.h>
-#import <WebCore/VideoFullscreenInterfaceAVKit.h>
-#import <WebCore/VideoFullscreenInterfaceMac.h>
+#import <WebCore/VideoPresentationInterfaceIOS.h>
+#import <WebCore/VideoPresentationInterfaceMac.h>
 #import <WebCore/WebAVPlayerLayer.h>
 #import <WebCore/WebAVPlayerLayerView.h>
 #import <pal/spi/cocoa/QuartzCoreSPI.h>
@@ -62,6 +62,8 @@
 #if USE(EXTENSIONKIT)
 #import "ExtensionKitSoftLink.h"
 #endif
+
+#define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, m_page->process().connection())
 
 @interface WKLayerHostView : PlatformView
 @property (nonatomic, assign) uint32_t contextID;
@@ -518,7 +520,7 @@ bool VideoPresentationManagerProxy::isPlayingVideoInEnhancedFullscreen() const
 }
 #endif
 
-PlatformVideoFullscreenInterface* VideoPresentationManagerProxy::controlsManagerInterface()
+PlatformVideoPresentationInterface* VideoPresentationManagerProxy::controlsManagerInterface()
 {
     if (auto contextId = m_playbackSessionManagerProxy->controlsManagerContextId())
         return &ensureInterface(contextId);
@@ -543,7 +545,7 @@ VideoPresentationManagerProxy::ModelInterfaceTuple VideoPresentationManagerProxy
     Ref playbackSessionModel = m_playbackSessionManagerProxy->ensureModel(contextId);
     auto model = VideoPresentationModelContext::create(*this, playbackSessionModel, contextId);
     Ref playbackSessionInterface = m_playbackSessionManagerProxy->ensureInterface(contextId);
-    Ref<PlatformVideoFullscreenInterface> interface = PlatformVideoFullscreenInterface::create(playbackSessionInterface);
+    Ref<PlatformVideoPresentationInterface> interface = PlatformVideoPresentationInterface::create(playbackSessionInterface);
     m_playbackSessionManagerProxy->addClientForContext(contextId);
 
     interface->setVideoPresentationModel(model.ptr());
@@ -564,12 +566,12 @@ VideoPresentationModelContext& VideoPresentationManagerProxy::ensureModel(Playba
     return *std::get<0>(ensureModelAndInterface(contextId));
 }
 
-PlatformVideoFullscreenInterface& VideoPresentationManagerProxy::ensureInterface(PlaybackSessionContextIdentifier contextId)
+PlatformVideoPresentationInterface& VideoPresentationManagerProxy::ensureInterface(PlaybackSessionContextIdentifier contextId)
 {
     return *std::get<1>(ensureModelAndInterface(contextId));
 }
 
-PlatformVideoFullscreenInterface* VideoPresentationManagerProxy::findInterface(PlaybackSessionContextIdentifier contextId) const
+PlatformVideoPresentationInterface* VideoPresentationManagerProxy::findInterface(PlaybackSessionContextIdentifier contextId) const
 {
     auto it = m_contextMap.find(contextId);
     if (it == m_contextMap.end())
@@ -612,14 +614,14 @@ void VideoPresentationManagerProxy::removeClientForContext(PlaybackSessionContex
     m_clientCounts.set(contextId, clientCount);
 }
 
-void VideoPresentationManagerProxy::forEachSession(Function<void(VideoPresentationModelContext&, PlatformVideoFullscreenInterface&)>&& callback)
+void VideoPresentationManagerProxy::forEachSession(Function<void(VideoPresentationModelContext&, PlatformVideoPresentationInterface&)>&& callback)
 {
     if (m_contextMap.isEmpty())
         return;
 
     for (auto& value : copyToVector(m_contextMap.values())) {
         RefPtr<VideoPresentationModelContext> model;
-        RefPtr<PlatformVideoFullscreenInterface> interface;
+        RefPtr<PlatformVideoPresentationInterface> interface;
         std::tie(model, interface) = value;
 
         ASSERT(model);
@@ -723,7 +725,7 @@ RetainPtr<WKLayerHostView> VideoPresentationManagerProxy::createLayerHostViewWit
         model->setLayerHostView(view);
 
 #if USE(EXTENSIONKIT)
-        auto hostingView = adoptNS([[_SEHostingView alloc] init]);
+        auto hostingView = adoptNS([alloc_SEHostingViewInstance() init]);
         view->_hostingView = hostingView;
         [view addSubview:hostingView.get()];
         auto layer = [hostingView layer];
@@ -749,7 +751,7 @@ RetainPtr<WKLayerHostView> VideoPresentationManagerProxy::createLayerHostViewWit
 }
 
 #if PLATFORM(IOS_FAMILY)
-PlatformVideoFullscreenInterface* VideoPresentationManagerProxy::returningToStandbyInterface() const
+PlatformVideoPresentationInterface* VideoPresentationManagerProxy::returningToStandbyInterface() const
 {
     if (m_contextMap.isEmpty())
         return nullptr;
@@ -823,7 +825,7 @@ void VideoPresentationManagerProxy::setupFullscreenWithID(PlaybackSessionContext
 
     if (m_mockVideoPresentationModeEnabled) {
         if (!videoDimensions.isEmpty())
-            m_mockPictureInPictureWindowSize.setHeight(DefaultMockPictureInPictureWindowWidth /  videoDimensions.aspectRatio());
+            m_mockPictureInPictureWindowSize.setHeight(DefaultMockPictureInPictureWindowWidth / videoDimensions.aspectRatio());
 #if PLATFORM(IOS_FAMILY)
         requestVideoContentLayer(contextId);
 #else
@@ -831,6 +833,12 @@ void VideoPresentationManagerProxy::setupFullscreenWithID(PlaybackSessionContext
 #endif
         return;
     }
+
+#if PLATFORM(IOS_FAMILY)
+    MESSAGE_CHECK((videoFullscreenMode | HTMLMediaElementEnums::VideoFullscreenModeAllValidBitsMask) == HTMLMediaElementEnums::VideoFullscreenModeAllValidBitsMask);
+#else
+    MESSAGE_CHECK(videoFullscreenMode == HTMLMediaElementEnums::VideoFullscreenModePictureInPicture); // setupFullscreen() ASSERTs this so catch it here while we can still fail the message
+#endif
 
     RetainPtr<WKLayerHostView> view = createLayerHostViewWithID(contextId, videoLayerID, initialSize, hostingDeviceScaleFactor);
 
@@ -941,6 +949,8 @@ void VideoPresentationManagerProxy::exitFullscreen(PlaybackSessionContextIdentif
 
 void VideoPresentationManagerProxy::exitFullscreenWithoutAnimationToMode(PlaybackSessionContextIdentifier contextId, WebCore::HTMLMediaElementEnums::VideoFullscreenMode targetMode)
 {
+    MESSAGE_CHECK((targetMode | HTMLMediaElementEnums::VideoFullscreenModeAllValidBitsMask) == HTMLMediaElementEnums::VideoFullscreenModeAllValidBitsMask);
+
     if (m_mockVideoPresentationModeEnabled) {
         fullscreenModeChanged(contextId, targetMode);
         return;

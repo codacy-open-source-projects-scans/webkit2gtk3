@@ -194,6 +194,7 @@ MESSAGE_RECEIVERS = \
 	WebProcess/Extensions/WebExtensionControllerProxy \
 	WebProcess/GPU/GPUProcessConnection \
 	WebProcess/GPU/graphics/RemoteImageBufferProxy \
+	WebProcess/GPU/graphics/RemoteImageBufferSetProxy \
 	WebProcess/GPU/graphics/RemoteRenderingBackendProxy \
 	WebProcess/GPU/graphics/RemoteGraphicsContextGLProxy \
 	WebProcess/GPU/graphics/WebGPU/RemoteGPUProxy \
@@ -578,6 +579,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/Extensions/WebExtensionMatchedRuleParameters.serialization.in \
 	Shared/Extensions/WebExtensionMenuItem.serialization.in \
 	Shared/Extensions/WebExtensionMessageSenderParameters.serialization.in \
+	Shared/Extensions/WebExtensionStorage.serialization.in \
 	Shared/Extensions/WebExtensionTab.serialization.in \
 	Shared/Extensions/WebExtensionWindow.serialization.in \
 	Shared/FileSystemSyncAccessHandleInfo.serialization.in \
@@ -604,7 +606,6 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/MediaPlaybackState.serialization.in \
 	Shared/Model.serialization.in \
 	Shared/NavigationActionData.serialization.in \
-	Shared/NavigationActionPolicyParameters.serialization.in \
 	Shared/NetworkProcessConnectionParameters.serialization.in \
 	Shared/Pasteboard.serialization.in \
 	Shared/PlatformPopupMenuData.serialization.in \

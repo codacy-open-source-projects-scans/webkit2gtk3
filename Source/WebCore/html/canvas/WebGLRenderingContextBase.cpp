@@ -471,7 +471,7 @@ WebGLRenderingContextBase::WebGLRenderingContextBase(CanvasBase& canvas, WebGLCo
     : GPUBasedCanvasRenderingContext(canvas)
     , m_generatedImageCache(4)
     , m_attributes(WTFMove(attributes))
-    , m_creationAttributes(attributes)
+    , m_creationAttributes(m_attributes)
     , m_numGLErrorsToConsoleAllowed(canvas.scriptExecutionContext()->settingsValues().webGLErrorsToConsoleEnabled ? maxGLErrorsAllowedToConsole : 0)
 {
 }
@@ -711,7 +711,7 @@ void WebGLRenderingContextBase::markContextChangedAndNotifyCanvasObserver(WebGLR
 
     if (m_canvasBufferContents.has_value()) {
         m_canvasBufferContents = std::nullopt;
-        canvasBase().didDraw(FloatRect(FloatPoint(0, 0), clampedCanvasSize()));
+        canvasBase().didDraw(FloatRect(FloatPoint(0, 0), clampedCanvasSize()), ShouldApplyPostProcessingToDirtyRect::No);
     }
 }
 
@@ -1381,7 +1381,7 @@ bool WebGLRenderingContextBase::deleteObject(const AbstractLocker& locker, WebGL
     if (object->object())
         // We need to pass in context here because we want
         // things in this context unbound.
-        object->deleteObject(locker, graphicsContextGL());
+        object->deleteObject(locker, protectedGraphicsContextGL().get());
     return true;
 }
 
@@ -1531,7 +1531,7 @@ void WebGLRenderingContextBase::detachShader(WebGLProgram& program, WebGLShader&
         return;
     }
     m_context->detachShader(program.object(), shader.object());
-    shader.onDetached(locker, graphicsContextGL());
+    shader.onDetached(locker, protectedGraphicsContextGL().get());
 }
 
 void WebGLRenderingContextBase::disable(GCGLenum cap)
@@ -4540,7 +4540,7 @@ void WebGLRenderingContextBase::useProgram(WebGLProgram* program)
 
     if (m_currentProgram != program) {
         if (m_currentProgram)
-            m_currentProgram->onDetached(locker, graphicsContextGL());
+            m_currentProgram->onDetached(locker, protectedGraphicsContextGL().get());
         m_currentProgram = program;
         m_context->useProgram(objectOrZero(program));
         if (program)

@@ -1,5 +1,8 @@
 // RUN: %not %wgslc | %check
 
+// CHECK-L: 'array' requires at least 1 template argument
+var<private> a:array;
+
 fn testArrayLengthMismatch() {
   // CHECK-L: array count must be greater than 0
   let x1 = array<i32, 0>();
@@ -29,4 +32,9 @@ fn testArrayInferenceError() {
 
   // CHECK-L: cannot infer common array element type from constructor arguments
   let x2 = array(0, 0.0, 0u);
+}
+
+fn testBottomElementType() {
+  // CHECK-L: unresolved type 'i2'
+  let xl = array<i2, 1>(0.0);
 }

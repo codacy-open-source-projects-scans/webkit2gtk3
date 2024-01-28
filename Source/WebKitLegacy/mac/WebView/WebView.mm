@@ -252,6 +252,7 @@
 #import <pal/spi/cocoa/NSURLDownloadSPI.h>
 #import <pal/spi/cocoa/NSURLFileTypeMappingsSPI.h>
 #import <pal/spi/cocoa/QuartzCoreSPI.h>
+#import <pal/spi/ios/BrowserEngineKitSPI.h>
 #import <pal/spi/mac/NSResponderSPI.h>
 #import <pal/spi/mac/NSSpellCheckerSPI.h>
 #import <pal/spi/mac/NSViewSPI.h>
@@ -374,10 +375,6 @@
 
 #if PLATFORM(IOS_FAMILY)
 #import <pal/ios/ManagedConfigurationSoftLink.h>
-#endif
-
-#if USE(APPLE_INTERNAL_SDK)
-#import <WebKitAdditions/ServiceExtensionsAdditions.h>
 #endif
 
 #if HAVE(TOUCH_BAR) && ENABLE(WEB_PLAYBACK_CONTROLS_MANAGER)
@@ -3303,14 +3300,16 @@ IGNORE_WARNINGS_END
     [NSApp setWindowsNeedUpdate:YES];
 
 #if ENABLE(FULLSCREEN_API)
-    auto* document = core([frame DOMDocument]);
-    if (auto* element = document ? document->fullscreenManager().currentFullscreenElement() : 0) {
-        SEL selector = @selector(webView:closeFullScreenWithListener:);
-        if ([_private->UIDelegate respondsToSelector:selector]) {
-            auto listener = adoptNS([[WebKitFullScreenListener alloc] initWithElement:element]);
-            CallUIDelegate(self, selector, listener.get());
-        } else if (_private->newFullscreenController && [_private->newFullscreenController isFullScreen]) {
-            [_private->newFullscreenController close];
+    if (RefPtr document = core([frame DOMDocument]); document) {
+        if (CheckedPtr fullscreenManager = document->fullscreenManagerIfExists()) {
+            if (RefPtr element = fullscreenManager->currentFullscreenElement()) {
+                SEL selector = @selector(webView:closeFullScreenWithListener:);
+                if ([_private->UIDelegate respondsToSelector:selector]) {
+                    auto listener = adoptNS([[WebKitFullScreenListener alloc] initWithElement:element.get()]);
+                    CallUIDelegate(self, selector, listener.get());
+                } else if (_private->newFullscreenController && [_private->newFullscreenController isFullScreen])
+                    [_private->newFullscreenController close];
+            }
         }
     }
 #endif
@@ -4670,6 +4669,15 @@ IGNORE_WARNINGS_END
 + (void)_setHTTPPipeliningEnabled:(BOOL)enabled
 {
     WebCore::ResourceRequest::setHTTPPipeliningEnabled(enabled);
+}
+
+- (void)_setPortsForUpgradingInsecureSchemeForTesting:(uint16_t)insecureUpgradePort withSecurePort:(uint16_t)secureUpgradePort
+{
+    auto* page = core(self);
+    if (!page)
+        return;
+
+    page->setPortsForUpgradingInsecureSchemeForTesting(insecureUpgradePort, secureUpgradePort);
 }
 
 - (void)_didScrollDocumentInFrameView:(WebFrameView *)frameView

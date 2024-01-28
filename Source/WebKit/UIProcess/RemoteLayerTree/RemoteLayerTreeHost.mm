@@ -57,7 +57,7 @@ using namespace WebCore;
 #define REMOTE_LAYER_TREE_HOST_RELEASE_LOG(...) RELEASE_LOG(ViewState, __VA_ARGS__)
 
 RemoteLayerTreeHost::RemoteLayerTreeHost(RemoteLayerTreeDrawingAreaProxy& drawingArea)
-    : m_drawingArea(&drawingArea)
+    : m_drawingArea(drawingArea)
 {
 }
 
@@ -67,6 +67,11 @@ RemoteLayerTreeHost::~RemoteLayerTreeHost()
         [delegate.get() invalidate];
 
     clearLayers();
+}
+
+RemoteLayerTreeDrawingAreaProxy& RemoteLayerTreeHost::drawingArea() const
+{
+    return *m_drawingArea;
 }
 
 LayerContentsType RemoteLayerTreeHost::layerContentsType() const
@@ -475,6 +480,11 @@ void RemoteLayerTreeHost::animationsWereRemovedFromNode(RemoteLayerTreeNode& nod
 Seconds RemoteLayerTreeHost::acceleratedTimelineTimeOrigin() const
 {
     return m_drawingArea->acceleratedTimelineTimeOrigin();
+}
+
+MonotonicTime RemoteLayerTreeHost::animationCurrentTime() const
+{
+    return m_drawingArea->animationCurrentTime();
 }
 #endif
 

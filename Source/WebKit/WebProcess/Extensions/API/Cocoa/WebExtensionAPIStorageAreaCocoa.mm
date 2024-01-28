@@ -32,8 +32,10 @@
 
 #if ENABLE(WK_WEB_EXTENSIONS)
 
+#import "APIData.h"
 #import "APIObject.h"
 #import "CocoaHelpers.h"
+#import "DataReference.h"
 #import "MessageSenderInlines.h"
 #import "WebExtensionConstants.h"
 #import "WebExtensionContextMessages.h"
@@ -43,7 +45,6 @@
 #import <wtf/cocoa/VectorCocoa.h>
 
 static NSString * const accessLevelKey = @"accessLevel";
-
 static NSString * const accessLevelTrustedContexts = @"TRUSTED_CONTEXTS";
 static NSString * const accessLevelTrustedAndUntrustedContexts = @"TRUSTED_AND_UNTRUSTED_CONTEXTS";
 
@@ -54,93 +55,95 @@ bool WebExtensionAPIStorageArea::isPropertyAllowed(ASCIILiteral propertyName, We
     static NeverDestroyed<HashSet<AtomString>> syncStorageProperties { HashSet { AtomString("QUOTA_BYTES_PER_ITEM"_s), AtomString("MAX_ITEMS"_s), AtomString("MAX_WRITE_OPERATIONS_PER_HOUR"_s), AtomString("MAX_WRITE_OPERATIONS_PER_MINUTE"_s) } };
 
     if (syncStorageProperties.get().contains(propertyName))
-        return m_type == StorageType::Sync;
+        return m_type == WebExtensionStorageType::Sync;
 
     if (propertyName == "setAccessLevel"_s)
-        return m_type == StorageType::Session;
+        return m_type == WebExtensionStorageType::Session;
 
     ASSERT_NOT_REACHED();
     return false;
 }
 
-void WebExtensionAPIStorageArea::get(id items, Ref<WebExtensionCallbackHandler>&& callback, NSString **outExceptionString)
+void WebExtensionAPIStorageArea::get(WebPage* page, id items, Ref<WebExtensionCallbackHandler>&& callback, NSString **outExceptionString)
 {
     // Documentation: https://developer.mozilla.org/docs/Mozilla/Add-ons/WebExtensions/API/storage/StorageArea/get
 
-    auto returnEmptyResult = ^() {
-        callback->call(@{ });
-    };
+    if (!items)
+        items = NSNull.null;
 
-    auto validateJSONAndReturnData = ^(id items, JSONOptionSet options, NSString **outExceptionString) {
-        if (!isValidJSONObject(items, options)) {
-            *outExceptionString = toErrorString(nil, @"items", @"it is not JSON-serializable");
-            return;
-        }
+    if (!validateObject(items, @"items", [NSOrderedSet orderedSetWithObjects:NSDictionary.class, NSString.class, @[ NSString.class ], NSNull.class, nil], outExceptionString))
+        return;
 
-        NSData *data = encodeJSONData(items, options);
-        if (!data) {
-            *outExceptionString = toErrorString(nil, @"items", @"it is not JSON-serializable");
-            return;
-        }
+    Vector<String> keysVector;
+    NSDictionary *keysWithDefaultValues = dynamic_objc_cast<NSDictionary>(items);
 
-        // FIXME: <https://webkit.org/b/264892> Get data from storage.
-        callback->call();
-    };
-
-    if ([items isKindOfClass:NSDictionary.class]) {
-        auto *keysWithDefaultValues = (NSDictionary *)items;
+    if (keysWithDefaultValues) {
         if (!keysWithDefaultValues.count) {
-            returnEmptyResult();
+            callback->call(@{ });
             return;
         }
 
-        validateJSONAndReturnData(keysWithDefaultValues, { }, outExceptionString);
-        return;
+        keysVector = makeVector<String>(keysWithDefaultValues.allKeys);
     }
 
-    if ([items isKindOfClass:NSArray.class]) {
-        auto *keys = (NSArray *)items;
+    if (NSArray *keys = dynamic_objc_cast<NSArray>(items)) {
         if (!keys.count) {
-            returnEmptyResult();
+            callback->call(@{ });
             return;
         }
 
-        validateJSONAndReturnData(keys, { JSONOptions::FragmentsAllowed }, outExceptionString);
-        return;
+        keysVector = makeVector<String>(keys);
     }
 
-    if ([items isKindOfClass:NSString.class]) {
-        auto *key = (NSString *)items;
+    if (NSString *key = dynamic_objc_cast<NSString>(items)) {
         if (!key.length) {
-            returnEmptyResult();
+            callback->call(@{ });
             return;
         }
 
-        validateJSONAndReturnData(key, { JSONOptions::FragmentsAllowed }, outExceptionString);
-        return;
+        keysVector = { key };
     }
 
-    if (items && ![items isKindOfClass:NSNull.class]) {
-        *outExceptionString = *outExceptionString = toErrorString(nil, @"items", @"an invalid parameter was passed");
-        return;
-    }
+    WebProcess::singleton().sendWithAsyncReply(Messages::WebExtensionContext::StorageGet(page->webPageProxyIdentifier(), m_type, keysVector), [&, keysWithDefaultValues, protectedThis = Ref { *this }, callback = WTFMove(callback)](std::optional<String> dataJSON, WebKit::WebExtensionContext::ErrorString error) {
+        if (error)
+            callback->reportError(error.value());
+        else {
+            NSDictionary *data = parseJSON(dataJSON.value());
+            NSDictionary<NSString *, id> *deserializedData = mapObjects(data, ^id(NSString *key, NSString *jsonString) {
+                return parseJSON(jsonString, { JSONOptions::FragmentsAllowed });
+            });
+
+            deserializedData = keysWithDefaultValues ? mergeDictionaries(deserializedData, keysWithDefaultValues) : deserializedData;
+            callback->call(deserializedData);
+        }
+    }, extensionContext().identifier());
 }
 
-void WebExtensionAPIStorageArea::getBytesInUse(id keys, Ref<WebExtensionCallbackHandler>&& callback, NSString **outExceptionString)
+void WebExtensionAPIStorageArea::getBytesInUse(WebPage* page, id keys, Ref<WebExtensionCallbackHandler>&& callback, NSString **outExceptionString)
 {
     // Documentation: https://developer.mozilla.org/docs/Mozilla/Add-ons/WebExtensions/API/storage/StorageArea/getBytesInUse
+
+    if (!keys)
+        keys = NSNull.null;
 
     if (keys && !validateObject(keys, @"keys", [NSOrderedSet orderedSetWithObjects:NSString.class, @[ NSString.class ], NSNull.class, nil], outExceptionString))
         return;
 
-    // If empty, return the total storage size.
-    Vector<String> keysVector = [keys isKindOfClass:NSArray.class] ? makeVector<String>((NSArray *)keys) : Vector<String> { (NSString *)keys };
+    Vector<String> keysVector;
+    if (NSArray *keysArray = dynamic_objc_cast<NSArray>(keys))
+        keysVector = makeVector<String>(keysArray);
+    else if (NSString *key = dynamic_objc_cast<NSString>(keys))
+        keysVector = { key };
 
-    // FIXME: <https://webkit.org/b/264892> Get bytes used in storage.
-    callback->call();
+    WebProcess::singleton().sendWithAsyncReply(Messages::WebExtensionContext::StorageGetBytesInUse(page->webPageProxyIdentifier(), m_type, keysVector), [protectedThis = Ref { *this }, callback = WTFMove(callback)](std::optional<size_t> size, WebKit::WebExtensionContext::ErrorString error) {
+        if (error)
+            callback->reportError(error.value());
+        else
+            callback->call(@(size.value()));
+    }, extensionContext().identifier());
 }
 
-void WebExtensionAPIStorageArea::set(NSDictionary *items, Ref<WebExtensionCallbackHandler>&& callback, NSString **outExceptionString)
+void WebExtensionAPIStorageArea::set(WebPage* page, NSDictionary *items, Ref<WebExtensionCallbackHandler>&& callback, NSString **outExceptionString)
 {
     // Documentation: https://developer.mozilla.org/docs/Mozilla/Add-ons/WebExtensions/API/storage/StorageArea/set
 
@@ -154,17 +157,24 @@ void WebExtensionAPIStorageArea::set(NSDictionary *items, Ref<WebExtensionCallba
         return;
     }
 
-    auto *data = encodeJSONData(items);
-    if (!data) {
-        *outExceptionString = toErrorString(nil, @"items", @"it is not JSON-serializable");
+    NSDictionary<NSString *, NSString *> *serializedData = mapObjects(items, ^NSString *(NSString *key, id object) {
+        return encodeJSONString(object, { JSONOptions::FragmentsAllowed });
+    });
+
+    if (anyItemsExceedQuota(serializedData, webExtensionStorageAreaSyncQuotaBytesPerItem)) {
+        *outExceptionString = toErrorString(nil, @"items", @"exceeded maximum size for a single item");
         return;
     }
 
-    // FIXME: <https://webkit.org/b/264892> Save data to storage.
-    callback->call();
+    WebProcess::singleton().sendWithAsyncReply(Messages::WebExtensionContext::StorageSet(page->webPageProxyIdentifier(), m_type, encodeJSONString(serializedData)), [protectedThis = Ref { *this }, callback = WTFMove(callback)](WebKit::WebExtensionContext::ErrorString error) {
+        if (error)
+            callback->reportError(error.value());
+        else
+            callback->call();
+    }, extensionContext().identifier());
 }
 
-void WebExtensionAPIStorageArea::remove(id keys, Ref<WebExtensionCallbackHandler>&& callback, NSString **outExceptionString)
+void WebExtensionAPIStorageArea::remove(WebPage* page, id keys, Ref<WebExtensionCallbackHandler>&& callback, NSString **outExceptionString)
 {
     // Documentation: https://developer.mozilla.org/docs/Mozilla/Add-ons/WebExtensions/API/storage/StorageArea/remove
 
@@ -173,26 +183,25 @@ void WebExtensionAPIStorageArea::remove(id keys, Ref<WebExtensionCallbackHandler
 
     Vector<String> keysVector = [keys isKindOfClass:NSArray.class] ? makeVector<String>((NSArray *)keys) : Vector<String> { keys };
 
-    // FIXME: <https://webkit.org/b/264892> Remove keys from storage.
-    callback->call();
+    WebProcess::singleton().sendWithAsyncReply(Messages::WebExtensionContext::StorageRemove(page->webPageProxyIdentifier(), m_type, keysVector), [protectedThis = Ref { *this }, callback = WTFMove(callback)](WebKit::WebExtensionContext::ErrorString error) {
+        if (error)
+            callback->reportError(error.value());
+        else
+            callback->call();
+    }, extensionContext().identifier());
 }
 
-WebExtensionAPIEvent& WebExtensionAPIStorageArea::onChanged()
+void WebExtensionAPIStorageArea::clear(WebPage* page, Ref<WebExtensionCallbackHandler>&& callback)
 {
-    // Documentation: https://developer.mozilla.org/docs/Mozilla/Add-ons/WebExtensions/API/storage/StorageArea/onChanged
-
-    if (!m_onChanged)
-        m_onChanged = WebExtensionAPIEvent::create(forMainWorld(), runtime(), extensionContext(), WebExtensionEventListenerType::StorageOnChanged);
-    return *m_onChanged;
+    WebProcess::singleton().sendWithAsyncReply(Messages::WebExtensionContext::StorageClear(page->webPageProxyIdentifier(), m_type), [protectedThis = Ref { *this }, callback = WTFMove(callback)](WebKit::WebExtensionContext::ErrorString error) {
+        if (error)
+            callback->reportError(error.value());
+        else
+            callback->call();
+    }, extensionContext().identifier());
 }
 
-void WebExtensionAPIStorageArea::clear(Ref<WebExtensionCallbackHandler>&& callback)
-{
-    // FIXME: <https://webkit.org/b/264892> Clear storage.
-    callback->call();
-}
-
-void WebExtensionAPIStorageArea::setAccessLevel(NSDictionary *accessOptions, Ref<WebExtensionCallbackHandler>&& callback, NSString **outExceptionString)
+void WebExtensionAPIStorageArea::setAccessLevel(WebPage* page, NSDictionary *accessOptions, Ref<WebExtensionCallbackHandler>&& callback, NSString **outExceptionString)
 {
     static auto *requiredKeys = @[
         accessLevelKey,
@@ -211,17 +220,34 @@ void WebExtensionAPIStorageArea::setAccessLevel(NSDictionary *accessOptions, Ref
         return;
     }
 
-    // FIXME: <https://webkit.org/b/264892> Set access level.
+    WebExtensionStorageAccessLevel accessLevel = [accessLevelString isEqualToString:accessLevelTrustedContexts] ? WebExtensionStorageAccessLevel::TrustedContexts : WebExtensionStorageAccessLevel::TrustedAndUntrustedContexts;
+
+    WebProcess::singleton().sendWithAsyncReply(Messages::WebExtensionContext::StorageSetAccessLevel(page->webPageProxyIdentifier(), m_type, accessLevel), [protectedThis = Ref { *this }, callback = WTFMove(callback)](WebKit::WebExtensionContext::ErrorString error) {
+        if (error)
+            callback->reportError(error.value());
+        else
+            callback->call();
+    }, extensionContext().identifier());
+}
+
+WebExtensionAPIEvent& WebExtensionAPIStorageArea::onChanged()
+{
+    // Documentation: https://developer.mozilla.org/docs/Mozilla/Add-ons/WebExtensions/API/storage/StorageArea/onChanged
+
+    if (!m_onChanged)
+        m_onChanged = WebExtensionAPIEvent::create(forMainWorld(), runtime(), extensionContext(), WebExtensionEventListenerType::StorageOnChanged);
+
+    return *m_onChanged;
 }
 
 double WebExtensionAPIStorageArea::quotaBytes()
 {
     switch (m_type) {
-    case StorageType::Local:
+    case WebExtensionStorageType::Local:
         return webExtensionStorageAreaLocalQuotaBytes;
-    case StorageType::Sync:
+    case WebExtensionStorageType::Sync:
         return webExtensionStorageAreaSyncQuotaBytes;
-    case StorageType::Session:
+    case WebExtensionStorageType::Session:
         return webExtensionStorageAreaSessionQuotaBytes;
     }
 
@@ -231,25 +257,25 @@ double WebExtensionAPIStorageArea::quotaBytes()
 
 double WebExtensionAPIStorageArea::quotaBytesPerItem()
 {
-    ASSERT(m_type == StorageType::Sync);
+    ASSERT(m_type == WebExtensionStorageType::Sync);
     return webExtensionStorageAreaSyncQuotaBytesPerItem;
 }
 
 NSUInteger WebExtensionAPIStorageArea::maxItems()
 {
-    ASSERT(m_type == StorageType::Sync);
+    ASSERT(m_type == WebExtensionStorageType::Sync);
     return webExtensionStorageAreaSyncMaximumItems;
 }
 
 NSUInteger WebExtensionAPIStorageArea::maxWriteOperationsPerHour()
 {
-    ASSERT(m_type == StorageType::Sync);
+    ASSERT(m_type == WebExtensionStorageType::Sync);
     return webExtensionStorageAreaSyncMaximumWriteOperationsPerHour;
 }
 
 NSUInteger WebExtensionAPIStorageArea::maxWriteOperationsPerMinute()
 {
-    ASSERT(m_type == StorageType::Sync);
+    ASSERT(m_type == WebExtensionStorageType::Sync);
     return webExtensionStorageAreaSyncMaximumWriteOperationsPerMinute;
 }
 

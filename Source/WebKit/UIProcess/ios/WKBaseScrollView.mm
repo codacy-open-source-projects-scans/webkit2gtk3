@@ -32,6 +32,7 @@
 #import <WebCore/RuntimeApplicationChecks.h>
 #import <objc/runtime.h>
 #import <wtf/RetainPtr.h>
+#import <wtf/SetForScope.h>
 #import <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
 
 @interface UIScrollView (GestureRecognizerDelegate) <UIGestureRecognizerDelegate>
@@ -40,6 +41,7 @@
 @implementation WKBaseScrollView {
     RetainPtr<UIPanGestureRecognizer> _axisLockingPanGestureRecognizer;
     UIAxis _axesToPreventMomentumScrolling;
+    BOOL _isBeingRemovedFromSuperview;
 }
 
 - (instancetype)initWithFrame:(CGRect)frame
@@ -49,7 +51,7 @@
     if (!(self = [super initWithFrame:frame]))
         return nil;
 
-#if HAVE(UISCROLLVIEW_ASYNCHRONOUS_SCROLL_EVENT_HANDLING) && !SERVICE_EXTENSIONS_SCROLL_VIEW_IS_AVAILABLE
+#if HAVE(UISCROLLVIEW_ASYNCHRONOUS_SCROLL_EVENT_HANDLING) && !USE(BROWSERENGINEKIT)
 ALLOW_DEPRECATED_DECLARATIONS_BEGIN
     self._allowsAsyncScrollEvent = YES;
 ALLOW_DEPRECATED_DECLARATIONS_END
@@ -115,6 +117,17 @@ ALLOW_DEPRECATED_DECLARATIONS_END
         break;
     }
 
+    switch ([_axisLockingPanGestureRecognizer state]) {
+    case UIGestureRecognizerStateCancelled:
+    case UIGestureRecognizerStateFailed:
+        return;
+    case UIGestureRecognizerStatePossible:
+    case UIGestureRecognizerStateBegan:
+    case UIGestureRecognizerStateChanged:
+    case UIGestureRecognizerStateEnded:
+        break;
+    }
+
     auto axesToPrevent = self._axesToPreventScrollingFromDelegate;
     if (axesToPrevent == UIAxisNeither)
         return;
@@ -137,8 +150,17 @@ ALLOW_DEPRECATED_DECLARATIONS_END
         [panGesture setTranslation:adjustedTranslation inView:nil];
 }
 
+- (void)removeFromSuperview
+{
+    SetForScope removeFromSuperviewScope { _isBeingRemovedFromSuperview, YES };
+
+    [super removeFromSuperview];
+}
+
 - (UIAxis)_axesToPreventScrollingFromDelegate
 {
+    if (_isBeingRemovedFromSuperview || !self.window)
+        return UIAxisNeither;
     auto delegate = self.baseScrollViewDelegate;
     return delegate ? [delegate axesToPreventScrollingForPanGestureInScrollView:self] : UIAxisNeither;
 }

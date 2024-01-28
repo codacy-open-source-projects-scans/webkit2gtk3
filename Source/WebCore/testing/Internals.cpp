@@ -1078,7 +1078,7 @@ static PDFDocumentImage* pdfDocumentImageFromImageElement(HTMLImageElement& elem
 unsigned Internals::imageFrameIndex(HTMLImageElement& element)
 {
     auto* bitmapImage = bitmapImageFromImageElement(element);
-    return bitmapImage ? bitmapImage->currentFrame() : 0;
+    return bitmapImage ? bitmapImage->currentFrameIndex() : 0;
 }
 
 unsigned Internals::imageFrameCount(HTMLImageElement& element)
@@ -1531,6 +1531,8 @@ std::optional<Internals::EventThrottlingBehavior> Internals::eventThrottlingBeha
 
 String Internals::visiblePlaceholder(Element& element)
 {
+    element.document().updateLayout(LayoutOptions::IgnorePendingStylesheets);
+
     if (is<HTMLTextFormControlElement>(element)) {
         const HTMLTextFormControlElement& textFormControlElement = downcast<HTMLTextFormControlElement>(element);
         if (!textFormControlElement.isPlaceholderVisible())

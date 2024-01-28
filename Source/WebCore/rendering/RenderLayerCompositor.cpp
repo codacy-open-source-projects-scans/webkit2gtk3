@@ -1616,7 +1616,7 @@ void RenderLayerCompositor::adjustOverflowScrollbarContainerLayers(RenderLayer& 
     if (layersClippedByScrollers.isEmpty())
         return;
 
-    HashMap<RenderLayer*, RenderLayer*> overflowScrollToLastContainedLayerMap;
+    HashMap<CheckedPtr<RenderLayer>, CheckedPtr<RenderLayer>> overflowScrollToLastContainedLayerMap;
 
     for (auto* clippedLayer : layersClippedByScrollers) {
         auto* clippingStack = clippedLayer->backing()->ancestorClippingStack();
@@ -1635,7 +1635,7 @@ void RenderLayerCompositor::adjustOverflowScrollbarContainerLayers(RenderLayer& 
         if (it == overflowScrollToLastContainedLayerMap.end())
             continue;
     
-        auto* lastContainedDescendant = it->value;
+        CheckedPtr lastContainedDescendant = it->value;
         if (!lastContainedDescendant || !lastContainedDescendant->isComposited())
             continue;
 
@@ -2846,9 +2846,12 @@ enum class FullScreenDescendant { Yes, No, NotApplicable };
 static FullScreenDescendant isDescendantOfFullScreenLayer(const RenderLayer& layer)
 {
     auto& document = layer.renderer().document();
-    auto* fullScreenElement = document.fullscreenManager().fullscreenElement();
+    CheckedPtr manager = document.fullscreenManagerIfExists();
+    if (!manager)
+        return FullScreenDescendant::NotApplicable;
 
-    if (!document.fullscreenManager().isFullscreen() || !fullScreenElement)
+    auto* fullScreenElement = manager->fullscreenElement();
+    if (!manager->isFullscreen() || !fullScreenElement)
         return FullScreenDescendant::NotApplicable;
 
     auto* fullScreenRenderer = dynamicDowncast<RenderLayerModelObject>(fullScreenElement->renderer());

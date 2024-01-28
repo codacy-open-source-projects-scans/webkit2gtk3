@@ -30,6 +30,8 @@
 
 #include "Chrome.h"
 #include "ChromeClient.h"
+#include "Document.h"
+#include "DocumentInlines.h"
 #include "ElementInlines.h"
 #include "EventLoop.h"
 #include "EventNames.h"
@@ -737,7 +739,7 @@ void FullscreenManager::setAnimatingFullscreen(bool flag)
 
     std::optional<Style::PseudoClassChangeInvalidation> styleInvalidation;
     if (m_fullscreenElement)
-        emplace(styleInvalidation, *m_fullscreenElement, { { CSSSelector::PseudoClass::WebKitAnimatingFullScreenTransition, flag } });
+        emplace(styleInvalidation, *m_fullscreenElement, { { CSSSelector::PseudoClass::InternalAnimatingFullScreenTransition, flag } });
     m_isAnimatingFullscreen = flag;
 }
 

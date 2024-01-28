@@ -127,7 +127,6 @@ class SystemImage;
 struct CompositionUnderline;
 struct DataDetectorElementInfo;
 struct SoupNetworkProxySettings;
-struct TextRecognitionDataDetector;
 struct ViewportArguments;
 
 template <class>
@@ -221,21 +220,6 @@ template<> struct ArgumentCoder<WebCore::MediaPlaybackTargetContext> {
 
 #if ENABLE(APPLE_PAY)
 
-template<> struct ArgumentCoder<WebCore::Payment> {
-    static void encode(Encoder&, const WebCore::Payment&);
-    static std::optional<WebCore::Payment> decode(Decoder&);
-};
-
-template<> struct ArgumentCoder<WebCore::PaymentContact> {
-    static void encode(Encoder&, const WebCore::PaymentContact&);
-    static std::optional<WebCore::PaymentContact> decode(Decoder&);
-};
-
-template<> struct ArgumentCoder<WebCore::PaymentMerchantSession> {
-    static void encode(Encoder&, const WebCore::PaymentMerchantSession&);
-    static std::optional<WebCore::PaymentMerchantSession> decode(Decoder&);
-};
-
 template<> struct ArgumentCoder<WebCore::ApplePaySessionPaymentRequest> {
     static void encode(Encoder&, const WebCore::ApplePaySessionPaymentRequest&);
     static WARN_UNUSED_RETURN bool decode(Decoder&, WebCore::ApplePaySessionPaymentRequest&);
@@ -248,16 +232,6 @@ template<> struct ArgumentCoder<WebCore::ApplePaySessionPaymentRequest::ContactF
 template<> struct ArgumentCoder<WebCore::ApplePaySessionPaymentRequest::MerchantCapabilities> {
     static void encode(Encoder&, const WebCore::ApplePaySessionPaymentRequest::MerchantCapabilities&);
     static WARN_UNUSED_RETURN bool decode(Decoder&, WebCore::ApplePaySessionPaymentRequest::MerchantCapabilities&);
-};
-
-template<> struct ArgumentCoder<RefPtr<WebCore::ApplePayError>> {
-    static void encode(Encoder&, const RefPtr<WebCore::ApplePayError>&);
-    static std::optional<RefPtr<WebCore::ApplePayError>> decode(Decoder&);
-};
-
-template<> struct ArgumentCoder<WebCore::PaymentSessionError> {
-    static void encode(Encoder&, const WebCore::PaymentSessionError&);
-    static std::optional<WebCore::PaymentSessionError> decode(Decoder&);
 };
 
 #endif
@@ -307,17 +281,6 @@ template<> struct ArgumentCoder<WebCore::CDMInstanceSession::Message> {
     static std::optional<WebCore::CDMInstanceSession::Message> decode(Decoder&);
 };
 #endif
-
-#if ENABLE(IMAGE_ANALYSIS) && ENABLE(DATA_DETECTION)
-
-template<> struct ArgumentCoder<WebCore::TextRecognitionDataDetector> {
-    static void encode(Encoder&, const WebCore::TextRecognitionDataDetector&);
-    static WARN_UNUSED_RETURN std::optional<WebCore::TextRecognitionDataDetector> decode(Decoder&);
-    static void encodePlatformData(Encoder&, const WebCore::TextRecognitionDataDetector&);
-    static WARN_UNUSED_RETURN bool decodePlatformData(Decoder&, WebCore::TextRecognitionDataDetector&);
-};
-
-#endif // ENABLE(IMAGE_ANALYSIS) && ENABLE(DATA_DETECTION)
 
 #if ENABLE(IMAGE_ANALYSIS_ENHANCEMENTS)
 

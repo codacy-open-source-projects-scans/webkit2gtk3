@@ -375,7 +375,7 @@ RenderLayer::RenderLayer(RenderLayerModelObject& renderer)
 #endif
 
         //  We need the parent to know if we have skipped content or content-visibility root.
-        if (renderer.style().skippedContentReason().has_value() && !renderer.parent())
+        if (renderer.style().hasSkippedContent() && !renderer.parent())
             return false;
         return true;
     }();
@@ -940,7 +940,8 @@ OptionSet<RenderLayer::UpdateLayerPositionsFlag> RenderLayer::flagsForUpdateLaye
 
 void RenderLayer::willUpdateLayerPositions()
 {
-    renderer().document().markers().invalidateRectsForAllMarkers();
+    if (CheckedPtr markers = renderer().document().markersIfExists())
+        markers->invalidateRectsForAllMarkers();
 }
 
 void RenderLayer::updateLayerPositionsAfterStyleChange()
@@ -990,6 +991,18 @@ void RenderLayer::recursiveUpdateLayerPositions(OptionSet<UpdateLayerPositionsFl
         updatePagination();
     else
         m_enclosingPaginationLayer = nullptr;
+
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
+    if (renderer().isSVGLayerAwareRenderer() && renderer().document().settings().layerBasedSVGEngineEnabled()) {
+        if (!is<RenderSVGRoot>(renderer())) {
+            ASSERT(!renderer().isFixedPositioned());
+            m_repaintStatus = RepaintStatus::NeedsFullRepaint;
+        }
+
+        // Only the outermost <svg> and / <foreignObject> are potentially scrollable.
+        ASSERT_IMPLIES(is<RenderSVGModelObject>(renderer()) || is<RenderSVGText>(renderer()) || is<RenderSVGInline>(renderer()), !m_scrollableArea);
+    }
+#endif
 
     auto repaintIfNecessary = [&](bool checkForRepaint) {
         if (!m_hasVisibleContent || !isSelfPaintingLayer()) {
@@ -1065,17 +1078,6 @@ void RenderLayer::recursiveUpdateLayerPositions(OptionSet<UpdateLayerPositionsFl
             setNeedsPostLayoutCompositingUpdate();
         }
     }
-
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
-    if (renderer().isSVGLayerAwareRenderer() && renderer().document().settings().layerBasedSVGEngineEnabled()) {
-        if (!is<RenderSVGRoot>(renderer()))
-            ASSERT(!renderer().isFixedPositioned());
-
-        // Only the outermost <svg> and / <foreignObject> are potentially scrollable.
-        if (is<RenderSVGModelObject>(renderer()) || is<RenderSVGText>(renderer()) || is<RenderSVGInline>(renderer()))
-            ASSERT(!m_scrollableArea);
-    }
-#endif
 
     if (isComposited())
         backing()->updateAfterLayout(flags.contains(ContainingClippingLayerChangedSize), flags.contains(NeedsFullRepaintInBacking));
@@ -1588,7 +1590,7 @@ void RenderLayer::updateDescendantDependentFlags()
 
     if (m_visibleContentStatusDirty) {
         //  We need the parent to know if we have skipped content or content-visibility root.
-        if (renderer().style().skippedContentReason().has_value() && !renderer().parent())
+        if (renderer().style().hasSkippedContent() && !renderer().parent())
             return;
         m_hasVisibleContent = computeHasVisibleContent();
         m_visibleContentStatusDirty = false;
@@ -3108,7 +3110,7 @@ void RenderLayer::setupClipPath(GraphicsContext& context, GraphicsContextStateSa
             if (!coordinateSystemOriginTranslation.isZero())
                 context.translate(coordinateSystemOriginTranslation);
 
-            svgClipper->applyPathClipping(context, svgReferenceBox, *graphicsElement);
+            svgClipper->applyPathClipping(context, renderer(), svgReferenceBox, *graphicsElement);
 
             if (!coordinateSystemOriginTranslation.isZero())
                 context.translate(-coordinateSystemOriginTranslation);
@@ -5516,7 +5518,7 @@ void RenderLayer::styleChanged(StyleDifference diff, const RenderStyle* oldStyle
     // likely be folded along with the rest.
     if (oldStyle) {
         bool visibilityChanged = oldStyle->visibility() != renderer().style().visibility();
-        if (oldStyle->usedZIndex() != renderer().style().usedZIndex() || oldStyle->skippedContentReason() != renderer().style().skippedContentReason() || visibilityChanged) {
+        if (oldStyle->usedZIndex() != renderer().style().usedZIndex() || oldStyle->effectiveContentVisibility() != renderer().style().effectiveContentVisibility() || visibilityChanged) {
             dirtyStackingContextZOrderLists();
             if (isStackingContext())
                 dirtyZOrderLists();

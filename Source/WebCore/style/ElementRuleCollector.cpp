@@ -271,7 +271,8 @@ void ElementRuleCollector::transferMatchedRules(DeclarationOrigin declarationOri
             matchedRule.ruleData->propertyAllowlist(),
             matchedRule.styleScopeOrdinal,
             FromStyleAttribute::No,
-            matchedRule.cascadeLayerPriority
+            matchedRule.cascadeLayerPriority,
+            matchedRule.ruleData->isStartingStyle()
         }, declarationOrigin);
     }
 }
@@ -492,7 +493,7 @@ inline bool ElementRuleCollector::ruleMatches(const RuleData& ruleData, unsigned
     SelectorChecker::CheckingContext context(m_mode);
     context.pseudoId = m_pseudoElementRequest.pseudoId;
     context.scrollbarState = m_pseudoElementRequest.scrollbarState;
-    context.nameIdentifier = m_pseudoElementRequest.nameIdentifier;
+    context.pseudoElementNameArgument = m_pseudoElementRequest.pseudoElementNameArgument;
     context.styleScopeOrdinal = styleScopeOrdinal;
     context.selectorMatchingState = m_selectorMatchingState;
     context.scope = scopingRoot;

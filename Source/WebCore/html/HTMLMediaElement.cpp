@@ -150,7 +150,7 @@
 
 #if PLATFORM(IOS_FAMILY)
 #include "RuntimeApplicationChecks.h"
-#include "VideoFullscreenInterfaceAVKit.h"
+#include "VideoPresentationInterfaceIOS.h"
 #endif
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
@@ -429,7 +429,7 @@ static bool defaultVolumeLocked()
 }
 
 HTMLMediaElement::HTMLMediaElement(const QualifiedName& tagName, Document& document, bool createdByParser)
-    : HTMLElement(tagName, document, TypeFlag::HasCustomStyleResolveCallbacks)
+    : HTMLElement(tagName, document, { TypeFlag::HasCustomStyleResolveCallbacks, TypeFlag::HasDidMoveToNewDocument })
     , ActiveDOMObject(document)
     , m_progressEventTimer(*this, &HTMLMediaElement::progressEventTimerFired)
     , m_playbackProgressTimer(*this, &HTMLMediaElement::playbackProgressTimerFired)
@@ -886,6 +886,8 @@ Node::InsertedIntoAncestorResult HTMLMediaElement::insertedIntoAncestor(Insertio
     if (insertionType.connectedToDocument)
         setInActiveDocument(true);
 
+    if (!insertionType.connectedToDocument)
+        return InsertedIntoAncestorResult::Done;
     return InsertedIntoAncestorResult::NeedsPostInsertionCallback;
 }
 
@@ -6475,8 +6477,8 @@ void HTMLMediaElement::mediaVolumeDidChange()
 bool HTMLMediaElement::elementIsHidden() const
 {
 #if ENABLE(FULLSCREEN_API)
-    auto& fullscreenManager = document().fullscreenManager();
-    if (isVideo() && fullscreenManager.isFullscreen() && fullscreenManager.currentFullscreenElement())
+    auto* fullscreenManager = document().fullscreenManagerIfExists();
+    if (isVideo() && fullscreenManager && fullscreenManager->isFullscreen() && fullscreenManager->currentFullscreenElement())
         return false;
 #endif
 
@@ -6770,7 +6772,8 @@ bool HTMLMediaElement::taintsOrigin(const SecurityOrigin& origin) const
 bool HTMLMediaElement::isFullscreen() const
 {
 #if ENABLE(FULLSCREEN_API)
-    if (document().fullscreenManager().isFullscreen() && document().fullscreenManager().currentFullscreenElement() == this)
+    CheckedPtr fullscreenManager = document().fullscreenManagerIfExists();
+    if (fullscreenManager && fullscreenManager->isFullscreen() && fullscreenManager->currentFullscreenElement() == this)
         return true;
 #endif
 
@@ -6780,7 +6783,8 @@ bool HTMLMediaElement::isFullscreen() const
 bool HTMLMediaElement::isStandardFullscreen() const
 {
 #if ENABLE(FULLSCREEN_API)
-    if (document().fullscreenManager().isFullscreen() && document().fullscreenManager().currentFullscreenElement() == this)
+    CheckedPtr fullscreenManager = document().fullscreenManagerIfExists();
+    if (fullscreenManager && fullscreenManager->isFullscreen() && fullscreenManager->currentFullscreenElement() == this)
         return true;
 #endif
 
@@ -7172,7 +7176,7 @@ void HTMLMediaElement::configureTextTrackDisplay(TextTrackVisibilityCheckType ch
     if (m_processingPreferenceChange)
         return;
 
-    if (isSuspended())
+    if (isSuspended() || isContextStopped())
         return;
 
     bool haveVisibleTextTrack = false;
@@ -8043,16 +8047,16 @@ RefPtr<VideoPlaybackQuality> HTMLMediaElement::getVideoPlaybackQuality()
     RefPtr domWindow = document().domWindow();
     double timestamp = domWindow ? domWindow->nowTimestamp().milliseconds() : 0;
 
-    auto metrics = m_player ? m_player->videoPlaybackQualityMetrics() : std::nullopt;
-    if (!metrics)
-        return VideoPlaybackQuality::create(timestamp, { });
-
+    VideoPlaybackQualityMetrics currentVideoPlaybackQuality;
 #if ENABLE(MEDIA_SOURCE)
-    metrics.value().totalVideoFrames += m_droppedVideoFrames;
-    metrics.value().droppedVideoFrames += m_droppedVideoFrames;
+    currentVideoPlaybackQuality.totalVideoFrames = m_droppedVideoFrames;
+    currentVideoPlaybackQuality.droppedVideoFrames = m_droppedVideoFrames;
 #endif
 
-    return VideoPlaybackQuality::create(timestamp, metrics.value());
+    if (auto metrics = m_player ? m_player->videoPlaybackQualityMetrics() : std::nullopt)
+        currentVideoPlaybackQuality += *metrics;
+
+    return VideoPlaybackQuality::create(timestamp, currentVideoPlaybackQuality);
 }
 
 DOMWrapperWorld& HTMLMediaElement::ensureIsolatedWorld()

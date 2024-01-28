@@ -72,14 +72,11 @@
 #import <WebCore/TextAlternativeWithRange.h>
 #import <WebCore/ValidationBubble.h>
 #import <pal/spi/cocoa/QuartzCoreSPI.h>
+#import <pal/spi/ios/BrowserEngineKitSPI.h>
 #import <pal/spi/mac/QuarantineSPI.h>
 #import <wtf/BlockPtr.h>
 #import <wtf/SoftLinking.h>
 #import <wtf/cf/TypeCastsCF.h>
-
-#if USE(APPLE_INTERNAL_SDK)
-#import <WebKitAdditions/ServiceExtensionsAdditions.h>
-#endif
 
 #if ENABLE(MEDIA_USAGE)
 #import "MediaUsageManagerCocoa.h"
@@ -914,6 +911,14 @@ bool WebPageProxy::isQuarantinedAndNotUserApproved(const String& fileURLString)
         return false;
 
     return true;
+}
+#endif
+
+#if ENABLE(MULTI_REPRESENTATION_HEIC)
+void WebPageProxy::insertMultiRepresentationHEIC(NSData *data)
+{
+    send(Messages::WebPage::InsertMultiRepresentationHEIC(IPC::DataReference(static_cast<const uint8_t*>([data bytes]), [data length])));
+
 }
 #endif
 

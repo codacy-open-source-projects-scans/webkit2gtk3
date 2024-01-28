@@ -47,6 +47,7 @@
 #include "RenderStyleConstants.h"
 #include "RenderStyleInlines.h"
 #include "RenderTreeUpdaterGeneratedContent.h"
+#include "RenderTreeUpdaterViewTransition.h"
 #include "RenderView.h"
 #include "SVGElement.h"
 #include "StyleResolver.h"
@@ -77,6 +78,7 @@ RenderTreeUpdater::Parent::Parent(Element& element, const Style::ElementUpdate* 
 RenderTreeUpdater::RenderTreeUpdater(Document& document, Style::PostResolutionCallbackDisabler&)
     : m_document(document)
     , m_generatedContent(makeUnique<GeneratedContent>(*this))
+    , m_viewTransition(makeUnique<ViewTransition>(*this))
     , m_builder(renderView())
 {
 }
@@ -338,6 +340,9 @@ void RenderTreeUpdater::updateAfterDescendants(Element& element, const Style::El
         return;
 
     generatedContent().updateBackdropRenderer(*renderer);
+    if (&element == element.document().documentElement())
+        viewTransition().updatePseudoElementTree(*renderer);
+
     m_builder.updateAfterDescendants(*renderer);
 
     if (element.hasCustomStyleResolveCallbacks() && update && update->change == Style::Change::Renderer)
@@ -353,7 +358,7 @@ static bool pseudoStyleCacheIsInvalid(RenderElement* renderer, RenderStyle* newS
         return false;
 
     for (auto& cache : pseudoStyleCache->styles) {
-        PseudoId pseudoId = cache->styleType();
+        PseudoId pseudoId = cache->pseudoElementType();
         std::unique_ptr<RenderStyle> newPseudoStyle = renderer->getUncachedPseudoStyle({ pseudoId }, newStyle, newStyle);
         if (!newPseudoStyle)
             return true;
@@ -403,7 +408,7 @@ void RenderTreeUpdater::updateElementRenderer(Element& element, const Style::Ele
     auto elementUpdateStyle = RenderStyle::cloneIncludingPseudoElements(*elementUpdate.style);
 
     bool shouldTearDownRenderers = [&]() {
-        if (element.isInTopLayer() && elementUpdate.change == Style::Change::Inherited && elementUpdate.style->skippedContentReason().has_value())
+        if (element.isInTopLayer() && elementUpdate.change == Style::Change::Inherited && elementUpdate.style->hasSkippedContent())
             return true;
         return elementUpdate.change == Style::Change::Renderer && (element.renderer() || element.hasDisplayContents());
     }();
@@ -422,19 +427,22 @@ void RenderTreeUpdater::updateElementRenderer(Element& element, const Style::Ele
     }
 
     bool hasDisplayContents = elementUpdate.style->display() == DisplayType::Contents;
-    if (hasDisplayContents)
-        element.storeDisplayContentsStyle(makeUnique<RenderStyle>(WTFMove(elementUpdateStyle)));
+    bool hasDisplayNonePreventingRendererCreation = elementUpdate.style->display() == DisplayType::None && !element.rendererIsNeeded(elementUpdateStyle) && !shouldCreateRenderer(element, renderTreePosition().parent());
+    bool hasDisplayContentsOrNone = hasDisplayContents || hasDisplayNonePreventingRendererCreation;
+    if (hasDisplayContentsOrNone)
+        element.storeDisplayContentsOrNoneStyle(makeUnique<RenderStyle>(WTFMove(elementUpdateStyle)));
     else
-        element.clearDisplayContentsStyle();
+        element.clearDisplayContentsOrNoneStyle();
 
-    if (!hasDisplayContents) {
+    if (!hasDisplayContentsOrNone) {
         if (!elementUpdateStyle.containIntrinsicLogicalWidthHasAuto())
             element.clearLastRememberedLogicalWidth();
         if (!elementUpdateStyle.containIntrinsicLogicalHeightHasAuto())
             element.clearLastRememberedLogicalHeight();
     }
+
     auto scopeExit = makeScopeExit([&] {
-        if (!hasDisplayContents) {
+        if (!hasDisplayContentsOrNone) {
             auto* box = element.renderBox();
             if (box && box->style().hasAutoLengthContainIntrinsicSize() && !box->isSkippedContentRoot())
                 m_document.observeForContainIntrinsicSize(element);
@@ -443,7 +451,7 @@ void RenderTreeUpdater::updateElementRenderer(Element& element, const Style::Ele
         }
     });
 
-    bool shouldCreateNewRenderer = !element.renderer() && !hasDisplayContents && !(element.isInTopLayer() && renderTreePosition().parent().style().skippedContentReason().has_value());
+    bool shouldCreateNewRenderer = !element.renderer() && !hasDisplayContents && !(element.isInTopLayer() && renderTreePosition().parent().style().hasSkippedContent());
     if (shouldCreateNewRenderer) {
         if (element.hasCustomStyleResolveCallbacks())
             element.willAttachRenderers();

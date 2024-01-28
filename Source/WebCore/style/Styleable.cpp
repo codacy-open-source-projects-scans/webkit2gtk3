@@ -36,6 +36,7 @@
 #include "CSSTransition.h"
 #include "CommonAtomStrings.h"
 #include "Document.h"
+#include "DocumentInlines.h"
 #include "DocumentTimeline.h"
 #include "Element.h"
 #include "KeyframeEffect.h"
@@ -58,7 +59,7 @@ namespace WebCore {
 
 const std::optional<const Styleable> Styleable::fromRenderer(const RenderElement& renderer)
 {
-    switch (renderer.style().styleType()) {
+    switch (renderer.style().pseudoElementType()) {
     case PseudoId::Backdrop:
         for (auto& topLayerElement : renderer.document().topLayerElements()) {
             if (topLayerElement->renderer() && topLayerElement->renderer()->backdropRenderer() == &renderer)

@@ -143,7 +143,7 @@ char* newTypedArrayWithSize(JSGlobalObject* globalObject, VM& vm, Structure* str
     size_t unsignedSize = static_cast<size_t>(size);
 
     if (vector)
-        return bitwise_cast<char*>(ViewClass::createWithFastVector(globalObject, structure, unsignedSize, untagArrayPtr(vector, unsignedSize)));
+        return bitwise_cast<char*>(ViewClass::createWithFastVector(globalObject, structure, unsignedSize, vector));
 
     RELEASE_AND_RETURN(scope, bitwise_cast<char*>(ViewClass::create(globalObject, structure, unsignedSize)));
 }
@@ -2106,7 +2106,11 @@ JSC_DEFINE_JIT_OPERATION(operationCreateClonedArguments, JSCell*, (JSGlobalObjec
     VM& vm = globalObject->vm();
     CallFrame* callFrame = DECLARE_CALL_FRAME(vm);
     JITOperationPrologueCallFrameTracer tracer(vm, callFrame);
-    return ClonedArguments::createByCopyingFrom(globalObject, structure, argumentStart, length, callee, butterfly);
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    JSCell* result = ClonedArguments::createByCopyingFrom(globalObject, structure, argumentStart, length, callee, butterfly);
+    EXCEPTION_ASSERT_UNUSED(scope, scope.exception() || result);
+    return result;
 }
 
 JSC_DEFINE_JIT_OPERATION(operationCreateDirectArgumentsDuringExit, JSCell*, (VM* vmPointer, InlineCallFrame* inlineCallFrame, JSFunction* callee, uint32_t argumentCount))

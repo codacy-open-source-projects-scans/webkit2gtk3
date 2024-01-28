@@ -1488,10 +1488,6 @@ webkit.org/b/88045 fast/dom/gc-attribute-node.html [ Failure Pass ]
 css2.1/20110323/replaced-intrinsic-001.htm [ Failure ]
 css2.1/20110323/replaced-intrinsic-002.htm [ Failure ]
 
-webkit.org/b/132791 svg/as-object/sizing/svg-in-object-placeholder-height-fixed.html [ Skip ]
-webkit.org/b/132791 svg/as-object/sizing/svg-in-object-placeholder-height-percentage.html [ Skip ]
-webkit.org/b/132791 svg/as-object/sizing/svg-in-object-placeholder-height-auto.html [ Skip ]
-
 webkit.org/b/133057 fast/table/border-collapsing/collapsed-borders-adjoining-sections.html [ ImageOnlyFailure ]
 
 webkit.org/b/169075 editing/selection/extend-by-character-007.html [ Failure ]
@@ -1977,7 +1973,6 @@ webkit.org/b/137883 transitions/cubic-bezier-overflow-svg-length.html [ Pass Fai
 webkit.org/b/137883 transitions/cubic-bezier-overflow-transform.html [ Pass Failure ]
 webkit.org/b/137883 transitions/delay.html [ Pass Failure ]
 webkit.org/b/137883 transitions/equivalent-background-image-no-transition.html [ Pass Failure ]
-webkit.org/b/137883 transitions/flex-transitions.html [ Pass Failure ]
 webkit.org/b/137883 transitions/interrupt-transform-transition.html [ Pass Failure ]
 webkit.org/b/137883 transitions/interrupt-zero-duration.html [ Pass Failure ]
 webkit.org/b/137883 transitions/interrupted-accelerated-transition.html [ Pass Failure ]
@@ -3333,7 +3328,7 @@ webkit.org/b/176183 fast/block/inside-inlines/opacity-on-inline.html [ ImageOnly
 
 webkit.org/b/166025 http/tests/fetch/fetching-same-resource-with-different-options.html [ Pass Failure ]
 
-# WPT css/css-pseudo import (webkit.org/b/235197)
+# WPT css/css-pseudo import (webkit.org/b/235197, webkit.org/b/266986)
 imported/w3c/web-platform-tests/css/css-pseudo/active-selection-011.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/active-selection-016.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/cascade-highlight-005.html [ ImageOnlyFailure ]
@@ -3342,11 +3337,14 @@ imported/w3c/web-platform-tests/css/css-pseudo/first-letter-002.html [ ImageOnly
 imported/w3c/web-platform-tests/css/css-pseudo/first-letter-003.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/first-letter-hi-001.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/first-letter-hi-002.html [ Pass ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-pseudo/first-letter-with-preceding-new-line.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/first-line-line-height-002.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/highlight-cascade-001.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/highlight-cascade-002.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/highlight-currentcolor-painting-properties-001.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/highlight-currentcolor-painting-properties-002.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-pseudo/highlight-currentcolor-painting-text-shadow-001.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-pseudo/highlight-currentcolor-painting-text-shadow-002.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/highlight-currentcolor-root-explicit-default-002.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/highlight-currentcolor-root-implicit-default-001.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/highlight-currentcolor-root-implicit-default-002.html [ ImageOnlyFailure ]
@@ -3358,6 +3356,14 @@ imported/w3c/web-platform-tests/css/css-pseudo/highlight-styling-002.html [ Imag
 imported/w3c/web-platform-tests/css/css-pseudo/marker-text-transform-dynamic.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/selection-link-001.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/selection-link-002.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-pseudo/slider/slider-fill-001.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-pseudo/slider/slider-fill-002.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-pseudo/slider/slider-fill-003.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-pseudo/slider/slider-thumb-001.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-pseudo/slider/slider-track-001.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-pseudo/slider/slider-track-002.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-pseudo/slider/slider-track-003.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-pseudo/svg-text-selection-002.html [ ImageOnlyFailure ]
 # WPT support ::target-text (webkit.org/b/236817)
 imported/w3c/web-platform-tests/css/css-pseudo/target-text-001.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/target-text-002.html [ ImageOnlyFailure ]
@@ -3366,6 +3372,8 @@ imported/w3c/web-platform-tests/css/css-pseudo/target-text-004.html [ ImageOnlyF
 imported/w3c/web-platform-tests/css/css-pseudo/target-text-005.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/target-text-006.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/target-text-007.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-pseudo/target-text-009.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-pseudo/target-text-010.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/target-text-dynamic-001.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/target-text-dynamic-002.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/target-text-dynamic-003.html [ ImageOnlyFailure ]
@@ -5395,6 +5403,9 @@ webkit.org/b/239959 ipc/stream-sync-crash-no-timeout.html [ Skip ]
 # The test invokes random messages, potentially produces random results.
 ipc/start-message-testing.html [ Skip ]
 
+# Test is slow
+ipc/invalid-fullscreen-enum.html [ Pass Timeout ]
+
 # Test is crashing in Debug builds since import.
 webkit.org/b/234977 [ Debug ] imported/w3c/web-platform-tests/dom/events/focus-event-document-move.html [ Skip ]
 
@@ -6347,13 +6358,12 @@ imported/w3c/web-platform-tests/webcodecs/audio-encoder.https.any.html [ Failure
 
 webkit.org/b/258192 imported/w3c/web-platform-tests/webcodecs/full-cycle-test.https.any.worker.html?h264_avc [ Pass Failure ]
 
-# These tests crash in debug since their import.
+# These tests crash in debug since their import (webkit.org/b/268217).
 [ Debug ] imported/w3c/web-platform-tests/html/syntax/parsing/html5lib_entities01.html?run_type=write_single [ Skip ]
 [ Debug ] imported/w3c/web-platform-tests/html/syntax/parsing/html5lib_html5test-com.html?run_type=write_single [ Skip ]
 [ Debug ] imported/w3c/web-platform-tests/html/syntax/parsing/html5lib_plain-text-unsafe.html?run_type=write_single [ Skip ]
 [ Debug ] imported/w3c/web-platform-tests/html/syntax/parsing/html5lib_tests2.html?run_type=write_single [ Skip ]
 [ Debug ] imported/w3c/web-platform-tests/html/syntax/parsing/html5lib_tests24.html?run_type=write_single [ Skip ]
-[ Debug ] imported/w3c/web-platform-tests/html/syntax/parsing/html5lib_webkit01.html?run_type=write_single [ Skip ]
 
 # These tests are timing out since their import.
 imported/w3c/web-platform-tests/html/browsers/the-window-object/window-open-noopener.html?indexed [ Skip ]
@@ -6870,7 +6880,6 @@ imported/w3c/web-platform-tests/scroll-animations/scroll-timelines/custom-proper
 imported/w3c/web-platform-tests/scroll-animations/view-timelines/range-boundary.html [ ImageOnlyFailure ]
 
 # webkit.org/b/229520 CSS @scope unimplemented
-imported/w3c/web-platform-tests/css/css-cascade/import-conditional-002.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-cascade/scope-visited.html [ ImageOnlyFailure ]
 
 # :is(:host) https://bugs.webkit.org/show_bug.cgi?id=264628
@@ -7429,6 +7438,8 @@ imported/w3c/web-platform-tests/css/css-break/flexbox/flexbox-fragmentation-layo
 # css/css-break missing ref
 imported/w3c/web-platform-tests/css/css-break/chrome-bug-1289999-crash.https.html [ Skip ]
 
+webkit.org/b/264830 [ Debug ] fast/rendering/render-list-marker-select.html [ Skip ]
+
 # webkit.org/b/266168 Two wheel/mousewheel passive event listeners WPT test pass on macOS Sonoma and up
 imported/w3c/web-platform-tests/dom/events/non-cancelable-when-passive/passive-mousewheel-event-listener-on-div.html [ Failure ]
 imported/w3c/web-platform-tests/dom/events/non-cancelable-when-passive/passive-wheel-event-listener-on-div.html [ Failure ]
@@ -7457,7 +7468,13 @@ http/wpt/opener/parent-access-child-via-windowproxy.html [ Skip ]
 
 webkit.org/b/266477 compositing/layer-creation/scale-rotation-transition-overlap.html [ Failure Timeout ]
 
-webkit.org/b/266986 imported/w3c/web-platform-tests/css/css-pseudo/highlight-pseudos-computed.html [ Failure ]
-
 # At the time of writing this test consumes all available IOSurfaces. If the next test is image-buffer-backend-variants.html, that will fail.
 fast/canvas/2d.context.many.small.html [ Slow Skip ]
+
+# web-platform-tests/html/dom/elements/global-attributes failures
+webkit.org/b/267951 imported/w3c/web-platform-tests/html/dom/elements/global-attributes/dir-shadow-06.html [ ImageOnlyFailure ]
+webkit.org/b/267951 imported/w3c/web-platform-tests/html/dom/elements/global-attributes/dir-shadow-36.html [ ImageOnlyFailure ]
+webkit.org/b/267951 imported/w3c/web-platform-tests/html/dom/elements/global-attributes/dir-shadow-38.html [ ImageOnlyFailure ]
+webkit.org/b/267951 imported/w3c/web-platform-tests/html/dom/elements/global-attributes/dir-shadow-39.html [ ImageOnlyFailure ]
+webkit.org/b/267951 imported/w3c/web-platform-tests/html/dom/elements/global-attributes/dir-shadow-41.html [ ImageOnlyFailure ]
+webkit.org/b/267951 imported/w3c/web-platform-tests/html/dom/elements/global-attributes/dir_auto-N-EN.html [ ImageOnlyFailure ]

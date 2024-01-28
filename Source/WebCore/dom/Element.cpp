@@ -767,7 +767,7 @@ bool Element::hasFocusableStyle() const
     auto isFocusableStyle = [](const RenderStyle* style) {
         return style && style->display() != DisplayType::None && style->display() != DisplayType::Contents
             && style->visibility() == Visibility::Visible && !style->effectiveInert()
-            && (style->skippedContentReason().value_or(ContentVisibility::Visible) != ContentVisibility::Hidden || style->contentVisibility() != ContentVisibility::Visible);
+            && (style->effectiveContentVisibility() != ContentVisibility::Hidden || style->contentVisibility() != ContentVisibility::Visible);
     };
 
     if (renderStyle())
@@ -2101,10 +2101,12 @@ void Element::attributeChanged(const QualifiedName& name, const AtomString& oldV
             elementData()->setIdForStyleResolution(newId);
         }
 
-        if (!oldValue.isEmpty())
-            treeScope().idTargetObserverRegistry().notifyObservers(oldValue);
-        if (!newValue.isEmpty())
-            treeScope().idTargetObserverRegistry().notifyObservers(newValue);
+        if (CheckedPtr observerRegistry = treeScope().idTargetObserverRegistryIfExists()) {
+            if (!oldValue.isEmpty())
+                observerRegistry->notifyObservers(oldValue);
+            if (!newValue.isEmpty())
+                observerRegistry->notifyObservers(newValue);
+        }
         break;
     }
     case AttributeNames::nameAttr:
@@ -2471,28 +2473,34 @@ bool Element::hasDisplayContents() const
 {
     if (!hasRareData())
         return false;
-
-    auto* style = elementRareData()->displayContentsStyle();
-    ASSERT(!style || style->display() == DisplayType::Contents);
-    return !!style;
+    auto* style = elementRareData()->displayContentsOrNoneStyle();
+    return style && style->display() == DisplayType::Contents;
 }
 
-void Element::storeDisplayContentsStyle(std::unique_ptr<RenderStyle> style)
+bool Element::hasDisplayNone() const
 {
-    // This is used by RenderTreeBuilder to store the style for Elements with display:contents.
+    if (!hasRareData())
+        return false;
+    auto* style = elementRareData()->displayContentsOrNoneStyle();
+    return style && style->display() == DisplayType::None;
+}
+
+void Element::storeDisplayContentsOrNoneStyle(std::unique_ptr<RenderStyle> style)
+{
+    // This is used by RenderTreeBuilder to store the style for Elements with display:{contents|none}.
     // Normally style is held in renderers but display:contents doesn't generate one.
     // This is kept distinct from ElementRareData::computedStyle() which can update outside style resolution.
     // This way renderOrDisplayContentsStyle() always returns consistent styles matching the rendering state.
-    ASSERT(style && style->display() == DisplayType::Contents);
+    ASSERT(style && (style->display() == DisplayType::Contents || style->display() == DisplayType::None));
     ASSERT(!renderer() || isPseudoElement());
-    ensureElementRareData().setDisplayContentsStyle(WTFMove(style));
+    ensureElementRareData().setDisplayContentsOrNoneStyle(WTFMove(style));
 }
 
-void Element::clearDisplayContentsStyle()
+void Element::clearDisplayContentsOrNoneStyle()
 {
     if (!hasRareData())
         return;
-    elementRareData()->setDisplayContentsStyle(nullptr);
+    elementRareData()->setDisplayContentsOrNoneStyle(nullptr);
 }
 
 // Returns true is the given attribute is an event handler.
@@ -3713,7 +3721,6 @@ void Element::dispatchWebKitImageReadyEventForTesting()
 
 bool Element::dispatchMouseForceWillBegin()
 {
-#if ENABLE(MOUSE_FORCE_EVENTS)
     if (!document().hasListenerType(Document::ListenerType::ForceWillBegin))
         return false;
 
@@ -3728,7 +3735,6 @@ bool Element::dispatchMouseForceWillBegin()
 
     if (mouseForceWillBeginEvent->defaultHandled() || mouseForceWillBeginEvent->defaultPrevented())
         return true;
-#endif
 
     return false;
 }
@@ -3982,6 +3988,9 @@ const RenderStyle* Element::existingComputedStyle() const
             return style;
     }
 
+    if (hasDisplayNone())
+        return elementRareData()->displayContentsOrNoneStyle();
+
     return renderOrDisplayContentsStyle();
 }
 
@@ -3998,12 +4007,8 @@ const RenderStyle* Element::renderOrDisplayContentsStyle(PseudoId pseudoId) cons
         return nullptr;
     }
 
-    if (hasRareData()) {
-        if (auto* style = elementRareData()->displayContentsStyle()) {
-            ASSERT(style->display() == DisplayType::Contents);
-            return style;
-        }
-    }
+    if (hasDisplayContents())
+        return elementRareData()->displayContentsOrNoneStyle();
 
     return renderStyle();
 }
@@ -4113,7 +4118,7 @@ const RenderStyle& Element::resolvePseudoElementStyle(PseudoId pseudoElementSpec
     if (!style) {
         style = RenderStyle::createPtr();
         style->inheritFrom(*parentStyle);
-        style->setStyleType(pseudoElementSpecifier);
+        style->setPseudoElementType(pseudoElementSpecifier);
     }
 
     auto* computedStyle = style.get();
@@ -4844,31 +4849,17 @@ void Element::updateIdForDocument(HTMLDocument& document, const AtomString& oldI
     }
 }
 
-void Element::updateLabel(TreeScope& scope, const AtomString& oldForAttributeValue, const AtomString& newForAttributeValue)
-{
-    ASSERT(hasTagName(labelTag));
-
-    if (!isConnected())
-        return;
-
-    if (oldForAttributeValue == newForAttributeValue)
-        return;
-
-    if (!oldForAttributeValue.isEmpty())
-        scope.removeLabel(oldForAttributeValue, downcast<HTMLLabelElement>(*this));
-    if (!newForAttributeValue.isEmpty())
-        scope.addLabel(newForAttributeValue, downcast<HTMLLabelElement>(*this));
-}
-
 void Element::willModifyAttribute(const QualifiedName& name, const AtomString& oldValue, const AtomString& newValue)
 {
     if (name == HTMLNames::idAttr)
         updateId(oldValue, newValue, NotifyObservers::No); // Will notify observers after the attribute is actually changed.
     else if (name == HTMLNames::nameAttr)
         updateName(oldValue, newValue);
-    else if (name == HTMLNames::forAttr && hasTagName(labelTag)) {
-        if (treeScope().shouldCacheLabelsByForAttribute())
-            updateLabel(treeScope(), oldValue, newValue);
+    else if (name == HTMLNames::forAttr) {
+        if (auto* label = dynamicDowncast<HTMLLabelElement>(*this)) {
+            if (treeScope().shouldCacheLabelsByForAttribute())
+                label->updateLabel(treeScope(), oldValue, newValue);
+        }
     }
 
     if (auto recipients = MutationObserverInterestGroup::createForAttributesMutation(*this, name))
@@ -4967,7 +4958,7 @@ void Element::resetComputedStyle()
     };
     reset(*this);
     for (Ref child : descendantsOfType<Element>(*this)) {
-        if (!child->hasRareData() || !child->elementRareData()->computedStyle() || child->hasDisplayContents())
+        if (!child->hasRareData() || !child->elementRareData()->computedStyle() || child->hasDisplayContents() || child->hasDisplayNone())
             continue;
         reset(child);
     }
@@ -5482,11 +5473,11 @@ bool Element::checkVisibility(const CheckVisibilityOptions& options)
     RefPtr parent = parentElementInComposedTree();
     auto isSkippedContentWithReason = [&](ContentVisibility reason) -> bool {
         ASSERT(!parent || parent->computedStyle());
-        if (style->skippedContentReason().value_or(ContentVisibility::Visible) != reason)
+        if (style->effectiveContentVisibility() != reason)
             return false;
 
-        // skippedContentReason() includes the skipped content root, so we query the parent to make sure roots are not considered as skipped.
-        if (!parent || parent->computedStyle()->skippedContentReason().value_or(ContentVisibility::Visible) != reason)
+        // effectiveContentVisibility() includes the skipped content root, so we query the parent to make sure roots are not considered as skipped.
+        if (!parent || parent->computedStyle()->effectiveContentVisibility() != reason)
             return false;
 
         return true;

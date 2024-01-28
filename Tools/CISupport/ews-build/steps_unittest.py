@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2023 Apple Inc. All rights reserved.
+# Copyright (C) 2018-2024 Apple Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -67,8 +67,9 @@ from buildbot.test.fake.fakebuild import FakeBuild
 FakeBuild.addStepsAfterCurrentStep = lambda FakeBuild, step_factories: None
 FakeBuild._builderid = 1
 
-# Prevent unit-tests from talking to live bugzilla server
+# Prevent unit-tests from talking to live bugzilla and github servers
 BugzillaMixin.fetch_data_from_url_with_authentication_bugzilla = lambda x, y: None
+GitHubMixin.fetch_data_from_url_with_authentication_github = lambda x, y: None
 
 def mock_step(step, logs='', results=SUCCESS, stopped=False, properties=None):
     step.logs = logs
@@ -4733,16 +4734,18 @@ class TestUploadFileToS3(BuildStepMixinAdditions, unittest.TestCase):
 
     def test_success(self):
         self.configureStep()
+        self.assertEqual(UploadFileToS3.haltOnFailure, True)
+        self.assertEqual(UploadFileToS3.flunkOnFailure, True)
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         env=dict(UPLOAD_URL='https://test-s3-url'),
                         logEnviron=False,
                         command=['python3', 'Tools/Scripts/upload-file-to-url', '--filename', 'WebKitBuild/release.zip'],
-                        timeout=1800,
+                        timeout=1860,
                         )
             + 0,
         )
-        self.expectOutcome(result=SUCCESS, state_string='upload-file-to-s3')
+        self.expectOutcome(result=SUCCESS, state_string='Uploaded archive to S3')
         with current_hostname(EWS_BUILD_HOSTNAME):
             return self.runStep()
 
@@ -4753,20 +4756,20 @@ class TestUploadFileToS3(BuildStepMixinAdditions, unittest.TestCase):
                         env=dict(UPLOAD_URL='https://test-s3-url'),
                         logEnviron=False,
                         command=['python3', 'Tools/Scripts/upload-file-to-url', '--filename', 'WebKitBuild/release.zip'],
-                        timeout=1800,
+                        timeout=1860,
                         )
             + ExpectShell.log('stdio', stdout='''Uploading WebKitBuild/release.zip
 response: <Response [403]>, 403, Forbidden
 exit 1''')
             + 2,
         )
-        self.expectOutcome(result=FAILURE, state_string='upload-file-to-s3 (failure)')
+        self.expectOutcome(result=FAILURE, state_string='Failed to upload archive to S3. Please inform an admin.')
         with current_hostname(EWS_BUILD_HOSTNAME):
             return self.runStep()
 
     def test_skipped(self):
         self.configureStep()
-        self.expectOutcome(result=SKIPPED, state_string='upload-file-to-s3 (skipped)')
+        self.expectOutcome(result=SKIPPED, state_string='Skipped upload to S3')
         with current_hostname('something-other-than-steps.EWS_BUILD_HOSTNAME'):
             return self.runStep()
 
@@ -7576,7 +7579,7 @@ class TestValidateSquashed(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['git', 'log', '--format=format:"%H"', 'HEAD', '^origin/main', '--max-count=51'],
+                        command=['git', 'log', '--format=format:%H', 'HEAD', '^origin/main', '--max-count=51'],
                         )
             + 0
             + ExpectShell.log('stdio', stdout='e1eb24603493\n'),
@@ -7590,7 +7593,7 @@ class TestValidateSquashed(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['git', 'log', '--format=format:"%H"', 'HEAD', '^origin/main', '--max-count=51'],
+                        command=['git', 'log', '--format=format:%H', 'HEAD', '^origin/main', '--max-count=51'],
                         )
             + 0
             + ExpectShell.log('stdio', stdout='e1eb24603493\n08abb9ddcbb5\n45cf3efe4dfb\n'),
@@ -7609,7 +7612,7 @@ class TestValidateSquashed(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['git', 'log', '--format=format:"%H"', 'eng/pull-request-branch', '^main', '--max-count=51'],
+                        command=['git', 'log', '--format=format:%H', 'eng/pull-request-branch', '^main', '--max-count=51'],
                         )
             + 0
             + ExpectShell.log('stdio', stdout='e1eb24603493\n'),
@@ -7625,7 +7628,7 @@ class TestValidateSquashed(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['git', 'log', '--format=format:"%H"', 'eng/pull-request-branch', '^main', '--max-count=51'],
+                        command=['git', 'log', '--format=format:%H', 'eng/pull-request-branch', '^main', '--max-count=51'],
                         )
             + 0
             + ExpectShell.log('stdio', stdout='e1eb24603493\n08abb9ddcbb5\n45cf3efe4dfb\n'),
@@ -7644,7 +7647,7 @@ class TestValidateSquashed(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['git', 'log', '--format=format:"%H"', 'eng/pull-request-branch', '^main', '--max-count=51'],
+                        command=['git', 'log', '--format=format:%H', 'eng/pull-request-branch', '^main', '--max-count=51'],
                         )
             + 0
             + ExpectShell.log('stdio', stdout=''),
@@ -7664,7 +7667,7 @@ class TestValidateSquashed(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['git', 'log', '--format=format:"%H"', 'eng/pull-request-branch', '^main', '--max-count=51'],
+                        command=['git', 'log', '--format=format:%H', 'eng/pull-request-branch', '^main', '--max-count=51'],
                         )
             + 0
             + ExpectShell.log('stdio', stdout='e1eb24603493\n08abb9ddcbb5\n45cf3efe4dfb\n'),
@@ -7683,7 +7686,7 @@ class TestValidateSquashed(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['git', 'log', '--format=format:"%H"', 'eng/pull-request-branch', '^main', '--max-count=51'],
+                        command=['git', 'log', '--format=format:%H', 'eng/pull-request-branch', '^main', '--max-count=51'],
                         )
             + 0
             + ExpectShell.log('stdio', stdout='e1eb24603493\n' + 50 * '08abb9ddcbb5\n'),

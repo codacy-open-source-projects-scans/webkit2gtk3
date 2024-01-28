@@ -50,6 +50,7 @@ class MediaStreamTrackProcessor
 public:
     struct Init {
         RefPtr<MediaStreamTrack> track;
+        unsigned short maxBufferSize { 1 };
     };
 
     static ExceptionOr<Ref<MediaStreamTrackProcessor>> create(ScriptExecutionContext&, Init&&);
@@ -57,66 +58,22 @@ public:
 
     ExceptionOr<Ref<ReadableStream>> readable(JSC::JSGlobalObject&);
 
-private:
-    MediaStreamTrackProcessor(ScriptExecutionContext&, Ref<MediaStreamTrack>&&);
-
-    // ContextDestructionObserver
-    void contextDestroyed() final;
-
-    void stopVideoFrameObserver();
-    void tryEnqueueingVideoFrame();
-
-    class VideoFrameObserver final : private RealtimeMediaSource::VideoFrameObserver {
-        WTF_MAKE_FAST_ALLOCATED;
-    public:
-        explicit VideoFrameObserver(ScriptExecutionContextIdentifier, WeakPtr<MediaStreamTrackProcessor>&&, Ref<RealtimeMediaSource>&&);
-        ~VideoFrameObserver();
-
-        void start();
-        RefPtr<WebCodecsVideoFrame> takeVideoFrame(ScriptExecutionContext&);
-
-    private:
-        // RealtimeMediaSource::VideoFrameObserver
-        void videoFrameAvailable(VideoFrame&, VideoFrameTimeMetadata) final;
-
-        bool m_isStarted { false };
-        ScriptExecutionContextIdentifier m_contextIdentifier;
-        WeakPtr<MediaStreamTrackProcessor> m_processor;
-        RefPtr<RealtimeMediaSource> m_realtimeVideoSource;
-
-        Lock m_videoFrameLock;
-        RefPtr<VideoFrame> m_videoFrame WTF_GUARDED_BY_LOCK(m_videoFrameLock);
-        VideoFrameTimeMetadata m_metadata WTF_GUARDED_BY_LOCK(m_videoFrameLock);
-    };
-
-    class VideoFrameObserverWrapper : public ThreadSafeRefCounted<VideoFrameObserverWrapper, WTF::DestructionThread::Main> {
-    public:
-        static Ref<VideoFrameObserverWrapper> create(ScriptExecutionContextIdentifier, MediaStreamTrackProcessor&, Ref<RealtimeMediaSource>&&);
-
-        void start();
-        RefPtr<WebCodecsVideoFrame> takeVideoFrame(ScriptExecutionContext& context) { return m_observer->takeVideoFrame(context); }
-
-    private:
-        VideoFrameObserverWrapper();
-
-        void initialize(ScriptExecutionContextIdentifier, MediaStreamTrackProcessor&, Ref<RealtimeMediaSource>&&);
-
-        std::unique_ptr<VideoFrameObserver> m_observer;
-    };
-
     class Source final
         : public ReadableStreamSource
         , public MediaStreamTrackPrivate::Observer {
+        WTF_MAKE_ISO_ALLOCATED(Source);
     public:
-        static Ref<Source> create(Ref<MediaStreamTrack>&& track, MediaStreamTrackProcessor& processor) { return adoptRef(*new Source(WTFMove(track), processor)); }
+        Source(Ref<MediaStreamTrack>&&, MediaStreamTrackProcessor&);
         ~Source();
 
         bool isWaiting() const;
         void close();
         void enqueue(WebCodecsVideoFrame&, ScriptExecutionContext&);
 
+        void ref() final { m_processor->ref(); };
+        void deref() final { m_processor->deref(); };
+
     private:
-        Source(Ref<MediaStreamTrack>&&, MediaStreamTrackProcessor&);
 
         // MediaStreamTrackPrivate::Observer
         void trackEnded(MediaStreamTrackPrivate&) final;
@@ -136,9 +93,56 @@ private:
         Ref<MediaStreamTrack> m_track;
         WeakPtr<MediaStreamTrackProcessor> m_processor;
     };
+    using MediaStreamTrackProcessorSource = MediaStreamTrackProcessor::Source;
+
+
+private:
+    MediaStreamTrackProcessor(ScriptExecutionContext&, Ref<MediaStreamTrack>&&, unsigned short maxVideoFramesCount);
+
+    // ContextDestructionObserver
+    void contextDestroyed() final;
+
+    void stopVideoFrameObserver();
+    void tryEnqueueingVideoFrame();
+
+    class VideoFrameObserver final : private RealtimeMediaSource::VideoFrameObserver {
+        WTF_MAKE_FAST_ALLOCATED;
+    public:
+        explicit VideoFrameObserver(ScriptExecutionContextIdentifier, WeakPtr<MediaStreamTrackProcessor>&&, Ref<RealtimeMediaSource>&&, unsigned short maxVideoFramesCount);
+        ~VideoFrameObserver();
+
+        void start();
+        RefPtr<WebCodecsVideoFrame> takeVideoFrame(ScriptExecutionContext&);
+
+    private:
+        // RealtimeMediaSource::VideoFrameObserver
+        void videoFrameAvailable(VideoFrame&, VideoFrameTimeMetadata) final;
+
+        bool m_isStarted { false };
+        ScriptExecutionContextIdentifier m_contextIdentifier;
+        WeakPtr<MediaStreamTrackProcessor> m_processor;
+        RefPtr<RealtimeMediaSource> m_realtimeVideoSource;
+
+        Lock m_videoFramesLock;
+        Deque<Ref<VideoFrame>> m_videoFrames WTF_GUARDED_BY_LOCK(m_videoFramesLock);
+        const unsigned short m_maxVideoFramesCount { 1 };
+    };
+
+    class VideoFrameObserverWrapper : public ThreadSafeRefCounted<VideoFrameObserverWrapper, WTF::DestructionThread::Main> {
+    public:
+        static Ref<VideoFrameObserverWrapper> create(ScriptExecutionContextIdentifier, MediaStreamTrackProcessor&, Ref<RealtimeMediaSource>&&, unsigned short maxVideoFramesCount);
+
+        void start();
+        RefPtr<WebCodecsVideoFrame> takeVideoFrame(ScriptExecutionContext& context) { return m_observer->takeVideoFrame(context); }
+
+    private:
+        VideoFrameObserverWrapper(ScriptExecutionContextIdentifier, MediaStreamTrackProcessor&, Ref<RealtimeMediaSource>&&, unsigned short maxVideoFramesCount);
+
+        UniqueRef<VideoFrameObserver> m_observer;
+    };
 
     RefPtr<ReadableStream> m_readable;
-    RefPtr<Source> m_readableStreamSource;
+    std::unique_ptr<Source> m_readableStreamSource;
     RefPtr<VideoFrameObserverWrapper> m_videoFrameObserverWrapper;
     Ref<MediaStreamTrack> m_track;
 };

@@ -258,6 +258,7 @@ $(PROJECT_DIR)/Shared/Extensions/WebExtensionFrameParameters.serialization.in
 $(PROJECT_DIR)/Shared/Extensions/WebExtensionMatchedRuleParameters.serialization.in
 $(PROJECT_DIR)/Shared/Extensions/WebExtensionMenuItem.serialization.in
 $(PROJECT_DIR)/Shared/Extensions/WebExtensionMessageSenderParameters.serialization.in
+$(PROJECT_DIR)/Shared/Extensions/WebExtensionStorage.serialization.in
 $(PROJECT_DIR)/Shared/Extensions/WebExtensionTab.serialization.in
 $(PROJECT_DIR)/Shared/Extensions/WebExtensionTabParameters.serialization.in
 $(PROJECT_DIR)/Shared/Extensions/WebExtensionWindow.serialization.in
@@ -285,7 +286,6 @@ $(PROJECT_DIR)/Shared/LocalFrameCreationParameters.serialization.in
 $(PROJECT_DIR)/Shared/MediaPlaybackState.serialization.in
 $(PROJECT_DIR)/Shared/Model.serialization.in
 $(PROJECT_DIR)/Shared/NavigationActionData.serialization.in
-$(PROJECT_DIR)/Shared/NavigationActionPolicyParameters.serialization.in
 $(PROJECT_DIR)/Shared/NetworkProcessConnectionParameters.serialization.in
 $(PROJECT_DIR)/Shared/Notifications/NotificationManagerMessageHandler.messages.in
 $(PROJECT_DIR)/Shared/Notifications/NotificationManagerProxy.messages.in
@@ -525,6 +525,7 @@ $(PROJECT_DIR)/WebProcess/GPU/graphics/BufferIdentifierSet.serialization.in
 $(PROJECT_DIR)/WebProcess/GPU/graphics/PrepareBackingStoreBuffersData.serialization.in
 $(PROJECT_DIR)/WebProcess/GPU/graphics/RemoteGraphicsContextGLProxy.messages.in
 $(PROJECT_DIR)/WebProcess/GPU/graphics/RemoteImageBufferProxy.messages.in
+$(PROJECT_DIR)/WebProcess/GPU/graphics/RemoteImageBufferSetProxy.messages.in
 $(PROJECT_DIR)/WebProcess/GPU/graphics/RemoteRenderingBackendProxy.messages.in
 $(PROJECT_DIR)/WebProcess/GPU/graphics/WebGPU/RemoteGPUProxy.messages.in
 $(PROJECT_DIR)/WebProcess/GPU/media/MediaOverridesForTesting.serialization.in

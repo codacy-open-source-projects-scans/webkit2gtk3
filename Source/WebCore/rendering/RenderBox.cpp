@@ -30,6 +30,7 @@
 #include "BorderPainter.h"
 #include "CSSFontSelector.h"
 #include "Document.h"
+#include "DocumentInlines.h"
 #include "Editing.h"
 #include "EventHandler.h"
 #include "FloatQuad.h"
@@ -1951,6 +1952,14 @@ void RenderBox::paintClippingMask(PaintInfo& paintInfo, const LayoutPoint& paint
         return;
 
     LayoutRect paintRect = LayoutRect(paintOffset, size());
+
+#if ENABLE(LAYER_BASED_SVG_ENGINE)
+    if (document().settings().layerBasedSVGEngineEnabled() && style().clipPath() && style().clipPath()->type() == PathOperation::Reference) {
+        paintSVGClippingMask(paintInfo, paintRect);
+        return;
+    }
+#endif
+
     paintInfo.context().fillRect(snappedIntRect(paintRect), Color::black);
 }
 
@@ -5303,7 +5312,7 @@ bool RenderBox::isUnsplittableForPagination() const
     return isReplacedOrInlineBlock()
         || hasUnsplittableScrollingOverflow()
         || (parent() && isWritingModeRoot())
-        || (isFloating() && style().styleType() == PseudoId::FirstLetter && style().initialLetterDrop() > 0)
+        || (isFloating() && style().pseudoElementType() == PseudoId::FirstLetter && style().initialLetterDrop() > 0)
         || shouldApplySizeContainment();
 }
 

@@ -870,6 +870,10 @@ bool RenderBlock::simplifiedLayout()
     if (needsPositionedMovementLayout() && !tryLayoutDoingPositionedMovementOnly())
         return false;
 
+    bool canContainFixedPosObjects = canContainFixedPositionObjects();
+    if (isSkippedContentRoot() && (posChildNeedsLayout() || canContainFixedPosObjects))
+        return false;
+
     // Lay out positioned descendants or objects that just need to recompute overflow.
     if (needsSimplifiedNormalFlowLayout())
         simplifiedNormalFlowLayout();
@@ -884,7 +888,6 @@ bool RenderBlock::simplifiedLayout()
     // child, neither the fixed element nor its container learn of the movement since posChildNeedsLayout() is only marked as far as the 
     // relative positioned container. So if we can have fixed pos objects in our positioned objects list check if any of them
     // are statically positioned and thus need to move with their absolute ancestors.
-    bool canContainFixedPosObjects = canContainFixedPositionObjects();
     if (posChildNeedsLayout() || canContainFixedPosObjects)
         layoutPositionedObjects(false, !posChildNeedsLayout() && canContainFixedPosObjects);
 
@@ -1999,7 +2002,7 @@ Node* RenderBlock::nodeForHitTest() const
 {
     // If we're a ::backdrop pseudo-element, we should hit-test to the element that generated it.
     // This matches the behavior that other browsers have.
-    if (style().styleType() == PseudoId::Backdrop) {
+    if (style().pseudoElementType() == PseudoId::Backdrop) {
         for (auto& element : document().topLayerElements()) {
             if (!element->renderer())
                 continue;
@@ -2604,7 +2607,7 @@ void RenderBlock::getFirstLetter(RenderObject*& firstLetter, RenderElement*& fir
     firstLetterContainer = nullptr;
 
     // Don't recur
-    if (style().styleType() == PseudoId::FirstLetter)
+    if (style().pseudoElementType() == PseudoId::FirstLetter)
         return;
     
     // FIXME: We need to destroy the first-letter object if it is no longer the first child. Need to find
@@ -2629,7 +2632,7 @@ void RenderBlock::getFirstLetter(RenderObject*& firstLetter, RenderElement*& fir
         if (is<RenderListMarker>(current))
             firstLetter = current.nextSibling();
         else if (current.isFloatingOrOutOfFlowPositioned()) {
-            if (current.style().styleType() == PseudoId::FirstLetter) {
+            if (current.style().pseudoElementType() == PseudoId::FirstLetter) {
                 firstLetter = current.firstChild();
                 break;
             }

@@ -273,6 +273,7 @@ set(WebKit_MESSAGES_IN_FILES
 
     WebProcess/GPU/graphics/RemoteGraphicsContextGLProxy
     WebProcess/GPU/graphics/RemoteImageBufferProxy
+    WebProcess/GPU/graphics/RemoteImageBufferSetProxy
     WebProcess/GPU/graphics/RemoteRenderingBackendProxy
 
     WebProcess/GPU/graphics/WebGPU/RemoteGPUProxy
@@ -412,7 +413,6 @@ set(WebKit_SERIALIZATION_IN_FILES
     Shared/MediaPlaybackState.serialization.in
     Shared/Model.serialization.in
     Shared/NavigationActionData.serialization.in
-    Shared/NavigationActionPolicyParameters.serialization.in
     Shared/NetworkProcessConnectionParameters.serialization.in
     Shared/Pasteboard.serialization.in
     Shared/PlatformPopupMenuData.serialization.in

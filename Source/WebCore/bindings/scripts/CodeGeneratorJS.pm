@@ -1208,6 +1208,7 @@ sub GeneratePut
     # Temporary quirk for ungap/@custom-elements polyfill (rdar://problem/111008826), consider removing in 2025.
     if (!$namedSetterOperation && !$indexedSetterOperation) {
        AddToImplIncludes("Document.h");
+       AddToImplIncludes("DocumentInlines.h");
        AddToImplIncludes("Quirks.h");
        push(@$outputArray, "\n    // Temporary quirk for ungap/\@custom-elements polyfill (rdar://problem/111008826), consider removing in 2025.\n");
        push(@$outputArray, "    if (auto* document = dynamicDowncast<Document>(jsDynamicCast<JSDOMGlobalObject*>(lexicalGlobalObject)->scriptExecutionContext())) {\n");
@@ -1318,6 +1319,7 @@ sub GeneratePutByIndex
     # Temporary quirk for ungap/@custom-elements polyfill (rdar://problem/111008826), consider removing in 2025.
     if (!$namedSetterOperation && !$indexedSetterOperation) {
        AddToImplIncludes("Document.h");
+       AddToImplIncludes("DocumentInlines.h");
        AddToImplIncludes("Quirks.h");
        push(@$outputArray, "\n    // Temporary quirk for ungap/\@custom-elements polyfill (rdar://problem/111008826), consider removing in 2025.\n");
        push(@$outputArray, "    if (auto* document = dynamicDowncast<Document>(jsDynamicCast<JSDOMGlobalObject*>(lexicalGlobalObject)->scriptExecutionContext())) {\n");
@@ -1609,6 +1611,7 @@ sub GenerateDeleteProperty
     # Temporary quirk for ungap/@custom-elements polyfill (rdar://problem/111008826), consider removing in 2025.
     if (!$namedDeleterOperation) {
        AddToImplIncludes("Document.h");
+       AddToImplIncludes("DocumentInlines.h");
        AddToImplIncludes("Quirks.h");
        push(@$outputArray, "\n    // Temporary quirk for ungap/\@custom-elements polyfill (rdar://problem/111008826), consider removing in 2025.\n");
        push(@$outputArray, "    if (auto* document = dynamicDowncast<Document>(jsDynamicCast<JSDOMGlobalObject*>(lexicalGlobalObject)->scriptExecutionContext())) {\n");
@@ -1661,6 +1664,7 @@ sub GenerateDeletePropertyByIndex
     # Temporary quirk for ungap/@custom-elements polyfill (rdar://problem/111008826), consider removing in 2025.
     if (!$namedDeleterOperation) {
        AddToImplIncludes("Document.h");
+       AddToImplIncludes("DocumentInlines.h");
        AddToImplIncludes("Quirks.h");
        push(@$outputArray, "\n    // Temporary quirk for ungap/\@custom-elements polyfill (rdar://problem/111008826), consider removing in 2025.\n");
        push(@$outputArray, "    if (auto* document = dynamicDowncast<Document>(jsDynamicCast<JSDOMGlobalObject*>(lexicalGlobalObject)->scriptExecutionContext())) {\n");
@@ -3332,7 +3336,8 @@ sub GenerateHeader
             push(@headerContent, "    $interfaceName& wrapped() const\n");
             push(@headerContent, "    {\n");
             push(@headerContent, "        return static_cast<$interfaceName&>(Base::wrapped());\n");
-            push(@headerContent, "    }\n");
+            push(@headerContent, "    }\n\n");
+            push(@headerContent, "    Ref<$interfaceName> protectedWrapped() const;\n\n");
         }
     }
 
@@ -4266,6 +4271,7 @@ sub GenerateRuntimeEnableConditionalString
         assert("Must specify value for EnabledByQuirk.") if $context->extendedAttributes->{DisabledByQuirk} eq "VALUE_IS_MISSING";
 
         AddToImplIncludes("Document.h");
+        AddToImplIncludes("DocumentInlines.h");
         AddToImplIncludes("Quirks.h");
 
         assert("EnabledByQuirk can only be used by interfaces only exposed to the Window") if $interface->extendedAttributes->{Exposed} && $interface->extendedAttributes->{Exposed} ne "Window";
@@ -4280,6 +4286,7 @@ sub GenerateRuntimeEnableConditionalString
         assert("Must specify value for DisabledByQuirk.") if $context->extendedAttributes->{DisabledByQuirk} eq "VALUE_IS_MISSING";
 
         AddToImplIncludes("Document.h");
+        AddToImplIncludes("DocumentInlines.h");
         AddToImplIncludes("Quirks.h");
 
         assert("DisabledByQuirk can only be used by interfaces only exposed to the Window") if $interface->extendedAttributes->{Exposed} && $interface->extendedAttributes->{Exposed} ne "Window";
@@ -4878,6 +4885,13 @@ sub GenerateImplementation
         push(@implContent, "${className}::$className(Structure* structure, JSDOMGlobalObject& globalObject, Ref<$implType>&& impl)\n");
         push(@implContent, "    : $parentClassName(structure, globalObject, WTFMove(impl))\n");
         push(@implContent, "{\n");
+        push(@implContent, "}\n\n");
+    }
+
+    if (NeedsImplementationClass($interface) && $hasParent) {
+        push(@implContent, "Ref<$interfaceName> ${className}::protectedWrapped() const\n");
+        push(@implContent, "{\n");
+        push(@implContent, "    return wrapped();\n");
         push(@implContent, "}\n\n");
     }
 

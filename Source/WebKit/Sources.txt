@@ -380,6 +380,7 @@ UIProcess/DeviceIdHashSaltStorage.cpp
 UIProcess/DisplayLink.cpp
 UIProcess/DisplayLinkProcessProxyClient.cpp
 UIProcess/DrawingAreaProxy.cpp
+UIProcess/FindStringCallbackAggregator.cpp
 UIProcess/FrameLoadState.cpp
 UIProcess/GeolocationPermissionRequestManagerProxy.cpp
 UIProcess/GeolocationPermissionRequestProxy.cpp
@@ -844,7 +845,6 @@ WebProcess/WebPage/WebContextMenu.cpp
 WebProcess/WebPage/WebCookieCache.cpp
 WebProcess/WebPage/WebCookieJar.cpp
 WebProcess/WebPage/WebDisplayRefreshMonitor.cpp
-WebProcess/WebPage/WebDocumentLoader.cpp
 WebProcess/WebPage/WebFoundTextRangeController.cpp
 WebProcess/WebPage/WebFrame.cpp
 WebProcess/WebPage/WebHistoryItemClient.cpp

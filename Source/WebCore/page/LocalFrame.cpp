@@ -992,6 +992,11 @@ FrameView* LocalFrame::virtualView() const
     return m_view.get();
 }
 
+FrameLoaderClient& LocalFrame::loaderClient()
+{
+    return loader().client();
+}
+
 String LocalFrame::trackedRepaintRectsAsText() const
 {
     if (!m_view)
@@ -1277,6 +1282,11 @@ void LocalFrame::frameWasDisconnectedFromOwner() const
         window->willDetachDocumentFromFrame();
 
     protectedDocument()->detachFromFrame();
+}
+
+CheckedRef<FrameSelection> LocalFrame::checkedSelection() const
+{
+    return document()->selection();
 }
 
 #if ENABLE(WINDOW_PROXY_PROPERTY_ACCESS_NOTIFICATION)

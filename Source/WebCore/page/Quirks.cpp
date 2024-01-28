@@ -31,6 +31,7 @@
 #include "DOMTokenList.h"
 #include "DeprecatedGlobalSettings.h"
 #include "Document.h"
+#include "DocumentInlines.h"
 #include "DocumentLoader.h"
 #include "DocumentStorageAccess.h"
 #include "ElementInlines.h"
@@ -127,6 +128,13 @@ bool Quirks::isDomain(const String& domainString) const
     return RegistrableDomain(m_document->topDocument().url()).string() == domainString;
 }
 
+bool Quirks::isEmbedDomain(const String& domainString) const
+{
+    if (m_document->isTopDocument())
+        return false;
+    return RegistrableDomain(m_document->url()).string() == domainString;
+}
+
 // vote.gov https://bugs.webkit.org/show_bug.cgi?id=267779
 bool Quirks::needsAnchorElementsToBeMouseFocusable() const
 {
@@ -143,7 +151,7 @@ bool Quirks::needsFormControlToBeMouseFocusable() const
     if (!needsQuirks())
         return false;
 
-    return isDomain("ceac.state.gov"_s);
+    return m_document->topDocument().url().host() == "ceac.state.gov"_s;
 #else
     return false;
 #endif
@@ -410,8 +418,17 @@ bool Quirks::shouldDisableElementFullscreenQuirk() const
     // Vimeo.com has incorrect layout on iOS on certain videos with wider
     // aspect ratios than the device's screen in landscape mode.
     // (Ref: rdar://116531089)
-    if (!m_shouldDisableElementFullscreen)
-        m_shouldDisableElementFullscreen = isDomain("vimeo.com"_s);
+    // Instagram.com stories flow under the notch and status bar
+    // (Ref: rdar://121014613)
+    // Twitter.com video embeds have controls that are too tiny and
+    // show page behind fullscreen.
+    // (Ref: rdar://121473410)
+    if (!m_shouldDisableElementFullscreen) {
+        m_shouldDisableElementFullscreen = isDomain("vimeo.com"_s)
+            || isDomain("instagram.com"_s)
+            || isEmbedDomain("twitter.com"_s);
+    }
+
     return m_shouldDisableElementFullscreen.value();
 #else
     return false;
@@ -801,7 +818,7 @@ bool Quirks::shouldSilenceWindowResizeEvents() const
     if (!page || !page->isTakingSnapshotsForApplicationSuspension())
         return false;
 
-    return isDomain("nytimes.com"_s) || isDomain("twitter.com"_s) || isDomain("zillow.com"_s);
+    return isDomain("nytimes.com"_s) || isDomain("twitter.com"_s) || isDomain("zillow.com"_s) || isDomain("365scores.com"_s);
 #else
     return false;
 #endif

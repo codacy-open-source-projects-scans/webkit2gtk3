@@ -101,7 +101,6 @@
 #include "WebDatabaseProvider.h"
 #include "WebDateTimeChooser.h"
 #include "WebDiagnosticLoggingClient.h"
-#include "WebDocumentLoader.h"
 #include "WebDragClient.h"
 #include "WebEditorClient.h"
 #include "WebEventConversion.h"
@@ -287,6 +286,7 @@
 #include <WebCore/SubframeLoader.h>
 #include <WebCore/SubresourceLoader.h>
 #include <WebCore/SubstituteData.h>
+#include <WebCore/TextExtraction.h>
 #include <WebCore/TextIterator.h>
 #include <WebCore/TextRecognitionOptions.h>
 #include <WebCore/TranslationContextMenuInfo.h>
@@ -712,6 +712,7 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     pageConfiguration.allowedNetworkHosts = parameters.allowedNetworkHosts;
     pageConfiguration.shouldRelaxThirdPartyCookieBlocking = parameters.shouldRelaxThirdPartyCookieBlocking;
     pageConfiguration.httpsUpgradeEnabled = parameters.httpsUpgradeEnabled;
+    pageConfiguration.portsForUpgradingInsecureSchemeForTesting = parameters.portsForUpgradingInsecureSchemeForTesting;
 
     if (!parameters.crossOriginAccessControlCheckEnabled)
         CrossOriginAccessControlCheckDisabler::singleton().setCrossOriginAccessControlCheckEnabled(false);
@@ -1070,10 +1071,8 @@ void WebPage::getFrameTree(CompletionHandler<void(FrameTreeNodeData&&)>&& comple
 void WebPage::didCommitLoadInAnotherProcess(WebCore::FrameIdentifier frameID, std::optional<WebCore::LayerHostingContextIdentifier> layerHostingContextIdentifier)
 {
     RefPtr frame = WebProcess::singleton().webFrame(frameID);
-    if (!frame) {
-        ASSERT_NOT_REACHED();
+    if (!frame)
         return;
-    }
     ASSERT(frame->page() == this);
     frame->didCommitLoadInAnotherProcess(layerHostingContextIdentifier);
 }
@@ -1081,10 +1080,8 @@ void WebPage::didCommitLoadInAnotherProcess(WebCore::FrameIdentifier frameID, st
 void WebPage::didFinishLoadInAnotherProcess(WebCore::FrameIdentifier frameID)
 {
     RefPtr frame = WebProcess::singleton().webFrame(frameID);
-    if (!frame) {
-        ASSERT_NOT_REACHED();
+    if (!frame)
         return;
-    }
     ASSERT(frame->page() == this);
     frame->didFinishLoadInAnotherProcess();
 }
@@ -3536,7 +3533,7 @@ bool WebPage::handleKeyEventByRelinquishingFocusToChrome(const KeyboardEvent& ev
     if (event.charCode() != '\t')
         return false;
 
-    if (!event.shiftKey() || event.ctrlKey() || event.metaKey() || event.altGraphKey())
+    if (!event.shiftKey() || event.ctrlKey() || event.metaKey())
         return false;
 
     ASSERT(event.type() == eventNames().keypressEvent);
@@ -5321,7 +5318,7 @@ void WebPage::setTextIndicator(const WebCore::TextIndicatorData& indicatorData)
 
 bool WebPage::findStringFromInjectedBundle(const String& target, OptionSet<FindOptions> options)
 {
-    return m_page->findString(target, core(options));
+    return m_page->findString(target, core(options)).has_value();
 }
 
 void WebPage::findStringMatchesFromInjectedBundle(const String& target, OptionSet<FindOptions> options)
@@ -5334,7 +5331,7 @@ void WebPage::replaceStringMatchesFromInjectedBundle(const Vector<uint32_t>& mat
     findController().replaceMatches(matchIndices, replacementText, selectionOnly);
 }
 
-void WebPage::findString(const String& string, OptionSet<FindOptions> options, uint32_t maxMatchCount, CompletionHandler<void(bool)>&& completionHandler)
+void WebPage::findString(const String& string, OptionSet<FindOptions> options, uint32_t maxMatchCount, CompletionHandler<void(std::optional<FrameIdentifier>, bool)>&& completionHandler)
 {
     findController().findString(string, options, maxMatchCount, FindController::TriggerImageAnalysis::Yes, WTFMove(completionHandler));
 }
@@ -5561,9 +5558,9 @@ void WebPage::setMockCaptureDevicesInterrupted(bool isCameraInterrupted, bool is
 #endif // ENABLE(MEDIA_STREAM)
 
 #if ENABLE(ENCRYPTED_MEDIA)
-void WebPage::mediaKeySystemWasGranted(MediaKeySystemRequestIdentifier mediaKeySystemID, CompletionHandler<void()>&& completionHandler)
+void WebPage::mediaKeySystemWasGranted(MediaKeySystemRequestIdentifier mediaKeySystemID)
 {
-    m_mediaKeySystemPermissionRequestManager->mediaKeySystemWasGranted(mediaKeySystemID, WTFMove(completionHandler));
+    m_mediaKeySystemPermissionRequestManager->mediaKeySystemWasGranted(mediaKeySystemID);
 }
 
 void WebPage::mediaKeySystemWasDenied(MediaKeySystemRequestIdentifier mediaKeySystemID, String&& message)
@@ -6009,20 +6006,22 @@ void WebPage::setCaretBlinkingSuspended(bool suspended)
     frame->selection().setCaretBlinkingSuspended(suspended);
 }
 
-RetainPtr<PDFDocument> WebPage::pdfDocumentForPrintingFrame(LocalFrame* coreFrame)
-{
-    PluginView* pluginView = pluginViewForFrame(coreFrame);
-    if (!pluginView)
-        return nullptr;
-
-    return pluginView->pdfDocumentForPrinting();
-}
-
 void WebPage::setUseSystemAppearance(bool useSystemAppearance)
 {
     corePage()->setUseSystemAppearance(useSystemAppearance);
 }
 
+#endif
+
+#if PLATFORM(COCOA)
+RetainPtr<PDFDocument> WebPage::pdfDocumentForPrintingFrame(LocalFrame* coreFrame)
+{
+#if ENABLE(PDF_PLUGIN)
+    if (auto* pluginView = pluginViewForFrame(coreFrame))
+        return pluginView->pdfDocumentForPrinting();
+#endif
+    return nullptr;
+}
 #endif
 
 void WebPage::effectiveAppearanceDidChange(bool useDarkAppearance, bool useElevatedUserInterfaceLevel)
@@ -7345,7 +7344,7 @@ void WebPage::didSameDocumentNavigationForFrame(WebFrame& frame)
 {
     RefPtr<API::Object> userData;
 
-    auto navigationID = static_cast<WebDocumentLoader&>(*frame.coreLocalFrame()->loader().documentLoader()).navigationID();
+    auto navigationID = frame.coreLocalFrame()->loader().documentLoader()->navigationID();
 
     if (frame.isMainFrame())
         m_pendingNavigationID = 0;
@@ -7531,7 +7530,7 @@ void WebPage::setScrollbarOverlayStyle(std::optional<uint32_t> scrollbarStyle)
 
 Ref<DocumentLoader> WebPage::createDocumentLoader(LocalFrame& frame, const ResourceRequest& request, const SubstituteData& substituteData)
 {
-    Ref<WebDocumentLoader> documentLoader = WebDocumentLoader::create(request, substituteData);
+    auto documentLoader = DocumentLoader::create(request, substituteData);
 
     documentLoader->setLastNavigationWasAppInitiated(m_lastNavigationWasAppInitiated);
 
@@ -7551,7 +7550,7 @@ Ref<DocumentLoader> WebPage::createDocumentLoader(LocalFrame& frame, const Resou
     return documentLoader;
 }
 
-void WebPage::updateCachedDocumentLoader(WebDocumentLoader& documentLoader, LocalFrame& frame)
+void WebPage::updateCachedDocumentLoader(DocumentLoader& documentLoader, LocalFrame& frame)
 {
     if (m_pendingNavigationID && frame.isMainFrame()) {
         documentLoader.setNavigationID(m_pendingNavigationID);
@@ -7873,7 +7872,7 @@ void WebPage::requestStorageAccess(RegistrableDomain&& subFrameDomain, Registrab
         if (result.wasGranted == StorageAccessWasGranted::Yes) {
             switch (result.scope) {
             case StorageAccessScope::PerFrame:
-                frame->frameLoaderClient()->setHasFrameSpecificStorageAccess({ frameID, pageID });
+                frame->localFrameLoaderClient()->setHasFrameSpecificStorageAccess({ frameID, pageID });
                 break;
             case StorageAccessScope::PerPage:
                 addDomainWithPageLevelStorageAccess(result.topFrameDomain, result.subFrameDomain);
@@ -9080,6 +9079,11 @@ void WebPage::renderTreeAsText(WebCore::FrameIdentifier frameID, size_t baseInde
     ts.setIndent(baseIndent);
     WebCore::externalRepresentationForLocalFrame(ts, *coreLocalFrame, behavior);
     completionHandler(ts.release());
+}
+
+void WebPage::requestTextExtraction(CompletionHandler<void(TextExtraction::Item&&)>&& completion)
+{
+    completion(TextExtraction::extractItem(Ref { *corePage() }));
 }
 
 } // namespace WebKit

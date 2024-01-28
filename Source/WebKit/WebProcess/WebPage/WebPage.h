@@ -302,7 +302,12 @@ class HandleUserInputEventResult;
 #if HAVE(TRANSLATION_UI_SERVICES) && ENABLE(CONTEXT_MENUS)
 struct TranslationContextMenuInfo;
 #endif
+
+namespace TextExtraction {
+struct Item;
 }
+
+} // namespace WebCore
 
 namespace WebKit {
 
@@ -331,7 +336,6 @@ class WebContextMenu;
 class WebContextMenuItemData;
 class WebDataListSuggestionPicker;
 class WebDateTimeChooser;
-class WebDocumentLoader;
 class WebEvent;
 class WebFoundTextRangeController;
 class WebHistoryItemClient;
@@ -1061,6 +1065,10 @@ public:
     void shouldDelayWindowOrderingEvent(const WebKit::WebMouseEvent&, CompletionHandler<void(bool)>&&);
     bool performNonEditingBehaviorForSelector(const String&, WebCore::KeyboardEvent*);
 
+#if ENABLE(MULTI_REPRESENTATION_HEIC)
+    void insertMultiRepresentationHEIC(const IPC::DataReference&);
+#endif
+
     void insertDictatedTextAsync(const String& text, const EditingRange& replacementRange, const Vector<WebCore::DictationAlternative>& dictationAlternativeLocations, InsertTextOptions&&);
     void addDictationAlternative(const String& text, WebCore::DictationContext, CompletionHandler<void(bool)>&&);
     void dictationAlternativesAtSelection(CompletionHandler<void(Vector<WebCore::DictationContext>&&)>&&);
@@ -1306,7 +1314,7 @@ public:
     void setScrollbarOverlayStyle(std::optional<uint32_t /* WebCore::ScrollbarOverlayStyle */> scrollbarStyle);
 
     Ref<WebCore::DocumentLoader> createDocumentLoader(WebCore::LocalFrame&, const WebCore::ResourceRequest&, const WebCore::SubstituteData&);
-    void updateCachedDocumentLoader(WebDocumentLoader&, WebCore::LocalFrame&);
+    void updateCachedDocumentLoader(WebCore::DocumentLoader&, WebCore::LocalFrame&);
 
     void getBytecodeProfile(CompletionHandler<void(const String&)>&&);
     void getSamplingProfilerOutput(CompletionHandler<void(const String&)>&&);
@@ -1385,6 +1393,7 @@ public:
     std::optional<double> cpuLimit() const { return m_cpuLimit; }
 
 #if ENABLE(PDF_PLUGIN)
+    static PluginView* focusedPluginViewForFrame(WebCore::LocalFrame&);
     static PluginView* pluginViewForFrame(WebCore::LocalFrame*);
     PluginView* mainFramePlugIn() const;
 #endif
@@ -1953,7 +1962,7 @@ private:
     void reapplyEditCommand(WebUndoStepID commandID);
     void didRemoveEditCommand(WebUndoStepID commandID);
 
-    void findString(const String&, OptionSet<FindOptions>, uint32_t maxMatchCount, CompletionHandler<void(bool)>&&);
+    void findString(const String&, OptionSet<FindOptions>, uint32_t maxMatchCount, CompletionHandler<void(std::optional<WebCore::FrameIdentifier>, bool)>&&);
     void findStringMatches(const String&, OptionSet<FindOptions>, uint32_t maxMatchCount);
     void getImageForFindMatch(uint32_t matchIndex);
     void selectFindMatch(uint32_t matchIndex);
@@ -2005,7 +2014,7 @@ private:
 #endif
 
 #if ENABLE(ENCRYPTED_MEDIA)
-    void mediaKeySystemWasGranted(WebCore::MediaKeySystemRequestIdentifier, CompletionHandler<void()>&&);
+    void mediaKeySystemWasGranted(WebCore::MediaKeySystemRequestIdentifier);
     void mediaKeySystemWasDenied(WebCore::MediaKeySystemRequestIdentifier, String&& message);
 #endif
 
@@ -2038,10 +2047,6 @@ private:
     void setCanStartMediaTimerFired();
 
     static bool platformCanHandleRequest(const WebCore::ResourceRequest&);
-
-#if ENABLE(PDF_PLUGIN)
-    static PluginView* focusedPluginViewForFrame(WebCore::LocalFrame&);
-#endif
 
     void reportUsedFeatures();
 
@@ -2164,6 +2169,8 @@ private:
 
     void remotePostMessage(WebCore::FrameIdentifier source, const String& sourceOrigin, WebCore::FrameIdentifier target, std::optional<WebCore::SecurityOriginData>&& targetOrigin, const WebCore::MessageWithMessagePorts&);
     void renderTreeAsText(WebCore::FrameIdentifier, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag>, CompletionHandler<void(String&&)>&&);
+
+    void requestTextExtraction(CompletionHandler<void(WebCore::TextExtraction::Item&&)>&&);
 
 #if HAVE(SANDBOX_STATE_FLAGS)
     static void setHasLaunchedWebContentProcess();
