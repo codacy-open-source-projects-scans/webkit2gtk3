@@ -59,22 +59,16 @@ WindowProxy* RemoteDOMWindow::self() const
     return &m_frame->windowProxy();
 }
 
-void RemoteDOMWindow::close(Document&)
+void RemoteDOMWindow::closePage()
 {
-    // FIXME: <rdar://117381050> Add security checks here equivalent to LocalDOMWindow::close (both with and without Document& parameter).
-    // Or refactor to share code.
     if (!m_frame)
         return;
+    m_frame->client().closePage();
+}
 
-    if (!m_frame->isMainFrame())
-        return;
-
-    RefPtr page = m_frame->page();
-    if (!page)
-        return;
-
-    page->setIsClosing();
-    m_frame->client().close();
+void RemoteDOMWindow::frameDetached()
+{
+    m_frame = nullptr;
 }
 
 void RemoteDOMWindow::focus(LocalDOMWindow&)
@@ -99,42 +93,10 @@ unsigned RemoteDOMWindow::length() const
     return m_frame->tree().childCount();
 }
 
-WindowProxy* RemoteDOMWindow::top() const
-{
-    if (!m_frame)
-        return nullptr;
-
-    return &m_frame->tree().top().windowProxy();
-}
-
-WindowProxy* RemoteDOMWindow::opener() const
-{
-    if (!m_frame)
-        return nullptr;
-
-    RefPtr openerFrame = m_frame->opener();
-    if (!openerFrame)
-        return nullptr;
-
-    return &openerFrame->windowProxy();
-}
-
 void RemoteDOMWindow::setOpener(WindowProxy*)
 {
     // FIXME: <rdar://118263373> Implement.
     // JSLocalDOMWindow::setOpener has some security checks. Are they needed here?
-}
-
-WindowProxy* RemoteDOMWindow::parent() const
-{
-    if (!m_frame)
-        return nullptr;
-
-    RefPtr parent = m_frame->tree().parent();
-    if (!parent)
-        return nullptr;
-
-    return &parent->windowProxy();
 }
 
 ExceptionOr<void> RemoteDOMWindow::postMessage(JSC::JSGlobalObject& lexicalGlobalObject, LocalDOMWindow& incumbentWindow, JSC::JSValue message, WindowPostMessageOptions&& options)

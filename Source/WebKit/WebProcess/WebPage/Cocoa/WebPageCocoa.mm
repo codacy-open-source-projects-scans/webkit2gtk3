@@ -27,6 +27,7 @@
 #import "WebPage.h"
 
 #import "EditorState.h"
+#import "GPUProcessConnection.h"
 #import "InsertTextOptions.h"
 #import "LoadParameters.h"
 #import "MessageSenderInlines.h"
@@ -88,6 +89,10 @@
 
 #if USE(EXTENSIONKIT)
 #import "WKProcessExtension.h"
+#endif
+
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+#import "UnifiedTextReplacementController.h"
 #endif
 
 #define WEBPAGE_RELEASE_LOG(channel, fmt, ...) RELEASE_LOG(channel, "%p - [webPageID=%" PRIu64 "] WebPage::" fmt, this, m_identifier.toUInt64(), ##__VA_ARGS__)
@@ -838,6 +843,24 @@ void WebPage::setMediaEnvironment(const String& mediaEnvironment)
     m_mediaEnvironment = mediaEnvironment;
     if (auto gpuProcessConnection = WebProcess::singleton().existingGPUProcessConnection())
         gpuProcessConnection->setMediaEnvironment(identifier(), mediaEnvironment);
+}
+#endif
+
+std::optional<SimpleRange> WebPage::rangeSelectionContext() const
+{
+    Ref frame = CheckedRef(m_page->focusController())->focusedOrMainFrame();
+    return frame->selection().rangeByExtendingCurrentSelection(TextGranularity::ParagraphGranularity);
+}
+
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+void WebPage::didBeginTextReplacementSession(const WTF::UUID& uuid)
+{
+    m_unifiedTextReplacementController->didBeginTextReplacementSession(uuid);
+}
+
+void WebPage::textReplacementSessionDidReceiveReplacements(const WTF::UUID& uuid, const Vector<WebTextReplacementData>& replacements, const WebUnifiedTextReplacementContextData& context, bool finished)
+{
+    m_unifiedTextReplacementController->textReplacementSessionDidReceiveReplacements(uuid, replacements, context, finished);
 }
 #endif
 

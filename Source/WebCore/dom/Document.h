@@ -35,9 +35,10 @@
 #include "FontSelectorClient.h"
 #include "FrameDestructionObserver.h"
 #include "FrameIdentifier.h"
-#include "OrientationNotifier.h"
+#include "IntDegrees.h"
 #include "PageIdentifier.h"
 #include "PlaybackTargetClientContextIdentifier.h"
+#include "PseudoElementIdentifier.h"
 #include "RegistrableDomain.h"
 #include "RenderPtr.h"
 #include "ReportingClient.h"
@@ -186,6 +187,7 @@ class MouseEventWithHitTestResults;
 class NodeFilter;
 class NodeIterator;
 class NodeList;
+class OrientationNotifier;
 class Page;
 class PaintWorklet;
 class PaintWorkletGlobalScope;
@@ -248,6 +250,10 @@ class XPathEvaluator;
 class XPathExpression;
 class XPathNSResolver;
 class XPathResult;
+
+#if ENABLE(ATTACHMENT_ELEMENT)
+class AttachmentAssociatedElement;
+#endif
 
 #if ENABLE(CONTENT_CHANGE_OBSERVER)
 class ContentChangeObserver;
@@ -391,7 +397,8 @@ private:
 };
 
 class Document
-    : public ContainerNode
+    : public CanMakeCheckedPtr
+    , public ContainerNode
     , public TreeScope
     , public ScriptExecutionContext
     , public FontSelectorClient
@@ -413,13 +420,13 @@ public:
     virtual ~Document();
 
     // Resolve ambiguity for CanMakeCheckedPtr.
-    void incrementPtrCount() const { static_cast<const ContainerNode*>(this)->incrementPtrCount(); }
-    void decrementPtrCount() const { static_cast<const ContainerNode*>(this)->decrementPtrCount(); }
+    using CanMakeCheckedPtr::incrementPtrCount;
+    using CanMakeCheckedPtr::decrementPtrCount;
 #if CHECKED_POINTER_DEBUG
-    void registerCheckedPtr(const void* pointer) const { static_cast<const ContainerNode*>(this)->registerCheckedPtr(pointer); }
-    void copyCheckedPtr(const void* source, const void* destination) const { static_cast<const ContainerNode*>(this)->copyCheckedPtr(source, destination); }
-    void moveCheckedPtr(const void* source, const void* destination) const { static_cast<const ContainerNode*>(this)->moveCheckedPtr(source, destination); }
-    void unregisterCheckedPtr(const void* pointer) const { static_cast<const ContainerNode*>(this)->unregisterCheckedPtr(pointer); }
+    using CanMakeCheckedPtr::registerCheckedPtr;
+    using CanMakeCheckedPtr::copyCheckedPtr;
+    using CanMakeCheckedPtr::moveCheckedPtr;
+    using CanMakeCheckedPtr::unregisterCheckedPtr;
 #endif // CHECKED_POINTER_DEBUG
 
     // Nodes belonging to this document increase referencingNodeCount -
@@ -429,20 +436,17 @@ public:
     // pointer without introducing reference cycles.
     ALWAYS_INLINE void incrementReferencingNodeCount(unsigned count = 1)
     {
-        ASSERT(!m_deletionHasBegun);
+        ASSERT(!deletionHasBegun());
         m_referencingNodeCount += count;
     }
 
     ALWAYS_INLINE void decrementReferencingNodeCount(unsigned count = 1)
     {
-        ASSERT(!m_deletionHasBegun || !m_referencingNodeCount);
-        ASSERT(m_referencingNodeCount >= count || (!m_referencingNodeCount && m_deletionHasBegun));
         m_referencingNodeCount -= count;
         if (!m_referencingNodeCount && !refCount()) {
-#if ASSERT_ENABLED
-            m_deletionHasBegun = true;
-#endif
-            m_refCountAndParentBit = s_refCountIncrement; // Avoid double destruction through use of Ref<T>/RefPtr<T>. (This is a security mitigation in case of programmer error. It will ASSERT in debug builds.)
+            if (deletionHasBegun())
+                return;
+            setStateFlag(StateFlag::HasStartedDeletion);
             delete this;
         }
     }
@@ -459,6 +463,8 @@ public:
 
     using ContainerNode::ref;
     using ContainerNode::deref;
+    using ContainerNode::refAllowingPartiallyDestroyed;
+    using ContainerNode::derefAllowingPartiallyDestroyed;
     using TreeScope::rootNode;
 
     bool canContainRangeEndPoint() const final { return true; }
@@ -639,6 +645,7 @@ public:
     bool isSrcdocDocument() const { return m_isSrcdocDocument; }
 
     bool sawElementsInKnownNamespaces() const { return m_sawElementsInKnownNamespaces; }
+    bool wasRemovedLastRefCalled() const { return m_wasRemovedLastRefCalled; }
 
     Style::Resolver& userAgentShadowTreeStyleResolver();
 
@@ -725,7 +732,7 @@ public:
     // so calling this may cause a flash of unstyled content (FOUC).
         WEBCORE_EXPORT UpdateLayoutResult updateLayoutIgnorePendingStylesheets(OptionSet<LayoutOptions> = { }, const Element* = nullptr);
 
-    std::unique_ptr<RenderStyle> styleForElementIgnoringPendingStylesheets(Element&, const RenderStyle* parentStyle, PseudoId = PseudoId::None);
+    std::unique_ptr<RenderStyle> styleForElementIgnoringPendingStylesheets(Element&, const RenderStyle* parentStyle, const std::optional<Style::PseudoElementIdentifier>& = std::nullopt);
 
     // Returns true if page box (margin boxes and page borders) is visible.
     WEBCORE_EXPORT bool isPageBoxVisible(int pageIndex);
@@ -1696,10 +1703,10 @@ public:
     void attachToCachedFrame(CachedFrameBase&);
     void detachFromCachedFrame(CachedFrameBase&);
 
-    ConstantPropertyMap& constantProperties() const { return *m_constantPropertyMap; }
+    ConstantPropertyMap& constantProperties() const;
 
     void orientationChanged(IntDegrees orientation);
-    OrientationNotifier& orientationNotifier() { return m_orientationNotifier; }
+    OrientationNotifier& orientationNotifier();
 
     WEBCORE_EXPORT const AtomString& bgColor() const;
     WEBCORE_EXPORT void setBgColor(const AtomString&);
@@ -1757,7 +1764,7 @@ public:
     void handlePopoverLightDismiss(const PointerEvent&, Node&);
 
 #if ENABLE(ATTACHMENT_ELEMENT)
-    void registerAttachmentIdentifier(const String&, const HTMLImageElement&);
+    void registerAttachmentIdentifier(const String&, const AttachmentAssociatedElement&);
     void didInsertAttachmentElement(HTMLAttachmentElement&);
     void didRemoveAttachmentElement(HTMLAttachmentElement&);
     WEBCORE_EXPORT RefPtr<HTMLAttachmentElement> attachmentForIdentifier(const String&) const;
@@ -1961,17 +1968,12 @@ private:
     // FontSelectorClient
     void fontsNeedUpdate(FontSelector&) final;
 
-    bool isDocument() const final { return true; }
-
     void childrenChanged(const ChildChange&) final;
 
     String nodeName() const final;
     bool childTypeAllowed(NodeType) const final;
     Ref<Node> cloneNodeInternal(Document&, CloningOperation) final;
     void cloneDataFromDocument(const Document&);
-
-    void refScriptExecutionContext() final { ref(); }
-    void derefScriptExecutionContext() final { deref(); }
 
     Seconds minimumDOMTimerInterval() const final;
 
@@ -2324,7 +2326,7 @@ private:
 
     WeakHashSet<Element, WeakPtrImplWithEventTargetData> m_associatedFormControls;
 
-    OrientationNotifier m_orientationNotifier;
+    std::unique_ptr<OrientationNotifier> m_orientationNotifier;
     mutable RefPtr<Logger> m_logger;
     RefPtr<StringCallback> m_consoleMessageListener;
 
@@ -2571,6 +2573,7 @@ private:
     bool m_isDirAttributeDirty { false };
 
     bool m_scheduledDeferredAXObjectCacheUpdate { false };
+    bool m_wasRemovedLastRefCalled { false };
 
     static bool hasEverCreatedAnAXObjectCache;
 

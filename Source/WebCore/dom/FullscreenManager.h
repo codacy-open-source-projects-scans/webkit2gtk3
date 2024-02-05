@@ -30,6 +30,7 @@
 #include "Document.h"
 #include "FrameDestructionObserverInlines.h"
 #include "GCReachableRef.h"
+#include "HTMLMediaElement.h"
 #include "LayoutRect.h"
 #include "Page.h"
 #include <wtf/Deque.h>
@@ -70,9 +71,8 @@ public:
         EnforceIFrameAllowFullscreenRequirement,
         ExemptIFrameAllowFullscreenRequirement,
     };
-    WEBCORE_EXPORT void requestFullscreenForElement(Ref<Element>&&, RefPtr<DeferredPromise>&&, FullscreenCheckType);
-
-    WEBCORE_EXPORT bool willEnterFullscreen(Element&);
+    WEBCORE_EXPORT void requestFullscreenForElement(Ref<Element>&&, RefPtr<DeferredPromise>&&, FullscreenCheckType, HTMLMediaElementEnums::VideoFullscreenMode = HTMLMediaElementEnums::VideoFullscreenModeStandard);
+    WEBCORE_EXPORT bool willEnterFullscreen(Element&, HTMLMediaElementEnums::VideoFullscreenMode = HTMLMediaElementEnums::VideoFullscreenModeStandard);
     WEBCORE_EXPORT bool didEnterFullscreen();
     WEBCORE_EXPORT bool willExitFullscreen();
     WEBCORE_EXPORT bool didExitFullscreen();
@@ -86,9 +86,6 @@ public:
 
     WEBCORE_EXPORT bool isAnimatingFullscreen() const;
     WEBCORE_EXPORT void setAnimatingFullscreen(bool);
-
-    WEBCORE_EXPORT bool areFullscreenControlsHidden() const;
-    WEBCORE_EXPORT void setFullscreenControlsHidden(bool);
 
     void clear();
     void emptyEventQueue();
@@ -127,7 +124,6 @@ private:
 
     bool m_areKeysEnabledInFullscreen { false };
     bool m_isAnimatingFullscreen { false };
-    bool m_areFullscreenControlsHidden { false };
 
 #if !RELEASE_LOG_DISABLED
     const void* m_logIdentifier;

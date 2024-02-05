@@ -38,7 +38,6 @@
 #import <wtf/Ref.h>
 #import <wtf/ThreadSafeWeakPtr.h>
 #import <wtf/Vector.h>
-#import <wtf/WeakPtr.h>
 #import <wtf/text/WTFString.h>
 
 struct WGPUDeviceImpl {
@@ -107,7 +106,7 @@ public:
     void setUncapturedErrorCallback(Function<void(WGPUErrorType, String&&)>&&);
     void setLabel(String&&);
 
-    bool isValid() const { return m_device; }
+    bool isValid() const;
     bool isLost() const { return m_isLost; }
     const WGPULimits& limits() const { return m_capabilities.limits; }
     const Vector<WGPUFeatureName>& features() const { return m_capabilities.features; }
@@ -129,6 +128,9 @@ public:
 
     static bool isStencilOnlyFormat(MTLPixelFormat);
     bool shouldStopCaptureAfterSubmit();
+    id<MTLBuffer> placeholderBuffer() const;
+    id<MTLTexture> placeholderTexture() const;
+    bool isDestroyed() const;
 
 private:
     Device(id<MTLDevice>, id<MTLCommandQueue> defaultQueue, HardwareCapabilities&&, Adapter&);
@@ -174,9 +176,13 @@ private:
 
     Function<void(WGPUDeviceLostReason, String&&)> m_deviceLostCallback;
     bool m_isLost { false };
+    bool m_destroyed { false };
     id<NSObject> m_deviceObserver { nil };
 
     HardwareCapabilities m_capabilities { };
+
+    id<MTLBuffer> m_placeholderBuffer { nil };
+    id<MTLTexture> m_placeholderTexture { nil };
 
     const Ref<Adapter> m_adapter;
 #if HAVE(COREVIDEO_METAL_SUPPORT)

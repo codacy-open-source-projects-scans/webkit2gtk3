@@ -138,6 +138,14 @@ void PDFPluginBase::setView(PluginView& view)
     m_view = view;
 }
 
+void PDFPluginBase::startLoading()
+{
+#if HAVE(INCREMENTAL_PDF_APIS)
+    if (incrementalPDFLoadingEnabled())
+        m_incrementalLoader = PDFIncrementalLoader::create(*this);
+#endif
+}
+
 void PDFPluginBase::destroy()
 {
     ASSERT(!m_isBeingDestroyed);
@@ -177,6 +185,13 @@ bool PDFPluginBase::handlesPageScaleFactor() const
 bool PDFPluginBase::isLocked() const
 {
     return [m_pdfDocument isLocked];
+}
+
+void PDFPluginBase::notifySelectionChanged()
+{
+    if (!m_frame || !m_frame->page())
+        return;
+    m_frame->protectedPage()->didChangeSelection(*m_frame->protectedCoreLocalFrame());
 }
 
 NSData *PDFPluginBase::originalData() const
@@ -260,8 +275,8 @@ void PDFPluginBase::streamDidReceiveData(const SharedBuffer& buffer)
     memcpy(CFDataGetMutableBytePtr(m_data.get()) + m_streamedBytes, buffer.data(), buffer.size());
     m_streamedBytes += buffer.size();
 
-#if !LOG_DISABLED
-    pdfLog(makeString("PDFPluginBase::streamDidReceiveData() - received ", buffer.size(), " bytes, total streamed bytes ", m_streamedBytes));
+#if !LOG_DISABLED && HAVE(INCREMENTAL_PDF_APIS)
+    incrementalLoaderLog(makeString("PDFPluginBase::streamDidReceiveData() - received ", buffer.size(), " bytes, total streamed bytes ", m_streamedBytes));
 #endif
 
 #if HAVE(INCREMENTAL_PDF_APIS)
@@ -319,7 +334,7 @@ void PDFPluginBase::adoptBackgroundThreadDocument(RetainPtr<PDFDocument>&& backg
     ASSERT(isMainRunLoop());
 
 #if !LOG_DISABLED
-    pdfLog("Adopting PDFDocument from background thread"_s);
+    incrementalLoaderLog("Adopting PDFDocument from background thread"_s);
 #endif
 
     m_pdfDocument = WTFMove(backgroundThreadDocument);
@@ -337,8 +352,8 @@ void PDFPluginBase::maybeClearHighLatencyDataProviderFlag()
     if (!m_pdfDocument || !m_documentFinishedLoading)
         return;
 
-    if ([m_pdfDocument.get() respondsToSelector:@selector(setHasHighLatencyDataProvider:)])
-        [m_pdfDocument.get() setHasHighLatencyDataProvider:NO];
+    if ([m_pdfDocument respondsToSelector:@selector(setHasHighLatencyDataProvider:)])
+        [m_pdfDocument setHasHighLatencyDataProvider:NO];
 }
 
 void PDFPluginBase::startByteRangeRequest(NetscapePlugInStreamLoaderClient& streamLoaderClient, uint64_t requestIdentifier, uint64_t position, size_t count)
@@ -377,7 +392,7 @@ void PDFPluginBase::receivedNonLinearizedPDFSentinel()
 
     if (!isMainRunLoop()) {
 #if !LOG_DISABLED
-        pdfLog("Disabling incremental PDF loading on background thread"_s);
+        incrementalLoaderLog("Disabling incremental PDF loading on background thread"_s);
 #endif
         callOnMainRunLoop([this, protectedThis = Ref { *this }] {
             receivedNonLinearizedPDFSentinel();
@@ -817,38 +832,43 @@ bool PDFPluginBase::supportsForms()
 
 #if !LOG_DISABLED
 
-void PDFPluginBase::pdfLog(const String& message)
-{
-    if (!isMainRunLoop()) {
-        callOnMainRunLoop([this, protectedThis = Ref { *this }, message = message.isolatedCopy()] {
-            pdfLog(message);
-        });
-        return;
-    }
-
-    LOG_WITH_STREAM(IncrementalPDF, stream << message);
-    verboseLog();
-    LOG_WITH_STREAM(IncrementalPDFVerbose, stream << message);
-}
-
-void PDFPluginBase::verboseLog()
+#if HAVE(INCREMENTAL_PDF_APIS)
+static void verboseLog(PDFIncrementalLoader* incrementalLoader, uint64_t streamedBytes, bool documentFinishedLoading)
 {
     ASSERT(isMainRunLoop());
 
     TextStream stream;
     stream << "\n";
 
-#if HAVE(INCREMENTAL_PDF_APIS)
-    if (m_incrementalLoader)
-        m_incrementalLoader->logState(stream);
-#endif
 
-    stream << "The main document loader has finished loading " << m_streamedBytes << " bytes, and is";
-    if (!m_documentFinishedLoading)
+    if (incrementalLoader)
+        incrementalLoader->logState(stream);
+
+    stream << "The main document loader has finished loading " << streamedBytes << " bytes, and is";
+    if (!documentFinishedLoading)
         stream << " not";
     stream << " complete";
 
     LOG(IncrementalPDFVerbose, "%s", stream.release().utf8().data());
+}
+#endif
+
+void PDFPluginBase::incrementalLoaderLog(const String& message)
+{
+#if HAVE(INCREMENTAL_PDF_APIS)
+    if (!isMainRunLoop()) {
+        callOnMainRunLoop([this, protectedThis = Ref { *this }, message = message.isolatedCopy()] {
+            incrementalLoaderLog(message);
+        });
+        return;
+    }
+
+    LOG_WITH_STREAM(IncrementalPDF, stream << message);
+    verboseLog(m_incrementalLoader.get(), m_streamedBytes, m_documentFinishedLoading);
+    LOG_WITH_STREAM(IncrementalPDFVerbose, stream << message);
+#else
+    UNUSED_PARAM(message);
+#endif
 }
 
 #endif // !LOG_DISABLED

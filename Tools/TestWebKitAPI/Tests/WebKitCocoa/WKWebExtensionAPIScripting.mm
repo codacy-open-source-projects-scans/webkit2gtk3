@@ -27,6 +27,7 @@
 
 #if ENABLE(WK_WEB_EXTENSIONS)
 
+#import "HTTPServer.h"
 #import "WebExtensionUtilities.h"
 
 namespace TestWebKitAPI {
@@ -457,6 +458,50 @@ TEST(WKWebExtensionAPIScripting, InsertAndRemoveCSSWithFrameIds)
         @"background.js": backgroundScript,
         @"backgroundColor.css": backgroundColor,
         @"fontSize.css": fontSize,
+    };
+
+    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:scriptingManifest resources:resources]);
+    auto manager = adoptNS([[TestWebExtensionManager alloc] initForExtension:extension.get()]);
+
+    auto *urlRequest = server.requestWithLocalhost();
+    auto *url = urlRequest.URL;
+
+    auto *matchPattern = [_WKWebExtensionMatchPattern matchPatternWithScheme:url.scheme host:url.host path:@"/*"];
+    [manager.get().context setPermissionStatus:_WKWebExtensionContextPermissionStatusGrantedExplicitly forMatchPattern:matchPattern];
+    [manager.get().defaultTab.mainWebView loadRequest:urlRequest];
+
+    [manager loadAndRun];
+}
+
+TEST(WKWebExtensionAPIScripting, World)
+{
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, "<script> const world = 'MAIN'; </script>"_s } }
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *backgroundScript = Util::constructScript(@[
+        @"function testWorld() {",
+        @"  if (world)",
+        @"    browser.test.notifyPass()",
+        @"  else",
+        @"    throw 'Variable not defined'",
+        @"}",
+
+        @"browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {",
+        @"  if (tab.status === 'complete') {",
+
+        @"    var results = await browser?.scripting?.executeScript( { target: { tabId: tabId, world: 'ISOLATED'}, func: testWorld })",
+        @"    browser.test.assertEq(results[0]?.error, 'A JavaScript exception occurred')",
+
+        @"    await browser?.scripting?.executeScript( { target: { tabId: tabId, world: 'MAIN'}, func: testWorld })",
+        @"  }",
+        @"})",
+
+        @"browser.test.yield('Load Tab')",
+    ]);
+
+    static auto *resources = @{
+        @"background.js": backgroundScript,
     };
 
     auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:scriptingManifest resources:resources]);

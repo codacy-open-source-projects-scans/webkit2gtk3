@@ -294,6 +294,11 @@ TextStream& operator<<(TextStream& stream, AccessibilitySearchKey searchKey)
     case AccessibilitySearchKey::Graphic:
         stream << "Graphic";
         break;
+#if ENABLE(AX_THREAD_TEXT_APIS)
+    case AccessibilitySearchKey::HasTextRuns:
+        stream << "HasTextRuns";
+        break;
+#endif
     case AccessibilitySearchKey::HeadingLevel1:
         stream << "HeadingLevel1";
         break;
@@ -870,11 +875,12 @@ void streamAXCoreObject(TextStream& stream, const AXCoreObject& object, const Op
 
     if (options & AXStreamOptions::ParentID) {
         auto* parent = object.parentObjectUnignored();
-        stream.dumpProperty("parentObject", parent ? parent->objectID() : AXID());
+        stream.dumpProperty("parentID", parent ? parent->objectID() : AXID());
     }
 
-    if (options & AXStreamOptions::IdentifierAttribute)
-        stream.dumpProperty("identifierAttribute", object.identifierAttribute());
+    auto id = options & AXStreamOptions::IdentifierAttribute ? object.identifierAttribute() : emptyString();
+    if (!id.isEmpty())
+        stream.dumpProperty("identifier", WTFMove(id));
 
     if (options & AXStreamOptions::OuterHTML) {
         auto role = object.roleValue();

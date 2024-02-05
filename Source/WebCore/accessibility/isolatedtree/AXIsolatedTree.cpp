@@ -144,7 +144,7 @@ Ref<AXIsolatedTree> AXIsolatedTree::create(AXObjectCache& axObjectCache)
     }
 
     auto& document = axObjectCache.document();
-    if (!document.view()->layoutContext().isInRenderTreeLayout() && !document.inRenderTreeUpdate() && !document.inStyleRecalc())
+    if (!Accessibility::inRenderTreeOrStyleUpdate(document))
         document.updateLayoutIgnorePendingStylesheets();
 
     tree->m_maxTreeDepth = document.settings().maximumHTMLParserDOMTreeDepth();
@@ -512,7 +512,7 @@ void AXIsolatedTree::updatePropertiesForSelfAndDescendants(AccessibilityObject& 
         propertySet.add(property);
 
     Accessibility::enumerateDescendants<AXCoreObject>(axObject, true, [&propertySet, this] (auto& descendant) {
-        queueNodeUpdate(descendant, { propertySet });
+        queueNodeUpdate(descendant.objectID(), { propertySet });
     });
 }
 
@@ -645,6 +645,9 @@ void AXIsolatedTree::updateNodeProperties(AXCoreObject& axObject, const AXProper
         case AXPropertyName::CellScope:
             propertyMap.set(AXPropertyName::CellScope, axObject.cellScope().isolatedCopy());
             break;
+        case AXPropertyName::ScreenRelativePosition:
+            propertyMap.set(AXPropertyName::ScreenRelativePosition, axObject.screenRelativePosition());
+            break;
         case AXPropertyName::SelectedTextRange:
             propertyMap.set(AXPropertyName::SelectedTextRange, axObject.selectedTextRange());
             break;
@@ -727,7 +730,7 @@ void AXIsolatedTree::updateDependentProperties(AccessibilityObject& axObject)
     bool updateTableAncestorColumns = is<AccessibilityTableRow>(axObject);
     for (RefPtr ancestor = axObject.parentObject(); ancestor; ancestor = ancestor->parentObject()) {
         if (ancestor->isTree()) {
-            queueNodeUpdate(*ancestor, { AXPropertyName::ARIATreeRows });
+            queueNodeUpdate(ancestor->objectID(), { AXPropertyName::ARIATreeRows });
             if (!updateTableAncestorColumns)
                 break;
         }
@@ -1017,18 +1020,30 @@ void AXIsolatedTree::updateFrame(AXID axID, IntRect&& newFrame)
     m_pendingPropertyChanges.append({ axID, WTFMove(propertyMap) });
 }
 
+void AXIsolatedTree::updateRootScreenRelativePosition()
+{
+    AXTRACE("AXIsolatedTree::updateRootScreenRelativePosition"_s);
+    ASSERT(isMainThread());
+
+    if (!rootNode())
+        return;
+
+    if (auto* axRoot = rootNode()->associatedAXObject())
+        updateNodeProperties(*axRoot, { AXPropertyName::ScreenRelativePosition });
+}
+
 void AXIsolatedTree::removeNode(const AccessibilityObject& axObject)
 {
     AXTRACE("AXIsolatedTree::removeNode"_s);
     AXLOG(makeString("objectID ", axObject.objectID().loggingString()));
     ASSERT(isMainThread());
 
-    if (axObject.isLabel()) {
-        // Update the labeled objects since one of their labels was removed.
-        auto labeledObjects = axObject.labelForObjects();
-        for (auto& labeledObject : labeledObjects) {
+    auto labeledObjectIDs = axObjectCache() ? axObjectCache()->relatedObjectIDsFor(axObject, AXRelationType::LabelFor, AXObjectCache::UpdateRelations::No) : std::nullopt;
+    if (labeledObjectIDs) {
+        // Update the labeled objects since axObject is one of their labels and it is being removed.
+        for (AXID labeledObjectID : *labeledObjectIDs) {
             // The label/title of an isolated object is computed based on its AccessibilityText propperty, thus update it.
-            queueNodeUpdate(*labeledObject, { AXPropertyName::AccessibilityText });
+            queueNodeUpdate(labeledObjectID, { AXPropertyName::AccessibilityText });
         }
     }
 
@@ -1233,26 +1248,26 @@ AXTreePtr findAXTree(Function<bool(AXTreePtr)>&& match)
 #endif
 }
 
-void AXIsolatedTree::queueNodeUpdate(AXCoreObject& object, const NodeUpdateOptions& options)
+void AXIsolatedTree::queueNodeUpdate(AXID objectID, const NodeUpdateOptions& options)
 {
     ASSERT(isMainThread());
 
     if (!options.shouldUpdateNode && options.properties.size()) {
         // If we're going to recompute all properties for the node (i.e., the node is in m_needsUpdateNode),
         // don't bother queueing any individual property updates.
-        if (m_needsUpdateNode.contains(object.objectID()))
+        if (m_needsUpdateNode.contains(objectID))
             return;
 
-        auto addResult = m_needsPropertyUpdates.add(object.objectID(), options.properties);
+        auto addResult = m_needsPropertyUpdates.add(objectID, options.properties);
         if (!addResult.isNewEntry)
             addResult.iterator->value.formUnion(options.properties);
     }
 
     if (options.shouldUpdateChildren)
-        m_needsUpdateChildren.add(object.objectID());
+        m_needsUpdateChildren.add(objectID);
 
     if (options.shouldUpdateNode)
-        m_needsUpdateNode.add(object.objectID());
+        m_needsUpdateNode.add(objectID);
 
     if (auto* cache = axObjectCache())
         cache->startUpdateTreeSnapshotTimer();
@@ -1276,11 +1291,9 @@ void AXIsolatedTree::processQueuedNodeUpdates()
     m_needsUpdateChildren.clear();
 
     for (AXID objectID : m_needsUpdateNode) {
-        if (!m_unresolvedPendingAppends.contains(objectID)) {
-            m_unresolvedPendingAppends.ensure(objectID, [] {
-                return AttachWrapper::OnAXThread;
-            });
-        }
+        m_unresolvedPendingAppends.ensure(objectID, [] {
+            return AttachWrapper::OnAXThread;
+        });
     }
     m_needsUpdateNode.clear();
 
@@ -1301,6 +1314,26 @@ void AXIsolatedTree::processQueuedNodeUpdates()
 
     queueRemovalsAndUnresolvedChanges({ });
 }
+
+#if ENABLE(AX_THREAD_TEXT_APIS)
+AXTextMarker AXIsolatedTree::firstMarker()
+{
+    RefPtr root = rootNode();
+    return root ? AXTextMarker { root->treeID(), root->objectID(), 0 } : AXTextMarker();
+}
+
+AXTextMarker AXIsolatedTree::lastMarker()
+{
+    RefPtr root = rootNode();
+    if (!root)
+        return { };
+
+    const auto& children = root->children();
+    // Start the `findLast` traversal from the last child of the root to reduce the amount of traversal done.
+    RefPtr endObject = children.isEmpty() ? root : dynamicDowncast<AXIsolatedObject>(children[children.size() - 1].get());
+    return AXTextMarker { endObject->treeID(), endObject->objectID(), 0 }.findLast();
+}
+#endif // ENABLE(AX_THREAD_TEXT_APIS)
 
 } // namespace WebCore
 

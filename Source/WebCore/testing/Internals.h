@@ -195,6 +195,7 @@ public:
 
     ExceptionOr<String> elementRenderTreeAsText(Element&);
     bool hasPausedImageAnimations(Element&);
+    void markFrontBufferVolatile(Element&);
 
     bool isFullyActive(Document&);
     bool isPaintingFrequently(Element&);
@@ -426,6 +427,9 @@ public:
     bool hasAutocorrectedMarker(int from, int length);
     bool hasDictationAlternativesMarker(int from, int length);
     bool hasCorrectionIndicatorMarker(int from, int length);
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+    bool hasUnifiedTextReplacementMarker(int from, int length);
+#endif
     void setContinuousSpellCheckingEnabled(bool);
     void setAutomaticQuoteSubstitutionEnabled(bool);
     void setAutomaticLinkDetectionEnabled(bool);
@@ -609,7 +613,6 @@ public:
     };
     void setFullscreenInsets(FullscreenInsets);
     void setFullscreenAutoHideDuration(double);
-    void setFullscreenControlsHidden(bool);
 
 #if ENABLE(VIDEO)
     bool isChangingPresentationMode(HTMLVideoElement&) const;
@@ -801,6 +804,7 @@ public:
     bool elementIsBlockingDisplaySleep(const HTMLMediaElement&) const;
     bool isPlayerVisibleInViewport(const HTMLMediaElement&) const;
     bool isPlayerMuted(const HTMLMediaElement&) const;
+    bool isPlayerPaused(const HTMLMediaElement&) const;
     void beginAudioSessionInterruption();
     void endAudioSessionInterruption();
     void clearAudioSessionInterruptionFlag();

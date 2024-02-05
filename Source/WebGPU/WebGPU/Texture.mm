@@ -2395,13 +2395,11 @@ WGPUTextureFormat Texture::aspectSpecificFormat(WGPUTextureFormat format, WGPUTe
         return format;
     case WGPUTextureAspect_StencilOnly: {
         auto result = stencilSpecificFormat(format);
-        ASSERT(result);
-        return *result;
+        return result ? *result : WGPUTextureFormat_Undefined;
     }
     case WGPUTextureAspect_DepthOnly: {
         auto result = depthSpecificFormat(format);
-        ASSERT(result);
-        return *result;
+        return result ? *result : WGPUTextureFormat_Undefined;
     }
     case WGPUTextureAspect_Force32:
         ASSERT_NOT_REACHED();
@@ -3094,7 +3092,7 @@ void Texture::destroy()
 {
     // https://gpuweb.github.io/gpuweb/#dom-gputexture-destroy
     if (!m_canvasBacking)
-        m_texture = nil;
+        m_texture = m_device->placeholderTexture();
     m_destroyed = true;
     for (auto& view : m_textureViews) {
         if (view.get())
@@ -3197,7 +3195,14 @@ bool Texture::validateImageCopyTexture(const WGPUImageCopyTexture& imageCopyText
     if (imageCopyTexture.origin.y % blockHeight)
         return false;
 
-    UNUSED_PARAM(copySize);
+    if (Texture::isDepthOrStencilFormat(fromAPI(imageCopyTexture.texture).format())
+        || fromAPI(imageCopyTexture.texture).sampleCount() > 1) {
+        auto subresourceSize = imageCopyTextureSubresourceSize(imageCopyTexture);
+        if (subresourceSize.width != copySize.width
+            || subresourceSize.height != copySize.height
+            || subresourceSize.depthOrArrayLayers != copySize.depthOrArrayLayers)
+            return false;
+    }
 
     return true;
 }
@@ -3337,6 +3342,11 @@ bool Texture::isValidDepthStencilCopySource(WGPUTextureFormat format, WGPUTextur
         ASSERT_NOT_REACHED();
         return false;
     }
+}
+
+bool Texture::isValid() const
+{
+    return isDestroyed() || m_texture;
 }
 
 bool Texture::isValidDepthStencilCopyDestination(WGPUTextureFormat format, WGPUTextureAspect aspect)

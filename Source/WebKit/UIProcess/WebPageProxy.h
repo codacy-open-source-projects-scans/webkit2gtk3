@@ -128,6 +128,8 @@ class SecurityOriginData;
 class SelectionData;
 class SelectionGeometry;
 class SharedBuffer;
+class SharedMemory;
+class SharedMemoryHandle;
 class SleepDisabler;
 class SpeechRecognitionRequest;
 class SubstituteData;
@@ -203,6 +205,10 @@ enum class WillContinueLoading : bool;
 enum class WillInternallyHandleFailure : bool;
 enum class WindowProxyProperty : uint8_t;
 enum class WritingDirection : uint8_t;
+
+#if ENABLE(ATTACHMENT_ELEMENT)
+enum class AttachmentAssociatedElementType : uint8_t;
+#endif
 
 struct AppHighlight;
 struct ApplePayAMSUIRequest;
@@ -332,6 +338,12 @@ struct wpe_view_backend;
 typedef struct _WPEView WPEView;
 #endif
 
+namespace WebCore {
+class ShareableBitmap;
+class ShareableBitmapHandle;
+class ShareableResourceHandle;
+}
+
 namespace WebKit {
 
 class AudioSessionRoutingArbitratorProxy;
@@ -374,11 +386,6 @@ class RemoteScrollingCoordinatorProxy;
 class RevealItem;
 class SandboxExtensionHandle;
 class SecKeyProxyStore;
-class ShareableBitmap;
-class ShareableBitmapHandle;
-class ShareableResourceHandle;
-class SharedMemory;
-class SharedMemoryHandle;
 class SpeechRecognitionPermissionManager;
 class SuspendedPageProxy;
 class SystemPreviewController;
@@ -452,6 +459,7 @@ struct PDFContextMenu;
 struct PDFPluginIdentifierType;
 struct PlatformPopupMenuData;
 struct PolicyDecision;
+struct PolicyDecisionConsoleMessage;
 struct PrintInfo;
 struct ResourceLoadInfo;
 struct SessionState;
@@ -472,6 +480,8 @@ struct WebPageProxyIdentifierType;
 struct WebPopupItem;
 struct WebPreferencesStore;
 struct WebSpeechSynthesisVoice;
+struct WebTextReplacementData;
+struct WebUnifiedTextReplacementContextData;
 struct WebsitePoliciesData;
 #if PLATFORM(WPE) && USE(GBM)
 struct DMABufRendererBufferFormat;
@@ -820,7 +830,7 @@ public:
 
     void setInitialFocus(bool forward, bool isKeyboardEventValid, const std::optional<WebKeyboardEvent>&, CompletionHandler<void()>&&);
     
-    void clearSelection();
+    void clearSelection(std::optional<WebCore::FrameIdentifier> = std::nullopt);
     void restoreSelectionInFocusedEditableElement();
 
     PageClient& pageClient() const;
@@ -975,7 +985,7 @@ public:
     void stopInteraction();
     void performActionOnElement(uint32_t action);
     void performActionOnElements(uint32_t action, Vector<WebCore::ElementContext>&&);
-    void saveImageToLibrary(SharedMemoryHandle&& imageHandle, const String& authorizationToken);
+    void saveImageToLibrary(WebCore::SharedMemoryHandle&& imageHandle, const String& authorizationToken);
     void focusNextFocusedElement(bool isForward, CompletionHandler<void()>&&);
     void setFocusedElementValue(const WebCore::ElementContext&, const String&);
     void setFocusedElementSelectedIndex(const WebCore::ElementContext&, uint32_t index, bool allowMultipleSelection = false);
@@ -1219,9 +1229,14 @@ public:
     bool supportsTextZoom() const;
     double textZoomFactor() const { return m_textZoomFactor; }
     void setTextZoomFactor(double);
+
     double pageZoomFactor() const;
     void setPageZoomFactor(double);
+
     void setPageAndTextZoomFactors(double pageZoomFactor, double textZoomFactor);
+
+    double minPageZoomFactor() const;
+    double maxPageZoomFactor() const;
 
     void scalePage(double scale, const WebCore::IntPoint& origin);
     void scalePageInViewCoordinates(double scale, const WebCore::IntPoint& centerInViewCoordinates);
@@ -1350,7 +1365,7 @@ public:
     void getImageForFindMatch(int32_t matchIndex);
     void selectFindMatch(int32_t matchIndex);
     void indicateFindMatch(int32_t matchIndex);
-    void didGetImageForFindMatch(WebCore::ImageBufferParameters&&, ShareableBitmapHandle&& contentImageHandle, uint32_t matchIndex);
+    void didGetImageForFindMatch(WebCore::ImageBufferParameters&&, WebCore::ShareableBitmapHandle&& contentImageHandle, uint32_t matchIndex);
     void hideFindUI();
     void hideFindIndicator();
     void countStringMatches(const String&, OptionSet<FindOptions>, unsigned maxMatchCount);
@@ -1362,7 +1377,6 @@ public:
 
     void didFindString(const String&, const Vector<WebCore::IntRect>&, uint32_t matchCount, int32_t matchIndex, bool didWrapAround);
     void didFailToFindString(const String&);
-    void didFindStringMatches(const String&, const Vector<Vector<WebCore::IntRect>>& matchRects, int32_t firstIndexAfterSelection);
 
     void findTextRangesForStringMatches(const String&, OptionSet<FindOptions>, unsigned maxMatchCount, CompletionHandler<void(Vector<WebFoundTextRange>&&)>&&);
     void replaceFoundTextRangeWithString(const WebFoundTextRange&, const String&);
@@ -1410,9 +1424,9 @@ public:
 #endif
 
     enum class WillContinueLoadInNewProcess : bool { No, Yes };
-    void receivedPolicyDecision(WebCore::PolicyAction, API::Navigation*, RefPtr<API::WebsitePolicies>&&, Ref<API::NavigationAction>&&, WillContinueLoadInNewProcess, std::optional<SandboxExtensionHandle>, CompletionHandler<void(PolicyDecision&&)>&&);
+    void receivedPolicyDecision(WebCore::PolicyAction, API::Navigation*, RefPtr<API::WebsitePolicies>&&, Ref<API::NavigationAction>&&, WillContinueLoadInNewProcess, std::optional<SandboxExtensionHandle>, std::optional<PolicyDecisionConsoleMessage>&&, CompletionHandler<void(PolicyDecision&&)>&&);
     void receivedNavigationResponsePolicyDecision(WebCore::PolicyAction, API::Navigation*, const WebCore::ResourceRequest&, Ref<API::NavigationResponse>&&, CompletionHandler<void(PolicyDecision&&)>&&);
-    void receivedNavigationActionPolicyDecision(WebProcessProxy&, WebProcessProxy&, WebCore::PolicyAction, API::Navigation*, Ref<API::NavigationAction>&&, ProcessSwapRequestedByClient, WebFrameProxy&, const FrameInfoData&, WasNavigationIntercepted, CompletionHandler<void(PolicyDecision&&)>&&);
+    void receivedNavigationActionPolicyDecision(WebProcessProxy&, WebProcessProxy&, WebCore::PolicyAction, API::Navigation*, Ref<API::NavigationAction>&&, ProcessSwapRequestedByClient, WebFrameProxy&, const FrameInfoData&, WasNavigationIntercepted, std::optional<PolicyDecisionConsoleMessage>&&, CompletionHandler<void(PolicyDecision&&)>&&);
 
     void backForwardRemovedItem(const WebCore::BackForwardItemIdentifier&);
 
@@ -1429,12 +1443,12 @@ public:
     void dragCancelled();
     void setDragCaretRect(const WebCore::IntRect&);
 #if PLATFORM(COCOA)
-    void startDrag(const WebCore::DragItem&, ShareableBitmapHandle&& dragImageHandle);
-    void setPromisedDataForImage(const String& pasteboardName, SharedMemoryHandle&& imageHandle, const String& filename, const String& extension,
-        const String& title, const String& url, const String& visibleURL, SharedMemoryHandle&& archiveHandle, const String& originIdentifier);
+    void startDrag(const WebCore::DragItem&, WebCore::ShareableBitmapHandle&& dragImageHandle);
+    void setPromisedDataForImage(const String& pasteboardName, WebCore::SharedMemoryHandle&& imageHandle, const String& filename, const String& extension,
+        const String& title, const String& url, const String& visibleURL, WebCore::SharedMemoryHandle&& archiveHandle, const String& originIdentifier);
 #endif
 #if PLATFORM(GTK)
-    void startDrag(WebCore::SelectionData&&, OptionSet<WebCore::DragOperation>, std::optional<ShareableBitmapHandle>&& dragImage, WebCore::IntPoint&& dragImageHotspot);
+    void startDrag(WebCore::SelectionData&&, OptionSet<WebCore::DragOperation>, std::optional<WebCore::ShareableBitmapHandle>&& dragImage, WebCore::IntPoint&& dragImageHotspot);
 #endif
 #endif
 
@@ -1561,16 +1575,16 @@ public:
     IPC::AsyncReplyID computePagesForPrinting(WebCore::FrameIdentifier, const PrintInfo&, CompletionHandler<void(const Vector<WebCore::IntRect>&, double, const WebCore::FloatBoxExtent&)>&&);
     void getPDFFirstPageSize(WebCore::FrameIdentifier, CompletionHandler<void(WebCore::FloatSize)>&&);
 #if PLATFORM(COCOA)
-    IPC::AsyncReplyID drawRectToImage(WebFrameProxy*, const PrintInfo&, const WebCore::IntRect&, const WebCore::IntSize&, CompletionHandler<void(std::optional<ShareableBitmapHandle>&&)>&&);
+    IPC::AsyncReplyID drawRectToImage(WebFrameProxy*, const PrintInfo&, const WebCore::IntRect&, const WebCore::IntSize&, CompletionHandler<void(std::optional<WebCore::ShareableBitmapHandle>&&)>&&);
     IPC::AsyncReplyID drawPagesToPDF(WebFrameProxy*, const PrintInfo&, uint32_t first, uint32_t count, CompletionHandler<void(API::Data*)>&&);
     void drawToPDF(WebCore::FrameIdentifier, const std::optional<WebCore::FloatRect>&, bool allowTransparentBackground,  CompletionHandler<void(RefPtr<WebCore::SharedBuffer>&&)>&&);
 #if PLATFORM(IOS_FAMILY)
     size_t computePagesForPrintingiOS(WebCore::FrameIdentifier, const PrintInfo&);
-    IPC::AsyncReplyID drawToImage(WebCore::FrameIdentifier, const PrintInfo&, CompletionHandler<void(std::optional<ShareableBitmapHandle>&&)>&&);
+    IPC::AsyncReplyID drawToImage(WebCore::FrameIdentifier, const PrintInfo&, CompletionHandler<void(std::optional<WebCore::ShareableBitmapHandle>&&)>&&);
     IPC::AsyncReplyID drawToPDFiOS(WebCore::FrameIdentifier, const PrintInfo&, size_t pageCount, CompletionHandler<void(RefPtr<WebCore::SharedBuffer>&&)>&&);
 #endif
 #elif PLATFORM(GTK)
-    void drawPagesForPrinting(WebFrameProxy*, const PrintInfo&, CompletionHandler<void(std::optional<SharedMemoryHandle>&&, WebCore::ResourceError&&)>&&);
+    void drawPagesForPrinting(WebFrameProxy*, const PrintInfo&, CompletionHandler<void(std::optional<WebCore::SharedMemoryHandle>&&, WebCore::ResourceError&&)>&&);
 #endif
 
     const PageLoadState& pageLoadState() const;
@@ -1694,7 +1708,7 @@ public:
     void wrapCryptoKey(const Vector<uint8_t>&, CompletionHandler<void(bool, Vector<uint8_t>&&)>&&);
     void unwrapCryptoKey(const Vector<uint8_t>&, CompletionHandler<void(bool, Vector<uint8_t>&&)>&&);
 
-    void takeSnapshot(WebCore::IntRect, WebCore::IntSize bitmapSize, SnapshotOptions, CompletionHandler<void(std::optional<ShareableBitmapHandle>&&)>&&);
+    void takeSnapshot(WebCore::IntRect, WebCore::IntSize bitmapSize, SnapshotOptions, CompletionHandler<void(std::optional<WebCore::ShareableBitmapHandle>&&)>&&);
 
     void navigationGestureDidBegin();
     void navigationGestureWillEnd(bool willNavigate, WebBackForwardListItem&);
@@ -1872,9 +1886,9 @@ public:
 #endif
 
 #if ENABLE(IMAGE_ANALYSIS)
-    void requestTextRecognition(const URL& imageURL, ShareableBitmapHandle&& imageData, const String& sourceLanguageIdentifier, const String& targetLanguageIdentifier, CompletionHandler<void(WebCore::TextRecognitionResult&&)>&&);
+    void requestTextRecognition(const URL& imageURL, WebCore::ShareableBitmapHandle&& imageData, const String& sourceLanguageIdentifier, const String& targetLanguageIdentifier, CompletionHandler<void(WebCore::TextRecognitionResult&&)>&&);
     void updateWithTextRecognitionResult(WebCore::TextRecognitionResult&&, const WebCore::ElementContext&, const WebCore::FloatPoint& location, CompletionHandler<void(TextRecognitionUpdateResult)>&&);
-    void computeHasVisualSearchResults(const URL& imageURL, ShareableBitmap& imageBitmap, CompletionHandler<void(bool)>&&);
+    void computeHasVisualSearchResults(const URL& imageURL, WebCore::ShareableBitmap& imageBitmap, CompletionHandler<void(bool)>&&);
     void startVisualTranslation(const String& sourceLanguageIdentifier, const String& targetLanguageIdentifier);
 #endif
 
@@ -1896,7 +1910,7 @@ public:
 #endif
 
 #if ENABLE(ATTACHMENT_ELEMENT) && HAVE(QUICKLOOK_THUMBNAILING)
-    void updateAttachmentThumbnail(const String&, const RefPtr<ShareableBitmap>&);
+    void updateAttachmentThumbnail(const String&, const RefPtr<WebCore::ShareableBitmap>&);
     void requestThumbnailWithPath(const String&, const String&);
     void requestThumbnail(const API::Attachment&, const String&);
 #endif
@@ -1939,14 +1953,14 @@ public:
     void didPerformClientRedirectShared(Ref<WebProcessProxy>&&, const String& sourceURLString, const String& destinationURLString, WebCore::FrameIdentifier);
     void didNavigateWithNavigationDataShared(Ref<WebProcessProxy>&&, const WebNavigationDataStore&, WebCore::FrameIdentifier);
     void didChangeProvisionalURLForFrameShared(Ref<WebProcessProxy>&&, WebCore::FrameIdentifier, uint64_t navigationID, URL&&);
-    void decidePolicyForNavigationActionAsyncShared(Ref<WebProcessProxy>&&, WebCore::PageIdentifier, NavigationActionData&&, CompletionHandler<void(PolicyDecision&&)>&&);
+    void decidePolicyForNavigationActionAsyncShared(Ref<WebProcessProxy>&&, NavigationActionData&&, CompletionHandler<void(PolicyDecision&&)>&&);
     void decidePolicyForResponseShared(Ref<WebProcessProxy>&&, WebCore::PageIdentifier, FrameInfoData&&, uint64_t navigationID, const WebCore::ResourceResponse&, const WebCore::ResourceRequest&, bool canShowMIMEType, const String& downloadAttribute, CompletionHandler<void(PolicyDecision&&)>&&);
     void startURLSchemeTaskShared(Ref<WebProcessProxy>&&, WebCore::PageIdentifier, URLSchemeTaskParameters&&);
     void loadDataWithNavigationShared(Ref<WebProcessProxy>&&, WebCore::PageIdentifier, API::Navigation&, const IPC::DataReference&, const String& MIMEType, const String& encoding, const String& baseURL, API::Object* userData, WebCore::ShouldTreatAsContinuingLoad, std::optional<NavigatingToAppBoundDomain>, std::optional<WebsitePoliciesData>&&, WebCore::ShouldOpenExternalURLsPolicy, WebCore::SessionHistoryVisibility);
     void loadRequestWithNavigationShared(Ref<WebProcessProxy>&&, WebCore::PageIdentifier, API::Navigation&, WebCore::ResourceRequest&&, WebCore::ShouldOpenExternalURLsPolicy, API::Object* userData, WebCore::ShouldTreatAsContinuingLoad, std::optional<NavigatingToAppBoundDomain>, std::optional<WebsitePoliciesData>&&, std::optional<NetworkResourceLoadIdentifier> existingNetworkResourceLoadIdentifierToResume);
     void backForwardAddItemShared(Ref<WebProcessProxy>&&, BackForwardListItemState&&);
     void backForwardGoToItemShared(const WebCore::BackForwardItemIdentifier&, CompletionHandler<void(const WebBackForwardListCounts&)>&&);
-    void decidePolicyForNavigationActionSyncShared(Ref<WebProcessProxy>&&, WebCore::PageIdentifier, NavigationActionData&&, CompletionHandler<void(PolicyDecision&&)>&&);
+    void decidePolicyForNavigationActionSyncShared(Ref<WebProcessProxy>&&, NavigationActionData&&, CompletionHandler<void(PolicyDecision&&)>&&);
     void didDestroyNavigationShared(Ref<WebProcessProxy>&&, uint64_t navigationID);
 #if USE(QUICK_LOOK)
     void requestPasswordForQuickLookDocumentInMainFrameShared(const String& fileName, CompletionHandler<void(const String&)>&&);
@@ -2132,7 +2146,7 @@ public:
 #if ENABLE(APP_HIGHLIGHTS)
     void createAppHighlightInSelectedRange(WebCore::CreateNewGroupForHighlight, WebCore::HighlightRequestOriginatedInApp);
     void storeAppHighlight(const WebCore::AppHighlight&);
-    void restoreAppHighlightsAndScrollToIndex(const Vector<Ref<SharedMemory>>& highlights, const std::optional<unsigned> index);
+    void restoreAppHighlightsAndScrollToIndex(const Vector<Ref<WebCore::SharedMemory>>& highlights, const std::optional<unsigned> index);
     void setAppHighlightsVisibility(const WebCore::HighlightVisibility);
     bool appHighlightsVisibility();
     CGRect appHighlightsOverlayRect();
@@ -2220,7 +2234,7 @@ public:
     void addOpenedPage(WebPageProxy&);
     bool hasOpenedPage() const;
 
-    void requestImageBitmap(const WebCore::ElementContext&, CompletionHandler<void(std::optional<ShareableBitmapHandle>&&, const String& sourceMIMEType)>&&);
+    void requestImageBitmap(const WebCore::ElementContext&, CompletionHandler<void(std::optional<WebCore::ShareableBitmapHandle>&&, const String& sourceMIMEType)>&&);
 
 #if PLATFORM(MAC)
     bool isQuarantinedAndNotUserApproved(const String&);
@@ -2326,6 +2340,12 @@ public:
 
     void requestTextExtraction(CompletionHandler<void(WebCore::TextExtraction::Item&&)>&&);
 
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+    void didBeginTextReplacementSession(const WTF::UUID&);
+
+    void textReplacementSessionDidReceiveReplacements(const WTF::UUID&, const Vector<WebKit::WebTextReplacementData>&, const WebKit::WebUnifiedTextReplacementContextData&, bool finished);
+#endif
+
 private:
     WebPageProxy(PageClient&, WebProcessProxy&, Ref<API::PageConfiguration>&&);
     void platformInitialize();
@@ -2399,7 +2419,7 @@ private:
     void didFirstVisuallyNonEmptyLayoutForFrame(WebCore::FrameIdentifier, const UserData&);
     void didDisplayInsecureContentForFrame(WebCore::FrameIdentifier, const UserData&);
     void didRunInsecureContentForFrame(WebCore::FrameIdentifier, const UserData&);
-    void mainFramePluginHandlesPageScaleGestureDidChange(bool);
+    void mainFramePluginHandlesPageScaleGestureDidChange(bool, double minScale, double maxScale);
     void didStartProgress();
     void didChangeProgress(double);
     void didFinishProgress();
@@ -2409,7 +2429,7 @@ private:
 
     void didDestroyNavigation(uint64_t navigationID);
 
-    void decidePolicyForNavigationAction(Ref<WebProcessProxy>&&, WebCore::PageIdentifier, WebFrameProxy&, NavigationActionData&&, CompletionHandler<void(PolicyDecision&&)>&&);
+    void decidePolicyForNavigationAction(Ref<WebProcessProxy>&&, WebFrameProxy&, NavigationActionData&&, CompletionHandler<void(PolicyDecision&&)>&&);
     void decidePolicyForNavigationActionAsync(NavigationActionData&&, CompletionHandler<void(PolicyDecision&&)>&&);
     void decidePolicyForNavigationActionSync(NavigationActionData&&, CompletionHandler<void(PolicyDecision&&)>&&);
     void decidePolicyForNewWindowAction(NavigationActionData&&, const String& frameName, CompletionHandler<void(PolicyDecision&&)>&&);
@@ -2744,7 +2764,7 @@ private:
 
 #if USE(QUICK_LOOK)
     void didStartLoadForQuickLookDocumentInMainFrame(const String& fileName, const String& uti);
-    void didFinishLoadForQuickLookDocumentInMainFrame(ShareableResourceHandle&&);
+    void didFinishLoadForQuickLookDocumentInMainFrame(WebCore::ShareableResourceHandle&&);
     void requestPasswordForQuickLookDocumentInMainFrame(const String& fileName, CompletionHandler<void(const String&)>&&);
 #endif
 
@@ -2805,7 +2825,7 @@ private:
     void platformRegisterAttachment(Ref<API::Attachment>&&, const String& filePath);
     void platformCloneAttachment(Ref<API::Attachment>&& fromAttachment, Ref<API::Attachment>&& toAttachment);
 
-    void didInsertAttachmentWithIdentifier(const String& identifier, const String& source, bool hasEnclosingImage);
+    void didInsertAttachmentWithIdentifier(const String& identifier, const String& source, WebCore::AttachmentAssociatedElementType);
     void didRemoveAttachmentWithIdentifier(const String& identifier);
     void didRemoveAttachment(API::Attachment&);
     Ref<API::Attachment> ensureAttachment(const String& identifier);
@@ -2817,7 +2837,7 @@ private:
 
     void requestAttachmentIcon(const String& identifier, const String& type, const String& path, const String& title, const WebCore::FloatSize&);
 
-    RefPtr<ShareableBitmap> iconForAttachment(const String& fileName, const String& contentType, const String& title, WebCore::FloatSize&);
+    RefPtr<WebCore::ShareableBitmap> iconForAttachment(const String& fileName, const String& contentType, const String& title, WebCore::FloatSize&);
 #endif
 
 #if ENABLE(ATTACHMENT_ELEMENT) && HAVE(QUICKLOOK_THUMBNAILING)
@@ -2877,7 +2897,7 @@ private:
     void runModalJavaScriptDialog(RefPtr<WebFrameProxy>&&, FrameInfoData&&, const String& message, CompletionHandler<void(WebPageProxy&, WebFrameProxy*, FrameInfoData&&, const String&, CompletionHandler<void()>&&)>&&);
 
 #if ENABLE(IMAGE_ANALYSIS) && PLATFORM(MAC)
-    void showImageInQuickLookPreviewPanel(ShareableBitmap& imageBitmap, const String& tooltip, const URL& imageURL, QuickLookPreviewActivity);
+    void showImageInQuickLookPreviewPanel(WebCore::ShareableBitmap& imageBitmap, const String& tooltip, const URL& imageURL, QuickLookPreviewActivity);
 #endif
         
 #if ENABLE(APP_HIGHLIGHTS)
@@ -2909,7 +2929,6 @@ private:
 
     void broadcastFocusedFrameToOtherProcesses(IPC::Connection&, const WebCore::FrameIdentifier&);
 
-    void closeRemoteFrame(WebCore::FrameIdentifier);
     void focusRemoteFrame(IPC::Connection&, WebCore::FrameIdentifier);
     void postMessageToRemote(WebCore::FrameIdentifier source, const String& sourceOrigin, WebCore::FrameIdentifier target, std::optional<WebCore::SecurityOriginData> targetOrigin, const WebCore::MessageWithMessagePorts&);
     void renderTreeAsText(WebCore::FrameIdentifier, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag>, CompletionHandler<void(String&&)>&&);
@@ -3113,8 +3132,14 @@ private:
     double m_textZoomFactor { 1 };
     double m_pageZoomFactor { 1 };
     double m_pageScaleFactor { 1 };
+
     double m_pluginZoomFactor { 1 };
+
+    double m_pluginMinZoomFactor { 1 };
+    double m_pluginMaxZoomFactor { 1 };
+
     double m_pluginScaleFactor { 1 };
+
     double m_viewScaleFactor { 1 };
     float m_intrinsicDeviceScaleFactor { 1 };
     std::optional<float> m_customDeviceScaleFactor;

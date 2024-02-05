@@ -109,6 +109,7 @@
 #import <WebCore/PlatformScreen.h>
 #import <WebCore/PlaybackSessionInterfaceMac.h>
 #import <WebCore/PromisedAttachmentInfo.h>
+#import <WebCore/ShareableBitmap.h>
 #import <WebCore/TextAlternativeWithRange.h>
 #import <WebCore/TextRecognitionResult.h>
 #import <WebCore/TextUndoInsertionMarkupMac.h>
@@ -1125,6 +1126,8 @@ static void* imageOverlayObservationContext = &imageOverlayObservationContext;
 #endif // ENABLE(IMAGE_ANALYSIS_ENHANCEMENTS)
 
 namespace WebKit {
+
+using namespace WebCore;
 
 static NSTrackingAreaOptions trackingAreaOptions()
 {
@@ -4248,7 +4251,7 @@ void WebViewImpl::provideDataForPasteboard(NSPasteboard *pasteboard, NSString *t
 
     // FIXME: Need to support NSRTFDPboardType.
     if ([type isEqual:WebCore::legacyTIFFPasteboardType()])
-        [pasteboard setData:(__bridge NSData *)m_promisedImage->tiffRepresentation() forType:WebCore::legacyTIFFPasteboardType()];
+        [pasteboard setData:(__bridge NSData *)m_promisedImage->adapter().tiffRepresentation() forType:WebCore::legacyTIFFPasteboardType()];
 }
 
 static BOOL fileExists(NSString *path)

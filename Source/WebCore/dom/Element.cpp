@@ -112,6 +112,7 @@
 #include "RenderLayerScrollableArea.h"
 #include "RenderListBox.h"
 #include "RenderSVGModelObject.h"
+#include "RenderStyleSetters.h"
 #include "RenderTheme.h"
 #include "RenderTreeUpdater.h"
 #include "RenderView.h"
@@ -167,9 +168,9 @@ static_assert(sizeof(Element) == sizeof(SameSizeAsElement), "Element should stay
 using namespace HTMLNames;
 using namespace XMLNames;
 
-static HashMap<CheckedRef<Element>, Vector<RefPtr<Attr>>>& attrNodeListMap()
+static HashMap<WeakRef<Element, WeakPtrImplWithEventTargetData>, Vector<RefPtr<Attr>>>& attrNodeListMap()
 {
-    static NeverDestroyed<HashMap<CheckedRef<Element>, Vector<RefPtr<Attr>>>> map;
+    static NeverDestroyed<HashMap<WeakRef<Element, WeakPtrImplWithEventTargetData>, Vector<RefPtr<Attr>>>> map;
     return map;
 }
 
@@ -234,9 +235,9 @@ static bool shouldAutofocus(const Element& element)
     return true;
 }
 
-static HashMap<CheckedRef<Element>, ElementIdentifier>& elementIdentifiersMap()
+static HashMap<WeakRef<Element, WeakPtrImplWithEventTargetData>, ElementIdentifier>& elementIdentifiersMap()
 {
-    static MainThreadNeverDestroyed<HashMap<CheckedRef<Element>, ElementIdentifier>> map;
+    static MainThreadNeverDestroyed<HashMap<WeakRef<Element, WeakPtrImplWithEventTargetData>, ElementIdentifier>> map;
     return map;
 }
 
@@ -583,7 +584,7 @@ Ref<Node> Element::cloneNodeInternal(Document& targetDocument, CloningOperation 
 void Element::cloneShadowTreeIfPossible(Element& newHost)
 {
     RefPtr oldShadowRoot = this->shadowRoot();
-    if (!oldShadowRoot || !oldShadowRoot->isCloneable())
+    if (!oldShadowRoot || !oldShadowRoot->isClonable())
         return;
 
     Ref clonedShadowRoot = [&] {
@@ -839,6 +840,13 @@ ValidatedFormListedElement* Element::asValidatedFormListedElement()
 {
     return nullptr;
 }
+
+#if ENABLE(ATTACHMENT_ELEMENT)
+AttachmentAssociatedElement* Element::asAttachmentAssociatedElement()
+{
+    return nullptr;
+}
+#endif
 
 bool Element::isUserActionElementHasFocusWithin() const
 {
@@ -2141,7 +2149,7 @@ void Element::attributeChanged(const QualifiedName& name, const AtomString& oldV
     case AttributeNames::XML::langAttr:
     case AttributeNames::langAttr: {
         if (name == HTMLNames::langAttr)
-            setHasLangAttr(!newValue.isNull());
+            setHasLangAttr(!newValue.isNull() && (isHTMLElement() || isSVGElement()));
         else
             setHasXMLLangAttr(!newValue.isNull());
         Ref document = this->document();
@@ -2953,7 +2961,7 @@ ExceptionOr<ShadowRoot&> Element::attachShadow(const ShadowRootInit& init)
         return Exception { ExceptionCode::TypeError };
     Ref shadow = ShadowRoot::create(document(), init.mode, init.slotAssignment,
         init.delegatesFocus ? ShadowRoot::DelegatesFocus::Yes : ShadowRoot::DelegatesFocus::No,
-        init.cloneable ? ShadowRoot::Cloneable::Yes : ShadowRoot::Cloneable::No,
+        init.clonable ? ShadowRoot::Clonable::Yes : ShadowRoot::Clonable::No,
         isPrecustomizedOrDefinedCustomElement() ? ShadowRoot::AvailableToElementInternals::Yes : ShadowRoot::AvailableToElementInternals::No);
     addShadowRoot(shadow.copyRef());
     return shadow.get();
@@ -2961,7 +2969,7 @@ ExceptionOr<ShadowRoot&> Element::attachShadow(const ShadowRootInit& init)
 
 ExceptionOr<ShadowRoot&> Element::attachDeclarativeShadow(ShadowRootMode mode, bool delegatesFocus)
 {
-    auto exceptionOrShadowRoot = attachShadow({ mode, delegatesFocus, /* cloneable */ true });
+    auto exceptionOrShadowRoot = attachShadow({ mode, delegatesFocus, /* clonable */ true });
     if (exceptionOrShadowRoot.hasException())
         return exceptionOrShadowRoot.releaseException();
     Ref shadowRoot = exceptionOrShadowRoot.releaseReturnValue();
@@ -3152,14 +3160,11 @@ void Element::removeAllEventListeners()
         shadowRoot->removeAllEventListeners();
 }
 
-void Element::beginParsingChildren()
-{
-    clearIsParsingChildrenFinished();
-}
-
 void Element::finishParsingChildren()
 {
-    ContainerNode::finishParsingChildren();
+    if (hasHeldBackChildrenChanged())
+        parserNotifyChildrenChanged();
+
     setIsParsingChildrenFinished();
 
     Style::ChildChangeInvalidation::invalidateAfterFinishedParsingChildren(*this);
@@ -4103,46 +4108,54 @@ const RenderStyle* Element::resolveComputedStyle(ResolveComputedStyleMode mode)
     return computedStyle;
 }
 
-const RenderStyle& Element::resolvePseudoElementStyle(PseudoId pseudoElementSpecifier)
+const RenderStyle& Element::resolvePseudoElementStyle(const Style::PseudoElementIdentifier& pseudoElementIdentifier)
 {
     ASSERT(!isPseudoElement());
 
     auto* parentStyle = existingComputedStyle();
     ASSERT(parentStyle);
-    ASSERT(!parentStyle->getCachedPseudoStyle(pseudoElementSpecifier));
+    ASSERT(!parentStyle->getCachedPseudoStyle(pseudoElementIdentifier.pseudoId));
 
     Ref document = this->document();
     Style::PostResolutionCallbackDisabler disabler(document, Style::PostResolutionCallbackDisabler::DrainCallbacks::No);
 
-    auto style = document->styleForElementIgnoringPendingStylesheets(*this, parentStyle, pseudoElementSpecifier);
+    auto style = document->styleForElementIgnoringPendingStylesheets(*this, parentStyle, pseudoElementIdentifier);
     if (!style) {
         style = RenderStyle::createPtr();
         style->inheritFrom(*parentStyle);
-        style->setPseudoElementType(pseudoElementSpecifier);
+        // FIXME: RenderStyle should switch to use PseudoElementIdentifier.
+        style->setPseudoElementType(pseudoElementIdentifier.pseudoId);
+        if (!pseudoElementIdentifier.nameArgument.isNull())
+            style->setPseudoElementNameArgument(pseudoElementIdentifier.nameArgument);
     }
 
     auto* computedStyle = style.get();
-    const_cast<RenderStyle*>(parentStyle)->addCachedPseudoStyle(WTFMove(style));
+    if (!pseudoElementIdentifier.nameArgument)
+        const_cast<RenderStyle*>(parentStyle)->addCachedPseudoStyle(WTFMove(style));
     return *computedStyle;
 }
 
-const RenderStyle* Element::computedStyle(PseudoId pseudoElementSpecifier)
+const RenderStyle* Element::computedStyle(const std::optional<Style::PseudoElementIdentifier>& pseudoElementIdentifier)
 {
     if (!isConnected())
         return nullptr;
 
-    if (RefPtr pseudoElement = beforeOrAfterPseudoElement(*this, pseudoElementSpecifier))
-        return pseudoElement->computedStyle();
+    if (pseudoElementIdentifier) {
+        if (RefPtr pseudoElement = beforeOrAfterPseudoElement(*this, pseudoElementIdentifier->pseudoId))
+            return pseudoElement->computedStyle();
+    }
 
     // FIXME: This should call resolveComputedStyle() unconditionally so we check if the style is valid.
     auto* style = existingComputedStyle();
     if (!style)
         style = resolveComputedStyle();
 
-    if (pseudoElementSpecifier != PseudoId::None) {
-        if (auto* cachedPseudoStyle = style->getCachedPseudoStyle(pseudoElementSpecifier))
-            return cachedPseudoStyle;
-        return &resolvePseudoElementStyle(pseudoElementSpecifier);
+    if (pseudoElementIdentifier) {
+        if (!pseudoElementIdentifier->nameArgument) {
+            if (auto* cachedPseudoStyle = style->getCachedPseudoStyle(pseudoElementIdentifier->pseudoId))
+                return cachedPseudoStyle;
+        }
+        return &resolvePseudoElementStyle(*pseudoElementIdentifier);
     }
 
     return style;

@@ -175,6 +175,7 @@
 #include "NoiseInjectionPolicy.h"
 #include "NotificationController.h"
 #include "OpportunisticTaskScheduler.h"
+#include "OrientationNotifier.h"
 #include "OverflowEvent.h"
 #include "PageConsoleClient.h"
 #include "PageGroup.h"
@@ -593,7 +594,7 @@ static inline IntDegrees currentOrientation(LocalFrame* frame)
 Document::Document(LocalFrame* frame, const Settings& settings, const URL& url, DocumentClasses documentClasses, OptionSet<ConstructionFlag> constructionFlags, ScriptExecutionContextIdentifier identifier)
     : ContainerNode(*this, DOCUMENT_NODE)
     , TreeScope(*this)
-    , ScriptExecutionContext(identifier)
+    , ScriptExecutionContext(Type::Document, identifier)
     , FrameDestructionObserver(frame)
     , m_settings(settings)
     , m_parserContentPolicy(DefaultParserContentPolicy)
@@ -608,7 +609,6 @@ Document::Document(LocalFrame* frame, const Settings& settings, const URL& url, 
     , m_applyPendingXSLTransformsTimer(*this, &Document::applyPendingXSLTransformsTimerFired)
 #endif
     , m_xmlVersion("1.0"_s)
-    , m_constantPropertyMap(makeUnique<ConstantPropertyMap>(*this))
     , m_intersectionObserversInitialUpdateTimer(*this, &Document::intersectionObserversInitialUpdateTimerFired)
     , m_loadEventDelayTimer(*this, &Document::loadEventDelayTimerFired)
 #if PLATFORM(IOS_FAMILY) && ENABLE(DEVICE_ORIENTATION)
@@ -623,7 +623,6 @@ Document::Document(LocalFrame* frame, const Settings& settings, const URL& url, 
     , m_didAssociateFormControlsTimer(*this, &Document::didAssociateFormControlsTimerFired)
     , m_cookieCacheExpiryTimer(*this, &Document::invalidateDOMCookieCache)
     , m_socketProvider(page() ? &page()->socketProvider() : nullptr)
-    , m_orientationNotifier(currentOrientation(frame))
     , m_selection(makeUniqueRef<FrameSelection>(this))
     , m_documentClasses(documentClasses)
     , m_latestFocusTrigger { FocusTrigger::Other }
@@ -663,7 +662,9 @@ Document::Document(LocalFrame* frame, const Settings& settings, const URL& url, 
     ASSERT(!m_undoManager);
     ASSERT(!m_editor);
     ASSERT(!m_reportingScope);
+    ASSERT(!hasEmptySecurityOriginPolicyAndContentSecurityPolicy() || !hasInitializedSecurityOriginPolicyOrContentSecurityPolicy());
     m_constructionDidFinish = true;
+
 }
 
 void Document::createNewIdentifier()
@@ -788,12 +789,9 @@ Document::~Document()
 void Document::removedLastRef()
 {
     ScriptDisallowedScope::InMainThread scriptDisallowedScope;
-    ASSERT(!m_deletionHasBegun);
+    ASSERT(!deletionHasBegun());
+    m_wasRemovedLastRefCalled = true;
     if (m_referencingNodeCount) {
-        // Node::removedLastRef doesn't set refCount() to zero because it's not observable.
-        // But we need to remember that our refCount reached zero in subsequent calls to decrementReferencingNodeCount().
-        m_refCountAndParentBit = 0;
-
         // If removing a child removes the last node reference, we don't want the scope to be destroyed
         // until after removeDetachedChildren returns, so we protect ourselves.
         incrementReferencingNodeCount();
@@ -842,13 +840,18 @@ void Document::removedLastRef()
         // We need to do this right now since selfOnlyDeref() can delete this.
         m_inRemovedLastRefFunction = false;
 #endif
+
+        // Node::removedLastRef doesn't set refCount() to zero because it's not observable.
+        // But we need to remember that our refCount reached zero in subsequent calls to decrementReferencingNodeCount().
+        m_refCountAndParentBit = 0;
+
         decrementReferencingNodeCount();
     } else {
         commonTeardown();
 #if ASSERT_ENABLED
         m_inRemovedLastRefFunction = false;
-        m_deletionHasBegun = true;
 #endif
+        setStateFlag(StateFlag::HasStartedDeletion);
         delete this;
     }
 }
@@ -1048,7 +1051,9 @@ void Document::setMarkupUnsafe(const String& markup, OptionSet<ParserContentPoli
     setParserContentPolicy(policy);
     if (this->contentType() == textHTMLContentTypeAtom()) {
         auto body = HTMLBodyElement::create(*this);
+        body->beginParsingChildren();
         if (LIKELY(tryFastParsingHTMLFragment(StringView { markup }.substring(markup.find(isNotASCIIWhitespace<UChar>)), *this, body, body, policy))) {
+            body->finishParsingChildren();
             auto html = HTMLHtmlElement::create(*this);
             auto head = HTMLHeadElement::create(*this);
             html->appendChild(head);
@@ -2739,11 +2744,11 @@ auto Document::updateLayout(OptionSet<LayoutOptions> layoutOptions, const Elemen
     return result;
 }
 
-std::unique_ptr<RenderStyle> Document::styleForElementIgnoringPendingStylesheets(Element& element, const RenderStyle* parentStyle, PseudoId pseudoElementSpecifier)
+std::unique_ptr<RenderStyle> Document::styleForElementIgnoringPendingStylesheets(Element& element, const RenderStyle* parentStyle, const std::optional<Style::PseudoElementIdentifier>& pseudoElementIdentifier)
 {
     ASSERT(&element.document() == this);
-    ASSERT(!element.isPseudoElement() || pseudoElementSpecifier == PseudoId::None);
-    ASSERT(pseudoElementSpecifier == PseudoId::None || parentStyle);
+    ASSERT(!element.isPseudoElement() || !pseudoElementIdentifier);
+    ASSERT(!pseudoElementIdentifier || parentStyle);
     ASSERT(Style::postResolutionCallbacksAreSuspended());
 
     std::optional<RenderStyle> updatedDocumentStyle;
@@ -2755,8 +2760,8 @@ std::unique_ptr<RenderStyle> Document::styleForElementIgnoringPendingStylesheets
     SetForScope change(m_ignorePendingStylesheets, true);
     auto& resolver = element.styleResolver();
 
-    if (pseudoElementSpecifier != PseudoId::None) {
-        auto style = resolver.styleForPseudoElement(element, { pseudoElementSpecifier }, { parentStyle });
+    if (pseudoElementIdentifier) {
+        auto style = resolver.styleForPseudoElement(element, { *pseudoElementIdentifier }, { parentStyle });
         if (!style)
             return nullptr;
         return WTFMove(style->style);
@@ -2939,7 +2944,7 @@ void Document::pageSizeAndMarginsInPixels(int pageIndex, IntSize& pageSize, int&
 
 void Document::fontsNeedUpdate(FontSelector&)
 {
-    ASSERT(!m_deletionHasBegun);
+    ASSERT(!deletionHasBegun());
     invalidateMatchedPropertiesCacheAndForceStyleRecalc();
 }
 
@@ -3168,8 +3173,7 @@ void Document::willBeRemovedFromFrame()
     if (auto* pluginDocument = dynamicDowncast<PluginDocument>(*this))
         pluginDocument->detachFromPluginElement();
 
-    // Unable to ref the page as it may have started destruction.
-    if (WeakPtr page = this->page()) {
+    if (RefPtrAllowingPartiallyDestroyed<Page> page = this->page()) {
 #if ENABLE(POINTER_LOCK)
         page->pointerLockController().documentDetached(*this);
 #endif
@@ -3563,11 +3567,10 @@ bool Document::isFullyActive() const
     if (!frame || frame->document() != this)
         return false;
 
-    if (frame->isMainFrame())
-        return true;
-
     RefPtr parentFrame = dynamicDowncast<LocalFrame>(frame->tree().parent());
-    return parentFrame && parentFrame->document() && parentFrame->document()->isFullyActive();
+    if (!parentFrame)
+        return true;
+    return parentFrame->document() && parentFrame->document()->isFullyActive();
 }
 
 void Document::detachParser()
@@ -5413,7 +5416,7 @@ void Document::flushDeferredAXObjectCacheUpdate()
     m_scheduledDeferredAXObjectCacheUpdate = false;
 
     if (CheckedPtr cache = existingAXObjectCache())
-        cache->performDeferredCacheUpdate();
+        cache->performDeferredCacheUpdate(ForceLayout::No);
 }
 
 void Document::updateAccessibilityObjectRegions()
@@ -7272,9 +7275,8 @@ void Document::initSecurityContext()
     if (!m_frame) {
         // No source for a security context.
         // This can occur via document.implementation.createDocument().
-        setCookieURL(URL({ }, emptyString()));
-        setSecurityOriginPolicy(SecurityOriginPolicy::create(SecurityOrigin::createOpaque()));
-        setContentSecurityPolicy(makeUnique<ContentSecurityPolicy>(URL { emptyString() }, *this));
+        ASSERT(m_cookieURL.isNull());
+        setEmptySecurityOriginPolicyAndContentSecurityPolicy();
         return;
     }
 
@@ -8035,8 +8037,7 @@ void Document::wheelEventHandlersChanged(Node* node)
     }
 
 #if ENABLE(WHEEL_EVENT_REGIONS)
-    // Unable to ref the element as its deletion may have started.
-    if (auto* element = dynamicDowncast<Element>(node)) {
+    if (RefPtrAllowingPartiallyDestroyed<Element> element = dynamicDowncast<Element>(node)) {
         // Style is affected via eventListenerRegionTypes().
         element->invalidateStyle();
     }
@@ -9203,11 +9204,28 @@ void Document::didRemoveInDocumentShadowRoot(ShadowRoot& shadowRoot)
     m_inDocumentShadowRoots.remove(shadowRoot);
 }
 
+ConstantPropertyMap& Document::constantProperties() const
+{
+    if (!m_constantPropertyMap) {
+        auto& thisDocument = const_cast<Document&>(*this);
+        thisDocument.m_constantPropertyMap = makeUnique<ConstantPropertyMap>(thisDocument);
+    }
+    return *m_constantPropertyMap;
+}
+
 void Document::orientationChanged(IntDegrees orientation)
 {
     LOG(Events, "Document %p orientationChanged - orientation %d", this, orientation);
     dispatchWindowEvent(Event::create(eventNames().orientationchangeEvent, Event::CanBubble::No, Event::IsCancelable::No));
-    m_orientationNotifier.orientationChanged(orientation);
+    if (CheckedPtr notifier = m_orientationNotifier.get())
+        notifier->orientationChanged(orientation);
+}
+
+OrientationNotifier& Document::orientationNotifier()
+{
+    if (!m_orientationNotifier)
+        m_orientationNotifier = makeUnique<OrientationNotifier>(currentOrientation(frame()));
+    return *m_orientationNotifier;
 }
 
 #if ENABLE(MEDIA_STREAM)
@@ -9562,7 +9580,7 @@ void Document::keyframesRuleDidChange(const String& name)
 
 void Document::addTopLayerElement(Element& element)
 {
-    RELEASE_ASSERT(&element.document() == this && element.isConnected() && !element.isInTopLayer());
+    RELEASE_ASSERT(&element.document() == this && !element.isInTopLayer());
     auto result = m_topLayerElements.add(element);
     RELEASE_ASSERT(result.isNewEntry);
     if (auto* candidatePopover = dynamicDowncast<HTMLElement>(element); candidatePopover && candidatePopover->popoverState() == PopoverState::Auto) {
@@ -9706,9 +9724,9 @@ void Document::handlePopoverLightDismiss(const PointerEvent& event, Node& target
 
 #if ENABLE(ATTACHMENT_ELEMENT)
 
-void Document::registerAttachmentIdentifier(const String& identifier, const HTMLImageElement& image)
+void Document::registerAttachmentIdentifier(const String& identifier, const AttachmentAssociatedElement& element)
 {
-    editor().registerAttachmentIdentifier(identifier, image);
+    editor().registerAttachmentIdentifier(identifier, element);
 }
 
 void Document::didInsertAttachmentElement(HTMLAttachmentElement& attachment)

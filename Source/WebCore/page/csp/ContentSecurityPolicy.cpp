@@ -829,8 +829,7 @@ void ContentSecurityPolicy::reportViolation(const String& effectiveViolatedDirec
     info.sample = violatedDirectiveList.shouldReportSample(effectiveViolatedDirective) ? sourceContent.left(40).toString() : emptyString();
 
     if (!m_client) {
-        // Unable to ref the document as it may have started destruction.
-        auto* document = dynamicDowncast<Document>(m_scriptExecutionContext.get());
+        RefPtrAllowingPartiallyDestroyed<Document> document = dynamicDowncast<Document>(m_scriptExecutionContext.get());
         if (!document || !document->frame())
             return;
 
@@ -946,6 +945,30 @@ void ContentSecurityPolicy::reportInvalidPluginTypes(const String& pluginType) c
         message = "'plugin-types' Content Security Policy directive is empty; all plugins will be blocked.\n"_s;
     else
         message = makeString("Invalid plugin type in 'plugin-types' Content Security Policy directive: '", pluginType, "'.\n");
+    logToConsole(message);
+}
+
+void ContentSecurityPolicy::reportInvalidTrustedTypesPolicy(const String& policyName) const
+{
+    String message = makeString("Invalid policy name in 'trusted-types' Content Security Policy directive: '", policyName, "'.\n");
+    logToConsole(message);
+}
+
+void ContentSecurityPolicy::reportInvalidTrustedTypesNoneKeyword() const
+{
+    String message = "Invalid policy name in 'trusted-types' Content Security Policy directive: 'none'. Note that 'none' has no effect unless it is the only expression.\n"_s;
+    logToConsole(message);
+}
+
+void ContentSecurityPolicy::reportInvalidTrustedTypesSinkGroup(const String& sinkGroup) const
+{
+    String message = makeString("Invalid sink group in 'require-trusted-types-for' Content Security Policy directive: '", sinkGroup, "'.\n");
+    logToConsole(message);
+}
+
+void ContentSecurityPolicy::reportEmptyRequireTrustedTypesForDirective() const
+{
+    String message = "'require-trusted-types-for' Content Security Policy directive is empty; The directive has no effect.\n"_s;
     logToConsole(message);
 }
 

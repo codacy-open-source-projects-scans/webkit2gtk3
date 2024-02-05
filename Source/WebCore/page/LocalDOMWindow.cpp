@@ -632,15 +632,16 @@ ExceptionOr<Ref<NodeList>> LocalDOMWindow::collectMatchingElementsInFlatTree(Nod
     if (queryOrException.hasException())
         return queryOrException.releaseException();
 
-    if (!is<ContainerNode>(scope))
+    RefPtr scopeContainer = dynamicDowncast<ContainerNode>(scope);
+    if (!scopeContainer)
         return Ref<NodeList> { StaticElementList::create() };
 
     SelectorQuery& query = queryOrException.releaseReturnValue();
 
     Vector<Ref<Element>> result;
-    for (auto& node : composedTreeDescendants(downcast<ContainerNode>(scope))) {
-        if (is<Element>(node) && query.matches(downcast<Element>(node)) && !node.isInUserAgentShadowTree())
-            result.append(downcast<Element>(node));
+    for (auto& node : composedTreeDescendants(*scopeContainer)) {
+        if (RefPtr element = dynamicDowncast<Element>(node); element && query.matches(*element) && !node.isInUserAgentShadowTree())
+            result.append(element.releaseNonNull());
     }
 
     return Ref<NodeList> { StaticElementList::create(WTFMove(result)) };
@@ -652,14 +653,15 @@ ExceptionOr<RefPtr<Element>> LocalDOMWindow::matchingElementInFlatTree(Node& sco
     if (queryOrException.hasException())
         return queryOrException.releaseException();
 
-    if (!is<ContainerNode>(scope))
+    RefPtr scopeContainer = dynamicDowncast<ContainerNode>(scope);
+    if (!scopeContainer)
         return RefPtr<Element> { nullptr };
 
     SelectorQuery& query = queryOrException.releaseReturnValue();
 
-    for (auto& node : composedTreeDescendants(downcast<ContainerNode>(scope))) {
-        if (is<Element>(node) && query.matches(downcast<Element>(node)) && !node.isInUserAgentShadowTree())
-            return &downcast<Element>(node);
+    for (auto& node : composedTreeDescendants(*scopeContainer)) {
+        if (RefPtr element = dynamicDowncast<Element>(node); element && query.matches(*element) && !node.isInUserAgentShadowTree())
+            return element;
     }
 
     return RefPtr<Element> { nullptr };
@@ -749,20 +751,6 @@ BarProp& LocalDOMWindow::toolbar()
     if (!m_toolbar)
         m_toolbar = BarProp::create(*this, BarProp::Toolbar);
     return *m_toolbar;
-}
-
-PageConsoleClient* LocalDOMWindow::console() const
-{
-    // FIXME: This should not return nullptr when frameless.
-    if (!isCurrentlyDisplayedInFrame())
-        return nullptr;
-    auto* frame = this->frame();
-    return frame->page() ? &frame->page()->console() : nullptr;
-}
-
-CheckedPtr<PageConsoleClient> LocalDOMWindow::checkedConsole() const
-{
-    return console();
 }
 
 DOMApplicationCache& LocalDOMWindow::applicationCache()
@@ -1103,38 +1091,8 @@ void LocalDOMWindow::blur()
     page->chrome().unfocus();
 }
 
-void LocalDOMWindow::close(Document& document)
+void LocalDOMWindow::closePage()
 {
-    if (!document.canNavigate(protectedFrame().get()))
-        return;
-    close();
-}
-
-void LocalDOMWindow::close()
-{
-    RefPtr frame = this->frame();
-    if (!frame)
-        return;
-
-    RefPtr page = frame->page();
-    if (!page)
-        return;
-
-    if (!frame->isMainFrame())
-        return;
-
-    if (!(page->openedByDOM() || page->backForward().count() <= 1)) {
-        checkedConsole()->addMessage(MessageSource::JS, MessageLevel::Warning, "Can't close the window since it was not opened by JavaScript"_s);
-        return;
-    }
-
-    if (!frame->checkedLoader()->shouldClose())
-        return;
-
-    ResourceLoadObserver::shared().updateCentralStatisticsStore([] { });
-
-    page->setIsClosing();
-
     protectedDocument()->checkedEventLoop()->queueTask(TaskSource::DOMManipulation, [this, protectedThis = Ref { *this }] {
         // Calling closeWindow() may destroy the page.
         if (auto* page = this->page())
@@ -1504,49 +1462,10 @@ void LocalDOMWindow::setStatus(const String& string)
     m_status = string;
 }
 
-WindowProxy* LocalDOMWindow::opener() const
-{
-    // FIXME: <rdar://118263278> Move LocalDOMWindow::opener and RemoteDOMWindow::opener to DOMWindow.
-    RefPtr frame = this->frame();
-    if (!frame)
-        return nullptr;
-
-    RefPtr openerFrame = frame->loader().opener();
-    if (!openerFrame)
-        return nullptr;
-
-    return &openerFrame->windowProxy();
-}
-
 void LocalDOMWindow::disownOpener()
 {
     if (RefPtr frame = this->frame())
         frame->checkedLoader()->setOpener(nullptr);
-}
-
-WindowProxy* LocalDOMWindow::parent() const
-{
-    RefPtr frame = this->frame();
-    if (!frame)
-        return nullptr;
-
-    RefPtr parentFrame = frame->tree().parent();
-    if (parentFrame)
-        return &parentFrame->windowProxy();
-
-    return &frame->windowProxy();
-}
-
-WindowProxy* LocalDOMWindow::top() const
-{
-    RefPtr frame = this->frame();
-    if (!frame)
-        return nullptr;
-
-    if (!frame->page())
-        return nullptr;
-
-    return &frame->tree().top().windowProxy();
 }
 
 String LocalDOMWindow::origin() const
@@ -1686,11 +1605,15 @@ StyleMedia& LocalDOMWindow::styleMedia()
 
 Ref<CSSStyleDeclaration> LocalDOMWindow::getComputedStyle(Element& element, const String& pseudoElt) const
 {
-    std::optional<PseudoId> pseudoId = PseudoId::None;
+    if (!pseudoElt.startsWith(':'))
+        return CSSComputedStyleDeclaration::create(element, std::nullopt);
+
     // FIXME: This does not work for pseudo-elements that take arguments (webkit.org/b/264103).
-    if (pseudoElt.startsWith(":"_s))
-        pseudoId = CSSSelector::parsePseudoElement(pseudoElt, CSSSelectorParserContext { element.document() });
-    return CSSComputedStyleDeclaration::create(element, pseudoId);
+    auto pseudoId = CSSSelector::parsePseudoElement(pseudoElt, CSSSelectorParserContext { element.document() });
+    if (!pseudoId)
+        return CSSComputedStyleDeclaration::createEmpty(element);
+    // FIXME: CSSSelector::parsePseudoElement should never return PseudoId::None.
+    return CSSComputedStyleDeclaration::create(element, pseudoId == PseudoId::None ? std::nullopt : std::optional(Style::PseudoElementIdentifier { *pseudoId }));
 }
 
 RefPtr<CSSRuleList> LocalDOMWindow::getMatchedCSSRules(Element* element, const String& pseudoElement, bool authorOnly) const

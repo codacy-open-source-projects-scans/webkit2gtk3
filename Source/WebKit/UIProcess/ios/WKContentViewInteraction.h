@@ -170,6 +170,17 @@ typedef std::pair<WebKit::InteractionInformationRequest, InteractionInformationC
 #define FOR_EACH_FIND_WKCONTENTVIEW_ACTION(M)
 #endif
 
+#if USE(APPLE_INTERNAL_SDK)
+#import <WebKitAdditions/UnifiedTextReplacementAdditions.h>
+#endif
+
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+#define FOR_EACH_UNIFIED_TEXT_REPLACEMENT_PRIVATE_WKCONTENTVIEW_ACTION(M) \
+    M(_swapCharacters)
+#else
+#define FOR_EACH_UNIFIED_TEXT_REPLACEMENT_PRIVATE_WKCONTENTVIEW_ACTION(M)
+#endif
+
 #define FOR_EACH_WKCONTENTVIEW_ACTION(M) \
     FOR_EACH_INSERT_TEXT_FROM_CAMERA_WKCONTENTVIEW_ACTION(M) \
     FOR_EACH_FIND_WKCONTENTVIEW_ACTION(M) \
@@ -206,6 +217,7 @@ typedef std::pair<WebKit::InteractionInformationRequest, InteractionInformationC
     M(makeTextWritingDirectionRightToLeft)
 
 #define FOR_EACH_PRIVATE_WKCONTENTVIEW_ACTION(M) \
+    FOR_EACH_UNIFIED_TEXT_REPLACEMENT_PRIVATE_WKCONTENTVIEW_ACTION(M) \
     M(_alignCenter) \
     M(_alignJustified) \
     M(_alignLeft) \
@@ -854,7 +866,7 @@ FOR_EACH_PRIVATE_WKCONTENTVIEW_ACTION(DECLARE_WKCONTENTVIEW_ACTION_FOR_WEB_VIEW)
 
 #if ENABLE(IMAGE_ANALYSIS)
 - (void)_endImageAnalysisGestureDeferral:(WebKit::ShouldPreventGestures)shouldPreventGestures;
-- (void)requestTextRecognition:(NSURL *)imageURL imageData:(WebKit::ShareableBitmap::Handle&&)imageData sourceLanguageIdentifier:(NSString *)sourceLanguageIdentifier targetLanguageIdentifier:(NSString *)targetLanguageIdentifier completionHandler:(CompletionHandler<void(WebCore::TextRecognitionResult&&)>&&)completion;
+- (void)requestTextRecognition:(NSURL *)imageURL imageData:(WebCore::ShareableBitmap::Handle&&)imageData sourceLanguageIdentifier:(NSString *)sourceLanguageIdentifier targetLanguageIdentifier:(NSString *)targetLanguageIdentifier completionHandler:(CompletionHandler<void(WebCore::TextRecognitionResult&&)>&&)completion;
 #endif
 
 #if HAVE(UIFINDINTERACTION)
@@ -866,11 +878,11 @@ FOR_EACH_PRIVATE_WKCONTENTVIEW_ACTION(DECLARE_WKCONTENTVIEW_ACTION_FOR_WEB_VIEW)
 - (void)requestRectForFoundTextRange:(UITextRange *)range completionHandler:(void (^)(CGRect))completionHandler;
 #endif
 
-- (void)beginTextRecognitionForFullscreenVideo:(WebKit::ShareableBitmap::Handle&&)imageHandle playerViewController:(AVPlayerViewController *)playerViewController;
+- (void)beginTextRecognitionForFullscreenVideo:(WebCore::ShareableBitmap::Handle&&)imageHandle playerViewController:(AVPlayerViewController *)playerViewController;
 - (void)cancelTextRecognitionForFullscreenVideo:(AVPlayerViewController *)controller;
 @property (nonatomic, readonly) BOOL isTextRecognitionInFullscreenVideoEnabled;
 
-- (void)beginTextRecognitionForVideoInElementFullscreen:(WebKit::ShareableBitmap::Handle&&)bitmapHandle bounds:(WebCore::FloatRect)bounds;
+- (void)beginTextRecognitionForVideoInElementFullscreen:(WebCore::ShareableBitmap::Handle&&)bitmapHandle bounds:(WebCore::FloatRect)bounds;
 - (void)cancelTextRecognitionForVideoInElementFullscreen;
 
 - (BOOL)_tryToHandlePressesEvent:(UIPressesEvent *)event;

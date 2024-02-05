@@ -432,6 +432,7 @@ typedef (FetchRequest or FetchResponse) FetchObject;
     // Animated image pausing testing.
     boolean hasPausedImageAnimations(Element element);
 
+    undefined markFrontBufferVolatile(Element element);
     boolean isFullyActive(Document document);
     // Must be called on an element whose enclosingLayer() is self-painting.
     boolean isPaintingFrequently(Element element);
@@ -617,6 +618,9 @@ typedef (FetchRequest or FetchResponse) FetchObject;
     boolean hasAutocorrectedMarker(long from, long length);
     boolean hasDictationAlternativesMarker(long from, long length);
     boolean hasCorrectionIndicatorMarker(long from, long length);
+#if defined(ENABLE_UNIFIED_TEXT_REPLACEMENT) && ENABLE_UNIFIED_TEXT_REPLACEMENT
+    boolean hasUnifiedTextReplacementMarker(long from, long length);
+#endif
     undefined setContinuousSpellCheckingEnabled(boolean enabled);
     undefined setAutomaticQuoteSubstitutionEnabled(boolean enabled);
     undefined setAutomaticLinkDetectionEnabled(boolean enabled);
@@ -777,7 +781,6 @@ typedef (FetchRequest or FetchResponse) FetchObject;
 
     undefined setFullscreenInsets(FullscreenInsets insets);
     undefined setFullscreenAutoHideDuration(double duration);
-    undefined setFullscreenControlsHidden(boolean hidden);
 
     [Conditional=VIDEO] boolean isChangingPresentationMode(HTMLVideoElement element);
     [Conditional=VIDEO_PRESENTATION_MODE] undefined setMockVideoPresentationModeEnabled(boolean enabled);
@@ -961,6 +964,7 @@ typedef (FetchRequest or FetchResponse) FetchObject;
     [Conditional=VIDEO] boolean elementIsBlockingDisplaySleep(HTMLMediaElement element);
     [Conditional=VIDEO] boolean isPlayerVisibleInViewport(HTMLMediaElement element);
     [Conditional=VIDEO] boolean isPlayerMuted(HTMLMediaElement element);
+    [Conditional=VIDEO] boolean isPlayerPaused(HTMLMediaElement element);
 
     MockPageOverlay installMockPageOverlay(PageOverlayType type);
     DOMString pageOverlayLayerTreeAsText(optional unsigned short flags = 0);

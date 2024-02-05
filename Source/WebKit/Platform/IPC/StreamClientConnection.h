@@ -72,6 +72,7 @@ public:
     void setMaxBatchSize(unsigned);
 
     void open(Connection::Client&, SerialFunctionDispatcher& = RunLoop::current());
+    Error flushSentMessages(Timeout);
     void invalidate();
 
     template<typename T, typename U, typename V> Error send(T&& message, ObjectIdentifierGeneric<U, V> destinationID, Timeout);
@@ -87,6 +88,9 @@ public:
     template<typename T, typename U, typename V>
     Error waitForAndDispatchImmediately(ObjectIdentifierGeneric<U, V> destinationID, Timeout, OptionSet<WaitForOption> = { });
     template<typename> Error waitForAsyncReplyAndDispatchImmediately(AsyncReplyID, Timeout);
+
+    void addWorkQueueMessageReceiver(ReceiverName, WorkQueue&, WorkQueueMessageReceiver&, uint64_t destinationID = 0);
+    void removeWorkQueueMessageReceiver(ReceiverName, uint64_t destinationID = 0);
 
     StreamClientConnectionBuffer& bufferForTesting();
     Connection& connectionForTesting();

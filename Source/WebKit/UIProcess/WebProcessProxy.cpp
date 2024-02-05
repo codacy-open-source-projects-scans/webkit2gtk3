@@ -35,6 +35,7 @@
 #include "GoToBackForwardItemParameters.h"
 #include "LoadParameters.h"
 #include "Logging.h"
+#include "ModelProcessProxy.h"
 #include "NetworkProcessConnectionInfo.h"
 #include "NotificationManagerMessageHandlerMessages.h"
 #include "PageLoadState.h"
@@ -348,8 +349,7 @@ WebProcessProxy::~WebProcessProxy()
     WebPasteboardProxy::singleton().removeWebProcessProxy(*this);
 
 #if HAVE(DISPLAY_LINK)
-    // Unable to ref the process pool as it may have started destruction.
-    if (auto* processPool = m_processPool.get())
+    if (RefPtrAllowingPartiallyDestroyed<WebProcessPool> processPool = m_processPool.get())
         processPool->displayLinks().stopDisplayLinks(m_displayLinkClient);
 #endif
 
@@ -617,8 +617,7 @@ void WebProcessProxy::processWillShutDown(IPC::Connection& connection)
 
 #if HAVE(DISPLAY_LINK)
     m_displayLinkClient.setConnection(nullptr);
-    // Unable to protect the process pool as it may have started destruction.
-    processPool().displayLinks().stopDisplayLinks(m_displayLinkClient);
+    RefAllowingPartiallyDestroyed<WebProcessPool> { processPool() }->displayLinks().stopDisplayLinks(m_displayLinkClient);
 #endif
 }
 
@@ -687,8 +686,7 @@ void WebProcessProxy::shutDown()
     m_routingArbitrator->processDidTerminate();
 #endif
 
-    // Unable to protect the process pool as it may have started destruction.
-    processPool().disconnectProcess(*this);
+    RefAllowingPartiallyDestroyed<WebProcessPool> { processPool() }->disconnectProcess(*this);
 }
 
 RefPtr<WebPageProxy> WebProcessProxy::webPage(WebPageProxyIdentifier pageID)
@@ -1052,6 +1050,12 @@ void WebProcessProxy::gpuProcessExited(ProcessTerminationReason reason)
 
     for (Ref page : pages())
         page->gpuProcessExited(reason);
+}
+#endif
+
+#if ENABLE(MODEL_PROCESS)
+void WebProcessProxy::createModelProcessConnection(IPC::Connection::Handle&&, WebKit::ModelProcessConnectionParameters&&)
+{
 }
 #endif
 

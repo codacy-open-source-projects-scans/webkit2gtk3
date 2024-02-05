@@ -44,6 +44,7 @@ OBJC_CLASS _WKWebExtensionLocalization;
 namespace WebKit {
 
 class WebExtensionAPINamespace;
+class WebExtensionAPIStorage;
 class WebExtensionMatchPattern;
 class WebFrame;
 
@@ -84,9 +85,12 @@ public:
 
     bool inTestingMode() { return m_testingMode; }
 
+    WebCore::DOMWrapperWorld& toDOMWorld(WebExtensionContentWorldType);
+
     static WebCore::DOMWrapperWorld& mainWorld() { return WebCore::mainThreadNormalWorld(); }
 
-    WebCore::DOMWrapperWorld& contentScriptWorld() { return *m_contentScriptWorld; }
+    bool hasContentScriptWorld() const { return !!m_contentScriptWorld; }
+    WebCore::DOMWrapperWorld& contentScriptWorld() const { RELEASE_ASSERT(hasContentScriptWorld()); return *m_contentScriptWorld; }
     void setContentScriptWorld(WebCore::DOMWrapperWorld* world) { m_contentScriptWorld = world; }
 
     void addFrameWithExtensionContent(WebFrame&);
@@ -157,6 +161,7 @@ private:
 
     // Storage
     void setStorageAccessLevel(bool);
+    void dispatchStorageChangedEvent(const String& onChangedJSON, WebExtensionStorageType, WebExtensionContentWorldType);
 
     // Tabs
     void dispatchTabsCreatedEvent(const WebExtensionTabParameters&);

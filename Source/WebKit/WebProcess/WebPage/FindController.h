@@ -25,12 +25,12 @@
 
 #pragma once
 
-#include "ShareableBitmap.h"
 #include "WebFindOptions.h"
 #include <WebCore/FindOptions.h>
 #include <WebCore/FrameIdentifier.h>
 #include <WebCore/IntRect.h>
 #include <WebCore/PageOverlay.h>
+#include <WebCore/ShareableBitmap.h>
 #include <WebCore/SimpleRange.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/Forward.h>
@@ -64,7 +64,7 @@ public:
     virtual ~FindController();
 
     void findString(const String&, OptionSet<FindOptions>, unsigned maxMatchCount, TriggerImageAnalysis, CompletionHandler<void(std::optional<WebCore::FrameIdentifier>, bool)>&& = { });
-    void findStringMatches(const String&, OptionSet<FindOptions>, unsigned maxMatchCount);
+    void findStringMatches(const String&, OptionSet<FindOptions>, unsigned maxMatchCount, CompletionHandler<void(Vector<Vector<WebCore::IntRect>>, int32_t)>&&);
     void findRectsForStringMatches(const String&, OptionSet<WebKit::FindOptions>, unsigned maxMatchCount, CompletionHandler<void(Vector<WebCore::FloatRect>&&)>&&);
     void getImageForFindMatch(uint32_t matchIndex);
     void selectFindMatch(uint32_t matchIndex);

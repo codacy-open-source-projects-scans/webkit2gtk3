@@ -93,7 +93,7 @@ void PDFDocumentLayout::updateLayout(IntSize pluginSize)
         auto pageCropBox = FloatRect { [page boundsForBox:kPDFDisplayBoxCropBox] };
         auto rotation = normalizeRotation([page rotation]);
 
-        LOG_WITH_STREAM(Plugins, stream << "PDFDocumentLayout::updateLayout() - page " << i << " crop box " << pageCropBox << " rotation " << rotation);
+        LOG_WITH_STREAM(PDF, stream << "PDFDocumentLayout::updateLayout() - page " << i << " crop box " << pageCropBox << " rotation " << rotation);
 
         auto pageBounds = normalizePageBounds(pageCropBox, rotation);
 
@@ -116,7 +116,7 @@ void PDFDocumentLayout::updateLayout(IntSize pluginSize)
 
     layoutPages(pluginSize.width(), maxRowWidth);
 
-    LOG_WITH_STREAM(Plugins, stream << "PDFDocumentLayout::updateLayout() - plugin size " << pluginSize << " document bounds " << m_documentBounds << " scale " << m_scale);
+    LOG_WITH_STREAM(PDF, stream << "PDFDocumentLayout::updateLayout() - plugin size " << pluginSize << " document bounds " << m_documentBounds << " scale " << m_scale);
 }
 
 void PDFDocumentLayout::layoutPages(float availableWidth, float maxRowWidth)
@@ -146,6 +146,8 @@ void PDFDocumentLayout::layoutSingleColumn(float availableWidth, float maxRowWid
 
         auto pageBounds = m_pageGeometry[i].normalizedBounds;
 
+        LOG_WITH_STREAM(PDF, stream << "PDFDocumentLayout::layoutSingleColumn - page " << i << " bounds " << pageBounds);
+
         auto pageLeft = std::max<float>(std::floor((maxRowWidth - pageBounds.width()) / 2), 0);
         pageBounds.setLocation({ pageLeft, currentYOffset });
 
@@ -159,6 +161,8 @@ void PDFDocumentLayout::layoutSingleColumn(float availableWidth, float maxRowWid
 
     m_scale = std::max<float>(availableWidth / maxRowWidth, minScale);
     m_documentBounds = FloatRect { 0, 0, maxRowWidth, currentYOffset };
+
+    LOG_WITH_STREAM(PDF, stream << "PDFDocumentLayout::layoutSingleColumn - document bounds " << m_documentBounds << " scale " << m_scale);
 }
 
 void PDFDocumentLayout::layoutTwoUpColumn(float availableWidth, float maxRowWidth)

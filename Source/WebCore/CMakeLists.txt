@@ -930,6 +930,7 @@ set(WebCore_NON_SVG_IDL_FILES
     css/CSSRule.idl
     css/CSSRuleList.idl
     css/CSSScopeRule.idl
+    css/CSSStartingStyleRule.idl
     css/CSSStyleDeclaration.idl
     css/CSSStyleRule.idl
     css/CSSStyleSheet.idl
@@ -1024,6 +1025,9 @@ set(WebCore_NON_SVG_IDL_FILES
     dom/Comment.idl
     dom/CompositionEvent.idl
     dom/ContentVisibilityAutoStateChangeEvent.idl
+    dom/CreateHTMLCallback.idl
+    dom/CreateScriptCallback.idl
+    dom/CreateScriptURLCallback.idl
     dom/CustomElementRegistry.idl
     dom/CustomEvent.idl
     dom/CustomStateSet.idl
@@ -1146,6 +1150,12 @@ set(WebCore_NON_SVG_IDL_FILES
     dom/TouchEvent.idl
     dom/TouchList.idl
     dom/TreeWalker.idl
+    dom/TrustedHTML.idl
+    dom/TrustedScript.idl
+    dom/TrustedScriptURL.idl
+    dom/TrustedTypePolicy.idl
+    dom/TrustedTypePolicyFactory.idl
+    dom/TrustedTypePolicyOptions.idl
     dom/UIEvent.idl
     dom/UIEventInit.idl
     dom/ValidityStateFlags.idl
@@ -1153,6 +1163,7 @@ set(WebCore_NON_SVG_IDL_FILES
     dom/ViewTransitionUpdateCallback.idl
     dom/VisibilityState.idl
     dom/WheelEvent.idl
+    dom/WindowOrWorkerGlobalScope+TrustedTypes.idl
     dom/XMLDocument.idl
 
     fileapi/Blob.idl
@@ -1913,6 +1924,18 @@ endif ()
 
 if (ENABLE_XSLT)
     list(APPEND WebCore_LIBRARIES LibXslt::LibXslt)
+endif ()
+
+if (UNIX)
+    check_function_exists(shm_open SHM_OPEN_EXISTS)
+    if (NOT SHM_OPEN_EXISTS)
+        set(CMAKE_REQUIRED_LIBRARIES rt)
+        check_function_exists(shm_open SHM_OPEN_REQUIRES_LIBRT)
+        if (SHM_OPEN_REQUIRES_LIBRT)
+            list(APPEND WebCore_PRIVATE_LIBRARIES rt)
+        endif ()
+        unset(CMAKE_REQUIRED_LIBRARIES)
+    endif ()
 endif ()
 
 # For platforms that want to use system-provided OpenGL (ES) / EGL headers,

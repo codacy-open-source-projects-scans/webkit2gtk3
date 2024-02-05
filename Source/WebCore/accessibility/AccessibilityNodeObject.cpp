@@ -340,11 +340,8 @@ AccessibilityRole AccessibilityNodeObject::determineAccessibilityRoleFromNode(Tr
             return AccessibilityRole::RadioButton;
         if (input->isTextButton())
             return buttonRoleType();
-        // On iOS, the date field and time field are popup buttons. On other platforms they are text fields.
-#if PLATFORM(IOS_FAMILY)
-        if (input->isDateField() || input->isTimeField())
-            return AccessibilityRole::PopUpButton;
-#endif
+        if (input->isDateField() || input->isDateTimeLocalField() || input->isMonthField() || input->isTimeField() || input->isWeekField())
+            return AccessibilityRole::DateTime;
 #if ENABLE(INPUT_TYPE_COLOR)
         if (input->isColorControl())
             return AccessibilityRole::ColorWell;
@@ -647,6 +644,7 @@ bool AccessibilityNodeObject::computeAccessibilityIsIgnored() const
     if (decision == AccessibilityObjectInclusion::IgnoreObject)
         return true;
 
+    // FIXME: We should return true for node-only objects within display:none containers, but we don't.
     auto role = roleValue();
     return role == AccessibilityRole::Ignored || role == AccessibilityRole::Unknown;
 }
@@ -933,8 +931,11 @@ AXCoreObject::AccessibilityChildrenVector AccessibilityNodeObject::radioButtonGr
         auto radioButtonGroup = input->radioButtonGroup();
         result.reserveInitialCapacity(radioButtonGroup.size());
 
+        WeakPtr cache = axObjectCache();
         for (auto& radioSibling : radioButtonGroup) {
-            if (auto* object = axObjectCache()->getOrCreate(radioSibling.ptr()))
+            if (!cache)
+                break;
+            if (auto* object = cache->getOrCreate(radioSibling.ptr()))
                 result.append(object);
         }
     }
@@ -2461,7 +2462,8 @@ static String accessibleNameForNode(Node* node, Node* labelledbyNode)
 
     // If the node can be turned into an AX object, we can use standard name computation rules.
     // If however, the node cannot (because there's no renderer e.g.) fallback to using the basic text underneath.
-    auto* axObject = node->document().axObjectCache()->getOrCreate(node);
+    auto* cache = node->document().axObjectCache();
+    RefPtr axObject = cache ? cache->getOrCreate(node) : nullptr;
     if (axObject) {
         String valueDescription = axObject->valueDescription();
         if (!valueDescription.isEmpty())

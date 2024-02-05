@@ -3044,6 +3044,17 @@
    },
    {
       "emails" : [
+         "feaneron@igalia.com",
+         "gbsneto@gnome.org"
+      ],
+      "github" : "GeorgesStavracas",
+      "name" : "Georges Basile Stavracas Neto",
+      "nicks" : [
+         "feaneron"
+      ]
+   },
+   {
+      "emails" : [
          "g_squelart@apple.com",
          "squelart@apple.com"
       ],
@@ -3834,7 +3845,7 @@
       "nicks" : [
          "jeffm7"
       ],
-      "status" : "committer"
+      "status" : "reviewer"
    },
    {
       "emails" : [
@@ -5100,7 +5111,6 @@
    },
    {
       "emails" : [
-         "luke@warlow.dev",
          "lwarlow@igalia.com"
       ],
       "github" : "lukewarlow",

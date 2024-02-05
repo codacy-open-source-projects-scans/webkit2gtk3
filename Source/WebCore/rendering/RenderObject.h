@@ -217,7 +217,9 @@ public:
         LegacySVGRect,
         LegacySVGResourceClipper,
         LegacySVGResourceLinearGradient,
+        LegacySVGResourceMarker,
         LegacySVGResourceMasker,
+        LegacySVGResourcePattern,
         LegacySVGResourceRadialGradient,
         LegacySVGRoot,
         LegacySVGTransformableContainer,
@@ -572,13 +574,15 @@ public:
     bool isRenderSVGResourceContainer() const { return isRenderSVGModelObject() && m_typeSpecificFlags.svgFlags().contains(SVGModelObjectFlag::IsResourceContainer); }
     bool isRenderSVGResourceFilter() const { return type() == Type::SVGResourceFilter; }
     bool isLegacyRenderSVGResourceClipper() const { return type() == Type::LegacySVGResourceClipper; }
-    bool isLegacyRenderSVGResourceMarker() const { return type() == Type::SVGResourceMarker; }
+    bool isLegacyRenderSVGResourceMarker() const { return type() == Type::LegacySVGResourceMarker; }
     bool isLegacyRenderSVGResourceMasker() const { return type() == Type::LegacySVGResourceMasker; }
     bool isRenderSVGResourceGradient() const { return type() == Type::SVGResourceLinearGradient || type() == Type::SVGResourceRadialGradient; }
-    bool isRenderSVGResourcePaintServer() const { return isRenderSVGResourceGradient(); }
+    bool isRenderSVGResourcePaintServer() const { return isRenderSVGResourceGradient() || isRenderSVGResourcePattern(); }
+    bool isRenderSVGResourcePattern() const { return type() == Type::SVGResourcePattern; }
     bool isRenderSVGResourceClipper() const { return type() == Type::SVGResourceClipper; }
     bool isRenderSVGResourceFilterPrimitive() const { return type() == Type::SVGResourceFilterPrimitive; }
     bool isRenderSVGResourceLinearGradient() const { return type() == Type::SVGResourceLinearGradient; }
+    bool isRenderSVGResourceMarker() const { return type() == Type::SVGResourceMarker; }
     bool isRenderSVGResourceMasker() const { return type() == Type::SVGResourceMasker; }
     bool isRenderSVGResourceRadialGradient() const { return type() == Type::SVGResourceRadialGradient; }
     bool isRenderOrLegacyRenderSVGRoot() const { return isRenderSVGRoot() || isLegacyRenderSVGRoot(); }
@@ -1257,7 +1261,7 @@ private:
 
     StateBitfields m_stateBitfields;
 
-    CheckedRef<Node> m_node;
+    WeakRef<Node, WeakPtrImplWithEventTargetData> m_node;
 
     SingleThreadWeakPtr<RenderElement> m_parent;
     SingleThreadPackedWeakPtr<RenderObject> m_previous;

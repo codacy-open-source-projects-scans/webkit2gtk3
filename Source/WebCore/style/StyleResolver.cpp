@@ -484,9 +484,9 @@ std::optional<ResolvedStyle> Resolver::styleForPseudoElement(const Element& elem
     if (collector.matchResult().isEmpty())
         return { };
 
-    state.style()->setPseudoElementType(pseudoElementRequest.pseudoId);
-    if (!pseudoElementRequest.pseudoElementNameArgument.isNull())
-        state.style()->setPseudoElementNameArgument(pseudoElementRequest.pseudoElementNameArgument);
+    state.style()->setPseudoElementType(pseudoElementRequest.pseudoId());
+    if (!pseudoElementRequest.nameArgument().isNull())
+        state.style()->setPseudoElementNameArgument(pseudoElementRequest.nameArgument());
 
     applyMatchedProperties(state, collector.matchResult());
 
@@ -605,7 +605,7 @@ void Resolver::applyMatchedProperties(State& state, const MatchResult& matchResu
     auto& element = *state.element();
 
     unsigned cacheHash = MatchedDeclarationsCache::computeHash(matchResult, parentStyle.inheritedCustomProperties());
-    auto includedProperties = PropertyCascade::allProperties();
+    auto includedProperties = PropertyCascade::normalProperties();
 
     auto* cacheEntry = m_matchedDeclarationsCache.find(cacheHash, matchResult, parentStyle.inheritedCustomProperties());
 

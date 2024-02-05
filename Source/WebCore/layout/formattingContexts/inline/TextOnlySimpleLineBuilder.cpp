@@ -442,15 +442,20 @@ InlineLayoutUnit TextOnlySimpleLineBuilder::availableWidth() const
     return (m_lineLogicalRect.width() + LayoutUnit::epsilon()) - (!std::isnan(contentLogicalRight) ? contentLogicalRight : 0.f);
 }
 
-bool TextOnlySimpleLineBuilder::isEligibleForSimplifiedTextOnlyInlineLayout(const ElementBox& rootBox, const InlineContentCache& inlineContentCache, const PlacedFloats* placedFloats)
+bool TextOnlySimpleLineBuilder::isEligibleForSimplifiedTextOnlyInlineLayoutByContent(const InlineContentCache::InlineItems& inlineItems, const PlacedFloats& placedFloats)
 {
-    if (placedFloats && !placedFloats->isEmpty())
+    if (inlineItems.isEmpty())
         return false;
-    if (inlineContentCache.inlineItems().isEmpty())
+    if (!inlineItems.hasTextAndLineBreakOnlyContent() || inlineItems.hasInlineBoxes() || inlineItems.requiresVisualReordering())
         return false;
-    if (!inlineContentCache.inlineItems().isNonBidiTextAndForcedLineBreakOnlyContent())
+    if (!placedFloats.isEmpty())
         return false;
 
+    return true;
+}
+
+bool TextOnlySimpleLineBuilder::isEligibleForSimplifiedInlineLayoutByStyle(const ElementBox& rootBox)
+{
     auto& rootStyle = rootBox.style();
     if (rootStyle.fontCascade().wordSpacing())
         return false;

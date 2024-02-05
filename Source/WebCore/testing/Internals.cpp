@@ -186,7 +186,6 @@
 #include "RenderMenuList.h"
 #include "RenderSearchField.h"
 #include "RenderTheme.h"
-#include "RenderThemeIOS.h"
 #include "RenderTreeAsText.h"
 #include "RenderView.h"
 #include "RenderedDocumentMarker.h"
@@ -360,6 +359,7 @@
 
 #if PLATFORM(IOS_FAMILY)
 #include "MediaSessionHelperIOS.h"
+#include "RenderThemeIOS.h"
 #endif
 
 #if PLATFORM(COCOA)
@@ -498,6 +498,10 @@ static bool markerTypeFrom(const String& markerType, DocumentMarker::Type& resul
 #if ENABLE(TELEPHONE_NUMBER_DETECTION)
     else if (equalLettersIgnoringASCIICase(markerType, "telephonenumber"_s))
         result = DocumentMarker::Type::TelephoneNumber;
+#endif
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+    else if (equalLettersIgnoringASCIICase(markerType, "unifiedtextreplacement"_s))
+        result = DocumentMarker::Type::UnifiedTextReplacement;
 #endif
     else
         return false;
@@ -640,7 +644,6 @@ void Internals::resetToConsistentState(Page& page)
 
     page.setFullscreenAutoHideDuration(0_s);
     page.setFullscreenInsets({ });
-    page.setFullscreenControlsHidden(false);
 
     MediaEngineConfigurationFactory::disableMock();
 
@@ -1385,20 +1388,31 @@ void Internals::incrementFrequentPaintCounter(Element& element)
 
 void Internals::purgeFrontBuffer(Element& element)
 {
-    if (element.renderer() && element.renderer()->enclosingLayer())
-        element.renderer()->enclosingLayer()->purgeFrontBufferForTesting();
+    if (element.renderer()) {
+        if (CheckedPtr layer = element.renderer()->enclosingLayer())
+            layer->purgeFrontBufferForTesting();
+    }
 }
 
 void Internals::purgeBackBuffer(Element& element)
 {
-    if (element.renderer() && element.renderer()->enclosingLayer())
-        element.renderer()->enclosingLayer()->purgeBackBufferForTesting();
+    if (element.renderer()) {
+        if (CheckedPtr layer = element.renderer()->enclosingLayer())
+            layer->purgeBackBufferForTesting();
+    }
+}
+
+void Internals::markFrontBufferVolatile(Element& element)
+{
+    if (element.renderer()) {
+        if (CheckedPtr layer = element.renderer()->enclosingLayer())
+            layer->markFrontBufferVolatileForTesting();
+    }
 }
 
 Ref<CSSComputedStyleDeclaration> Internals::computedStyleIncludingVisitedInfo(Element& element) const
 {
-    bool allowVisitedStyle = true;
-    return CSSComputedStyleDeclaration::create(element, allowVisitedStyle);
+    return CSSComputedStyleDeclaration::create(element, CSSComputedStyleDeclaration::AllowVisited::Yes);
 }
 
 Node* Internals::ensureUserAgentShadowRoot(Element& host)
@@ -2733,6 +2747,13 @@ bool Internals::hasCorrectionIndicatorMarker(int from, int length)
     return hasMarkerFor(DocumentMarker::Type::CorrectionIndicator, from, length);
 }
 
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+bool Internals::hasUnifiedTextReplacementMarker(int from, int length)
+{
+    return hasMarkerFor(DocumentMarker::Type::UnifiedTextReplacement, from, length);
+}
+#endif
+
 void Internals::setContinuousSpellCheckingEnabled(bool enabled)
 {
     if (!contextDocument() || !contextDocument()->frame())
@@ -3792,14 +3813,6 @@ void Internals::setFullscreenAutoHideDuration(double duration)
     page->setFullscreenAutoHideDuration(Seconds(duration));
 }
 
-void Internals::setFullscreenControlsHidden(bool hidden)
-{
-    Page* page = contextDocument()->frame()->page();
-    ASSERT(page);
-
-    page->setFullscreenControlsHidden(hidden);
-}
-
 #if ENABLE(VIDEO)
 bool Internals::isChangingPresentationMode(HTMLVideoElement& element) const
 {
@@ -4805,6 +4818,12 @@ bool Internals::isPlayerMuted(const HTMLMediaElement& element) const
 {
     auto player = element.player();
     return player && player->muted();
+}
+
+bool Internals::isPlayerPaused(const HTMLMediaElement& element) const
+{
+    auto player = element.player();
+    return player && player->paused();
 }
 
 void Internals::beginAudioSessionInterruption()

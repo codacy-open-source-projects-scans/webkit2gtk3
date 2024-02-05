@@ -426,8 +426,10 @@ typedef struct CGSVGDocument *CGSVGDocumentRef;
 @property (nonatomic, readonly) UIEdgeInsets _systemContentInset;
 @property (nonatomic, getter=_allowsAsyncScrollEvent, setter=_setAllowsAsyncScrollEvent:) BOOL _allowsAsyncScrollEvent;
 @property (nonatomic, getter=_isFirstResponderKeyboardAvoidanceEnabled, setter=_setFirstResponderKeyboardAvoidanceEnabled:) BOOL firstResponderKeyboardAvoidanceEnabled;
+#if !HAVE(BROWSER_ENGINE_SUPPORTING_API)
 @property (nonatomic) BOOL bouncesHorizontally;
 @property (nonatomic) BOOL bouncesVertically;
+#endif
 @property (nonatomic, setter=_setAllowsParentToBeginHorizontally:) BOOL _allowsParentToBeginHorizontally;
 @property (nonatomic, setter=_setAllowsParentToBeginVertically:) BOOL _allowsParentToBeginVertically;
 @property (nonatomic) BOOL tracksImmediatelyWhileDecelerating;
@@ -488,8 +490,6 @@ typedef enum {
 @protocol UITextInputDelegatePrivate
 - (void)layoutHasChanged;
 @end
-
-@class UITextInputArrowKeyHistory;
 
 @protocol UITextInputPrivate <UITextInput, UITextInputTokenizer, UITextInputTraits_Private>
 @optional
@@ -1203,6 +1203,8 @@ typedef NS_ENUM(NSUInteger, _UIScrollDeviceCategory) {
 - (BOOL)_requiresKeyboardResetOnReload;
 - (UTF32Char)_characterInRelationToCaretSelection:(int)amount;
 @end
+
+@class UITextInputArrowKeyHistory;
 
 WTF_EXTERN_C_BEGIN
 

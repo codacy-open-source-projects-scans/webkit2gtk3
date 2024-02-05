@@ -77,6 +77,7 @@
 #include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/ThreadSafeWeakHashSet.h>
 #include <wtf/UniqueArray.h>
+#include <wtf/text/AdaptiveStringSearcher.h>
 #include <wtf/text/SymbolImpl.h>
 #include <wtf/text/SymbolRegistry.h>
 
@@ -325,6 +326,8 @@ public:
 
     HeapProfiler* heapProfiler() { return m_heapProfiler.getIfExists(); }
     HeapProfiler& ensureHeapProfiler() { return m_heapProfiler.get(*this); }
+
+    AdaptiveStringSearcherTables& adaptiveStringSearcherTables() { return m_stringSearcherTables.get(*this); }
 
     bool isAnalyzingHeap() const { return m_activeHeapAnalyzer; }
     HeapAnalyzer* activeHeapAnalyzer() const { return m_activeHeapAnalyzer; }
@@ -1015,6 +1018,9 @@ public:
     void registerWasmInstance(Wasm::Instance&);
 #endif
 
+    void notifyDebuggerHookInjected() { m_isDebuggerHookInjected = true; }
+    bool isDebuggerHookInjected() const { return m_isDebuggerHookInjected; }
+
 private:
     VM(VMType, HeapType, WTF::RunLoop* = nullptr, bool* success = nullptr);
     static VM*& sharedInstanceInternal();
@@ -1113,6 +1119,7 @@ private:
     VMTraps m_traps;
     LazyRef<VM, Watchdog> m_watchdog;
     LazyUniqueRef<VM, HeapProfiler> m_heapProfiler;
+    LazyUniqueRef<VM, AdaptiveStringSearcherTables> m_stringSearcherTables;
 #if ENABLE(SAMPLING_PROFILER)
     RefPtr<SamplingProfiler> m_samplingProfiler;
 #endif
@@ -1131,6 +1138,7 @@ private:
     bool m_hasTerminationRequest { false };
     bool m_executionForbidden { false };
     bool m_executionForbiddenOnTermination { false };
+    bool m_isDebuggerHookInjected { false };
 
     Lock m_loopHintExecutionCountLock;
     HashMap<const JSInstruction*, std::pair<unsigned, std::unique_ptr<uintptr_t>>> m_loopHintExecutionCounts;

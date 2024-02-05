@@ -1503,10 +1503,6 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
     if ([attributeName isEqualToString: NSAccessibilityRoleDescriptionAttribute])
         return [self roleDescription];
 
-    // AXARIARole is only used by DumpRenderTree (so far).
-    if ([attributeName isEqualToString:@"AXARIARole"])
-        return backingObject->computedRoleString();
-
     if ([attributeName isEqualToString: NSAccessibilityParentAttribute]) {
         // This will return the parent of the AXWebArea, if this is a web area.
         if (id scrollView = scrollViewParent(*backingObject))
@@ -1936,6 +1932,12 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
         return (id)[self selectedTextMarkerRange];
 
     if ([attributeName isEqualToString:AXStartTextMarkerAttribute]) {
+#if ENABLE(AX_THREAD_TEXT_APIS)
+        if (AXObjectCache::useAXThreadTextApis()) {
+            if (RefPtr tree = std::get<RefPtr<AXIsolatedTree>>(axTreeForID(backingObject->treeID())))
+                return tree->firstMarker().platformData().bridgingAutorelease();
+        }
+#endif // ENABLE(AX_THREAD_TEXT_APIS)
         return Accessibility::retrieveAutoreleasedValueFromMainThread<id>([protectedSelf = retainPtr(self)] () -> RetainPtr<id> {
             auto* backingObject = protectedSelf.get().axBackingObject;
             if (!backingObject)
@@ -1946,6 +1948,12 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
     }
 
     if ([attributeName isEqualToString:AXEndTextMarkerAttribute]) {
+#if ENABLE(AX_THREAD_TEXT_APIS)
+        if (AXObjectCache::useAXThreadTextApis()) {
+            if (RefPtr tree = std::get<RefPtr<AXIsolatedTree>>(axTreeForID(backingObject->treeID())))
+                return tree->lastMarker().platformData().bridgingAutorelease();
+        }
+#endif // ENABLE(AX_THREAD_TEXT_APIS)
         return Accessibility::retrieveAutoreleasedValueFromMainThread<id>([protectedSelf = retainPtr(self)] () -> RetainPtr<id> {
             auto* backingObject = protectedSelf.get().axBackingObject;
             if (!backingObject)
@@ -2230,6 +2238,9 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
     }
 
     // Used by LayoutTests only, not by AT clients.
+    if (UNLIKELY([attributeName isEqualToString:@"AXARIARole"]))
+        return backingObject->computedRoleString();
+
     if (UNLIKELY([attributeName isEqualToString:@"AXControllers"]))
         return makeNSArray(backingObject->controllers());
 

@@ -246,6 +246,37 @@ const Vector<uint32_t>* PipelineLayout::computeOffsets(uint32_t bindGroupIndex, 
     return offsetVectorForBindGroup(bindGroupIndex, m_computeOffsets, dynamicOffsets, WGPUShaderStage_Compute);
 }
 
+NSString* PipelineLayout::errorValidatingBindGroupCompatibility(const PipelineLayout::BindGroupHashMap& bindGroups, size_t vertexStageInBufferCount) const
+{
+    auto setBindGroupsSize = bindGroups.size();
+    if (!m_bindGroupLayouts)
+        return (!setBindGroupsSize && !vertexStageInBufferCount) ? nil : @"bind groups were set but layout has no bind groups";
+
+    auto& bindGroupLayouts = *m_bindGroupLayouts;
+    auto numberOfBindGroupsInPipeline = bindGroupLayouts.size();
+    if (setBindGroupsSize + vertexStageInBufferCount < numberOfBindGroupsInPipeline) {
+        if (numberOfBindGroupsInPipeline == 1 && !bindGroupLayouts[0]->entries().size())
+            return nil;
+        return [NSString stringWithFormat:@"number of bind groups set(%u) is less than the pipeline uses(%zu)", setBindGroupsSize, numberOfBindGroupsInPipeline];
+    }
+
+    for (size_t bindGroupIndex = vertexStageInBufferCount; bindGroupIndex < numberOfBindGroupsInPipeline; ++bindGroupIndex) {
+        auto it = bindGroups.find(bindGroupIndex);
+        if (it == bindGroups.end())
+            return [NSString stringWithFormat:@"can not find bind group in pipeline for bindGroup index %zu", bindGroupIndex];
+
+        auto* setBindGroupLayout = it->value->bindGroupLayout();
+        if (!setBindGroupLayout)
+            return [NSString stringWithFormat:@"can not find bind group in set bind groups for bindGroup index %zu", bindGroupIndex];
+
+        auto& pipelineBindGroupLayout = bindGroupLayouts[bindGroupIndex];
+        if (NSString* error = pipelineBindGroupLayout->errorValidatingBindGroupCompatibility(*setBindGroupLayout))
+            return error;
+    }
+
+    return nil;
+}
+
 } // namespace WebGPU
 
 #pragma mark WGPU Stubs

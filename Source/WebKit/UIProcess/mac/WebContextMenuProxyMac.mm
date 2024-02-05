@@ -35,7 +35,6 @@
 #import "MenuUtilities.h"
 #import "PageClientImplMac.h"
 #import "ServicesController.h"
-#import "ShareableBitmap.h"
 #import "WKMenuItemIdentifiersPrivate.h"
 #import "WKSharingServicePickerDelegate.h"
 #import "WebContextMenuItem.h"
@@ -45,6 +44,7 @@
 #import <WebCore/GraphicsContext.h>
 #import <WebCore/IntRect.h>
 #import <WebCore/LocalizedStrings.h>
+#import <WebCore/ShareableBitmap.h>
 #import <pal/spi/mac/NSMenuSPI.h>
 #import <pal/spi/mac/NSSharingServicePickerSPI.h>
 #import <pal/spi/mac/NSWindowSPI.h>
@@ -236,7 +236,7 @@ void WebContextMenuProxyMac::setupServicesMenu()
     RetainPtr<NSItemProvider> itemProvider;
     if (hasControlledImage) {
         if (attachment)
-            itemProvider = adoptNS([[NSItemProvider alloc] initWithItem:attachment->enclosingImageNSData() typeIdentifier:attachment->utiType()]);
+            itemProvider = adoptNS([[NSItemProvider alloc] initWithItem:attachment->associatedElementNSData() typeIdentifier:attachment->utiType()]);
         else {
             RefPtr<ShareableBitmap> image = m_context.controlledImage();
             if (!image)
@@ -256,7 +256,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 
         items = @[ selection.get() ];
     } else if (isPDFAttachment) {
-        itemProvider = adoptNS([[NSItemProvider alloc] initWithItem:attachment->enclosingImageNSData() typeIdentifier:attachment->utiType()]);
+        itemProvider = adoptNS([[NSItemProvider alloc] initWithItem:attachment->associatedElementNSData() typeIdentifier:attachment->utiType()]);
         items = @[ itemProvider.get() ];
     } else {
         LOG_ERROR("No service controlled item represented in the context");

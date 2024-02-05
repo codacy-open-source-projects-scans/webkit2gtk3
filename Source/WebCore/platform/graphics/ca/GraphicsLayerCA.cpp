@@ -1312,6 +1312,9 @@ void GraphicsLayerCA::setContentsToPlatformLayer(PlatformLayer* platformLayer, C
 
 void GraphicsLayerCA::setContentsToPlatformLayerHost(LayerHostingContextIdentifier identifier)
 {
+    if (m_contentsLayer && m_contentsLayer->hostingContextIdentifier() == identifier)
+        return;
+
     m_contentsLayer = createPlatformCALayerHost(identifier, this);
     m_contentsLayerPurpose = GraphicsLayer::ContentsLayerPurpose::Host;
     m_contentsDisplayDelegate = nullptr;
@@ -1972,6 +1975,11 @@ void GraphicsLayerCA::platformCALayerLayerDisplay(PlatformCALayer* layer)
     ASSERT(m_contentsDisplayDelegate);
     ASSERT(layer == m_contentsLayer);
     m_contentsDisplayDelegate->display(*layer);
+}
+
+bool GraphicsLayerCA::platformCALayerNeedsPlatformContext(const PlatformCALayer*) const
+{
+    return client().layerNeedsPlatformContext(this);
 }
 
 void GraphicsLayerCA::commitLayerChangesBeforeSublayers(CommitState& commitState, float pageScaleFactor, const FloatPoint& positionRelativeToBase, bool& layerChanged)
@@ -5068,14 +5076,20 @@ void GraphicsLayerCA::setAcceleratedEffectsAndBaseValues(AcceleratedEffects&& ef
 
 void GraphicsLayerCA::purgeFrontBufferForTesting()
 {
-    if (primaryLayer())
-        primaryLayer()->purgeFrontBufferForTesting();
+    if (RefPtr layer = primaryLayer())
+        layer->purgeFrontBufferForTesting();
 }
 
 void GraphicsLayerCA::purgeBackBufferForTesting()
 {
-    if (primaryLayer())
-        primaryLayer()->purgeBackBufferForTesting();
+    if (RefPtr layer = primaryLayer())
+        layer->purgeBackBufferForTesting();
+}
+
+void GraphicsLayerCA::markFrontBufferVolatileForTesting()
+{
+    if (RefPtr layer = primaryLayer())
+        layer->markFrontBufferVolatileForTesting();
 }
 
 } // namespace WebCore

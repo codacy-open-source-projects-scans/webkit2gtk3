@@ -1825,6 +1825,9 @@ TEST(SiteIsolation, FindStringSelection)
     } };
     for (auto& offsets : selectionOffsetsForFrames)
         findStringAndValidateResults(webView.get(), offsets);
+    findConfiguration.get().backwards = YES;
+    for (auto it = selectionOffsetsForFrames.rbegin() + 1; it != selectionOffsetsForFrames.rend(); ++it)
+        findStringAndValidateResults(webView.get(), *it);
 }
 
 TEST(SiteIsolation, FindStringSelectionWithEmptyFrames)
@@ -1870,6 +1873,102 @@ TEST(SiteIsolation, FindStringSelectionWithEmptyFrames)
         { { { 0, 11 }, { 0, 0 }, { 0, 0 } } },
         { { { 0, 0 }, { 0, 11 }, { 0, 0 } } },
         { { { 0, 0 }, { 0, 0 }, { 0, 11 } } },
+        { { { 0, 11 }, { 0, 0 }, { 0, 0 } } }
+    } };
+    for (auto& offsets : selectionOffsetsForFrames)
+        findStringAndValidateResults(webView.get(), offsets);
+    findConfiguration.get().backwards = YES;
+    for (auto it = selectionOffsetsForFrames.rbegin() + 1; it != selectionOffsetsForFrames.rend(); ++it)
+        findStringAndValidateResults(webView.get(), *it);
+}
+
+TEST(SiteIsolation, FindStringSelectionNoWrap)
+{
+    auto mainframeHTML = "<p>Hello world</p>"
+        "<iframe src='https://domain2.com/subframe'></iframe>"_s;
+    HTTPServer server({
+        { "/mainframe"_s, { mainframeHTML } },
+        { "/subframe"_s, { "<p>Hello world</p>"_s } }
+    }, HTTPServer::Protocol::HttpsProxy);
+    auto [webView, navigationDelegate] = siteIsolatedViewAndDelegate(server);
+    [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"https://domain1.com/mainframe"]]];
+    [navigationDelegate waitForDidFinishNavigation];
+
+    auto findConfiguration = adoptNS([[WKFindConfiguration alloc] init]);
+    findConfiguration.get().wraps = NO;
+    using SelectionOffsets = std::array<std::pair<int, int>, 2>;
+    auto findStringAndValidateResults = [findConfiguration](TestWKWebView *webView, const SelectionOffsets& offsets) {
+        __block RetainPtr<_WKFrameTreeNode> mainFrameNode;
+        __block bool done = false;
+        [webView _frames:^(_WKFrameTreeNode *mainFrame) {
+            EXPECT_EQ(1UL, mainFrame.childFrames.count);
+            mainFrameNode = mainFrame;
+            done = true;
+        }];
+        Util::run(&done);
+        done = false;
+
+        [webView findString:@"Hello world" withConfiguration:findConfiguration.get() completionHandler:^(WKFindResult *result) {
+            done = true;
+        }];
+        Util::run(&done);
+        EXPECT_TRUE([webView selectionRangeHasStartOffset:offsets[0].first endOffset:offsets[0].second inFrame:mainFrameNode.get().info]);
+        EXPECT_TRUE([webView selectionRangeHasStartOffset:offsets[1].first endOffset:offsets[1].second inFrame:mainFrameNode.get().childFrames[0].info]);
+    };
+
+    std::array<SelectionOffsets, 3> selectionOffsetsForFrames = { {
+        { { { 0, 11 }, { 0, 0 } } },
+        { { { 0, 0 }, { 0, 11 } } },
+        { { { 0, 0 }, { 0, 0 } } }
+    } };
+    for (auto& offsets : selectionOffsetsForFrames)
+        findStringAndValidateResults(webView.get(), offsets);
+    findConfiguration.get().backwards = YES;
+    for (auto it = selectionOffsetsForFrames.rbegin() + 1; it != selectionOffsetsForFrames.rend(); ++it)
+        findStringAndValidateResults(webView.get(), *it);
+}
+
+TEST(SiteIsolation, FindStringSelectionBackwards)
+{
+    auto mainframeHTML = "<p>Hello world</p>"
+        "<iframe src='https://domain2.com/subframe'></iframe>"
+        "<iframe src='https://domain3.com/subframe'></iframe>"_s;
+    HTTPServer server({
+        { "/mainframe"_s, { mainframeHTML } },
+        { "/subframe"_s, { "<p>Hello world</p>"_s } }
+    }, HTTPServer::Protocol::HttpsProxy);
+    auto [webView, navigationDelegate] = siteIsolatedViewAndDelegate(server);
+    [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"https://domain1.com/mainframe"]]];
+    [navigationDelegate waitForDidFinishNavigation];
+
+    auto findConfiguration = adoptNS([[WKFindConfiguration alloc] init]);
+    findConfiguration.get().backwards = YES;
+    using SelectionOffsets = std::array<std::pair<int, int>, 3>;
+    auto findStringAndValidateResults = [&findConfiguration](TestWKWebView *webView, const SelectionOffsets& offsets) {
+        __block RetainPtr<_WKFrameTreeNode> mainFrameNode;
+        __block bool done = false;
+        [webView _frames:^(_WKFrameTreeNode *mainFrame) {
+            EXPECT_EQ(2UL, mainFrame.childFrames.count);
+            mainFrameNode = mainFrame;
+            done = true;
+        }];
+        Util::run(&done);
+        done = false;
+
+        [webView findString:@"Hello world" withConfiguration:findConfiguration.get() completionHandler:^(WKFindResult *result) {
+            EXPECT_TRUE(result.matchFound);
+            done = true;
+        }];
+        Util::run(&done);
+        EXPECT_TRUE([webView selectionRangeHasStartOffset:offsets[0].first endOffset:offsets[0].second inFrame:mainFrameNode.get().info]);
+        EXPECT_TRUE([webView selectionRangeHasStartOffset:offsets[1].first endOffset:offsets[1].second inFrame:mainFrameNode.get().childFrames[0].info]);
+        EXPECT_TRUE([webView selectionRangeHasStartOffset:offsets[2].first endOffset:offsets[2].second inFrame:mainFrameNode.get().childFrames[1].info]);
+    };
+
+    std::array<SelectionOffsets, 4> selectionOffsetsForFrames = { {
+        { { { 0, 11 }, { 0, 0 }, { 0, 0 } } },
+        { { { 0, 0 }, { 0, 0 }, { 0, 11 } } },
+        { { { 0, 0 }, { 0, 11 }, { 0, 0 } } },
         { { { 0, 11 }, { 0, 0 }, { 0, 0 } } }
     } };
     for (auto& offsets : selectionOffsetsForFrames)
@@ -1920,6 +2019,9 @@ TEST(SiteIsolation, FindStringSelectionSameOriginFrames)
     } };
     for (auto& offsets : selectionOffsetsForFrames)
         findStringAndValidateResults(webView.get(), offsets);
+    findConfiguration.get().backwards = YES;
+    for (auto it = selectionOffsetsForFrames.rbegin() + 1; it != selectionOffsetsForFrames.rend(); ++it)
+        findStringAndValidateResults(webView.get(), *it);
 }
 
 TEST(SiteIsolation, FindStringSelectionNestedFrames)
@@ -1974,6 +2076,9 @@ TEST(SiteIsolation, FindStringSelectionNestedFrames)
     } };
     for (auto& offsets : selectionOffsetsForFrames)
         findStringAndValidateResults(webView.get(), offsets);
+    findConfiguration.get().backwards = YES;
+    for (auto it = selectionOffsetsForFrames.rbegin() + 1; it != selectionOffsetsForFrames.rend(); ++it)
+        findStringAndValidateResults(webView.get(), *it);
 }
 
 TEST(SiteIsolation, FindStringSelectionMultipleMatchesInMainFrame)
@@ -2019,6 +2124,9 @@ TEST(SiteIsolation, FindStringSelectionMultipleMatchesInMainFrame)
     } };
     for (auto& offsets : selectionOffsetsForFrames)
         findStringAndValidateResults(webView.get(), offsets);
+    findConfiguration.get().backwards = YES;
+    for (auto it = selectionOffsetsForFrames.rbegin() + 1; it != selectionOffsetsForFrames.rend(); ++it)
+        findStringAndValidateResults(webView.get(), *it);
 }
 
 TEST(SiteIsolation, FindStringSelectionMultipleMatchesInChildFrame)
@@ -2064,6 +2172,9 @@ TEST(SiteIsolation, FindStringSelectionMultipleMatchesInChildFrame)
     } };
     for (auto& offsets : selectionOffsetsForFrames)
         findStringAndValidateResults(webView.get(), offsets);
+    findConfiguration.get().backwards = YES;
+    for (auto it = selectionOffsetsForFrames.rbegin() + 1; it != selectionOffsetsForFrames.rend(); ++it)
+        findStringAndValidateResults(webView.get(), *it);
 }
 
 TEST(SiteIsolation, FindStringSelectionSameOriginFrameBeforeWrap)
@@ -2119,6 +2230,9 @@ TEST(SiteIsolation, FindStringSelectionSameOriginFrameBeforeWrap)
     } };
     for (auto& offsets : selectionOffsetsForFrames)
         findStringAndValidateResults(webView.get(), offsets);
+    findConfiguration.get().backwards = YES;
+    for (auto it = selectionOffsetsForFrames.rbegin() + 1; it != selectionOffsetsForFrames.rend(); ++it)
+        findStringAndValidateResults(webView.get(), *it);
 }
 
 #if PLATFORM(MAC)
@@ -2194,6 +2308,35 @@ TEST(SiteIsolation, NavigateOpener)
     EXPECT_EQ(opened.webView.get()._webProcessIdentifier, opener.webView.get()._webProcessIdentifier);
     checkFrameTreesInProcesses(opener.webView.get(), { { "https://webkit.org"_s } });
     checkFrameTreesInProcesses(opened.webView.get(), { { "https://webkit.org"_s } });
+}
+
+TEST(SiteIsolation, CustomUserAgent)
+{
+    HTTPServer server({
+        { "/mainframe"_s, { "<iframe src='https://domain2.com/subframe'></iframe>"_s } },
+        { "/subframe"_s, { ""_s } }
+    }, HTTPServer::Protocol::HttpsProxy);
+    auto [webView, navigationDelegate] = siteIsolatedViewAndDelegate(server);
+    [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"https://domain1.com/mainframe"]]];
+    [navigationDelegate waitForDidFinishNavigation];
+
+    __block RetainPtr<WKFrameInfo> childFrameInfo;
+    __block bool done = false;
+    [webView _frames:^(_WKFrameTreeNode *mainFrame) {
+        EXPECT_EQ(1UL, mainFrame.childFrames.count);
+        childFrameInfo = mainFrame.childFrames.firstObject.info;
+        done = true;
+    }];
+    Util::run(&done);
+    done = false;
+
+    webView.get().customUserAgent = @"Custom UserAgent";
+
+    [webView evaluateJavaScript:@"navigator.userAgent" inFrame:childFrameInfo.get() inContentWorld:WKContentWorld.pageWorld completionHandler:^(id result, NSError *) {
+        EXPECT_WK_STREQ(@"Custom UserAgent", (NSString *)result);
+        done = true;
+    }];
+    Util::run(&done);
 }
 
 // FIXME: <rdar://121240941> Add tests covering provisional navigation failures in cases like SiteIsolation.NavigateOpener.

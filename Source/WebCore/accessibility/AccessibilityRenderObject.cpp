@@ -788,10 +788,14 @@ String AccessibilityRenderObject::stringValue() const
     if (isWebArea())
         return { };
 
-#if PLATFORM(IOS_FAMILY)
-    if (isInputTypePopupButton())
-        return textUnderElement();
-#endif
+    if (isDateTime()) {
+        String value;
+        Accessibility::enumerateDescendants(*const_cast<AccessibilityRenderObject*>(this), false, [&value] (const auto& object) {
+            if (object.isStaticText())
+                value = value + object.stringValue();
+        });
+        return value;
+    }
 
     if (auto* renderFileUploadControl = dynamicDowncast<RenderFileUploadControl>(m_renderer.get()))
         return renderFileUploadControl->fileTextValue();
@@ -1112,8 +1116,11 @@ bool AccessibilityRenderObject::computeAccessibilityIsIgnored() const
 
     if (WeakPtr renderText = dynamicDowncast<RenderText>(m_renderer.get())) {
         // Text elements with no rendered text, or only whitespace should not be part of the AX tree.
-        if (!renderText->hasRenderedText())
+        if (!renderText->hasRenderedText()) {
+            // Layout must be clean to make the right decision here (because hasRenderedText() can return false solely because layout is dirty).
+            ASSERT(!renderText->needsLayout() || !renderText->text().length());
             return true;
+        }
 
         if (renderText->text().containsOnly<isASCIIWhitespace>()) {
 #if ENABLE(AX_THREAD_TEXT_APIS)
@@ -2292,7 +2299,7 @@ void AccessibilityRenderObject::addTextFieldChildren()
     RefPtr node = dynamicDowncast<HTMLInputElement>(this->node());
     if (!node)
         return;
-    
+
     auto* spinButtonElement = dynamicDowncast<SpinButtonElement>(node->innerSpinButtonElement());
     if (!spinButtonElement)
         return;

@@ -34,6 +34,7 @@ scrollingcoordinator/ios [ Skip ]
 swipe [ Pass ]
 view-gestures [ Pass ]
 http/tests/swipe [ Pass ]
+http/tests/pdf [ Pass ]
 tiled-drawing [ Pass ]
 ipc/restrictedendpoints/mac [ Pass ]
 
@@ -544,8 +545,6 @@ webkit.org/b/162999 accessibility/mac/wk1-set-selected-text-marker-range-input-e
 webkit.org/b/162999 [ Monterey+ Debug ] accessibility/mac/native-text-control-set-selected-textmarker-range.html [ Pass Failure ]
 
 # testRunner.setUseDeferredFrameLoading is not implemented.
-webkit.org/b/93980 http/tests/appcache/load-from-appcache-defer-resume-crash.html [ Skip ]
-
 webkit.org/b/172544 [ Debug ] tiled-drawing/scrolling/fast-scroll-iframe-latched-mainframe-with-handler.html [ Pass Failure ]
 
 webkit.org/b/139820 fast/frames/lots-of-objects.html [ Pass Timeout ]
@@ -694,9 +693,6 @@ webkit.org/b/71298 accessibility/mac/iframe-with-title-correct-hierarchy.html
 # There is no network load scheduling or prioritization with NetworkProcess.
 webkit.org/b/123431 http/tests/local/link-stylesheet-load-order-preload.html [ Failure ]
 webkit.org/b/123431 http/tests/local/link-stylesheet-load-order.html [ Failure ]
-
-# This test times out, likely because appcache still loads in WebProcess, not NetworkProcess
-webkit.org/b/138736 http/tests/appcache/auth.html [ Skip ]
 
 ### END OF (5) Features that are not supported in WebKit2, on Mavericks
 ########################################
@@ -1019,8 +1015,6 @@ webkit.org/b/207209 inspector/heap/getPreview.html [ Pass Failure Timeout ]
 
 webkit.org/b/207269 [ Debug ] http/tests/websocket/tests/hybi/server-close.html [ Pass Crash ]
 
-webkit.org/b/183684 http/tests/appcache/abort-cache-onprogress.html [ Pass Failure ]
-
 webkit.org/b/207303 loader/stateobjects/pushstate-size-iframe.html [ Pass Crash ]
 
 webkit.org/b/229820 [ BigSur Debug arm64 ] loader/stateobjects/pushstate-size.html [ Pass Crash ]
@@ -1102,8 +1096,6 @@ webkit.org/b/214478 [ Debug ] tiled-drawing/scrolling/fast-scroll-iframe-latched
 webkit.org/b/214661 [ Debug ] imported/w3c/web-platform-tests/webrtc/RTCSctpTransport-events.html [ Pass Crash Failure ]
 
 webkit.org/b/230485 [ Release ] imported/w3c/web-platform-tests/webrtc/RTCSctpTransport-events.html [ Pass Failure ]
-
-webkit.org/b/230653 [ Debug ] imported/w3c/web-platform-tests/webrtc/simulcast/setParameters-active.https.html [ Pass Failure ]
 
 webkit.org/b/214682 imported/w3c/web-platform-tests/css/cssom/stylesheet-same-origin.sub.html [ Pass Failure ]
 
@@ -1338,8 +1330,6 @@ webkit.org/b/225534 [ BigSur Debug arm64 ] imported/w3c/web-platform-tests/webrt
 webkit.org/b/225533 [ BigSur Release arm64 ] mathml/scripts-removeChild.html [ Pass ImageOnlyFailure ]
 
 webkit.org/b/225666 http/tests/cache/disk-cache/redirect-chain-limits.html [ Slow ]
-
-webkit.org/b/225665 [ Release arm64 ] http/tests/appcache/fail-on-update-2.html [ DumpJSConsoleLogInStdErr Slow ]
 
 webkit.org/b/225664 editing/selection/move-by-character-brute-force.html [ Slow ]
 
@@ -1853,7 +1843,7 @@ webkit.org/b/263044 imported/w3c/web-platform-tests/webrtc-stats/supported-stats
 [ Monterey+ X86_64 ] imported/w3c/web-platform-tests/mediacapture-record/MediaRecorder-peerconnection.https.html [ Pass Failure ]
 [ Ventura+ ] imported/w3c/web-platform-tests/html/cross-origin-opener-policy/reporting/navigation-reporting/reporting-coop-navigated-opener.https.html [ Pass Failure ]
 [ Monterey+ ] imported/w3c/web-platform-tests/webcodecs/videoFrame-serialization.crossAgentCluster.https.html [ Pass Failure ]
-[ Monterey+ X86_64 ] imported/w3c/web-platform-tests/webrtc/simulcast/getStats.https.html [ Pass Failure ]
+
 
 webkit.org/b/261344 requestidlecallback/requestidlecallback-does-not-block-timer.html [ Pass Failure ]
 
@@ -1973,3 +1963,24 @@ webkit.org/b/268047 [ Monterey+ ] http/wpt/webrtc/video-script-transform-simulca
 webkit.org/b/268098 [ Monterey+ ] imported/w3c/web-platform-tests/webrtc/RTCPeerConnection-GC.https.html [ Pass Failure ]
 
 webkit.org/b/268200 [ Sonoma+ Release ] inspector/console/console-screenshot.html [ Pass Failure ]
+
+webkit.org/b/268332 [ Sonoma+ Release ] imported/w3c/web-platform-tests/webrtc/simulcast/getStats.https.html [ Pass Failure ]
+
+# webkit.org/b/268347 REGRESSION(273637@main?): [ Sonoma+ wk2 Release arm64] 7 http/wpt/webcodecs (layout-tests) are constant text failures
+[ Sonoma+ Release arm64 ] http/tests/webcodecs/h264-reordering.html [ Failure ]
+[ Sonoma+ Release arm64 ] http/wpt/webrtc/audiovideo-script-transform.html [ Failure ]
+[ Sonoma+ Release arm64 ] http/wpt/webcodecs/webcodecs-gc.html [ Failure ]
+[ Sonoma+ Release arm64 ] http/wpt/webcodecs/videoFrame-negative-timestamp.html [ Failure ]
+[ Sonoma+ Release arm64 ] http/wpt/webcodecs/hevc-decoder-annexb.https.any.worker.html [ Failure ]
+[ Sonoma+ Release arm64 ] http/wpt/webcodecs/hevc-decoder-annexb.https.any.html [ Failure ]
+[ Sonoma+ Release arm64 ] http/tests/webcodecs/hevc-reordering.html [ Failure ]
+
+webkit.org/b/268406 transitions/flex-transitions.html [ Pass Failure ]
+
+# webkit.org/b/268414 [ macOS ] 2 tests in imported/w3c/web-platform-tests/webrtc are flaky failure
+imported/w3c/web-platform-tests/webrtc/simulcast/setParameters-active.https.html [ Pass Failure ]
+imported/w3c/web-platform-tests/webrtc/simulcast/h264.https.html [ Pass Failure ]
+
+webkit.org/b/268494 [ Monterey+ Release ] media/track/media-element-enqueue-event-crash.html [ Pass Crash ]
+
+webkit.org/b/264001 [ Debug ] imported/w3c/web-platform-tests/requestidlecallback/callback-multiple-calls.html [ Pass Failure ]

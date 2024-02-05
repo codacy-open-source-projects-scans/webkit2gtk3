@@ -33,6 +33,38 @@
 // Note: SPI usage should be limited to testing purposes and binary compatibility with clients
 // of existing WebKit SPI.
 #import <BrowserEngineKit/BrowserEngineKit_Private.h>
+#else
+
+@class NSTextAlternatives;
+@class UIKeyEvent;
+@class UITextSuggestion;
+@class UIWKDocumentContext;
+
+@interface BEKeyEntry (ForTesting)
+- (UIKeyEvent *)_uikitKeyEvent;
+- (instancetype)_initWithUIKitKeyEvent:(UIKeyEvent *)keyEvent;
+@end
+
+@interface BETextAlternatives ()
+@property (readonly) BOOL isLowConfidence;
+- (NSTextAlternatives *)_nsTextAlternative;
+- (instancetype)_initWithNSTextAlternatives:(NSTextAlternatives *)nsTextAlternatives;
+@end
+
+@interface BETextDocumentContext ()
+@property (strong, nonatomic, readonly) UIWKDocumentContext *_uikitDocumentContext;
+@property (nonatomic, copy) NSAttributedString *annotatedText;
+@end
+
+@interface BETextDocumentRequest ()
+@property (nonatomic, assign) CGRect _documentRect;
+@end
+
+@interface BETextSuggestion ()
+@property (nonatomic, readonly, strong) UITextSuggestion *_uikitTextSuggestion;
+- (instancetype)_initWithUIKitTextSuggestion:(UITextSuggestion *)suggestion;
+@end
+
 #endif
 
 @interface BEKeyEntry (Staging_121227027)

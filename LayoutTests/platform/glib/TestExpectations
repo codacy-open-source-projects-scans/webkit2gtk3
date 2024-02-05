@@ -324,6 +324,11 @@ webkit.org/b/266195 media/media-source/media-managedmse-multipletracks-bufferedc
 # Support to pause with 0 rate playback seems to work only in GStreamer ports
 media/media-source/media-source-play-zero-playbackrate.html [ Pass ]
 
+# Test was flaky already before 263317 but it does "enhance its flakyness"
+webkit.org/b/263317 media/video-played-collapse.html [ Failure Pass ]
+webkit.org/b/263317 media/media-source/media-controller-media-source-play-then-pause.html [ Pass Timeout ]
+webkit.org/b/263317 media/media-source/media-source-seek-and-play.html [ Pass Timeout ]
+
 # NOTIFICATION_EVENT tests
 http/tests/workers/service/shownotification-allowed-document.html [ Pass ]
 http/tests/workers/service/shownotification-invalid-data.html [ Pass ]
@@ -514,8 +519,10 @@ accessibility/display-contents/dynamically-added-children.html [ Skip ]
 accessibility/display-contents/object-ordering.html [ Skip ]
 accessibility/display-contents/search-traversal.html [ Skip ]
 accessibility/empty-text-under-element-cached.html [ Skip ]
+accessibility/menuitem-is-selected.html [ Skip ]
 accessibility/search-traversal-after-role-change.html [ Skip ]
 accessibility/table-search-traversal.html [ Skip ]
+accessibility/tree-update-with-dirty-layout.html [ Skip ]
 accessibility/dynamically-changing-iframe-remains-accessible.html [ Skip ]
 accessibility/ignore-modals-without-any-content.html [ Skip ]
 accessibility/iframe-with-role.html [ Skip ]
@@ -1203,6 +1210,8 @@ http/wpt/webcodecs/encoder-task-failing.html [ Pass ]
 # expected to pass again once we update to GStreamer 1.24.
 fast/mediastream/play-newly-added-audio-track.html [ Pass Crash ]
 
+fast/mediacapturefromelement/CanvasCaptureMediaStream-capture-out-of-DOM-canvas-webgl.html [ Pass Failure ]
+
 webkit.org/b/264665 http/wpt/webcodecs/videoFrame-webglCanvasImageSource.html [ Failure ]
 
 webkit.org/b/264666 imported/w3c/web-platform-tests/encrypted-media/clearkey-generate-request-disallowed-input.https.html [ Failure ]
@@ -1632,15 +1641,6 @@ webkit.org/b/213782 svg/custom/object-sizing-explicit-width.xhtml [ Failure Pass
 webkit.org/b/189739 svg/gradients/spreadMethodClose2.svg [ ImageOnlyFailure ]
 webkit.org/b/189739 imported/mozilla/svg/linearGradient-basic-03.svg [ ImageOnlyFailure ]
 
-webkit.org/b/129958 svg/clip-path/mask-nested-clip-path-006.svg [ ImageOnlyFailure ]
-webkit.org/b/129958 svg/clip-path/mask-nested-clip-path-007.svg [ ImageOnlyFailure ]
-webkit.org/b/129958 svg/clip-path/mask-nested-clip-path-008.svg [ ImageOnlyFailure ]
-webkit.org/b/129958 svg/clip-path/mask-nested-clip-path-009.svg [ ImageOnlyFailure ]
-webkit.org/b/129958 svg/clip-path/mask-objectboundingbox-content-clip-transform.svg [ ImageOnlyFailure ]
-webkit.org/b/129958 svg/clip-path/mask-objectboundingbox-content-clip.svg [ ImageOnlyFailure ]
-webkit.org/b/129958 svg/clip-path/mask-userspaceonuse-content-clip-transform.svg [ ImageOnlyFailure ]
-webkit.org/b/129958 svg/clip-path/mask-userspaceonuse-content-clip.svg [ ImageOnlyFailure ]
-
 webkit.org/b/135529 svg/css/parse-height.html [ Failure ]
 webkit.org/b/135529 svg/css/parse-length.html [ Failure ]
 
@@ -1875,13 +1875,10 @@ webkit.org/b/187603 fast/mediastream/media-stream-track-source-failure.html [ Ti
 
 webkit.org/b/264803 fast/mediastream/mediastreamtrack-video-resize-event.html [ Failure ]
 
-http/wpt/mediastream/mediastreamtrackprocessor-videoframe-timestamp.html [ Failure ]
-
 # Adding transceivers without tracks is broken.
 webkit.org/b/265865 imported/w3c/web-platform-tests/webrtc-stats/rtp-stats-creation.html [ Skip ]
 
 # Requires video scaling adaptation.
-webrtc/captureCanvas-webrtc-with-video-scaling-adaptation.html [ Failure ]
 webrtc/video-maxBitrate.html [ Failure ]
 webrtc/video-maxBitrate-vp8.html [ Failure ]
 
@@ -1896,9 +1893,6 @@ fast/mediastream/mediastreamtrack-configurationchange.html [ Skip ]
 
 fast/mediastream/video-rotation2.html [ Failure Pass Timeout ]
 
-# Missing/broken pageIsFocused notification.
-fast/mediastream/device-change-event-2.html [ Timeout Failure ]
-
 # Regressions introduced by https://commits.webkit.org/263750@main
 fast/mediastream/apply-constraints-advanced.html [ Failure ]
 fast/mediastream/apply-constraints-video.html [ Failure ]
@@ -1910,7 +1904,6 @@ fast/mediastream/getUserMedia-video-rescaling.html [ Failure ]
 fast/mediastream/getUserMedia-frame-rate.html [ Failure ]
 fast/mediastream/get-user-media-constraints.html [ Failure ]
 fast/mediastream/get-user-media-ideal-constraints.html [ Failure ]
-fast/mediastream/mediastreamtrack-video-frameRate-clone-increasing.html [ Failure ]
 fast/mediastream/video-rotation.html [ Skip ]
 webrtc/video-rotation-no-cvo.html [ Failure Timeout ]
 webrtc/video-rotation-black.html [ Crash Failure Pass Timeout ]
@@ -2151,7 +2144,6 @@ imported/w3c/web-platform-tests/WebCryptoAPI/wrapKey_unwrapKey/wrapKey_unwrapKey
 
 webkit.org/b/150806 imported/w3c/web-platform-tests/xhr/send-timeout-events.htm [ Failure Pass ]
 
-webkit.org/b/202736 http/tests/appcache/remove-cache.html [ DumpJSConsoleLogInStdErr ]
 webkit.org/b/202736 [ Release ] http/wpt/cache-storage/quota-third-party.https.html [ Pass Timeout ]
 
 webkit.org/b/203240 imported/w3c/web-platform-tests/css/css-shapes/shape-outside/shape-image/shape-image-025.html [ ImageOnlyFailure Pass ]
@@ -2894,9 +2886,6 @@ webkit.org/b/84692 fast/events/attempt-scroll-with-no-scrollbars.html [ Failure 
 
 # Started failing after it was added in r116473.
 webkit.org/b/85969 http/tests/loading/post-in-iframe-with-back-navigation.html [ Failure ]
-
-# Implement testRunner.setUseDeferredFrameLoading.
-webkit.org/b/93980 http/tests/appcache/load-from-appcache-defer-resume-crash.html [ Failure ]
 
 webkit.org/b/98146 accessibility/svg-bounds.html [ Failure ]
 webkit.org/b/98613 css3/masking/clip-path-reference.html [ ImageOnlyFailure ]
@@ -3748,6 +3737,15 @@ webkit.org/b/266713 webrtc/processIceTransportStateChange-gc.html [ Skip ]
 webrtc/datachannel/multiple-connections.html [ Timeout ]
 
 webkit.org/b/268068 imported/w3c/web-platform-tests/html/cross-origin-opener-policy [ Skip ]
+webkit.org/b/267992 imported/w3c/web-platform-tests/html/anonymous-iframe/initial-empty-document.tentative.https.window.html [ Pass Failure Crash ]
+webkit.org/b/267992 http/wpt/cross-origin-opener-policy/header-parsing-with-report-to.https.html [ Failure Pass Crash ]
+
+webkit.org/b/268281 imported/w3c/web-platform-tests/service-workers/service-worker/navigation-headers.https.html [ Pass Crash ]
+
+# Skip Merchant-Validation API test cases from GTK / WPE
+webkit.org/b/268238  imported/w3c/web-platform-tests/merchant-validation/complete-method.tentative.https.html [ Skip ]
+webkit.org/b/268238  imported/w3c/web-platform-tests/merchant-validation/constructor.tentative.https.html [ Skip ]
+webkit.org/b/268238  imported/w3c/web-platform-tests/merchant-validation/onmerchantvalidation-attribute.https.html [ Skip ]
 
 # End: Common failures between GTK and WPE.
 

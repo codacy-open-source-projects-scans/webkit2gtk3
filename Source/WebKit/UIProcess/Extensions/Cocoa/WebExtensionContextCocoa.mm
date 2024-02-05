@@ -509,6 +509,7 @@ void WebExtensionContext::setHasAccessInPrivateBrowsing(bool hasAccess)
 
     if (m_hasAccessInPrivateBrowsing) {
         addDeclarativeNetRequestRulesToPrivateUserContentControllers();
+
         for (auto& controller : extensionController()->allPrivateUserContentControllers())
             addInjectedContent(controller);
     } else {
@@ -1009,9 +1010,9 @@ WebExtensionContext::PermissionState WebExtensionContext::permissionState(const 
 {
     ASSERT(!permission.isEmpty());
 
-    if (tab && hasPermission(_WKWebExtensionPermissionActiveTab) && hasActiveUserGesture(*tab)) {
-        // An active user gesture grants the "tabs" permission.
-        if (permission == String(_WKWebExtensionPermissionTabs))
+    if (tab && permission == String(_WKWebExtensionPermissionTabs)) {
+        RefPtr temporaryPattern = tab->temporaryPermissionMatchPattern();
+        if (temporaryPattern && temporaryPattern->matchesURL(tab->url()))
             return PermissionState::GrantedExplicitly;
     }
 
@@ -1674,7 +1675,7 @@ void WebExtensionContext::didCloseTab(const WebExtensionTab& tab, WindowIsClosin
     if (!isLoaded() || !tab.extensionHasAccess())
         return;
 
-    auto window = tab.window(WebExtensionTab::SkipContainsCheck::Yes);
+    auto window = tab.window();
     auto windowIdentifier = window ? window->identifier() : WebExtensionWindowConstants::NoneIdentifier;
 
     fireTabsRemovedEventIfNeeded(tab.identifier(), windowIdentifier, windowIsClosing);
@@ -2291,6 +2292,9 @@ void WebExtensionContext::userGesturePerformed(WebExtensionTab& tab)
 
     // Nothing else to do if the extension does not have the activeTab permission.
     if (!hasPermission(_WKWebExtensionPermissionActiveTab))
+        return;
+
+    if (!tab.shouldGrantTabPermissionsOnUserGesture())
         return;
 
     auto currentURL = tab.url();
@@ -2911,7 +2915,7 @@ void WebExtensionContext::addInjectedContent(const InjectedContentVector& inject
         [baseExcludeMatchPatternsSet addObjectsFromArray:deniedEntry.key->expandedStrings()];
     }
 
-    auto userContentControllers = hasAccessInPrivateBrowsing() ? extensionController()->allUserContentControllers() : extensionController()->allNonPrivateUserContentControllers();
+    auto& userContentControllers = this->userContentControllers();
 
     for (auto& injectedContentData : injectedContents) {
         NSMutableSet<NSString *> *includeMatchPatternsSet = [NSMutableSet set];
@@ -3032,9 +3036,7 @@ void WebExtensionContext::removeInjectedContent()
 
     // Use all user content controllers in case the extension was briefly allowed in private browsing
     // and content was injected into any of those content controllers.
-    auto allUserContentControllers = extensionController()->allUserContentControllers();
-
-    for (auto& userContentController : allUserContentControllers) {
+    for (auto& userContentController : extensionController()->allUserContentControllers()) {
         for (auto& entry : m_injectedScriptsPerPatternMap) {
             for (auto& userScript : entry.value)
                 userContentController.removeUserScript(userScript);
@@ -3077,9 +3079,7 @@ void WebExtensionContext::removeInjectedContent(WebExtensionMatchPattern& patter
 
     // Use all user content controllers in case the extension was briefly allowed in private browsing
     // and content was injected into any of those content controllers.
-    auto allUserContentControllers = extensionController()->allUserContentControllers();
-
-    for (auto& userContentController : allUserContentControllers) {
+    for (auto& userContentController : extensionController()->allUserContentControllers()) {
         for (auto& userScript : originInjectedScripts)
             userContentController.removeUserScript(userScript);
 
@@ -3131,9 +3131,7 @@ void WebExtensionContext::removeDeclarativeNetRequestRules()
 
     // Use all user content controllers in case the extension was briefly allowed in private browsing
     // and content was injected into any of those content controllers.
-    auto allUserContentControllers = extensionController()->allUserContentControllers();
-
-    for (auto& userContentController : allUserContentControllers)
+    for (auto& userContentController : extensionController()->allUserContentControllers())
         userContentController.removeContentRuleList(uniqueIdentifier());
 }
 
@@ -3181,8 +3179,7 @@ void WebExtensionContext::compileDeclarativeNetRequestRules(NSArray *rulesData, 
     API::ContentRuleListStore::defaultStore().lookupContentRuleListFile(declarativeNetRequestContentRuleListFilePath(), uniqueIdentifier().isolatedCopy(), [this, protectedThis = Ref { *this }, completionHandler = WTFMove(completionHandler), previouslyLoadedHash = String { previouslyLoadedHash }, hashOfWebKitRules = String { hashOfWebKitRules }, webKitRules = String { webKitRules }](RefPtr<API::ContentRuleList> foundRuleList, std::error_code) mutable {
         if (foundRuleList) {
             if ([previouslyLoadedHash isEqualToString:hashOfWebKitRules]) {
-                auto userContentControllers = hasAccessInPrivateBrowsing() ? extensionController()->allUserContentControllers() : extensionController()->allNonPrivateUserContentControllers();
-                for (auto& userContentController : userContentControllers)
+                for (auto& userContentController : userContentControllers())
                     userContentController.addContentRuleList(*foundRuleList, m_baseURL);
 
                 completionHandler(true);
@@ -3200,8 +3197,7 @@ void WebExtensionContext::compileDeclarativeNetRequestRules(NSArray *rulesData, 
             [m_state setObject:hashOfWebKitRules forKey:lastLoadedDeclarativeNetRequestHashStateKey];
             writeStateToStorage();
 
-            auto userContentControllers = hasAccessInPrivateBrowsing() ? extensionController()->allUserContentControllers() : extensionController()->allNonPrivateUserContentControllers();
-            for (auto& userContentController : userContentControllers)
+            for (auto& userContentController : userContentControllers())
                 userContentController.addContentRuleList(*ruleList, m_baseURL);
 
             completionHandler(true);
@@ -3299,7 +3295,7 @@ bool WebExtensionContext::handleContentRuleListNotificationForTab(WebExtensionTa
 {
     incrementActionCountForTab(tab, 1);
 
-    if (!hasPermission(_WKWebExtensionPermissionDeclarativeNetRequestFeedback) && !(hasPermission(_WKWebExtensionPermissionDeclarativeNetRequest) && hasPermission(_WKWebExtensionPermissionActiveTab)))
+    if (!hasPermission(_WKWebExtensionPermissionDeclarativeNetRequestFeedback) && !(hasPermission(_WKWebExtensionPermissionDeclarativeNetRequest) && hasPermission(url, &tab)))
         return false;
 
     m_matchedRules.append({

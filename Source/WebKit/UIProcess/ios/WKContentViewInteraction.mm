@@ -4435,7 +4435,12 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     }
     if (action == @selector(cut:))
         return !editorState.isInPasswordField && editorState.isContentEditable && editorState.selectionIsRange;
-    
+
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+    if (action == @selector(_swapCharacters:))
+        return editorState.selectionIsRange && editorState.isContentRichlyEditable && [super canPerformAction:action withSender:sender];
+#endif
+
     if (action == @selector(paste:) || action == @selector(_pasteAsQuotation:) || action == @selector(_pasteAndMatchStyle:) || action == @selector(pasteAndMatchStyle:)) {
         if (editorState.selectionIsNone || !editorState.isContentEditable)
             return NO;
@@ -4726,6 +4731,13 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 
     [self lookupForWebView:sender];
 }
+
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+- (void)_swapCharactersForWebView:(id)sender
+{
+    [super _swapCharacters:sender];
+}
+#endif
 
 - (void)accessibilityRetrieveSpeakSelectionContent
 {
@@ -5296,7 +5308,7 @@ static void selectionChangedWithTouch(WKTextInteractionWrapper *interaction, con
             return;
         }
 
-        strongSelf->_page->requestImageBitmap(context, [context, completion = WTFMove(completion), weakSelf = WTFMove(weakSelf)](std::optional<WebKit::ShareableBitmapHandle>&& imageData, auto& sourceMIMEType) mutable {
+        strongSelf->_page->requestImageBitmap(context, [context, completion = WTFMove(completion), weakSelf = WTFMove(weakSelf)](std::optional<WebCore::ShareableBitmapHandle>&& imageData, auto& sourceMIMEType) mutable {
             auto strongSelf = weakSelf.get();
             if (!strongSelf) {
                 completion();
@@ -5308,7 +5320,7 @@ static void selectionChangedWithTouch(WKTextInteractionWrapper *interaction, con
                 return;
             }
 
-            auto imageBitmap = WebKit::ShareableBitmap::create(WTFMove(*imageData));
+            auto imageBitmap = WebCore::ShareableBitmap::create(WTFMove(*imageData));
             if (!imageBitmap) {
                 completion();
                 return;
@@ -5982,10 +5994,18 @@ static void logTextInteraction(const char* methodName, UIGestureRecognizer *loup
 
 - (void)_didChangeWebViewEditability
 {
+    BOOL webViewIsEditable = self.webView._editable;
     if ([_formAccessoryView respondsToSelector:@selector(setNextPreviousItemsVisible:)])
-        [_formAccessoryView setNextPreviousItemsVisible:!self.webView._editable];
+        [_formAccessoryView setNextPreviousItemsVisible:!webViewIsEditable];
     
-    [_twoFingerSingleTapGestureRecognizer setEnabled:!self.webView._editable];
+    [_twoFingerSingleTapGestureRecognizer setEnabled:!webViewIsEditable];
+
+    if (webViewIsEditable) {
+        static dispatch_once_t onceToken;
+        dispatch_once(&onceToken, ^{
+            class_addProtocol(self.class, @protocol(UITextInputMultiDocument));
+        });
+    }
 }
 
 - (void)insertTextSuggestion:(id)textSuggestion
@@ -7162,6 +7182,7 @@ static UITextAutocapitalizationType toUITextAutocapitalize(WebCore::Autocapitali
 #if USE(BROWSERENGINEKIT)
     if (self.shouldUseAsyncInteractions) {
         RetainPtr inputDelegate = _asyncInputDelegate;
+        [self _logMissingSystemInputDelegateIfNeeded:__PRETTY_FUNCTION__];
         if (!inputDelegate)
             return NO;
 
@@ -7229,6 +7250,7 @@ static UITextAutocapitalizationType toUITextAutocapitalize(WebCore::Autocapitali
 #if USE(BROWSERENGINEKIT)
     if (self.shouldUseAsyncInteractions) {
         RetainPtr systemDelegate = _asyncInputDelegate;
+        [self _logMissingSystemInputDelegateIfNeeded:__PRETTY_FUNCTION__];
         if (!systemDelegate)
             return NO;
 
@@ -12077,9 +12099,9 @@ static RetainPtr<NSItemProvider> createItemProvider(const WebKit::WebPageProxy& 
     return NO;
 }
 
-- (void)requestTextRecognition:(NSURL *)imageURL imageData:(WebKit::ShareableBitmap::Handle&&)imageData sourceLanguageIdentifier:(NSString *)sourceLanguageIdentifier targetLanguageIdentifier:(NSString *)targetLanguageIdentifier completionHandler:(CompletionHandler<void(WebCore::TextRecognitionResult&&)>&&)completion
+- (void)requestTextRecognition:(NSURL *)imageURL imageData:(WebCore::ShareableBitmap::Handle&&)imageData sourceLanguageIdentifier:(NSString *)sourceLanguageIdentifier targetLanguageIdentifier:(NSString *)targetLanguageIdentifier completionHandler:(CompletionHandler<void(WebCore::TextRecognitionResult&&)>&&)completion
 {
-    auto imageBitmap = WebKit::ShareableBitmap::create(WTFMove(imageData));
+    auto imageBitmap = WebCore::ShareableBitmap::create(WTFMove(imageData));
     if (!imageBitmap) {
         completion({ });
         return;
@@ -12395,7 +12417,7 @@ static BOOL shouldUseMachineReadableCodeMenuFromImageAnalysisResult(CocoaImageAn
 
 #endif // ENABLE(IMAGE_ANALYSIS_ENHANCEMENTS)
 
-- (void)beginTextRecognitionForFullscreenVideo:(WebKit::ShareableBitmap::Handle&&)imageData playerViewController:(AVPlayerViewController *)controller
+- (void)beginTextRecognitionForFullscreenVideo:(WebCore::ShareableBitmap::Handle&&)imageData playerViewController:(AVPlayerViewController *)controller
 {
 #if ENABLE(IMAGE_ANALYSIS_ENHANCEMENTS)
     ASSERT(_page->preferences().textRecognitionInVideosEnabled());
@@ -12403,7 +12425,7 @@ static BOOL shouldUseMachineReadableCodeMenuFromImageAnalysisResult(CocoaImageAn
     if (_fullscreenVideoImageAnalysisRequestIdentifier)
         return;
 
-    auto imageBitmap = WebKit::ShareableBitmap::create(WTFMove(imageData));
+    auto imageBitmap = WebCore::ShareableBitmap::create(WTFMove(imageData));
     if (!imageBitmap)
         return;
 
@@ -12446,10 +12468,10 @@ static BOOL shouldUseMachineReadableCodeMenuFromImageAnalysisResult(CocoaImageAn
 #endif
 }
 
-- (void)beginTextRecognitionForVideoInElementFullscreen:(WebKit::ShareableBitmap::Handle&&)bitmapHandle bounds:(WebCore::FloatRect)bounds
+- (void)beginTextRecognitionForVideoInElementFullscreen:(WebCore::ShareableBitmap::Handle&&)bitmapHandle bounds:(WebCore::FloatRect)bounds
 {
 #if ENABLE(IMAGE_ANALYSIS_ENHANCEMENTS)
-    auto imageBitmap = WebKit::ShareableBitmap::create(WTFMove(bitmapHandle));
+    auto imageBitmap = WebCore::ShareableBitmap::create(WTFMove(bitmapHandle));
     if (!imageBitmap)
         return;
 
@@ -12597,6 +12619,19 @@ static BOOL shouldUseMachineReadableCodeMenuFromImageAnalysisResult(CocoaImageAn
 {
     ASSERT([self conformsToProtocol:@protocol(BETextInput)]);
     return static_cast<id<BETextInput>>(self);
+}
+
+- (void)_logMissingSystemInputDelegateIfNeeded:(const char*)methodName
+{
+    if (_asyncInputDelegate)
+        return;
+
+    static constexpr auto delayBetweenLogStatements = 10_s;
+    static ApproximateTime lastLoggingTimestamp;
+    if (auto timestamp = ApproximateTime::now(); timestamp - lastLoggingTimestamp > delayBetweenLogStatements) {
+        RELEASE_LOG_ERROR(TextInput, "%{public}s - system input delegate is nil", methodName);
+        lastLoggingTimestamp = timestamp;
+    }
 }
 
 - (void)shiftKeyStateChangedFromState:(BEKeyModifierFlags)oldState toState:(BEKeyModifierFlags)newState

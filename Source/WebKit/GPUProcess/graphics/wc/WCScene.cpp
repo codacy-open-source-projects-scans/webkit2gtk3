@@ -35,6 +35,7 @@
 #include "WCSceneContext.h"
 #include "WCUpdateInfo.h"
 #include <WebCore/BitmapTexture.h>
+#include <WebCore/ShareableBitmap.h>
 #include <WebCore/TextureMapper.h>
 #include <WebCore/TextureMapperGLHeaders.h>
 #include <WebCore/TextureMapperLayer.h>
@@ -144,7 +145,7 @@ std::optional<UpdateInfo> WCScene::update(WCUpdateInfo&& update)
         if (layerUpdate.changes & WCLayerChange::MasksToBounds)
             layer->texmapLayer.setMasksToBounds(layerUpdate.masksToBounds);
         if (layerUpdate.changes & WCLayerChange::Background) {
-            if (layerUpdate.hasBackingStore) {
+            if (layerUpdate.background.hasBackingStore) {
                 if (!layer->backingStore) {
                     layer->backingStore = makeUnique<WebCore::TextureMapperSparseBackingStore>();
                     auto& backingStore = *layer->backingStore;
@@ -153,7 +154,7 @@ std::optional<UpdateInfo> WCScene::update(WCUpdateInfo&& update)
                 }
                 auto& backingStore = *layer->backingStore;
                 backingStore.setSize(WebCore::IntSize(layer->texmapLayer.size()));
-                for (auto& tileUpdate : layerUpdate.tileUpdate) {
+                for (auto& tileUpdate : layerUpdate.background.tileUpdates) {
                     if (tileUpdate.willRemove)
                         backingStore.removeTile(tileUpdate.index);
                     else {
@@ -165,7 +166,7 @@ std::optional<UpdateInfo> WCScene::update(WCUpdateInfo&& update)
                     }
                 }
             } else {
-                layer->texmapLayer.setBackgroundColor(layerUpdate.backgroundColor);
+                layer->texmapLayer.setBackgroundColor(layerUpdate.background.color);
                 layer->texmapLayer.setBackingStore(nullptr);
                 layer->backingStore = nullptr;
             }
@@ -212,7 +213,7 @@ std::optional<UpdateInfo> WCScene::update(WCUpdateInfo&& update)
             layer->texmapLayer.setBackdropFiltersRect(layerUpdate.backdropFiltersRect);
         }
         if (layerUpdate.changes & WCLayerChange::PlatformLayer) {
-            if (!layerUpdate.hasPlatformLayer) {
+            if (!layerUpdate.platformLayer.hasLayer) {
                 if (layer->contentBuffer) {
                     layer->contentBuffer->setClient(nullptr);
                     layer->contentBuffer = nullptr;
@@ -220,7 +221,7 @@ std::optional<UpdateInfo> WCScene::update(WCUpdateInfo&& update)
                 layer->texmapLayer.setContentsLayer(nullptr);
             } else {
                 WCContentBuffer* contentBuffer = nullptr;
-                for (auto identifier : layerUpdate.contentBufferIdentifiers)
+                for (auto identifier : layerUpdate.platformLayer.identifiers)
                     contentBuffer = WCContentBufferManager::singleton().releaseContentBufferIdentifier(m_webProcessIdentifier, identifier);
                 if (contentBuffer) {
                     if (layer->contentBuffer)
@@ -257,7 +258,7 @@ std::optional<UpdateInfo> WCScene::update(WCUpdateInfo&& update)
     RefPtr<WebCore::BitmapTexture> texture;
     bool showFPS = true;
     bool readPixel = false;
-    RefPtr<ShareableBitmap> bitmap;
+    RefPtr<WebCore::ShareableBitmap> bitmap;
 
     if (update.remoteContextHostedIdentifier) {
         showFPS = false;
@@ -275,7 +276,7 @@ std::optional<UpdateInfo> WCScene::update(WCUpdateInfo&& update)
     if (showFPS)
         m_fpsCounter.updateFPSAndDisplay(*m_textureMapper);
     if (readPixel) {
-        bitmap = ShareableBitmap::create({ windowSize });
+        bitmap = WebCore::ShareableBitmap::create({ windowSize });
         glReadPixels(0, 0, windowSize.width(), windowSize.height(), GL_BGRA, GL_UNSIGNED_BYTE, bitmap->data());
     }
     m_textureMapper->endPainting();

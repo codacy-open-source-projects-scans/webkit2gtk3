@@ -595,8 +595,7 @@ void FrameLoader::submitForm(Ref<FormSubmission>&& submission)
 
 void FrameLoader::stopLoading(UnloadEventPolicy unloadEventPolicy)
 {
-    // The frame may have started destruction, in which case we can't protect it.
-    RefPtr protectedFrame = m_frame->view() ? m_frame.ptr() : nullptr;
+    RefAllowingPartiallyDestroyed<LocalFrame> protectedFrame { m_frame.get() };
 
     if (RefPtr parser = m_frame->document() ? m_frame->document()->parser() : nullptr)
         parser->stopParsing();
@@ -1145,8 +1144,7 @@ void FrameLoader::setOpener(RefPtr<Frame>&& opener)
 
     if (m_opener) {
         // When setOpener is called in ~FrameLoader, opener's m_frameLoader is already cleared.
-        // Cannot ref localOpener as it may have started destruction.
-        if (auto* localOpener = dynamicDowncast<LocalFrame>(m_opener.get())) {
+        if (RefPtrAllowingPartiallyDestroyed<LocalFrame> localOpener = dynamicDowncast<LocalFrame>(m_opener.get())) {
             auto& openerFrameLoader = m_opener == m_frame.ptr() ? *this : localOpener->loader();
             openerFrameLoader.m_openedFrames.remove(m_frame.get());
         }
@@ -2046,6 +2044,11 @@ DocumentLoader* FrameLoader::activeDocumentLoader() const
     if (m_state == FrameState::Provisional)
         return m_provisionalDocumentLoader.get();
     return m_documentLoader.get();
+}
+
+RefPtr<DocumentLoader> FrameLoader::protectedActiveDocumentLoader() const
+{
+    return activeDocumentLoader();
 }
 
 bool FrameLoader::isLoading() const
@@ -3998,13 +4001,11 @@ bool FrameLoader::shouldInterruptLoadForXFrameOptions(const String& content, con
     switch (disposition) {
     case XFrameOptionsDisposition::SameOrigin: {
         Ref origin = SecurityOrigin::create(url);
-        if (topFrame && !origin->isSameSchemeHostPort(topFrame->document()->securityOrigin()))
+        if (!topFrame || !origin->isSameSchemeHostPort(topFrame->document()->securityOrigin()))
             return true;
         for (auto* frame = m_frame->tree().parent(); frame; frame = frame->tree().parent()) {
             auto* localFrame = dynamicDowncast<LocalFrame>(frame);
-            if (!localFrame)
-                continue;
-            if (!origin->isSameSchemeHostPort(localFrame->document()->securityOrigin()))
+            if (!localFrame || !origin->isSameSchemeHostPort(localFrame->document()->securityOrigin()))
                 return true;
         }
         return false;
@@ -4075,7 +4076,7 @@ RefPtr<Frame> FrameLoader::findFrameForNavigation(const AtomString& name, Docume
         return nullptr;
 
     RefPtr frame = m_frame->tree().findBySpecifiedName(name, activeDocument->frame() ? *activeDocument->protectedFrame() : protectedFrame().get());
-    if (!activeDocument->canNavigate(dynamicDowncast<LocalFrame>(frame.get())))
+    if (!activeDocument->canNavigate(frame.get()))
         return nullptr;
 
     return frame;
@@ -4362,8 +4363,6 @@ void FrameLoader::didChangeTitle(DocumentLoader* loader)
     m_client->didChangeTitle(loader);
 
     if (loader == m_documentLoader) {
-        // Must update the entries in the back-forward list too.
-        history().setCurrentItemTitle(loader->title());
         // This must go through the WebFrame because it has the right notion of the current b/f item.
         m_client->setTitle(loader->title(), loader->urlForHistory());
         m_client->setMainFrameDocumentReady(true); // update observers with new DOMDocument

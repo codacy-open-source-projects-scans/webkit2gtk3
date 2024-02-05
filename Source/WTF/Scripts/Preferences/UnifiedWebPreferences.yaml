@@ -1114,17 +1114,17 @@ CSSInputSecurityEnabled:
 
 CSSLightDarkEnabled:
   type: bool
-  status: testable
+  status: stable
   category: css
   humanReadableName: "CSS light-dark()"
   humanReadableDescription: "Enable support for CSS light-dark() defined in CSS Color 5"
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 CSSMarginTrimEnabled:
   type: bool
@@ -1313,17 +1313,17 @@ CSSScrollbarWidthEnabled:
 
 CSSStartingStyleAtRuleEnabled:
   type: bool
-  status: testable
+  status: stable
   category: css
   humanReadableName: "CSS @starting-style rule"
   humanReadableDescription: "Enable CSS @starting-style rule"
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 CSSTextBoxTrimEnabled:
   type: bool
@@ -3247,6 +3247,20 @@ ImperativeSlotAPIEnabled:
     WebCore:
       default: true
 
+InWindowFullscreenEnabled:
+  type: bool
+  status: internal
+  category: media
+  humanReadableName: "In-Window Fullscreen"
+  humanReadableDescription: "Enable In-Window Fullscreen"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 InactiveMediaCaptureSteamRepromptIntervalInMinutes:
   type: double
   status: embedder
@@ -4868,17 +4882,6 @@ NotificationsEnabled:
     WebCore:
       "PLATFORM(IOS_FAMILY)": false
       default: true
-
-OfflineWebApplicationCacheEnabled:
-  type: bool
-  status: embedder
-  defaultValue:
-    WebKitLegacy:
-      default: false
-    WebKit:
-      default: WebKit::defaultOfflineWebApplicationCacheEnabled()
-    WebCore:
-      default: false
 
 OffscreenCanvasEnabled:
   type: bool
@@ -6773,6 +6776,20 @@ TreatsAnyTextCSSLinkAsStylesheet:
     WebCore:
       default: false
 
+TrustedTypesEnabled:
+  type: bool
+  status: testable
+  category: dom
+  humanReadableName: "Trusted Types"
+  humanReadableDescription: "Enable Trusted Types"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 UAVisualTransitionDetectionEnabled:
   type: bool
   status: testable
@@ -7794,17 +7811,19 @@ WebRTCH264SimulcastEnabled:
 
 WebRTCH265CodecEnabled:
   type: bool
-  status: developer
+  status: stable
   category: media
   condition: ENABLE(WEB_RTC)
-  humanReadableName: "WebRTC H265 codec"
-  humanReadableDescription: "Enable WebRTC H265 codec"
+  humanReadableName: "WebRTC HEVC codec"
+  humanReadableDescription: "Enable WebRTC HEVC codec"
   defaultValue:
     WebKitLegacy:
       default: false
     WebKit:
+      "PLATFORM(COCOA)": true
       default: false
     WebCore:
+      "PLATFORM(COCOA)": true
       default: false
 
 WebRTCMediaPipelineAdditionalLoggingEnabled:

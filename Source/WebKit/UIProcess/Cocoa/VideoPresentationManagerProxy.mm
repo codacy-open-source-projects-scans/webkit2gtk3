@@ -31,7 +31,9 @@
 #import "APIUIClient.h"
 #import "DrawingAreaProxy.h"
 #import "GPUProcessProxy.h"
+#import "Logging.h"
 #import "MessageSenderInlines.h"
+#import "PageClient.h"
 #import "PlaybackSessionManagerProxy.h"
 #import "VideoPresentationManagerMessages.h"
 #import "VideoPresentationManagerProxyMessages.h"
@@ -42,6 +44,8 @@
 #import <QuartzCore/CoreAnimation.h>
 #import <WebCore/MediaPlayerEnums.h>
 #import <WebCore/NullVideoPresentationInterface.h>
+#import <WebCore/PlaybackSessionInterfaceAVKit.h>
+#import <WebCore/PlaybackSessionInterfaceMac.h>
 #import <WebCore/TimeRanges.h>
 #import <WebCore/VideoPresentationInterfaceIOS.h>
 #import <WebCore/VideoPresentationInterfaceMac.h>
@@ -51,6 +55,7 @@
 #import <wtf/LoggerHelper.h>
 #import <wtf/MachSendRight.h>
 #import <wtf/WeakObjCPtr.h>
+#import <wtf/cocoa/TypeCastsCocoa.h>
 
 #if PLATFORM(IOS_FAMILY)
 #import "RemoteLayerTreeDrawingAreaProxy.h"
@@ -60,13 +65,17 @@
 #endif
 
 #if USE(EXTENSIONKIT)
-#import "ExtensionKitSoftLink.h"
+#import <BrowserEngineKit/BELayerHierarchyHostingTransactionCoordinator.h>
+#import <BrowserEngineKit/BELayerHierarchyHostingView.h>
 #endif
 
 #define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, m_page->process().connection())
 
 @interface WKLayerHostView : PlatformView
 @property (nonatomic, assign) uint32_t contextID;
+#if USE(EXTENSIONKIT)
+@property (nonatomic, strong) PlatformView *visibilityPropagationView;
+#endif
 @end
 
 @implementation WKLayerHostView {
@@ -74,8 +83,9 @@
     WeakObjCPtr<UIWindow> _window;
 #endif
 #if USE(EXTENSIONKIT)
+    RetainPtr<PlatformView> _visibilityPropagationView;
 @public
-    RetainPtr<_SEHostingView> _hostingView;
+    RetainPtr<BELayerHierarchyHostingView> _hostingView;
 #endif
 }
 
@@ -118,6 +128,20 @@
     return [super window];
 }
 #endif
+
+#if USE(EXTENSIONKIT)
+- (PlatformView *)visibilityPropagationView
+{
+    return _visibilityPropagationView.get();
+}
+
+- (void)setVisibilityPropagationView:(PlatformView *)visibilityPropagationView
+{
+    [_visibilityPropagationView removeFromSuperview];
+    _visibilityPropagationView = visibilityPropagationView;
+    [self addSubview:_visibilityPropagationView.get()];
+}
+#endif // USE(EXTENSIONKIT)
 
 @end
 
@@ -545,7 +569,7 @@ VideoPresentationManagerProxy::ModelInterfaceTuple VideoPresentationManagerProxy
     Ref playbackSessionModel = m_playbackSessionManagerProxy->ensureModel(contextId);
     auto model = VideoPresentationModelContext::create(*this, playbackSessionModel, contextId);
     Ref playbackSessionInterface = m_playbackSessionManagerProxy->ensureInterface(contextId);
-    Ref<PlatformVideoPresentationInterface> interface = PlatformVideoPresentationInterface::create(playbackSessionInterface);
+    Ref<PlatformVideoPresentationInterface> interface = PlatformVideoPresentationInterface::create(playbackSessionInterface.get());
     m_playbackSessionManagerProxy->addClientForContext(contextId);
 
     interface->setVideoPresentationModel(model.ptr());
@@ -725,7 +749,7 @@ RetainPtr<WKLayerHostView> VideoPresentationManagerProxy::createLayerHostViewWit
         model->setLayerHostView(view);
 
 #if USE(EXTENSIONKIT)
-        auto hostingView = adoptNS([alloc_SEHostingViewInstance() init]);
+        auto hostingView = adoptNS([[BELayerHierarchyHostingView alloc] init]);
         view->_hostingView = hostingView;
         [view addSubview:hostingView.get()];
         auto layer = [hostingView layer];
@@ -738,9 +762,12 @@ RetainPtr<WKLayerHostView> VideoPresentationManagerProxy::createLayerHostViewWit
     }
 
 #if USE(EXTENSIONKIT)
-    auto pid = m_page->process().processPool().gpuProcess()->processID();
-    auto handle = LayerHostingContext::createHostingHandle(pid, videoLayerID);
-    [view->_hostingView setHandle:handle.get()];
+    RefPtr page = m_page.get();
+    if (RefPtr gpuProcess = page ? page->process().processPool().gpuProcess() : nullptr) {
+        RetainPtr handle = LayerHostingContext::createHostingHandle(gpuProcess->processID(), videoLayerID);
+        [view->_hostingView setHandle:handle.get()];
+    } else
+        RELEASE_LOG_ERROR(Media, "VideoPresentationManagerProxy::createLayerHostViewWithID: Unable to initialize hosting view, no GPU process");
 #else
     [view setContextID:videoLayerID];
 #endif
@@ -841,6 +868,11 @@ void VideoPresentationManagerProxy::setupFullscreenWithID(PlaybackSessionContext
 #endif
 
     RetainPtr<WKLayerHostView> view = createLayerHostViewWithID(contextId, videoLayerID, initialSize, hostingDeviceScaleFactor);
+
+#if USE(EXTENSIONKIT)
+        if (UIView *visibilityPropagationView = m_page->pageClient().createVisibilityPropagationView())
+            [view setVisibilityPropagationView:visibilityPropagationView];
+#endif
 
 #if PLATFORM(IOS_FAMILY)
     auto* rootNode = downcast<RemoteLayerTreeDrawingAreaProxy>(*m_page->drawingArea()).remoteLayerTreeHost().rootNode();
@@ -1184,6 +1216,11 @@ void VideoPresentationManagerProxy::didCleanupFullscreen(PlaybackSessionContextI
 
     auto& [model, interface] = ensureModelAndInterface(contextId);
 
+#if USE(EXTENSIONKIT)
+    if (auto layerHostView = dynamic_objc_cast<WKLayerHostView>(model->layerHostView()))
+        [layerHostView setVisibilityPropagationView:nil];
+#endif
+
     [model->layerHostView() removeFromSuperview];
     interface->removeCaptionsLayer();
     if (auto playerLayer = model->playerLayer()) {
@@ -1213,11 +1250,11 @@ void VideoPresentationManagerProxy::setVideoLayerFrame(PlaybackSessionContextIde
     MachSendRight fenceSendRight;
 #if PLATFORM(IOS_FAMILY)
 #if USE(EXTENSIONKIT)
-    RetainPtr<WKLayerHostView> view = static_cast<WKLayerHostView*>(model->layerHostView());
+    auto view = dynamic_objc_cast<WKLayerHostView>(model->layerHostView());
     if (view && view->_hostingView) {
-        auto hostingUpdateCoordinator = adoptNS([alloc_SEHostingUpdateCoordinatorInstance() init]);
-        [hostingUpdateCoordinator addHostingView:view->_hostingView.get()];
-        OSObjectPtr<xpc_object_t> xpcRepresentationHostingCoordinator = [hostingUpdateCoordinator xpcRepresentation];
+        auto hostingUpdateCoordinator = [BELayerHierarchyHostingTransactionCoordinator coordinatorWithError:nil];
+        [hostingUpdateCoordinator addLayerHierarchyHostingView:view->_hostingView.get()];
+        OSObjectPtr<xpc_object_t> xpcRepresentationHostingCoordinator = [hostingUpdateCoordinator createXPCRepresentation];
         fenceSendRight = MachSendRight::adopt(xpc_dictionary_copy_mach_send(xpcRepresentationHostingCoordinator.get(), machPortKey));
         m_page->send(Messages::VideoPresentationManager::SetVideoLayerFrameFenced(contextId, frame, WTFMove(fenceSendRight)));
         [hostingUpdateCoordinator commit];

@@ -1289,7 +1289,7 @@ IntRect AccessibilityObject::boundingBoxForQuads(RenderObject* obj, const Vector
 bool AccessibilityObject::press()
 {
     // The presence of the actionElement will confirm whether we should even attempt a press.
-    Element* actionElem = actionElement();
+    RefPtr actionElem = actionElement();
     if (!actionElem)
         return false;
     if (auto* frame = actionElem->document().frame())
@@ -1297,41 +1297,40 @@ bool AccessibilityObject::press()
     
     // Hit test at this location to determine if there is a sub-node element that should act
     // as the target of the action.
-    Element* hitTestElement = nullptr;
-    Document* document = this->document();
+    RefPtr<Element> hitTestElement;
+    RefPtr document = this->document();
     if (document) {
         constexpr OptionSet<HitTestRequest::Type> hitType { HitTestRequest::Type::ReadOnly, HitTestRequest::Type::Active, HitTestRequest::Type::AccessibilityHitTest };
         HitTestResult hitTestResult { clickPoint() };
         document->hitTest(hitType, hitTestResult);
-        if (auto* innerNode = hitTestResult.innerNode()) {
-            if (auto* shadowHost = innerNode->shadowHost())
-                hitTestElement = shadowHost;
-            else if (is<Element>(*innerNode))
-                hitTestElement = &downcast<Element>(*innerNode);
+        if (RefPtr innerNode = hitTestResult.innerNode()) {
+            if (RefPtr shadowHost = innerNode->shadowHost())
+                hitTestElement = WTFMove(shadowHost);
+            else if (RefPtr element = dynamicDowncast<Element>(*innerNode))
+                hitTestElement = WTFMove(element);
             else
                 hitTestElement = innerNode->parentElement();
         }
     }
 
     // Prefer the actionElement instead of this node, if the actionElement is inside this node.
-    Element* pressElement = this->element();
+    RefPtr pressElement = this->element();
     if (!pressElement || actionElem->isDescendantOf(*pressElement))
-        pressElement = actionElem;
-    
+        pressElement = WTFMove(actionElem);
+
     ASSERT(pressElement);
     // Prefer the hit test element, if it is inside the target element.
     if (hitTestElement && hitTestElement->isDescendantOf(*pressElement))
-        pressElement = hitTestElement;
-    
-    UserGestureIndicator gestureIndicator(IsProcessingUserGesture::Yes, document);
-    
+        pressElement = WTFMove(hitTestElement);
+
+    UserGestureIndicator gestureIndicator(IsProcessingUserGesture::Yes, document.get());
+
     bool dispatchedEvent = false;
 #if PLATFORM(IOS_FAMILY)
     if (hasTouchEventListener())
         dispatchedEvent = dispatchTouchEvent();
 #endif
-    
-    Ref protectedPressElement { *pressElement };
+
     return dispatchedEvent || pressElement->accessKeyAction(true) || pressElement->dispatchSimulatedClick(nullptr, SendMouseUpDownEvents);
 }
     
@@ -2067,13 +2066,13 @@ void AccessibilityObject::updateBackingStore()
     // Updating the layout may delete this object.
     RefPtr<AccessibilityObject> protectedThis(this);
     if (auto* document = this->document()) {
-        if (!document->view()->layoutContext().isInRenderTreeLayout() && !document->inRenderTreeUpdate() && !document->inStyleRecalc())
+        if (!Accessibility::inRenderTreeOrStyleUpdate(*document))
             document->updateLayoutIgnorePendingStylesheets();
     }
 
-    if (auto cache = axObjectCache())
-        cache->performDeferredCacheUpdate();
-    
+    if (auto* cache = axObjectCache())
+        cache->performDeferredCacheUpdate(ForceLayout::Yes);
+
     updateChildrenIfNecessary();
 }
 
@@ -2739,6 +2738,7 @@ static void initializeRoleMap()
     // Create specific synonyms for the computedRole which is used in WPT tests and the accessibility inspector.
     gAriaReverseRoleMap->set(enumToUnderlyingType(AccessibilityRole::Image), "image"_s);
     gAriaReverseRoleMap->set(enumToUnderlyingType(AccessibilityRole::TextArea), "textbox"_s);
+    gAriaReverseRoleMap->set(enumToUnderlyingType(AccessibilityRole::DateTime), "textbox"_s);
     gAriaReverseRoleMap->set(enumToUnderlyingType(AccessibilityRole::Presentational), "none"_s);
 }
 
@@ -3041,8 +3041,12 @@ bool AccessibilityObject::isSelected() const
         return true;
 
     // Menu items are considered selectable by assistive technologies
-    if (isMenuItem())
-        return isFocused() || parentObjectUnignored()->activeDescendant() == this;
+    if (isMenuItem()) {
+        if (isFocused())
+            return true;
+        WeakPtr parent = parentObjectUnignored();
+        return parent && parent->activeDescendant() == this;
+    }
 
     return false;
 }
@@ -4467,6 +4471,10 @@ static bool isAccessibilityObjectSearchMatchAtIndex(RefPtr<AXCoreObject> axObjec
         return axObject->isWebArea();
     case AccessibilitySearchKey::Graphic:
         return axObject->isImage();
+#if ENABLE(AX_THREAD_TEXT_APIS)
+    case AccessibilitySearchKey::HasTextRuns:
+        return axObject->hasTextRuns();
+#endif
     case AccessibilitySearchKey::HeadingLevel1:
         return axObject->headingLevel() == 1;
     case AccessibilitySearchKey::HeadingLevel2:

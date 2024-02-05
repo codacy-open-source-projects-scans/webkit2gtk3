@@ -56,6 +56,7 @@ public:
     RemoteLayerBackingStoreCollection(RemoteLayerTreeContext&);
     virtual ~RemoteLayerBackingStoreCollection();
 
+    void markFrontBufferVolatileForTesting(RemoteLayerBackingStore&);
     virtual void backingStoreWasCreated(RemoteLayerBackingStore&);
     virtual void backingStoreWillBeDestroyed(RemoteLayerBackingStore&);
 
@@ -65,8 +66,6 @@ public:
     // Return value indicates whether the backing store needs to be included in the transaction.
     bool backingStoreWillBeDisplayed(RemoteLayerBackingStore&);
     void backingStoreBecameUnreachable(RemoteLayerBackingStore&);
-
-    std::unique_ptr<RemoteLayerBackingStore> createRemoteLayerBackingStore(PlatformCALayerRemote*);
 
     virtual void prepareBackingStoresForDisplay(RemoteLayerTreeTransaction&);
     virtual bool paintReachableBackingStoreContents();

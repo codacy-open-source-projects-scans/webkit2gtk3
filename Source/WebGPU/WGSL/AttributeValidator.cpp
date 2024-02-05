@@ -248,6 +248,9 @@ void AttributeValidator::visit(AST::Variable& variable)
 
         error(attribute.span(), "invalid attribute for variable declaration");
     }
+
+    if (isResource && (!variable.m_group || !variable.m_binding))
+        error(variable.span(), "resource variables require @group and @binding attributes");
 }
 
 void AttributeValidator::visit(AST::Structure& structure)
@@ -326,8 +329,12 @@ void AttributeValidator::visit(AST::StructureMember& member)
             auto sizeValue = constantValue->integerValue();
             if (sizeValue < 0)
                 error(attribute.span(), "@size value must be non-negative");
-            else if (sizeValue < member.type().inferredType()->size())
+            else if (m_errors.isEmpty() && sizeValue < member.type().inferredType()->size()) {
+                // We can't call Type::size() if we already have errors, as we might
+                // try to read the size of a struct, which we will not have computed
+                // if we already encountered errors
                 error(attribute.span(), "@size value must be at least the byte-size of the type of the member");
+            }
             update(attribute.span(), member.m_size, static_cast<unsigned>(sizeValue));
             continue;
         }

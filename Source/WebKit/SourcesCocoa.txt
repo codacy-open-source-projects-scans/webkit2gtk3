@@ -139,8 +139,6 @@ Shared/WebSQLiteDatabaseTracker.cpp
 
 Shared/cf/CookieStorageUtilsCF.mm
 
-Shared/cg/ShareableBitmapCG.mm
-
 Shared/Authentication/cocoa/AuthenticationChallengeDispositionCocoa.mm
 Shared/Authentication/cocoa/AuthenticationManagerCocoa.mm
 Shared/Authentication/cocoa/ClientCertificateAuthenticationXPCConstants.cpp
@@ -513,6 +511,7 @@ UIProcess/ios/WKTextSelectionRect.mm
 UIProcess/ios/WKUSDPreviewView.mm
 UIProcess/ios/WKVelocityTrackingScrollView.mm
 UIProcess/ios/WKVideoView.mm
+UIProcess/ios/WKVisibilityPropagationView.mm
 UIProcess/ios/WKWebEvent.mm
 UIProcess/ios/WKWebGeolocationPolicyDeciderIOS.mm
 
@@ -745,6 +744,10 @@ GPUProcessProxyMessageReceiver.cpp
 GPUProcessMessageReceiver.cpp
 LibWebRTCCodecsProxyMessageReceiver.cpp
 LibWebRTCCodecsMessageReceiver.cpp
+ModelConnectionToWebProcessMessageReceiver.cpp
+ModelProcessConnectionMessageReceiver.cpp
+ModelProcessProxyMessageReceiver.cpp
+ModelProcessMessageReceiver.cpp
 RemoteAudioDestinationManagerMessageReceiver.cpp
 RemoteAudioHardwareListenerMessageReceiver.cpp
 RemoteAudioSessionMessageReceiver.cpp

@@ -387,6 +387,7 @@ public:
     unsigned textLength() const final;
 #if ENABLE(AX_THREAD_TEXT_APIS)
     virtual AXTextRuns textRuns() { return { }; }
+    bool hasTextRuns() final { return textRuns().size(); }
 #endif
 #if PLATFORM(COCOA)
     // Returns an array of strings and AXObject wrappers corresponding to the
@@ -712,7 +713,6 @@ public:
 #if PLATFORM(IOS_FAMILY)
     int accessibilitySecureFieldLength() override;
     bool hasTouchEventListener() const override;
-    bool isInputTypePopupButton() const override;
 #endif
 
     // allows for an AccessibilityObject to update its render tree or perform
@@ -847,7 +847,8 @@ protected: // FIXME: Make the data members private.
 
 inline bool AccessibilityObject::hasDisplayContents() const
 {
-    return is<Element>(node()) && downcast<Element>(node())->hasDisplayContents();
+    RefPtr element = this->element();
+    return element && element->hasDisplayContents();
 }
 
 inline void AccessibilityObject::recomputeIsIgnored()

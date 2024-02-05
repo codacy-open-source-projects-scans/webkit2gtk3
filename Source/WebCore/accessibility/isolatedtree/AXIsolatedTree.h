@@ -348,6 +348,7 @@ public:
     void updateDependentProperties(AccessibilityObject&);
     void updatePropertiesForSelfAndDescendants(AccessibilityObject&, const AXPropertyNameSet&);
     void updateFrame(AXID, IntRect&&);
+    void updateRootScreenRelativePosition();
     void overrideNodeProperties(AXID, AXPropertyMap&&);
 
     double loadingProgress() { return m_loadingProgress; }
@@ -383,8 +384,13 @@ public:
     AXTextMarkerRange selectedTextMarkerRange();
     void setSelectedTextMarkerRange(AXTextMarkerRange&&);
 
-    void queueNodeUpdate(AXCoreObject&, const NodeUpdateOptions&);
+    void queueNodeUpdate(AXID, const NodeUpdateOptions&);
     void processQueuedNodeUpdates();
+
+#if ENABLE(AX_THREAD_TEXT_APIS)
+    AXTextMarker firstMarker();
+    AXTextMarker lastMarker();
+#endif
 
 private:
     AXIsolatedTree(AXObjectCache&);

@@ -74,6 +74,10 @@ class ShadowRoot;
 class TouchEvent;
 class WebCoreOpaqueRoot;
 
+namespace Style {
+struct PseudoElementIdentifier;
+}
+
 }
 
 WTF_ALLOW_COMPACT_POINTERS_TO_INCOMPLETE_TYPE(WebCore::RenderObject);
@@ -87,7 +91,10 @@ using MutationRecordDeliveryOptions = OptionSet<MutationObserverOptionType>;
 
 using NodeOrString = std::variant<RefPtr<Node>, String>;
 
-class Node : public EventTarget, public CanMakeCheckedPtr {
+const int initialNodeVectorSize = 11; // Covers 99.5%. See webkit.org/b/80706
+typedef Vector<Ref<Node>, initialNodeVectorSize> NodeVector;
+
+class Node : public EventTarget {
     WTF_MAKE_ISO_ALLOCATED(Node);
 
     friend class Document;
@@ -141,11 +148,11 @@ public:
     inline RefPtr<ContainerNode> protectedParentNode() const; // Defined in ContainerNode.h.
     static ptrdiff_t parentNodeMemoryOffset() { return OBJECT_OFFSETOF(Node, m_parentNode); }
     inline Element* parentElement() const;
-    Node* previousSibling() const { return m_previous.get(); }
-    RefPtr<Node> protectedPreviousSibling() const { return m_previous.get(); }
+    Node* previousSibling() const { return m_previous; }
+    RefPtr<Node> protectedPreviousSibling() const { return m_previous; }
     static ptrdiff_t previousSiblingMemoryOffset() { return OBJECT_OFFSETOF(Node, m_previous); }
-    Node* nextSibling() const { return m_next.get(); }
-    RefPtr<Node> protectedNextSibling() const { return m_next.get(); }
+    Node* nextSibling() const { return m_next; }
+    RefPtr<Node> protectedNextSibling() const { return m_next; }
     static ptrdiff_t nextSiblingMemoryOffset() { return OBJECT_OFFSETOF(Node, m_next); }
     WEBCORE_EXPORT RefPtr<NodeList> childNodes();
     Node* firstChild() const;
@@ -212,7 +219,7 @@ public:
 
     bool isElementNode() const { return hasTypeFlag(TypeFlag::IsElement); }
     bool isContainerNode() const { return hasTypeFlag(TypeFlag::IsContainerNode); }
-    bool isCharacterData() const { return hasTypeFlag(TypeFlag::IsCharacterData); }
+    bool isCharacterDataNode() const { return hasTypeFlag(TypeFlag::IsCharacterData); }
     bool isTextNode() const { return hasTypeFlag(TypeFlag::IsText); }
     bool isHTMLElement() const { return hasTypeFlag(TypeFlag::IsHTMLElement); }
     bool isSVGElement() const { return hasTypeFlag(TypeFlag::IsSVGElement); }
@@ -235,8 +242,7 @@ public:
 #endif
     bool isStyledElement() const { return hasTypeFlag(TypeFlag::IsHTMLElement) || hasTypeFlag(TypeFlag::IsSVGElement) || hasTypeFlag(TypeFlag::IsMathMLElement); }
     virtual bool isAttributeNode() const { return false; }
-    bool isCharacterDataNode() const { return hasTypeFlag(TypeFlag::IsCharacterData); }
-    virtual bool isFrameOwnerElement() const { return false; }
+    virtual bool isHTMLFrameOwnerElement() const { return false; }
     virtual bool isPluginElement() const { return false; }
 
     bool isDocumentNode() const { return nodeType() == DOCUMENT_NODE; }
@@ -329,15 +335,6 @@ public:
     WEBCORE_EXPORT bool isRootEditableElement() const;
     WEBCORE_EXPORT Element* rootEditableElement() const;
 
-    // Called by the parser when this element's close tag is reached,
-    // signaling that all child tags have been parsed and added.
-    // This is needed for <applet> and <object> elements, which can't lay themselves out
-    // until they know all of their nested <param>s. [Radar 3603191, 4040848].
-    // Also used for script elements and some SVG elements for similar purposes,
-    // but making parsing a special case in this respect should be avoided if possible.
-    virtual void finishParsingChildren() { }
-    virtual void beginParsingChildren() { }
-
     // For <link> and <style> elements.
     virtual bool sheetLoaded() { return true; }
     virtual void notifyLoadedSheetAndAllCriticalSubresources(bool /* error loading subresource */) { }
@@ -355,6 +352,10 @@ public:
     bool isEditingText() const { return isTextNode() && hasTypeFlag(TypeFlag::IsSpecialInternalNode); }
 
     bool isDocumentFragmentForInnerOuterHTML() const { return isDocumentFragment() && hasTypeFlag(TypeFlag::IsSpecialInternalNode); }
+
+    bool hasHeldBackChildrenChanged() const { return hasStateFlag(StateFlag::HasHeldBackChildrenChanged); }
+    void setHasHeldBackChildrenChanged() { setStateFlag(StateFlag::HasHeldBackChildrenChanged); }
+    void clearHasHeldBackChildrenChanged() { clearStateFlag(StateFlag::HasHeldBackChildrenChanged); }
 
     void setChildNeedsStyleRecalc() { setStyleFlag(NodeStyleFlag::DescendantNeedsStyleResolution); }
     void clearChildNeedsStyleRecalc();
@@ -453,11 +454,12 @@ public:
     // Use these two methods with caution.
     WEBCORE_EXPORT RenderBox* renderBox() const;
     RenderBoxModelObject* renderBoxModelObject() const;
-    
+
     // Wrapper for nodes that don't have a renderer, but still cache the style (like HTMLOptionElement).
     const RenderStyle* renderStyle() const;
 
-    virtual const RenderStyle* computedStyle(PseudoId pseudoElementSpecifier = PseudoId::None);
+    WEBCORE_EXPORT const RenderStyle* computedStyle();
+    virtual const RenderStyle* computedStyle(const std::optional<Style::PseudoElementIdentifier>&);
 
     enum class InsertedIntoAncestorResult {
         Done,
@@ -527,20 +529,31 @@ public:
     virtual void defaultEventHandler(Event&);
 
     void ref() const;
+    void refAllowingPartiallyDestroyed() const;
     void deref() const;
+    void derefAllowingPartiallyDestroyed() const;
     bool hasOneRef() const;
     unsigned refCount() const;
 
 #if ASSERT_ENABLED
-    bool m_deletionHasBegun { false };
+    enum class IsAllocatedMemory : unsigned {
+        Scribble = 0, // Do not check for this value, it is not guaranteed to exist.
+        Yes = 0xFEEDB0BA,
+    };
+    mutable IsAllocatedMemory m_isAllocatedMemory { IsAllocatedMemory::Yes };
     mutable bool m_inRemovedLastRefFunction { false };
     bool m_adoptionIsRequired { true };
+
+    bool deletionHasEnded() const
+    {
+        return m_isAllocatedMemory != IsAllocatedMemory::Yes;
+    }
 #endif
 
     void relaxAdoptionRequirement()
     {
 #if ASSERT_ENABLED
-        ASSERT_WITH_SECURITY_IMPLICATION(!m_deletionHasBegun);
+        ASSERT_WITH_SECURITY_IMPLICATION(!deletionHasBegun());
         ASSERT(m_adoptionIsRequired);
         m_adoptionIsRequired = false;
 #endif
@@ -576,6 +589,8 @@ public:
     static auto flagIsLink() { return enumToUnderlyingType(StateFlag::IsLink); }
     static auto flagIsParsingChildren() { return enumToUnderlyingType(StateFlag::IsParsingChildren); }
 #endif // ENABLE(JIT)
+
+    bool deletionHasBegun() const { return hasStateFlag(StateFlag::HasStartedDeletion); }
 
 protected:
     enum class TypeFlag : uint16_t {
@@ -615,6 +630,8 @@ protected:
         HasInvalidRenderer = 1 << 10,
         ContainsOnlyASCIIWhitespace = 1 << 11, // Only used on CharacterData.
         ContainsOnlyASCIIWhitespaceIsValid = 1 << 12, // Only used on CharacterData.
+        HasHeldBackChildrenChanged = 1 << 13,
+        HasStartedDeletion = 1 << 14,
     };
 
     enum class TabIndexState : uint8_t {
@@ -720,7 +737,9 @@ protected:
     void updateAncestorsForStyleRecalc();
     void markAncestorsForInvalidatedStyle();
 
+    // FIXME: Replace all uses of convertNodesOrStringsIntoNode by convertNodesOrStringsIntoNodeVector.
     ExceptionOr<RefPtr<Node>> convertNodesOrStringsIntoNode(FixedVector<NodeOrString>&&);
+    ExceptionOr<NodeVector> convertNodesOrStringsIntoNodeVector(FixedVector<NodeOrString>&&);
 
 private:
     virtual PseudoId customPseudoId() const
@@ -754,10 +773,10 @@ private:
     const uint16_t m_typeBitFields;
     mutable OptionSet<StateFlag> m_stateFlags;
 
-    CheckedPtr<ContainerNode> m_parentNode;
+    ContainerNode* m_parentNode { nullptr };
     CheckedPtr<TreeScope> m_treeScope;
-    CheckedPtr<Node> m_previous;
-    CheckedPtr<Node> m_next;
+    Node* m_previous { nullptr };
+    Node* m_next { nullptr };
     CompactPointerTuple<RenderObject*, uint16_t> m_rendererWithStyleFlags;
     CompactUniquePtrTuple<NodeRareData, uint16_t> m_rareDataWithBitfields;
 };
@@ -784,7 +803,7 @@ inline void adopted(Node* node)
 {
     if (!node)
         return;
-    ASSERT(!node->m_deletionHasBegun);
+    ASSERT(!node->deletionHasBegun());
     ASSERT(!node->m_inRemovedLastRefFunction);
     node->m_adoptionIsRequired = false;
 }
@@ -793,22 +812,39 @@ inline void adopted(Node* node)
 
 ALWAYS_INLINE void Node::ref() const
 {
-    ASSERT(isMainThread());
-    ASSERT(!m_deletionHasBegun);
+    ASSERT(!deletionHasBegun());
     ASSERT(!m_inRemovedLastRefFunction);
+    refAllowingPartiallyDestroyed();
+}
+
+// Doesn't check deletionHasBegun().
+ALWAYS_INLINE void Node::refAllowingPartiallyDestroyed() const
+{
+    ASSERT(isMainThread());
+    ASSERT(!deletionHasEnded());
     ASSERT(!m_adoptionIsRequired);
     m_refCountAndParentBit += s_refCountIncrement;
 }
 
 ALWAYS_INLINE void Node::deref() const
 {
-    ASSERT(isMainThread());
-    ASSERT(refCount());
-    ASSERT(!m_deletionHasBegun);
+    ASSERT(!deletionHasBegun());
     ASSERT(!m_inRemovedLastRefFunction);
+    derefAllowingPartiallyDestroyed();
+}
+
+// Doesn't check deletionHasBegun().
+ALWAYS_INLINE void Node::derefAllowingPartiallyDestroyed() const
+{
+    ASSERT(isMainThread());
+    ASSERT(!deletionHasEnded());
     ASSERT(!m_adoptionIsRequired);
+
+    ASSERT(refCount());
     auto updatedRefCount = m_refCountAndParentBit - s_refCountIncrement;
     if (!updatedRefCount) {
+        if (deletionHasBegun())
+            return;
         // Don't update m_refCountAndParentBit to avoid double destruction through use of Ref<T>/RefPtr<T>.
         // (This is a security mitigation in case of programmer error. It will ASSERT in debug builds.)
 #if ASSERT_ENABLED
@@ -822,7 +858,7 @@ ALWAYS_INLINE void Node::deref() const
 
 ALWAYS_INLINE bool Node::hasOneRef() const
 {
-    ASSERT(!m_deletionHasBegun);
+    ASSERT(!deletionHasBegun());
     ASSERT(!m_inRemovedLastRefFunction);
     return refCount() == 1;
 }
@@ -842,7 +878,7 @@ inline void addSubresourceURL(ListHashSet<URL>& urls, const URL& url)
 inline ContainerNode* Node::parentNode() const
 {
     ASSERT(isMainThreadOrGCThread());
-    return m_parentNode.get();
+    return m_parentNode;
 }
 
 inline ContainerNode* Node::parentNodeGuaranteedHostFree() const
@@ -885,7 +921,7 @@ inline void Node::setHasValidStyle()
 inline void Node::setTreeScopeRecursively(TreeScope& newTreeScope)
 {
     ASSERT(!isDocumentNode());
-    ASSERT(!m_deletionHasBegun);
+    ASSERT(!deletionHasBegun());
     if (m_treeScope != &newTreeScope)
         moveTreeToNewScope(*this, *m_treeScope, newTreeScope);
 }

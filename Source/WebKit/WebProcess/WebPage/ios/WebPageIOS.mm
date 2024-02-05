@@ -46,7 +46,6 @@
 #import "SandboxUtilities.h"
 #import "ShareableBitmapUtilities.h"
 #import "SharedBufferReference.h"
-#import "SharedMemory.h"
 #import "SyntheticEditingCommandType.h"
 #import "TapHandlingResult.h"
 #import "TextCheckingControllerProxy.h"
@@ -149,6 +148,7 @@
 #import <WebCore/Settings.h>
 #import <WebCore/ShadowRoot.h>
 #import <WebCore/SharedBuffer.h>
+#import <WebCore/SharedMemory.h>
 #import <WebCore/StyleProperties.h>
 #import <WebCore/TextIndicator.h>
 #import <WebCore/TextIterator.h>
@@ -4522,7 +4522,7 @@ void WebPage::computePagesForPrintingiOS(WebCore::FrameIdentifier frameID, const
     reply(pageRects.size());
 }
 
-void WebPage::drawToImage(WebCore::FrameIdentifier frameID, const PrintInfo& printInfo, CompletionHandler<void(std::optional<WebKit::ShareableBitmap::Handle>&&)>&& reply)
+void WebPage::drawToImage(WebCore::FrameIdentifier frameID, const PrintInfo& printInfo, CompletionHandler<void(std::optional<WebCore::ShareableBitmap::Handle>&&)>&& reply)
 {  
     Vector<WebCore::IntRect> pageRects;
     double totalScaleFactor;

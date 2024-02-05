@@ -26,6 +26,11 @@ webkit_platform_headers: "StreamConnectionEncoder.h"
     String string()
 }
 
+header: <wtf/text/CString.h>
+[CustomHeader] class WTF::CString {
+   std::span<const uint8_t> bytes()
+}
+
 [AdditionalEncoder=StreamConnectionEncoder] class WTF::MediaTime {
     int64_t timeValue()
     uint32_t timeScale()
@@ -186,6 +191,7 @@ template: enum class WebKit::VideoDecoderIdentifierType
 template: enum class WebKit::VideoEncoderIdentifierType
 template: enum class WebKit::WCContentBufferIdentifierType
 template: enum class WebKit::WebGPUIdentifierType
+template: enum class TestWebKitAPI::TestedObjectIdentifierType
 template: struct IPC::AsyncReplyIDType
 template: struct WebCore::WebSocketFrame
 template: struct WebKit::ConnectionAsyncReplyHandler
@@ -207,6 +213,10 @@ header: <wtf/MemoryPressureHandler.h>
     double strictThresholdFraction;
     std::optional<double> killThresholdFraction;
     Seconds pollInterval;
+}
+
+header: <variant>
+[AdditionalEncoder=StreamConnectionEncoder, Nested] struct std::monostate {
 }
 
 enum class WTFLogLevel : uint8_t {

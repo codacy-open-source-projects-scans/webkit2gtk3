@@ -39,7 +39,8 @@
 #import "RemoteLayerTreeHost.h"
 #import "RemoteLayerTreeLayers.h"
 #import "RemoteLayerTreeNode.h"
-#import "ShareableBitmap.h"
+#import "RemoteLayerWithInProcessRenderingBackingStore.h"
+#import "RemoteLayerWithRemoteRenderingBackingStore.h"
 #import "SwapBuffersDisplayRequirement.h"
 #import "WebCoreArgumentCoders.h"
 #import "WebPageProxy.h"
@@ -54,6 +55,7 @@
 #import <WebCore/ImageBuffer.h>
 #import <WebCore/PlatformCALayerClient.h>
 #import <WebCore/PlatformCALayerDelegatedContents.h>
+#import <WebCore/ShareableBitmap.h>
 #import <WebCore/WebCoreCALayerExtras.h>
 #import <WebCore/WebLayer.h>
 #import <pal/spi/cocoa/QuartzCoreSPI.h>
@@ -93,6 +95,16 @@ private:
 
 }
 
+std::unique_ptr<RemoteLayerBackingStore> RemoteLayerBackingStore::createForLayer(PlatformCALayerRemote* layer)
+{
+    switch (processModelForLayer(layer)) {
+    case ProcessModel::Remote:
+        return makeUnique<RemoteLayerWithRemoteRenderingBackingStore>(layer);
+    case ProcessModel::InProcess:
+        return makeUnique<RemoteLayerWithInProcessRenderingBackingStore>(layer);
+    }
+}
+
 RemoteLayerBackingStore::RemoteLayerBackingStore(PlatformCALayerRemote* layer)
     : m_layer(layer)
     , m_lastDisplayTime(-MonotonicTime::infinity())
@@ -128,6 +140,13 @@ void RemoteLayerBackingStore::ensureBackingStore(const Parameters& parameters)
 
     m_parameters = parameters;
     clearBackingStore();
+}
+
+RemoteLayerBackingStore::ProcessModel RemoteLayerBackingStore::processModelForLayer(PlatformCALayerRemote* layer)
+{
+    if (WebProcess::singleton().shouldUseRemoteRenderingFor(WebCore::RenderingPurpose::DOM) && !layer->needsPlatformContext())
+        return ProcessModel::Remote;
+    return ProcessModel::InProcess;
 }
 
 #if !LOG_DISABLED
@@ -598,6 +617,12 @@ void RemoteLayerBackingStore::purgeBackBufferForTesting()
 {
     if (auto* collection = backingStoreCollection())
         collection->purgeBackBufferForTesting(*this);
+}
+
+void RemoteLayerBackingStore::markFrontBufferVolatileForTesting()
+{
+    if (auto* collection = backingStoreCollection())
+        collection->markFrontBufferVolatileForTesting(*this);
 }
 
 TextStream& operator<<(TextStream& ts, const RemoteLayerBackingStore& backingStore)

@@ -165,7 +165,7 @@ void RemoteDevice::setSharedVideoFrameSemaphore(IPC::Semaphore&& semaphore)
     m_sharedVideoFrameReader.setSemaphore(WTFMove(semaphore));
 }
 
-void RemoteDevice::setSharedVideoFrameMemory(SharedMemory::Handle&& handle)
+void RemoteDevice::setSharedVideoFrameMemory(WebCore::SharedMemory::Handle&& handle)
 {
     m_sharedVideoFrameReader.setSharedMemory(WTFMove(handle));
 }
@@ -186,9 +186,6 @@ void RemoteDevice::importExternalTextureFromVideoFrame(const WebGPU::ExternalTex
             pixelBuffer = videoFrame ? videoFrame->pixelBuffer() : nullptr;
         });
     }
-
-    if (!pixelBuffer)
-        return;
 
     auto convertedDescriptor = m_objectHeap.convertFromBacking(descriptor, pixelBuffer);
     ASSERT(convertedDescriptor);

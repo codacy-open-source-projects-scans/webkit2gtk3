@@ -31,6 +31,7 @@
 #include "LegacyRenderSVGResourceClipper.h"
 #include "PathOperation.h"
 #include "RenderLayer.h"
+#include "RenderSVGPath.h"
 #include "RenderStyle.h"
 #include "SVGClipPathElement.h"
 #include "SVGElementTypeHelpers.h"
@@ -59,12 +60,19 @@ private:
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(CSSSVGResourceElementClient);
 
-void CSSSVGResourceElementClient::resourceChanged(SVGElement&)
+void CSSSVGResourceElementClient::resourceChanged(SVGElement& element)
 {
     if (m_clientRenderer.renderTreeBeingDestroyed())
         return;
 
 #if ENABLE(LAYER_BASED_SVG_ENGINE)
+    // Special case for markers. Markers can be attached to RenderSVGPath object. Marker positions are computed
+    // once during layout, or if the shape itself changes. Here we manually update the marker positions without
+    // requiring a relayout. Instead we can simply repaint the path - via the updateLayerPosition() logic, properly
+    // repainting the old repaint boundaries and the new ones (after the marker change).
+    if (auto* pathClientRenderer = dynamicDowncast<RenderSVGPath>(m_clientRenderer); pathClientRenderer && is<SVGMarkerElement>(element))
+        pathClientRenderer->updateMarkerPositions();
+
     auto useUpdateLayerPositionsLogic = [&]() -> std::optional<CheckedPtr<RenderLayer>> {
         auto& document = m_clientRenderer.document();
         if (!document.settings().layerBasedSVGEngineEnabled())
@@ -162,18 +170,37 @@ ReferencedSVGResources::SVGElementIdentifierAndTagPairs ReferencedSVGResources::
         }
     }
 
-    // FIXME: [LBSE] Implement support for patterns
     const auto& svgStyle = style.svgStyle();
+    if (svgStyle.hasMarkers()) {
+        if (auto markerStartResource = svgStyle.markerStartResource(); !markerStartResource.isEmpty()) {
+            auto resourceID = SVGURIReference::fragmentIdentifierFromIRIString(markerStartResource, document);
+            if (!resourceID.isEmpty())
+                referencedResources.append({ resourceID, { SVGNames::markerTag } });
+        }
+
+        if (auto markerMidResource = svgStyle.markerMidResource(); !markerMidResource.isEmpty()) {
+            auto resourceID = SVGURIReference::fragmentIdentifierFromIRIString(markerMidResource, document);
+            if (!resourceID.isEmpty())
+                referencedResources.append({ resourceID, { SVGNames::markerTag } });
+        }
+
+        if (auto markerEndResource = svgStyle.markerEndResource(); !markerEndResource.isEmpty()) {
+            auto resourceID = SVGURIReference::fragmentIdentifierFromIRIString(markerEndResource, document);
+            if (!resourceID.isEmpty())
+                referencedResources.append({ resourceID, { SVGNames::markerTag } });
+        }
+    }
+
     if (svgStyle.fillPaintType() >= SVGPaintType::URINone) {
         auto resourceID = SVGURIReference::fragmentIdentifierFromIRIString(svgStyle.fillPaintUri(), document);
         if (!resourceID.isEmpty())
-            referencedResources.append({ resourceID, { SVGNames::linearGradientTag, SVGNames::radialGradientTag } });
+            referencedResources.append({ resourceID, { SVGNames::linearGradientTag, SVGNames::radialGradientTag, SVGNames::patternTag } });
     }
 
     if (svgStyle.strokePaintType() >= SVGPaintType::URINone) {
         auto resourceID = SVGURIReference::fragmentIdentifierFromIRIString(svgStyle.strokePaintUri(), document);
         if (!resourceID.isEmpty())
-            referencedResources.append({ resourceID, { SVGNames::linearGradientTag, SVGNames::radialGradientTag } });
+            referencedResources.append({ resourceID, { SVGNames::linearGradientTag, SVGNames::radialGradientTag, SVGNames::patternTag } });
     }
 #endif
 
@@ -240,7 +267,7 @@ RefPtr<SVGMarkerElement> ReferencedSVGResources::referencedMarkerElement(TreeSco
     if (resourceID.isEmpty())
         return nullptr;
 
-    RefPtr element = elementForResourceID(treeScope, resourceID, SVGNames::maskTag);
+    RefPtr element = elementForResourceID(treeScope, resourceID, SVGNames::markerTag);
     return element ? downcast<SVGMarkerElement>(WTFMove(element)) : nullptr;
 }
 
@@ -264,8 +291,7 @@ RefPtr<SVGElement> ReferencedSVGResources::referencedPaintServerElement(TreeScop
     if (resourceID.isEmpty())
         return nullptr;
 
-    // FIXME: [LBSE] Implement pattern support
-    return elementForResourceIDs(treeScope, resourceID, { SVGNames::linearGradientTag, SVGNames::radialGradientTag });
+    return elementForResourceIDs(treeScope, resourceID, { SVGNames::linearGradientTag, SVGNames::radialGradientTag, SVGNames::patternTag });
 }
 #endif
 

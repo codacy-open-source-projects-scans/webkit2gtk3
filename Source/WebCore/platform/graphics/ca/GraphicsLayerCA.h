@@ -204,6 +204,7 @@ public:
 
     WEBCORE_EXPORT RefPtr<GraphicsLayerAsyncContentsDisplayDelegate> createAsyncContentsDisplayDelegate(GraphicsLayerAsyncContentsDisplayDelegate*) override;
 
+    WEBCORE_EXPORT void markFrontBufferVolatileForTesting() override;
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
     WEBCORE_EXPORT void setAcceleratedEffectsAndBaseValues(AcceleratedEffects&&, AcceleratedEffectValues&&) override;
 #endif
@@ -241,6 +242,7 @@ private:
     WEBCORE_EXPORT bool platformCALayerUseGiantTiles() const override;
     WEBCORE_EXPORT bool platformCALayerUseCSS3DTransformInteroperability() const override;
     WEBCORE_EXPORT void platformCALayerLogFilledVisibleFreshTile(unsigned) override;
+    WEBCORE_EXPORT bool platformCALayerNeedsPlatformContext(const PlatformCALayer*) const override;
     bool platformCALayerContainsBitmapOnly(const PlatformCALayer*) const override { return client().layerContainsBitmapOnly(this); }
     bool platformCALayerShouldPaintUsingCompositeCopy() const override { return shouldPaintUsingCompositeCopy(); }
 

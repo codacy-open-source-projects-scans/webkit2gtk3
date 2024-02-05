@@ -47,7 +47,15 @@ void FindStringCallbackAggregator::foundString(std::optional<FrameIdentifier> fr
     m_matches.set(*frameID, didWrap);
 }
 
-static inline bool shouldTargetFrame(const WebFrameProxy& frame, const WebFrameProxy& focusedFrame, bool didWrap)
+RefPtr<WebFrameProxy> FindStringCallbackAggregator::incrementFrame(WebFrameProxy& frame)
+{
+    auto canWrap = m_options.contains(FindOptions::WrapAround) ? CanWrap::Yes : CanWrap::No;
+    return m_options.contains(FindOptions::Backwards)
+        ? frame.traversePrevious(canWrap).frame
+        : frame.traverseNext(canWrap).frame;
+}
+
+bool FindStringCallbackAggregator::shouldTargetFrame(WebFrameProxy& frame, WebFrameProxy& focusedFrame, bool didWrap)
 {
     if (!didWrap)
         return true;
@@ -55,11 +63,11 @@ static inline bool shouldTargetFrame(const WebFrameProxy& frame, const WebFrameP
     if (frame.process() != focusedFrame.process())
         return true;
 
-    RefPtr nextFrameInProcess = focusedFrame.traverseNext(CanWrap::Yes).frame;
+    RefPtr nextFrameInProcess = incrementFrame(focusedFrame);
     while (nextFrameInProcess && nextFrameInProcess != &focusedFrame && nextFrameInProcess->process() == focusedFrame.process()) {
         if (nextFrameInProcess == &frame)
             return true;
-        nextFrameInProcess = nextFrameInProcess->traverseNext(CanWrap::Yes).frame;
+        nextFrameInProcess = incrementFrame(*nextFrameInProcess);
     }
     return false;
 }
@@ -85,22 +93,23 @@ FindStringCallbackAggregator::~FindStringCallbackAggregator()
             if (shouldTargetFrame(*targetFrame, *focusedFrame, it->value))
                 break;
         }
-        // FIXME(267905): This should have support for backwards traversal.
-        // FIXME(267904): This probably shouldn't always wrap if FindOptions::WrapAround is not in m_options.
-        targetFrame = targetFrame->traverseNext(CanWrap::Yes).frame;
+        targetFrame = incrementFrame(*targetFrame);
     } while (targetFrame && targetFrame != focusedFrame);
 
+    auto message = Messages::WebPage::FindString(m_string, m_options, m_maxMatchCount);
     if (!targetFrame) {
-        m_completionHandler(false);
+        focusedFrame->protectedProcess()->sendWithAsyncReply(WTFMove(message), [completionHandler = WTFMove(m_completionHandler)](std::optional<FrameIdentifier>, bool) mutable {
+            completionHandler(false);
+        }, protectedPage->webPageID());
         return;
     }
 
-    targetFrame->process().sendWithAsyncReply(Messages::WebPage::FindString(m_string, m_options, m_maxMatchCount), [completionHandler = WTFMove(m_completionHandler)](std::optional<FrameIdentifier> frameID, bool) mutable {
+    targetFrame->protectedProcess()->sendWithAsyncReply(WTFMove(message), [completionHandler = WTFMove(m_completionHandler)](std::optional<FrameIdentifier> frameID, bool) mutable {
         completionHandler(frameID.has_value());
     }, protectedPage->webPageID());
 
     if (focusedFrame && focusedFrame->process() != targetFrame->process())
-        focusedFrame->process().send(Messages::WebPage::ClearSelection(), protectedPage->webPageID());
+        protectedPage->clearSelection(focusedFrame->frameID());
 }
 
 FindStringCallbackAggregator::FindStringCallbackAggregator(WebPageProxy& page, const String& string, OptionSet<FindOptions> options, unsigned maxMatchCount, CompletionHandler<void(bool)>&& completionHandler)

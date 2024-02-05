@@ -29,7 +29,6 @@
 #if ENABLE(PDF_PLUGIN)
 
 #include "PDFPlugin.h"
-#include "ShareableBitmap.h"
 #include "UnifiedPDFPlugin.h"
 #include "WebCoreArgumentCoders.h"
 #include "WebFrame.h"
@@ -74,6 +73,7 @@
 #include <WebCore/SecurityOrigin.h>
 #include <WebCore/SecurityPolicy.h>
 #include <WebCore/Settings.h>
+#include <WebCore/ShareableBitmap.h>
 #include <WebCore/UserGestureIndicator.h>
 #include <pal/text/TextEncoding.h>
 #include <wtf/CompletionHandler.h>
@@ -238,6 +238,7 @@ PluginView::PluginView(HTMLPlugInElement& element, const URL& mainResourceURL, c
     , m_shouldUseManualLoader(shouldUseManualLoader)
     , m_pendingResourceRequestTimer(RunLoop::main(), this, &PluginView::pendingResourceRequestTimerFired)
 {
+    m_plugin->startLoading();
     m_webPage->addPluginView(*this);
 }
 
@@ -405,7 +406,7 @@ void PluginView::initializePlugin()
         if (auto* frameView = frame->view())
             frameView->setNeedsLayoutAfterViewConfigurationChange();
         if (frame->isMainFrame() && m_plugin->isFullFramePlugin())
-            WebFrame::fromCoreFrame(*frame)->page()->send(Messages::WebPageProxy::MainFramePluginHandlesPageScaleGestureDidChange(true));
+            WebFrame::fromCoreFrame(*frame)->page()->send(Messages::WebPageProxy::MainFramePluginHandlesPageScaleGestureDidChange(true, m_plugin->minScaleFactor(), m_plugin->maxScaleFactor()));
     }
 }
 

@@ -107,9 +107,9 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(Node);
 
 using namespace HTMLNames;
 
-struct SameSizeAsNode : EventTarget, CanMakeCheckedPtr {
+struct SameSizeAsNode : EventTarget {
 #if ASSERT_ENABLED
-    bool deletionHasBegun;
+    uint32_t m_isAllocatedMemory;
     bool inRemovedLastRefFunction;
     bool adoptionIsRequired;
 #endif
@@ -413,8 +413,8 @@ Node::Node(Document& document, NodeType type, OptionSet<TypeFlag> flags)
 Node::~Node()
 {
     ASSERT(isMainThread());
-    ASSERT(m_refCountAndParentBit == s_refCountIncrement);
-    ASSERT(m_deletionHasBegun);
+    ASSERT(deletionHasBegun());
+    ASSERT(!deletionHasEnded());
     ASSERT(!m_adoptionIsRequired);
 
     InspectorInstrumentation::willDestroyDOMNode(*this);
@@ -450,6 +450,10 @@ Node::~Node()
         ASSERT_WITH_SECURITY_IMPLICATION(!document->touchEventHandlersContain(*this));
         ASSERT_WITH_SECURITY_IMPLICATION(!document->touchEventTargetsContain(*this));
     }
+#endif
+
+#if ASSERT_ENABLED
+    m_isAllocatedMemory = IsAllocatedMemory::Scribble;
 #endif
 }
 
@@ -590,6 +594,7 @@ static RefPtr<Node> firstFollowingSiblingNotInNodeSet(Node& context, const HashS
     return nullptr;
 }
 
+// https://dom.spec.whatwg.org/#converting-nodes-into-a-node
 ExceptionOr<RefPtr<Node>> Node::convertNodesOrStringsIntoNode(FixedVector<NodeOrString>&& nodeOrStringVector)
 {
     if (nodeOrStringVector.isEmpty())
@@ -615,6 +620,42 @@ ExceptionOr<RefPtr<Node>> Node::convertNodesOrStringsIntoNode(FixedVector<NodeOr
     return RefPtr<Node> { WTFMove(nodeToReturn) };
 }
 
+// https://dom.spec.whatwg.org/#converting-nodes-into-a-node except this returns a NodeVector
+ExceptionOr<NodeVector> Node::convertNodesOrStringsIntoNodeVector(FixedVector<NodeOrString>&& nodeOrStringVector)
+{
+    if (nodeOrStringVector.isEmpty())
+        return NodeVector { };
+
+    Ref document = this->document();
+    NodeVector nodeVector;
+    nodeVector.reserveInitialCapacity(nodeOrStringVector.size());
+    for (auto& variant : nodeOrStringVector) {
+        if (std::holds_alternative<String>(variant)) {
+            nodeVector.append(Text::create(document, WTFMove(std::get<String>(variant))));
+            continue;
+        }
+        ASSERT(std::holds_alternative<RefPtr<Node>>(variant));
+        RefPtr node = WTFMove(std::get<RefPtr<Node>>(variant));
+        ASSERT(node);
+        if (auto* fragment = dynamicDowncast<DocumentFragment>(node.get()); UNLIKELY(fragment)) {
+            for (auto* child = fragment->firstChild(); child; child = child->nextSibling())
+                nodeVector.append(*child);
+        } else
+            nodeVector.append(node.releaseNonNull());
+    }
+
+    if (nodeVector.size() == 1)
+        return nodeVector; // step 3, if nodes contains one node, then set node to nodes[0].
+
+    for (auto& node : nodeVector) {
+        auto result = node->remove();
+        if (result.hasException())
+            return result.releaseException();
+    }
+
+    return nodeVector;
+}
+
 ExceptionOr<void> Node::before(FixedVector<NodeOrString>&& nodeOrStringVector)
 {
     RefPtr parent = parentNode();
@@ -624,19 +665,16 @@ ExceptionOr<void> Node::before(FixedVector<NodeOrString>&& nodeOrStringVector)
     auto nodeSet = nodeSetPreTransformedFromNodeOrStringVector(nodeOrStringVector);
     RefPtr viablePreviousSibling = firstPrecedingSiblingNotInNodeSet(*this, nodeSet);
 
-    auto result = convertNodesOrStringsIntoNode(WTFMove(nodeOrStringVector));
+    auto result = convertNodesOrStringsIntoNodeVector(WTFMove(nodeOrStringVector));
     if (result.hasException())
         return result.releaseException();
-    RefPtr node = result.releaseReturnValue();
-    if (!node)
-        return { };
 
-    if (viablePreviousSibling)
-        viablePreviousSibling = viablePreviousSibling->nextSibling();
-    else
-        viablePreviousSibling = parent->firstChild();
+    auto newChildren = result.releaseReturnValue();
+    if (auto checkResult = parent->ensurePreInsertionValidityForPhantomDocumentFragment(newChildren); checkResult.hasException())
+        return checkResult;
 
-    return parent->insertBefore(*node, WTFMove(viablePreviousSibling));
+    RefPtr viableNextSibling = viablePreviousSibling ? viablePreviousSibling->nextSibling() : parent->firstChild();
+    return parent->insertChildrenBeforeWithoutPreInsertionValidityCheck(WTFMove(newChildren), viableNextSibling.get());
 }
 
 ExceptionOr<void> Node::after(FixedVector<NodeOrString>&& nodeOrStringVector)
@@ -648,14 +686,15 @@ ExceptionOr<void> Node::after(FixedVector<NodeOrString>&& nodeOrStringVector)
     auto nodeSet = nodeSetPreTransformedFromNodeOrStringVector(nodeOrStringVector);
     RefPtr viableNextSibling = firstFollowingSiblingNotInNodeSet(*this, nodeSet);
 
-    auto result = convertNodesOrStringsIntoNode(WTFMove(nodeOrStringVector));
+    auto result = convertNodesOrStringsIntoNodeVector(WTFMove(nodeOrStringVector));
     if (result.hasException())
         return result.releaseException();
-    RefPtr node = result.releaseReturnValue();
-    if (!node)
-        return { };
 
-    return parent->insertBefore(*node, WTFMove(viableNextSibling));
+    auto newChildren = result.releaseReturnValue();
+    if (auto checkResult = parent->ensurePreInsertionValidityForPhantomDocumentFragment(newChildren); checkResult.hasException())
+        return checkResult;
+
+    return parent->insertChildrenBeforeWithoutPreInsertionValidityCheck(WTFMove(newChildren), viableNextSibling.get());
 }
 
 ExceptionOr<void> Node::replaceWith(FixedVector<NodeOrString>&& nodeOrStringVector)
@@ -1193,10 +1232,15 @@ Node* Node::pseudoAwareLastChild() const
     return lastChild();
 }
 
-const RenderStyle* Node::computedStyle(PseudoId pseudoElementSpecifier)
+const RenderStyle* Node::computedStyle()
+{
+    return computedStyle(std::nullopt);
+}
+
+const RenderStyle* Node::computedStyle(const std::optional<Style::PseudoElementIdentifier>& pseudoElementIdentifier)
 {
     RefPtr composedParent = parentElementInComposedTree();
-    return composedParent ? composedParent->computedStyle(pseudoElementSpecifier) : nullptr;
+    return composedParent ? composedParent->computedStyle(pseudoElementIdentifier) : nullptr;
 }
 
 // FIXME: Shouldn't these functions be in the editing code?  Code that asks questions about HTML in the core DOM class
@@ -2040,8 +2084,8 @@ static void showSubTreeAcrossFrame(const Node* node, const Node* markedNode, con
     fputs(indent.utf8().data(), stderr);
     node->showNode();
     if (!node->isShadowRoot()) {
-        if (node->isFrameOwnerElement())
-            showSubTreeAcrossFrame(static_cast<const HTMLFrameOwnerElement*>(node)->contentDocument(), markedNode, indent + "\t");
+        if (auto* frameOwner = dynamicDowncast<HTMLFrameOwnerElement>(node))
+            showSubTreeAcrossFrame(frameOwner->protectedContentDocument().get(), markedNode, indent + "\t");
         if (RefPtr shadowRoot = node->shadowRoot())
             showSubTreeAcrossFrame(shadowRoot.get(), markedNode, indent + "\t");
     }
@@ -2356,8 +2400,9 @@ void Node::moveNodeToNewDocumentSlowCase(Document& oldDocument, Document& newDoc
 bool isTouchRelatedEventType(const EventTypeInfo& eventType, const EventTarget& target)
 {
 #if ENABLE(TOUCH_EVENTS)
-    if (auto* node = dynamicDowncast<Node>(target); node && node->document().quirks().shouldDispatchSimulatedMouseEvents(&target))
-        return eventType.isInCategory(EventCategory::ExtendedTouchRelated);
+    if (auto* node = dynamicDowncast<Node>(target); eventType.isInCategory(EventCategory::ExtendedTouchRelated)
+        && node && node->document().quirks().shouldDispatchSimulatedMouseEvents(&target))
+        return true;
 #endif
     UNUSED_PARAM(target);
     return eventType.isInCategory(EventCategory::TouchRelated);
@@ -2795,9 +2840,7 @@ void Node::removedLastRef()
     if (auto* svgElement = dynamicDowncast<SVGElement>(*this))
         svgElement->detachAllProperties();
 
-#if ASSERT_ENABLED
-    m_deletionHasBegun = true;
-#endif
+    setStateFlag(StateFlag::HasStartedDeletion);
     delete this;
 }
 

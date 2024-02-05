@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2010-2024 Apple Inc. All rights reserved.
  * Copyright (C) 2012 Intel Corporation. All rights reserved.
  * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies)
  *
@@ -74,7 +74,6 @@
 #include "RemoteWebInspectorUIMessages.h"
 #include "SessionState.h"
 #include "SessionStateConversion.h"
-#include "ShareableBitmap.h"
 #include "ShareableBitmapUtilities.h"
 #include "SharedBufferReference.h"
 #include "TextRecognitionUpdateResult.h"
@@ -219,6 +218,7 @@
 #include <WebCore/HTMLSelectElement.h>
 #include <WebCore/HTMLTextFormControlElement.h>
 #include <WebCore/HTTPParsers.h>
+#include <WebCore/HTTPStatusCodes.h>
 #include <WebCore/HandleUserInputEventResult.h>
 #include <WebCore/Highlight.h>
 #include <WebCore/HighlightRegistry.h>
@@ -280,6 +280,7 @@
 #include <WebCore/SerializedScriptValue.h>
 #include <WebCore/Settings.h>
 #include <WebCore/ShadowRoot.h>
+#include <WebCore/ShareableBitmap.h>
 #include <WebCore/SharedBuffer.h>
 #include <WebCore/StaticRange.h>
 #include <WebCore/StyleProperties.h>
@@ -435,6 +436,10 @@
 #import <WebCore/AcceleratedTimeline.h>
 #endif
 
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+#include "UnifiedTextReplacementController.h"
+#endif
+
 namespace WebKit {
 using namespace JSC;
 using namespace WebCore;
@@ -588,6 +593,9 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     , m_appHighlightsVisible(parameters.appHighlightsVisible)
 #endif
     , m_historyItemClient(WebHistoryItemClient::create())
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+    , m_unifiedTextReplacementController(makeUniqueRef<UnifiedTextReplacementController>(*this))
+#endif
 {
     ASSERT(m_identifier);
     WEBPAGE_RELEASE_LOG(Loading, "constructor:");
@@ -989,17 +997,12 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     PlatformMediaSessionManager::setShouldEnableVP8Decoder(parameters.shouldEnableVP8Decoder);
     PlatformMediaSessionManager::setShouldEnableVP9Decoder(parameters.shouldEnableVP9Decoder);
     PlatformMediaSessionManager::setShouldEnableVP9SWDecoder(parameters.shouldEnableVP9SWDecoder);
-    if (m_shouldPlayMediaInGPUProcess && WebProcess::singleton().existingGPUProcessConnection())
-        WebProcess::singleton().existingGPUProcessConnection()->enableVP9Decoders(parameters.shouldEnableVP8Decoder, parameters.shouldEnableVP9Decoder, parameters.shouldEnableVP9SWDecoder);
 #endif
 
     m_page->setCanUseCredentialStorage(parameters.canUseCredentialStorage);
 
 #if HAVE(SANDBOX_STATE_FLAGS)
     auto auditToken = WebProcess::singleton().auditTokenForSelf();
-
-    if (!m_page->settings().offlineWebApplicationCacheEnabled())
-        sandbox_enable_state_flag("AppCacheDisabled", *auditToken);
 
     auto experimentalSandbox = parameters.store.getBoolValueForKey(WebPreferencesKey::experimentalSandboxEnabledKey());
     if (experimentalSandbox)
@@ -2879,7 +2882,7 @@ void WebPage::setFooterBannerHeight(int height)
 }
 #endif
 
-void WebPage::takeSnapshot(IntRect snapshotRect, IntSize bitmapSize, uint32_t options, CompletionHandler<void(std::optional<WebKit::ShareableBitmap::Handle>&&)>&& completionHandler)
+void WebPage::takeSnapshot(IntRect snapshotRect, IntSize bitmapSize, uint32_t options, CompletionHandler<void(std::optional<WebCore::ShareableBitmap::Handle>&&)>&& completionHandler)
 {
     std::optional<ShareableBitmap::Handle> handle;
     RefPtr coreFrame = m_mainFrame->coreLocalFrame();
@@ -4621,10 +4624,6 @@ void WebPage::updatePreferences(const WebPreferencesStore& store)
         settings.setTrackConfigurationEnabled(true);
     }
 
-#if USE(APPLE_INTERNAL_SDK)
-#include <WebKitAdditions/WebPageUpdatePreferencesAdditions.cpp>
-#endif
-
 #if ENABLE(PDF_PLUGIN)
     for (auto& pluginView : m_pluginViews)
         pluginView.didChangeSettings();
@@ -5321,11 +5320,6 @@ bool WebPage::findStringFromInjectedBundle(const String& target, OptionSet<FindO
     return m_page->findString(target, core(options)).has_value();
 }
 
-void WebPage::findStringMatchesFromInjectedBundle(const String& target, OptionSet<FindOptions> options)
-{
-    findController().findStringMatches(target, options, 0);
-}
-
 void WebPage::replaceStringMatchesFromInjectedBundle(const Vector<uint32_t>& matchIndices, const String& replacementText, bool selectionOnly)
 {
     findController().replaceMatches(matchIndices, replacementText, selectionOnly);
@@ -5336,9 +5330,9 @@ void WebPage::findString(const String& string, OptionSet<FindOptions> options, u
     findController().findString(string, options, maxMatchCount, FindController::TriggerImageAnalysis::Yes, WTFMove(completionHandler));
 }
 
-void WebPage::findStringMatches(const String& string, OptionSet<FindOptions> options, uint32_t maxMatchCount)
+void WebPage::findStringMatches(const String& string, OptionSet<FindOptions> options, uint32_t maxMatchCount, CompletionHandler<void(Vector<Vector<WebCore::IntRect>>, int32_t)>&& completionHandler)
 {
-    findController().findStringMatches(string, options, maxMatchCount);
+    findController().findStringMatches(string, options, maxMatchCount, WTFMove(completionHandler));
 }
 
 void WebPage::findRectsForStringMatches(const String& string, OptionSet<FindOptions> options, uint32_t maxMatchCount, CompletionHandler<void(Vector<FloatRect>&&)>&& completionHandler)
@@ -6190,7 +6184,7 @@ void WebPage::drawToPDF(FrameIdentifier frameID, const std::optional<FloatRect>&
     completionHandler(SharedBuffer::create(pdfData.get()));
 }
 
-void WebPage::drawRectToImage(FrameIdentifier frameID, const PrintInfo& printInfo, const IntRect& rect, const WebCore::IntSize& imageSize, CompletionHandler<void(std::optional<WebKit::ShareableBitmap::Handle>&&)>&& completionHandler)
+void WebPage::drawRectToImage(FrameIdentifier frameID, const PrintInfo& printInfo, const IntRect& rect, const WebCore::IntSize& imageSize, CompletionHandler<void(std::optional<WebCore::ShareableBitmap::Handle>&&)>&& completionHandler)
 {
     PrintContextAccessScope scope { *this };
     RefPtr frame = WebProcess::singleton().webFrame(frameID);
@@ -8017,12 +8011,12 @@ void WebPage::insertAttachment(const String& identifier, std::optional<uint64_t>
     callback();
 }
 
-void WebPage::updateAttachmentAttributes(const String& identifier, std::optional<uint64_t>&& fileSize, const String& contentType, const String& fileName, const IPC::SharedBufferReference& enclosingImageData, CompletionHandler<void()>&& callback)
+void WebPage::updateAttachmentAttributes(const String& identifier, std::optional<uint64_t>&& fileSize, const String& contentType, const String& fileName, const IPC::SharedBufferReference& associatedElementData, CompletionHandler<void()>&& callback)
 {
     if (RefPtr attachment = attachmentElementWithIdentifier(identifier)) {
         attachment->document().updateLayout();
         attachment->updateAttributes(WTFMove(fileSize), AtomString { contentType }, AtomString { fileName });
-        attachment->updateEnclosingImageWithData(contentType, enclosingImageData.isNull() ? WebCore::SharedBuffer::create() : enclosingImageData.unsafeBuffer().releaseNonNull());
+        attachment->updateAssociatedElementWithData(contentType, associatedElementData.isNull() ? WebCore::SharedBuffer::create() : associatedElementData.unsafeBuffer().releaseNonNull());
     }
     callback();
 }
@@ -8945,10 +8939,8 @@ bool WebPage::shouldSkipDecidePolicyForResponse(const WebCore::ResourceResponse&
     if (!m_skipDecidePolicyForResponseIfPossible)
         return false;
 
-    constexpr auto noContent = 204;
-    constexpr auto smallestError = 400;
     auto statusCode = response.httpStatusCode();
-    if (statusCode == noContent || statusCode >= smallestError)
+    if (statusCode == httpStatus204NoContent || statusCode >= httpStatus400BadRequest)
         return false;
 
     if (!equalIgnoringASCIICase(response.mimeType(), "text/html"_s))

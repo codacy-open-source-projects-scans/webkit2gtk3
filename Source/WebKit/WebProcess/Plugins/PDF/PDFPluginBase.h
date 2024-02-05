@@ -56,6 +56,7 @@ class HTMLPlugInElement;
 class NetscapePlugInStreamLoaderClient;
 class ResourceResponse;
 class Scrollbar;
+class ShareableBitmap;
 class SharedBuffer;
 enum class PlatformCursorType : uint8_t;
 }
@@ -65,7 +66,6 @@ namespace WebKit {
 class PDFIncrementalLoader;
 class PDFPluginAnnotation;
 class PluginView;
-class ShareableBitmap;
 class WebFrame;
 class WebKeyboardEvent;
 class WebMouseEvent;
@@ -85,6 +85,7 @@ public:
     using WebKit::PDFScriptEvaluator::Client::WeakValueType;
     using WebKit::PDFScriptEvaluator::Client::WeakPtrImplType;
 
+    void startLoading();
     void destroy();
 
     virtual bool isUnifiedPDFPlugin() const { return false; }
@@ -103,11 +104,14 @@ public:
     virtual bool isComposited() const { return false; }
 
     virtual bool shouldCreateTransientPaintingSnapshot() const { return false; }
-    virtual RefPtr<ShareableBitmap> snapshot() { return nullptr; }
+    virtual RefPtr<WebCore::ShareableBitmap> snapshot() { return nullptr; }
     virtual void paint(WebCore::GraphicsContext&, const WebCore::IntRect&) { }
 
     virtual CGFloat scaleFactor() const = 0;
     virtual CGSize contentSizeRespectingZoom() const = 0;
+
+    virtual CGFloat minScaleFactor() const { return 0.25; }
+    virtual CGFloat maxScaleFactor() const { return 5; }
 
     bool isLocked() const;
 
@@ -188,7 +192,7 @@ public:
     virtual void setActiveAnnotation(RetainPtr<PDFAnnotation>&&) = 0;
     void didMutatePDFDocument() { m_pdfDocumentWasMutated = true; }
 
-    virtual CGRect boundsForAnnotation(RetainPtr<PDFAnnotation>&) const = 0;
+    virtual CGRect pluginBoundsForAnnotation(RetainPtr<PDFAnnotation>&) const = 0;
     virtual void focusNextAnnotation() = 0;
     virtual void focusPreviousAnnotation() = 0;
 
@@ -201,6 +205,8 @@ public:
     void adoptBackgroundThreadDocument(RetainPtr<PDFDocument>&&);
     void maybeClearHighLatencyDataProviderFlag();
 #endif
+
+    void notifySelectionChanged();
 
 private:
     bool documentFinishedLoading() const { return m_documentFinishedLoading; }
@@ -287,8 +293,7 @@ protected:
 #endif
 
 #if !LOG_DISABLED
-    void pdfLog(const String&);
-    void verboseLog();
+    void incrementalLoaderLog(const String&);
 #endif
 
     SingleThreadWeakPtr<PluginView> m_view;

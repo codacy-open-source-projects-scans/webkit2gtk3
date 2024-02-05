@@ -1255,7 +1255,7 @@ class TestCompileWebKit(BuildStepMixinAdditions, unittest.TestCase):
             ExpectShell(workdir='wkdir',
                         timeout=1200,
                         logEnviron=False,
-                        command=['perl', 'Tools/Scripts/build-webkit', '--release', '--architecture', 'x86_64 arm64', 'WK_VALIDATE_DEPENDENCIES=YES'],
+                        command=['perl', 'Tools/Scripts/build-webkit', '--release', '--architecture', 'x86_64 arm64', '-hideShellScriptEnvironment', 'WK_VALIDATE_DEPENDENCIES=YES'],
                         )
             + 0,
         )
@@ -2925,12 +2925,21 @@ class TestAnalyzeLayoutTestsResults(BuildStepMixinAdditions, unittest.TestCase):
         self.expectOutcome(result=RETRY, state_string='Unexpected infrastructure issue, retrying build (retry)')
         return self.runStep()
 
-    def test_change_breaks_layout_tests(self):
+    def test_change_breaks_layout_tests1(self):
         self.configureStep()
         self.setProperty('first_run_failures', [])
         self.setProperty('second_run_failures', [])
         self.setProperty('clean_tree_run_failures', [])
         self.setProperty('clean_tree_run_status', SUCCESS)
+        self.expectOutcome(result=FAILURE, state_string='Found unexpected failure with change (failure)')
+        return self.runStep()
+
+    def test_change_breaks_layout_tests2(self):
+        self.configureStep()
+        self.setProperty('first_run_failures', [])
+        self.setProperty('second_run_failures', [])
+        self.setProperty('clean_tree_run_failures', [])
+        self.setProperty('clean_tree_run_status', WARNINGS)
         self.expectOutcome(result=FAILURE, state_string='Found unexpected failure with change (failure)')
         return self.runStep()
 
@@ -6528,7 +6537,7 @@ class TestPushCommitToWebKitRepo(BuildStepMixinAdditions, unittest.TestCase):
                         logEnviron=False,
                         env=dict(GIT_USER='webkit-commit-queue', GIT_PASSWORD='password'),
                         command=['git', 'push', 'origin', 'HEAD:main']) +
-            ExpectShell.log('stdio', stdout=' 4c3bac1de151...b94dc426b331 \n') +
+            ExpectShell.log('stdio', stdout=' 4c3bac1de151...b94dc426b331 ') +
             0,
         )
         self.expectOutcome(result=SUCCESS, state_string='')
@@ -7069,7 +7078,7 @@ class TestShowIdentifier(BuildStepMixinAdditions, unittest.TestCase):
                         timeout=300,
                         logEnviron=False,
                         command=['python3', 'Tools/Scripts/git-webkit', 'find', '51a6aec9f664']) +
-            ExpectShell.log('stdio', stdout='Identifier: 233175@main\n') +
+            ExpectShell.log('stdio', stdout='Identifier: 233175@main') +
             0,
         )
         self.expectOutcome(result=SUCCESS, state_string='Identifier: 233175@main')
@@ -7094,7 +7103,7 @@ class TestShowIdentifier(BuildStepMixinAdditions, unittest.TestCase):
                         timeout=300,
                         logEnviron=False,
                         command=['python3', 'Tools/Scripts/git-webkit', 'find', '51a6aec9f664']) +
-            ExpectShell.log('stdio', stdout='Identifier: 233175@main\n') +
+            ExpectShell.log('stdio', stdout='Identifier: 233175@main') +
             0,
         )
         self.expectOutcome(result=SUCCESS, state_string='Identifier: 233175@main')
@@ -7115,7 +7124,7 @@ class TestShowIdentifier(BuildStepMixinAdditions, unittest.TestCase):
                         timeout=300,
                         logEnviron=False,
                         command=['python3', 'Tools/Scripts/git-webkit', 'find', '51a6aec9f664']) +
-            ExpectShell.log('stdio', stdout='Identifier: 233175@main\n') +
+            ExpectShell.log('stdio', stdout='Identifier: 233175@main') +
             0,
         )
         self.expectOutcome(result=SUCCESS, state_string='Identifier: 233175@main')
@@ -7579,7 +7588,7 @@ class TestValidateSquashed(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['git', 'log', '--format=format:%H', 'HEAD', '^origin/main', '--max-count=51'],
+                        command=['git', 'log', '--format=format:"%H"', 'HEAD', '^origin/main', '--max-count=51'],
                         )
             + 0
             + ExpectShell.log('stdio', stdout='e1eb24603493\n'),
@@ -7593,7 +7602,7 @@ class TestValidateSquashed(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['git', 'log', '--format=format:%H', 'HEAD', '^origin/main', '--max-count=51'],
+                        command=['git', 'log', '--format=format:"%H"', 'HEAD', '^origin/main', '--max-count=51'],
                         )
             + 0
             + ExpectShell.log('stdio', stdout='e1eb24603493\n08abb9ddcbb5\n45cf3efe4dfb\n'),
@@ -7612,7 +7621,7 @@ class TestValidateSquashed(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['git', 'log', '--format=format:%H', 'eng/pull-request-branch', '^main', '--max-count=51'],
+                        command=['git', 'log', '--format=format:"%H"', 'eng/pull-request-branch', '^main', '--max-count=51'],
                         )
             + 0
             + ExpectShell.log('stdio', stdout='e1eb24603493\n'),
@@ -7628,7 +7637,7 @@ class TestValidateSquashed(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['git', 'log', '--format=format:%H', 'eng/pull-request-branch', '^main', '--max-count=51'],
+                        command=['git', 'log', '--format=format:"%H"', 'eng/pull-request-branch', '^main', '--max-count=51'],
                         )
             + 0
             + ExpectShell.log('stdio', stdout='e1eb24603493\n08abb9ddcbb5\n45cf3efe4dfb\n'),
@@ -7647,7 +7656,7 @@ class TestValidateSquashed(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['git', 'log', '--format=format:%H', 'eng/pull-request-branch', '^main', '--max-count=51'],
+                        command=['git', 'log', '--format=format:"%H"', 'eng/pull-request-branch', '^main', '--max-count=51'],
                         )
             + 0
             + ExpectShell.log('stdio', stdout=''),
@@ -7667,7 +7676,7 @@ class TestValidateSquashed(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['git', 'log', '--format=format:%H', 'eng/pull-request-branch', '^main', '--max-count=51'],
+                        command=['git', 'log', '--format=format:"%H"', 'eng/pull-request-branch', '^main', '--max-count=51'],
                         )
             + 0
             + ExpectShell.log('stdio', stdout='e1eb24603493\n08abb9ddcbb5\n45cf3efe4dfb\n'),
@@ -7686,7 +7695,7 @@ class TestValidateSquashed(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['git', 'log', '--format=format:%H', 'eng/pull-request-branch', '^main', '--max-count=51'],
+                        command=['git', 'log', '--format=format:"%H"', 'eng/pull-request-branch', '^main', '--max-count=51'],
                         )
             + 0
             + ExpectShell.log('stdio', stdout='e1eb24603493\n' + 50 * '08abb9ddcbb5\n'),

@@ -136,6 +136,7 @@ enum class AccessibilityRole {
     Column,
     ColumnHeader,
     ComboBox,
+    DateTime,
     Definition,
     Deletion,
     DescriptionList,
@@ -303,6 +304,8 @@ ALWAYS_INLINE String accessibilityRoleToString(AccessibilityRole role)
         return "ColumnHeader"_s;
     case AccessibilityRole::ComboBox:
         return "ComboBox"_s;
+    case AccessibilityRole::DateTime:
+        return "DateTime"_s;
     case AccessibilityRole::Definition:
         return "Definition"_s;
     case AccessibilityRole::Deletion:
@@ -544,6 +547,7 @@ enum class AccessibilityDetachmentType { CacheDestroyed, ElementDestroyed, Eleme
 
 enum class AccessibilityConversionSpace { Screen, Page };
 
+// FIXME: This should be replaced by AXDirection (or vice versa).
 enum class AccessibilitySearchDirection {
     Next = 1,
     Previous,
@@ -577,6 +581,9 @@ enum class AccessibilitySearchKey {
     FontColorChange,
     Frame,
     Graphic,
+#if ENABLE(AX_THREAD_TEXT_APIS)
+    HasTextRuns,
+#endif
     HeadingLevel1,
     HeadingLevel2,
     HeadingLevel3,
@@ -770,6 +777,8 @@ enum class SpinButtonType : bool {
     Composite
 };
 
+enum class ForceLayout : bool { No, Yes };
+
 // Use this struct to store the isIgnored data that depends on the parents, so that in addChildren()
 // we avoid going up the parent chain for each element while traversing the tree with useful information already.
 struct AccessibilityIsIgnoredFromParentData {
@@ -908,6 +917,7 @@ public:
     bool isTabItem() const { return roleValue() == AccessibilityRole::Tab; }
     bool isRadioGroup() const { return roleValue() == AccessibilityRole::RadioGroup; }
     bool isComboBox() const { return roleValue() == AccessibilityRole::ComboBox; }
+    bool isDateTime() const { return roleValue() == AccessibilityRole::DateTime; }
     bool isTree() const { return roleValue() == AccessibilityRole::Tree; }
     bool isTreeGrid() const { return roleValue() == AccessibilityRole::TreeGrid; }
     bool isTreeItem() const { return roleValue() == AccessibilityRole::TreeItem; }
@@ -1106,6 +1116,9 @@ public:
     virtual String description() const = 0;
 
     virtual std::optional<String> textContent() const = 0;
+#if ENABLE(AX_THREAD_TEXT_APIS)
+    virtual bool hasTextRuns() = 0;
+#endif
 
     // Methods for determining accessibility text.
     virtual String stringValue() const = 0;
@@ -1368,7 +1381,6 @@ public:
 #if PLATFORM(IOS_FAMILY)
     virtual int accessibilitySecureFieldLength() = 0;
     virtual bool hasTouchEventListener() const = 0;
-    virtual bool isInputTypePopupButton() const = 0;
 #endif
 
     // allows for an AccessibilityObject to update its render tree or perform
@@ -1661,6 +1673,8 @@ template<typename T, typename U> inline T retrieveAutoreleasedValueFromMainThrea
     return value.autorelease();
 }
 #endif
+
+bool inRenderTreeOrStyleUpdate(const Document&);
 
 } // namespace Accessibility
 

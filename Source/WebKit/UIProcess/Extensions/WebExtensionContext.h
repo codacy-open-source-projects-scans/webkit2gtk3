@@ -180,6 +180,8 @@ public:
     using DeclarativeNetRequestValidatedRulesets = std::pair<std::optional<WebExtension::DeclarativeNetRequestRulesetVector>, std::optional<String>>;
     using DeclarativeNetRequestMatchedRuleVector = Vector<WebExtensionMatchedRuleParameters>;
 
+    using UserContentControllerProxySet = WeakHashSet<WebUserContentControllerProxy>;
+
     enum class EqualityOnly : bool { No, Yes };
     enum class WindowIsClosing : bool { No, Yes };
     enum class ReloadFromOrigin : bool { No, Yes };
@@ -422,6 +424,8 @@ public:
     HashSet<Ref<WebProcessProxy>> processes(WebExtensionEventListenerType, WebExtensionContentWorldType) const;
     HashSet<Ref<WebProcessProxy>> processes(EventListenerTypeSet, WebExtensionContentWorldType) const;
 
+    const UserContentControllerProxySet& userContentControllers() const;
+
     bool pageListensForEvent(const WebPageProxy&, WebExtensionEventListenerType, WebExtensionContentWorldType) const;
 
     template<typename T>
@@ -644,6 +648,7 @@ private:
     void storageRemove(WebPageProxyIdentifier, WebExtensionStorageType, const Vector<String>& keys, CompletionHandler<void(ErrorString)>&&);
     void storageClear(WebPageProxyIdentifier, WebExtensionStorageType, CompletionHandler<void(ErrorString)>&&);
     void storageSetAccessLevel(WebPageProxyIdentifier, WebExtensionStorageType, WebExtensionStorageAccessLevel, CompletionHandler<void(ErrorString)>&&);
+    void fireStorageChangedEventIfNeeded(NSDictionary *oldKeysAndValues, NSDictionary *newKeysAndValues, WebExtensionStorageType);
 
     // Tabs APIs
     void tabsCreate(WebPageProxyIdentifier, const WebExtensionTabParameters&, CompletionHandler<void(std::optional<WebExtensionTabParameters>, WebExtensionTab::Error)>&&);

@@ -63,6 +63,7 @@ class FloatSize;
 class FragmentedSharedBuffer;
 class GraphicsContext;
 class HTMLPlugInElement;
+class ShareableBitmap;
 struct PluginInfo;
 }
 
@@ -71,7 +72,6 @@ namespace WebKit {
 class PDFPluginAnnotation;
 class PDFPluginPasswordField;
 class PluginView;
-class ShareableBitmap;
 class WebFrame;
 class WebKeyboardEvent;
 class WebWheelEvent;
@@ -91,8 +91,6 @@ public:
     void notifyContentScaleFactorChanged(CGFloat scaleFactor);
     void notifyDisplayModeChanged(int);
 
-    void notifySelectionChanged(PDFSelection *);
-
     // HUD Actions.
 #if ENABLE(PDF_HUD)
     void zoomIn() final;
@@ -106,7 +104,7 @@ public:
     void performWebSearch(NSString *);
     void performSpotlightSearch(NSString *);
 
-    CGRect boundsForAnnotation(RetainPtr<PDFAnnotation>&) const final;
+    CGRect pluginBoundsForAnnotation(RetainPtr<PDFAnnotation>&) const final;
     void focusNextAnnotation() final;
     void focusPreviousAnnotation() final;
 
@@ -181,7 +179,7 @@ private:
     std::tuple<String, PDFSelection *, NSDictionary *> lookupTextAtLocation(const WebCore::FloatPoint&, WebHitTestResultData&) const override;
 
     bool shouldCreateTransientPaintingSnapshot() const override { return true; }
-    RefPtr<ShareableBitmap> snapshot() override;
+    RefPtr<WebCore::ShareableBitmap> snapshot() override;
 
     id accessibilityHitTest(const WebCore::IntPoint&) const override;
     id accessibilityObject() const override;

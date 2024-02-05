@@ -31,6 +31,7 @@
 #include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/ThreadSafeWeakPtr.h>
 #include <wtf/Threading.h>
+#include <wtf/threads/BinarySemaphore.h>
 
 OBJC_CLASS PDFDocument;
 
@@ -110,8 +111,7 @@ private:
     size_t incrementThreadsWaitingOnCallback() { return ++m_threadsWaitingOnCallback; }
     size_t decrementThreadsWaitingOnCallback() { return --m_threadsWaitingOnCallback; }
 
-    void pdfLog(const String&);
-    void verboseLog();
+    void incrementalLoaderLog(const String&);
     void logStreamLoader(WTF::TextStream&, WebCore::NetscapePlugInStreamLoader&);
 #endif
 
@@ -119,6 +119,7 @@ private:
 
     RetainPtr<PDFDocument> m_backgroundThreadDocument;
     RefPtr<Thread> m_pdfThread;
+    BinarySemaphore m_dataSemaphore;
 
     Ref<PDFPluginStreamLoaderClient> m_streamLoaderClient;
 

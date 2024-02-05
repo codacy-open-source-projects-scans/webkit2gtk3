@@ -2220,6 +2220,7 @@ accessibility/heading-level.html [ Pass ]
 accessibility/html5-required-attribute.html [ Pass ]
 accessibility/iframe-with-role.html [ Pass ]
 accessibility/input-type-hidden-in-aria-hidden-false.html [ Pass ]
+accessibility/input-time-label-value.html [ Pass ]
 accessibility/invalid-inputs.html [ Pass ]
 accessibility/insert-text-into-password-field.html [ Pass ]
 accessibility/list-with-dynamically-changing-content.html [ Pass ]
@@ -2247,6 +2248,7 @@ accessibility/table-display-block.html [ Pass ]
 accessibility/table-display-flex.html [ Pass ]
 accessibility/table-display-grid.html [ Pass ]
 accessibility/table-display-inline-block.html [ Pass ]
+accessibility/tree-update-with-dirty-layout.html [ Pass ]
 accessibility/url-test.html [ Pass ]
 accessibility/video-element-url-attribute.html [ Pass ]
 accessibility/visible-character-range-basic.html [ Pass ]
@@ -2391,6 +2393,8 @@ webkit.org/b/76121 imported/blink/fast/events/event-trusted.html [ Skip ]
 
 webkit.org/b/184608 [ Debug ] animations/added-while-suspended.html [ Skip ]
 webkit.org/b/184608 [ Debug ] transitions/created-while-suspended.html [ Skip ]
+
+webkit.org/b/268580 [ Debug ] imported/w3c/web-platform-tests/html/dom/elements/global-attributes/the-anchor-attribute-003-crash.tentative.html [ Skip ]
 
 webkit.org/b/155095 fast/table/border-collapsing/table-rtl-row-mixed-direction.html [ ImageOnlyFailure Pass ]
 webkit.org/b/155095 fast/table/border-collapsing/table-ltr-rows-mixed-direction.html [ ImageOnlyFailure Pass ]
@@ -3536,7 +3540,6 @@ webkit.org/b/229832 [ Release ] imported/w3c/web-platform-tests/beacon/beacon-re
 fast/canvas/canvas-blending-text.html [ Pass Failure ]
 
 # webkit.org/b/201982 These are flaky failures on iOS
-fast/images/exif-orientation-svg-feimage.html [ Pass Failure ]
 fast/images/image-orientation-dynamic-from-image.html [ Pass Failure ]
 fast/images/image-orientation-none.html [ Pass Failure ]
 
@@ -4469,7 +4472,7 @@ fast/images/pagewide-play-pause-animateTransform-svg-animation.html [ Pass ]
 fast/images/pagewide-play-pause-offscreen-animations.html [ Pass ]
 
 # Re-enabling tests fixed by DocumentManager in iOS16+ rdar://102159271
-fast/forms/ios/file-upload-panel-capture.html [ Pass ]
+fast/forms/ios/file-upload-panel-capture.html [ Pass Crash ] # remove crash after this is resolved: webkit.org/b/268568
 fast/forms/ios/file-upload-panel.html [ Pass ]
 fast/forms/ios/show-file-upload-context-menu-above-keyboard.html [ Pass ]
 fast/forms/ios/file-upload-panel-accept.html [ Pass ]
@@ -4692,3 +4695,5 @@ imported/w3c/web-platform-tests/css/selectors/valid-invalid-form-fieldset.html [
 webkit.org/b/266669 imported/w3c/web-platform-tests/webrtc-extensions/RTCRtpSynchronizationSource-captureTimestamp.html [ Pass Failure ]
 
 webkit.org/b/266996 imported/w3c/web-platform-tests/css/css-writing-modes/mongolian-orientation-002.html [ ImageOnlyFailure ]
+
+webkit.org/b/263317 media/media-controller-play-then-pause.html [ Failure ]

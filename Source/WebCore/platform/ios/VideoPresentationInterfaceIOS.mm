@@ -113,6 +113,8 @@ static bool ignoreWatchdogForDebugging = false;
 @property (nonatomic, assign /* weak */) RefPtr<VideoPresentationInterfaceIOS> fullscreenInterface;
 #if !PLATFORM(APPLETV)
 - (BOOL)playerViewController:(AVPlayerViewController *)playerViewController shouldExitFullScreenWithReason:(AVPlayerViewControllerExitFullScreenReason)reason;
+#else
+- (BOOL)playerViewControllerShouldDismiss:(AVPlayerViewController *)playerViewController;
 #endif
 @end
 
@@ -202,6 +204,17 @@ static VideoPresentationInterfaceIOS::ExitFullScreenReason convertToExitFullScre
     UNUSED_PARAM(playerViewController);
     if (auto fullscreenInterface = self.fullscreenInterface)
         return fullscreenInterface->shouldExitFullscreenWithReason(convertToExitFullScreenReason(reason));
+
+    return YES;
+}
+
+#else
+
+- (BOOL)playerViewControllerShouldDismiss:(AVPlayerViewController *)playerViewController
+{
+    UNUSED_PARAM(playerViewController);
+    if (auto fullscreenInterface = self.fullscreenInterface)
+        return fullscreenInterface->shouldExitFullscreenWithReason(VideoPresentationInterfaceIOS::ExitFullScreenReason::PinchGestureHandled);
 
     return YES;
 }
@@ -775,14 +788,14 @@ static const NSTimeInterval startPictureInPictureTimeInterval = 5.0;
 #endif
 @end
 
-Ref<VideoPresentationInterfaceIOS> VideoPresentationInterfaceIOS::create(PlaybackSessionInterfaceAVKit& playbackSessionInterface)
+Ref<VideoPresentationInterfaceIOS> VideoPresentationInterfaceIOS::create(PlaybackSessionInterfaceIOS& playbackSessionInterface)
 {
     Ref<VideoPresentationInterfaceIOS> interface = adoptRef(*new VideoPresentationInterfaceIOS(playbackSessionInterface));
     [interface->m_playerViewControllerDelegate setFullscreenInterface:interface.ptr()];
     return interface;
 }
 
-VideoPresentationInterfaceIOS::VideoPresentationInterfaceIOS(PlaybackSessionInterfaceAVKit& playbackSessionInterface)
+VideoPresentationInterfaceIOS::VideoPresentationInterfaceIOS(PlaybackSessionInterfaceIOS& playbackSessionInterface)
     : m_playbackSessionInterface(playbackSessionInterface)
     , m_playerViewControllerDelegate(adoptNS([[WebAVPlayerViewControllerDelegate alloc] init]))
     , m_watchdogTimer(RunLoop::main(), this, &VideoPresentationInterfaceIOS::watchdogTimerFired)

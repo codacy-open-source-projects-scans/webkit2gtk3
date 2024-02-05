@@ -35,8 +35,10 @@ class RemoteImageBufferSetProxy;
 class RemoteLayerWithRemoteRenderingBackingStore : public RemoteLayerBackingStore {
 public:
     RemoteLayerWithRemoteRenderingBackingStore(PlatformCALayerRemote*);
+    ~RemoteLayerWithRemoteRenderingBackingStore();
 
     bool isRemoteLayerWithRemoteRenderingBackingStore() const final { return true; }
+    ProcessModel processModel() const final { return ProcessModel::Remote; }
 
     void prepareToDisplay() final;
     void clearBackingStore() final;

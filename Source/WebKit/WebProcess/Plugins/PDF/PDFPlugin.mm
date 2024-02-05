@@ -35,6 +35,7 @@
 #import "MessageSenderInlines.h"
 #import "PDFAnnotationTextWidgetDetails.h"
 #import "PDFContextMenu.h"
+#import "PDFIncrementalLoader.h"
 #import "PDFLayerControllerSPI.h"
 #import "PDFPluginAnnotation.h"
 #import "PDFPluginPasswordField.h"
@@ -472,7 +473,7 @@ static WebCore::Cursor::Type toWebCoreCursorType(PDFLayerControllerCursorType cu
 
 - (void)pdfLayerController:(PDFLayerController *)pdfLayerController didChangeSelection:(PDFSelection *)selection
 {
-    _pdfPlugin->notifySelectionChanged(selection);
+    _pdfPlugin->notifySelectionChanged();
 }
 
 - (void)pdfLayerController:(PDFLayerController *)pdfLayerController didUpdateLayer:(CALayer *)layer forAnnotation:(PDFAnnotation *)annotation
@@ -561,11 +562,6 @@ PDFPlugin::PDFPlugin(HTMLPlugInElement& element)
     
     if ([getPDFLayerControllerClass() respondsToSelector:@selector(setUseIOSurfaceForTiles:)])
         [getPDFLayerControllerClass() setUseIOSurfaceForTiles:false];
-
-#if HAVE(INCREMENTAL_PDF_APIS)
-    if (incrementalPDFLoadingEnabled())
-        m_incrementalLoader = PDFIncrementalLoader::create(*this);
-#endif
 }
 
 void PDFPlugin::updateScrollbars()
@@ -807,7 +803,7 @@ void PDFPlugin::geometryDidChange(const IntSize& pluginSize, const AffineTransfo
     if (size() == pluginSize)
         return;
 
-    LOG_WITH_STREAM(Plugins, stream << "PDFPlugin::geometryDidChange - size " << pluginSize << " pluginToRootViewTransform " << pluginToRootViewTransform);
+    LOG_WITH_STREAM(PDF, stream << "PDFPlugin::geometryDidChange - size " << pluginSize << " pluginToRootViewTransform " << pluginToRootViewTransform);
     PDFPluginBase::geometryDidChange(pluginSize, pluginToRootViewTransform);
 
     [m_pdfLayerController setFrameSize:pluginSize];
@@ -1422,11 +1418,12 @@ bool PDFPlugin::performDictionaryLookupAtLocation(const WebCore::FloatPoint& poi
     return true;
 }
 
-CGRect PDFPlugin::boundsForAnnotation(RetainPtr<PDFAnnotation>& annotation) const
+CGRect PDFPlugin::pluginBoundsForAnnotation(RetainPtr<PDFAnnotation>& annotation) const
 {
     auto documentSize = contentSizeRespectingZoom();
     auto annotationBounds = [m_pdfLayerController boundsForAnnotation:annotation.get()];
-    annotationBounds.origin.y = documentSize.height - annotationBounds.origin.y - annotationBounds.size.height;
+    annotationBounds.origin.y = documentSize.height - annotationBounds.origin.y - annotationBounds.size.height - m_scrollOffset.height();
+    annotationBounds.origin.x -= m_scrollOffset.width();
     return annotationBounds;
 }
 
@@ -1438,13 +1435,6 @@ void PDFPlugin::focusNextAnnotation()
 void PDFPlugin::focusPreviousAnnotation()
 {
     [m_pdfLayerController activateNextAnnotation:true];
-}
-
-void PDFPlugin::notifySelectionChanged(PDFSelection *)
-{
-    if (!m_frame || !m_frame->page())
-        return;
-    m_frame->page()->didChangeSelection(*m_frame->coreLocalFrame());
 }
 
 String PDFPlugin::getSelectionString() const

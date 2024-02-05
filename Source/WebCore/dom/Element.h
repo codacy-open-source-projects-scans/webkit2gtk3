@@ -85,6 +85,10 @@ class UniqueElementData;
 class ValidatedFormListedElement;
 class WebAnimation;
 
+#if ENABLE(ATTACHMENT_ELEMENT)
+class AttachmentAssociatedElement;
+#endif
+
 enum class AnimationImpact : uint8_t;
 enum class EventHandling : uint8_t;
 enum class EventProcessing : uint8_t;
@@ -120,6 +124,7 @@ enum class ContentRelevancy : uint8_t {
 namespace Style {
 class Resolver;
 enum class Change : uint8_t;
+struct PseudoElementIdentifier;
 struct ResolutionContext;
 struct ResolvedStyle;
 }
@@ -324,6 +329,10 @@ public:
     virtual ValidatedFormListedElement* asValidatedFormListedElement();
     virtual bool attributeContainsJavaScriptURL(const Attribute&) const;
 
+#if ENABLE(ATTACHMENT_ELEMENT)
+    virtual AttachmentAssociatedElement* asAttachmentAssociatedElement();
+#endif
+
     // Remove attributes that might introduce scripting from the vector leaving the element unchanged.
     void stripScriptingAttributes(Vector<Attribute>&) const;
 
@@ -411,7 +420,8 @@ public:
     WEBCORE_EXPORT ExceptionOr<void> insertAdjacentHTML(const String& where, const String& html);
     WEBCORE_EXPORT ExceptionOr<void> insertAdjacentText(const String& where, String&& text);
 
-    const RenderStyle* computedStyle(PseudoId = PseudoId::None) override;
+    using Node::computedStyle;
+    const RenderStyle* computedStyle(const std::optional<Style::PseudoElementIdentifier>&) override;
     const RenderStyle* computedStyleForEditability();
 
     bool needsStyleInvalidation() const;
@@ -498,15 +508,17 @@ public:
     virtual void prepareForDocumentSuspension() { }
     virtual void resumeFromDocumentSuspension() { }
 
-    virtual void willBecomeFullscreenElement();
+    void willBecomeFullscreenElement();
     virtual void ancestorWillEnterFullscreen() { }
     virtual void didBecomeFullscreenElement() { }
     virtual void willStopBeingFullscreenElement() { }
     virtual void didStopBeingFullscreenElement() { }
 
     bool isFinishedParsingChildren() const { return isParsingChildrenFinished(); }
-    void finishParsingChildren() override;
-    void beginParsingChildren() final;
+    // Overriding these functions to make parsing a special case should be avoided if possible
+    // as that could lead to elements responding differently to the parser vs. other kinds of DOM mutations.
+    void beginParsingChildren() { clearIsParsingChildrenFinished(); }
+    virtual void finishParsingChildren();
 
     PseudoElement& ensurePseudoElement(PseudoId);
     WEBCORE_EXPORT PseudoElement* beforePseudoElement() const;
@@ -858,7 +870,7 @@ private:
 
     enum class ResolveComputedStyleMode : uint8_t { Normal, RenderedOnly, Editability };
     const RenderStyle* resolveComputedStyle(ResolveComputedStyleMode = ResolveComputedStyleMode::Normal);
-    const RenderStyle& resolvePseudoElementStyle(PseudoId);
+    const RenderStyle& resolvePseudoElementStyle(const Style::PseudoElementIdentifier&);
 
     unsigned rareDataChildIndex() const;
 

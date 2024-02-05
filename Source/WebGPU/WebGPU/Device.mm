@@ -128,6 +128,11 @@ bool Device::shouldStopCaptureAfterSubmit()
     return GPUFrameCapture::shouldStopCaptureAfterSubmit();
 }
 
+bool Device::isDestroyed() const
+{
+    return m_destroyed;
+}
+
 Ref<Device> Device::create(id<MTLDevice> device, String&& deviceLabel, HardwareCapabilities&& capabilities, Adapter& adapter)
 {
     id<MTLCommandQueue> commandQueue = [device newCommandQueue];
@@ -183,6 +188,17 @@ Device::Device(id<MTLDevice> device, id<MTLCommandQueue> defaultQueue, HardwareC
     m_coreVideoTextureCache = coreVideoTextureCache;
 #endif
     GPUFrameCapture::registerForFrameCapture(m_device);
+
+    m_placeholderBuffer = safeCreateBuffer(1, MTLStorageModeShared);
+    auto desc = [MTLTextureDescriptor new];
+    desc.width = 1;
+    desc.height = 1;
+    desc.mipmapLevelCount = 1;
+    desc.pixelFormat = MTLPixelFormatR8Unorm;
+    desc.textureType = MTLTextureType2D;
+    desc.storageMode = MTLStorageModeShared;
+    desc.usage = MTLTextureUsageShaderRead;
+    m_placeholderTexture = [m_device newTextureWithDescriptor:desc];
 }
 
 Device::Device(Adapter& adapter)
@@ -227,7 +243,7 @@ void Device::loseTheDevice(WGPUDeviceLostReason reason)
 
 void Device::destroy()
 {
-    // https://gpuweb.github.io/gpuweb/#dom-gpudevice-destroy
+    m_destroyed = true;
 
     loseTheDevice(WGPUDeviceLostReason_Destroyed);
 }
@@ -248,6 +264,16 @@ bool Device::getLimits(WGPUSupportedLimits& limits)
 
     limits.limits = m_capabilities.limits;
     return true;
+}
+
+id<MTLBuffer> Device::placeholderBuffer() const
+{
+    return m_placeholderBuffer;
+}
+
+id<MTLTexture> Device::placeholderTexture() const
+{
+    return m_placeholderTexture;
 }
 
 Queue& Device::getQueue()
@@ -406,6 +432,11 @@ void Device::setDeviceLostCallback(Function<void(WGPUDeviceLostReason, String&&)
         loseTheDevice(WGPUDeviceLostReason_Destroyed);
     else if (!m_adapter->isValid())
         loseTheDevice(WGPUDeviceLostReason_Undefined);
+}
+
+bool Device::isValid() const
+{
+    return m_device;
 }
 
 void Device::setUncapturedErrorCallback(Function<void(WGPUErrorType, String&&)>&& callback)

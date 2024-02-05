@@ -1138,6 +1138,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     history/CachedPage.h
     history/HistoryItem.h
 
+    html/AttachmentAssociatedElement.h
     html/Autocapitalize.h
     html/AutocapitalizeTypes.h
     html/Autofill.h
@@ -1754,8 +1755,10 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/SearchPopupMenu.h
     platform/SerializedPlatformDataCue.h
     platform/SerializedPlatformDataCueValue.h
+    platform/ShareableResource.h
     platform/SharedBuffer.h
     platform/SharedBufferChunkReader.h
+    platform/SharedMemory.h
     platform/SharedStringHash.h
     platform/SimpleCaretAnimator.h
     platform/SleepDisabler.h
@@ -1930,6 +1933,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/GraphicsTypesGL.h
     platform/graphics/Icon.h
     platform/graphics/Image.h
+    platform/graphics/ImageAdapter.h
     platform/graphics/ImageBackingStore.h
     platform/graphics/ImageBuffer.h
     platform/graphics/ImageBufferAllocator.h
@@ -2014,6 +2018,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/RotationDirection.h
     platform/graphics/RoundedRect.h
     platform/graphics/ScreenDataOverrides.h
+    platform/graphics/ShareableBitmap.h
     platform/graphics/ShouldLocalizeAxisNames.h
     platform/graphics/SourceBrush.h
     platform/graphics/SourceBrushLogicalGradient.h
@@ -2236,6 +2241,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/network/HTTPHeaderNames.in
     platform/network/HTTPHeaderValues.h
     platform/network/HTTPParsers.h
+    platform/network/HTTPStatusCodes.h
     platform/network/NetworkLoadInformation.h
     platform/network/NetworkLoadMetrics.h
     platform/network/NetworkStateNotifier.h
@@ -2360,8 +2366,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/RenderTextControl.h
     rendering/RenderTextLineBoxes.h
     rendering/RenderTheme.h
-    rendering/RenderThemeCocoa.h
-    rendering/RenderThemeIOS.h
     rendering/RenderTreeAsText.h
     rendering/RenderVideo.h
     rendering/RenderView.h
@@ -2444,6 +2448,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     storage/StorageType.h
     storage/StorageUtilities.h
 
+    style/PseudoElementIdentifier.h
     style/ScopedName.h
     style/StyleAppearance.h
     style/StyleChange.h
