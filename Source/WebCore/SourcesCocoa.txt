@@ -199,7 +199,6 @@ editing/cocoa/WebContentReaderCocoa.mm
 editing/cocoa/WebCoreTextAttachment.mm
 editing/ios/DictationCommandIOS.cpp
 editing/ios/EditorIOS.mm
-editing/mac/DictionaryLookupLegacy.mm
 editing/mac/EditorMac.mm
 editing/mac/FrameSelectionMac.mm
 editing/mac/TextAlternativeWithRange.mm @no-unify
@@ -311,6 +310,7 @@ platform/cocoa/PublicSuffixCocoa.mm
 platform/cocoa/RemoteCommandListenerCocoa.mm
 platform/cocoa/RuntimeApplicationChecksCocoa.mm
 platform/cocoa/SearchPopupMenuCocoa.mm
+platform/cocoa/SerializedPlatformDataCueValue.mm @no-unify
 platform/cocoa/SharedBufferCocoa.mm
 platform/cocoa/SharedMemoryCocoa.cpp
 platform/cocoa/SystemVersion.mm
@@ -518,6 +518,7 @@ platform/graphics/mac/controls/TextFieldMac.mm
 platform/graphics/mac/controls/ToggleButtonMac.mm
 platform/graphics/mac/controls/WebControlView.mm
 platform/graphics/opentype/OpenTypeCG.cpp
+platform/graphics/re/DynamicContentScalingResourceCache.mm
 platform/image-decoders/avif/AVIFImageDecoder.cpp
 platform/image-decoders/avif/AVIFImageReader.cpp
 platform/image-decoders/jpegxl/JPEGXLImageDecoder.cpp

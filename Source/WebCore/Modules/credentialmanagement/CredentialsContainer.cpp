@@ -32,12 +32,12 @@
 #include "AbortSignal.h"
 #include "CredentialCreationOptions.h"
 #include "CredentialRequestOptions.h"
-#include "DigitalCredential.h"
 #include "DigitalCredentialRequestOptions.h"
+#include "DigitalIdentity.h"
 #include "Document.h"
 #include "ExceptionOr.h"
 #include "JSDOMPromiseDeferred.h"
-#include "JSDigitalCredential.h"
+#include "JSDigitalIdentity.h"
 #include "Page.h"
 #include "SecurityOrigin.h"
 #include "WebAuthenticationConstants.h"
@@ -68,7 +68,7 @@ ScopeAndCrossOriginParent CredentialsContainer::scopeAndCrossOriginParent() cons
     if (!crossOriginParent)
         return std::pair { WebAuthn::Scope::SameOrigin, std::nullopt };
     if (isSameSite)
-        return std::pair { WebAuthn::Scope::SameSite, std::nullopt };
+        return std::pair { WebAuthn::Scope::SameSite, crossOriginParent };
     return std::pair { WebAuthn::Scope::CrossOrigin, crossOriginParent };
 }
 
@@ -142,17 +142,6 @@ void CredentialsContainer::isCreate(CredentialCreationOptions&& options, Credent
 void CredentialsContainer::preventSilentAccess(DOMPromiseDeferred<void>&& promise) const
 {
     promise.resolve();
-}
-
-void CredentialsContainer::requestIdentity(DigitalCredentialRequestOptions&& options, DigitalCredentialPromise&& promise)
-{
-    if (options.signal && options.signal->aborted()) {
-        promise.reject(Exception { ExceptionCode::AbortError, "Aborted by AbortSignal."_s });
-        return;
-    }
-    std::span<uint8_t> emptySpan;
-    Ref<ArrayBuffer> emptyArrayBuffer = ArrayBuffer::create(emptySpan);
-    promise.resolve(DigitalCredential::create(WTFMove(emptyArrayBuffer)));
 }
 
 } // namespace WebCore

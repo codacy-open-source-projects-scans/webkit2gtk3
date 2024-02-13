@@ -145,7 +145,7 @@ enum AXTextChange { AXTextInserted, AXTextDeleted, AXTextAttributesChanged };
 enum class PostTarget { Element, ObservableParent };
 
 DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(AXObjectCache);
-class AXObjectCache : public CanMakeWeakPtr<AXObjectCache>, public CanMakeCheckedPtr
+class AXObjectCache final : public CanMakeWeakPtr<AXObjectCache>, public CanMakeCheckedPtr
     , public AXTreeStore<AXObjectCache> {
     WTF_MAKE_NONCOPYABLE(AXObjectCache);
     WTF_MAKE_FAST_ALLOCATED_WITH_HEAP_IDENTIFIER(AXObjectCache);
@@ -274,6 +274,12 @@ public:
     static bool accessibilityEnhancedUserInterfaceEnabled() { return gAccessibilityEnhancedUserInterfaceEnabled; }
 #if ENABLE(AX_THREAD_TEXT_APIS)
     static bool useAXThreadTextApis() { return gAccessibilityThreadTextApisEnabled && !isMainThread(); }
+#endif
+
+    static bool forceInitialFrameCaching() { return gForceInitialFrameCaching; }
+    WEBCORE_EXPORT static void setForceInitialFrameCaching(bool);
+#if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
+    static bool shouldServeInitialCachedFrame();
 #endif
 
     const Element* rootAXEditableElement(const Node*);
@@ -678,6 +684,7 @@ private:
     WEBCORE_EXPORT static bool gAccessibilityEnabled;
     WEBCORE_EXPORT static bool gAccessibilityEnhancedUserInterfaceEnabled;
     static bool gForceDeferredSpellChecking;
+    static bool gForceInitialFrameCaching;
 
 #if ENABLE(AX_THREAD_TEXT_APIS)
     static bool gAccessibilityThreadTextApisEnabled;
@@ -760,7 +767,7 @@ inline Vector<RefPtr<AXCoreObject>> AXObjectCache::objectsForIDs(const U& axIDs)
     });
 }
 
-class AXAttributeCacheEnabler
+class AXAttributeCacheEnabler final
 {
 public:
     explicit AXAttributeCacheEnabler(AXObjectCache *cache);

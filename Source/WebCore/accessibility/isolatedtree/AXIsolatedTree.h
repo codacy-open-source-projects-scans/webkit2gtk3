@@ -111,6 +111,7 @@ enum class AXPropertyName : uint16_t {
     HorizontalScrollBar,
     IdentifierAttribute,
     IncrementButton,
+    InitialFrameRect,
     InnerHTML,
     InternalLinkElement,
     InsideLink,
@@ -151,6 +152,7 @@ enum class AXPropertyName : uint16_t {
     IsMathToken,
     IsMeter,
     IsMultiSelectable,
+    IsNonLayerSVGObject,
     IsNonNativeTextControl,
     IsPlugin,
     IsPressed,
@@ -323,20 +325,7 @@ public:
     WEBCORE_EXPORT RefPtr<AXIsolatedObject> focusedNode();
 
     RefPtr<AXIsolatedObject> objectForID(const AXID) const;
-    template<typename U>
-    Vector<RefPtr<AXCoreObject>> objectsForIDs(const U& axIDs) const
-    {
-        ASSERT(!isMainThread());
-
-        Vector<RefPtr<AXCoreObject>> result;
-        result.reserveInitialCapacity(axIDs.size());
-        for (const auto& axID : axIDs) {
-            if (RefPtr object = objectForID(axID))
-                result.append(WTFMove(object));
-        }
-        result.shrinkToFit();
-        return result;
-    }
+    template<typename U> Vector<RefPtr<AXCoreObject>> objectsForIDs(const U&);
 
     void generateSubtree(AccessibilityObject&);
     void updateNode(AccessibilityObject&);
@@ -449,10 +438,6 @@ private:
     // IsolatedObject must have one and only one entry in this map, that maps
     // its ObjectID to its ParentChildrenIDs struct.
     HashMap<AXID, ParentChildrenIDs> m_nodeMap;
-
-    // Only accessed on the main thread.
-    // Stores all nodes that are added via addUnconnectedNode, which do not get stored in m_nodeMap.
-    HashSet<AXID> m_unconnectedNodes;
 
     // Only accessed on the main thread.
     // The key is the ID of the object that will be resolved into an m_pendingAppends NodeChange.

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright (C) 2022-2023 Apple Inc. All rights reserved.
+# Copyright (C) 2022-2024 Apple Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -31,6 +31,7 @@ import sys
 #
 # AdditionalEncoder - generate serializers for StreamConnectionEncoder in addition to IPC::Encoder.
 # CreateUsing - use a custom function to call instead of the constructor or create.
+# ConstructSubclass - use a subclass to construct the object. Do not include namespace.
 # CustomHeader - don't include a header based on the struct/class name. Only needed for non-enum types.
 # DisableMissingMemberCheck - do not check for attributes that are missed during serialization.
 # Alias - this type is not a struct or class, but a typedef.
@@ -89,6 +90,7 @@ class SerializedType(object):
         self.condition = condition
         self.encoders = ['Encoder']
         self.return_ref = False
+        self.construct_subclass = None
         self.create_using = False
         self.populate_from_empty_constructor = False
         self.nested = False
@@ -104,6 +106,8 @@ class SerializedType(object):
                     key, value = attribute.split('=')
                     if key == 'AdditionalEncoder':
                         self.encoders.append(value)
+                    if key == 'ConstructSubclass':
+                        self.construct_subclass = value
                     if key == 'CreateUsing':
                         self.create_using = value
                     if key == 'Alias':
@@ -149,6 +153,16 @@ class SerializedType(object):
         if self.namespace is None:
             return self.name
         return self.namespace + '::' + self.cpp_struct_or_class_name()
+
+    def namespace_and_name_for_construction(self, specialization):
+        fulltype = None
+        if self.construct_subclass:
+            fulltype = self.namespace + '::' + self.construct_subclass
+        else:
+            fulltype = self.namespace_and_name()
+        if specialization:
+            fulltype = fulltype + '<' + specialization + '>'
+        return fulltype
 
     def cf_wrapper_type(self):
         return self.namespace + '::' + self.name
@@ -848,9 +862,7 @@ def indent(indentation):
 
 def construct_type(type, specialization, indentation):
     result = []
-    fulltype = type.namespace_and_name()
-    if specialization:
-        fulltype = fulltype + '<' + specialization + '>'
+    fulltype = type.namespace_and_name_for_construction(specialization)
     if type.create_using:
         result.append(indent(indentation) + fulltype + '::' + type.create_using + '(')
     elif type.return_ref:
@@ -1249,6 +1261,31 @@ def generate_serialized_type_info(serialized_types, serialized_enums, headers, u
     return '\n'.join(result)
 
 
+class ConditionStackEntry(object):
+    def __init__(self, expression):
+        self._base_expression = expression
+        self.should_negate = False
+
+    @property
+    def expression(self):
+        return self._base_expression if not self.should_negate else f'!({self._base_expression})'
+
+
+def generate_condition_expression(condition_stack):
+    if not condition_stack:
+        return None
+
+    full_condition_expression = condition_stack[0].expression
+    if len(condition_stack) == 1:
+        return full_condition_expression
+
+    for condition in condition_stack[1:]:
+        condition_expression = condition.expression
+        full_condition_expression = f'({full_condition_expression}) && ({condition_expression})'
+
+    return full_condition_expression
+
+
 def parse_serialized_types(file):
     serialized_types = []
     serialized_enums = []
@@ -1263,6 +1300,8 @@ def parse_serialized_types(file):
     dictionary_members = []
     type_condition = None
     member_condition = None
+    type_condition_stack = []
+    member_condition_stack = []
     struct_or_class = None
     cf_type = None
     underlying_type = None
@@ -1275,19 +1314,26 @@ def parse_serialized_types(file):
         if line.startswith('#'):
             if line == '#else':
                 if name is None:
-                    type_condition = '!' + type_condition
+                    if type_condition_stack:
+                        type_condition_stack[-1].should_negate = True
                 else:
-                    member_condition = '!' + member_condition
+                    if member_condition_stack:
+                        member_condition_stack[-1].should_negate = True
             elif line.startswith('#if '):
+                condition_expression = line[4:]
                 if name is None:
-                    type_condition = line[4:]
+                    type_condition_stack.append(ConditionStackEntry(expression=condition_expression))
                 else:
-                    member_condition = line[4:]
+                    member_condition_stack.append(ConditionStackEntry(expression=condition_expression))
             elif line.startswith('#endif'):
                 if name is None:
-                    type_condition = None
+                    if type_condition_stack:
+                        type_condition_stack.pop()
                 else:
-                    member_condition = None
+                    if member_condition_stack:
+                        member_condition_stack.pop()
+            type_condition = generate_condition_expression(type_condition_stack)
+            member_condition = generate_condition_expression(member_condition_stack)
             continue
         if line.startswith('}'):
             if underlying_type is not None:

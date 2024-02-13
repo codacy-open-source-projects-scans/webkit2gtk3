@@ -143,6 +143,7 @@ SourceBufferPrivateAVFObjC::~SourceBufferPrivateAVFObjC()
     destroyStreamDataParser();
     destroyRenderers();
     clearTracks();
+    m_listener->invalidate();
 
     abort();
 }
@@ -298,6 +299,13 @@ void SourceBufferPrivateAVFObjC::didProvideContentKeyRequestInitializationDataFo
 
 #if ENABLE(ENCRYPTED_MEDIA) && HAVE(AVCONTENTKEYSESSION)
     auto keyIDs = CDMPrivateFairPlayStreaming::extractKeyIDsSinf(*m_initData);
+    AtomString initDataType = CDMPrivateFairPlayStreaming::sinfName();
+#if HAVE(FAIRPLAYSTREAMING_MTPS_INITDATA)
+    if (!keyIDs) {
+        keyIDs = CDMPrivateFairPlayStreaming::extractKeyIDsMpts(*m_initData);
+        initDataType = CDMPrivateFairPlayStreaming::mptsName();
+    }
+#endif
     if (!keyIDs)
         return;
 
@@ -319,7 +327,7 @@ void SourceBufferPrivateAVFObjC::didProvideContentKeyRequestInitializationDataFo
     }
 
     m_keyIDs = WTFMove(keyIDs.value());
-    player->initializationDataEncountered("sinf"_s, m_initData->tryCreateArrayBuffer());
+    player->initializationDataEncountered(initDataType, m_initData->tryCreateArrayBuffer());
     player->needsVideoLayerChanged();
 
     m_waitingForKey = true;
@@ -502,11 +510,6 @@ void SourceBufferPrivateAVFObjC::destroyRenderers()
         if (m_cdmInstance && shouldAddContentKeyRecipients())
             [m_cdmInstance->contentKeySession() removeContentKeyRecipient:renderer.get()];
 #endif
-    }
-
-    if (m_listener) {
-        m_listener->invalidate();
-        m_listener = nullptr;
     }
 
     m_audioRenderers.clear();
@@ -1249,7 +1252,6 @@ void SourceBufferPrivateAVFObjC::setVideoLayer(AVSampleBufferDisplayLayer* layer
     ASSERT(!layer || !m_decompressionSession || hasSelectedVideo());
 
     if (m_videoLayer) {
-        ASSERT(m_listener);
         m_videoLayer->flush();
         m_videoLayer->stopRequestingMediaData();
         m_listener->stopObservingLayer(m_videoLayer->displayLayer());
@@ -1310,8 +1312,8 @@ void SourceBufferPrivateAVFObjC::setDecompressionSession(WebCoreDecompressionSes
 
 RefPtr<MediaPlayerPrivateMediaSourceAVFObjC> SourceBufferPrivateAVFObjC::player() const
 {
-    if (RefPtr mediaSource = downcast<MediaSourcePrivateAVFObjC>(m_mediaSource.get()))
-        return mediaSource->player();
+    if (RefPtr mediaSource = m_mediaSource.get())
+        return static_cast<MediaPlayerPrivateMediaSourceAVFObjC*>(mediaSource->player().get());
     return nullptr;
 }
 

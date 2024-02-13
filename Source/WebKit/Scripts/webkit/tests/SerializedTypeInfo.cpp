@@ -50,12 +50,24 @@
 #include "TemplateTest.h"
 #include <Namespace/EmptyConstructorStruct.h>
 #include <Namespace/EmptyConstructorWithIf.h>
+#if !(ENABLE(OUTER_CONDITION))
+#include <Namespace/OtherOuterClass.h>
+#endif
+#if ENABLE(OUTER_CONDITION)
+#include <Namespace/OuterClass.h>
+#endif
 #include <Namespace/ReturnRefClass.h>
+#if USE(APPKIT)
+#include <WebCore/AppKitControlSystemImage.h>
+#endif
 #include <WebCore/FloatBoxExtent.h>
 #include <WebCore/InheritanceGrandchild.h>
 #include <WebCore/InheritsFrom.h>
 #include <WebCore/MoveOnlyBaseClass.h>
 #include <WebCore/MoveOnlyDerivedClass.h>
+#if USE(APPKIT)
+#include <WebCore/ScrollbarTrackCornerSystemImageMac.h>
+#endif
 #include <WebCore/ScrollingStateFrameHostingNode.h>
 #include <WebCore/ScrollingStateFrameHostingNodeWithStuffAfterTuple.h>
 #include <WebCore/TimingFunction.h>
@@ -461,6 +473,28 @@ Vector<SerializedTypeInfo> allSerializedTypes()
                 "pendingReads()"_s
             },
         } },
+        { "Namespace::OuterClass"_s, {
+            {
+                "int"_s,
+                "outerValue"_s
+            },
+        } },
+        { "Namespace::OtherOuterClass"_s, {
+            {
+                "int"_s,
+                "outerValue"_s
+            },
+        } },
+        { "WebCore::AppKitControlSystemImage"_s, {
+            {
+                "WebCore::Color"_s,
+                "m_tintColor"_s
+            },
+            {
+                "bool"_s,
+                "m_useDarkAppearance"_s
+            },
+        } },
         { "WebCore::SharedStringHash"_s, {
             { "uint32_t"_s, "alias"_s }
         } },
@@ -472,7 +506,7 @@ Vector<SerializedTypeInfo> allSerializedTypes()
             { "int"_s, "alias"_s }
         } },
 #endif
-#if !OS(WINDOWS)
+#if !(OS(WINDOWS))
         { "WTF::ProcessID"_s, {
             { "pid_t"_s, "alias"_s }
         } },
@@ -506,7 +540,7 @@ Vector<SerializedEnumInfo> allSerializedEnums()
 #if ENABLE(OPTION_SET_SECOND_VALUE)
             static_cast<uint64_t>(EnumNamespace2::OptionSetEnumType::OptionSetSecondValue),
 #endif
-#if !ENABLE(OPTION_SET_SECOND_VALUE)
+#if !(ENABLE(OPTION_SET_SECOND_VALUE))
             static_cast<uint64_t>(EnumNamespace2::OptionSetEnumType::OptionSetSecondValueElse),
 #endif
             static_cast<uint64_t>(EnumNamespace2::OptionSetEnumType::OptionSetThirdValue),
@@ -536,6 +570,22 @@ Vector<SerializedEnumInfo> allSerializedEnums()
             static_cast<uint64_t>(OptionSetEnumAllCondition::OptionSetThirdValue),
 #endif
         } },
+#if (ENABLE(OUTER_CONDITION)) && (ENABLE(INNER_CONDITION))
+        { "EnumNamespace::InnerEnumType"_s, sizeof(EnumNamespace::InnerEnumType), false, {
+            static_cast<uint64_t>(EnumNamespace::InnerEnumType::InnerValue),
+#if ENABLE(INNER_INNER_CONDITION)
+            static_cast<uint64_t>(EnumNamespace::InnerEnumType::InnerInnerValue),
+#endif
+#if !(ENABLE(INNER_INNER_CONDITION))
+            static_cast<uint64_t>(EnumNamespace::InnerEnumType::OtherInnerInnerValue),
+#endif
+        } },
+#endif
+#if (ENABLE(OUTER_CONDITION)) && (!(ENABLE(INNER_CONDITION)))
+        { "EnumNamespace::InnerBoolType"_s, sizeof(EnumNamespace::InnerBoolType), false, {
+            0, 1
+        } },
+#endif
     };
 }
 

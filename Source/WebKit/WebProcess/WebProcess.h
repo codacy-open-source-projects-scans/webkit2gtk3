@@ -123,6 +123,7 @@ class GPUProcessConnection;
 class InjectedBundle;
 class LibWebRTCCodecs;
 class LibWebRTCNetwork;
+class ModelProcessConnection;
 class NetworkProcessConnection;
 class ObjCObjectGraph;
 class RemoteCDMFactory;
@@ -271,6 +272,12 @@ public:
 #endif
     RemoteMediaEngineConfigurationFactory& mediaEngineConfigurationFactory();
 #endif // ENABLE(GPU_PROCESS)
+
+#if ENABLE(MODEL_PROCESS)
+    ModelProcessConnection& ensureModelProcessConnection();
+    void modelProcessConnectionClosed(ModelProcessConnection&);
+    ModelProcessConnection* existingModelProcessConnection() { return m_modelProcessConnection.get(); }
+#endif // ENABLE(MODEL_PROCESS)
 
     LibWebRTCNetwork& libWebRTCNetwork();
 
@@ -487,6 +494,10 @@ private:
     void registerURLSchemeAsCachePartitioned(const String&) const;
     void registerURLSchemeAsCanDisplayOnlyIfCanRequest(const String&) const;
 
+#if ENABLE(WK_WEB_EXTENSIONS)
+    void registerURLSchemeAsWebExtension(const String&) const;
+#endif
+
     void setDefaultRequestTimeoutInterval(double);
     void setAlwaysUsesComplexTextCodePath(bool);
     void setDisableFontSubpixelAntialiasingForTesting(bool);
@@ -532,8 +543,8 @@ private:
 #endif
 
     void handleInjectedBundleMessage(const String& messageName, const UserData& messageBody);
-    void setInjectedBundleParameter(const String& key, const IPC::DataReference&);
-    void setInjectedBundleParameters(const IPC::DataReference&);
+    void setInjectedBundleParameter(const String& key, std::span<const uint8_t>);
+    void setInjectedBundleParameters(std::span<const uint8_t>);
 
     bool areAllPagesSuspended() const;
 
@@ -604,7 +615,7 @@ private:
     void displayConfigurationChanged(CGDirectDisplayID, CGDisplayChangeSummaryFlags);
 #endif
 
-#if PLATFORM(COCOA) || PLATFORM(GTK)
+#if PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WPE)
     void setScreenProperties(const WebCore::ScreenProperties&);
 #endif
 
@@ -713,6 +724,11 @@ private:
     std::unique_ptr<AudioMediaStreamTrackRendererInternalUnitManager> m_audioMediaStreamTrackRendererInternalUnitManager;
 #endif
 #endif
+
+#if ENABLE(MODEL_PROCESS)
+    RefPtr<ModelProcessConnection> m_modelProcessConnection;
+#endif
+
     Ref<WebCacheStorageProvider> m_cacheStorageProvider;
     Ref<WebBadgeClient> m_badgeClient;
 #if ENABLE(GPU_PROCESS) && ENABLE(VIDEO)

@@ -63,11 +63,6 @@ WebAVPlayerController *PlaybackSessionInterfaceLMK::playerController() const
     return nullptr;
 }
 
-PlaybackSessionInterfaceLMK::~PlaybackSessionInterfaceLMK()
-{
-
-}
-
 void PlaybackSessionInterfaceLMK::durationChanged(double)
 {
 
@@ -126,6 +121,21 @@ void PlaybackSessionInterfaceLMK::mutedChanged(bool)
 void PlaybackSessionInterfaceLMK::volumeChanged(double)
 {
 
+}
+
+PlaybackSessionInterfaceLMK::~PlaybackSessionInterfaceLMK()
+{
+    ASSERT(isUIThread());
+    invalidate();
+}
+
+void PlaybackSessionInterfaceLMK::invalidate()
+{
+    if (!m_playbackSessionModel)
+        return;
+
+    m_playbackSessionModel->removeClient(*this);
+    m_playbackSessionModel = nullptr;
 }
 
 #if !RELEASE_LOG_DISABLED

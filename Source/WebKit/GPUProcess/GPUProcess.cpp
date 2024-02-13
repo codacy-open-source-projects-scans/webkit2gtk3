@@ -31,7 +31,6 @@
 #include "ArgumentCoders.h"
 #include "Attachment.h"
 #include "AuxiliaryProcessMessages.h"
-#include "DataReference.h"
 #include "GPUConnectionToWebProcess.h"
 #include "GPUProcessConnectionParameters.h"
 #include "GPUProcessCreationParameters.h"
@@ -508,6 +507,12 @@ void GPUProcess::promptForGetDisplayMedia(WebCore::DisplayCapturePromptType type
 {
     WebCore::ScreenCaptureKitSharingSessionManager::singleton().promptForGetDisplayMedia(type, WTFMove(completionHandler));
 }
+
+void GPUProcess::cancelGetDisplayMediaPrompt()
+{
+    WebCore::ScreenCaptureKitSharingSessionManager::singleton().cancelGetDisplayMediaPrompt();
+}
+
 #endif // HAVE(SCREEN_CAPTURE_KIT)
 
 #if PLATFORM(MAC)

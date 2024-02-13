@@ -37,6 +37,7 @@
 #include <WebCore/Cookie.h>
 #include <WebCore/DeviceOrientationOrMotionPermissionState.h>
 #include <WebCore/PageIdentifier.h>
+#include <WebCore/RegistrableDomain.h>
 #include <WebCore/SecurityOriginData.h>
 #include <WebCore/SecurityOriginHash.h>
 #include <pal/SessionID.h>
@@ -104,6 +105,7 @@ class WebProcessProxy;
 class WebResourceLoadStatisticsStore;
 enum class CacheModel : uint8_t;
 enum class CallDownloadDidStart : bool;
+enum class RestrictedOpenerType : uint8_t;
 enum class ShouldGrandfatherStatistics : bool;
 enum class StorageAccessStatus : uint8_t;
 enum class StorageAccessPromptStatus;
@@ -252,7 +254,7 @@ public:
     bool hasStatisticsTestingCallback() const { return !!m_statisticsTestingCallback; }
     void setVeryPrevalentResource(const URL&, CompletionHandler<void()>&&);
     void setSubframeUnderTopFrameDomain(const URL& subframe, const URL& topFrame);
-    void setCrossSiteLoadWithLinkDecorationForTesting(const URL& fromURL, const URL& toURL, CompletionHandler<void()>&&);
+    void setCrossSiteLoadWithLinkDecorationForTesting(const URL& fromURL, const URL& toURL, bool wasFiltered, CompletionHandler<void()>&&);
     void resetCrossSiteLoadsWithLinkDecorationForTesting(CompletionHandler<void()>&&);
     void deleteCookiesForTesting(const URL&, bool includeHttpOnlyCookies, CompletionHandler<void()>&&);
     void hasLocalStorageForTesting(const URL&, CompletionHandler<void(bool)>&&) const;
@@ -482,6 +484,9 @@ public:
 
     void setOriginQuotaRatioEnabledForTesting(bool enabled, CompletionHandler<void()>&&);
 
+    RestrictedOpenerType openerTypeForDomain(const WebCore::RegistrableDomain&) const;
+    void setRestrictedOpenerTypeForDomainForTesting(const WebCore::RegistrableDomain&, RestrictedOpenerType);
+
     bool operator==(const WebsiteDataStore& other) const { return (m_sessionID == other.sessionID()); }
 
 private:
@@ -614,6 +619,12 @@ private:
     FileSystem::Salt m_mediaKeysStorageSalt;
 
     bool m_isBlobRegistryPartitioningEnabled { false };
+
+    HashMap<WebCore::RegistrableDomain, RestrictedOpenerType> m_restrictedOpenerTypesForTesting;
+
+#if HAVE(NW_PROXY_CONFIG)
+    std::optional<Vector<std::pair<Vector<uint8_t>, WTF::UUID>>> m_proxyConfigData;
+#endif
 };
 
 }

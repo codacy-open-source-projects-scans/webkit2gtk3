@@ -460,6 +460,11 @@ void GPUProcessProxy::promptForGetDisplayMedia(WebCore::DisplayCapturePromptType
 {
     sendWithAsyncReply(Messages::GPUProcess::PromptForGetDisplayMedia { type }, WTFMove(completionHandler));
 }
+
+void GPUProcessProxy::cancelGetDisplayMediaPrompt()
+{
+    send(Messages::GPUProcess::CancelGetDisplayMediaPrompt { }, 0);
+}
 #endif
 
 void GPUProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& launchOptions)
@@ -594,6 +599,12 @@ void GPUProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Connect
     
 #if USE(RUNNINGBOARD)
     m_throttler.didConnectToProcess(*this);
+#if USE(EXTENSIONKIT)
+    // FIXME: this should be moved to AuxiliaryProcessProxy::didFinishLaunching along with m_throttler.didConnectToProcess.
+    // This FIXME applies to all process proxy subclasses.
+    if (launcher)
+        launcher->releaseLaunchGrant();
+#endif
 #endif
 
 #if PLATFORM(COCOA)

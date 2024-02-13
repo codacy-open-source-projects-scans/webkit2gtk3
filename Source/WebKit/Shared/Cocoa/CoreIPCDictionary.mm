@@ -47,9 +47,19 @@ CoreIPCDictionary::CoreIPCDictionary(NSDictionary *dictionary)
         if (!IPC::isSerializableValue(key) || !IPC::isSerializableValue(value))
             continue;
 
-        m_keyValuePairs.append({ WTF::makeUniqueRef<CoreIPCNSCFObject>(key), WTF::makeUniqueRef<CoreIPCNSCFObject>(value) });
+        m_keyValuePairs.append({ CoreIPCNSCFObject(key), CoreIPCNSCFObject(value) });
     }
 }
+
+CoreIPCDictionary::CoreIPCDictionary(const RetainPtr<NSDictionary>& dictionary)
+    : CoreIPCDictionary(dictionary.get()) { }
+
+CoreIPCDictionary::CoreIPCDictionary(CoreIPCDictionary&&) = default;
+
+CoreIPCDictionary::~CoreIPCDictionary() = default;
+
+CoreIPCDictionary::CoreIPCDictionary(ValueType&& keyValuePairs)
+    : m_keyValuePairs(WTFMove(keyValuePairs)) { }
 
 bool CoreIPCDictionary::keyHasValueOfType(const String& key, IPC::NSType type) const
 {
@@ -115,7 +125,7 @@ void CoreIPCDictionary::createNSDictionaryIfNeeded() const
     if (!m_nsDictionary) {
         auto result = adoptNS([[NSMutableDictionary alloc] initWithCapacity:m_keyValuePairs.size()]);
         for (auto& keyValuePair : m_keyValuePairs)
-            [result setObject:keyValuePair.value->toID().get() forKey:keyValuePair.key->toID().get()];
+            [result setObject:keyValuePair.value.toID().get() forKey:keyValuePair.key.toID().get()];
         m_nsDictionary = WTFMove(result);
     }
 }

@@ -603,6 +603,11 @@
 #endif
 #endif
 
+/* wyhash-based StringHasher */
+#if !defined(ENABLE_WYHASH_STRING_HASHER) && PLATFORM(MAC)
+#define ENABLE_WYHASH_STRING_HASHER 1
+#endif
+
 /* The JIT is enabled by default on all x86-64 & ARM64 platforms. */
 #if !defined(ENABLE_JIT) && (CPU(X86_64) || (CPU(ARM64) && CPU(ADDRESS64)))
 #define ENABLE_JIT 1
@@ -975,4 +980,9 @@
 #if !defined(ENABLE_EXTENSION_CAPABILITIES) \
     && USE(EXTENSIONKIT)
 #define ENABLE_EXTENSION_CAPABILITIES 1
+#endif
+
+#if !defined(ENABLE_LINEAR_MEDIA_PLAYER) \
+    && USE(LINEARMEDIAKIT)
+#define ENABLE_LINEAR_MEDIA_PLAYER 1
 #endif

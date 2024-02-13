@@ -2713,6 +2713,13 @@
    },
    {
       "emails" : [
+         "estaggs@apple.com"
+      ],
+      "github" : "esstaggs",
+      "name" : "Eric Staggs"
+   },
+   {
+      "emails" : [
          "ericu@chromium.org"
       ],
       "name" : "Eric Uhrhane",
@@ -3822,6 +3829,14 @@
       "nicks" : [
          "jcivelli"
       ]
+   },
+   {
+      "emails" : [
+         "j_stfleur@apple.com"
+      ],
+      "github" : "Jean-saintfleur",
+      "name" : "Jay Stfleur",
+      "status" : "committer"
    },
    {
       "emails" : [
@@ -6336,6 +6351,16 @@
    },
    {
       "emails" : [
+         "qianlangchen@apple.com"
+      ],
+      "github" : "the-chenergy",
+      "name" : "Qianlang Chen",
+      "nicks" : [
+         "qianlangchen"
+      ]
+   },
+   {
+      "emails" : [
          "webkit-bug-importer@group.apple.com"
       ],
       "name" : "Radar WebKit Bug Importer",
@@ -6784,7 +6809,7 @@
          "sgill26@apple.com",
          "sammy.gill@apple.com"
       ],
-      "github" : "sgill26",
+      "github" : "sammygill",
       "name" : "Sammy Gill",
       "nicks" : [
          "sgill26",

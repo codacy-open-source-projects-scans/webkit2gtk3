@@ -2394,8 +2394,6 @@ webkit.org/b/76121 imported/blink/fast/events/event-trusted.html [ Skip ]
 webkit.org/b/184608 [ Debug ] animations/added-while-suspended.html [ Skip ]
 webkit.org/b/184608 [ Debug ] transitions/created-while-suspended.html [ Skip ]
 
-webkit.org/b/268580 [ Debug ] imported/w3c/web-platform-tests/html/dom/elements/global-attributes/the-anchor-attribute-003-crash.tentative.html [ Skip ]
-
 webkit.org/b/155095 fast/table/border-collapsing/table-rtl-row-mixed-direction.html [ ImageOnlyFailure Pass ]
 webkit.org/b/155095 fast/table/border-collapsing/table-ltr-rows-mixed-direction.html [ ImageOnlyFailure Pass ]
 
@@ -4585,8 +4583,6 @@ imported/w3c/web-platform-tests/css/css-lists/list-style-image-gradients.html [ 
 imported/w3c/web-platform-tests/css/css-lists/content-property/marker-text-matches-disc.html [ Skip ]
 
 http/tests/site-isolation/mouse-events/ [ Skip ]
-webkit.org/b/257904 http/tests/site-isolation/basic-iframe.html [ Skip ]
-webkit.org/b/257904 http/tests/site-isolation/double-iframe.html [ Skip ]
 webkit.org/b/257904 http/tests/site-isolation/draw-after-navigation.html [ Skip ]
 webkit.org/b/257904 http/tests/site-isolation/selection-focus.html [ Skip ]
 webkit.org/b/257904 http/tests/site-isolation/basic-iframe-render-output.html [ Failure Timeout Pass ]
@@ -4697,3 +4693,7 @@ webkit.org/b/266669 imported/w3c/web-platform-tests/webrtc-extensions/RTCRtpSync
 webkit.org/b/266996 imported/w3c/web-platform-tests/css/css-writing-modes/mongolian-orientation-002.html [ ImageOnlyFailure ]
 
 webkit.org/b/263317 media/media-controller-play-then-pause.html [ Failure ]
+
+webkit.org/b/268947 imported/w3c/web-platform-tests/mathml/relations/css-styling/floats/not-floating-001.html [ Failure ]
+
+webkit.org/b/268929 imported/w3c/web-platform-tests/xhr/xmlhttprequest-timeout-worker-aborted.html [ Skip ]

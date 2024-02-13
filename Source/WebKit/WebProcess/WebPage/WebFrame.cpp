@@ -442,7 +442,7 @@ void WebFrame::transitionToLocal(std::optional<WebCore::LayerHostingContextIdent
     auto invalidator = static_cast<WebRemoteFrameClient&>(remoteFrame->client()).takeFrameInvalidator();
 
     auto client = makeUniqueRef<WebLocalFrameLoaderClient>(*this, WTFMove(invalidator));
-    auto localFrame = parent ? LocalFrame::createSubframeHostedInAnotherProcess(*corePage, WTFMove(client), m_frameID, *parent) : LocalFrame::createMainFrame(*corePage, WTFMove(client), m_frameID);
+    auto localFrame = parent ? LocalFrame::createSubframeHostedInAnotherProcess(*corePage, WTFMove(client), m_frameID, *parent) : LocalFrame::createMainFrame(*corePage, WTFMove(client), m_frameID, remoteFrame->opener());
     m_coreFrame = localFrame.ptr();
     remoteFrame->setView(nullptr);
     localFrame->init();
@@ -712,15 +712,15 @@ String WebFrame::innerText() const
 
 RefPtr<WebFrame> WebFrame::parentFrame() const
 {
-    RefPtr localFrame = dynamicDowncast<LocalFrame>(m_coreFrame.get());
-    if (!localFrame || !localFrame->ownerElement())
+    RefPtr frame = m_coreFrame.get();
+    if (!frame || !frame->ownerElement())
         return nullptr;
 
-    RefPtr frame = localFrame->ownerElement()->document().frame();
-    if (!frame)
+    RefPtr parentFrame = frame->tree().parent();
+    if (!parentFrame)
         return nullptr;
 
-    return WebFrame::fromCoreFrame(*frame);
+    return WebFrame::fromCoreFrame(*parentFrame);
 }
 
 Ref<API::Array> WebFrame::childFrames()
@@ -1256,7 +1256,7 @@ WebCore::HandleUserInputEventResult WebFrame::handleMouseEvent(const WebMouseEve
 
         auto mousePressEventResult = coreLocalFrame->eventHandler().handleMousePressEvent(platformMouseEvent);
 #if ENABLE(CONTEXT_MENU_EVENT)
-        if (isContextClick(platformMouseEvent))
+        if (isContextClick(platformMouseEvent) && !mousePressEventResult.remoteUserInputEventData())
             mousePressEventResult.setHandled(handleContextMenuEvent(platformMouseEvent));
 #endif
         return mousePressEventResult;

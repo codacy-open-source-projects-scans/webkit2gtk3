@@ -29,6 +29,8 @@
 
 #include "WebTextReplacementData.h"
 
+#include <WebCore/DocumentFragment.h>
+#include <WebCore/Node.h>
 #include <WebCore/Range.h>
 #include <wtf/FastMalloc.h>
 #include <wtf/Noncopyable.h>
@@ -46,14 +48,31 @@ class UnifiedTextReplacementController final {
 public:
     explicit UnifiedTextReplacementController(WebPage&);
 
-    void didBeginTextReplacementSession(const WTF::UUID&);
+    void willBeginTextReplacementSession(const WTF::UUID&, CompletionHandler<void(const Vector<WebKit::WebUnifiedTextReplacementContextData>&)>&&);
 
-    void textReplacementSessionDidReceiveReplacements(const WTF::UUID&, const Vector<WebKit::WebTextReplacementData>&, const WebKit::WebUnifiedTextReplacementContextData&, bool);
+    void didBeginTextReplacementSession(const WTF::UUID&, const Vector<WebKit::WebUnifiedTextReplacementContextData>&);
+
+    void textReplacementSessionDidReceiveReplacements(const WTF::UUID&, const Vector<WebKit::WebTextReplacementData>&, const WebKit::WebUnifiedTextReplacementContextData&, bool finished);
+
+    void textReplacementSessionDidUpdateStateForReplacement(const WTF::UUID&, WebKit::WebTextReplacementData::State, const WebKit::WebTextReplacementData&, const WebKit::WebUnifiedTextReplacementContextData&);
+
+    void didEndTextReplacementSession(const WTF::UUID&, bool accepted);
+
+    void textReplacementSessionDidReceiveTextWithReplacementRange(const WTF::UUID&, const WebCore::AttributedString&, const WebCore::CharacterRange&, const WebKit::WebUnifiedTextReplacementContextData&);
+
+    void textReplacementSessionDidReceiveEditAction(const WTF::UUID&, WebKit::WebTextReplacementData::EditAction);
 
 private:
+    struct Replacement {
+        WebCore::AttributedString attributedText;
+        WebCore::CharacterRange range;
+    };
+
     WeakPtr<WebPage> m_webPage;
 
-    HashMap<WTF::UUID, Ref<WebCore::Range>> m_sessionRanges;
+    HashMap<WTF::UUID, Ref<WebCore::Range>> m_contextRanges;
+    HashMap<WTF::UUID, Ref<WebCore::DocumentFragment>> m_originalDocumentNodes;
+    HashMap<WTF::UUID, Vector<Replacement>> m_replacements;
 };
 
 } // namespace WebKit

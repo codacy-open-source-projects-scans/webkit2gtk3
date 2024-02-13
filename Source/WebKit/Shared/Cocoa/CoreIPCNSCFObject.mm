@@ -61,14 +61,33 @@ static ObjectValue valueFromID(id object)
     case IPC::NSType::Array:
         return CoreIPCArray((NSArray *)object);
 #if USE(PASSKIT)
+    case IPC::NSType::CNContact:
+        // FIXME: Serialize CNContact directly instead of relying on secure coding.
+        // Difficult because of the reliance on CNLabeledValue<>
+        return CoreIPCSecureCoding(object);
     case IPC::NSType::CNPhoneNumber:
         return CoreIPCCNPhoneNumber((CNPhoneNumber *)object);
     case IPC::NSType::CNPostalAddress:
         return CoreIPCCNPostalAddress((CNPostalAddress *)object);
+    case IPC::NSType::NSDateComponents:
+        return CoreIPCDateComponents((NSDateComponents *)object);
     case IPC::NSType::PKContact:
         return CoreIPCPKContact((PKContact *)object);
     case IPC::NSType::PKPaymentMerchantSession:
         return CoreIPCPKPaymentMerchantSession((PKPaymentMerchantSession *)object);
+    case IPC::NSType::PKPayment:
+        return CoreIPCPKPayment((PKPayment *)object);
+    case IPC::NSType::PKPaymentToken:
+        return CoreIPCPKPaymentToken((PKPaymentToken *)object);
+    case IPC::NSType::PKSecureElementPass:
+        // FIXME: Serialize PKSecureElementPass directly instead of relying on secure coding.
+        return CoreIPCSecureCoding(object);
+    case IPC::NSType::PKShippingMethod:
+        return CoreIPCPKShippingMethod((PKShippingMethod *)object);
+    case IPC::NSType::PKDateComponentsRange:
+        return CoreIPCPKDateComponentsRange((PKDateComponentsRange *)object);
+    case IPC::NSType::PKPaymentMethod:
+        return CoreIPCPKPaymentMethod((PKPaymentMethod *)object);
 #endif
     case IPC::NSType::Color:
         return CoreIPCColor((WebCore::CocoaColor *)object);
@@ -96,8 +115,12 @@ static ObjectValue valueFromID(id object)
         return CoreIPCNSValue((NSValue *)object);
     case IPC::NSType::Number:
         return CoreIPCNumber(bridge_cast((NSNumber *)object));
+    case IPC::NSType::Null:
+        return CoreIPCNull((NSNull *)object);
     case IPC::NSType::PersonNameComponents:
         return CoreIPCPersonNameComponents((NSPersonNameComponents *)object);
+    case IPC::NSType::PresentationIntent:
+        return CoreIPCPresentationIntent((NSPresentationIntent *)object);
     case IPC::NSType::SecureCoding:
         return CoreIPCSecureCoding((NSObject<NSSecureCoding> *)object);
     case IPC::NSType::String:

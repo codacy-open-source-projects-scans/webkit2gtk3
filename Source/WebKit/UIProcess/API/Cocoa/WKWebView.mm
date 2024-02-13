@@ -82,6 +82,7 @@
 #import "WKSecurityOriginInternal.h"
 #import "WKSharedAPICast.h"
 #import "WKSnapshotConfigurationPrivate.h"
+#import "WKTextExtractionUtilities.h"
 #import "WKUIDelegate.h"
 #import "WKUIDelegatePrivate.h"
 #import "WKUserContentControllerInternal.h"
@@ -2556,6 +2557,16 @@ static RetainPtr<NSArray> wkTextManipulationErrors(NSArray<_WKTextManipulationIt
 #endif
 }
 
+- (void)_nowPlayingMediaTitleAndArtist:(void (^)(NSString *, NSString *))completionHandler
+{
+    THROW_IF_SUSPENDED;
+#if HAVE(TOUCH_BAR) && ENABLE(WEB_PLAYBACK_CONTROLS_MANAGER)
+    _impl->nowPlayingMediaTitleAndArtist(completionHandler);
+#else
+    completionHandler(nil, nil);
+#endif
+}
+
 #if ENABLE(ACCESSIBILITY_ANIMATION_CONTROL)
 - (void)_pauseAllAnimationsWithCompletionHandler:(void(^)(void))completionHandler
 {
@@ -2616,6 +2627,11 @@ static RetainPtr<NSArray> wkTextManipulationErrors(NSArray<_WKTextManipulationIt
     return NO;
 }
 #endif // ENABLE(ACCESSIBILITY_ANIMATION_CONTROL)
+
+- (void)_setStatisticsCrossSiteLoadWithLinkDecorationForTesting:(NSString *)fromHost withToHost:(NSString *)toHost withWasFiltered:(BOOL)wasFiltered withCompletionHandler:(void(^)(void))completionHandler
+{
+    _page->setCrossSiteLoadWithLinkDecorationForTesting(URL { fromHost }, URL { toHost }, wasFiltered, makeBlockPtr(completionHandler));
+}
 
 - (_WKMediaMutedState)_mediaMutedState
 {
@@ -2924,6 +2940,15 @@ static void convertAndAddHighlight(Vector<Ref<WebCore::SharedMemory>>& buffers, 
     return _page->gpuProcessID();
 }
 
+- (pid_t)_modelProcessIdentifier
+{
+    if (![self _isValid])
+        return 0;
+
+    return _page->modelProcessID();
+}
+
+
 - (BOOL)_webProcessIsResponsive
 {
     return _page->process().isResponsive();
@@ -3008,9 +3033,10 @@ static void convertAndAddHighlight(Vector<Ref<WebCore::SharedMemory>>& buffers, 
 - (void)_restoreFromSessionStateData:(NSData *)sessionStateData
 {
     THROW_IF_SUSPENDED;
+
     // FIXME: This should not use the legacy session state decoder.
     WebKit::SessionState sessionState;
-    if (!WebKit::decodeLegacySessionState(static_cast<const uint8_t*>(sessionStateData.bytes), sessionStateData.length, sessionState))
+    if (!WebKit::decodeLegacySessionState(std::span { static_cast<const uint8_t*>(sessionStateData.bytes), sessionStateData.length }, sessionState))
         return;
 
     _page->restoreFromSessionState(WTFMove(sessionState), true);
@@ -4177,6 +4203,31 @@ static inline OptionSet<WebKit::FindOptions> toFindOptions(_WKFindOptions wkFind
 - (void)_setFormDelegate:(id <_WKInputDelegate>)formDelegate
 {
     self._inputDelegate = formDelegate;
+}
+
+@end
+
+@implementation WKWebView (WKTextExtraction)
+
+- (void)_requestTextExtraction:(CGRect)rectInWebView completionHandler:(void(^)(WKTextExtractionItem *))completionHandler
+{
+    if (!self._isValid || !_page->preferences().textExtractionEnabled())
+        return completionHandler(nil);
+
+    auto rectInRootView = [&]() -> std::optional<WebCore::FloatRect> {
+        if (CGRectIsNull(rectInWebView))
+            return std::nullopt;
+
+#if PLATFORM(IOS_FAMILY)
+        return WebCore::FloatRect { [self convertRect:rectInWebView toView:_contentView.get()] };
+#else
+        return WebCore::FloatRect { rectInWebView };
+#endif
+    }();
+
+    _page->requestTextExtraction(WTFMove(rectInRootView), [completionHandler = makeBlockPtr(completionHandler)](auto&& item) {
+        completionHandler(WebKit::createItem(item).get());
+    });
 }
 
 @end

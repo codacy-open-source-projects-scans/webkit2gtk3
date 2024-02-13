@@ -70,7 +70,7 @@
 #define USE_GLIB 1
 #endif
 
-#if PLATFORM(GTK) || PLATFORM(WPE)
+#if PLATFORM(GTK) || (PLATFORM(WPE) && !USE(SKIA))
 #define USE_FREETYPE 1
 #endif
 
@@ -80,10 +80,6 @@
 
 #if PLATFORM(GTK) || PLATFORM(WPE)
 #define USE_SOUP 1
-#endif
-
-#if PLATFORM(GTK) || PLATFORM(WPE)
-#define USE_WEBP 1
 #endif
 
 #if PLATFORM(COCOA)

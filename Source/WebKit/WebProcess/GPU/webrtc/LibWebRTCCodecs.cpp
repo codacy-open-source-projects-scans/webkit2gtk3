@@ -70,10 +70,10 @@ static webrtc::WebKitVideoDecoder createVideoDecoder(const webrtc::SdpVideoForma
         return { codecs.createDecoder(VideoCodecType::H265), false };
 
 #if ENABLE(VP9)
-    if (equalIgnoringASCIICase(codecString, "VP9"_s) && codecs.supportVP9VTB())
+    if (equalIgnoringASCIICase(codecString, "VP9"_s) && codecs.isSupportingVP9HardwareDecoder())
         return { codecs.createDecoder(VideoCodecType::VP9), false };
-
 #endif
+
 #if ENABLE(AV1)
     if (equalIgnoringASCIICase(codecString, "AV1"_s)) {
         if (codecs.hasAV1HardwareDecoder())
@@ -93,7 +93,7 @@ std::optional<VideoCodecType> LibWebRTCCodecs::videoCodecTypeFromWebCodec(const 
         return VideoCodecType::H264;
 
     if (codec.startsWith("vp09.0"_s)) {
-        if (!supportVP9VTB())
+        if (!isSupportingVP9HardwareDecoder())
             return { };
         return VideoCodecType::VP9;
     }
@@ -413,7 +413,7 @@ void LibWebRTCCodecs::setDecoderFormatDescription(Decoder& decoder, const uint8_
     if (!decoder.connection)
         return;
 
-    decoder.connection->send(Messages::LibWebRTCCodecsProxy::SetDecoderFormatDescription { decoder.identifier, IPC::DataReference { data, size }, width, height }, 0);
+    decoder.connection->send(Messages::LibWebRTCCodecsProxy::SetDecoderFormatDescription { decoder.identifier, std::span { data, size }, width, height }, 0);
 }
 
 static void sendFrameToDecode(LibWebRTCCodecs::Decoder& decoder, int64_t timeStamp, const uint8_t* data, size_t size, uint16_t width, uint16_t height)
@@ -421,7 +421,7 @@ static void sendFrameToDecode(LibWebRTCCodecs::Decoder& decoder, int64_t timeSta
     if (decoder.type == VideoCodecType::VP9 && (width || height))
         decoder.connection->send(Messages::LibWebRTCCodecsProxy::SetFrameSize { decoder.identifier, width, height }, 0);
 
-    decoder.connection->send(Messages::LibWebRTCCodecsProxy::DecodeFrame { decoder.identifier, timeStamp, IPC::DataReference { data, size } }, 0);
+    decoder.connection->send(Messages::LibWebRTCCodecsProxy::DecodeFrame { decoder.identifier, timeStamp, std::span { data, size } }, 0);
 }
 
 int32_t LibWebRTCCodecs::decodeFrame(Decoder& decoder, int64_t timeStamp, const uint8_t* data, size_t size, uint16_t width, uint16_t height)
@@ -763,7 +763,7 @@ void LibWebRTCCodecs::setEncodeRates(Encoder& encoder, uint32_t bitRate, uint32_
     connection->send(Messages::LibWebRTCCodecsProxy::SetEncodeRates { encoder.identifier, bitRate, frameRate }, 0);
 }
 
-void LibWebRTCCodecs::completedEncoding(VideoEncoderIdentifier identifier, IPC::DataReference&& data, const webrtc::WebKitEncodedFrameInfo& info)
+void LibWebRTCCodecs::completedEncoding(VideoEncoderIdentifier identifier, std::span<const uint8_t> data, const webrtc::WebKitEncodedFrameInfo& info)
 {
     assertIsCurrent(workQueue());
 
@@ -789,7 +789,7 @@ void LibWebRTCCodecs::completedEncoding(VideoEncoderIdentifier identifier, IPC::
     webrtc::encoderVideoTaskComplete(encoder->encodedImageCallback, toWebRTCCodecType(encoder->type), data.data(), data.size(), info);
 }
 
-void LibWebRTCCodecs::setEncodingConfiguration(WebKit::VideoEncoderIdentifier identifier, IPC::DataReference&& description, std::optional<WebCore::PlatformVideoColorSpace> colorSpace)
+void LibWebRTCCodecs::setEncodingConfiguration(WebKit::VideoEncoderIdentifier identifier, std::span<const uint8_t> description, std::optional<WebCore::PlatformVideoColorSpace> colorSpace)
 {
     assertIsCurrent(workQueue());
 

@@ -49,6 +49,7 @@ class ShareableBitmap;
 namespace WebKit {
 
 class PDFPluginBase;
+class WebFrame;
 class WebPage;
 
 struct WebHitTestResultData;
@@ -97,9 +98,8 @@ public:
 
     RefPtr<WebCore::FragmentedSharedBuffer> liveResourceData() const;
     bool performDictionaryLookupAtLocation(const WebCore::FloatPoint&);
-    bool existingSelectionContainsPoint(const WebCore::FloatPoint&) const;
 
-    std::tuple<String, PDFSelection *, NSDictionary *> lookupTextAtLocation(const WebCore::FloatPoint&, WebHitTestResultData&) const;
+    std::pair<String, PDFSelection *> lookupTextAtLocation(const WebCore::FloatPoint&, WebHitTestResultData&) const;
     WebCore::FloatRect rectForSelectionInRootView(PDFSelection *) const;
     CGFloat contentScaleFactor() const;
     
@@ -108,6 +108,10 @@ public:
     void invalidateRect(const WebCore::IntRect&) final;
 
     void didChangeSettings();
+
+    void windowActivityDidChange();
+
+    void didSameDocumentNavigationForFrame(WebFrame&);
 
 private:
     PluginView(WebCore::HTMLPlugInElement&, const URL&, const String& contentType, bool shouldUseManualLoader, WebPage&);
@@ -150,6 +154,7 @@ private:
 
     bool usesAsyncScrolling() const final;
     WebCore::ScrollingNodeID scrollingNodeID() const final;
+    void didAttachScrollingNode() final;
 
     // WebCore::Widget
     void setFrameRect(const WebCore::IntRect&) final;

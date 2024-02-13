@@ -77,6 +77,10 @@ GPUProcess/media/ios/RemoteMediaSessionHelperProxy.cpp
 GPUProcess/webrtc/LibWebRTCCodecsProxy.mm @no-unify
 GPUProcess/webrtc/RemoteAudioMediaStreamTrackRendererInternalUnitManager.cpp
 
+ModelProcess/EntryPoint/Cocoa/XPCService/ModelServiceEntryPoint.mm
+ModelProcess/cocoa/ModelProcessCocoa.mm
+ModelProcess/ios/ModelProcessIOS.mm
+
 Platform/classifier/cocoa/ResourceLoadStatisticsClassifierCocoa.cpp
 Platform/classifier/ResourceLoadStatisticsClassifier.cpp
 
@@ -203,7 +207,6 @@ Shared/mac/PasteboardTypes.mm
 Shared/mac/PrintInfoMac.mm
 Shared/mac/ScrollingAccelerationCurveMac.mm
 Shared/mac/SecItemRequestData.cpp
-Shared/mac/WebCoreArgumentCodersMac.mm
 Shared/mac/WebEventFactory.mm
 Shared/mac/WebGestureEvent.cpp
 Shared/mac/WebMemorySampler.mac.mm
@@ -420,6 +423,7 @@ UIProcess/Cocoa/WKContactPicker.mm
 UIProcess/Cocoa/WKEditCommand.mm
 UIProcess/Cocoa/WKFullKeyboardAccessWatcher.mm
 UIProcess/Cocoa/WKReloadFrameErrorRecoveryAttempter.mm
+UIProcess/Cocoa/WKTextExtractionUtilities.mm
 UIProcess/Cocoa/WKWebViewContentProviderRegistry.mm
 UIProcess/Cocoa/XPCConnectionTerminationWatchdog.mm
 
@@ -674,6 +678,7 @@ WebProcess/Inspector/mac/WebInspectorUIMac.mm
 WebProcess/MediaCache/WebMediaKeyStorageManager.cpp
 
 WebProcess/Model/ARKitInlinePreviewModelPlayer.mm
+WebProcess/Model/ModelProcessModelPlayer.mm
 WebProcess/Model/ios/ARKitInlinePreviewModelPlayerIOS.mm
 WebProcess/Model/mac/ARKitInlinePreviewModelPlayerMac.mm
 

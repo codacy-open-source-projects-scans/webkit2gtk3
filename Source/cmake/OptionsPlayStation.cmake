@@ -211,6 +211,7 @@ endif ()
 #
 # Features that require additional implementation pieces
 WEBKIT_OPTION_DEFAULT_PORT_VALUE(USE_AVIF PRIVATE OFF)
+WEBKIT_OPTION_DEFAULT_PORT_VALUE(USE_LCMS PRIVATE OFF)
 WEBKIT_OPTION_DEFAULT_PORT_VALUE(USE_JPEGXL PRIVATE OFF)
 
 # Features that are temporarily turned off because an implementation is not
@@ -231,6 +232,7 @@ WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_NOTIFICATIONS PRIVATE OFF)
 WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_USER_MESSAGE_HANDLERS PRIVATE OFF)
 WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_WEBGL PRIVATE OFF)
 WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_XSLT PRIVATE OFF)
+WEBKIT_OPTION_DEFAULT_PORT_VALUE(USE_WOFF2 PRIVATE OFF)
 
 WEBKIT_OPTION_END()
 
@@ -268,7 +270,24 @@ if (ENABLE_WEBCORE)
     SET_AND_EXPOSE_TO_BUILD(USE_HARFBUZZ ON)
     SET_AND_EXPOSE_TO_BUILD(USE_LIBWPE ON)
     SET_AND_EXPOSE_TO_BUILD(USE_OPENSSL ON)
-    SET_AND_EXPOSE_TO_BUILD(USE_WEBP ON)
+
+    if (USE_LCMS)
+        set(LCMS2_NAMES SceVshLCMS2)
+        find_package(LCMS2)
+        if (NOT LCMS2_FOUND)
+            message(FATAL_ERROR "libcms2 is required for USE_LCMS.")
+       endif ()
+       list(APPEND PlayStationModule_TARGETS LCMS2::LCMS2)
+    endif ()
+
+    if (USE_JPEGXL)
+        set(JPEGXL_NAMES SceVshJxl)
+        find_package(JPEGXL 0.7.0)
+        if (NOT JPEGXL_FOUND)
+            message(FATAL_ERROR "libjxl is required for USE_JPEGXL")
+        endif ()
+        list(APPEND PlayStationModule_TARGETS JPEGXL::jxl)
+    endif ()
 
     # See if OpenSSL implementation is BoringSSL
     cmake_push_check_state()

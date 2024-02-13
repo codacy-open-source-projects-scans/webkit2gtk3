@@ -351,6 +351,9 @@ void TestInvocation::didReceiveMessageFromInjectedBundle(WKStringRef messageName
         return;
     }
 
+    if (WKStringIsEqualToUTF8CString(messageName, "NotifyDone"))
+        return postPageMessage("NotifyDone");
+
     if (WKStringIsEqualToUTF8CString(messageName, "TextOutput") || WKStringIsEqualToUTF8CString(messageName, "FinalTextOutput")) {
         m_textOutput.append(toWTFString(stringValue(messageBody)));
         return;
@@ -1307,7 +1310,8 @@ WKRetainPtr<WKTypeRef> TestInvocation::didReceiveSynchronousMessageFromInjectedB
         auto messageBodyDictionary = dictionaryValue(messageBody);
         auto fromHost = stringValue(messageBodyDictionary, "FromHost");
         auto toHost = stringValue(messageBodyDictionary, "ToHost");
-        TestController::singleton().setStatisticsCrossSiteLoadWithLinkDecoration(fromHost, toHost);
+        auto wasFiltered = booleanValue(messageBodyDictionary, "WasFiltered");
+        TestController::singleton().setStatisticsCrossSiteLoadWithLinkDecoration(fromHost, toHost, wasFiltered);
         return nullptr;
     }
 

@@ -57,6 +57,10 @@ OBJC_CLASS NSData;
 typedef struct OpaqueCMBlockBuffer* CMBlockBufferRef;
 #endif
 
+#if USE(SKIA)
+#include <skia/core/SkData.h>
+#endif
+
 namespace WTF {
 namespace Persistence {
 class Decoder;
@@ -86,6 +90,9 @@ public:
 #if USE(GSTREAMER)
     WEBCORE_EXPORT static Ref<DataSegment> create(RefPtr<GstMappedOwnedBuffer>&&);
 #endif
+#if USE(SKIA)
+    WEBCORE_EXPORT static Ref<DataSegment> create(sk_sp<SkData>&&);
+#endif
     WEBCORE_EXPORT static Ref<DataSegment> create(FileSystem::MappedFileData&&);
 
     struct Provider {
@@ -102,9 +109,9 @@ public:
     WEBCORE_EXPORT bool containsMappedFileData() const;
 
 private:
-    void iterate(const Function<void(const std::span<const uint8_t>&)>& apply) const;
+    void iterate(const Function<void(std::span<const uint8_t>)>& apply) const;
 #if USE(FOUNDATION)
-    void iterate(CFDataRef, const Function<void(const std::span<const uint8_t>&)>& apply) const;
+    void iterate(CFDataRef, const Function<void(std::span<const uint8_t>)>& apply) const;
 #endif
 
     explicit DataSegment(Vector<uint8_t>&& data)
@@ -121,6 +128,10 @@ private:
     explicit DataSegment(RefPtr<GstMappedOwnedBuffer>&& data)
         : m_immutableData(WTFMove(data)) { }
 #endif
+#if USE(SKIA)
+    explicit DataSegment(sk_sp<SkData>&& data)
+        : m_immutableData(WTFMove(data)) { }
+#endif
     explicit DataSegment(FileSystem::MappedFileData&& data)
         : m_immutableData(WTFMove(data)) { }
     explicit DataSegment(Provider&& provider)
@@ -135,6 +146,9 @@ private:
 #endif
 #if USE(GSTREAMER)
         RefPtr<GstMappedOwnedBuffer>,
+#endif
+#if USE(SKIA)
+        sk_sp<SkData>,
 #endif
         FileSystem::MappedFileData,
         Provider> m_immutableData;
@@ -168,6 +182,10 @@ public:
 #if USE(GSTREAMER)
     WEBCORE_EXPORT static Ref<FragmentedSharedBuffer> create(GstMappedOwnedBuffer&);
 #endif
+
+#if USE(SKIA)
+    WEBCORE_EXPORT static Ref<FragmentedSharedBuffer> create(SkData*);
+#endif
     WEBCORE_EXPORT Vector<uint8_t> copyData() const;
     WEBCORE_EXPORT Vector<uint8_t> read(size_t offset, size_t length) const;
 
@@ -184,8 +202,8 @@ public:
     WEBCORE_EXPORT void copyTo(void* destination, size_t length) const;
     WEBCORE_EXPORT void copyTo(void* destination, size_t offset, size_t length) const;
 
-    WEBCORE_EXPORT void forEachSegment(const Function<void(const std::span<const uint8_t>&)>&) const;
-    WEBCORE_EXPORT bool startsWith(const std::span<const uint8_t>& prefix) const;
+    WEBCORE_EXPORT void forEachSegment(const Function<void(std::span<const uint8_t>)>&) const;
+    WEBCORE_EXPORT bool startsWith(std::span<const uint8_t> prefix) const;
     WEBCORE_EXPORT void forEachSegmentAsSharedBuffer(const Function<void(Ref<SharedBuffer>&&)>&) const;
 
     using DataSegment = WebCore::DataSegment; // To keep backward compatibility when using FragmentedSharedBuffer::DataSegment
@@ -232,6 +250,9 @@ protected:
 #endif
 #if USE(GSTREAMER)
     WEBCORE_EXPORT explicit FragmentedSharedBuffer(GstMappedOwnedBuffer&);
+#endif
+#if USE(SKIA)
+    WEBCORE_EXPORT explicit FragmentedSharedBuffer(SkData*);
 #endif
     size_t m_size { 0 };
 
@@ -299,6 +320,9 @@ public:
 #endif
 #if USE(GLIB)
     WEBCORE_EXPORT GRefPtr<GBytes> createGBytes() const;
+#endif
+#if USE(SKIA)
+    WEBCORE_EXPORT sk_sp<SkData> createSkData() const;
 #endif
 
     Ref<FragmentedSharedBuffer> asFragmentedSharedBuffer() const { return const_cast<SharedBuffer&>(*this); }

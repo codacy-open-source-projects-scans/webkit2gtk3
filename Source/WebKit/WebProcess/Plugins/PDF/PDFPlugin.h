@@ -28,7 +28,6 @@
 #if ENABLE(LEGACY_PDFKIT_PLUGIN)
 
 #include "PDFPluginBase.h"
-#include "WebMouseEvent.h"
 #include <WebCore/NetscapePlugInStreamLoader.h>
 #include <wtf/HashMap.h>
 #include <wtf/Identified.h>
@@ -99,7 +98,6 @@ public:
 
     void clickedLink(NSURL *);
 
-    void writeItemsToPasteboard(NSString *pasteboardName, NSArray *items, NSArray *types);
     void showDefinitionForAttributedString(NSAttributedString *, CGPoint);
     void performWebSearch(NSString *);
     void performSpotlightSearch(NSString *);
@@ -148,7 +146,7 @@ private:
 
     void installPDFDocument() override;
 
-    void geometryDidChange(const WebCore::IntSize& pluginSize, const WebCore::AffineTransform& pluginToRootViewTransform) override;
+    bool geometryDidChange(const WebCore::IntSize& pluginSize, const WebCore::AffineTransform& pluginToRootViewTransform) override;
     void deviceScaleFactorChanged(float) override;
 
     void setPageScaleFactor(double, std::optional<WebCore::IntPoint> origin) override;
@@ -176,7 +174,7 @@ private:
     bool findString(const String& target, WebCore::FindOptions, unsigned maxMatchCount) override;
 
     bool performDictionaryLookupAtLocation(const WebCore::FloatPoint&) override;
-    std::tuple<String, PDFSelection *, NSDictionary *> lookupTextAtLocation(const WebCore::FloatPoint&, WebHitTestResultData&) const override;
+    std::pair<String, PDFSelection *> lookupTextAtLocation(const WebCore::FloatPoint&, WebHitTestResultData&) const override;
 
     bool shouldCreateTransientPaintingSnapshot() const override { return true; }
     RefPtr<WebCore::ShareableBitmap> snapshot() override;
@@ -202,8 +200,6 @@ private:
     RetainPtr<WKPDFPluginAccessibilityObject> m_accessibilityObject;
     
     RefPtr<PDFPluginPasswordField> m_passwordField;
-
-    std::optional<WebMouseEvent> m_lastMouseEvent;
 
     String m_temporaryPDFUUID;
     String m_lastFoundString;

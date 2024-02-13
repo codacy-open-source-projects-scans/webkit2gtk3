@@ -751,8 +751,6 @@ webkit.org/b/236722 http/tests/media/video-play-waiting.html [ Timeout ]
 # This test requires generation of progress events during loading
 webkit.org/b/100984 media/progress-events-generated-correctly.html [ Failure ]
 
-webkit.org/b/34287 http/tests/media/video-cookie.html
-
 # needs enhanced eventSender.contextMenu() return value
 webkit.org/b/116651 media/context-menu-actions.html [ Skip ]
 
@@ -2580,5 +2578,7 @@ webkit.org/b/267352 [ Monterey ] imported/w3c/web-platform-tests/mathml/relation
 
 webkit.org/b/267612 [ Ventura+ Release x86_64 ] fast/canvas/image-buffer-backend-variants.html [ Pass Failure ]
 
-# Asserts in debug 'global-attributes'.
-webkit.org/b/267993 [ Debug ] imported/w3c/web-platform-tests/html/dom/elements/global-attributes/the-anchor-attribute-003-crash.tentative.html [ Skip ]
+webkit.org/b/268947 [ Ventura+ ] imported/w3c/web-platform-tests/mathml/relations/css-styling/floats/not-floating-001.html [ Failure ]
+
+# Enable after rdar://120859525 is available on bots
+http/tests/media/fairplay/fps-mse-unmuxed-mpts.html [ Skip ]

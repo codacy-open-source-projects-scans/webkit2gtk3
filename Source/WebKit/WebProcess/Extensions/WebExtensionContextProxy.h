@@ -95,8 +95,15 @@ public:
 
     void addFrameWithExtensionContent(WebFrame&);
 
+    std::optional<WebExtensionTabIdentifier> tabIdentifier(WebPage&) const;
+
     RefPtr<WebPage> backgroundPage() const;
     void setBackgroundPage(WebPage&);
+
+#if ENABLE(INSPECTOR_EXTENSIONS)
+    void addInspectorBackgroundPage(WebPage&, std::optional<WebExtensionTabIdentifier>, std::optional<WebExtensionWindowIdentifier>);
+    bool isInspectorBackgroundPage(WebPage&) const;
+#endif
 
     Vector<Ref<WebPage>> popupPages(std::optional<WebExtensionTabIdentifier> = std::nullopt, std::optional<WebExtensionWindowIdentifier> = std::nullopt) const;
     void addPopupPage(WebPage&, std::optional<WebExtensionTabIdentifier>, std::optional<WebExtensionWindowIdentifier>);
@@ -136,6 +143,11 @@ private:
     // Cookies
     void dispatchCookiesChangedEvent();
 
+#if ENABLE(INSPECTOR_EXTENSIONS)
+    // DevTools
+    void addInspectorBackgroundPageIdentifier(WebCore::PageIdentifier, std::optional<WebExtensionTabIdentifier>, std::optional<WebExtensionWindowIdentifier>);
+#endif
+
     // Extension
     void setBackgroundPageIdentifier(WebCore::PageIdentifier);
     void addPopupPageIdentifier(WebCore::PageIdentifier, std::optional<WebExtensionTabIdentifier>, std::optional<WebExtensionWindowIdentifier>);
@@ -148,7 +160,7 @@ private:
     void dispatchPermissionsEvent(WebExtensionEventListenerType, HashSet<String> permissions, HashSet<String> origins);
 
     // Port
-    void dispatchPortMessageEvent(WebExtensionPortChannelIdentifier, const String& messageJSON);
+    void dispatchPortMessageEvent(std::optional<WebKit::WebPageProxyIdentifier>, WebExtensionPortChannelIdentifier, const String& messageJSON);
     void dispatchPortDisconnectEvent(WebExtensionPortChannelIdentifier);
 
     // Runtime
@@ -201,6 +213,9 @@ private:
     RefPtr<WebCore::DOMWrapperWorld> m_contentScriptWorld;
     WeakFrameSet m_extensionContentFrames;
     WeakPtr<WebPage> m_backgroundPage;
+#if ENABLE(INSPECTOR_EXTENSIONS)
+    WeakPageTabWindowMap m_inspectorBackgroundPageMap;
+#endif
     WeakPageTabWindowMap m_popupPageMap;
     WeakPageTabWindowMap m_tabPageMap;
 };

@@ -185,6 +185,12 @@
 #include "GPUProcessConnection.h"
 #endif
 
+#if ENABLE(MODEL_PROCESS)
+#include "ModelConnectionToWebProcessMessages.h"
+#include "ModelProcessConnection.h"
+#include "ModelProcessConnectionParameters.h"
+#endif
+
 #if ENABLE(REMOTE_INSPECTOR)
 #include <JavaScriptCore/RemoteInspector.h>
 #endif
@@ -494,7 +500,7 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
             WTF::TextStream activityStateStream(WTF::TextStream::LineMode::SingleLine);
             activityStateStream << page->activityState();
 
-            RELEASE_LOG(ActivityState, "WebPage %p - load_time: %lld, visible: %d, throttleable: %d , suspended: %d , websam_state: %" PUBLIC_LOG_STRING ", activity_state: %" PUBLIC_LOG_STRING ", url: %" PRIVATE_LOG_STRING, page.get(), loadCommitTime, page->isVisible(), page->isThrottleable(), page->isSuspended(), MemoryPressureHandler::processStateDescription().characters(), activityStateStream.release().utf8().data(), page->mainWebFrame().url().string().utf8().data());
+            RELEASE_LOG(ActivityState, "WebPage %p - load_time: %" PRId64 ", visible: %d, throttleable: %d , suspended: %d , websam_state: %" PUBLIC_LOG_STRING ", activity_state: %" PUBLIC_LOG_STRING ", url: %" PRIVATE_LOG_STRING, page.get(), loadCommitTime, page->isVisible(), page->isThrottleable(), page->isSuspended(), MemoryPressureHandler::processStateDescription().characters(), activityStateStream.release().utf8().data(), page->mainWebFrame().url().string().utf8().data());
         }
     });
 #endif
@@ -565,6 +571,11 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
 
     for (auto& scheme : parameters.urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest)
         registerURLSchemeAsCanDisplayOnlyIfCanRequest(scheme);
+
+#if ENABLE(WK_WEB_EXTENSIONS)
+    for (auto& scheme : parameters.urlSchemesRegisteredAsWebExtensions)
+        WebExtensionMatchPattern::registerCustomURLScheme(scheme);
+#endif
 
     setDefaultRequestTimeoutInterval(parameters.defaultRequestTimeoutInterval);
 
@@ -772,6 +783,13 @@ void WebProcess::registerURLSchemeAsCanDisplayOnlyIfCanRequest(const String& url
 {
     LegacySchemeRegistry::registerAsCanDisplayOnlyIfCanRequest(urlScheme);
 }
+
+#if ENABLE(WK_WEB_EXTENSIONS)
+void WebProcess::registerURLSchemeAsWebExtension(const String& urlScheme) const
+{
+    WebExtensionMatchPattern::registerCustomURLScheme(urlScheme);
+}
+#endif
 
 void WebProcess::setDefaultRequestTimeoutInterval(double timeoutInterval)
 {
@@ -1131,7 +1149,7 @@ void WebProcess::handleInjectedBundleMessage(const String& messageName, const Us
     injectedBundle->didReceiveMessage(messageName, transformHandlesToObjects(messageBody.object()));
 }
 
-void WebProcess::setInjectedBundleParameter(const String& key, const IPC::DataReference& value)
+void WebProcess::setInjectedBundleParameter(const String& key, std::span<const uint8_t> value)
 {
     RefPtr injectedBundle = WebProcess::singleton().injectedBundle();
     if (!injectedBundle)
@@ -1140,7 +1158,7 @@ void WebProcess::setInjectedBundleParameter(const String& key, const IPC::DataRe
     injectedBundle->setBundleParameter(key, value);
 }
 
-void WebProcess::setInjectedBundleParameters(const IPC::DataReference& value)
+void WebProcess::setInjectedBundleParameters(std::span<const uint8_t> value)
 {
     RefPtr injectedBundle = WebProcess::singleton().injectedBundle();
     if (!injectedBundle)
@@ -1375,6 +1393,36 @@ AudioMediaStreamTrackRendererInternalUnitManager& WebProcess::audioMediaStreamTr
 #endif
 
 #endif // ENABLE(GPU_PROCESS)
+
+#if ENABLE(MODEL_PROCESS)
+
+ModelProcessConnection& WebProcess::ensureModelProcessConnection()
+{
+    RELEASE_ASSERT(RunLoop::isMain());
+
+    // If we've lost our connection to the model process (e.g. it crashed) try to re-establish it.
+    if (!m_modelProcessConnection) {
+        m_modelProcessConnection = ModelProcessConnection::create(Ref { *parentProcessConnection() });
+
+        for (auto& page : m_pageMap.values()) {
+            // If page is null, then it is currently being constructed.
+            if (page)
+                page->modelProcessConnectionDidBecomeAvailable(Ref { *m_modelProcessConnection });
+        }
+    }
+
+    return *m_modelProcessConnection;
+}
+
+void WebProcess::modelProcessConnectionClosed(ModelProcessConnection& connection)
+{
+    ASSERT(m_modelProcessConnection);
+    ASSERT_UNUSED(connection, m_modelProcessConnection == &connection);
+
+    m_modelProcessConnection = nullptr;
+}
+
+#endif // ENABLE(MODEL_PROCESS)
 
 void WebProcess::setEnhancedAccessibility(bool flag)
 {

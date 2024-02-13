@@ -29,7 +29,7 @@
 #if ENABLE(WEB_AUTHN)
 
 #include "AuthenticatorCoordinator.h"
-#include "DigitalCredential.h"
+#include "DigitalIdentity.h"
 #include <wtf/RefCounted.h>
 #include <wtf/WeakPtr.h>
 
@@ -39,7 +39,7 @@ enum class Scope;
 
 namespace WebCore {
 
-class DigitalCredential;
+class DigitalIdentity;
 class Document;
 class WeakPtrImplWithEventTargetData;
 struct CredentialCreationOptions;
@@ -57,8 +57,6 @@ public:
     void isCreate(CredentialCreationOptions&&, CredentialPromise&&);
 
     void preventSilentAccess(DOMPromiseDeferred<void>&&) const;
-
-    void requestIdentity(DigitalCredentialRequestOptions&&, DigitalCredentialPromise&&);
 
 private:
     CredentialsContainer(WeakPtr<Document, WeakPtrImplWithEventTargetData>&&);

@@ -131,8 +131,15 @@ Ref<RenderBundleEncoder> Device::createRenderBundleEncoder(const WGPURenderBundl
     uint32_t bytesPerSample = 0;
     const auto maxColorAttachmentBytesPerSample = limits().maxColorAttachmentBytesPerSample;
 
+    if (descriptor.colorFormatCount > limits().maxColorAttachments) {
+        NSString* error = [NSString stringWithFormat:@"descriptor.colorFormatCount(%zu) > limits().maxColorAttachments(%u)", descriptor.colorFormatCount, limits().maxColorAttachments];
+        generateAValidationError(error);
+        return RenderBundleEncoder::createInvalid(*this, error);
+    }
     for (size_t i = 0, colorFormatCount = descriptor.colorFormatCount; i < colorFormatCount; ++i) {
         auto textureFormat = descriptor.colorFormats[i];
+        if (textureFormat == WGPUTextureFormat_Undefined)
+            continue;
         if (!Texture::isColorRenderableFormat(textureFormat, *this)) {
             NSString* error = [NSString stringWithFormat:@"createRenderBundleEncoder - colorAttachment[%zu] with format %d is not renderable", i, textureFormat];
             generateAValidationError(error);
@@ -216,7 +223,7 @@ void RenderBundleEncoder::addResource(RenderBundle::ResourcesContainer* resource
         if (resource.renderStages && mtlResource)
             [m_renderPassEncoder->renderCommandEncoder() useResource:mtlResource usage:resource.usage stages:resource.renderStages];
         ASSERT(resource.entryUsage.hasExactlyOneBitSet());
-        m_renderPassEncoder->addResourceToActiveResources(mtlResource, *resource.entryUsage.toSingleValue());
+        m_renderPassEncoder->addResourceToActiveResources(resource.resource, mtlResource, resource.entryUsage);
         m_renderPassEncoder->setCommandEncoder(resource.resource);
         return;
     }
@@ -226,7 +233,6 @@ void RenderBundleEncoder::addResource(RenderBundle::ResourcesContainer* resource
         existingResource.renderStages |= resource.renderStages;
         existingResource.entryUsage |= resource.entryUsage;
         existingResource.binding = resource.binding;
-        // !! assert resource is the same
     } else
         [resources setObject:resource forKey:mtlResource];
 }
@@ -695,8 +701,10 @@ bool RenderBundleEncoder::validToEncodeCommand() const
 
 Ref<RenderBundle> RenderBundleEncoder::finish(const WGPURenderBundleDescriptor& descriptor)
 {
-    if (!m_icbDescriptor || m_debugGroupStackSize)
+    if (!m_icbDescriptor || m_debugGroupStackSize) {
+        m_device->generateAValidationError(m_lastErrorString);
         return RenderBundle::createInvalid(m_device, m_lastErrorString);
+    }
 
     m_requiresCommandReplay = m_requiresCommandReplay ?: (m_requiresMetalWorkaround || !m_currentCommandIndex);
 
@@ -711,7 +719,11 @@ Ref<RenderBundle> RenderBundleEncoder::finish(const WGPURenderBundleDescriptor& 
         m_icbDescriptor.maxFragmentBufferBindCount = 0;
 
         RELEASE_ASSERT(m_icbArray || m_lastErrorString);
-        return m_icbArray ? RenderBundle::create(m_icbArray, nullptr, m_descriptor, m_currentCommandIndex, m_device) : RenderBundle::createInvalid(m_device, m_lastErrorString);
+        if (m_icbArray)
+            return RenderBundle::create(m_icbArray, nullptr, m_descriptor, m_currentCommandIndex, m_device);
+
+        m_device->generateAValidationError(m_lastErrorString);
+        return RenderBundle::createInvalid(m_device, m_lastErrorString);
     };
 
     auto renderBundle = createRenderBundle();

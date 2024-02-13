@@ -1956,6 +1956,36 @@ void RenderLayerCompositor::layerStyleChanged(StyleDifference diff, RenderLayer&
     }
 }
 
+void RenderLayerCompositor::establishesTopLayerWillChangeForLayer(RenderLayer& layer)
+{
+    clearBackingProviderSequencesInStackingContextOfLayer(layer);
+}
+
+// This is a recursive walk similar to RenderLayer::collectLayers().
+static void clearBackingSharingWithinStackingContext(RenderLayer& stackingContextRoot, RenderLayer& curLayer)
+{
+    if (curLayer.establishesTopLayer())
+        return;
+
+    if (&curLayer != &stackingContextRoot && curLayer.isStackingContext())
+        return;
+
+    for (auto* child = curLayer.firstChild(); child; child = child->nextSibling()) {
+        if (child->isComposited())
+            child->backing()->clearBackingSharingLayers();
+
+        if (!curLayer.isReflectionLayer(*child))
+            clearBackingSharingWithinStackingContext(stackingContextRoot, *child);
+    }
+}
+
+void RenderLayerCompositor::clearBackingProviderSequencesInStackingContextOfLayer(RenderLayer& layer)
+{
+    // We can't rely on z-order lists to be up-to-date here. For fullscreen, we may already have done a style update which dirties them.
+    if (auto* stackingContextLayer = layer.stackingContext())
+        clearBackingSharingWithinStackingContext(*stackingContextLayer, *stackingContextLayer);
+}
+
 // FIXME: remove and never ask questions about reflection layers.
 static RenderLayerModelObject& rendererForCompositingTests(const RenderLayer& layer)
 {
@@ -2624,8 +2654,10 @@ bool RenderLayerCompositor::attachWidgetContentLayers(RenderWidget& renderer)
                 if (auto pluginHostingNodeID = backing->scrollingNodeIDForRole(ScrollCoordinationRole::PluginHosting)) {
                     auto* renderEmbeddedObject = dynamicDowncast<RenderEmbeddedObject>(renderer);
                     if (auto pluginScrollingNodeID = renderEmbeddedObject->scrollingNodeID()) {
-                        if (auto* scrollingCoordinator = this->scrollingCoordinator())
+                        if (auto* scrollingCoordinator = this->scrollingCoordinator()) {
                             scrollingCoordinator->insertNode(ScrollingNodeType::PluginScrolling, pluginScrollingNodeID, pluginHostingNodeID, 0);
+                            renderEmbeddedObject->didAttachScrollingNode();
+                        }
                     }
                 }
             }
@@ -3882,6 +3914,10 @@ bool RenderLayerCompositor::isLayerForIFrameWithScrollCoordinatedContents(const 
     auto* renderWidget = dynamicDowncast<RenderWidget>(layer.renderer());
     if (!renderWidget)
         return false;
+
+    auto* frame = renderWidget->frameOwnerElement().contentFrame();
+    if (frame && is<RemoteFrame>(frame))
+        return renderWidget->hasLayer() && renderWidget->layer()->isComposited();
 
     auto* contentDocument = renderWidget->frameOwnerElement().contentDocument();
     if (!contentDocument)
@@ -5267,6 +5303,12 @@ ScrollingNodeID RenderLayerCompositor::updateScrollingNodeForFrameHostingRole(Re
     if (changes & ScrollingNodeChangeFlags::Layer)
         scrollingCoordinator->setNodeLayers(newNodeID, { layer.backing()->graphicsLayer() });
 
+    if (auto* renderWidget = dynamicDowncast<RenderWidget>(layer.renderer())) {
+        if (auto* frame = renderWidget->frameOwnerElement().contentFrame()) {
+            if (is<RemoteFrame>(frame))
+                scrollingCoordinator->setLayerHostingContextIdentifierForFrameHostingNode(newNodeID, dynamicDowncast<RemoteFrame>(frame)->layerHostingContextIdentifier());
+        }
+    }
     return newNodeID;
 }
 

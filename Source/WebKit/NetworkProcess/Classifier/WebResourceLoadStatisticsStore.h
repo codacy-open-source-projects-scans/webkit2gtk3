@@ -64,6 +64,7 @@ class ResourceLoadStatisticsStore;
 class WebFrameProxy;
 class WebProcessProxy;
 enum class CanRequestStorageAccessWithoutUserInteraction : bool;
+enum class DidFilterKnownLinkDecoration : bool;
 enum class ShouldGrandfatherStatistics : bool;
 
 enum class ShouldIncludeLocalhost : bool { No, Yes };
@@ -129,7 +130,7 @@ public:
 
     void logFrameNavigation(NavigatedToDomain&&, TopFrameDomain&&, NavigatedFromDomain&&, bool isRedirect, bool isMainFrame, Seconds delayAfterMainFrameDocumentLoad, bool wasPotentiallyInitiatedByUser);
     void logUserInteraction(TopFrameDomain&&, CompletionHandler<void()>&&);
-    void logCrossSiteLoadWithLinkDecoration(NavigatedFromDomain&&, NavigatedToDomain&&, CompletionHandler<void()>&&);
+    void logCrossSiteLoadWithLinkDecoration(NavigatedFromDomain&&, NavigatedToDomain&&, DidFilterKnownLinkDecoration, CompletionHandler<void()>&&);
     void clearUserInteraction(TopFrameDomain&&, CompletionHandler<void()>&&);
     void setTimeAdvanceForTesting(Seconds, CompletionHandler<void()>&&);
     void removeDataForDomain(const RegistrableDomain, CompletionHandler<void()>&&);
@@ -211,8 +212,6 @@ public:
 
     NetworkSession* networkSession();
     void invalidateAndCancel();
-
-    void sendDiagnosticMessageWithValue(const String& message, const String& description, unsigned value, unsigned sigDigits, WebCore::ShouldSample) const;
 
     void resourceLoadStatisticsUpdated(Vector<WebCore::ResourceLoadStatistics>&&, CompletionHandler<void()>&&);
     void requestStorageAccessUnderOpener(DomainInNeedOfStorageAccess&&, WebCore::PageIdentifier openerID, OpenerDomain&&);

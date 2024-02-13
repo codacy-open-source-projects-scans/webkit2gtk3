@@ -387,6 +387,32 @@ TEST(SiteIsolation, NavigationAfterWindowOpen)
         Util::spinRunLoop();
 }
 
+TEST(SiteIsolation, ParentOpener)
+{
+    HTTPServer server({
+        { "/example"_s, { "<script>w = window.open('https://webkit.org/webkit')</script>"_s } },
+        { "/webkit"_s, { "<iframe src='https://apple.com/apple'></iframe>"_s } },
+        { "/apple"_s, { "hi"_s } }
+    }, HTTPServer::Protocol::HttpsProxy);
+
+    auto [opener, opened] = openerAndOpenedViews(server);
+
+    __block RetainPtr<WKFrameInfo> childFrame;
+    [opened.webView _frames:^(_WKFrameTreeNode *mainFrame) {
+        childFrame = mainFrame.childFrames[0].info;
+    }];
+    while (!childFrame)
+        Util::spinRunLoop();
+
+    [opened.webView evaluateJavaScript:@"try { opener.postMessage('test1', '*'); alert('posted message 1') } catch(e) { alert(e) }" completionHandler:nil];
+    EXPECT_WK_STREQ([opened.uiDelegate waitForAlert], "posted message 1");
+
+    [opened.webView evaluateJavaScript:@"try { top.opener.postMessage('test2', '*'); alert('posted message 2') } catch(e) { alert(e) }" inFrame:childFrame.get() inContentWorld:WKContentWorld.pageWorld completionHandler:nil];
+    // FIXME: This should say "posted message 2" like it does without site isolation on.
+    // It currently does not because when we make a new process for an iframe, we don't inject the opener remote page into it.
+    EXPECT_WK_STREQ([opened.uiDelegate waitForAlert], "TypeError: null is not an object (evaluating 'top.opener.postMessage')");
+}
+
 TEST(SiteIsolation, WindowOpenRedirect)
 {
     HTTPServer server({
@@ -2337,6 +2363,61 @@ TEST(SiteIsolation, CustomUserAgent)
         done = true;
     }];
     Util::run(&done);
+}
+
+TEST(SiteIsolation, ApplicationNameForUserAgent)
+{
+    auto mainframeHTML = "<iframe src='https://domain2.com/subframe'></iframe>"_s;
+    auto subframeHTML = "<script src='https://domain3.com/request_from_subframe'></script>"_s;
+    bool receivedRequestFromSubframe = false;
+    HTTPServer server(HTTPServer::UseCoroutines::Yes, [&](Connection connection) -> Task {
+        while (1) {
+            auto request = co_await connection.awaitableReceiveHTTPRequest();
+            auto path = HTTPServer::parsePath(request);
+            if (path == "/mainframe"_s) {
+                co_await connection.awaitableSend(HTTPResponse(mainframeHTML).serialize());
+                continue;
+            }
+            if (path == "/subframe"_s) {
+                co_await connection.awaitableSend(HTTPResponse(subframeHTML).serialize());
+                continue;
+            }
+            if (path == "/request_from_subframe"_s) {
+                auto headers = String::fromUTF8(request.data(), request.size()).split("\r\n"_s);
+                auto userAgentIndex = headers.findIf([](auto& header) {
+                    return header.startsWith("User-Agent:"_s);
+                });
+                co_await connection.awaitableSend(HTTPResponse(""_s).serialize());
+                EXPECT_TRUE(headers[userAgentIndex].endsWith(" Custom UserAgent"_s));
+                receivedRequestFromSubframe = true;
+                continue;
+            }
+            EXPECT_FALSE(true);
+        }
+    }, HTTPServer::Protocol::HttpsProxy);
+    auto [webView, navigationDelegate] = siteIsolatedViewAndDelegate(server);
+
+    [webView _setApplicationNameForUserAgent:@"Custom UserAgent"];
+
+    [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"https://domain1.com/mainframe"]]];
+    [navigationDelegate waitForDidFinishNavigation];
+
+    __block RetainPtr<WKFrameInfo> childFrameInfo;
+    __block bool done = false;
+    [webView _frames:^(_WKFrameTreeNode *mainFrame) {
+        EXPECT_EQ(1UL, mainFrame.childFrames.count);
+        childFrameInfo = mainFrame.childFrames.firstObject.info;
+        done = true;
+    }];
+    Util::run(&done);
+    done = false;
+
+    [webView evaluateJavaScript:@"navigator.userAgent" inFrame:childFrameInfo.get() inContentWorld:WKContentWorld.pageWorld completionHandler:^(id result, NSError *) {
+        EXPECT_TRUE([result hasSuffix:@" Custom UserAgent"]);
+        done = true;
+    }];
+    Util::run(&done);
+    Util::run(&receivedRequestFromSubframe);
 }
 
 // FIXME: <rdar://121240941> Add tests covering provisional navigation failures in cases like SiteIsolation.NavigateOpener.

@@ -381,32 +381,38 @@ static inline bool isAtSoftWrapOpportunity(const InlineItem& previous, const Inl
     // but an incoming text content would not necessarily.
     ASSERT(previous.isText() || previous.isBox() || previous.layoutBox().isRubyInlineBox());
     ASSERT(next.isText() || next.isBox() || next.layoutBox().isRubyInlineBox());
+
+    if (previous.layoutBox().isRubyInlineBox() || next.layoutBox().isRubyInlineBox())
+        return RubyFormattingContext::isAtSoftWrapOpportunity(previous, next);
+
+    auto mayWrapPrevious = TextUtil::isWrappingAllowed(previous.layoutBox().parent().style());
+    auto mayWrapNext = TextUtil::isWrappingAllowed(next.layoutBox().parent().style());
+    if (&previous.layoutBox().parent() == &next.layoutBox().parent() && !mayWrapPrevious && !mayWrapNext)
+        return false;
+
     if (previous.isText() && next.isText()) {
-        auto& currentInlineTextItem = downcast<InlineTextItem>(previous);
+        auto& previousInlineTextItem = downcast<InlineTextItem>(previous);
         auto& nextInlineTextItem = downcast<InlineTextItem>(next);
-        if (currentInlineTextItem.isWhitespace() && nextInlineTextItem.isWhitespace()) {
-            // <span> </span><span> </span>. Depending on the styles, there may or may not be a soft wrap opportunity between these 2 whitespace content.
-            return TextUtil::isWrappingAllowed(currentInlineTextItem.style()) || TextUtil::isWrappingAllowed(nextInlineTextItem.style());
-        }
-        if (currentInlineTextItem.isWhitespace()) {
-            // " <span>text</span>" : after [whitespace] position is a soft wrap opportunity.
-            return TextUtil::isWrappingAllowed(currentInlineTextItem.style());
+        if (previousInlineTextItem.isWhitespace()) {
+            // "<nowrap> </nowrap>after"
+            return mayWrapPrevious;
         }
         if (nextInlineTextItem.isWhitespace()) {
-            // "<span>text</span> "
+            // "<span>before</span><nowrap> </nowrap>"
+            if (!mayWrapNext)
+                return false;
             // 'white-space: break-spaces' and '-webkit-line-break: after-white-space': line breaking opportunity exists after every preserved white space character, but not before.
             auto& style = nextInlineTextItem.style();
-            return TextUtil::isWrappingAllowed(style) && style.whiteSpaceCollapse() != WhiteSpaceCollapse::BreakSpaces && style.lineBreak() != LineBreak::AfterWhiteSpace;
+            return style.whiteSpaceCollapse() != WhiteSpaceCollapse::BreakSpaces && style.lineBreak() != LineBreak::AfterWhiteSpace;
         }
         if (previous.style().lineBreak() == LineBreak::Anywhere || next.style().lineBreak() == LineBreak::Anywhere) {
-            // There is a soft wrap opportunity around every typographic character unit, including around any punctuation character
-            // or preserved white spaces, or in the middle of words.
+            // There is a soft wrap opportunity around every typographic character unit, including around any punctuation character or preserved white spaces, or in the middle of words.
             return true;
         }
         // Both previous and next items are non-whitespace text.
         // [text][text] : is a continuous content.
         // [text-][text] : after [hyphen] position is a soft wrap opportunity.
-        return endsWithSoftWrapOpportunity(currentInlineTextItem, nextInlineTextItem);
+        return endsWithSoftWrapOpportunity(previousInlineTextItem, nextInlineTextItem);
     }
     if (previous.layoutBox().isListMarkerBox()) {
         auto& listMarkerBox = downcast<ElementBox>(previous.layoutBox());
@@ -421,8 +427,6 @@ static inline bool isAtSoftWrapOpportunity(const InlineItem& previous, const Inl
         // The line breaking behavior of a replaced element or other atomic inline is equivalent to an ideographic character.
         return true;
     }
-    if (previous.layoutBox().isRubyInlineBox() || next.layoutBox().isRubyInlineBox())
-        return RubyFormattingContext::isAtSoftWrapOpportunity(previous, next);
 
     ASSERT_NOT_REACHED();
     return true;

@@ -865,8 +865,8 @@ void Document::commonTeardown()
         fullscreenManager->emptyEventQueue();
 #endif
 
-    if (svgExtensions())
-        accessSVGExtensions().pauseAnimations();
+    if (CheckedPtr svgExtensions = svgExtensionsIfExists())
+        svgExtensions->pauseAnimations();
 
     clearScriptedAnimationController();
 
@@ -1029,6 +1029,16 @@ const Editor& Document::editor() const
     return *m_editor;
 }
 
+CheckedRef<Editor> Document::checkedEditor()
+{
+    return editor();
+}
+
+CheckedRef<const Editor> Document::checkedEditor() const
+{
+    return editor();
+}
+
 Editor& Document::ensureEditor()
 {
     ASSERT(m_constructionDidFinish);
@@ -1047,20 +1057,22 @@ ReportingScope& Document::ensureReportingScope()
 
 void Document::setMarkupUnsafe(const String& markup, OptionSet<ParserContentPolicy> parserContentPolicy)
 {
+    ASSERT(!hasChildNodes());
     auto policy = OptionSet<ParserContentPolicy> { ParserContentPolicy::AllowScriptingContent } | parserContentPolicy;
     setParserContentPolicy(policy);
     if (this->contentType() == textHTMLContentTypeAtom()) {
+        auto html = HTMLHtmlElement::create(*this);
+        appendChild(html);
         auto body = HTMLBodyElement::create(*this);
+        html->appendChild(body);
         body->beginParsingChildren();
         if (LIKELY(tryFastParsingHTMLFragment(StringView { markup }.substring(markup.find(isNotASCIIWhitespace<UChar>)), *this, body, body, policy))) {
             body->finishParsingChildren();
-            auto html = HTMLHtmlElement::create(*this);
             auto head = HTMLHeadElement::create(*this);
-            html->appendChild(head);
-            html->appendChild(body);
-            appendChild(html);
+            html->insertBefore(head, body.ptr());
             return;
         }
+        html->remove();
     }
     open();
     protectedParser()->appendSynchronously(markup.impl());
@@ -2716,7 +2728,7 @@ auto Document::updateLayout(OptionSet<LayoutOptions> layoutOptions, const Elemen
 
         if (frameView && renderView()) {
             if (context && layoutOptions.contains(LayoutOptions::ContentVisibilityForceLayout)) {
-                if (context->renderer() && context->renderer()->style().hasSkippedContent())
+                if (context->renderer() && context->renderer()->style().hasSkippedContent() && !context->renderer()->everHadSkippedContentLayout())
                     context->renderer()->setNeedsLayout();
                 else
                     context = nullptr;
@@ -3762,8 +3774,8 @@ void Document::implicitClose()
             HTMLStyleElement::dispatchPendingLoadEvents(currentPage.get());
         }
 
-        if (svgExtensions())
-            accessSVGExtensions().dispatchLoadEventToOutermostSVGElements();
+        if (CheckedPtr svgExtensions = svgExtensionsIfExists())
+            svgExtensions->dispatchLoadEventToOutermostSVGElements();
     }
 
     dispatchWindowLoadEvent();
@@ -3822,8 +3834,8 @@ void Document::implicitClose()
     }
 #endif
 
-    if (svgExtensions())
-        accessSVGExtensions().startAnimations();
+    if (CheckedPtr svgExtensions = svgExtensionsIfExists())
+        svgExtensions->startAnimations();
 }
 
 void Document::setParsing(bool b)
@@ -7051,11 +7063,16 @@ ExceptionOr<Ref<Attr>> Document::createAttributeNS(const AtomString& namespaceUR
     return Attr::create(*this, parsedName, emptyAtom());
 }
 
-SVGDocumentExtensions& Document::accessSVGExtensions()
+SVGDocumentExtensions& Document::svgExtensions()
 {
     if (!m_svgExtensions)
         m_svgExtensions = makeUnique<SVGDocumentExtensions>(*this);
     return *m_svgExtensions;
+}
+
+CheckedRef<SVGDocumentExtensions> Document::checkedSVGExtensions()
+{
+    return svgExtensions();
 }
 
 bool Document::hasSVGRootNode() const
@@ -10112,38 +10129,45 @@ const CrossOriginOpenerPolicy& Document::crossOriginOpenerPolicy() const
     return SecurityContext::crossOriginOpenerPolicy();
 }
 
-void Document::prepareCanvasesForDisplayIfNeeded()
+void Document::prepareCanvasesForDisplayOrFlushIfNeeded()
 {
-    // Some canvas contexts need to do work when rendering has finished but
-    // before their content is composited.
+    auto contexts = copyToVectorOf<WeakPtr<CanvasRenderingContext>>(m_canvasContextsToPrepare);
+    m_canvasContextsToPrepare.clear();
+    for (auto& weakContext : contexts) {
+        auto* context = weakContext.get();
+        if (!context)
+            continue;
+        // Some canvas contexts hold memory that should be periodically freed.
+        if (context->hasDeferredOperations())
+            context->flushDeferredOperations();
 
-    // FIXME: Calling prepareForDisplay should not call back into a method
-    // that would mutate our m_canvasesNeedingDisplayPreparation list. It
-    // would be nice if this could be enforced to remove the copyToVector.
-
-    auto canvases = copyToVectorOf<Ref<HTMLCanvasElement>>(m_canvasesNeedingDisplayPreparation);
-    m_canvasesNeedingDisplayPreparation.clear();
-    for (auto& canvas : canvases)
-        canvas->prepareForDisplay();
-}
-
-void Document::clearCanvasPreparation(HTMLCanvasElement& canvas)
-{
-    m_canvasesNeedingDisplayPreparation.remove(canvas);
-}
-
-void Document::canvasChanged(CanvasBase& canvasBase, const std::optional<FloatRect>& changedRect)
-{
-    auto* canvas = dynamicDowncast<HTMLCanvasElement>(canvasBase);
-    if (canvas && canvas->needsPreparationForDisplay()) {
-        m_canvasesNeedingDisplayPreparation.add(*canvas);
-        // Schedule a rendering update to force handling of prepareForDisplay
-        // for any queued canvases. This is especially important for any canvas
-        // that is not in the DOM, as those don't have a rect to invalidate to
-        // trigger an update. <http://bugs.webkit.org/show_bug.cgi?id=240380>.
-        if (!changedRect)
-            scheduleRenderingUpdate(RenderingUpdateStep::PrepareCanvasesForDisplay);
+        // Some canvases need to do work when rendering has finished but before their content is composited.
+        if (auto* htmlCanvas = dynamicDowncast<HTMLCanvasElement>(context->canvasBase())) {
+            if (htmlCanvas->needsPreparationForDisplay())
+                htmlCanvas->prepareForDisplay();
+        }
     }
+}
+
+void Document::addCanvasNeedingPreparationForDisplayOrFlush(CanvasBase& canvas)
+{
+    auto* context = canvas.renderingContext();
+    if (!context)
+        return;
+    if (context->hasDeferredOperations() || context->needsPreparationForDisplay()) {
+        bool shouldSchedule = m_canvasContextsToPrepare.isEmptyIgnoringNullReferences();
+        m_canvasContextsToPrepare.add(*context);
+        if (shouldSchedule)
+            scheduleRenderingUpdate(RenderingUpdateStep::PrepareCanvasesForDisplayOrFlush);
+    }
+}
+
+void Document::removeCanvasNeedingPreparationForDisplayOrFlush(CanvasBase& canvas)
+{
+    auto* context = canvas.renderingContext();
+    if (!context)
+        return;
+    m_canvasContextsToPrepare.remove(*context);
 }
 
 void Document::updateSleepDisablerIfNeeded()
@@ -10154,12 +10178,6 @@ void Document::updateSleepDisablerIfNeeded()
         return;
     }
     m_sleepDisabler = nullptr;
-}
-
-void Document::canvasDestroyed(CanvasBase& canvasBase)
-{
-    if (auto* canvasElement = dynamicDowncast<HTMLCanvasElement>(canvasBase))
-        m_canvasesNeedingDisplayPreparation.remove(*canvasElement);
 }
 
 JSC::VM& Document::vm()
@@ -10428,6 +10446,11 @@ CheckedRef<const Style::Scope> Document::checkedStyleScope() const
 RefPtr<LocalFrameView> Document::protectedView() const
 {
     return view();
+}
+
+CheckedPtr<RenderView> Document::checkedRenderView() const
+{
+    return m_renderView.get();
 }
 
 } // namespace WebCore

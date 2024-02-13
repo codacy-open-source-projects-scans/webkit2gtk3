@@ -208,6 +208,7 @@ bool AXObjectCache::gForceDeferredSpellChecking = false;
 #if ENABLE(AX_THREAD_TEXT_APIS)
 bool AXObjectCache::gAccessibilityThreadTextApisEnabled = false;
 #endif
+bool AXObjectCache::gForceInitialFrameCaching = false;
 
 void AXObjectCache::enableAccessibility()
 {
@@ -234,7 +235,17 @@ void AXObjectCache::setEnhancedUserInterfaceAccessibility(bool flag)
 #endif
 }
 
+void AXObjectCache::setForceInitialFrameCaching(bool shouldForce)
+{
+    gForceInitialFrameCaching = shouldForce;
+}
+
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
+bool AXObjectCache::shouldServeInitialCachedFrame()
+{
+    return !isTestClient() || forceInitialFrameCaching();
+}
+
 static const Seconds updateTreeSnapshotTimerInterval { 100_ms };
 #endif
 
@@ -4793,15 +4804,6 @@ bool AXObjectCache::addRelation(AccessibilityObject* origin, AccessibilityObject
         // If the IDs are still in the m_objects map, the objects should be still alive.
         if (auto symmetric = symmetricRelation(relationType); symmetric != AXRelationType::None)
             addRelation(target, origin, symmetric, AddSymmetricRelation::No);
-
-#if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
-        if (auto tree = AXIsolatedTree::treeForPageID(m_pageID)) {
-            if (origin && origin->accessibilityIsIgnored())
-                tree->addUnconnectedNode(*origin);
-            if (target && target->accessibilityIsIgnored())
-                tree->addUnconnectedNode(*target);
-        }
-#endif
     }
 
     return true;

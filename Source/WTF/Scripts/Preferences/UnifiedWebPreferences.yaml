@@ -988,17 +988,17 @@ CSSContainmentEnabled:
 
 CSSContentVisibilityEnabled:
   type: bool
-  status: preview
+  status: stable
   category: css
   humanReadableName: "CSS Content Visibility"
   humanReadableDescription: "Enable CSS content-visibility"
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 CSSCounterStyleAtRuleImageSymbolsEnabled:
   type: bool
@@ -1041,6 +1041,20 @@ CSSCustomPropertiesAndValuesEnabled:
       default: true
     WebCore:
       default: true
+
+CSSFieldSizingEnabled:
+  type: bool
+  status: testable
+  category: css
+  humanReadableName: "CSS field-sizing property"
+  humanReadableDescription: "Enable field-sizing CSS property"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
 
 CSSFontFaceSizeAdjustEnabled:
   type: bool
@@ -1325,6 +1339,20 @@ CSSStartingStyleAtRuleEnabled:
     WebCore:
       default: true
 
+CSSStyleQueriesEnabled:
+  type: bool
+  status: stable
+  category: css
+  humanReadableName: "CSS style queries"
+  humanReadableDescription: "Enable CSS style queries for custom properties"
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
+    WebCore:
+      default: true
+
 CSSTextBoxTrimEnabled:
   type: bool
   status: preview
@@ -1411,17 +1439,17 @@ CSSTextWrapPrettyEnabled:
 
 CSSTextWrapStyleEnabled:
   type: bool
-  status: preview
+  status: stable
   category: css
   humanReadableName: "CSS text-wrap-style property"
   humanReadableDescription: "Enable the property text-wrap-style, defined in CSS Text 4"
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 CSSTransformStyleOptimized3DEnabled:
   type: bool
@@ -2365,12 +2393,12 @@ DiagnosticLoggingEnabled:
     WebCore:
       default: false
 
-DigitalCredentialsEnabled:
+DigitalIdentityEnabled:
   type: bool
   status: unstable
   category: dom
-  humanReadableName: "Digital Credentials API"
-  humanReadableDescription: "Enable the experimental Digital Credentials API"
+  humanReadableName: "Digital Identity API"
+  humanReadableDescription: "Enable the experimental Digital Identity API"
   defaultValue:
     WebKitLegacy:
       default: false
@@ -3148,6 +3176,20 @@ ICECandidateFilteringEnabled:
     WebCore:
       default: true
 
+IPAddressMixedContentUpgradeTestingEnabled:
+  type: bool
+  status: testable
+  category: security
+  humanReadableName: "Upgrade IP address in mixed content"
+  humanReadableDescription: "Enable Upgrade IP address in mixed content"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 IPCTestingAPIEnabled:
   type: bool
   status: internal
@@ -3919,6 +3961,21 @@ LegacyOverflowScrollingTouchEnabled:
       default: true
     WebCore:
       default: true
+
+LinearMediaPlayerEnabled:
+  type: bool
+  status: unstable
+  category: media
+  humanReadableName: "Linear Media Player"
+  humanReadableDescription: "Enable LinearMediaPlayer for fullscreen video"
+  condition: ENABLE(LINEAR_MEDIA_PLAYER)
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
 
 LinkModulePreloadEnabled:
   type: bool
@@ -4700,6 +4757,20 @@ ModelElementEnabled:
   humanReadableName: "HTML <model> element"
   humanReadableDescription: "Enable HTML <model> element"
   condition: ENABLE(MODEL_ELEMENT)
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
+ModelProcessEnabled:
+  type: bool
+  status: unstable
+  condition: ENABLE(MODEL_PROCESS)
+  humanReadableName: "Enable Model Process"
+  humanReadableDescription: "Load <model> content in a separate process"
   defaultValue:
     WebKitLegacy:
       default: false
@@ -6655,6 +6726,15 @@ TextAutosizingUsesIdempotentMode:
     WebCore:
       default: false
 
+TextExtractionEnabled:
+  type: bool
+  status: embedder
+  webcoreBinding: none
+  exposed: [ WebKit ]
+  defaultValue:
+    WebKit:
+      default: false
+
 TextInteractionEnabled:
   type: bool
   status: embedder
@@ -6859,6 +6939,20 @@ UpgradeKnownHostsToHTTPSEnabled:
   defaultValue:
     WebKit:
       default: true
+
+UpgradeMixedContentEnabled:
+  type: bool
+  status: unstable
+  category: networking
+  humanReadableName: "Upgrade upgradable mixed content"
+  humanReadableDescription: "Upgrade upgradable mixed content"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
 
 UseARKitForModel:
   type: bool

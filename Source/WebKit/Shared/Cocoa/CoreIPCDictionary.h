@@ -40,11 +40,9 @@ class CoreIPCDictionary {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     CoreIPCDictionary(NSDictionary *);
-
-    CoreIPCDictionary(const RetainPtr<NSDictionary>& dictionary)
-        : CoreIPCDictionary(dictionary.get())
-    {
-    }
+    CoreIPCDictionary(const RetainPtr<NSDictionary>&);
+    CoreIPCDictionary(CoreIPCDictionary&&);
+    ~CoreIPCDictionary();
 
     RetainPtr<id> toID() const;
 
@@ -56,12 +54,9 @@ public:
 private:
     friend struct IPC::ArgumentCoder<CoreIPCDictionary, void>;
 
-    using ValueType = Vector<KeyValuePair<UniqueRef<CoreIPCNSCFObject>, UniqueRef<CoreIPCNSCFObject>>>;
+    using ValueType = Vector<KeyValuePair<CoreIPCNSCFObject, CoreIPCNSCFObject>>;
 
-    CoreIPCDictionary(ValueType&& keyValuePairs)
-        : m_keyValuePairs(WTFMove(keyValuePairs))
-    {
-    }
+    CoreIPCDictionary(ValueType&&);
 
     void createNSDictionaryIfNeeded() const;
 

@@ -204,10 +204,8 @@ void ProvisionalPageProxy::initializeWebPage(RefPtr<API::WebsitePolicies>&& webs
         RegistrableDomain navigationDomain(m_request.url());
         RefPtr openerFrame = m_page->openerFrame();
         RefPtr openerPage = openerFrame ? openerFrame->page() : nullptr;
-        if (openerFrame) {
-            parameters.openerFrameIdentifier = openerFrame->frameID();
+        if (openerFrame)
             parameters.mainFrameIdentifier = m_page->mainFrame()->frameID();
-        }
         auto existingRemotePageProxy = m_page->takeRemotePageProxyInOpenerProcessIfDomainEquals(navigationDomain);
         if (!existingRemotePageProxy) {
             if ((existingRemotePageProxy = m_page->takeOpenedRemotePageProxyIfDomainEquals(navigationDomain)))
@@ -249,7 +247,7 @@ void ProvisionalPageProxy::initializeWebPage(RefPtr<API::WebsitePolicies>&& webs
         m_page->inspectorController().didCreateProvisionalPage(*this);
 }
 
-void ProvisionalPageProxy::loadData(API::Navigation& navigation, const IPC::DataReference& data, const String& mimeType, const String& encoding, const String& baseURL, API::Object* userData, WebCore::ShouldTreatAsContinuingLoad shouldTreatAsContinuingLoad, std::optional<NavigatingToAppBoundDomain> isNavigatingToAppBoundDomain, std::optional<WebsitePoliciesData>&& websitePolicies, SubstituteData::SessionHistoryVisibility sessionHistoryVisibility)
+void ProvisionalPageProxy::loadData(API::Navigation& navigation, std::span<const uint8_t> data, const String& mimeType, const String& encoding, const String& baseURL, API::Object* userData, WebCore::ShouldTreatAsContinuingLoad shouldTreatAsContinuingLoad, std::optional<NavigatingToAppBoundDomain> isNavigatingToAppBoundDomain, std::optional<WebsitePoliciesData>&& websitePolicies, SubstituteData::SessionHistoryVisibility sessionHistoryVisibility)
 {
     PROVISIONALPAGEPROXY_RELEASE_LOG(ProcessSwapping, "loadData:");
     ASSERT(shouldTreatAsContinuingLoad != WebCore::ShouldTreatAsContinuingLoad::No);
@@ -454,12 +452,12 @@ void ProvisionalPageProxy::decidePolicyForNavigationActionAsync(NavigationAction
     m_page->decidePolicyForNavigationActionAsyncShared(m_process.copyRef(), WTFMove(data), WTFMove(completionHandler));
 }
 
-void ProvisionalPageProxy::decidePolicyForResponse(FrameInfoData&& frameInfo, uint64_t navigationID, const WebCore::ResourceResponse& response, const WebCore::ResourceRequest& request, bool canShowMIMEType, const String& downloadAttribute, CompletionHandler<void(PolicyDecision&&)>&& completionHandler)
+void ProvisionalPageProxy::decidePolicyForResponse(FrameInfoData&& frameInfo, uint64_t navigationID, const WebCore::ResourceResponse& response, const WebCore::ResourceRequest& request, bool canShowMIMEType, const String& downloadAttribute, bool isShowingInitialAboutBlank, WebCore::CrossOriginOpenerPolicyValue activeDocumentCOOPValue, CompletionHandler<void(PolicyDecision&&)>&& completionHandler)
 {
     if (!validateInput(frameInfo.frameID, navigationID))
         return completionHandler({ });
 
-    m_page->decidePolicyForResponseShared(m_process.copyRef(), m_webPageID, WTFMove(frameInfo), navigationID, response, request, canShowMIMEType, downloadAttribute, WTFMove(completionHandler));
+    m_page->decidePolicyForResponseShared(m_process.copyRef(), m_webPageID, WTFMove(frameInfo), navigationID, response, request, canShowMIMEType, downloadAttribute, isShowingInitialAboutBlank, activeDocumentCOOPValue, WTFMove(completionHandler));
 }
 
 void ProvisionalPageProxy::didPerformServerRedirect(const String& sourceURLString, const String& destinationURLString, FrameIdentifier frameID)
@@ -545,7 +543,7 @@ void ProvisionalPageProxy::requestPasswordForQuickLookDocumentInMainFrame(const 
 #endif
 
 #if PLATFORM(COCOA)
-void ProvisionalPageProxy::registerWebProcessAccessibilityToken(const IPC::DataReference& data)
+void ProvisionalPageProxy::registerWebProcessAccessibilityToken(std::span<const uint8_t> data)
 {
     m_accessibilityToken = Vector(data);
 }
@@ -579,6 +577,14 @@ void ProvisionalPageProxy::didCreateContextInGPUProcessForVisibilityPropagation(
     m_contextIDForVisibilityPropagationInGPUProcess = contextID;
 }
 #endif // ENABLE(GPU_PROCESS)
+
+#if ENABLE(MODEL_PROCESS)
+void ProvisionalPageProxy::didCreateContextInModelProcessForVisibilityPropagation(LayerHostingContextID contextID)
+{
+    PROVISIONALPAGEPROXY_RELEASE_LOG(ProcessSwapping, "didCreateContextInModelProcessForVisibilityPropagation: contextID=%u", contextID);
+    m_contextIDForVisibilityPropagationInModelProcess = contextID;
+}
+#endif // ENABLE(MODEL_PROCESS)
 #endif // HAVE(VISIBILITY_PROPAGATION_VIEW)
 
 void ProvisionalPageProxy::unfreezeLayerTreeDueToSwipeAnimation()

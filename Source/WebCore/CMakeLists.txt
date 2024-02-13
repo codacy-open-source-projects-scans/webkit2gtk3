@@ -311,7 +311,7 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/credentialmanagement/CredentialMediationRequirement.idl
     Modules/credentialmanagement/CredentialRequestOptions.idl
     Modules/credentialmanagement/CredentialsContainer.idl
-    Modules/credentialmanagement/DigitalCredential.idl
+    Modules/credentialmanagement/DigitalIdentity.idl
     Modules/credentialmanagement/DigitalCredentialRequestOptions.idl
     Modules/credentialmanagement/IdentityCredentialProtocol.idl
     Modules/credentialmanagement/IdentityRequestProvider.idl
@@ -2227,7 +2227,7 @@ if (USE_LCMS)
 endif ()
 
 if (USE_WOFF2)
-  list(APPEND WebCore_LIBRARIES WOFF2::dec)
+    list(APPEND WebCore_LIBRARIES WOFF2::dec)
 endif ()
 
 if (USE_XDGMIME)

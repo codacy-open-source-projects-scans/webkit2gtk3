@@ -29,7 +29,6 @@
 #if PLATFORM(MAC)
 
 #import "ContextMenuContextData.h"
-#import "DataReference.h"
 #import "EditingRange.h"
 #import "EditorState.h"
 #import "FontInfo.h"
@@ -374,7 +373,7 @@ void WebPage::attributedSubstringForCharacterRangeAsync(const EditingRange& edit
 
 #if ENABLE(LEGACY_PDFKIT_PLUGIN)
 
-DictionaryPopupInfo WebPage::dictionaryPopupInfoForSelectionInPDFPlugin(PDFSelection *selection, PluginView& pdfPlugin, NSDictionary *options, WebCore::TextIndicatorPresentationTransition presentationTransition)
+DictionaryPopupInfo WebPage::dictionaryPopupInfoForSelectionInPDFPlugin(PDFSelection *selection, PluginView& pdfPlugin, WebCore::TextIndicatorPresentationTransition presentationTransition)
 {
     DictionaryPopupInfo dictionaryPopupInfo;
     if (!selection.string.length)
@@ -416,7 +415,6 @@ DictionaryPopupInfo WebPage::dictionaryPopupInfoForSelectionInPDFPlugin(PDFSelec
     dataForSelection.presentationTransition = presentationTransition;
     
     dictionaryPopupInfo.origin = rangeRect.origin;
-    dictionaryPopupInfo.platformData.options = options;
     dictionaryPopupInfo.textIndicator = dataForSelection;
     dictionaryPopupInfo.platformData.attributedString = WebCore::AttributedString::fromNSAttributedString(scaledNSAttributedString);
     
@@ -471,7 +469,7 @@ bool WebPage::performNonEditingBehaviorForSelector(const String& selector, Keybo
     return didPerformAction;
 }
 
-void WebPage::registerUIProcessAccessibilityTokens(const IPC::DataReference& elementToken, const IPC::DataReference& windowToken)
+void WebPage::registerUIProcessAccessibilityTokens(std::span<const uint8_t> elementToken, std::span<const uint8_t> windowToken)
 {
     NSData *elementTokenData = [NSData dataWithBytes:elementToken.data() length:elementToken.size()];
     NSData *windowTokenData = [NSData dataWithBytes:windowToken.data() length:windowToken.size()];
@@ -879,11 +877,11 @@ void WebPage::performImmediateActionHitTestAtLocation(WebCore::FloatPoint locati
     }
 
     if (auto lookupResult = lookupTextAtLocation(locationInViewCoordinates)) {
-        auto [lookupRange, options] = WTFMove(*lookupResult);
+        auto lookupRange = WTFMove(*lookupResult);
         immediateActionResult.lookupText = plainText(lookupRange);
         if (auto* node = hitTestResult.innerNode()) {
             if (auto* frame = node->document().frame())
-                immediateActionResult.dictionaryPopupInfo = dictionaryPopupInfoForRange(*frame, lookupRange, options, TextIndicatorPresentationTransition::FadeIn);
+                immediateActionResult.dictionaryPopupInfo = dictionaryPopupInfoForRange(*frame, lookupRange, TextIndicatorPresentationTransition::FadeIn);
         }
     }
 
@@ -931,12 +929,11 @@ void WebPage::performImmediateActionHitTestAtLocation(WebCore::FloatPoint locati
                     pluginDocument->setFocusedElement(element.get());
 
                 auto selection = std::get<PDFSelection *>(lookupResult);
-                auto options = std::get<NSDictionary *>(lookupResult);
 
                 immediateActionResult.lookupText = lookupText;
                 immediateActionResult.isTextNode = true;
                 immediateActionResult.isSelected = true;
-                immediateActionResult.dictionaryPopupInfo = dictionaryPopupInfoForSelectionInPDFPlugin(selection, *pluginView, options, TextIndicatorPresentationTransition::FadeIn);
+                immediateActionResult.dictionaryPopupInfo = dictionaryPopupInfoForSelectionInPDFPlugin(selection, *pluginView, TextIndicatorPresentationTransition::FadeIn);
             }
         }
     }
@@ -949,7 +946,7 @@ void WebPage::performImmediateActionHitTestAtLocation(WebCore::FloatPoint locati
     send(Messages::WebPageProxy::DidPerformImmediateActionHitTest(immediateActionResult, immediateActionHitTestPreventsDefault, UserData(WebProcess::singleton().transformObjectsToHandles(userData.get()).get())));
 }
 
-std::optional<std::tuple<WebCore::SimpleRange, NSDictionary *>> WebPage::lookupTextAtLocation(FloatPoint locationInViewCoordinates)
+std::optional<WebCore::SimpleRange> WebPage::lookupTextAtLocation(FloatPoint locationInViewCoordinates)
 {
     RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_page->mainFrame());
     if (!localMainFrame || !localMainFrame->view() || !localMainFrame->view()->renderView())
@@ -1035,7 +1032,6 @@ void WebPage::playbackTargetSelected(PlaybackTargetClientContextIdentifier conte
 {
     switch (targetContext.type()) {
     case MediaPlaybackTargetContext::Type::AVOutputContext:
-    case MediaPlaybackTargetContext::Type::SerializedAVOutputContext:
         m_page->setPlaybackTarget(contextId, MediaPlaybackTargetCocoa::create(WTFMove(targetContext)));
         break;
     case MediaPlaybackTargetContext::Type::Mock:
@@ -1134,7 +1130,7 @@ void WebPage::zoomPDFOut(PDFPluginIdentifier identifier)
     pdfPlugin->zoomOut();
 }
 
-void WebPage::savePDF(PDFPluginIdentifier identifier, CompletionHandler<void(const String&, const URL&, const IPC::DataReference&)>&& completionHandler)
+void WebPage::savePDF(PDFPluginIdentifier identifier, CompletionHandler<void(const String&, const URL&, std::span<const uint8_t>)>&& completionHandler)
 {
     auto pdfPlugin = m_pdfPlugInsWithHUD.get(identifier);
     if (!pdfPlugin)
@@ -1142,7 +1138,7 @@ void WebPage::savePDF(PDFPluginIdentifier identifier, CompletionHandler<void(con
     pdfPlugin->save(WTFMove(completionHandler));
 }
 
-void WebPage::openPDFWithPreview(PDFPluginIdentifier identifier, CompletionHandler<void(const String&, FrameInfoData&&, const IPC::DataReference&, const String&)>&& completionHandler)
+void WebPage::openPDFWithPreview(PDFPluginIdentifier identifier, CompletionHandler<void(const String&, FrameInfoData&&, std::span<const uint8_t>, const String&)>&& completionHandler)
 {
     auto pdfPlugin = m_pdfPlugInsWithHUD.get(identifier);
     if (!pdfPlugin)

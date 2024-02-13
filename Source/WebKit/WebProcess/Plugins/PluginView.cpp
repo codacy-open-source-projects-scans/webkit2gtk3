@@ -333,12 +333,11 @@ void PluginView::didEndMagnificationGesture()
 
 void PluginView::setPageScaleFactor(double scaleFactor, std::optional<IntPoint> origin)
 {
-    m_webPage->send(Messages::WebPageProxy::PluginScaleFactorDidChange(scaleFactor));
-    m_webPage->send(Messages::WebPageProxy::PluginZoomFactorDidChange(scaleFactor));
-
     if (!m_isInitialized)
         return;
 
+    m_webPage->send(Messages::WebPageProxy::PluginScaleFactorDidChange(scaleFactor));
+    m_webPage->send(Messages::WebPageProxy::PluginZoomFactorDidChange(scaleFactor));
     m_plugin->setPageScaleFactor(scaleFactor, origin);
 }
 
@@ -688,6 +687,14 @@ ScrollingNodeID PluginView::scrollingNodeID() const
     return m_plugin->scrollingNodeID();
 }
 
+void PluginView::didAttachScrollingNode()
+{
+    if (!m_isInitialized)
+        return;
+
+    return m_plugin->didAttachScrollingNode();
+}
+
 RefPtr<FragmentedSharedBuffer> PluginView::liveResourceData() const
 {
     if (!m_isInitialized) {
@@ -706,14 +713,6 @@ bool PluginView::performDictionaryLookupAtLocation(const WebCore::FloatPoint& po
         return false;
 
     return m_plugin->performDictionaryLookupAtLocation(point);
-}
-
-bool PluginView::existingSelectionContainsPoint(const WebCore::FloatPoint& point) const
-{
-    if (!m_isInitialized)
-        return false;
-    
-    return m_plugin->existingSelectionContainsPoint(point);
 }
 
 void PluginView::notifyWidget(WidgetNotification notification)
@@ -935,7 +934,7 @@ id PluginView::accessibilityHitTest(const WebCore::IntPoint& point) const
     return m_plugin->accessibilityHitTest(point);
 }
 
-std::tuple<String, PDFSelection *, NSDictionary *> PluginView::lookupTextAtLocation(const WebCore::FloatPoint& point, WebHitTestResultData& data) const
+std::pair<String, PDFSelection *> PluginView::lookupTextAtLocation(const WebCore::FloatPoint& point, WebHitTestResultData& data) const
 {
     return m_plugin->lookupTextAtLocation(point, data);
 }
@@ -958,6 +957,19 @@ bool PluginView::isUsingUISideCompositing() const
 void PluginView::didChangeSettings()
 {
     m_plugin->didChangeSettings();
+}
+
+void PluginView::windowActivityDidChange()
+{
+    m_plugin->windowActivityDidChange();
+}
+
+void PluginView::didSameDocumentNavigationForFrame(WebFrame& frame)
+{
+    if (!m_isInitialized)
+        return;
+
+    return m_plugin->didSameDocumentNavigationForFrame(frame);
 }
 
 } // namespace WebKit

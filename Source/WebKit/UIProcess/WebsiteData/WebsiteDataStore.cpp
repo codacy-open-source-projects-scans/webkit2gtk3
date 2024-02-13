@@ -38,6 +38,7 @@
 #include "NetworkProcessConnectionInfo.h"
 #include "NetworkProcessMessages.h"
 #include "PageLoadState.h"
+#include "RestrictedOpenerType.h"
 #include "ShouldGrandfatherStatistics.h"
 #include "StorageAccessStatus.h"
 #include "UnifiedOriginStorageLevel.h"
@@ -1388,11 +1389,11 @@ void WebsiteDataStore::setGrandfathered(const URL& url, bool isGrandfathered, Co
     protectedNetworkProcess()->setGrandfathered(m_sessionID, WebCore::RegistrableDomain { url }, isGrandfathered, WTFMove(completionHandler));
 }
 
-void WebsiteDataStore::setCrossSiteLoadWithLinkDecorationForTesting(const URL& fromURL, const URL& toURL, CompletionHandler<void()>&& completionHandler)
+void WebsiteDataStore::setCrossSiteLoadWithLinkDecorationForTesting(const URL& fromURL, const URL& toURL, bool wasFiltered, CompletionHandler<void()>&& completionHandler)
 {
     ASSERT(RunLoop::isMain());
     
-    protectedNetworkProcess()->setCrossSiteLoadWithLinkDecorationForTesting(m_sessionID, WebCore::RegistrableDomain { fromURL }, WebCore::RegistrableDomain { toURL }, WTFMove(completionHandler));
+    protectedNetworkProcess()->setCrossSiteLoadWithLinkDecorationForTesting(m_sessionID, WebCore::RegistrableDomain { fromURL }, WebCore::RegistrableDomain { toURL }, wasFiltered, WTFMove(completionHandler));
 }
 
 void WebsiteDataStore::resetCrossSiteLoadsWithLinkDecorationForTesting(CompletionHandler<void()>&& completionHandler)
@@ -1943,6 +1944,9 @@ WebsiteDataStoreParameters WebsiteDataStore::parameters()
 #if ENABLE(DECLARATIVE_WEB_PUSH)
     networkSessionParameters.isDeclarativeWebPushEnabled = m_configuration->isDeclarativeWebPushEnabled();
 #endif
+#if HAVE(NW_PROXY_CONFIG)
+    networkSessionParameters.proxyConfigData = m_proxyConfigData;
+#endif
 
     parameters.networkSessionParameters = WTFMove(networkSessionParameters);
     parameters.networkSessionParameters.resourceLoadStatisticsParameters.enabled = m_trackingPreventionEnabled;
@@ -2427,7 +2431,9 @@ void WebsiteDataStore::clearProxyConfigData()
 
 void WebsiteDataStore::setProxyConfigData(Vector<std::pair<Vector<uint8_t>, WTF::UUID>>&& data)
 {
-    protectedNetworkProcess()->send(Messages::NetworkProcess::SetProxyConfigData(m_sessionID, WTFMove(data)), 0);
+    m_proxyConfigData = std::nullopt;
+    protectedNetworkProcess()->send(Messages::NetworkProcess::SetProxyConfigData(m_sessionID, data), 0);
+    m_proxyConfigData = WTFMove(data);
 }
 #endif // HAVE(NW_PROXY_CONFIG)
 
@@ -2526,6 +2532,28 @@ void WebsiteDataStore::processPushMessage(WebPushMessage&& pushMessage, Completi
 
     RELEASE_LOG(Push, "Sending push message to network process to handle");
     protectedNetworkProcess()->processPushMessage(sessionID(), WTFMove(pushMessage), WTFMove(innerHandler));
+}
+
+RestrictedOpenerType WebsiteDataStore::openerTypeForDomain(const WebCore::RegistrableDomain& domain) const
+{
+    if (UNLIKELY(!m_restrictedOpenerTypesForTesting.isEmpty())) {
+        auto it = m_restrictedOpenerTypesForTesting.find(domain);
+        return it == m_restrictedOpenerTypesForTesting.end() ? RestrictedOpenerType::Unrestricted : it->value;
+    }
+
+#if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
+    return RestrictedOpenerDomainsController::shared().lookup(domain);
+#else
+    return RestrictedOpenerType::Unrestricted;
+#endif
+}
+
+void WebsiteDataStore::setRestrictedOpenerTypeForDomainForTesting(const WebCore::RegistrableDomain& domain, RestrictedOpenerType type)
+{
+    if (domain.isEmpty())
+        return;
+
+    m_restrictedOpenerTypesForTesting.set(domain, type);
 }
 
 } // namespace WebKit

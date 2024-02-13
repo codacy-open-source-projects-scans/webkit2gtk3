@@ -29,7 +29,6 @@
 #if PLATFORM(IOS_FAMILY)
 
 #import "AccessibilityIOS.h"
-#import "DataReference.h"
 #import "DocumentEditingContext.h"
 #import "DrawingArea.h"
 #import "EditingRange.h"
@@ -259,9 +258,9 @@ RetainPtr<NSData> WebPage::accessibilityRemoteTokenData() const
 
 void WebPage::relayAccessibilityNotification(const String& notificationName, const RetainPtr<NSData>& notificationData)
 {
-    IPC::DataReference dataToken = { };
+    std::span<const uint8_t> dataToken;
     if ([notificationData length])
-        dataToken = IPC::DataReference(reinterpret_cast<const uint8_t*>([notificationData bytes]), [notificationData length]);
+        dataToken = { reinterpret_cast<const uint8_t*>([notificationData bytes]), [notificationData length] };
     send(Messages::WebPageProxy::RelayAccessibilityNotification(notificationName, dataToken));
 }
 
@@ -645,7 +644,7 @@ NSObject *WebPage::accessibilityObjectForMainFramePlugin()
     return nil;
 }
     
-void WebPage::registerUIProcessAccessibilityTokens(const IPC::DataReference& elementToken, const IPC::DataReference&)
+void WebPage::registerUIProcessAccessibilityTokens(std::span<const uint8_t> elementToken, std::span<const uint8_t>)
 {
     NSData *elementTokenData = [NSData dataWithBytes:elementToken.data() length:elementToken.size()];
     [m_mockAccessibilityElement setRemoteTokenData:elementTokenData];
@@ -4638,9 +4637,6 @@ String WebPage::platformUserAgent(const URL&) const
     if (osNameForUserAgent() == "iPhone OS"_s) {
         if (document->quirks().shouldAvoidUsingIOS13ForGmail())
             return standardUserAgentWithApplicationName({ }, "12_1_3"_s);
-
-        if (document->quirks().shouldAvoidUsingIOS17UserAgentForFacebook())
-            return standardUserAgentWithApplicationName({ }, "16_6_1"_s);
     }
     return String();
 }

@@ -30,6 +30,9 @@
 
 #include "PDFContextMenu.h"
 #include "PDFKitSPI.h"
+#include "PDFPluginAnnotation.h"
+#include "PDFPluginPasswordField.h"
+#include "PasteboardTypes.h"
 #include "PluginView.h"
 #include "WebEventConversion.h"
 #include "WebEventModifier.h"
@@ -43,6 +46,8 @@
 #include <WebCore/ChromeClient.h>
 #include <WebCore/ColorCocoa.h>
 #include <WebCore/Editor.h>
+#include <WebCore/EditorClient.h>
+#include <WebCore/FilterOperations.h>
 #include <WebCore/FloatPoint.h>
 #include <WebCore/GraphicsContext.h>
 #include <WebCore/HTMLNames.h>
@@ -55,12 +60,35 @@
 #include <WebCore/RenderLayer.h>
 #include <WebCore/RenderLayerBacking.h>
 #include <WebCore/RenderLayerCompositor.h>
+#include <WebCore/ScreenProperties.h>
 #include <WebCore/ScrollTypes.h>
 #include <WebCore/ScrollbarTheme.h>
 #include <WebCore/ScrollbarsController.h>
 #include <pal/spi/cg/CoreGraphicsSPI.h>
+#include <wtf/text/StringToIntegerConversion.h>
 
 #include "PDFKitSoftLink.h"
+
+@interface WKPDFFormMutationObserver : NSObject {
+    WebKit::UnifiedPDFPlugin* _plugin;
+}
+@end
+
+@implementation WKPDFFormMutationObserver
+
+- (id)initWithPlguin:(WebKit::UnifiedPDFPlugin *)plugin
+{
+    if (!(self = [super init]))
+        return nil;
+    _plugin = plugin;
+    return self;
+}
+
+- (void)formChanged:(NSNotification *)notification
+{
+    _plugin->didMutatePDFDocument();
+}
+@end
 
 #if PLATFORM(IOS_FAMILY)
 #import <UIKit/UIColor.h>
@@ -82,6 +110,7 @@ Ref<UnifiedPDFPlugin> UnifiedPDFPlugin::create(HTMLPlugInElement& pluginElement)
 
 UnifiedPDFPlugin::UnifiedPDFPlugin(HTMLPlugInElement& element)
     : PDFPluginBase(element)
+    , m_pdfMutationObserver(adoptNS([[WKPDFFormMutationObserver alloc] initWithPlguin:this]))
 {
     this->setVerticalScrollElasticity(ScrollElasticity::Automatic);
     this->setHorizontalScrollElasticity(ScrollElasticity::Automatic);
@@ -99,6 +128,12 @@ UnifiedPDFPlugin::UnifiedPDFPlugin(HTMLPlugInElement& element)
     }
 }
 
+static String mutationObserverNotificationString()
+{
+    static NeverDestroyed<String> notificationString = "PDFFormDidChangeValue"_s;
+    return notificationString;
+}
+
 void UnifiedPDFPlugin::teardown()
 {
     PDFPluginBase::teardown();
@@ -112,6 +147,8 @@ void UnifiedPDFPlugin::teardown()
         scrollingCoordinator->unparentChildrenAndDestroyNode(m_scrollingNodeID);
         m_frame->coreLocalFrame()->protectedView()->removePluginScrollableAreaForScrollingNodeID(m_scrollingNodeID);
     }
+    [[NSNotificationCenter defaultCenter] removeObserver:m_pdfMutationObserver.get() name:mutationObserverNotificationString() object:m_pdfDocument.get()];
+    m_pdfMutationObserver = nullptr;
 }
 
 GraphicsLayer* UnifiedPDFPlugin::graphicsLayer() const
@@ -134,10 +171,45 @@ void UnifiedPDFPlugin::installPDFDocument()
 
     m_documentLayout.setPDFDocument(m_pdfDocument.get());
 
+#if HAVE(INCREMENTAL_PDF_APIS)
+    maybeClearHighLatencyDataProviderFlag();
+#endif
+
     updateLayout();
+
+    updateHUDVisibility();
+
+    if (isLocked())
+        createPasswordEntryForm();
 
     if (m_view)
         m_view->layerHostingStrategyDidChange();
+    [[NSNotificationCenter defaultCenter] addObserver:m_pdfMutationObserver.get() selector:@selector(formChanged:) name:mutationObserverNotificationString() object:m_pdfDocument.get()];
+
+    scrollToFragmentIfNeeded();
+}
+
+void UnifiedPDFPlugin::createPasswordEntryForm()
+{
+    if (!supportsForms())
+        return;
+
+    auto passwordField = PDFPluginPasswordField::create(this);
+    m_passwordField = passwordField.ptr();
+    passwordField->attach(m_annotationContainer.get());
+}
+
+void UnifiedPDFPlugin::attemptToUnlockPDF(const String& password)
+{
+    if (![m_pdfDocument unlockWithPassword:password])
+        return;
+
+    m_passwordField = nullptr;
+
+    updateLayout();
+    updateHUDVisibility();
+    updateHUDLocation();
+    scrollToFragmentIfNeeded();
 }
 
 RefPtr<GraphicsLayer> UnifiedPDFPlugin::createGraphicsLayer(const String& name, GraphicsLayer::Type layerType)
@@ -188,18 +260,108 @@ void UnifiedPDFPlugin::ensureLayers()
         m_scrollContainerLayer->addChild(*m_scrolledContentsLayer);
     }
 
+    if (!m_pageBackgroundsContainerLayer) {
+        m_pageBackgroundsContainerLayer = createGraphicsLayer("Page backgrounds"_s, GraphicsLayer::Type::Normal);
+        m_pageBackgroundsContainerLayer->setAnchorPoint({ });
+        m_scrolledContentsLayer->addChild(*m_pageBackgroundsContainerLayer);
+    }
+
     if (!m_contentsLayer) {
-        m_contentsLayer = createGraphicsLayer("UnifiedPDFPlugin contents"_s, GraphicsLayer::Type::TiledBacking);
+        m_contentsLayer = createGraphicsLayer("PDF contents"_s, GraphicsLayer::Type::TiledBacking);
         m_contentsLayer->setAnchorPoint({ });
         m_contentsLayer->setDrawsContent(true);
         m_scrolledContentsLayer->addChild(*m_contentsLayer);
     }
 
     if (!m_overflowControlsContainer) {
-        m_overflowControlsContainer = createGraphicsLayer("UnifiedPDFPlugin overflow controls container"_s, GraphicsLayer::Type::Normal);
+        m_overflowControlsContainer = createGraphicsLayer("Overflow controls container"_s, GraphicsLayer::Type::Normal);
         m_overflowControlsContainer->setAnchorPoint({ });
         m_rootLayer->addChild(*m_overflowControlsContainer);
     }
+}
+
+void UnifiedPDFPlugin::updatePageBackgroundLayers()
+{
+    RefPtr page = this->page();
+    if (!page)
+        return;
+
+    if (isLocked())
+        return;
+
+    Vector<Ref<GraphicsLayer>> pageContainerLayers = m_pageBackgroundsContainerLayer->children();
+
+    for (PDFDocumentLayout::PageIndex i = 0; i < m_documentLayout.pageCount(); ++i) {
+        auto destinationRect = m_documentLayout.boundsForPageAtIndex(i);
+        destinationRect.scale(m_documentLayout.scale());
+
+        auto addLayerShadow = [](GraphicsLayer& layer, IntPoint shadowOffset, const Color& shadowColor, int shadowStdDeviation) {
+            Vector<RefPtr<FilterOperation>> filterOperations;
+            filterOperations.append(DropShadowFilterOperation::create(shadowOffset, shadowStdDeviation, shadowColor));
+
+            FilterOperations filters;
+            filters.setOperations(WTFMove(filterOperations));
+            layer.setFilters(filters);
+        };
+
+        const auto containerShadowOffset = IntPoint { 0, 1 };
+        constexpr auto containerShadowColor = SRGBA<uint8_t> { 0, 0, 0, 46 };
+        constexpr int containerShadowStdDeviation = 2; // FIXME: Same as radius?
+
+        const auto shadowOffset = IntPoint { 0, 2 };
+        constexpr auto shadowColor = SRGBA<uint8_t> { 0, 0, 0, 38 };
+        constexpr int shadowStdDeviation = 6; // FIXME: Same as radius?
+
+
+        auto pageContainerLayer = [&](PDFDocumentLayout::PageIndex pageIndex) {
+            if (pageIndex < pageContainerLayers.size())
+                return pageContainerLayers[pageIndex];
+
+            auto pageContainerLayer = createGraphicsLayer(makeString("Page container "_s, pageIndex), GraphicsLayer::Type::Normal);
+            auto pageBackgroundLayer = createGraphicsLayer(makeString("Page background "_s, pageIndex), GraphicsLayer::Type::Normal);
+            // Can only be null if this->page() is null, which we checked above.
+            ASSERT(pageContainerLayer);
+            ASSERT(pageBackgroundLayer);
+
+            pageContainerLayer->addChild(*pageBackgroundLayer);
+
+            pageContainerLayer->setAnchorPoint({ });
+            addLayerShadow(*pageContainerLayer, containerShadowOffset, containerShadowColor, containerShadowStdDeviation);
+
+            pageBackgroundLayer->setAnchorPoint({ });
+            pageBackgroundLayer->setBackgroundColor(Color::white);
+            // FIXME: Need to add a 1px black border with alpha 0.0586.
+
+            addLayerShadow(*pageBackgroundLayer, shadowOffset, shadowColor, shadowStdDeviation);
+
+            auto containerLayer = pageContainerLayer.releaseNonNull();
+            pageContainerLayers.append(WTFMove(containerLayer));
+
+            return pageContainerLayers[pageIndex];
+        }(i);
+
+        pageContainerLayer->setPosition(destinationRect.location());
+        pageContainerLayer->setSize(destinationRect.size());
+
+        auto pageContentsLayer = pageContainerLayer->children()[0];
+        pageContentsLayer->setSize(destinationRect.size());
+    }
+
+    m_pageBackgroundsContainerLayer->setChildren(WTFMove(pageContainerLayers));
+}
+
+void UnifiedPDFPlugin::didAttachScrollingNode()
+{
+    m_didAttachScrollingTreeNode = true;
+    scrollToFragmentIfNeeded();
+}
+
+void UnifiedPDFPlugin::didSameDocumentNavigationForFrame(WebFrame& frame)
+{
+    if (&frame != m_frame)
+        return;
+    m_didScrollToFragment = false;
+    scrollToFragmentIfNeeded();
 }
 
 ScrollingNodeID UnifiedPDFPlugin::scrollingNodeID() const
@@ -255,6 +417,8 @@ void UnifiedPDFPlugin::updateLayerHierarchy()
     m_contentsLayer->setSize(documentSize());
     m_contentsLayer->setNeedsDisplay();
 
+    updatePageBackgroundLayers();
+
     didChangeSettings();
     didChangeIsInWindow();
 }
@@ -276,7 +440,14 @@ void UnifiedPDFPlugin::didChangeSettings()
     propagateSettingsToLayer(*m_rootLayer);
     propagateSettingsToLayer(*m_scrollContainerLayer);
     propagateSettingsToLayer(*m_scrolledContentsLayer);
+    propagateSettingsToLayer(*m_pageBackgroundsContainerLayer);
     propagateSettingsToLayer(*m_contentsLayer);
+
+    for (auto& pageLayer : m_pageBackgroundsContainerLayer->children()) {
+        propagateSettingsToLayer(pageLayer);
+        if (pageLayer->children().size())
+            propagateSettingsToLayer(pageLayer->children()[0]);
+    }
 
     if (m_layerForHorizontalScrollbar)
         propagateSettingsToLayer(*m_layerForHorizontalScrollbar);
@@ -298,7 +469,14 @@ void UnifiedPDFPlugin::didChangeIsInWindow()
     RefPtr page = this->page();
     if (!page || !m_contentsLayer)
         return;
-    m_contentsLayer->tiledBacking()->setIsInWindow(page->isInWindow());
+
+    m_contentsLayer->setIsInWindow(page->isInWindow());
+}
+
+void UnifiedPDFPlugin::windowActivityDidChange()
+{
+    // FIXME: <https://webkit.org/b/268927> Selection painting requests should be optimized by specifying dirty rects.
+    repaintOnSelectionActiveStateChangeIfNeeded(ActiveStateChangeReason::WindowActivityChanged);
 }
 
 void UnifiedPDFPlugin::paint(WebCore::GraphicsContext& context, const WebCore::IntRect&)
@@ -373,7 +551,6 @@ void UnifiedPDFPlugin::paintPDFContent(WebCore::GraphicsContext& context, const 
 
         auto destinationRect = m_documentLayout.boundsForPageAtIndex(i);
 
-        // FIXME: If we draw page shadows we'll have to inflate destinationRect here.
         if (!destinationRect.intersects(drawingRectInPDFLayoutCoordinates))
             continue;
 
@@ -387,7 +564,13 @@ void UnifiedPDFPlugin::paintPDFContent(WebCore::GraphicsContext& context, const 
         context.scale({ 1, -1 });
 
         [page drawWithBox:kPDFDisplayBoxCropBox toContext:context.platformContext()];
+
+        bool isVisibleAndActive = isSelectionActiveAfterContextMenuInteraction();
+        if (RefPtr page = this->page())
+            isVisibleAndActive = isVisibleAndActive && page->isVisibleAndActive();
+        [m_currentSelection drawForPage:page.get() withBox:kCGPDFCropBox active:isVisibleAndActive inContext:context.platformContext()];
     }
+    paintPDFOverlays(context);
 }
 
 float UnifiedPDFPlugin::scaleForActualSize() const
@@ -418,6 +601,19 @@ float UnifiedPDFPlugin::scaleForActualSize() const
     return pixelSize / size().width();
 #endif
     return 1;
+}
+
+static const WebCore::Color textAnnotationHoverColor()
+{
+    static constexpr auto textAnnotationHoverAlpha = 0.12;
+    static NeverDestroyed color = WebCore::Color::createAndPreserveColorSpace([[[WebCore::CocoaColor systemBlueColor] colorWithAlphaComponent:textAnnotationHoverAlpha] CGColor]);
+    return color;
+}
+
+void UnifiedPDFPlugin::paintPDFOverlays(WebCore::GraphicsContext& context)
+{
+    if (auto* trackedAnnotation = m_annotationTrackingState.trackedAnnotation(); trackedAnnotation && [trackedAnnotation isKindOfClass:getPDFAnnotationTextWidgetClass()] && m_annotationTrackingState.isBeingHovered())
+        context.fillRect(IntRect { [trackedAnnotation bounds] }, textAnnotationHoverColor());
 }
 
 CGFloat UnifiedPDFPlugin::scaleFactor() const
@@ -471,6 +667,9 @@ void UnifiedPDFPlugin::setPageScaleFactor(double scale, std::optional<WebCore::I
     transform.translate(sidePaddingWidth(), 0);
 
     m_contentsLayer->setTransform(transform);
+    m_pageBackgroundsContainerLayer->setTransform(transform);
+
+    updatePageBackgroundLayers();
 
     if (!origin)
         origin = IntRect({ }, size()).center();
@@ -492,14 +691,13 @@ void UnifiedPDFPlugin::setPageScaleFactor(double scale, std::optional<WebCore::I
     scheduleRenderingUpdate();
 }
 
-void UnifiedPDFPlugin::geometryDidChange(const IntSize& pluginSize, const AffineTransform& pluginToRootViewTransform)
+bool UnifiedPDFPlugin::geometryDidChange(const IntSize& pluginSize, const AffineTransform& pluginToRootViewTransform)
 {
-    if (size() == pluginSize)
-        return;
-
-    PDFPluginBase::geometryDidChange(pluginSize, pluginToRootViewTransform);
+    if (!PDFPluginBase::geometryDidChange(pluginSize, pluginToRootViewTransform))
+        return false;
 
     updateLayout();
+    return true;
 }
 
 IntRect UnifiedPDFPlugin::availableContentsRect() const
@@ -575,21 +773,39 @@ IntSize UnifiedPDFPlugin::contentsSize() const
     return expandedIntSize(size);
 }
 
-unsigned UnifiedPDFPlugin::firstPageHeight() const
+unsigned UnifiedPDFPlugin::heightForPage(PDFDocumentLayout::PageIndex pageIndex) const
 {
     if (isLocked() || !m_documentLayout.pageCount())
         return 0;
-    return static_cast<unsigned>(CGCeiling(m_documentLayout.boundsForPageAtIndex(0).height()));
+    return std::ceil<unsigned>(m_documentLayout.boundsForPageAtIndex(pageIndex).height());
+}
+
+unsigned UnifiedPDFPlugin::firstPageHeight() const
+{
+    return heightForPage(0);
 }
 
 RefPtr<FragmentedSharedBuffer> UnifiedPDFPlugin::liveResourceData() const
 {
-    return nullptr;
+    NSData *pdfData = liveData();
+
+    if (!pdfData)
+        return nullptr;
+
+    return SharedBuffer::create(pdfData);
 }
 
 NSData *UnifiedPDFPlugin::liveData() const
 {
-    // FIXME: Handle annotations and re-generate the PDF if it's been mutated.
+#if PLATFORM(MAC)
+    if (m_activeAnnotation)
+        m_activeAnnotation->commit();
+#endif
+    // Save data straight from the resource instead of PDFKit if the document is
+    // untouched by the user, so that PDFs which PDFKit can't display will still be downloadable.
+    if (m_pdfDocumentWasMutated)
+        return [m_pdfDocument dataRepresentation];
+
     return originalData();
 }
 
@@ -623,6 +839,9 @@ bool UnifiedPDFPlugin::updateOverflowControlsLayers(bool needsHorizontalScrollba
 
         if (needLayer) {
             layer = createGraphicsLayer(layerName, GraphicsLayer::Type::Normal);
+            if (!layer)
+                return false;
+
             layer->setAllowsBackingStoreDetaching(false);
             layer->setAllowsTiling(false);
             layer->setDrawsContent(true);
@@ -929,6 +1148,15 @@ WebCore::IntPoint UnifiedPDFPlugin::convertFromPageToDocument(const WebCore::Int
     return documentSpaceToPageSpaceTransform(pageRotation, pageBounds).inverse()->mapPoint(documentSpacePoint);
 }
 
+WebCore::IntPoint UnifiedPDFPlugin::convertFromPageToContents(const WebCore::IntPoint& pageSpacePoint, PDFDocumentLayout::PageIndex pageIndex) const
+{
+    FloatPoint transformedPoint = convertFromPageToDocument(pageSpacePoint, pageIndex);
+    transformedPoint.scale(m_documentLayout.scale());
+    transformedPoint.move(sidePaddingWidth(), 0);
+    transformedPoint.scale(m_scaleFactor);
+    return roundedIntPoint(transformedPoint);
+}
+
 #if !LOG_DISABLED
 static TextStream& operator<<(TextStream& ts, UnifiedPDFPlugin::PDFElementType elementType)
 {
@@ -947,6 +1175,13 @@ static TextStream& operator<<(TextStream& ts, UnifiedPDFPlugin::PDFElementType e
 }
 #endif
 
+static BOOL annotationIsLinkWithDestination(PDFAnnotation *annotation)
+{
+    if (![annotation isKindOfClass:getPDFAnnotationLinkClass()])
+        return NO;
+    return [annotation URL] || [annotation destination];
+}
+
 auto UnifiedPDFPlugin::pdfElementTypesForPluginPoint(const WebCore::IntPoint& point) const -> PDFElementTypes
 {
     auto pointInDocumentSpace = convertFromPluginToDocument(point);
@@ -963,7 +1198,7 @@ auto UnifiedPDFPlugin::pdfElementTypesForPluginPoint(const WebCore::IntPoint& po
     if (auto annotation = [page annotationAtPoint:pointInPDFPageSpace]) {
         pdfElementTypes.add(PDFElementType::Annotation);
 
-        if ([annotation isKindOfClass:getPDFAnnotationLinkClass()])
+        if (annotationIsLinkWithDestination(annotation))
             pdfElementTypes.add(PDFElementType::Link);
 
         if ([annotation isKindOfClass:getPDFAnnotationPopupClass()])
@@ -997,42 +1232,78 @@ auto UnifiedPDFPlugin::pdfElementTypesForPluginPoint(const WebCore::IntPoint& po
     return pdfElementTypes;
 }
 
+#pragma mark Events
+
+static bool isContextMenuEvent(const WebMouseEvent& event)
+{
+#if PLATFORM(MAC)
+    return event.menuTypeForEvent();
+#else
+    UNUSED_PARAM(event);
+    return false;
+#endif
+}
+
 bool UnifiedPDFPlugin::handleMouseEvent(const WebMouseEvent& event)
 {
-    m_lastMousePositionInPluginCoordinates = convertFromRootViewToPlugin(event.position());
-    auto pointInDocumentSpace = convertFromPluginToDocument(m_lastMousePositionInPluginCoordinates);
+    m_lastMouseEvent = event;
+
+    auto pointInDocumentSpace = convertFromPluginToDocument(lastKnownMousePositionInView());
     auto pageIndex = pageIndexForDocumentPoint(pointInDocumentSpace);
     if (!pageIndex)
         return false;
 
     auto pointInPageSpace = convertFromDocumentToPage(pointInDocumentSpace, *pageIndex);
 
-    switch (event.type()) {
+    auto mouseEventButton = event.button();
+    auto mouseEventType = event.type();
+    // Context menu events always call handleContextMenuEvent as well.
+    if (mouseEventType == WebEventType::MouseDown && isContextMenuEvent(event)) {
+        beginTrackingSelection(*pageIndex, pointInPageSpace, event);
+        return true;
+    }
+
+    switch (mouseEventType) {
     case WebEventType::MouseMove:
         mouseMovedInContentArea();
-        switch (event.button()) {
+        switch (mouseEventButton) {
         case WebMouseEventButton::None: {
             auto altKeyIsActive = event.altKey() ? AltKeyIsActive::Yes : AltKeyIsActive::No;
-            auto pdfElementTypes = pdfElementTypesForPluginPoint(m_lastMousePositionInPluginCoordinates);
+            auto pdfElementTypes = pdfElementTypesForPluginPoint(lastKnownMousePositionInView());
             notifyCursorChanged(toWebCoreCursorType(pdfElementTypes, altKeyIsActive));
-            if (m_trackedAnnotation)
-                handleMouseDraggedOffTrackedAnnotation();
+
+            RetainPtr annotationUnderMouse = annotationForRootViewPoint(event.position());
+            bool annotationTrackingStateChanged = false;
+            if (auto* currentTrackedAnnotation = m_annotationTrackingState.trackedAnnotation(); (currentTrackedAnnotation && currentTrackedAnnotation != annotationUnderMouse) || (currentTrackedAnnotation && !m_annotationTrackingState.isBeingHovered())) {
+                m_annotationTrackingState.finishAnnotationTracking(mouseEventType, mouseEventButton);
+                annotationTrackingStateChanged = true;
+            }
+            if (!m_annotationTrackingState.trackedAnnotation() && annotationUnderMouse && [annotationUnderMouse isKindOfClass:getPDFAnnotationTextWidgetClass()]) {
+                m_annotationTrackingState.startAnnotationTracking(WTFMove(annotationUnderMouse), mouseEventType, mouseEventButton);
+                annotationTrackingStateChanged = true;
+            }
+            if (annotationTrackingStateChanged)
+                updateLayerHierarchy();
             return true;
         }
         case WebMouseEventButton::Left: {
-            if (m_trackedAnnotation && m_trackedAnnotation != annotationForRootViewPoint(event.position())) {
-                handleMouseDraggedOffTrackedAnnotation();
+            if (RetainPtr trackedAnnotation = m_annotationTrackingState.trackedAnnotation(); trackedAnnotation && trackedAnnotation != annotationForRootViewPoint(event.position())) {
+                notifyCursorChanged(toWebCoreCursorType({ }));
+                m_annotationTrackingState.finishAnnotationTracking(mouseEventType, mouseEventButton);
+                updateLayerHierarchy();
                 return true;
             }
 
-            continueTrackingSelection(*pageIndex, pointInPageSpace);
+            if (m_selectionTrackingData.isActivelyTrackingSelection)
+                continueTrackingSelection(*pageIndex, pointInPageSpace);
+
             return true;
         }
         default:
             return false;
         }
     case WebEventType::MouseDown:
-        switch (event.button()) {
+        switch (mouseEventButton) {
         case WebMouseEventButton::Left: {
             if (RetainPtr<PDFAnnotation> annotation = annotationForRootViewPoint(event.position())) {
                 if (([annotation isKindOfClass:getPDFAnnotationButtonWidgetClass()] || [annotation isKindOfClass:getPDFAnnotationTextWidgetClass()] || [annotation isKindOfClass:getPDFAnnotationChoiceWidgetClass()]) && [annotation isReadOnly])
@@ -1042,14 +1313,20 @@ bool UnifiedPDFPlugin::handleMouseEvent(const WebMouseEvent& event)
                     setActiveAnnotation(WTFMove(annotation));
                     return true;
                 }
+
                 if ([annotation isKindOfClass:getPDFAnnotationButtonWidgetClass()]) {
-                    startAnnotationTracking(WTFMove(annotation));
+                    m_annotationTrackingState.startAnnotationTracking(WTFMove(annotation), mouseEventType, mouseEventButton);
+                    updateLayerHierarchy();
                     return true;
                 }
-                return false;
+
+                if (annotationIsLinkWithDestination(annotation.get())) {
+                    m_annotationTrackingState.startAnnotationTracking(WTFMove(annotation), mouseEventType, mouseEventButton);
+                    return true;
+                }
             }
 
-            beginTrackingSelection(*pageIndex, pointInPageSpace, selectionGranularityForMouseEvent(event), event.modifiers());
+            beginTrackingSelection(*pageIndex, pointInPageSpace, event);
 
             return false;
         }
@@ -1057,14 +1334,19 @@ bool UnifiedPDFPlugin::handleMouseEvent(const WebMouseEvent& event)
             return false;
         }
     case WebEventType::MouseUp:
-        commitCurrentSelection(SelectionCommitReason::ReceivedMouseUp);
+        stopTrackingSelection();
 
-        switch (event.button()) {
+        switch (mouseEventButton) {
         case WebMouseEventButton::Left:
-            if (m_trackedAnnotation) {
-                finishAnnotationTracking();
-                return true;
+            if (RetainPtr trackedAnnotation = m_annotationTrackingState.trackedAnnotation(); trackedAnnotation && ![trackedAnnotation isKindOfClass:getPDFAnnotationTextWidgetClass()]) {
+                m_annotationTrackingState.finishAnnotationTracking(mouseEventType, mouseEventButton);
+
+                if (annotationIsLinkWithDestination(trackedAnnotation.get()))
+                    followLinkAnnotation(trackedAnnotation.get());
+
+                updateLayerHierarchy();
             }
+
             return false;
         default:
             return false;
@@ -1083,6 +1365,124 @@ bool UnifiedPDFPlugin::handleMouseLeaveEvent(const WebMouseEvent&)
 {
     return false;
 }
+
+bool UnifiedPDFPlugin::handleContextMenuEvent(const WebMouseEvent& event)
+{
+#if PLATFORM(MAC)
+    if (!m_frame || !m_frame->coreLocalFrame())
+        return false;
+    RefPtr webPage = m_frame->page();
+    if (!webPage)
+        return false;
+    RefPtr frameView = m_frame->coreLocalFrame()->view();
+    if (!frameView)
+        return false;
+
+    auto contextMenu = createContextMenu(frameView->contentsToScreen(IntRect(frameView->windowToContents(event.position()), IntSize())).location());
+
+    webPage->sendWithAsyncReply(Messages::WebPageProxy::ShowPDFContextMenu { contextMenu, m_identifier }, [this, weakThis = WeakPtr { *this }](std::optional<int32_t>&& selectedItemTag) {
+        RefPtr protectedThis = weakThis.get();
+        if (!protectedThis)
+            return;
+        if (selectedItemTag)
+            performContextMenuAction(toContextMenuItemTag(selectedItemTag.value()));
+        stopTrackingSelection();
+        repaintOnSelectionActiveStateChangeIfNeeded(ActiveStateChangeReason::HandledContextMenuEvent);
+    });
+
+    return true;
+#else
+    return false;
+#endif // PLATFORM(MAC)
+}
+
+bool UnifiedPDFPlugin::handleKeyboardEvent(const WebKeyboardEvent&)
+{
+    return false;
+}
+
+void UnifiedPDFPlugin::followLinkAnnotation(PDFAnnotation *annotation)
+{
+    ASSERT(annotationIsLinkWithDestination(annotation));
+    if (NSURL *url = [annotation URL])
+        navigateToURL(url);
+    else if (PDFDestination *destination = [annotation destination])
+        scrollToPDFDestination(destination);
+}
+
+void UnifiedPDFPlugin::scrollToPDFDestination(PDFDestination *destination)
+{
+    auto unspecifiedValue = get_PDFKit_kPDFDestinationUnspecifiedValue();
+
+    auto pageIndex = [m_pdfDocument indexForPage:[destination page]];
+    auto pointInPDFPageSpace = [destination point];
+    if (pointInPDFPageSpace.x == unspecifiedValue)
+        pointInPDFPageSpace.x = 0;
+    if (pointInPDFPageSpace.y == unspecifiedValue)
+        pointInPDFPageSpace.y = heightForPage(pageIndex);
+
+    scrollToPointInPage(roundedIntPoint(pointInPDFPageSpace), pageIndex);
+}
+
+void UnifiedPDFPlugin::scrollToPointInPage(IntPoint pointInPDFPageSpace, PDFDocumentLayout::PageIndex pageIndex)
+{
+    auto pointInContentsSpace = convertFromPageToContents(pointInPDFPageSpace, pageIndex);
+    scrollToPositionWithoutAnimation(pointInContentsSpace);
+}
+
+void UnifiedPDFPlugin::scrollToPage(PDFDocumentLayout::PageIndex pageIndex)
+{
+    scrollToPointInPage({ 0, static_cast<int>(heightForPage(pageIndex)) }, pageIndex);
+}
+
+void UnifiedPDFPlugin::scrollToFragmentIfNeeded()
+{
+    if (!m_pdfDocument || !m_didAttachScrollingTreeNode || isLocked())
+        return;
+
+    if (m_didScrollToFragment)
+        return;
+
+    m_didScrollToFragment = true;
+
+    if (!m_frame)
+        return;
+
+    auto fragment = m_frame->url().fragmentIdentifier();
+    if (!fragment)
+        return;
+
+    auto fragmentView = StringView(fragment);
+
+    // Only respect the first fragment component.
+    if (auto endOfFirstComponentLocation = fragmentView.find('&'); endOfFirstComponentLocation != notFound)
+        fragmentView = fragment.left(endOfFirstComponentLocation);
+
+    // Ignore leading hashes.
+    auto isNotHash = [](UChar character) {
+        return character != '#';
+    };
+    if (auto firstNonHashLocation = fragmentView.find(isNotHash); firstNonHashLocation != notFound)
+        fragmentView = fragment.substring(firstNonHashLocation);
+    else
+        return;
+
+    auto remainderForPrefix = [&](ASCIILiteral prefix) -> std::optional<StringView> {
+        if (fragmentView.startsWith(prefix))
+            return fragmentView.substring(prefix.length());
+        return std::nullopt;
+    };
+
+    if (auto remainder = remainderForPrefix("page="_s)) {
+        if (auto pageNumber = parseInteger<PDFDocumentLayout::PageIndex>(*remainder); pageNumber)
+            scrollToPage(*pageNumber - 1);
+        return;
+    }
+
+    // FIXME (269224): Support named destinations.
+}
+
+#pragma mark Context Menu
 
 #if PLATFORM(MAC)
 UnifiedPDFPlugin::ContextMenuItemTag UnifiedPDFPlugin::contextMenuItemTagFromDisplayMode(const PDFDocumentLayout::DisplayMode& displayMode) const
@@ -1108,13 +1508,37 @@ PDFDocumentLayout::DisplayMode UnifiedPDFPlugin::displayModeFromContextMenuItemT
     }
 }
 
+auto UnifiedPDFPlugin::toContextMenuItemTag(int tagValue) const -> ContextMenuItemTag
+{
+    static constexpr std::array regularContextMenuItemTags {
+        ContextMenuItemTag::Copy,
+        ContextMenuItemTag::OpenWithPreview,
+        ContextMenuItemTag::SinglePage,
+        ContextMenuItemTag::SinglePageContinuous,
+        ContextMenuItemTag::TwoPages,
+        ContextMenuItemTag::TwoPagesContinuous,
+        ContextMenuItemTag::ZoomIn,
+        ContextMenuItemTag::ZoomOut,
+        ContextMenuItemTag::ActualSize,
+    };
+    const auto isKnownContextMenuItemTag = WTF::anyOf(regularContextMenuItemTags, [tagValue](ContextMenuItemTag tag) {
+        return tagValue == enumToUnderlyingType(tag);
+    });
+    return isKnownContextMenuItemTag ? static_cast<ContextMenuItemTag>(tagValue) : ContextMenuItemTag::Unknown;
+}
+
 PDFContextMenu UnifiedPDFPlugin::createContextMenu(const IntPoint& contextMenuPoint) const
 {
     Vector<PDFContextMenuItem> menuItems;
 
     auto addSeparator = [&] {
-        menuItems.append({ String(), 0, invalidContextMenuItemTag, ContextMenuItemEnablement::Disabled, ContextMenuItemHasAction::No, ContextMenuItemIsSeparator::Yes });
+        menuItems.append({ String(), 0, enumToUnderlyingType(ContextMenuItemTag::Invalid), ContextMenuItemEnablement::Disabled, ContextMenuItemHasAction::No, ContextMenuItemIsSeparator::Yes });
     };
+
+    if ([m_pdfDocument allowsCopying] && m_currentSelection) {
+        menuItems.append({ WebCore::contextMenuItemPDFCopy(), 0, enumToUnderlyingType(ContextMenuItemTag::Copy), ContextMenuItemEnablement::Enabled, ContextMenuItemHasAction::Yes, ContextMenuItemIsSeparator::No });
+        addSeparator();
+    }
 
     menuItems.append({ WebCore::contextMenuItemPDFOpenWithPreview(), 0,
         enumToUnderlyingType(ContextMenuItemTag::OpenWithPreview),
@@ -1143,6 +1567,9 @@ PDFContextMenu UnifiedPDFPlugin::createContextMenu(const IntPoint& contextMenuPo
 void UnifiedPDFPlugin::performContextMenuAction(ContextMenuItemTag tag)
 {
     switch (tag) {
+    case ContextMenuItemTag::Copy:
+        performCopyEditingOperation();
+        break;
     // The OpenWithPreview action is handled in the UI Process.
     case ContextMenuItemTag::OpenWithPreview: return;
     case ContextMenuItemTag::SinglePage:
@@ -1161,41 +1588,13 @@ void UnifiedPDFPlugin::performContextMenuAction(ContextMenuItemTag tag)
         zoomOut();
         break;
     case ContextMenuItemTag::ActualSize:
-        setPageScaleFactor(scaleForActualSize(), std::nullopt);
+        m_view->setPageScaleFactor(scaleForActualSize(), std::nullopt);
         break;
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
     }
 }
 #endif // PLATFORM(MAC)
-
-bool UnifiedPDFPlugin::handleContextMenuEvent(const WebMouseEvent& event)
-{
-#if PLATFORM(MAC)
-    if (!m_frame || !m_frame->coreLocalFrame())
-        return false;
-    RefPtr webPage = m_frame->page();
-    if (!webPage)
-        return false;
-    RefPtr frameView = m_frame->coreLocalFrame()->view();
-    if (!frameView)
-        return false;
-
-    auto contextMenu = createContextMenu(frameView->contentsToScreen(IntRect(frameView->windowToContents(event.position()), IntSize())).location());
-
-    auto sendResult = webPage->sendSync(Messages::WebPageProxy::ShowPDFContextMenu(contextMenu, m_identifier));
-    auto [selectedItemTag] = sendResult.takeReplyOr(-1);
-
-    if (selectedItemTag >= 0)
-        performContextMenuAction(static_cast<ContextMenuItemTag>(selectedItemTag.value()));
-    return true;
-#else
-    return false;
-#endif // PLATFORM(MAC)
-}
-
-bool UnifiedPDFPlugin::handleKeyboardEvent(const WebKeyboardEvent&)
-{
-    return false;
-}
 
 #pragma mark Editing Commands
 
@@ -1204,10 +1603,17 @@ bool UnifiedPDFPlugin::handleEditingCommand(const String& commandName, const Str
     if (commandName == "ScrollPageBackward"_s || commandName == "ScrollPageForward"_s)
         return forwardEditingCommandToEditor(commandName, argument);
 
+    if (commandName == "copy"_s)
+        return performCopyEditingOperation();
+
     if (commandName == "selectAll"_s) {
         selectAll();
         return true;
     }
+
+    if (commandName == "takeFindStringFromSelection"_s)
+        return takeFindStringFromSelection();
+
     return false;
 }
 
@@ -1215,9 +1621,64 @@ bool UnifiedPDFPlugin::isEditingCommandEnabled(const String& commandName)
 {
     if (commandName == "ScrollPageBackward"_s || commandName == "ScrollPageForward"_s)
         return true;
+
     if (commandName == "selectAll"_s)
         return true;
+
+    if (commandName == "copy"_s || commandName == "takeFindStringFromSelection"_s)
+        return m_currentSelection;
+
     return false;
+}
+
+bool UnifiedPDFPlugin::performCopyEditingOperation() const
+{
+#if PLATFORM(MAC)
+    if (!m_currentSelection)
+        return false;
+
+    if (![m_pdfDocument allowsCopying]) {
+        [[NSNotificationCenter defaultCenter] postNotificationName:get_PDFKit_PDFViewCopyPermissionNotification() object:nil];
+        return false;
+    }
+
+    NSString *plainString = [m_currentSelection string];
+    NSString *htmlString = [m_currentSelection html];
+    NSData *webArchiveData = [m_currentSelection webArchive];
+
+    NSArray *types = @[ PasteboardTypes::WebArchivePboardType, NSPasteboardTypeString, NSPasteboardTypeHTML ];
+
+    NSArray *items = @[ webArchiveData, [plainString dataUsingEncoding:NSUTF8StringEncoding], [htmlString dataUsingEncoding:NSUTF8StringEncoding] ];
+
+    writeItemsToPasteboard(NSPasteboardNameGeneral, items, types);
+    return true;
+#endif
+    return false;
+}
+
+
+bool UnifiedPDFPlugin::takeFindStringFromSelection()
+{
+    if (!m_currentSelection)
+        return false;
+
+    String findString { m_currentSelection.get().string };
+    if (findString.isEmpty())
+        return false;
+
+#if PLATFORM(MAC)
+    writeItemsToPasteboard(NSPasteboardNameFind, @[ [nsStringNilIfEmpty(findString) dataUsingEncoding:NSUTF8StringEncoding] ], @[ NSPasteboardTypeString ]);
+#else
+    if (!m_frame || !m_frame->coreLocalFrame())
+        return false;
+
+    if (CheckedPtr client = m_frame->coreLocalFrame()->checkedEditor()->client())
+        client->updateStringForFind(findString);
+    else
+        return false;
+#endif
+
+    return true;
 }
 
 bool UnifiedPDFPlugin::forwardEditingCommandToEditor(const String& commandName, const String& argument) const
@@ -1243,21 +1704,51 @@ auto UnifiedPDFPlugin::selectionGranularityForMouseEvent(const WebMouseEvent& ev
     return SelectionGranularity::Character;
 }
 
-void UnifiedPDFPlugin::beginTrackingSelection(PDFDocumentLayout::PageIndex pageIndex, const WebCore::IntPoint& pagePoint, SelectionGranularity selectionGranularity, OptionSet<WebEventModifier> mouseEventModifiers)
+void UnifiedPDFPlugin::extendCurrentSelectionIfNeeded()
 {
-    m_selectionTrackingData.isActive = true;
-    m_selectionTrackingData.granularity = selectionGranularity;
+    if (!m_currentSelection)
+        return;
+    PDFPage *firstPageOfCurrentSelection = [[m_currentSelection pages] firstObject];
+
+    auto oldStartPageIndex = std::exchange(m_selectionTrackingData.startPageIndex, [m_pdfDocument indexForPage:firstPageOfCurrentSelection]);
+    auto oldStartPagePoint = std::exchange(m_selectionTrackingData.startPagePoint, IntPoint { [m_currentSelection firstCharCenter] });
+    m_selectionTrackingData.selectionToExtendWith = WTFMove(m_currentSelection);
+
+    RetainPtr selection = [m_pdfDocument selectionFromPage:firstPageOfCurrentSelection atPoint:m_selectionTrackingData.startPagePoint toPage:m_documentLayout.pageAtIndex(oldStartPageIndex).get() atPoint:oldStartPagePoint];
+    [selection addSelection:m_selectionTrackingData.selectionToExtendWith.get()];
+    setCurrentSelection(WTFMove(selection));
+}
+
+void UnifiedPDFPlugin::beginTrackingSelection(PDFDocumentLayout::PageIndex pageIndex, const WebCore::IntPoint& pagePoint, const WebMouseEvent& event)
+{
+    auto modifiers = event.modifiers();
+
+    m_selectionTrackingData.isActivelyTrackingSelection = true;
+    m_selectionTrackingData.granularity = selectionGranularityForMouseEvent(event);
     m_selectionTrackingData.startPageIndex = pageIndex;
     m_selectionTrackingData.startPagePoint = pagePoint;
     m_selectionTrackingData.marqueeSelectionRect = { };
-    m_selectionTrackingData.shouldMakeMarqueeSelection = mouseEventModifiers.contains(WebEventModifier::AltKey);
-    m_selectionTrackingData.shouldExtendCurrentSelection = mouseEventModifiers.contains(WebEventModifier::ShiftKey);
+    m_selectionTrackingData.shouldMakeMarqueeSelection = modifiers.contains(WebEventModifier::AltKey);
+    m_selectionTrackingData.shouldExtendCurrentSelection = modifiers.contains(WebEventModifier::ShiftKey);
+    m_selectionTrackingData.selectionToExtendWith = nullptr;
 
-    // FIXME: <https://webkit.org/b/268617>  Selections should be extensible on shift-click.
+    repaintOnSelectionActiveStateChangeIfNeeded(ActiveStateChangeReason::BeganTrackingSelection);
+
+    // Context menu events can only generate a word selection under the event, so we bail out of the rest of our selection tracking logic.
+    if (isContextMenuEvent(event))
+        return updateCurrentSelectionForContextMenuEventIfNeeded();
+
     if (m_selectionTrackingData.shouldExtendCurrentSelection)
-        notImplemented();
+        extendCurrentSelectionIfNeeded();
 
     continueTrackingSelection(pageIndex, pagePoint);
+}
+
+void UnifiedPDFPlugin::updateCurrentSelectionForContextMenuEventIfNeeded()
+{
+    auto page = m_documentLayout.pageAtIndex(m_selectionTrackingData.startPageIndex);
+    if (!m_currentSelection || !(IntRect([m_currentSelection boundsForPage:page.get()]).contains(m_selectionTrackingData.startPagePoint)))
+        setCurrentSelection([page selectionForWordAtPoint:m_selectionTrackingData.startPagePoint]);
 }
 
 static IntRect computeMarqueeSelectionRect(const WebCore::IntPoint& point1, const WebCore::IntPoint& point2)
@@ -1269,8 +1760,6 @@ static IntRect computeMarqueeSelectionRect(const WebCore::IntPoint& point1, cons
 
 void UnifiedPDFPlugin::continueTrackingSelection(PDFDocumentLayout::PageIndex pageIndex, const WebCore::IntPoint& pagePoint)
 {
-    m_selectionTrackingData.isActive = true;
-
     if (m_selectionTrackingData.shouldMakeMarqueeSelection) {
         if (m_selectionTrackingData.startPageIndex != pageIndex)
             return;
@@ -1297,19 +1786,44 @@ void UnifiedPDFPlugin::continueTrackingSelection(PDFDocumentLayout::PageIndex pa
     }
 }
 
+void UnifiedPDFPlugin::stopTrackingSelection()
+{
+    m_selectionTrackingData.selectionToExtendWith = nullptr;
+    m_selectionTrackingData.isActivelyTrackingSelection = false;
+}
+
+void UnifiedPDFPlugin::repaintOnSelectionActiveStateChangeIfNeeded(ActiveStateChangeReason reason)
+{
+    switch (reason) {
+    case ActiveStateChangeReason::HandledContextMenuEvent:
+        m_selectionTrackingData.lastHandledEventWasContextMenuEvent = true;
+        break;
+    case ActiveStateChangeReason::BeganTrackingSelection:
+        if (!std::exchange(m_selectionTrackingData.lastHandledEventWasContextMenuEvent, false))
+            return;
+        break;
+    case ActiveStateChangeReason::SetCurrentSelection:
+    case ActiveStateChangeReason::WindowActivityChanged:
+        break;
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
+    }
+
+    m_contentsLayer->setNeedsDisplay();
+}
+
+bool UnifiedPDFPlugin::isSelectionActiveAfterContextMenuInteraction() const
+{
+    return !m_selectionTrackingData.lastHandledEventWasContextMenuEvent;
+}
+
 void UnifiedPDFPlugin::setCurrentSelection(RetainPtr<PDFSelection>&& selection)
 {
     m_currentSelection = WTFMove(selection);
-    if (!m_selectionTrackingData.isActive)
-        commitCurrentSelection(SelectionCommitReason::SelectionIsNoLongerActive);
-}
-
-void UnifiedPDFPlugin::commitCurrentSelection(SelectionCommitReason reason)
-{
-    if (reason == SelectionCommitReason::ReceivedMouseUp && !std::exchange(m_selectionTrackingData.isActive, false))
-        return;
+    // FIXME: <https://webkit.org/b/268980> Selection painting requests should be only be made if the current selection has changed.
+    // FIXME: <https://webkit.org/b/268927> Selection painting requests should be optimized by specifying dirty rects.
+    repaintOnSelectionActiveStateChangeIfNeeded(ActiveStateChangeReason::SetCurrentSelection);
     notifySelectionChanged();
-    m_selectionTrackingData.selectionToExtendWith = nullptr;
 }
 
 String UnifiedPDFPlugin::getSelectionString() const
@@ -1344,7 +1858,7 @@ bool UnifiedPDFPlugin::performDictionaryLookupAtLocation(const FloatPoint&)
     return false;
 }
 
-std::tuple<String, PDFSelection *, NSDictionary *> UnifiedPDFPlugin::lookupTextAtLocation(const FloatPoint&, WebHitTestResultData&) const
+std::pair<String, PDFSelection *> UnifiedPDFPlugin::lookupTextAtLocation(const FloatPoint&, WebHitTestResultData&) const
 {
     return { };
 }
@@ -1368,12 +1882,12 @@ id UnifiedPDFPlugin::accessibilityAssociatedPluginParentForElement(Element*) con
 
 void UnifiedPDFPlugin::zoomIn()
 {
-    setPageScaleFactor(std::clamp(m_scaleFactor * zoomIncrement, minimumZoomScale, maximumZoomScale), std::nullopt);
+    m_view->setPageScaleFactor(std::clamp(m_scaleFactor * zoomIncrement, minimumZoomScale, maximumZoomScale), std::nullopt);
 }
 
 void UnifiedPDFPlugin::zoomOut()
 {
-    setPageScaleFactor(std::clamp(m_scaleFactor / zoomIncrement, minimumZoomScale, maximumZoomScale), std::nullopt);
+    m_view->setPageScaleFactor(std::clamp(m_scaleFactor / zoomIncrement, minimumZoomScale, maximumZoomScale), std::nullopt);
 }
 
 #endif // ENABLE(PDF_HUD)
@@ -1395,13 +1909,93 @@ CGRect UnifiedPDFPlugin::pluginBoundsForAnnotation(RetainPtr<PDFAnnotation>& ann
     return pageSpaceBounds;
 }
 
+#if PLATFORM(MAC)
+static RetainPtr<PDFAnnotation> findFirstTextAnnotationStartingAtIndex(const RetainPtr<NSArray>& annotations, unsigned startingIndex, AnnotationSearchDirection searchDirection)
+{
+    ASSERT(annotations);
+    if (!annotations || startingIndex >= [annotations count])
+        return nullptr;
+
+    auto indexRange = [&] {
+        if (searchDirection == AnnotationSearchDirection::Forward)
+            return [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(startingIndex, [annotations count] - startingIndex)];
+        return [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(0, startingIndex + 1)];
+    }();
+
+    auto searchResult = [annotations indexOfObjectAtIndexes:indexRange options:searchDirection == AnnotationSearchDirection::Forward ? 0 : NSEnumerationReverse passingTest:^BOOL(PDFAnnotation* annotation, NSUInteger, BOOL *) {
+        return [annotation isKindOfClass:getPDFAnnotationTextWidgetClass()] && ![annotation isReadOnly] && [annotation shouldDisplay];
+    }];
+
+    return searchResult != NSNotFound ? [annotations objectAtIndex:searchResult] : nullptr;
+}
+
+RetainPtr<PDFAnnotation> UnifiedPDFPlugin::nextTextAnnotation(AnnotationSearchDirection searchDirection) const
+{
+    ASSERT(m_activeAnnotation);
+    RetainPtr currentAnnotation = m_activeAnnotation->annotation();
+    RetainPtr currentPage = [currentAnnotation page];
+    if (!currentPage)
+        return nullptr;
+
+    RetainPtr annotationsForCurrentPage = [currentPage annotations];
+    auto indexOfCurrentAnnotation = [annotationsForCurrentPage indexOfObject:currentAnnotation.get()];
+    ASSERT(indexOfCurrentAnnotation != NSNotFound);
+    if (indexOfCurrentAnnotation == NSNotFound)
+        return nullptr;
+
+    bool isForwardSearchDirection = searchDirection == AnnotationSearchDirection::Forward;
+    if ((isForwardSearchDirection && indexOfCurrentAnnotation + 1 < [annotationsForCurrentPage count]) || (!isForwardSearchDirection && indexOfCurrentAnnotation)) {
+        auto startingIndexForSearch = isForwardSearchDirection ? indexOfCurrentAnnotation + 1 : indexOfCurrentAnnotation - 1;
+        if (RetainPtr nextTextAnnotationOnCurrentPage = findFirstTextAnnotationStartingAtIndex(annotationsForCurrentPage, startingIndexForSearch, searchDirection))
+            return nextTextAnnotationOnCurrentPage;
+    }
+
+    auto indexForCurrentPage = m_documentLayout.indexForPage(currentPage);
+    if (!indexForCurrentPage)
+        return nullptr;
+
+    RetainPtr<PDFAnnotation> nextAnnotation;
+    auto nextPageToSearchIndex = indexForCurrentPage.value();
+    while (!nextAnnotation) {
+        auto computeNextPageToSearchIndex = [this, isForwardSearchDirection](unsigned currentPageIndex) -> unsigned {
+            auto pageCount = m_documentLayout.pageCount();
+            if (!isForwardSearchDirection && !currentPageIndex)
+                return pageCount - 1;
+            return isForwardSearchDirection ? ((currentPageIndex + 1) % pageCount) : currentPageIndex - 1;
+        };
+        nextPageToSearchIndex = computeNextPageToSearchIndex(nextPageToSearchIndex);
+        RetainPtr nextPage = m_documentLayout.pageAtIndex(nextPageToSearchIndex);
+        if (!nextPage)
+            return nullptr;
+        if (RetainPtr nextPageAnnotations = [nextPage annotations]; nextPageAnnotations && [nextPageAnnotations count])
+            nextAnnotation = findFirstTextAnnotationStartingAtIndex(nextPageAnnotations, isForwardSearchDirection ? 0 : [nextPageAnnotations count] - 1, searchDirection);
+    }
+    return nextAnnotation;
+}
+#endif
 
 void UnifiedPDFPlugin::focusNextAnnotation()
 {
+#if PLATFORM(MAC)
+    if (!m_activeAnnotation)
+        return;
+    RetainPtr nextTextAnnotation = this->nextTextAnnotation(AnnotationSearchDirection::Forward);
+    if (!nextTextAnnotation || nextTextAnnotation == m_activeAnnotation->annotation())
+        return;
+    setActiveAnnotation(WTFMove(nextTextAnnotation));
+#endif
 }
 
 void UnifiedPDFPlugin::focusPreviousAnnotation()
 {
+#if PLATFORM(MAC)
+    if (!m_activeAnnotation)
+        return;
+    RetainPtr previousTextAnnotation = this->nextTextAnnotation(AnnotationSearchDirection::Backward);
+    if (!previousTextAnnotation || previousTextAnnotation == m_activeAnnotation->annotation())
+        return;
+    setActiveAnnotation(WTFMove(previousTextAnnotation));
+#endif
 }
 
 void UnifiedPDFPlugin::setActiveAnnotation(RetainPtr<PDFAnnotation>&& annotation)
@@ -1426,52 +2020,59 @@ ALLOW_DEPRECATED_DECLARATIONS_END
         activeAnnotation->attach(m_annotationContainer.get());
     } else
         m_activeAnnotation = nullptr;
+
     updateLayerHierarchy();
 #endif
 }
 
-void UnifiedPDFPlugin::startAnnotationTracking(RetainPtr<PDFAnnotation>&& annotation)
+void AnnotationTrackingState::startAnnotationTracking(RetainPtr<PDFAnnotation>&& annotation, WebEventType mouseEventType, WebMouseEventButton mouseEventButton)
 {
     ASSERT(!m_trackedAnnotation);
-    m_trackedAnnotation = annotation;
+    m_trackedAnnotation = WTFMove(annotation);
 
-    if ([annotation isKindOfClass:getPDFAnnotationButtonWidgetClass()])
-        [annotation setHighlighted:YES];
-
-    updateLayerHierarchy();
+    if ([m_trackedAnnotation isKindOfClass:getPDFAnnotationButtonWidgetClass()])
+        [m_trackedAnnotation setHighlighted:YES];
+    if (mouseEventType == WebEventType::MouseMove && mouseEventButton == WebMouseEventButton::None)
+        m_isBeingHovered = true;
 }
 
-void UnifiedPDFPlugin::finishAnnotationTracking()
+void AnnotationTrackingState::finishAnnotationTracking(WebEventType mouseEventType, WebMouseEventButton mouseEventButton)
 {
     ASSERT(m_trackedAnnotation);
+    if (mouseEventType == WebEventType::MouseUp && mouseEventButton == WebMouseEventButton::Left) {
+        if ([m_trackedAnnotation isHighlighted])
+            [m_trackedAnnotation setHighlighted:NO];
 
-    if ([m_trackedAnnotation isHighlighted])
-        [m_trackedAnnotation setHighlighted:NO];
-
-    if ([m_trackedAnnotation isKindOfClass:getPDFAnnotationButtonWidgetClass()] && [m_trackedAnnotation widgetControlType] != kPDFWidgetPushButtonControl) {
-        auto currentButtonState = [m_trackedAnnotation buttonWidgetState];
-        if (currentButtonState == PDFWidgetCellState::kPDFWidgetOnState && [m_trackedAnnotation allowsToggleToOff])
-            [m_trackedAnnotation setButtonWidgetState:PDFWidgetCellState::kPDFWidgetOffState];
-        else if (currentButtonState == PDFWidgetCellState::kPDFWidgetOffState)
-            [m_trackedAnnotation setButtonWidgetState:PDFWidgetCellState::kPDFWidgetOnState];
-    } else
-        ASSERT_NOT_IMPLEMENTED_YET();
-    m_trackedAnnotation = nullptr;
-
-    updateLayerHierarchy();
+        if ([m_trackedAnnotation isKindOfClass:getPDFAnnotationButtonWidgetClass()] && [m_trackedAnnotation widgetControlType] != kPDFWidgetPushButtonControl) {
+            auto currentButtonState = [m_trackedAnnotation buttonWidgetState];
+            if (currentButtonState == PDFWidgetCellState::kPDFWidgetOnState && [m_trackedAnnotation allowsToggleToOff])
+                [m_trackedAnnotation setButtonWidgetState:PDFWidgetCellState::kPDFWidgetOffState];
+            else if (currentButtonState == PDFWidgetCellState::kPDFWidgetOffState)
+                [m_trackedAnnotation setButtonWidgetState:PDFWidgetCellState::kPDFWidgetOnState];
+        }
+    } else if (mouseEventType == WebEventType::MouseMove && mouseEventButton == WebMouseEventButton::Left)
+        handleMouseDraggedOffTrackedAnnotation();
+    resetAnnotationTrackingState();
 }
 
-void UnifiedPDFPlugin::handleMouseDraggedOffTrackedAnnotation()
+void AnnotationTrackingState::handleMouseDraggedOffTrackedAnnotation()
 {
     ASSERT(m_trackedAnnotation);
 
     [m_trackedAnnotation setHighlighted:NO];
-    m_trackedAnnotation = nullptr;
-    updateLayerHierarchy();
 }
 
-void UnifiedPDFPlugin::attemptToUnlockPDF(const String& password)
+bool AnnotationTrackingState::isBeingHovered() const
 {
+    ASSERT(m_trackedAnnotation);
+    return m_isBeingHovered;
+}
+
+void AnnotationTrackingState::resetAnnotationTrackingState()
+{
+    ASSERT(m_trackedAnnotation);
+    m_trackedAnnotation = nullptr;
+    m_isBeingHovered = false;
 }
 
 bool UnifiedPDFPlugin::isTaggedPDF() const

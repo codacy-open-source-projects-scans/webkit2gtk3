@@ -51,6 +51,7 @@ class AudioTrackList;
 class BufferSource;
 class MediaSource;
 class PlatformTimeRanges;
+class Settings;
 class SourceBufferPrivate;
 class TextTrackList;
 class TimeRanges;
@@ -120,7 +121,6 @@ public:
     using SourceBufferPrivateClient::ref;
     using SourceBufferPrivateClient::deref;
 
-    Document& document() const;
     enum class AppendMode { Segments, Sequence };
     AppendMode mode() const { return m_mode; }
     ExceptionOr<void> setMode(AppendMode);
@@ -151,6 +151,7 @@ public:
 
 protected:
     SourceBuffer(Ref<SourceBufferPrivate>&&, MediaSource&);
+    const Settings& settings() const;
 
 private:
     void refEventTarget() final { ref(); }
@@ -216,6 +217,9 @@ private:
     WEBCORE_EXPORT MediaTime minimumUpcomingPresentationTimeForTrackID(TrackID);
     WEBCORE_EXPORT void setMaximumQueueDepthForTrackID(TrackID, uint64_t);
 
+    void ensureWeakOnDispatcher(Function<void()>&&) const;
+    Ref<MediaPromise> promisedWeakOnDispatcher(Function<Ref<MediaPromise>()>&&, bool forceAsync = false) const;
+
     void updateBuffered();
 
     Ref<SourceBufferPrivate> m_private;
@@ -258,6 +262,7 @@ private:
     Vector<PlatformTimeRanges> m_trackBuffers;
     NativePromiseRequest m_appendBufferPromise;
     NativePromiseRequest m_removeCodedFramesPromise;
+    const Ref<RefCountedSerialFunctionDispatcher> m_dispatcher;
 
 #if !RELEASE_LOG_DISABLED
     Ref<const Logger> m_logger;

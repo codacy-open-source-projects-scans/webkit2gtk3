@@ -27,10 +27,10 @@
 
 #if ENABLE(PDF_PLUGIN)
 
-#include "DataReference.h"
 #include "FrameInfoData.h"
 #include "PDFPluginIdentifier.h"
 #include "PDFScriptEvaluator.h"
+#include "WebMouseEvent.h"
 #include <WebCore/AffineTransform.h>
 #include <WebCore/FindOptions.h>
 #include <WebCore/FloatRect.h>
@@ -118,7 +118,7 @@ public:
     RetainPtr<PDFDocument> pdfDocumentForPrinting() const { return m_pdfDocument; }
     WebCore::FloatSize pdfDocumentSizeForPrinting() const;
 
-    virtual void geometryDidChange(const WebCore::IntSize& pluginSize, const WebCore::AffineTransform& pluginToRootViewTransform);
+    virtual bool geometryDidChange(const WebCore::IntSize& pluginSize, const WebCore::AffineTransform& pluginToRootViewTransform);
     virtual void visibilityDidChange(bool);
     virtual void deviceScaleFactorChanged(float) { }
 
@@ -149,7 +149,7 @@ public:
     virtual bool findString(const String& target, WebCore::FindOptions, unsigned maxMatchCount) = 0;
 
     virtual bool performDictionaryLookupAtLocation(const WebCore::FloatPoint&) = 0;
-    virtual std::tuple<String, PDFSelection *, NSDictionary *> lookupTextAtLocation(const WebCore::FloatPoint&, WebHitTestResultData&) const = 0;
+    virtual std::pair<String, PDFSelection *> lookupTextAtLocation(const WebCore::FloatPoint&, WebHitTestResultData&) const = 0;
 
     virtual id accessibilityHitTest(const WebCore::IntPoint&) const = 0;
     virtual id accessibilityObject() const = 0;
@@ -175,14 +175,16 @@ public:
     WebCore::Scrollbar* horizontalScrollbar() const override { return m_horizontalScrollbar.get(); }
     WebCore::Scrollbar* verticalScrollbar() const override { return m_verticalScrollbar.get(); }
 
+    virtual void didAttachScrollingNode() { }
+
     virtual void didChangeSettings() { }
 
     // HUD Actions.
 #if ENABLE(PDF_HUD)
     virtual void zoomIn() = 0;
     virtual void zoomOut() = 0;
-    void save(CompletionHandler<void(const String&, const URL&, const IPC::DataReference&)>&&);
-    void openWithPreview(CompletionHandler<void(const String&, FrameInfoData&&, const IPC::DataReference&, const String&)>&&);
+    void save(CompletionHandler<void(const String&, const URL&, std::span<const uint8_t>)>&&);
+    void openWithPreview(CompletionHandler<void(const String&, FrameInfoData&&, std::span<const uint8_t>, const String&)>&&);
 #endif
 
     void notifyCursorChanged(WebCore::PlatformCursorType);
@@ -196,6 +198,8 @@ public:
     virtual void focusNextAnnotation() = 0;
     virtual void focusPreviousAnnotation() = 0;
 
+    void navigateToURL(const URL&);
+
     virtual void attemptToUnlockPDF(const String& password) = 0;
 
 #if HAVE(INCREMENTAL_PDF_APIS)
@@ -207,6 +211,14 @@ public:
 #endif
 
     void notifySelectionChanged();
+
+    virtual void windowActivityDidChange() { }
+
+    virtual void didSameDocumentNavigationForFrame(WebFrame&) { }
+
+#if PLATFORM(MAC)
+    void writeItemsToPasteboard(NSString *pasteboardName, NSArray *items, NSArray *types) const;
+#endif
 
 private:
     bool documentFinishedLoading() const { return m_documentFinishedLoading; }
@@ -260,7 +272,7 @@ protected:
     WebCore::ScrollPosition minimumScrollPosition() const final;
     WebCore::ScrollPosition maximumScrollPosition() const final;
     WebCore::IntSize visibleSize() const final { return m_size; }
-    WebCore::IntPoint lastKnownMousePositionInView() const override { return m_lastMousePositionInPluginCoordinates; }
+    WebCore::IntPoint lastKnownMousePositionInView() const override;
 
     float deviceScaleFactor() const override;
     bool shouldSuspendScrollAnimations() const final { return false; } // If we return true, ScrollAnimatorMac will keep cycling a timer forever, waiting for a good time to animate.
@@ -287,9 +299,11 @@ protected:
     virtual void destroyScrollbar(WebCore::ScrollbarOrientation);
 
 #if ENABLE(PDF_HUD)
-    void updatePDFHUDLocation();
+    void updateHUDLocation();
     WebCore::IntRect frameForHUDInRootViewCoordinates() const;
     bool hudEnabled() const;
+    bool shouldShowHUD() const;
+    void updateHUDVisibility();
 #endif
 
 #if !LOG_DISABLED
@@ -316,7 +330,7 @@ protected:
     WebCore::AffineTransform m_rootViewToPluginTransform;
 
     WebCore::IntSize m_scrollOffset;
-    WebCore::IntPoint m_lastMousePositionInPluginCoordinates;
+    std::optional<WebMouseEvent> m_lastMouseEvent;
 
     RefPtr<WebCore::Scrollbar> m_horizontalScrollbar;
     RefPtr<WebCore::Scrollbar> m_verticalScrollbar;

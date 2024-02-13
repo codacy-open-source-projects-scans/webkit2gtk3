@@ -196,6 +196,8 @@ void PDFPluginStreamLoaderClient::didReceiveResponse(NetscapePlugInStreamLoader*
     if (response.httpStatusCode() == httpStatus206PartialContent)
         return;
 
+    LOG_WITH_STREAM(IncrementalPDF, stream << "Range request " << request->identifier() << " response was not 206, it was " << response.httpStatusCode());
+
     // If the response wasn't a successful range response, we don't need this stream loader anymore.
     // This can happen, for example, if the server doesn't support range requests.
     // We'll still resolve the ByteRangeRequest later once enough of the full resource has loaded.
@@ -292,7 +294,6 @@ void PDFIncrementalLoader::clear()
     // we can force the PDFThread to complete quickly
     if (m_pdfThread) {
         unconditionalCompleteOutstandingRangeRequests();
-        m_dataSemaphore.signal();
         m_pdfThread->waitForCompletion();
     }
 }
@@ -619,10 +620,8 @@ static void dataProviderReleaseInfoCallback(void* info)
 size_t PDFIncrementalLoader::dataProviderGetBytesAtPosition(void* buffer, off_t position, size_t count)
 {
     if (isMainRunLoop()) {
-#if !LOG_DISABLED
-        incrementalLoaderLog(makeString("Handling request for ", count, " bytes at position ", position, " synchronously on the main thread"));
-#endif
-        ASSERT(documentFinishedLoading());
+        LOG_WITH_STREAM(IncrementalPDF, stream << "Handling request for " << count << " bytes at position " << position << " synchronously on the main thread. Finished loading:" << documentFinishedLoading());
+        // FIXME: if documentFinishedLoading() is false, we may not be able to fulfill this request, but that should only happen if we trigger painting on the main thread.
         return getResourceBytesAtPositionAfterLoadingComplete(buffer, position, count);
     }
 
@@ -650,20 +649,19 @@ size_t PDFIncrementalLoader::dataProviderGetBytesAtPosition(void* buffer, off_t 
         return 0;
     }
 
+    WTF::Semaphore dataSemaphore { 0 };
     size_t bytesProvided = 0;
-    // Do not dispatch main runloop (again) and wait anymore if document is finshed loading.
-    if (plugin->documentFinishedLoading())
-        return 0;
-    RunLoop::main().dispatch([this, protectedLoader = Ref { *this }, position, count, buffer, &bytesProvided] {
-        protectedLoader->getResourceBytesAtPosition(count, position, [this, count, buffer, &bytesProvided](const uint8_t* bytes, size_t bytesCount) {
+
+    RunLoop::main().dispatch([protectedLoader = Ref { *this }, position, count, buffer, &dataSemaphore, &bytesProvided] {
+        protectedLoader->getResourceBytesAtPosition(count, position, [count, buffer, &dataSemaphore, &bytesProvided](const uint8_t* bytes, size_t bytesCount) {
             RELEASE_ASSERT(bytesCount <= count);
             memcpy(buffer, bytes, bytesCount);
             bytesProvided = bytesCount;
-            m_dataSemaphore.signal();
+            dataSemaphore.signal();
         });
     });
 
-    m_dataSemaphore.wait();
+    dataSemaphore.wait();
 
 #if !LOG_DISABLED
     decrementThreadsWaitingOnCallback();

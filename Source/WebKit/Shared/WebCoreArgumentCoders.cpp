@@ -161,17 +161,9 @@
 #include <wtf/text/CString.h>
 #include <wtf/text/StringHash.h>
 
-#if PLATFORM(COCOA)
-#include "ArgumentCodersCF.h"
-#endif
-
 #if PLATFORM(IOS_FAMILY)
 #include <WebCore/SelectionGeometry.h>
 #endif // PLATFORM(IOS_FAMILY)
-
-#if ENABLE(WIRELESS_PLAYBACK_TARGET)
-#include <WebCore/MediaPlaybackTargetContext.h>
-#endif
 
 #if ENABLE(MEDIA_STREAM)
 #include <WebCore/CaptureDevice.h>
@@ -196,44 +188,7 @@ namespace IPC {
 using namespace WebCore;
 using namespace WebKit;
 
-void ArgumentCoder<Credential>::encode(Encoder& encoder, const Credential& credential)
-{
-    if (credential.encodingRequiresPlatformData()) {
-        encoder << true;
-        encodePlatformData(encoder, credential);
-        return;
-    }
-
-    encoder << false;
-    encoder << credential.user() << credential.password();
-    encoder << credential.persistence();
-}
-
-bool ArgumentCoder<Credential>::decode(Decoder& decoder, Credential& credential)
-{
-    bool hasPlatformData;
-    if (!decoder.decode(hasPlatformData))
-        return false;
-
-    if (hasPlatformData)
-        return decodePlatformData(decoder, credential);
-
-    String user;
-    if (!decoder.decode(user))
-        return false;
-
-    String password;
-    if (!decoder.decode(password))
-        return false;
-
-    CredentialPersistence persistence;
-    if (!decoder.decode(persistence))
-        return false;
-    
-    credential = Credential(user, password, persistence);
-    return true;
-}
-
+#if !USE(CORE_TEXT)
 void ArgumentCoder<WebCore::Font>::encode(Encoder& encoder, const WebCore::Font& font)
 {
     encoder << font.attributes();
@@ -311,8 +266,6 @@ std::optional<Ref<FontCustomPlatformData>> ArgumentCoder<FontCustomPlatformData>
     return fontCustomPlatformData.releaseNonNull();
 }
 
-#if !USE(CORE_TEXT)
-
 void ArgumentCoder<WebCore::FontPlatformData::Attributes>::encode(Encoder& encoder, const WebCore::FontPlatformData::Attributes& data)
 {
     encoder << data.m_orientation;
@@ -363,83 +316,6 @@ std::optional<FontPlatformData::Attributes> ArgumentCoder<FontPlatformData::Attr
         return std::nullopt;
 
     return result;
-}
-
-#endif
-
-#if ENABLE(WIRELESS_PLAYBACK_TARGET)
-void ArgumentCoder<MediaPlaybackTargetContext>::encode(Encoder& encoder, const MediaPlaybackTargetContext& target)
-{
-    bool hasPlatformData = target.encodingRequiresPlatformData();
-    encoder << hasPlatformData;
-
-    MediaPlaybackTargetContext::Type contextType = target.type();
-    encoder << contextType;
-
-    if (target.encodingRequiresPlatformData()) {
-        encodePlatformData(encoder, target);
-        return;
-    }
-
-    ASSERT(contextType == MediaPlaybackTargetContext::Type::Mock);
-    encoder << target.deviceName();
-    encoder << target.mockState();
-}
-
-bool ArgumentCoder<MediaPlaybackTargetContext>::decode(Decoder& decoder, MediaPlaybackTargetContext& target)
-{
-    bool hasPlatformData;
-    if (!decoder.decode(hasPlatformData))
-        return false;
-
-    MediaPlaybackTargetContext::Type contextType;
-    if (!decoder.decode(contextType))
-        return false;
-
-    if (hasPlatformData)
-        return decodePlatformData(decoder, contextType, target);
-
-    ASSERT(contextType == MediaPlaybackTargetContext::Type::Mock);
-    String deviceName;
-    if (!decoder.decode(deviceName))
-        return false;
-
-    MediaPlaybackTargetContext::MockState mockState;
-    if (!decoder.decode(mockState))
-        return false;
-
-    target = MediaPlaybackTargetContext(deviceName, mockState);
-
-    return true;
-}
-#endif
-
-#if ENABLE(VIDEO)
-void ArgumentCoder<WebCore::SerializedPlatformDataCueValue>::encode(Encoder& encoder, const SerializedPlatformDataCueValue& value)
-{
-    bool hasPlatformData = value.encodingRequiresPlatformData();
-    encoder << hasPlatformData;
-
-    encoder << value.platformType();
-    if (hasPlatformData)
-        encodePlatformData(encoder, value);
-}
-
-std::optional<SerializedPlatformDataCueValue> ArgumentCoder<WebCore::SerializedPlatformDataCueValue>::decode(IPC::Decoder& decoder)
-{
-    bool hasPlatformData;
-    if (!decoder.decode(hasPlatformData))
-        return std::nullopt;
-
-    WebCore::SerializedPlatformDataCueValue::PlatformType type;
-    if (!decoder.decode(type))
-        return std::nullopt;
-
-    if (hasPlatformData)
-        return decodePlatformData(decoder, type);
-
-    return { SerializedPlatformDataCueValue() };
-
 }
 #endif
 

@@ -122,21 +122,18 @@ RenderPassEncoder::RenderPassEncoder(id<MTLRenderCommandEncoder> renderCommandEn
         }
 
         id<MTLTexture> depthTexture = textureView.texture();
-        std::optional<bool> isReadOnly = std::nullopt;
         if (!Device::isStencilOnlyFormat(depthTexture.pixelFormat)) {
             m_clearDepthAttachment = depthTexture && attachment->depthStoreOp == WGPUStoreOp_Discard;
             m_depthStencilAttachmentToClear = depthTexture;
-            isReadOnly = attachment->depthReadOnly;
+            addResourceToActiveResources(textureView, attachment->depthReadOnly ? BindGroupEntryUsage::AttachmentRead : BindGroupEntryUsage::Attachment, WGPUTextureAspect_DepthOnly);
         }
 
         m_stencilClearValue = attachment->stencilStoreOp == WGPUStoreOp_Discard ? 0 : attachment->stencilClearValue;
         if (Texture::stencilOnlyAspectMetalFormat(textureView.descriptor().format)) {
             m_clearStencilAttachment = depthTexture && attachment->stencilStoreOp == WGPUStoreOp_Discard;
             m_depthStencilAttachmentToClear = depthTexture;
-            isReadOnly = isReadOnly ? (*isReadOnly && attachment->stencilReadOnly) : attachment->stencilReadOnly;
+            addResourceToActiveResources(textureView, attachment->stencilReadOnly ? BindGroupEntryUsage::AttachmentRead : BindGroupEntryUsage::Attachment, WGPUTextureAspect_StencilOnly);
         }
-
-        addResourceToActiveResources(textureView, (isReadOnly && *isReadOnly) ? BindGroupEntryUsage::AttachmentRead : BindGroupEntryUsage::Attachment);
     }
 }
 
@@ -155,19 +152,33 @@ RenderPassEncoder::~RenderPassEncoder()
     m_renderCommandEncoder = nil;
 }
 
+bool RenderPassEncoder::occlusionQueryIsDestroyed() const
+{
+    return m_visibilityResultBufferSize == NSUIntegerMax;
+}
+
 void RenderPassEncoder::beginOcclusionQuery(uint32_t queryIndex)
 {
     RETURN_IF_FINISHED();
 
     queryIndex *= sizeof(uint64_t);
-    if (m_occlusionQueryActive || m_queryBufferIndicesToClear.contains(queryIndex) || !m_visibilityResultBufferSize || queryIndex >= m_visibilityResultBufferSize) {
+    if (m_occlusionQueryActive || m_queryBufferIndicesToClear.contains(queryIndex)) {
         makeInvalid(@"beginOcclusionQuery validation failure");
         return;
     }
     m_occlusionQueryActive = true;
     m_visibilityResultBufferOffset = queryIndex;
-    [m_renderCommandEncoder setVisibilityResultMode:MTLVisibilityResultModeCounting offset:queryIndex];
     m_queryBufferIndicesToClear.add(m_visibilityResultBufferOffset);
+
+
+    if (occlusionQueryIsDestroyed())
+        return;
+    if (!m_visibilityResultBufferSize || queryIndex >= m_visibilityResultBufferSize) {
+        makeInvalid(@"beginOcclusionQuery validation failure");
+        return;
+    }
+
+    [m_renderCommandEncoder setVisibilityResultMode:MTLVisibilityResultModeCounting offset:queryIndex];
 }
 
 void RenderPassEncoder::endOcclusionQuery()
@@ -178,6 +189,9 @@ void RenderPassEncoder::endOcclusionQuery()
         return;
     }
     m_occlusionQueryActive = false;
+
+    if (occlusionQueryIsDestroyed())
+        return;
     [m_renderCommandEncoder setVisibilityResultMode:MTLVisibilityResultModeDisabled offset:m_visibilityResultBufferOffset];
 }
 
@@ -224,19 +238,45 @@ void RenderPassEncoder::addResourceToActiveResources(id<MTLResource> mtlResource
     }
 
     if (!BindGroup::allowedUsage(resourceUsage)) {
-        makeInvalid(@"Bind group has incompatible usage list");
+        makeInvalid([NSString stringWithFormat:@"Bind group has incompatible usage list: %@ for %p", BindGroup::usageName(resourceUsage), mtlResourceAddr]);
         return;
     }
     if (!entryMap) {
         EntryMap entryMap;
         entryMap.set(mapKey, resourceUsage);
         m_usagesForResource.set(mtlResourceAddr, entryMap);
-    }
+    } else
+        entryMap->set(mapKey, resourceUsage);
 }
 
-void RenderPassEncoder::addResourceToActiveResources(const TextureView& texture, BindGroupEntryUsage resourceUsage)
+void RenderPassEncoder::addResourceToActiveResources(const TextureView& texture, OptionSet<BindGroupEntryUsage> resourceUsage, WGPUTextureAspect textureAspect)
 {
-    return addResourceToActiveResources(texture.parentTexture(), resourceUsage, texture.baseMipLevel(), texture.baseArrayLayer(), texture.aspect());
+    addResourceToActiveResources(texture.parentTexture(), resourceUsage, texture.baseMipLevel(), texture.baseArrayLayer(), textureAspect);
+}
+
+void RenderPassEncoder::addResourceToActiveResources(const TextureView& texture, OptionSet<BindGroupEntryUsage> resourceUsage)
+{
+    WGPUTextureAspect textureAspect = texture.aspect();
+    if (textureAspect != WGPUTextureAspect_All) {
+        addResourceToActiveResources(texture.parentTexture(), resourceUsage, texture.baseMipLevel(), texture.baseArrayLayer(), textureAspect);
+        return;
+    }
+
+    addResourceToActiveResources(texture.parentTexture(), resourceUsage, texture.baseMipLevel(), texture.baseArrayLayer(), WGPUTextureAspect_DepthOnly);
+    addResourceToActiveResources(texture.parentTexture(), resourceUsage, texture.baseMipLevel(), texture.baseArrayLayer(), WGPUTextureAspect_StencilOnly);
+}
+
+void RenderPassEncoder::addResourceToActiveResources(const BindGroupEntryUsageData::Resource& resource, id<MTLResource> mtlResource, OptionSet<BindGroupEntryUsage> resourceUsage)
+{
+    WTF::switchOn(resource, [&](const WeakPtr<const Buffer>& buffer) {
+        if (buffer.get())
+            addResourceToActiveResources(buffer->buffer(), resourceUsage);
+        }, [&](const WeakPtr<const TextureView>& textureView) {
+            if (textureView.get())
+                addResourceToActiveResources(*textureView.get(), resourceUsage);
+        }, [&](const WeakPtr<const ExternalTexture>&) {
+            addResourceToActiveResources(mtlResource, resourceUsage);
+    });
 }
 
 bool RenderPassEncoder::runIndexBufferValidation(uint32_t firstInstance, uint32_t instanceCount)
@@ -251,7 +291,6 @@ bool RenderPassEncoder::runIndexBufferValidation(uint32_t firstInstance, uint32_
         return true;
 
     auto& requiredBufferIndices = m_pipeline->requiredBufferIndices();
-    bool abortDraw = false;
     for (auto& [bufferIndex, bufferData] : requiredBufferIndices) {
         auto it = m_vertexBuffers.find(bufferIndex);
         RELEASE_ASSERT(it != m_vertexBuffers.end());
@@ -263,13 +302,10 @@ bool RenderPassEncoder::runIndexBufferValidation(uint32_t firstInstance, uint32_
                 makeInvalid([NSString stringWithFormat:@"Buffer[%d] fails: (strideCount(%d) - 1) * stride(%llu) + lastStride(%llu) > bufferSize(%llu) / mtlBufferSize(%lu)", bufferIndex, strideCount, stride, lastStride, bufferSize, (unsigned long)it->value.buffer.length]);
                 return false;
             }
-
-            if (stride && m_indexBuffer->maxIndex(m_indexType) >= (bufferSize / stride))
-                abortDraw = true;
         }
     }
 
-    return !abortDraw;
+    return true;
 }
 
 void RenderPassEncoder::runVertexBufferValidation(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance)
@@ -585,7 +621,7 @@ void RenderPassEncoder::endPass()
     m_renderCommandEncoder = nil;
     m_parentEncoder->lock(false);
 
-    if (m_queryBufferIndicesToClear.size()) {
+    if (m_queryBufferIndicesToClear.size() && !occlusionQueryIsDestroyed()) {
         id<MTLBlitCommandEncoder> blitCommandEncoder = m_parentEncoder->ensureBlitCommandEncoder();
         for (auto& offset : m_queryBufferIndicesToClear)
             [blitCommandEncoder fillBuffer:m_visibilityResultBuffer range:NSMakeRange(static_cast<NSUInteger>(offset), sizeof(uint64_t)) value:0];
@@ -603,7 +639,9 @@ void RenderPassEncoder::setCommandEncoder(const BindGroupEntryUsageData::Resourc
         }, [&](const WeakPtr<const TextureView>& textureView) {
             if (textureView)
                 textureView->setCommandEncoder(m_parentEncoder);
-        }, [](const WeakPtr<const ExternalTexture>&) {
+        }, [&](const WeakPtr<const ExternalTexture>& externalTexture) {
+            if (externalTexture)
+                externalTexture->setCommandEncoder(m_parentEncoder);
     });
 }
 
@@ -644,7 +682,7 @@ void RenderPassEncoder::executeBundles(Vector<std::reference_wrapper<RenderBundl
                 ASSERT(resource.mtlResources.size() == resource.resourceUsages.size());
                 for (size_t i = 0, resourceCount = resource.mtlResources.size(); i < resourceCount; ++i) {
                     auto& resourceUsage = resource.resourceUsages[i];
-                    addResourceToActiveResources(resource.mtlResources[i], resourceUsage.usage);
+                    addResourceToActiveResources(resourceUsage.resource, resource.mtlResources[i], resourceUsage.usage);
                     setCommandEncoder(resourceUsage.resource);
                 }
             }
@@ -764,7 +802,7 @@ void RenderPassEncoder::setBindGroup(uint32_t groupIndex, const BindGroup& group
         ASSERT(resource.mtlResources.size() == resource.resourceUsages.size());
         for (size_t i = 0, sz = resource.mtlResources.size(); i < sz; ++i) {
             auto& resourceUsage = resource.resourceUsages[i];
-            addResourceToActiveResources(resource.mtlResources[i], resourceUsage.usage);
+            addResourceToActiveResources(resourceUsage.resource, resource.mtlResources[i], resourceUsage.usage);
             setCommandEncoder(resourceUsage.resource);
         }
     }

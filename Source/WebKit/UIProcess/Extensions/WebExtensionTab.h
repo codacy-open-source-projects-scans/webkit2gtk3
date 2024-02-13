@@ -135,6 +135,10 @@ public:
 
     String title() const;
 
+    bool isOpen() const;
+    void didOpen() { ASSERT(!m_isOpen); m_isOpen = true; }
+    void didClose() { ASSERT(m_isOpen); m_isOpen = false; }
+
     bool isActive() const;
     bool isSelected() const;
     bool isPrivate() const;
@@ -201,6 +205,7 @@ private:
     RefPtr<WebExtensionMatchPattern> m_temporaryPermissionMatchPattern;
     OptionSet<ChangedProperties> m_changedProperties;
     bool m_activeUserGesture : 1 { false };
+    bool m_isOpen : 1 { false };
     mutable bool m_private : 1 { false };
     mutable bool m_cachedPrivate : 1 { false };
     bool m_respondsToWindow : 1 { false };
@@ -242,24 +247,5 @@ private:
 };
 
 } // namespace WebKit
-
-namespace WTF {
-
-template<> struct EnumTraits<WebKit::WebExtensionTab::ChangedProperties> {
-    using values = EnumValues<
-        WebKit::WebExtensionTab::ChangedProperties,
-        WebKit::WebExtensionTab::ChangedProperties::Audible,
-        WebKit::WebExtensionTab::ChangedProperties::Loading,
-        WebKit::WebExtensionTab::ChangedProperties::Muted,
-        WebKit::WebExtensionTab::ChangedProperties::Pinned,
-        WebKit::WebExtensionTab::ChangedProperties::ReaderMode,
-        WebKit::WebExtensionTab::ChangedProperties::Size,
-        WebKit::WebExtensionTab::ChangedProperties::Title,
-        WebKit::WebExtensionTab::ChangedProperties::URL,
-        WebKit::WebExtensionTab::ChangedProperties::ZoomFactor
-    >;
-};
-
-} // namespace WTF
 
 #endif // ENABLE(WK_WEB_EXTENSIONS)

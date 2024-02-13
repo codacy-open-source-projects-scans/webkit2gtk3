@@ -329,8 +329,8 @@ void MediaPlayerPrivateMediaSourceAVFObjC::playInternal(std::optional<MonotonicT
     if (!m_mediaSourcePrivate)
         return;
 
-    if (currentMediaTime() >= m_mediaSourcePrivate->duration()) {
-        ALWAYS_LOG(LOGIDENTIFIER, "bailing, current time: ", currentMediaTime(), " greater than duration ", m_mediaSourcePrivate->duration());
+    if (currentTime() >= m_mediaSourcePrivate->duration()) {
+        ALWAYS_LOG(LOGIDENTIFIER, "bailing, current time: ", currentTime(), " greater than duration ", m_mediaSourcePrivate->duration());
         return;
     }
 
@@ -459,22 +459,24 @@ void MediaPlayerPrivateMediaSourceAVFObjC::setPageIsVisible(bool visible, String
 #endif
 }
 
-MediaTime MediaPlayerPrivateMediaSourceAVFObjC::durationMediaTime() const
+MediaTime MediaPlayerPrivateMediaSourceAVFObjC::duration() const
 {
     return m_mediaSourcePrivate ? m_mediaSourcePrivate->duration() : MediaTime::zeroTime();
 }
 
-MediaTime MediaPlayerPrivateMediaSourceAVFObjC::currentMediaTime() const
+MediaTime MediaPlayerPrivateMediaSourceAVFObjC::currentTime() const
 {
+    if (seeking())
+        return m_pendingSeek ? m_pendingSeek->time : m_lastSeekTime;
     MediaTime synchronizerTime = clampTimeToLastSeekTime(PAL::toMediaTime(PAL::CMTimebaseGetTime([m_synchronizer timebase])));
     if (synchronizerTime < MediaTime::zeroTime())
         return MediaTime::zeroTime();
     return synchronizerTime;
 }
 
-bool MediaPlayerPrivateMediaSourceAVFObjC::currentMediaTimeMayProgress() const
+bool MediaPlayerPrivateMediaSourceAVFObjC::currentTimeMayProgress() const
 {
-    return m_mediaSourcePrivate ? m_mediaSourcePrivate->hasFutureTime(currentMediaTime()) : false;
+    return m_mediaSourcePrivate ? m_mediaSourcePrivate->hasFutureTime(currentTime()) : false;
 }
 
 MediaTime MediaPlayerPrivateMediaSourceAVFObjC::clampTimeToLastSeekTime(const MediaTime& time) const
@@ -658,12 +660,12 @@ MediaPlayer::ReadyState MediaPlayerPrivateMediaSourceAVFObjC::readyState() const
     return m_readyState;
 }
 
-MediaTime MediaPlayerPrivateMediaSourceAVFObjC::maxMediaTimeSeekable() const
+MediaTime MediaPlayerPrivateMediaSourceAVFObjC::maxTimeSeekable() const
 {
-    return durationMediaTime();
+    return duration();
 }
 
-MediaTime MediaPlayerPrivateMediaSourceAVFObjC::minMediaTimeSeekable() const
+MediaTime MediaPlayerPrivateMediaSourceAVFObjC::minTimeSeekable() const
 {
     return startTime();
 }
@@ -691,7 +693,7 @@ bool MediaPlayerPrivateMediaSourceAVFObjC::updateLastPixelBuffer()
 #if HAVE(AVSAMPLEBUFFERDISPLAYLAYER_COPYDISPLAYEDPIXELBUFFER)
     if (isCopyDisplayedPixelBufferAvailable()) {
         if (auto pixelBuffer = adoptCF([m_sampleBufferDisplayLayer copyDisplayedPixelBuffer])) {
-            INFO_LOG(LOGIDENTIFIER, "displayed pixelbuffer copied for time ", currentMediaTime());
+            INFO_LOG(LOGIDENTIFIER, "displayed pixelbuffer copied for time ", currentTime());
             m_lastPixelBuffer = WTFMove(pixelBuffer);
             return true;
         }
@@ -702,7 +704,7 @@ bool MediaPlayerPrivateMediaSourceAVFObjC::updateLastPixelBuffer()
         return false;
 
     auto flags = !m_lastPixelBuffer ? WebCoreDecompressionSession::AllowLater : WebCoreDecompressionSession::ExactTime;
-    auto newPixelBuffer = m_decompressionSession->imageForTime(currentMediaTime(), flags);
+    auto newPixelBuffer = m_decompressionSession->imageForTime(currentTime(), flags);
     if (!newPixelBuffer)
         return false;
 
@@ -777,7 +779,7 @@ RefPtr<VideoFrame> MediaPlayerPrivateMediaSourceAVFObjC::videoFrameForCurrentTim
         updateLastPixelBuffer();
     if (!m_lastPixelBuffer)
         return nullptr;
-    return VideoFrameCV::create(currentMediaTime(), false, VideoFrame::Rotation::None, RetainPtr { m_lastPixelBuffer });
+    return VideoFrameCV::create(currentTime(), false, VideoFrame::Rotation::None, RetainPtr { m_lastPixelBuffer });
 }
 
 DestinationColorSpace MediaPlayerPrivateMediaSourceAVFObjC::colorSpace()
@@ -1087,11 +1089,11 @@ void MediaPlayerPrivateMediaSourceAVFObjC::durationChanged()
     MediaTime duration = m_mediaSourcePrivate->duration();
     // Avoid emiting durationchanged in the case where the previous duration was unkniwn as that case is already handled
     // by the HTMLMediaElement.
-    if (m_mediaTimeDuration != duration && m_mediaTimeDuration.isValid()) {
+    if (m_duration != duration && m_duration.isValid()) {
         if (auto player = m_player.get())
             player->durationChanged();
     }
-    m_mediaTimeDuration = duration;
+    m_duration = duration;
 
     NSArray* times = @[[NSValue valueWithCMTime:PAL::toCMTime(duration)]];
 
@@ -1103,7 +1105,7 @@ void MediaPlayerPrivateMediaSourceAVFObjC::durationChanged()
         if (!weakThis)
             return;
 
-        MediaTime now = weakThis->currentMediaTime();
+        MediaTime now = weakThis->currentTime();
         ALWAYS_LOG(logSiteIdentifier, "boundary time observer called, now = ", now);
 
         weakThis->pauseInternal();
@@ -1116,7 +1118,7 @@ void MediaPlayerPrivateMediaSourceAVFObjC::durationChanged()
 
     }];
 
-    if (m_isPlaying && duration <= currentMediaTime())
+    if (m_isPlaying && duration <= currentTime())
         pauseInternal();
 }
 
@@ -1144,7 +1146,7 @@ void MediaPlayerPrivateMediaSourceAVFObjC::sizeWillChangeAtTime(const MediaTime&
     }];
     m_sizeChangeObservers.append(WTFMove(observer));
 
-    if (currentMediaTime() >= time)
+    if (currentTime() >= time)
         setNaturalSize(size);
 }
 
@@ -1450,7 +1452,7 @@ bool MediaPlayerPrivateMediaSourceAVFObjC::isCurrentPlaybackTargetWireless() con
 }
 #endif
 
-bool MediaPlayerPrivateMediaSourceAVFObjC::performTaskAtMediaTime(WTF::Function<void()>&& task, const MediaTime& time)
+bool MediaPlayerPrivateMediaSourceAVFObjC::performTaskAtTime(WTF::Function<void()>&& task, const MediaTime& time)
 {
     __block WTF::Function<void()> taskIn = WTFMove(task);
 

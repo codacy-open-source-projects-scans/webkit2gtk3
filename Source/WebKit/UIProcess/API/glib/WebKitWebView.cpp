@@ -26,7 +26,6 @@
 #include "APIData.h"
 #include "APINavigation.h"
 #include "APISerializedScriptValue.h"
-#include "DataReference.h"
 #include "ImageOptions.h"
 #include "NotificationService.h"
 #include "PageLoadState.h"
@@ -73,7 +72,6 @@
 #include <JavaScriptCore/JSRetainPtr.h>
 #include <WebCore/CertificateInfo.h>
 #include <WebCore/JSDOMExceptionHandling.h>
-#include <WebCore/RefPtrCairo.h>
 #include <WebCore/RunJavaScriptParameters.h>
 #include <WebCore/SharedBuffer.h>
 #include <WebCore/URLSoup.h>

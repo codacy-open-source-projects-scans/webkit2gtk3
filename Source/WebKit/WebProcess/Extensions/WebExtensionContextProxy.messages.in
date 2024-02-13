@@ -39,6 +39,11 @@ messages -> WebExtensionContextProxy {
     // Cookies
     DispatchCookiesChangedEvent()
 
+#if ENABLE(INSPECTOR_EXTENSIONS)
+    // DevTools
+    AddInspectorBackgroundPageIdentifier(WebCore::PageIdentifier pageID, std::optional<WebKit::WebExtensionTabIdentifier> tabIdentifier, std::optional<WebKit::WebExtensionWindowIdentifier> windowIdentifier)
+#endif
+
     // Extension
     SetBackgroundPageIdentifier(WebCore::PageIdentifier pageID)
     AddPopupPageIdentifier(WebCore::PageIdentifier pageID, std::optional<WebKit::WebExtensionTabIdentifier> tabIdentifier, std::optional<WebKit::WebExtensionWindowIdentifier> windowIdentifier)
@@ -51,7 +56,7 @@ messages -> WebExtensionContextProxy {
     DispatchPermissionsEvent(WebKit::WebExtensionEventListenerType type, HashSet<String> permissions, HashSet<String> origins)
 
     // Ports
-    DispatchPortMessageEvent(WebKit::WebExtensionPortChannelIdentifier channelIdentifier, String messageJSON)
+    DispatchPortMessageEvent(std::optional<WebKit::WebPageProxyIdentifier> sendingPageProxyIdentifier, WebKit::WebExtensionPortChannelIdentifier channelIdentifier, String messageJSON)
     DispatchPortDisconnectEvent(WebKit::WebExtensionPortChannelIdentifier channelIdentifier)
 
     // Runtime

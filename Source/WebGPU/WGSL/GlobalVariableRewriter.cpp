@@ -50,7 +50,7 @@ public:
     {
     }
 
-    void run();
+    std::optional<Error> run();
 
     void visit(AST::Function&) override;
     void visit(AST::Variable&) override;
@@ -96,13 +96,13 @@ private:
     void def(const AST::Identifier&, AST::Variable*);
 
     void collectGlobals();
-    void visitEntryPoint(const CallGraph::EntryPoint&);
+    std::optional<Error> visitEntryPoint(const CallGraph::EntryPoint&);
     void visitCallee(const CallGraph::Callee&);
-    UsedGlobals determineUsedGlobals();
+    Result<UsedGlobals> determineUsedGlobals();
     void collectDynamicOffsetGlobals(const PipelineLayout&);
     void usesOverride(AST::Variable&);
     Vector<unsigned> insertStructs(const UsedResources&);
-    Vector<unsigned> insertStructs(const PipelineLayout&);
+    Result<Vector<unsigned>> insertStructs(const PipelineLayout&, const UsedResources&);
     AST::StructureMember& createArgumentBufferEntry(unsigned binding, AST::Variable&);
     AST::StructureMember& createArgumentBufferEntry(unsigned binding, const SourceSpan&, const String& name, AST::Expression& type);
     void finalizeArgumentBufferStruct(unsigned group, Vector<std::pair<unsigned, AST::StructureMember*>>&);
@@ -124,7 +124,6 @@ private:
     void packResource(AST::Variable&);
     void packArrayResource(AST::Variable&, const Types::Array*);
     void packStructResource(AST::Variable&, const Types::Struct*);
-    bool containsRuntimeArray(const Type*);
     const Type* packType(const Type*);
     const Type* packStructType(const Types::Struct*);
     const Type* packArrayType(const Types::Array*);
@@ -162,15 +161,19 @@ private:
     HashMap<std::pair<unsigned, unsigned>, unsigned> m_globalsUsingDynamicOffset;
 };
 
-void RewriteGlobalVariables::run()
+std::optional<Error> RewriteGlobalVariables::run()
 {
     dataLogLnIf(shouldLogGlobalVariableRewriting, "BEGIN: GlobalVariableRewriter");
 
     collectGlobals();
-    for (auto& entryPoint : m_callGraph.entrypoints())
-        visitEntryPoint(entryPoint);
+    for (auto& entryPoint : m_callGraph.entrypoints()) {
+        auto maybeError = visitEntryPoint(entryPoint);
+        if (maybeError.has_value())
+            return maybeError;
+    }
 
     dataLogLnIf(shouldLogGlobalVariableRewriting, "END: GlobalVariableRewriter");
+    return std::nullopt;
 }
 
 void RewriteGlobalVariables::visitCallee(const CallGraph::Callee& callee)
@@ -208,10 +211,14 @@ void RewriteGlobalVariables::visitCallee(const CallGraph::Callee& callee)
     const auto& updateCallSites = [&] {
         for (auto& read : m_reads) {
             for (auto& call : callee.callSites) {
-                m_callGraph.ast().append(call->arguments(), m_callGraph.ast().astBuilder().construct<AST::IdentifierExpression>(
+                auto it = m_globals.find(read);
+                RELEASE_ASSERT(it != m_globals.end());
+                auto& global = m_callGraph.ast().astBuilder().construct<AST::IdentifierExpression>(
                     SourceSpan::empty(),
                     AST::Identifier::make(read)
-                ));
+                );
+                global.m_inferredType = it->value.declaration->storeType();
+                m_callGraph.ast().append(call->arguments(), global);
             }
         }
     };
@@ -570,7 +577,7 @@ void RewriteGlobalVariables::collectGlobals()
             result.iterator->value.append({ resource->binding, globalVar.name() });
             packResource(globalVar);
 
-            if (!m_generatedLayout || containsRuntimeArray(globalVar.maybeReferenceType()->inferredType()))
+            if (!m_generatedLayout || globalVar.maybeReferenceType()->inferredType()->containsRuntimeArray())
                 bufferLengths.append({ &globalVar, resource->group });
         }
     }
@@ -705,17 +712,6 @@ void RewriteGlobalVariables::updateReference(AST::Variable& global, AST::Express
     m_callGraph.ast().replace(reference, packedTypeReference);
 }
 
-bool RewriteGlobalVariables::containsRuntimeArray(const Type* type)
-{
-    if (auto* referenceType = std::get_if<Types::Reference>(type))
-        return containsRuntimeArray(referenceType->element);
-    if (auto* structType = std::get_if<Types::Struct>(type))
-        return containsRuntimeArray(structType->structure.members().last().type().inferredType());
-    if (auto* arrayType = std::get_if<Types::Array>(type))
-        return !arrayType->size.has_value();
-    return false;
-}
-
 const Type* RewriteGlobalVariables::packType(const Type* type)
 {
     if (auto* structType = std::get_if<Types::Struct>(type))
@@ -778,7 +774,13 @@ const Type* RewriteGlobalVariables::packArrayType(const Types::Array* arrayType)
     return m_callGraph.ast().types().arrayType(packedStructType, arrayType->size);
 }
 
-void RewriteGlobalVariables::visitEntryPoint(const CallGraph::EntryPoint& entryPoint)
+static size_t getRoundedSize(const AST::Variable& variable)
+{
+    auto* type = variable.storeType();
+    return roundUpToMultipleOf(16, type ? type->size() : 0);
+}
+
+std::optional<Error> RewriteGlobalVariables::visitEntryPoint(const CallGraph::EntryPoint& entryPoint)
 {
     dataLogLnIf(shouldLogGlobalVariableRewriting, "> Visiting entrypoint: ", entryPoint.function.name());
 
@@ -803,15 +805,27 @@ void RewriteGlobalVariables::visitEntryPoint(const CallGraph::EntryPoint& entryP
 
     visit(entryPoint.function);
     if (m_reads.isEmpty())
-        return;
+        return std::nullopt;
 
-    auto usedGlobals = determineUsedGlobals();
-    auto groups = m_generatedLayout
-        ? insertStructs(usedGlobals.resources)
-        : insertStructs(*it->value);
-    insertParameters(entryPoint.function, groups);
+    auto maybeUsedGlobals = determineUsedGlobals();
+    if (!maybeUsedGlobals)
+        return maybeUsedGlobals.error();
+    auto usedGlobals = *maybeUsedGlobals;
+    auto maybeGroups = m_generatedLayout ? Result<Vector<unsigned>>(insertStructs(usedGlobals.resources)) : insertStructs(*it->value, usedGlobals.resources);
+    if (!maybeGroups)
+        return maybeGroups.error();
+    insertParameters(entryPoint.function, *maybeGroups);
     insertMaterializations(entryPoint.function, usedGlobals.resources);
     insertLocalDefinitions(entryPoint.function, usedGlobals.privateGlobals);
+
+    for (auto* global : usedGlobals.privateGlobals) {
+        if (!global || !global->declaration)
+            continue;
+        auto* variable = global->declaration;
+        if (variable->addressSpace() == AddressSpace::Workgroup)
+            m_entryPointInformation->sizeForWorkgroupVariables += getRoundedSize(*variable);
+    }
+    return std::nullopt;
 }
 
 void RewriteGlobalVariables::collectDynamicOffsetGlobals(const PipelineLayout& pipelineLayout)
@@ -1045,7 +1059,7 @@ static BindGroupLayoutEntry::BindingMember bindingMemberForGlobal(auto& global)
     });
 }
 
-auto RewriteGlobalVariables::determineUsedGlobals() -> UsedGlobals
+auto RewriteGlobalVariables::determineUsedGlobals() -> Result<UsedGlobals>
 {
     UsedGlobals usedGlobals;
     for (const auto& globalName : m_reads) {
@@ -1068,8 +1082,13 @@ auto RewriteGlobalVariables::determineUsedGlobals() -> UsedGlobals
         }
 
         auto group = global.resource->group;
-        auto result = usedGlobals.resources.add(group, IndexMap<Global*>());
-        result.iterator->value.add(global.resource->binding, &global);
+        auto binding = global.resource->binding;
+        auto groupResult = usedGlobals.resources.add(group, IndexMap<Global*>());
+        auto bindingResult = groupResult.iterator->value.add(binding, &global);
+
+        // FIXME: this check needs to occur during WGSL::staticCheck
+        if (!bindingResult.isNewEntry)
+            return makeUnexpected(Error(makeString("entry point '", m_entryPointInformation->originalName, "' uses variables '", bindingResult.iterator->value->declaration->originalName(), "' and '", variable.originalName(), "', both which use the same resource binding: @group(", String::number(group), ") @binding(", String::number(binding), ")"), SourceSpan::empty()));
     }
     return usedGlobals;
 }
@@ -1450,10 +1469,11 @@ static bool variableAndEntryMatch(const AST::Variable& variable, const BindGroup
     return true;
 }
 
-Vector<unsigned> RewriteGlobalVariables::insertStructs(const PipelineLayout& layout)
+Result<Vector<unsigned>> RewriteGlobalVariables::insertStructs(const PipelineLayout& layout, const UsedResources& usedResources)
 {
     Vector<unsigned> groups;
     unsigned group = 0;
+    HashSet<AST::Variable*> serializedVariables;
     for (const auto& bindGroupLayout : layout.bindGroupLayouts) {
         Vector<std::pair<unsigned, AST::StructureMember*>> entries;
         Vector<std::pair<unsigned, AST::Variable*>> bufferLengths;
@@ -1487,7 +1507,8 @@ Vector<unsigned> RewriteGlobalVariables::insertStructs(const PipelineLayout& lay
             if (it != m_globalsByBinding.end()) {
                 variable = it->value;
                 if (!variableAndEntryMatch(*variable, entry))
-                    return Vector<unsigned>();
+                    return makeUnexpected(Error("Shader is incompatible with layout pipeline"_s, SourceSpan::empty()));
+                serializedVariables.add(variable);
                 entries.append({ entry.binding, &createArgumentBufferEntry(*argumentBufferIndex, *variable) });
             } else {
                 auto& type = m_callGraph.ast().astBuilder().construct<AST::IdentifierExpression>(SourceSpan::empty(), AST::Identifier::make("u32"_s));
@@ -1512,6 +1533,7 @@ Vector<unsigned> RewriteGlobalVariables::insertStructs(const PipelineLayout& lay
             if (variable) {
                 auto it = m_bufferLengthMap.find(variable);
                 RELEASE_ASSERT(it != m_bufferLengthMap.end());
+                serializedVariables.add(it->value);
                 entries.append({ binding, &createArgumentBufferEntry(binding, *it->value) });
             } else {
                 entries.append({
@@ -1529,7 +1551,19 @@ Vector<unsigned> RewriteGlobalVariables::insertStructs(const PipelineLayout& lay
         groups.append(group);
         finalizeArgumentBufferStruct(group++, entries);
     }
-    return groups;
+
+    for (auto& [_, bindingGlobalMap] : usedResources) {
+        for (auto [_, global] : bindingGlobalMap) {
+            auto* variable = global->declaration;
+            if (!m_reads.contains(variable->name()))
+                continue;
+
+            if (!serializedVariables.contains(variable))
+                return makeUnexpected(Error("Shader is incompatible with layout pipeline"_s, SourceSpan::empty()));
+        }
+    }
+
+    return { groups };
 }
 
 void RewriteGlobalVariables::insertParameters(AST::Function& function, const Vector<unsigned>& groups)
@@ -1790,7 +1824,7 @@ void RewriteGlobalVariables::storeInitialValue(AST::Expression& target, AST::Sta
 
     auto* type = target.inferredType();
     if (auto* arrayType = std::get_if<Types::Array>(type)) {
-        RELEASE_ASSERT(arrayType->size.has_value());
+        RELEASE_ASSERT(!arrayType->isRuntimeSized());
         String indexVariableName = makeString("__i", String::number(arrayDepth));
 
         auto& indexVariable = m_callGraph.ast().astBuilder().construct<AST::IdentifierExpression>(
@@ -1828,16 +1862,23 @@ void RewriteGlobalVariables::storeInitialValue(AST::Expression& target, AST::Sta
             forVariable
         );
 
-        auto& arrayLength = m_callGraph.ast().astBuilder().construct<AST::Unsigned32Literal>(
-            SourceSpan::empty(),
-            *arrayType->size
-        );
-        arrayLength.m_inferredType = m_callGraph.ast().types().u32Type();
+        auto* arrayLength = [&]() -> AST::Expression* {
+            if (auto* overrideExpression = std::get_if<AST::Expression*>(&arrayType->size))
+                return *overrideExpression;
+
+            auto& arrayLength = m_callGraph.ast().astBuilder().construct<AST::Unsigned32Literal>(
+                SourceSpan::empty(),
+                std::get<unsigned>(arrayType->size)
+            );
+            arrayLength.m_inferredType = m_callGraph.ast().types().u32Type();
+            return &arrayLength;
+        }();
+
 
         auto& forTest = m_callGraph.ast().astBuilder().construct<AST::BinaryExpression>(
             SourceSpan::empty(),
             indexVariable,
-            arrayLength,
+            *arrayLength,
             AST::BinaryOperation::LessThan
         );
         forTest.m_inferredType = m_callGraph.ast().types().boolType();
@@ -1938,7 +1979,13 @@ void RewriteGlobalVariables::readVariable(AST::IdentifierExpression& identifier,
         return;
 
     dataLogLnIf(shouldLogGlobalVariableRewriting, "> read global: ", identifier.identifier(), " at line:", identifier.span().line, " column: ", identifier.span().lineOffset);
-    m_reads.add(identifier.identifier());
+    auto addResult = m_reads.add(identifier.identifier());
+    if (addResult.isNewEntry) {
+        if (auto* type = global.declaration->maybeTypeName())
+            visit(*type);
+        if (auto* initializer = global.declaration->maybeInitializer())
+            visit(*initializer);
+    }
 }
 
 void RewriteGlobalVariables::insertBeforeCurrentStatement(AST::Statement& statement)
@@ -1961,9 +2008,9 @@ AST::Identifier RewriteGlobalVariables::dynamicOffsetVariableName()
     return AST::Identifier::make(makeString("__DynamicOffsets"));
 }
 
-void rewriteGlobalVariables(CallGraph& callGraph, const HashMap<String, std::optional<PipelineLayout>>& pipelineLayouts)
+std::optional<Error> rewriteGlobalVariables(CallGraph& callGraph, const HashMap<String, std::optional<PipelineLayout>>& pipelineLayouts)
 {
-    RewriteGlobalVariables(callGraph, pipelineLayouts).run();
+    return RewriteGlobalVariables(callGraph, pipelineLayouts).run();
 }
 
 } // namespace WGSL
