@@ -1003,6 +1003,10 @@ void WebProcessPool::initializeNewWebProcess(WebProcessProxy& process, WebsiteDa
 
     parameters.timeZoneOverride = m_configuration->timeZoneOverride();
 
+    parameters.memoryFootprintPollIntervalForTesting = m_configuration->memoryFootprintPollIntervalForTesting();
+
+    parameters.memoryFootprintNotificationThresholds = m_configuration->memoryFootprintNotificationThresholds();
+
     // Add any platform specific parameters
     platformInitializeWebProcess(process, parameters);
 
@@ -2057,6 +2061,9 @@ std::tuple<Ref<WebProcessProxy>, SuspendedPageProxy*, ASCIILiteral> WebProcessPo
     if (usesSingleWebProcess())
         return { WTFMove(sourceProcess), nullptr, "Single WebProcess mode is enabled"_s };
 
+    if (page.configuration().relatedPage() && page.alwaysUseRelatedPageProcess())
+        return { WTFMove(sourceProcess), nullptr, "Always using related page process"_s };
+
     if (sourceProcess->lockdownMode() != lockdownMode)
         return { createNewProcess(), nullptr, "Process swap due to Lockdown mode change"_s };
 
@@ -2417,6 +2424,18 @@ bool lockdownModeEnabledBySystem()
 void setLockdownModeEnabledGloballyForTesting(std::optional<bool>)
 {
 }
+#endif
+
+#if PLATFORM(WIN) // FIXME: remove this line when this feature is enabled for playstation port.
+#if ENABLE(REMOTE_INSPECTOR)
+void WebProcessPool::setPagesControlledByAutomation(bool controlled)
+{
+    for (auto& process : m_processes) {
+        for (auto& page : process->pages())
+            page->setControlledByAutomation(controlled);
+    }
+}
+#endif
 #endif
 
 } // namespace WebKit

@@ -32,6 +32,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+@class LMPlayableViewController;
 @class WKSLinearMediaPlayer;
 
 API_AVAILABLE(visionos(1.0))
@@ -73,6 +74,7 @@ API_AVAILABLE(visionos(1.0))
 - (void)linearMediaPlayer:(WKSLinearMediaPlayer *)player setTimeResolverResolution:(NSTimeInterval)resolution;
 - (void)linearMediaPlayer:(WKSLinearMediaPlayer *)player setThumbnailSize:(CGSize)size;
 - (void)linearMediaPlayer:(WKSLinearMediaPlayer *)player seekThumbnailToTime:(NSTimeInterval)time;
+- (void)linearMediaPlayer:(WKSLinearMediaPlayer *)player setVideoReceiverEndpoint:(xpc_object_t)videoReceiverEndpoint;
 @end
 
 API_AVAILABLE(visionos(1.0))
@@ -105,7 +107,7 @@ API_AVAILABLE(visionos(1.0))
 @property (nonatomic, copy) NSArray<UIViewController *> *contentInfoViewControllers;
 @property (nonatomic, copy) NSArray<UIAction *> *contextualActions;
 @property (nonatomic, strong, nullable) UIView *contextualActionsInfoView;
-@property (nonatomic, strong, nullable) NSValue *contentDimensions;
+@property (nonatomic) CGSize contentDimensions;
 @property (nonatomic) WKSLinearMediaContentMode contentMode;
 @property (nonatomic, strong, nullable) CALayer *videoLayer;
 @property (nonatomic) WKSLinearMediaViewingMode anticipatedViewingMode;
@@ -127,13 +129,15 @@ API_AVAILABLE(visionos(1.0))
 @property (nonatomic) BOOL isPlayableOffline;
 @property (nonatomic) BOOL allowPip;
 @property (nonatomic) BOOL allowFullScreenFromInline;
-@property (nonatomic, strong, nullable) NSNumber *isLiveStream;
+@property (nonatomic) BOOL isLiveStream;
 @property (nonatomic, strong, nullable) NSNumber *recommendedViewingRatio;
 @property (nonatomic) WKSLinearMediaFullscreenBehaviors fullscreenSceneBehaviors;
 @property (nonatomic) double startTime;
 @property (nonatomic) double endTime;
 @property (nonatomic, strong, nullable) NSDate *startDate;
 @property (nonatomic, strong, nullable) NSDate *endDate;
+
+- (LMPlayableViewController *)makeViewController;
 @end
 
 NS_ASSUME_NONNULL_END

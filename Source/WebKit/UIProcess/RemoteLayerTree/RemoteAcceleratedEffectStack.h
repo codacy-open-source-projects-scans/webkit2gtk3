@@ -76,10 +76,12 @@ private:
     WebCore::FloatRect m_bounds;
     Seconds m_acceleratedTimelineTimeOrigin;
 
+#if PLATFORM(MAC)
     RetainPtr<CAPresentationModifierGroup> m_presentationModifierGroup;
     RetainPtr<CAPresentationModifier> m_opacityPresentationModifier;
     RetainPtr<CAPresentationModifier> m_transformPresentationModifier;
     Vector<WebCore::TypedFilterPresentationModifier> m_filterPresentationModifiers;
+#endif
 };
 
 } // namespace WebKit

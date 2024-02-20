@@ -51,6 +51,11 @@ enum class Evaluation : uint8_t {
     Runtime = 3,
 };
 
+enum class DiscardResult : bool {
+    No,
+    Yes,
+};
+
 struct Binding {
     enum Kind : uint8_t {
         Value,
@@ -85,6 +90,20 @@ static ASCIILiteral evaluationToString(Evaluation evaluation)
         return "override"_s;
     case Evaluation::Runtime:
         return "runtime"_s;
+    }
+}
+
+static ASCIILiteral variableFlavorToString(AST::VariableFlavor flavor)
+{
+    switch (flavor) {
+    case AST::VariableFlavor::Var:
+        return "var"_s;
+    case AST::VariableFlavor::Let:
+        return "let"_s;
+    case AST::VariableFlavor::Const:
+        return "const"_s;
+    case AST::VariableFlavor::Override:
+        return "override"_s;
     }
 }
 
@@ -170,7 +189,7 @@ private:
     template<typename... Arguments>
     void typeError(InferBottom, const SourceSpan&, Arguments&&...);
 
-    const Type* infer(AST::Expression&, Evaluation);
+    const Type* infer(AST::Expression&, Evaluation, DiscardResult = DiscardResult::No);
     const Type* resolve(AST::Expression&);
     const Type* lookupType(const AST::Identifier&);
     void inferred(const Type*);
@@ -182,9 +201,11 @@ private:
     bool convertValue(const SourceSpan&, const Type*, std::optional<ConstantValue>&);
     bool convertValueImpl(const SourceSpan&, const Type*, ConstantValue&);
 
-    template<typename TargetConstructor, typename... Arguments>
-    void allocateSimpleConstructor(ASCIILiteral, TargetConstructor, Arguments&&...);
+    template<typename TargetConstructor, typename Validator, typename... Arguments>
+    void allocateSimpleConstructor(ASCIILiteral, TargetConstructor, const Validator&, Arguments&&...);
     void allocateTextureStorageConstructor(ASCIILiteral, Types::TextureStorage::Kind);
+
+    bool isModuleScope() const;
 
     std::optional<AccessMode> accessMode(AST::Expression&);
     std::optional<TexelFormat> texelFormat(AST::Expression&);
@@ -200,6 +221,7 @@ private:
     const Type* m_inferredType { nullptr };
     const Type* m_returnType { nullptr };
     Evaluation m_evaluation { Evaluation::Runtime };
+    DiscardResult m_discardResult { DiscardResult::No };
 
     TypeStore& m_types;
     Vector<Error> m_errors;
@@ -314,26 +336,43 @@ TypeChecker::TypeChecker(ShaderModule& shaderModule)
         }
     ));
 
-    allocateSimpleConstructor("vec2"_s, &TypeStore::vectorType, 2);
-    allocateSimpleConstructor("vec3"_s, &TypeStore::vectorType, 3);
-    allocateSimpleConstructor("vec4"_s, &TypeStore::vectorType, 4);
-    allocateSimpleConstructor("mat2x2"_s, &TypeStore::matrixType, 2, 2);
-    allocateSimpleConstructor("mat2x3"_s, &TypeStore::matrixType, 2, 3);
-    allocateSimpleConstructor("mat2x4"_s, &TypeStore::matrixType, 2, 4);
-    allocateSimpleConstructor("mat3x2"_s, &TypeStore::matrixType, 3, 2);
-    allocateSimpleConstructor("mat3x3"_s, &TypeStore::matrixType, 3, 3);
-    allocateSimpleConstructor("mat3x4"_s, &TypeStore::matrixType, 3, 4);
-    allocateSimpleConstructor("mat4x2"_s, &TypeStore::matrixType, 4, 2);
-    allocateSimpleConstructor("mat4x3"_s, &TypeStore::matrixType, 4, 3);
-    allocateSimpleConstructor("mat4x4"_s, &TypeStore::matrixType, 4, 4);
+    const auto& validateVector = [&](const Type* element) -> std::optional<String> {
+        if (!satisfies(element, Constraints::Scalar))
+            return { "vector element type must be a scalar type"_s };
+        return std::nullopt;
+    };
 
-    allocateSimpleConstructor("texture_1d"_s, &TypeStore::textureType, Types::Texture::Kind::Texture1d);
-    allocateSimpleConstructor("texture_2d"_s, &TypeStore::textureType, Types::Texture::Kind::Texture2d);
-    allocateSimpleConstructor("texture_2d_array"_s, &TypeStore::textureType, Types::Texture::Kind::Texture2dArray);
-    allocateSimpleConstructor("texture_3d"_s, &TypeStore::textureType, Types::Texture::Kind::Texture3d);
-    allocateSimpleConstructor("texture_cube"_s, &TypeStore::textureType, Types::Texture::Kind::TextureCube);
-    allocateSimpleConstructor("texture_cube_array"_s, &TypeStore::textureType, Types::Texture::Kind::TextureCubeArray);
-    allocateSimpleConstructor("texture_multisampled_2d"_s, &TypeStore::textureType, Types::Texture::Kind::TextureMultisampled2d);
+    allocateSimpleConstructor("vec2"_s, &TypeStore::vectorType, validateVector, 2);
+    allocateSimpleConstructor("vec3"_s, &TypeStore::vectorType, validateVector, 3);
+    allocateSimpleConstructor("vec4"_s, &TypeStore::vectorType, validateVector, 4);
+
+    const auto& validateMatrix = [&](const Type* element) -> std::optional<String> {
+        if (!satisfies(element, Constraints::Float))
+            return { "matrix element type must be a floating point type"_s };
+        return std::nullopt;
+    };
+    allocateSimpleConstructor("mat2x2"_s, &TypeStore::matrixType, validateMatrix, 2, 2);
+    allocateSimpleConstructor("mat2x3"_s, &TypeStore::matrixType, validateMatrix, 2, 3);
+    allocateSimpleConstructor("mat2x4"_s, &TypeStore::matrixType, validateMatrix, 2, 4);
+    allocateSimpleConstructor("mat3x2"_s, &TypeStore::matrixType, validateMatrix, 3, 2);
+    allocateSimpleConstructor("mat3x3"_s, &TypeStore::matrixType, validateMatrix, 3, 3);
+    allocateSimpleConstructor("mat3x4"_s, &TypeStore::matrixType, validateMatrix, 3, 4);
+    allocateSimpleConstructor("mat4x2"_s, &TypeStore::matrixType, validateMatrix, 4, 2);
+    allocateSimpleConstructor("mat4x3"_s, &TypeStore::matrixType, validateMatrix, 4, 3);
+    allocateSimpleConstructor("mat4x4"_s, &TypeStore::matrixType, validateMatrix, 4, 4);
+
+    const auto& validateTexture = [&](const Type* element) -> std::optional<String> {
+        if (!satisfies(element, Constraints::Concrete32BitNumber))
+            return { "texture sampled type must be one 'i32', 'u32' or 'f32'"_s };
+        return std::nullopt;
+    };
+    allocateSimpleConstructor("texture_1d"_s, &TypeStore::textureType, validateTexture, Types::Texture::Kind::Texture1d);
+    allocateSimpleConstructor("texture_2d"_s, &TypeStore::textureType, validateTexture, Types::Texture::Kind::Texture2d);
+    allocateSimpleConstructor("texture_2d_array"_s, &TypeStore::textureType, validateTexture, Types::Texture::Kind::Texture2dArray);
+    allocateSimpleConstructor("texture_3d"_s, &TypeStore::textureType, validateTexture, Types::Texture::Kind::Texture3d);
+    allocateSimpleConstructor("texture_cube"_s, &TypeStore::textureType, validateTexture, Types::Texture::Kind::TextureCube);
+    allocateSimpleConstructor("texture_cube_array"_s, &TypeStore::textureType, validateTexture, Types::Texture::Kind::TextureCubeArray);
+    allocateSimpleConstructor("texture_multisampled_2d"_s, &TypeStore::textureType, validateTexture, Types::Texture::Kind::TextureMultisampled2d);
 
     allocateTextureStorageConstructor("texture_storage_1d"_s, Types::TextureStorage::Kind::TextureStorage1d);
     allocateTextureStorageConstructor("texture_storage_2d"_s, Types::TextureStorage::Kind::TextureStorage2d);
@@ -500,6 +539,8 @@ void TypeChecker::visitVariable(AST::Variable& variable, VariableKind variableKi
                 result = initializerType;
             else {
                 result = concretize(initializerType, m_types);
+                if (!result)
+                    return error("'", *initializerType, "' cannot be used as the type of a '", variableFlavorToString(variable.flavor()), "'");
                 variable.maybeInitializer()->m_inferredType = result;
             }
         } else if (unify(result, initializerType))
@@ -513,13 +554,19 @@ void TypeChecker::visitVariable(AST::Variable& variable, VariableKind variableKi
     case AST::VariableFlavor::Let:
         if (variableKind == VariableKind::Global)
             return error("module-scope 'let' is invalid, use 'const'");
+        if (!result->isConstructible() && !std::holds_alternative<Types::Pointer>(*result))
+            return error("'", *result, "' cannot be used as the type of a 'let'");
         RELEASE_ASSERT(variable.maybeInitializer());
         break;
     case AST::VariableFlavor::Const:
         RELEASE_ASSERT(variable.maybeInitializer());
+        if (!result->isConstructible())
+            return error("'", *result, "' cannot be used as the type of a 'const'");
         break;
     case AST::VariableFlavor::Override:
         RELEASE_ASSERT(variableKind == VariableKind::Global);
+        if (!satisfies(result, Constraints::ConcreteScalar))
+            return error("'", *result, "' cannot be used as the type of an 'override'");
         break;
     case AST::VariableFlavor::Var:
         AddressSpace addressSpace;
@@ -588,7 +635,7 @@ void TypeChecker::visitVariable(AST::Variable& variable, VariableKind variableKi
         if ((addressSpace == AddressSpace::Storage || addressSpace == AddressSpace::Uniform || addressSpace == AddressSpace::Handle || addressSpace == AddressSpace::Workgroup) && variable.maybeInitializer())
             return error("variables in the address space '", toString(addressSpace), "' cannot have an initializer");
         if (addressSpace != AddressSpace::Workgroup && result->containsOverrideArray())
-            return error("array with an 'override' element count can only be used as the store type of a 'var<workgroup>'");
+            return error("");
     }
 
     if (value && !isBottom(result))
@@ -615,7 +662,15 @@ void TypeChecker::visitVariable(AST::Variable& variable, VariableKind variableKi
 
 void TypeChecker::visit(AST::Function& function)
 {
-    visitAttributes(function.attributes());
+    bool mustUse = false;
+    for (auto& attribute : function.attributes()) {
+        if (is<AST::MustUseAttribute>(attribute)) {
+            mustUse = true;
+            continue;
+        }
+
+        visit(attribute);
+    }
 
     Vector<const Type*> parameters;
     parameters.reserveInitialCapacity(function.parameters().size());
@@ -637,8 +692,10 @@ void TypeChecker::visit(AST::Function& function)
         Base::visit(function.body());
     }
 
-    const Type* functionType = m_types.functionType(WTFMove(parameters), m_returnType);
+    const Type* functionType = m_types.functionType(WTFMove(parameters), m_returnType, mustUse);
     introduceFunction(function.name(), functionType);
+
+    m_returnType = nullptr;
 }
 
 // Attributes
@@ -752,9 +809,7 @@ void TypeChecker::visit(AST::AssignmentStatement& statement)
 
 void TypeChecker::visit(AST::CallStatement& statement)
 {
-    auto* result = infer(statement.call(), Evaluation::Runtime);
-    // FIXME: this should check if the function has a must_use attribute
-    UNUSED_PARAM(result);
+    infer(statement.call(), Evaluation::Runtime, DiscardResult::Yes);
 }
 
 void TypeChecker::visit(AST::CompoundAssignmentStatement& statement)
@@ -1031,8 +1086,10 @@ void TypeChecker::visit(AST::IndexAccessExpression& access)
             return nullptr;
         }
 
-        if (!access.index().constantValue().has_value())
+        if (!access.index().constantValue().has_value()) {
             result = concretize(result, m_types);
+            RELEASE_ASSERT(result);
+        }
         return result;
     };
 
@@ -1085,18 +1142,23 @@ void TypeChecker::visit(AST::BinaryExpression& binary)
 void TypeChecker::visit(AST::IdentifierExpression& identifier)
 {
     auto* binding = readVariable(identifier.identifier());
-    if (!binding) {
+    if (UNLIKELY(!binding)) {
         typeError(identifier.span(), "unresolved identifier '", identifier.identifier(), "'");
         return;
     }
 
-    if (binding->kind != Binding::Value) {
+    if (UNLIKELY(binding->kind != Binding::Value)) {
         typeError(identifier.span(), "cannot use ", bindingKindToString(binding->kind), " '", identifier.identifier(), "' as value");
         return;
     }
 
-    if (binding->evaluation > m_evaluation) {
+    if (UNLIKELY(binding->evaluation > m_evaluation)) {
         typeError(identifier.span(), "cannot use ", evaluationToString(binding->evaluation), " value in ", evaluationToString(m_evaluation), " expression");
+        return;
+    }
+
+    if (UNLIKELY(isModuleScope() && std::holds_alternative<Types::Reference>(*binding->type))) {
+        typeError(identifier.span(), "var '", identifier.identifier(), "' cannot be referenced at module scope");
         return;
     }
 
@@ -1182,16 +1244,24 @@ void TypeChecker::visit(AST::CallExpression& call)
                 auto& functionType = std::get<Types::Function>(*targetBinding->type);
                 auto numberOfArguments = call.arguments().size();
                 auto numberOfParameters = functionType.parameters.size();
-                if (m_evaluation < Evaluation::Runtime) {
+                if (UNLIKELY(m_evaluation < Evaluation::Runtime)) {
                     typeError(call.span(), "cannot call function from ", evaluationToString(m_evaluation), " context");
                     return;
                 }
 
-                if (numberOfArguments != numberOfParameters) {
+                if (UNLIKELY(isModuleScope())) {
+                    typeError(call.span(), "functions cannot be called at module scope");
+                    return;
+                }
+
+                if (UNLIKELY(numberOfArguments != numberOfParameters)) {
                     const char* errorKind = numberOfArguments < numberOfParameters ? "few" : "many";
                     typeError(call.span(), "funtion call has too ", errorKind, " arguments: expected ", String::number(numberOfParameters), ", found ", String::number(numberOfArguments));
                     return;
                 }
+
+                if (m_discardResult == DiscardResult::Yes && functionType.mustUse)
+                    typeError(InferBottom::No, call.span(), "ignoring return value of function '", targetName, "' annotated with @must_use");
 
                 for (unsigned i = 0; i < numberOfArguments; ++i) {
                     auto& argument = call.arguments()[i];
@@ -1276,6 +1346,11 @@ void TypeChecker::visit(AST::CallExpression& call)
                 return;
             }
 
+            if (!elementType->isConstructible()) {
+                typeError(array.span(), "'", *elementType, "' cannot be used as an element type of an array");
+                return;
+            }
+
             auto constantValue = array.maybeElementCount()->constantValue();
             if (!constantValue) {
                 typeError(call.span(), "array must have constant size in order to be constructed");
@@ -1312,8 +1387,15 @@ void TypeChecker::visit(AST::CallExpression& call)
             for (auto& argument : call.arguments()) {
                 if (!elementType) {
                     elementType = infer(argument, m_evaluation);
+
                     if (auto* reference = std::get_if<Types::Reference>(elementType))
                         elementType = reference->element;
+
+                    if (!elementType->isConstructible()) {
+                        typeError(array.span(), "'", *elementType, "' cannot be used as an element type of an array");
+                        return;
+                    }
+
                     continue;
                 }
                 auto* argumentType = infer(argument, m_evaluation);
@@ -1375,7 +1457,6 @@ void TypeChecker::bitcast(AST::CallExpression& call, const Vector<const Type*>& 
 
     if (auto* reference = std::get_if<Types::Reference>(sourceType))
         sourceType = reference->element;
-    sourceType = concretize(sourceType, m_types);
 
     const auto& primitivePrimitive = [&](const Type* p1, const Type* p2) {
         return (satisfies(p1, Constraints::Concrete32BitNumber) && satisfies(p2, Constraints::Concrete32BitNumber))
@@ -1420,7 +1501,8 @@ void TypeChecker::bitcast(AST::CallExpression& call, const Vector<const Type*>& 
         return;
     }
 
-    typeError(call.span(), "cannot bitcast from '", *sourceType, "' to '", *destinationType, "'");
+    auto* concreteType = concretize(sourceType, m_types) ?: sourceType;
+    typeError(call.span(), "cannot bitcast from '", *concreteType, "' to '", *destinationType, "'");
 }
 
 void TypeChecker::visit(AST::UnaryExpression& unary)
@@ -1482,6 +1564,11 @@ void TypeChecker::visit(AST::ArrayTypeExpression& array)
     auto* elementType = resolve(*array.maybeElementType());
     if (isBottom(elementType)) {
         inferred(m_types.bottomType());
+        return;
+    }
+
+    if (!elementType->hasCreationFixedFootprint()) {
+        typeError(array.span(), "'", *elementType, "' cannot be used as an element type of an array");
         return;
     }
 
@@ -1658,6 +1745,9 @@ const Type* TypeChecker::chooseOverload(const char* kind, AST::Expression& expre
     auto overload = resolveOverloads(m_types, it->value.overloads, valueArguments, typeArguments);
     if (overload.has_value()) {
         ASSERT(overload->parameters.size() == callArguments.size());
+        if (m_discardResult == DiscardResult::Yes && it->value.mustUse)
+            typeError(InferBottom::No, expression.span(), "ignoring return value of builtin '", target, "'");
+
         for (unsigned i = 0; i < callArguments.size(); ++i)
             callArguments[i].m_inferredType = overload->parameters[i];
         inferred(overload->result);
@@ -1720,9 +1810,11 @@ const Type* TypeChecker::chooseOverload(const char* kind, AST::Expression& expre
     return m_types.bottomType();
 }
 
-const Type* TypeChecker::infer(AST::Expression& expression, Evaluation evaluation)
+const Type* TypeChecker::infer(AST::Expression& expression, Evaluation evaluation, DiscardResult discardResult)
 {
+    auto discardResultScope = SetForScope(m_discardResult, discardResult);
     auto evaluationScope = SetForScope(m_evaluation, evaluation);
+
     ASSERT(!m_inferredType);
     Base::visit(expression);
     ASSERT(m_inferredType);
@@ -2026,12 +2118,12 @@ std::optional<FailedCheck> typeCheck(ShaderModule& shaderModule)
     return TypeChecker(shaderModule).check();
 }
 
-template<typename TargetConstructor, typename... Arguments>
-void TypeChecker::allocateSimpleConstructor(ASCIILiteral name, TargetConstructor constructor, Arguments&&... arguments)
+template<typename TargetConstructor, typename Validator, typename... Arguments>
+void TypeChecker::allocateSimpleConstructor(ASCIILiteral name, TargetConstructor constructor, const Validator& validate, Arguments&&... arguments)
 {
     introduceType(AST::Identifier::make(name), m_types.typeConstructorType(
         name,
-        [this, constructor, arguments...](AST::ElaboratedTypeExpression& type) -> const Type* {
+        [this, constructor, &validate, arguments...](AST::ElaboratedTypeExpression& type) -> const Type* {
             if (type.arguments().size() != 1) {
                 typeError(InferBottom::No, type.span(), "'", type.base(), "' requires 1 template argument");
                 return m_types.bottomType();
@@ -2039,6 +2131,11 @@ void TypeChecker::allocateSimpleConstructor(ASCIILiteral name, TargetConstructor
             auto* elementType = resolve(type.arguments().first());
             if (isBottom(elementType))
                 return m_types.bottomType();
+
+            if (auto error = validate(elementType)) {
+                typeError(InferBottom::No, type.span(), *error);
+                return m_types.bottomType();
+            }
 
             return (m_types.*constructor)(arguments..., elementType);
         }
@@ -2136,6 +2233,11 @@ void TypeChecker::setConstantValue(Node& expression, const Type* type, const Con
     }
     expression.setConstantValue(value);
     convertValue(expression.span(), type, expression.m_constantValue);
+}
+
+bool TypeChecker::isModuleScope() const
+{
+    return !m_returnType;
 }
 
 

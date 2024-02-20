@@ -353,6 +353,11 @@ public:
     virtual void setShouldCheckHardwareSupport(bool value) { m_shouldCheckHardwareSupport = value; }
     bool shouldCheckHardwareSupport() const { return m_shouldCheckHardwareSupport; }
 
+    virtual void setVideoReceiverEndpoint(const VideoReceiverEndpoint&) { }
+
+    virtual const String& spatialTrackingLabel() const { return emptyString(); }
+    virtual void setSpatialTrackingLabel(String&&) { }
+
 protected:
     mutable PlatformTimeRanges m_seekable;
     bool m_shouldCheckHardwareSupport { false };

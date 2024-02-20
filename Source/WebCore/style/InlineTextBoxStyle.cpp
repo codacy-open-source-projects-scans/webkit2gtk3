@@ -179,7 +179,7 @@ static float computedUnderlineOffset(const UnderlineOffsetArguments& context)
             // Position underline relative to the bottom edge of the lowest element's content box.
             auto desiredOffset = context.textUnderlinePositionUnder->textRunLogicalHeight + std::max(context.textUnderlinePositionUnder->textRunOffsetFromBottomMost, 0.f);
             desiredOffset += styleToUse.textUnderlineOffset().lengthOr(0.f) + defaultGap(styleToUse);
-            underlineOffset = std::max<float>(desiredOffset, fontMetrics.ascent());
+            underlineOffset = std::max<float>(desiredOffset, fontMetrics.intAscent());
         }
     } else {
         switch (styleToUse.textUnderlinePosition()) {
@@ -189,14 +189,14 @@ static float computedUnderlineOffset(const UnderlineOffsetArguments& context)
             ASSERT(styleToUse.isHorizontalWritingMode());
             FALLTHROUGH;
         case TextUnderlinePosition::Auto:
-            underlineOffset = fontMetrics.ascent() + styleToUse.textUnderlineOffset().lengthOr(defaultGap(styleToUse));
+            underlineOffset = fontMetrics.intAscent() + styleToUse.textUnderlineOffset().lengthOr(defaultGap(styleToUse));
             break;
         case TextUnderlinePosition::FromFont:
-            underlineOffset = fontMetrics.ascent() + fontMetrics.underlinePosition() + styleToUse.textUnderlineOffset().lengthOr(0.f);
+            underlineOffset = fontMetrics.intAscent() + fontMetrics.underlinePosition().value_or(0) + styleToUse.textUnderlineOffset().lengthOr(0.f);
             break;
         default:
             ASSERT_NOT_REACHED();
-            underlineOffset = fontMetrics.ascent() + styleToUse.textUnderlineOffset().lengthOr(defaultGap(styleToUse));
+            underlineOffset = fontMetrics.intAscent() + styleToUse.textUnderlineOffset().lengthOr(defaultGap(styleToUse));
             break;
         }
     }
@@ -227,7 +227,7 @@ static GlyphOverflow computedVisualOverflowForDecorations(const RenderStyle& lin
     float wavyOffset = 0;
 
     TextDecorationStyle decorationStyle = lineStyle.textDecorationStyle();
-    float height = lineStyle.fontCascade().metricsOfPrimaryFont().floatHeight();
+    float height = lineStyle.fontCascade().metricsOfPrimaryFont().height();
     GlyphOverflow overflowResult;
 
     if (decorationStyle == TextDecorationStyle::Wavy) {
@@ -265,7 +265,7 @@ static GlyphOverflow computedVisualOverflowForDecorations(const RenderStyle& lin
     if (decoration & TextDecorationLine::LineThrough) {
         FloatRect rect(FloatPoint(), FloatSize(1, strokeThickness));
         float autoTextDecorationThickness = TextDecorationThickness::createWithAuto().resolve(lineStyle.computedFontSize(), lineStyle.metricsOfPrimaryFont());
-        auto center = 2 * lineStyle.metricsOfPrimaryFont().floatAscent() / 3 + autoTextDecorationThickness / 2;
+        auto center = 2 * lineStyle.metricsOfPrimaryFont().ascent() / 3 + autoTextDecorationThickness / 2;
         rect.move(0, center - strokeThickness / 2);
         if (decorationStyle == TextDecorationStyle::Wavy) {
             FloatBoxExtent wavyExpansion;
@@ -330,23 +330,24 @@ float underlineOffsetForTextBoxPainting(const InlineIterator::InlineBox& inlineB
 
 float overlineOffsetForTextBoxPainting(const InlineIterator::InlineBox& inlineBox, const RenderStyle& style)
 {
-    auto writingMode = style.writingMode();
-    if (isHorizontalWritingMode(writingMode))
-        return { };
-
     if (!style.textDecorationsInEffect().contains(TextDecorationLine::Underline))
         return { };
 
-    auto underlinePosition = style.textUnderlinePosition();
-    // If 'right' causes the underline to be drawn on the "over" side of the text, then an overline also switches sides and is drawn on the "under" side.
-    // If 'left' causes the underline to be drawn on the "over" side of the text, then an overline also switches sides and is drawn on the "under" side.
-    auto overBecomesUnder = (underlinePosition == TextUnderlinePosition::Left && writingMode == WritingMode::SidewaysLr)
-        || (underlinePosition == TextUnderlinePosition::Right && (writingMode == WritingMode::VerticalLr || writingMode == WritingMode::VerticalRl || writingMode == WritingMode::SidewaysRl));
-
-    if (!overBecomesUnder)
+    if (style.isHorizontalWritingMode())
         return { };
 
-    return inlineBoxContentBoxHeight(inlineBox);
+    auto underlinePosition = style.textUnderlinePosition();
+    auto overBecomesUnder = [&] {
+        auto typographicMode = style.typographicMode();
+        // If 'right' causes the underline to be drawn on the "over" side of the text, then an overline also switches sides and is drawn on the "under" side.
+        if (underlinePosition == TextUnderlinePosition::Right)
+            return typographicMode == TypographicMode::Vertical || style.blockFlowDirection() == BlockFlowDirection::RightToLeft;
+        // If 'left' causes the underline to be drawn on the "over" side of the text, then an overline also switches sides and is drawn on the "under" side.
+        if (underlinePosition == TextUnderlinePosition::Left)
+            return typographicMode == TypographicMode::Horizontal && style.blockFlowDirection() == BlockFlowDirection::LeftToRight;
+        return false;
+    };
+    return overBecomesUnder() ? inlineBoxContentBoxHeight(inlineBox) : 0.f;
 }
 
 }

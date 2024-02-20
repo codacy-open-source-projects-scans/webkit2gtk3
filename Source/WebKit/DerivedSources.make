@@ -554,9 +554,12 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/Cocoa/CoreIPCDateComponents.serialization.in \
 	Shared/Cocoa/CoreIPCDictionary.serialization.in \
 	Shared/Cocoa/CoreIPCError.serialization.in \
+	Shared/Cocoa/CoreIPCCVPixelBufferRef.serialization.in \
 	Shared/Cocoa/CoreIPCFont.serialization.in \
 	Shared/Cocoa/CoreIPCLocale.serialization.in \
 	Shared/Cocoa/CoreIPCNSCFObject.serialization.in \
+	Shared/Cocoa/CoreIPCNSShadow.serialization.in \
+	Shared/Cocoa/CoreIPCNSURLProtectionSpace.serialization.in \
 	Shared/Cocoa/CoreIPCNSValue.serialization.in \
 	Shared/Cocoa/CoreIPCNull.serialization.in \
 	Shared/Cocoa/CoreIPCPassKit.serialization.in \
@@ -603,6 +606,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/FrameInfoData.serialization.in \
 	Shared/FrameTreeCreationParameters.serialization.in \
 	Shared/FrameTreeNodeData.serialization.in \
+	Shared/FullScreenMediaDetails.serialization.in \
 	Shared/Gamepad/GamepadData.serialization.in \
 	Shared/GPUProcessConnectionParameters.serialization.in \
 	Shared/GPUProcessPreferencesForWebProcess.serialization.in \
@@ -860,6 +864,8 @@ EXTENSION_INTERFACES = \
     WebExtensionAPITest \
     WebExtensionAPIWebNavigation \
     WebExtensionAPIWebNavigationEvent \
+    WebExtensionAPIWebPageNamespace \
+    WebExtensionAPIWebPageRuntime \
     WebExtensionAPIWebRequest \
     WebExtensionAPIWebRequestEvent \
     WebExtensionAPIWindows \

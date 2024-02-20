@@ -984,7 +984,7 @@ void WebLocalFrameLoaderClient::dispatchDecidePolicyForNewWindowAction(const Nav
     });
 }
 
-void WebLocalFrameLoaderClient::applyToDocumentLoader(WebsitePoliciesData&& websitePolicies)
+void WebLocalFrameLoaderClient::applyWebsitePolicies(WebsitePoliciesData&& websitePolicies)
 {
     auto* coreFrame = m_frame->coreLocalFrame();
     if (!coreFrame)
@@ -1697,8 +1697,7 @@ ObjectContentType WebLocalFrameLoaderClient::objectContentType(const URL& url, c
         return ObjectContentType::Image;
 
     if (RefPtr webPage = m_frame->page()) {
-        auto allowedPluginTypes = webFrame().coreLocalFrame()->arePluginsEnabled()
-            ? PluginData::AllPlugins : PluginData::OnlyApplicationPlugins;
+        auto allowedPluginTypes = PluginData::OnlyApplicationPlugins;
         if (webPage->corePage()->pluginData().supportsMimeType(mimeType, allowedPluginTypes))
             return ObjectContentType::PlugIn;
     }
@@ -1807,6 +1806,12 @@ void WebLocalFrameLoaderClient::dispatchWillDestroyGlobalObjectForDOMWindowExten
 
 #if PLATFORM(COCOA)
     
+WebCore::IntPoint WebLocalFrameLoaderClient::accessibilityRemoteFrameOffset()
+{
+    RefPtr webPage = m_frame->page();
+    return webPage ? webPage->accessibilityRemoteFrameOffset() : IntPoint();
+}
+
 RemoteAXObjectRef WebLocalFrameLoaderClient::accessibilityRemoteObject()
 {
     RefPtr webPage = m_frame->page();

@@ -147,6 +147,7 @@
 #include <wtf/ProcessPrivilege.h>
 #include <wtf/RunLoop.h>
 #include <wtf/SystemTracing.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/URLParser.h>
 #include <wtf/WTFProcess.h>
 #include <wtf/text/StringHash.h>
@@ -259,6 +260,8 @@ static const Seconds nonVisibleProcessMemoryCleanupDelay { 120_s };
 namespace WebKit {
 using namespace JSC;
 using namespace WebCore;
+
+WTF_MAKE_WK_TZONE_ALLOCATED_IMPL(WebProcess);
 
 #if !PLATFORM(GTK) && !PLATFORM(WPE)
 NO_RETURN static void callExit(IPC::Connection*)
@@ -461,6 +464,8 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
                 page->releaseMemory(critical);
         });
 #if ENABLE(PERIODIC_MEMORY_MONITOR)
+        if (auto pollInterval = parameters.memoryFootprintPollIntervalForTesting)
+            memoryPressureHandler.setMemoryFootprintPollIntervalForTesting(pollInterval);
         memoryPressureHandler.setShouldUsePeriodicMemoryMonitor(true);
         memoryPressureHandler.setMemoryKillCallback([this] () {
             WebCore::logMemoryStatistics(LogMemoryStatisticsReason::OutOfMemoryDeath);
@@ -468,6 +473,9 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
                 parentProcessConnection()->send(Messages::WebProcessProxy::DidExceedActiveMemoryLimit(), 0);
             else
                 parentProcessConnection()->send(Messages::WebProcessProxy::DidExceedInactiveMemoryLimit(), 0);
+        });
+        memoryPressureHandler.setMemoryFootprintNotificationThresholds(WTFMove(parameters.memoryFootprintNotificationThresholds), [this](size_t footprint) {
+            parentProcessConnection()->send(Messages::WebProcessProxy::DidExceedMemoryFootprintThreshold(footprint), 0);
         });
 #endif
         memoryPressureHandler.setMemoryPressureStatusChangedCallback([this](WTF::MemoryPressureStatus memoryPressureStatus) {
@@ -998,7 +1006,9 @@ void WebProcess::addWebFrame(FrameIdentifier frameID, WebFrame* frame)
 
 void WebProcess::removeWebFrame(FrameIdentifier frameID, std::optional<WebPageProxyIdentifier> pageID)
 {
-    m_frameMap.remove(frameID);
+    auto frame = m_frameMap.take(frameID);
+    if (frame && frame->coreLocalFrame() && m_networkProcessConnection)
+        m_networkProcessConnection->connection().send(Messages::NetworkConnectionToWebProcess::ClearFrameLoadRecordsForStorageAccess(frameID), 0);
 
     // We can end up here after our connection has closed when WebCore's frame life-support timer
     // fires when the application is shutting down. There's no need (and no way) to update the UI
@@ -1558,6 +1568,10 @@ void WebProcess::updateCPULimit()
 }
 
 void WebProcess::updateCPUMonitorState(CPUMonitorUpdateReason)
+{
+}
+
+void WebProcess::bindAccessibilityFrameWithData(WebCore::FrameIdentifier, std::span<const uint8_t>)
 {
 }
 

@@ -325,7 +325,7 @@ public:
 
     Frame& mainFrame() { return m_mainFrame.get(); }
     const Frame& mainFrame() const { return m_mainFrame.get(); }
-    Ref<Frame> protectedMainFrame() const;
+    WEBCORE_EXPORT Ref<Frame> protectedMainFrame() const;
     WEBCORE_EXPORT void setMainFrame(Ref<Frame>&&);
     const URL& mainFrameURL() const { return m_mainFrameURL; }
     WEBCORE_EXPORT void setMainFrameURL(const URL&);
@@ -374,7 +374,7 @@ public:
     const DragController& dragController() const { return m_dragController.get(); }
 #endif
     FocusController& focusController() const { return *m_focusController; }
-    CheckedRef<FocusController> checkedFocusController() const;
+    WEBCORE_EXPORT CheckedRef<FocusController> checkedFocusController() const;
 #if ENABLE(CONTEXT_MENUS)
     ContextMenuController& contextMenuController() { return m_contextMenuController.get(); }
     const ContextMenuController& contextMenuController() const { return m_contextMenuController.get(); }
@@ -433,6 +433,8 @@ public:
     WEBCORE_EXPORT uint32_t replaceSelectionWithText(const String& replacementText);
 
     WEBCORE_EXPORT void revealCurrentSelection();
+
+    WEBCORE_EXPORT const URL fragmentDirectiveURLForSelectedText();
 
     WEBCORE_EXPORT std::optional<SimpleRange> rangeOfString(const String&, const std::optional<SimpleRange>& searchRange, FindOptions);
 
@@ -713,6 +715,11 @@ public:
 #endif
     bool imageAnimationEnabled() const { return m_imageAnimationEnabled; }
     bool systemAllowsAnimationControls() const { return m_systemAllowsAnimationControls; }
+
+#if ENABLE(ACCESSIBILITY_NON_BLINKING_CURSOR)
+    WEBCORE_EXPORT void setPrefersNonBlinkingCursor(bool);
+    bool prefersNonBlinkingCursor() const { return m_prefersNonBlinkingCursor; };
+#endif
 
     void userStyleSheetLocationChanged();
     const String& userStyleSheet() const;
@@ -1087,6 +1094,10 @@ public:
     std::optional<std::pair<uint16_t, uint16_t>> portsForUpgradingInsecureSchemeForTesting() const;
     WEBCORE_EXPORT void setPortsForUpgradingInsecureSchemeForTesting(uint16_t upgradeFromInsecurePort, uint16_t upgradeToSecurePort);
 
+#if PLATFORM(IOS_FAMILY) && ENABLE(WEBXR)
+    WEBCORE_EXPORT bool hasActiveImmersiveSession() const;
+#endif
+
 private:
     explicit Page(PageConfiguration&&);
 
@@ -1253,6 +1264,9 @@ private:
     bool m_systemAllowsAnimationControls { false };
     // Elements containing animations that are individually playing (potentially overriding the page-wide m_imageAnimationEnabled state).
     WeakHashSet<HTMLImageElement, WeakPtrImplWithEventTargetData> m_individuallyPlayingAnimationElements;
+#if ENABLE(ACCESSIBILITY_NON_BLINKING_CURSOR)
+    bool m_prefersNonBlinkingCursor { false };
+#endif
 
     TimerThrottlingState m_timerThrottlingState { TimerThrottlingState::Disabled };
     MonotonicTime m_timerThrottlingStateLastChangedTime;

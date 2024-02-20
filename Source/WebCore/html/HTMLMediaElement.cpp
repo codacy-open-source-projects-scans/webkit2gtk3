@@ -164,8 +164,13 @@
 #endif
 
 #if ENABLE(MEDIA_SOURCE)
+#include "MediaSource.h"
+#include "MediaSourceInterfaceMainThread.h"
+#if ENABLE(MEDIA_SOURCE_IN_WORKERS)
+#include "MediaSourceHandle.h"
+#include "MediaSourceInterfaceWorker.h"
+#endif
 #include "LocalDOMWindow.h"
-#include "ManagedMediaSource.h"
 #include "SourceBufferList.h"
 #endif
 
@@ -328,7 +333,7 @@ public:
     }
 
 private:
-    WeakRef<HTMLMediaElement, WeakPtrImplWithEventTargetData> m_element;
+    WeakRef<HTMLMediaElement> m_element;
 };
 
 struct HTMLMediaElement::TrackGroup {
@@ -346,9 +351,9 @@ struct HTMLMediaElement::TrackGroup {
     bool hasSrcLang { false };
 };
 
-HashSet<WeakRef<HTMLMediaElement, WeakPtrImplWithEventTargetData>>& HTMLMediaElement::allMediaElements()
+HashSet<WeakRef<HTMLMediaElement>>& HTMLMediaElement::allMediaElements()
 {
-    static NeverDestroyed<HashSet<WeakRef<HTMLMediaElement, WeakPtrImplWithEventTargetData>>> elements;
+    static NeverDestroyed<HashSet<WeakRef<HTMLMediaElement>>> elements;
     return elements;
 }
 
@@ -1476,7 +1481,19 @@ void HTMLMediaElement::selectMediaResource()
                 [this](RefPtr<MediaStream> stream) { m_mediaStreamSrcObject = stream; },
 #endif
 #if ENABLE(MEDIA_SOURCE)
-                [this](RefPtr<MediaSource> source) { m_mediaSource = source; },
+                [this](RefPtr<MediaSource> source) { m_mediaSource = MediaSourceInterfaceMainThread::create(source.releaseNonNull()); },
+#endif
+#if ENABLE(MEDIA_SOURCE_IN_WORKERS)
+                [this, &logSiteIdentifier](RefPtr<MediaSourceHandle> handle) {
+                    // If the media provider object is a MediaSourceHandle whose [[Detached]] internal slot is true
+                    // Run the "If the media data cannot be fetched at all, due to network errors, causing the user agent to give up trying to fetch the resource" steps of the resource fetch algorithm's media data processing steps list.
+                    // If the media provider object is a MediaSourceHandle whose underlying MediaSource's [[has ever been attached]] internal slot is true
+                    // Run the "If the media data cannot be fetched at all, due to network errors, causing the user agent to give up trying to fetch the resource" steps of the resource fetch algorithm's media data processing steps list.
+                    if (!handle->isDetached() && !handle->hasEverBeenAssignedAsSrcObject())
+                        m_mediaSource = MediaSourceInterfaceWorker::create(handle.releaseNonNull());
+                    else
+                        ALWAYS_LOG(logSiteIdentifier, "Attempting to use a detached or a previously attached MediaSourceHandle");
+                },
 #endif
                 [this](RefPtr<Blob> blob) { m_blob = blob; }
             );
@@ -1650,21 +1667,23 @@ void HTMLMediaElement::loadResource(const URL& initialURL, ContentType& contentT
 
     bool loadAttempted = false;
 #if ENABLE(MEDIA_SOURCE)
-    if (!m_mediaSource && url.protocolIs(mediaSourceBlobProtocol) && !m_remotePlaybackConfiguration)
-        m_mediaSource = MediaSource::lookup(url.string());
+    if (!m_mediaSource && url.protocolIs(mediaSourceBlobProtocol) && !m_remotePlaybackConfiguration) {
+        if (RefPtr mediaSource = MediaSource::lookup(url.string()))
+            m_mediaSource = MediaSourceInterfaceMainThread::create(mediaSource.releaseNonNull());
+    }
 
     if (m_mediaSource) {
         loadAttempted = true;
 
         ALWAYS_LOG(LOGIDENTIFIER, "loading MSE blob");
-        if (!m_mediaSource->attachToElement(*this)) {
+        if (!m_mediaSource->attachToElement(WeakPtr { *this })) {
             // Forget our reference to the MediaSource, so we leave it alone
             // while processing remainder of load failure.
             m_mediaSource = nullptr;
             mediaLoadingFailed(MediaPlayer::NetworkState::FormatError);
-        } else if (RefPtr mediaSource = m_mediaSource; !player->load(url, contentType, *mediaSource)) {
+        } else if (RefPtr mediaSource = m_mediaSource; !mediaSource->client() || !player->load(url, contentType, *mediaSource->client())) {
             // We have to detach the MediaSource before we forget the reference to it.
-            mediaSource->detachFromElement(*this);
+            mediaSource->detachFromElement();
             m_mediaSource = nullptr;
             mediaLoadingFailed(MediaPlayer::NetworkState::FormatError);
         }
@@ -1695,6 +1714,13 @@ void HTMLMediaElement::loadResource(const URL& initialURL, ContentType& contentT
         mediaLoadingFailed(MediaPlayer::NetworkState::FormatError);
 
     mediaPlayerRenderingModeChanged();
+}
+
+void HTMLMediaElement::mediaSourceWasDetached()
+{
+    // The steps on what happen when a MediaSource goes missing are not defined in the current spec.
+    // https://github.com/w3c/media-source/issues/348 ; we do what's the most sensible for now.
+    userCancelledLoad();
 }
 
 struct HTMLMediaElement::CueData {
@@ -1846,7 +1872,7 @@ void HTMLMediaElement::updateActiveTextTrackCues(const MediaTime& movieTime)
     INFO_LOG(identifier, "nextInterestingTime:", nextInterestingTime);
 
     if (RefPtr player = m_player; nextInterestingTime.isValid() && player) {
-        player->performTaskAtTime([this, weakThis = WeakPtr<HTMLMediaElement, WeakPtrImplWithEventTargetData> { *this }, identifier] {
+        player->performTaskAtTime([this, weakThis = WeakPtr { *this }, identifier] {
             RefPtr protectedThis = weakThis.get();
             if (!protectedThis)
                 return;
@@ -2050,7 +2076,7 @@ void HTMLMediaElement::speakCueText(TextTrackCue& cue)
     m_cueBeingSpoken = &cue;
     RefPtr { m_cueBeingSpoken }->prepareToSpeak(protectedSpeechSynthesis(), m_reportedPlaybackRate ? m_reportedPlaybackRate : m_requestedPlaybackRate, volume(), [weakThis = WeakPtr { *this }](const TextTrackCue&) {
         ASSERT(isMainThread());
-        RefPtr protectedThis = weakThis.get();
+        RefPtrAllowingPartiallyDestroyed<HTMLMediaElement> protectedThis = weakThis.get();
         if (!protectedThis)
             return;
 
@@ -3304,7 +3330,7 @@ void HTMLMediaElement::progressEventTimerFired()
     if (!m_player->supportsProgressMonitoring())
         return;
 
-    m_player->didLoadingProgress([this, weakThis = WeakPtr<HTMLMediaElement, WeakPtrImplWithEventTargetData> { *this }](bool progress) {
+    m_player->didLoadingProgress([this, weakThis = WeakPtr { *this }](bool progress) {
         RefPtr protectedThis = weakThis.get();
         if (!protectedThis)
             return;
@@ -4205,7 +4231,7 @@ bool HTMLMediaElement::hasMediaSource() const
 bool HTMLMediaElement::hasManagedMediaSource() const
 {
 #if ENABLE(MEDIA_SOURCE)
-    return is<ManagedMediaSource>(m_mediaSource);
+    return m_mediaSource && m_mediaSource->isManaged();
 #else
     return false;
 #endif
@@ -4215,15 +4241,10 @@ bool HTMLMediaElement::hasManagedMediaSource() const
 
 void HTMLMediaElement::detachMediaSource()
 {
-    if (!m_mediaSource)
-        return;
-
-    {
-        RefPtr mediaSource = m_mediaSource;
-        mediaSource->detachFromElement(*this);
+    if (RefPtr mediaSource = std::exchange(m_mediaSource, { })) {
+        mediaSource->detachFromElement();
         mediaSource->setAsSrcObject(false);
     }
-    m_mediaSource = nullptr;
 }
 
 bool HTMLMediaElement::deferredMediaSourceOpenCanProgress() const
@@ -4697,6 +4718,14 @@ void HTMLMediaElement::removeAudioTrack(Ref<AudioTrack>&& track)
     m_audioTracks->remove(track.get());
 }
 
+void HTMLMediaElement::removeAudioTrack(TrackID trackID)
+{
+    if (!m_audioTracks)
+        return;
+    if (RefPtr track = m_audioTracks->find(trackID))
+        removeAudioTrack(downcast<AudioTrack>(*track));
+}
+
 void HTMLMediaElement::removeTextTrack(TextTrack& track, bool scheduleEvent)
 {
     if (!m_textTracks || !m_textTracks->contains(track))
@@ -4710,12 +4739,28 @@ void HTMLMediaElement::removeTextTrack(TextTrack& track, bool scheduleEvent)
         textTracks->remove(track, scheduleEvent);
 }
 
+void HTMLMediaElement::removeTextTrack(TrackID trackID, bool scheduleEvent)
+{
+    if (!m_textTracks)
+        return;
+    if (RefPtr track = m_audioTracks->find(trackID))
+        removeTextTrack(downcast<TextTrack>(*track), scheduleEvent);
+}
+
 void HTMLMediaElement::removeVideoTrack(Ref<VideoTrack>&& track)
 {
     if (!m_videoTracks || !m_videoTracks->contains(track))
         return;
     track->clearClient(*this);
     RefPtr { m_videoTracks }->remove(track);
+}
+
+void HTMLMediaElement::removeVideoTrack(TrackID trackID)
+{
+    if (!m_videoTracks)
+        return;
+    if (RefPtr track = m_audioTracks->find(trackID))
+        removeVideoTrack(downcast<VideoTrack>(*track));
 }
 
 void HTMLMediaElement::forgetResourceSpecificTracks()
@@ -5079,11 +5124,11 @@ void HTMLMediaElement::updateCaptionContainer()
 void HTMLMediaElement::layoutSizeChanged()
 {
     auto task = [this] {
-        if (auto root = userAgentShadowRoot())
+        if (RefPtr root = userAgentShadowRoot())
             root->dispatchEvent(Event::create(eventNames().resizeEvent, Event::CanBubble::No, Event::IsCancelable::No));
 
-        if (m_mediaControlsHost)
-            m_mediaControlsHost->updateCaptionDisplaySizes();
+        if (RefPtr mediaControlsHost = m_mediaControlsHost)
+            mediaControlsHost->updateCaptionDisplaySizes();
     };
     queueTaskKeepingObjectAlive(*this, TaskSource::MediaElement, WTFMove(task));
 
@@ -8033,13 +8078,11 @@ void HTMLMediaElement::mediaPlayerBufferedTimeRangesChanged()
             if (!track->shouldPurgeCuesFromUnbufferedRanges())
                 continue;
 
-            auto& buffered =
+            track->removeCuesNotInTimeRanges(
 #if ENABLE(MEDIA_SOURCE)
                 m_mediaSource ? m_mediaSource->buffered() :
 #endif
-                m_player->buffered();
-
-            track->removeCuesNotInTimeRanges(buffered);
+                m_player->buffered());
         }
     });
 }
@@ -8570,6 +8613,14 @@ bool HTMLMediaElement::shouldOverrideBackgroundPlaybackRestriction(PlatformMedia
             return true;
         }
 #endif
+#if PLATFORM(VISION) && ENABLE(WEBXR)
+        if (RefPtr page = document().page()) {
+            if (page->hasActiveImmersiveSession()) {
+                INFO_LOG(LOGIDENTIFIER, "returning true due to active immersive session");
+                return true;
+            }
+        }
+#endif
 #if ENABLE(MEDIA_STREAM)
         if (hasMediaStreamSrcObject() && mediaState().containsAny(MediaProducerMediaState::IsPlayingAudio) && document().mediaState().containsAny(MediaProducerMediaState::HasActiveAudioCaptureDevice)) {
             INFO_LOG(LOGIDENTIFIER, "returning true because playing an audio MediaStreamTrack");
@@ -8715,14 +8766,7 @@ MediaProducerMediaStateFlags HTMLMediaElement::mediaState() const
 #endif
 
 #if ENABLE(MEDIA_SOURCE)
-    bool streaming = false;
-    RefPtr managedMediasource = dynamicDowncast<ManagedMediaSource>(m_mediaSource);
-    streaming |= managedMediasource && managedMediasource->streamingAllowed() && managedMediasource->streaming();
-    if (!managedMediasource) {
-        // We can assume that if we have active source buffers, later networking activity (such as stream or XHR requests) will be media related.
-        streaming |= m_mediaSource && m_mediaSource->activeSourceBuffers() && m_mediaSource->activeSourceBuffers()->length();
-    }
-    if (streaming)
+    if (m_mediaSource && m_mediaSource->isStreamingContent())
         state.add(MediaProducerMediaState::HasStreamingActivity);
 #endif
 
@@ -9234,6 +9278,19 @@ String HTMLMediaElement::localizedSourceType() const
 
     ASSERT_NOT_REACHED();
     return { };
+}
+
+const String& HTMLMediaElement::spatialTrackingLabel() const
+{
+    if (m_player)
+        return m_player->spatialTrackingLabel();
+    return emptyString();
+}
+
+void HTMLMediaElement::setSpatialTrackingLabel(String&& spatialTrackingLabel)
+{
+    if (m_player)
+        m_player->setSpatialTrackingLabel(WTFMove(spatialTrackingLabel));
 }
 
 } // namespace WebCore

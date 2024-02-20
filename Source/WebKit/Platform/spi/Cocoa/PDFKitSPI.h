@@ -36,7 +36,15 @@
 #import <PDFKit/PDFHostViewController.h>
 #endif // PLATFORM(IOS_FAMILY)
 
+#import <PDFKit/PDFDocumentPriv.h>
 #import <PDFKit/PDFSelectionPriv.h>
+#if __has_include(<PDFKit/PDFActionPriv.h>)
+#import <PDFKit/PDFActionPriv.h>
+#else
+@interface PDFAction(SPI)
+- (NSArray *) nextActions;
+@end
+#endif // __has_include(PDFKIT/PDFActionPriv.h)
 
 #endif // HAVE(PDFKIT)
 
@@ -87,6 +95,7 @@
 - (PDFPoint)firstCharCenter;
 - (/*nullable*/ NSString *)html;
 - (/*nullable*/ NSData *)webArchive;
+- (NSAttributedString *)attributedStringScaled:(CGFloat)scale;
 @end
 
 #endif // HAVE(PDFKIT)
@@ -97,12 +106,22 @@
 @interface PDFDocument ()
 -(instancetype)initWithProvider:(CGDataProviderRef)dataProvider;
 -(void)preloadDataOfPagesInRange:(NSRange)range onQueue:(dispatch_queue_t)queue completion:(void (^)(NSIndexSet* loadedPageIndexes))completionBlock;
+-(void)resetFormFields:(PDFActionResetForm *) action;
 @property (readwrite, nonatomic) BOOL hasHighLatencyDataProvider;
 @end
 #endif // HAVE(INCREMENTAL_PDF_APIS)
 
 #if ENABLE(UNIFIED_PDF)
+@interface PDFDocument (IPI)
+- (PDFDestination *)namedDestination:(NSString *)name;
+@end
+
 @interface PDFPage (IPI)
 - (CGPDFPageLayoutRef) pageLayout;
 @end
 #endif // ENABLE(UNIFIED_PDF)
+
+// FIXME: Move this declaration inside the !USE(APPLE_INTERNAL_SDK) block once rdar://problem/118903435 is in builds.
+@interface PDFDocument (AX)
+- (NSArray *)accessibilityChildren:(id)parent;
+@end

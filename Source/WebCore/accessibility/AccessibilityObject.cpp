@@ -544,7 +544,9 @@ FloatRect AccessibilityObject::convertFrameToSpace(const FloatRect& frameRect, A
     
 FloatRect AccessibilityObject::relativeFrame() const
 {
-    return convertFrameToSpace(elementRect(), AccessibilityConversionSpace::Page);
+    auto rect = elementRect();
+    rect.moveBy(remoteFrameOffset());
+    return convertFrameToSpace(rect, AccessibilityConversionSpace::Page);
 }
 
 AccessibilityObject* AccessibilityObject::nextSiblingUnignored(int limit) const
@@ -2086,13 +2088,22 @@ const AccessibilityScrollView* AccessibilityObject::ancestorAccessibilityScrollV
 #if PLATFORM(COCOA)
 RemoteAXObjectRef AccessibilityObject::remoteParentObject() const
 {
-    if (auto* document = this->document()) {
-        if (auto* frame = document->frame())
-            return frame->loader().client().accessibilityRemoteObject();
-    }
-    return nullptr;
+    auto* document = this->document();
+    auto* frame = document ? document->frame() : nullptr;
+    return frame ? frame->loader().client().accessibilityRemoteObject() : nullptr;
 }
 #endif
+
+IntPoint AccessibilityObject::remoteFrameOffset() const
+{
+#if PLATFORM(COCOA)
+    auto* document = this->document();
+    auto* frame = document ? document->frame() : nullptr;
+    return frame ? frame->loader().client().accessibilityRemoteFrameOffset() : IntPoint();
+#else
+    return IntPoint();
+#endif
+}
 
 Document* AccessibilityObject::document() const
 {
@@ -2102,7 +2113,12 @@ Document* AccessibilityObject::document() const
 
     return frameView->frame().document();
 }
-    
+
+RefPtr<Document> AccessibilityObject::protectedDocument() const
+{
+    return document();
+}
+
 Page* AccessibilityObject::page() const
 {
     Document* document = this->document();
@@ -4471,10 +4487,6 @@ static bool isAccessibilityObjectSearchMatchAtIndex(RefPtr<AXCoreObject> axObjec
         return axObject->isWebArea();
     case AccessibilitySearchKey::Graphic:
         return axObject->isImage();
-#if ENABLE(AX_THREAD_TEXT_APIS)
-    case AccessibilitySearchKey::HasTextRuns:
-        return axObject->hasTextRuns();
-#endif
     case AccessibilitySearchKey::HeadingLevel1:
         return axObject->headingLevel() == 1;
     case AccessibilitySearchKey::HeadingLevel2:
@@ -4678,11 +4690,6 @@ void findMatchingObjects(const AccessibilitySearchCriteria& criteria, AXCoreObje
         while (!searchStack.isEmpty()) {
             auto searchObject = searchStack.last();
             searchStack.removeLast();
-
-            if (criteria.stopAtID.isValid() && searchObject->objectID() == criteria.stopAtID) {
-                AXLOG(results);
-                return;
-            }
 
             if (objectMatchesSearchCriteriaWithResultLimit(searchObject, criteria, results))
                 break;

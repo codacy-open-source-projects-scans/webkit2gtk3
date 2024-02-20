@@ -266,6 +266,7 @@ class AcceleratedTimeline;
 
 struct ApplicationManifest;
 struct BoundaryPoint;
+struct CSSParserContext;
 struct ClientOrigin;
 struct FocusOptions;
 struct IntersectionObserverData;
@@ -278,6 +279,10 @@ struct EventTrackingRegions;
 
 #if USE(SYSTEM_PREVIEW)
 struct SystemPreviewInfo;
+#endif
+
+#if ENABLE(WEB_RTC)
+class RTCPeerConnection;
 #endif
 
 template<typename> class ExceptionOr;
@@ -655,6 +660,7 @@ public:
     const CSSFontSelector* fontSelectorIfExists() const { return m_fontSelector.get(); }
     inline CSSFontSelector& fontSelector();
     inline const CSSFontSelector& fontSelector() const;
+    Ref<CSSFontSelector> protectedFontSelector() const;
 
     WEBCORE_EXPORT bool haveStylesheetsLoaded() const;
     bool isIgnoringPendingStylesheets() const { return m_ignorePendingStylesheets; }
@@ -673,6 +679,9 @@ public:
     const Style::CustomPropertyRegistry& customPropertyRegistry() const;
     const CSSCounterStyleRegistry& counterStyleRegistry() const;
     CSSCounterStyleRegistry& counterStyleRegistry();
+
+    CSSParserContext cssParserContext() const;
+    void invalidateCachedCSSParserContext();
 
     bool gotoAnchorNeededAfterStylesheetsLoad() { return m_gotoAnchorNeededAfterStylesheetsLoad; }
     void setGotoAnchorNeededAfterStylesheetsLoad(bool b) { m_gotoAnchorNeededAfterStylesheetsLoad = b; }
@@ -853,6 +862,8 @@ public:
 #if ENABLE(WEB_RTC)
     RTCNetworkManager* rtcNetworkManager() { return m_rtcNetworkManager.get(); }
     WEBCORE_EXPORT void setRTCNetworkManager(Ref<RTCNetworkManager>&&);
+    void startGatheringRTCLogs(Function<void(String&& logType, String&& logMessage, String&& logLevel, RefPtr<RTCPeerConnection>&&)>&&);
+    void stopGatheringRTCLogs();
 #endif
 
     bool canNavigate(Frame* targetFrame, const URL& destinationURL = URL());
@@ -2194,12 +2205,12 @@ private:
     WeakHashSet<Element, WeakPtrImplWithEventTargetData> m_documentSuspensionCallbackElements;
 
 #if ENABLE(VIDEO)
-    WeakHashSet<HTMLMediaElement, WeakPtrImplWithEventTargetData> m_mediaElements;
+    WeakHashSet<HTMLMediaElement> m_mediaElements;
 #endif
 
 #if ENABLE(VIDEO)
-    WeakHashSet<HTMLMediaElement, WeakPtrImplWithEventTargetData> m_captionPreferencesChangedElements;
-    WeakPtr<HTMLMediaElement, WeakPtrImplWithEventTargetData> m_mediaElementShowingTextTrack;
+    WeakHashSet<HTMLMediaElement> m_captionPreferencesChangedElements;
+    WeakPtr<HTMLMediaElement> m_mediaElementShowingTextTrack;
 #endif
 
     WeakPtr<Element, WeakPtrImplWithEventTargetData> m_mainArticleElement;
@@ -2356,7 +2367,7 @@ private:
 #endif
 
 #if ENABLE(PICTURE_IN_PICTURE_API)
-    WeakPtr<HTMLVideoElement, WeakPtrImplWithEventTargetData> m_pictureInPictureElement;
+    WeakPtr<HTMLVideoElement> m_pictureInPictureElement;
 #endif
 
     std::unique_ptr<TextManipulationController> m_textManipulationController;
@@ -2583,6 +2594,8 @@ private:
 
     const std::optional<FrameIdentifier> m_frameIdentifier;
     std::optional<bool> m_cachedCookiesEnabled;
+
+    mutable std::unique_ptr<CSSParserContext> m_cachedCSSParserContext;
 };
 
 Element* eventTargetElementForDocument(Document*);

@@ -96,7 +96,7 @@ enum class HTTPCookieAcceptPolicy : uint8_t;
 enum class IncludeHttpOnlyCookies : bool;
 enum class StoredCredentialsPolicy : uint8_t;
 enum class StorageAccessPromptWasShown : bool;
-enum class StorageAccessWasGranted : bool;
+enum class StorageAccessWasGranted : uint8_t;
 struct ClientOrigin;
 struct MessageWithMessagePorts;
 class SecurityOriginData;
@@ -524,9 +524,9 @@ private:
 #if USE(RUNNINGBOARD)
     void setIsHoldingLockedFiles(bool);
 #if USE(EXTENSIONKIT)
-    bool acquireLockedFileGrant();
-    void invalidateGrant();
-    bool hasAcquiredGrant() const;
+    bool acquireLockedFileActivity();
+    void invalidateFileActivity();
+    bool hasAcquiredFileActivity() const;
 #endif
 #endif
     void stopRunLoopIfNecessary();
@@ -565,7 +565,7 @@ private:
 #if USE(RUNNINGBOARD)
     WebSQLiteDatabaseTracker m_webSQLiteDatabaseTracker;
 #if USE(EXTENSIONKIT)
-    RetainPtr<WKGrant> m_holdingLockedFileGrant;
+    OSObjectPtr<dispatch_semaphore_t> m_holdingLockedFileSemaphore;
 #endif
     RefPtr<ProcessAssertion> m_holdingLockedFileAssertion;
 #endif

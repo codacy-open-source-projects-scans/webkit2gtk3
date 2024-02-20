@@ -31,6 +31,7 @@
 #include <WebCore/PluginViewBase.h>
 #include <WebCore/ResourceResponse.h>
 #include <WebCore/SharedBuffer.h>
+#include <WebCore/TextIndicator.h>
 #include <WebCore/Timer.h>
 #include <memory>
 #include <wtf/RunLoop.h>
@@ -53,6 +54,11 @@ class WebFrame;
 class WebPage;
 
 struct WebHitTestResultData;
+
+struct LookupTextResult {
+    String text;
+    RetainPtr<PDFSelection> correspondingSelection;
+};
 
 class PluginView final : public WebCore::PluginViewBase {
 public:
@@ -77,6 +83,7 @@ public:
     void layerHostingStrategyDidChange() final;
 
     WebCore::HTMLPlugInElement& pluginElement() const { return m_pluginElement; }
+    Ref<WebCore::HTMLPlugInElement> protectedPluginElement() const;
     const URL& mainResourceURL() const { return m_mainResourceURL; }
 
     void didBeginMagnificationGesture();
@@ -93,13 +100,16 @@ public:
     
     unsigned countFindMatches(const String& target, WebCore::FindOptions, unsigned maxMatchCount);
     bool findString(const String& target, WebCore::FindOptions, unsigned maxMatchCount);
+    Vector<WebCore::FloatRect> rectsForTextMatchesInRect(const WebCore::IntRect&) const;
+    bool drawsFindOverlay() const;
+    RefPtr<WebCore::TextIndicator> textIndicatorForSelection(OptionSet<WebCore::TextIndicatorOption>, WebCore::TextIndicatorPresentationTransition);
 
-    String getSelectionString() const;
+    String selectionString() const;
 
     RefPtr<WebCore::FragmentedSharedBuffer> liveResourceData() const;
     bool performDictionaryLookupAtLocation(const WebCore::FloatPoint&);
 
-    std::pair<String, PDFSelection *> lookupTextAtLocation(const WebCore::FloatPoint&, WebHitTestResultData&) const;
+    LookupTextResult lookupTextAtLocation(const WebCore::FloatPoint&, WebHitTestResultData&) const;
     WebCore::FloatRect rectForSelectionInRootView(PDFSelection *) const;
     CGFloat contentScaleFactor() const;
     
@@ -168,6 +178,8 @@ private:
     void setParentVisible(bool) final;
     bool transformsAffectFrameRect() final;
     void clipRectChanged() final;
+
+    RefPtr<WebPage> protectedWebPage() const;
 
     Ref<WebCore::HTMLPlugInElement> m_pluginElement;
     Ref<PDFPluginBase> m_plugin;

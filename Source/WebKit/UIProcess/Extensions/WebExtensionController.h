@@ -35,6 +35,7 @@
 #include "WebExtensionContextIdentifier.h"
 #include "WebExtensionControllerConfiguration.h"
 #include "WebExtensionControllerIdentifier.h"
+#include "WebExtensionDataType.h"
 #include "WebExtensionFrameIdentifier.h"
 #include "WebExtensionURLSchemeHandler.h"
 #include "WebProcessProxy.h"
@@ -46,6 +47,7 @@
 
 OBJC_CLASS NSError;
 OBJC_CLASS NSMenu;
+OBJC_CLASS _WKWebExtensionStorageSQLiteStore;
 OBJC_PROTOCOL(_WKWebExtensionControllerDelegatePrivate);
 
 #ifdef __OBJC__
@@ -56,6 +58,7 @@ namespace WebKit {
 
 class ContextMenuContextData;
 class WebExtensionContext;
+class WebExtensionDataRecord;
 class WebPageProxy;
 class WebProcessPool;
 class WebsiteDataStore;
@@ -74,6 +77,8 @@ public:
 
     explicit WebExtensionController(Ref<WebExtensionControllerConfiguration>);
     ~WebExtensionController();
+
+    using UniqueIdentifier = String;
 
     using WebExtensionContextSet = HashSet<Ref<WebExtensionContext>>;
     using WebExtensionSet = HashSet<Ref<WebExtension>>;
@@ -94,8 +99,18 @@ public:
 
     bool operator==(const WebExtensionController& other) const { return (this == &other); }
 
+    bool inTestingMode() const { return m_testingMode; }
+    void setTestingMode(bool testingMode) { m_testingMode = testingMode; }
+
     bool storageIsPersistent() const { return m_configuration->storageIsPersistent(); }
-    String storageDirectory(WebExtensionContext&) const;
+
+    void getDataRecords(OptionSet<WebExtensionDataType>, CompletionHandler<void(Vector<Ref<WebExtensionDataRecord>>)>&&);
+    void getDataRecord(OptionSet<WebExtensionDataType>, WebExtensionContext&, CompletionHandler<void(RefPtr<WebExtensionDataRecord>)>&&);
+    void removeData(OptionSet<WebExtensionDataType>, const Vector<Ref<WebExtensionDataRecord>>&, CompletionHandler<void()>&&);
+    void removeData(OptionSet<WebExtensionDataType>, const WebExtensionContextSet&, CompletionHandler<void()>&&);
+
+    void calculateStorageSize(_WKWebExtensionStorageSQLiteStore *, WebExtensionDataType, CompletionHandler<void(size_t)>&&);
+    void removeStorage(_WKWebExtensionStorageSQLiteStore *, WebExtensionDataType, CompletionHandler<void()>&&);
 
     bool hasLoadedContexts() const { return !m_extensionContexts.isEmpty(); }
     bool isFreshlyCreated() const { return m_freshlyCreated; }
@@ -122,6 +137,7 @@ public:
     WebProcessProxySet allProcesses() const;
 
     RefPtr<WebExtensionContext> extensionContext(const WebExtension&) const;
+    RefPtr<WebExtensionContext> extensionContext(const UniqueIdentifier&) const;
     RefPtr<WebExtensionContext> extensionContext(const URL&) const;
 
     const WebExtensionContextSet& extensionContexts() const { return m_extensionContexts; }
@@ -167,12 +183,25 @@ private:
     void addWebsiteDataStore(WebsiteDataStore&);
     void removeWebsiteDataStore(WebsiteDataStore&);
 
+    String storageDirectory(const String& uniqueIdentifier) const;
+    String storageDirectory(WebExtensionContext&) const;
+
+    String stateFilePath(const String& uniqueIdentifier) const;
+    _WKWebExtensionStorageSQLiteStore* sqliteStore(const String& storageDirectory, WebExtensionDataType, std::optional<RefPtr<WebExtensionContext>>);
+
     void didStartProvisionalLoadForFrame(WebPageProxyIdentifier, WebExtensionFrameIdentifier, WebExtensionFrameIdentifier parentFrameID, const URL&, WallTime);
     void didCommitLoadForFrame(WebPageProxyIdentifier, WebExtensionFrameIdentifier, WebExtensionFrameIdentifier parentFrameID, const URL&, WallTime);
     void didFinishLoadForFrame(WebPageProxyIdentifier, WebExtensionFrameIdentifier, WebExtensionFrameIdentifier parentFrameID, const URL&, WallTime);
     void didFailLoadForFrame(WebPageProxyIdentifier, WebExtensionFrameIdentifier, WebExtensionFrameIdentifier parentFrameID, const URL&, WallTime);
 
     void purgeOldMatchedRules();
+
+    // Test APIs
+    void testResult(bool result, String message, String sourceURL, unsigned lineNumber);
+    void testEqual(bool result, String expected, String actual, String message, String sourceURL, unsigned lineNumber);
+    void testMessage(String message, String sourceURL, unsigned lineNumber);
+    void testYielded(String message, String sourceURL, unsigned lineNumber);
+    void testFinished(bool result, String message, String sourceURL, unsigned lineNumber);
 
     class HTTPCookieStoreObserver : public API::HTTPCookieStore::Observer {
         WTF_MAKE_FAST_ALLOCATED;
@@ -188,7 +217,7 @@ private:
         {
             // FIXME: <https://webkit.org/b/267514> Add support for changeInfo.
 
-            if (RefPtr extensionController = m_extensionController.get(); extensionController)
+            if (RefPtr extensionController = m_extensionController.get())
                 extensionController->cookiesDidChange(cookieStore);
         }
 
@@ -207,7 +236,13 @@ private:
     UserContentControllerProxySet m_allNonPrivateUserContentControllers;
     UserContentControllerProxySet m_allPrivateUserContentControllers;
     WebExtensionURLSchemeHandlerMap m_registeredSchemeHandlers;
-    bool m_freshlyCreated { true };
+
+    bool m_freshlyCreated : 1 { true };
+#ifdef NDEBUG
+    bool m_testingMode : 1 { false };
+#else
+    bool m_testingMode : 1 { true };
+#endif
 
     std::unique_ptr<WebCore::Timer> m_purgeOldMatchedRulesTimer;
     std::unique_ptr<HTTPCookieStoreObserver> m_cookieStoreObserver;
@@ -218,7 +253,7 @@ void WebExtensionController::sendToAllProcesses(const T& message, const ObjectId
 {
     for (auto& process : allProcesses()) {
         if (process.canSendMessage())
-            process.send(T(message), destinationID.toUInt64());
+            process.send(T(message), destinationID);
     }
 }
 

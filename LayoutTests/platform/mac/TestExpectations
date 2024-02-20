@@ -276,9 +276,6 @@ webkit.org/b/103435 fast/backgrounds/background-opaque-images-over-color.html [ 
 
 webkit.org/b/56685 webarchive/test-link-rel-icon.html [ Failure ]
 
-# The following two tests are expected to fail until <rdar://problem/34063313> is available on test systems.
-webarchive/loading/cache-expired-subresource.html [ Failure ]
-
 # Quota API is not supported.
 storage/storageinfo-missing-arguments.html
 storage/storageinfo-no-callbacks.html
@@ -715,7 +712,6 @@ webkit.org/b/137368 media/video-controls-no-scripting.html [ Pass Failure ]
 
 ## --- Start flaky media tests ---
 webkit.org/b/34331 http/tests/media/video-referer.html [ Pass Timeout ]
-webkit.org/b/35297 media/video-display-aspect-ratio.html [ Pass Failure ]
 webkit.org/b/82976 media/W3C/video/networkState/networkState_during_progress.html [ Pass Failure ]
 webkit.org/b/85525 media/video-played-reset.html [ Pass Failure ]
 webkit.org/b/112659 media/video-playing-and-pause.html [ Failure Timeout ]
@@ -735,7 +731,6 @@ webkit.org/b/141294 compositing/reflections/masked-reflection-on-composited.html
 webkit.org/b/142152 media/track/track-in-band-cues-added-once.html [ Pass Failure ]
 webkit.org/b/147944 media/video-seek-to-current-time.html [ Pass Failure ]
 webkit.org/b/150408 http/tests/media/video-load-suspend.html [ Pass Timeout ]
-webkit.org/b/155956 media/track/track-remove-track.html [ Pass Failure Timeout ]
 webkit.org/b/187476 media/video-background-playback.html [ Pass Failure ]
 ## --- End flaky media tests
 
@@ -801,8 +796,6 @@ media/media-can-play-av1.html [ Skip ]
 
 # Opera-submitted tests to W3C for <track>, a lot of failures still.
 webkit.org/b/103926 media/track/opera/idl/media-idl-tests.html [ Skip ]
-webkit.org/b/103926 media/track/opera/interfaces/HTMLElement/HTMLMediaElement/crossOrigin.html [ Skip ]
-webkit.org/b/103926 media/track/opera/interfaces/HTMLElement/HTMLTrackElement/kind.html [ Skip ]
 webkit.org/b/103926 media/track/opera/interfaces/HTMLElement/HTMLTrackElement/src.html [ Skip ]
 webkit.org/b/103926 media/track/opera/interfaces/TextTrackCue/getCueAsHTML.html [ Skip ]
 webkit.org/b/103926 media/track/opera/interfaces/TextTrackCue/line.html [ Skip ]
@@ -830,9 +823,6 @@ webkit.org/b/122021 media/track/track-in-band-mode.html [ Failure ]
 
 # --- End media tests ---
 
-# FIXME: Needs bugzilla (<rdar://problem/16040720>)
-fast/canvas/canvas-scale-strokePath-shadow.html [ Pass Failure ]
-
 # FIXME: Needs bugzilla (<rdar://problem/16802068>)
 fast/css/input-search-padding.html [ Failure ]
 
@@ -843,6 +833,7 @@ platform/mac/fast/text/systemFont.html [ Pass Failure ]
 ## --- Start W3C Imported Media Source Tests
 # Failing Media Source tests
 imported/w3c/web-platform-tests/media-source/ [ Pass ]
+imported/w3c/web-platform-tests/media-source/dedicated-worker/ [ Skip ]
 webkit.org/b/161725 imported/w3c/web-platform-tests/media-source/URL-createObjectURL-revoke.html [ Skip ]
 webkit.org/b/161725 imported/w3c/web-platform-tests/media-source/mediasource-append-buffer.html [ Skip ]
 webkit.org/b/161725 imported/w3c/web-platform-tests/media-source/mediasource-appendbuffer-quota-exceeded.html [ Skip ]
@@ -2089,13 +2080,9 @@ webkit.org/b/223472 [ Release arm64 ] imported/w3c/web-platform-tests/resource-t
 
 webkit.org/b/227753 [ Debug ] fast/dom/Window/post-message-large-array-buffer-should-not-crash.html [ Pass Failure ]
 
-webkit.org/b/207125 transitions/start-transform-transition.html [ Pass Failure ]
-
 webkit.org/b/221017 media/modern-media-controls/media-controller/media-controller-click-on-video-background-should-pause-fullscreen.html [ Timeout Pass ]
 
 webkit.org/b/226600 imported/w3c/web-platform-tests/navigation-timing/test_navigate_within_document.html [ Pass Failure ]
-
-webkit.org/b/228002 transitions/transition-end-event-nested.html [ Pass Failure ]
 
 webkit.org/b/227877 imported/w3c/web-platform-tests/navigation-timing/test_timing_attributes_order.html [ Pass Failure ]
 
@@ -2327,11 +2314,9 @@ imported/w3c/web-platform-tests/websockets/cookies/007.html?wss&wpt_flags=https 
 [ Monterey+ x86_64 ] media/media-fragments/TC0088.html [ Pass Failure ]
 [ Monterey+ x86_64 ] media/media-fragments/TC0089.html [ Pass Failure ]
 [ Monterey+ x86_64 ] media/media-fragments/TC0091.html [ Pass Failure ]
-[ Monterey+ x86_64 ] media/track/track-cues-enter-exit.html [ Pass Failure ]
 [ Monterey+ x86_64 ] inspector/animation/lifecycle-css-transition.html [ Pass Failure ]
 [ Monterey+ ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/autoplay-allowed-by-feature-policy-attribute-redirect-on-load.https.sub.html [ Pass Failure ]
 [ Ventura+ ] fast/text/synthetic-bold-transformed.html [ Pass ImageOnlyFailure ]
-[ Monterey+ x86_64 ] media/track/track-cues-cuechange.html [ Pass Timeout Failure ]
 [ Monterey+ x86_64 ] js/promises-tests/promises-tests-2-3-3.html [ Pass Timeout ]
 
 webkit.org/b/254637 fast/text/web-font-load-invisible-during-loading.html [ Pass Failure ]
@@ -2578,7 +2563,17 @@ webkit.org/b/267352 [ Monterey ] imported/w3c/web-platform-tests/mathml/relation
 
 webkit.org/b/267612 [ Ventura+ Release x86_64 ] fast/canvas/image-buffer-backend-variants.html [ Pass Failure ]
 
-webkit.org/b/268947 [ Ventura+ ] imported/w3c/web-platform-tests/mathml/relations/css-styling/floats/not-floating-001.html [ Failure ]
+# Requires (ACCESSIBILITY_NON_BLINKING_CURSOR)
+accessibility/mac/prefers-non-blinking-cursor.html [ Skip ]
 
 # Enable after rdar://120859525 is available on bots
 http/tests/media/fairplay/fps-mse-unmuxed-mpts.html [ Skip ]
+
+# web-platform-tests/svg/painting/reftests failures
+imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-021.svg [ Failure ]
+imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-022.svg [ Failure ]
+imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-023.svg [ Failure ]
+imported/w3c/web-platform-tests/svg/painting/reftests/percentage-attribute.svg [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/svg/painting/reftests/percentage.svg [ ImageOnlyFailure ]
+
+webkit.org/b/269598 [ Debug ] workers/wasm-hashset.html [ Skip ]

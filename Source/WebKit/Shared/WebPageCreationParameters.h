@@ -37,6 +37,7 @@
 #include "WebPageProxyIdentifier.h"
 #include "WebPreferencesStore.h"
 #include "WebURLSchemeHandlerIdentifier.h"
+#include "WebsitePoliciesData.h"
 #include <WebCore/ActivityState.h>
 #include <WebCore/Color.h>
 #include <WebCore/ContentSecurityPolicy.h>
@@ -199,6 +200,9 @@ struct WebPageCreationParameters {
     Vector<SandboxExtension::Handle> gpuIOKitExtensionHandles;
     Vector<SandboxExtension::Handle> gpuMachExtensionHandles;
 #endif
+#if PLATFORM(MAC)
+    SandboxExtension::Handle renderServerMachExtensionHandle;
+#endif
 #if HAVE(STATIC_FONT_REGISTRY)
     Vector<SandboxExtension::Handle> fontMachExtensionHandles;
 #endif
@@ -303,6 +307,7 @@ struct WebPageCreationParameters {
     struct SubframeProcessPageParameters {
         URL initialMainDocumentURL;
         FrameTreeCreationParameters frameTreeParameters;
+        std::optional<WebsitePoliciesData> websitePoliciesData;
     };
     std::optional<SubframeProcessPageParameters> subframeProcessPageParameters;
     std::optional<WebCore::FrameIdentifier> openerFrameIdentifier;

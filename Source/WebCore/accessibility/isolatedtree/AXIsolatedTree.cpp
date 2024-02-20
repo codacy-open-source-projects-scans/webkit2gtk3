@@ -30,6 +30,7 @@
 
 #include "AXIsolatedObject.h"
 #include "AXLogger.h"
+#include "AccessibilityTable.h"
 #include "AccessibilityTableRow.h"
 #include "FrameSelection.h"
 #include "LocalFrameView.h"
@@ -225,45 +226,25 @@ RefPtr<AXIsolatedObject> AXIsolatedTree::objectForID(const AXID axID) const
     return axID.isValid() ? m_readerThreadNodeMap.get(axID) : nullptr;
 }
 
-template<typename U>
-Vector<RefPtr<AXCoreObject>> AXIsolatedTree::objectsForIDs(const U& axIDs)
+RefPtr<AXIsolatedObject> AXIsolatedTree::retrieveObjectForIDFromMainThread(const AXID axID) const
 {
-    ASSERT(!isMainThread());
+    // There is no isolated object for this AXID. This can happen if the corresponding live object is ignored.
+    // If there is a live object for this ID and it is an ignored target of a relationship, create an isolated object for it.
+    return Accessibility::retrieveValueFromMainThread<RefPtr<AXIsolatedObject>>([&axID, this] () -> RefPtr<AXIsolatedObject> {
+        auto* cache = axObjectCache();
+        if (!cache || !cache->relationTargetIDs().contains(axID))
+            return nullptr;
 
-    Vector<RefPtr<AXCoreObject>> result;
-    result.reserveInitialCapacity(axIDs.size());
-    for (const auto& axID : axIDs) {
-        RefPtr object = objectForID(axID);
-        if (object) {
-            result.append(WTFMove(object));
-            continue;
-        }
+        RefPtr axObject = cache->objectForID(axID);
+        if (!axObject || !axObject->accessibilityIsIgnored())
+            return nullptr;
 
-        // There is no isolated object for this AXID. This can happen if the corresponding live object is ignored.
-        // If there is a live object for this ID and it is an ignored target of a relationship, create an isolated object for it.
-        object = Accessibility::retrieveValueFromMainThread<RefPtr<AXIsolatedObject>>([&axID, this] () -> RefPtr<AXIsolatedObject> {
-            auto* cache = axObjectCache();
-            if (!cache || !cache->relationTargetIDs().contains(axID))
-                return nullptr;
-
-            RefPtr axObject = cache->objectForID(axID);
-            if (!axObject || !axObject->accessibilityIsIgnored())
-                return nullptr;
-
-            auto object = AXIsolatedObject::create(*axObject, const_cast<AXIsolatedTree*>(this));
-            ASSERT(axObject->wrapper());
-            object->attachPlatformWrapper(axObject->wrapper());
-            return object;
-        });
-        if (object) {
-            m_readerThreadNodeMap.add(axID, *object);
-            result.append(WTFMove(object));
-        }
-    }
-    result.shrinkToFit();
-    return result;
+        auto object = AXIsolatedObject::create(*axObject, const_cast<AXIsolatedTree*>(this));
+        ASSERT(axObject->wrapper());
+        object->attachPlatformWrapper(axObject->wrapper());
+        return object;
+    });
 }
-
 
 void AXIsolatedTree::generateSubtree(AccessibilityObject& axObject)
 {
@@ -660,6 +641,12 @@ void AXIsolatedTree::updateNodeProperties(AXCoreObject& axObject, const AXProper
         case AXPropertyName::PosInSet:
             propertyMap.set(AXPropertyName::PosInSet, axObject.posInSet());
             break;
+        case AXPropertyName::RemoteFramePlatformElement:
+            propertyMap.set(AXPropertyName::RemoteFramePlatformElement, axObject.remoteFramePlatformElement());
+            break;
+        case AXPropertyName::HasRemoteFrameChild:
+            propertyMap.set(AXPropertyName::HasRemoteFrameChild, axObject.hasRemoteFrameChild());
+            break;
         case AXPropertyName::RoleDescription:
             propertyMap.set(AXPropertyName::RoleDescription, axObject.roleDescription().isolatedCopy());
             break;
@@ -711,6 +698,11 @@ void AXIsolatedTree::updateNodeProperties(AXCoreObject& axObject, const AXProper
             propertyMap.set(AXPropertyName::TextInputMarkedTextMarkerRange, value);
             break;
         }
+#if ENABLE(AX_THREAD_TEXT_APIS)
+        case AXPropertyName::TextRuns:
+            propertyMap.set(AXPropertyName::TextRuns, dynamicDowncast<AccessibilityObject>(axObject)->textRuns());
+            break;
+#endif
         case AXPropertyName::URL:
             propertyMap.set(AXPropertyName::URL, axObject.url().isolatedCopy());
             break;

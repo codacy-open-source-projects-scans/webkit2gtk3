@@ -301,6 +301,7 @@ namespace WebCore {
     macro(MediaRecorderErrorEvent) \
     macro(MediaSessionCoordinator) \
     macro(MediaSource) \
+    macro(MediaSourceHandle) \
     macro(MediaStream) \
     macro(MediaStreamAudioDestinationNode) \
     macro(MediaStreamAudioSourceNode) \
@@ -316,6 +317,7 @@ namespace WebCore {
     macro(NavigationPreloadManager) \
     macro(NavigationTransition) \
     macro(NavigatorCredentials) \
+    macro(NavigatorIdentity) \
     macro(NavigatorMediaDevices) \
     macro(NavigatorPermissions) \
     macro(NavigatorUserMedia) \

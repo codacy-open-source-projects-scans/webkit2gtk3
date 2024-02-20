@@ -107,8 +107,14 @@ void RemoteLayerTreeDrawingAreaProxy::sizeDidChange()
 
 void RemoteLayerTreeDrawingAreaProxy::remotePageProcessCrashed(WebCore::ProcessIdentifier processIdentifier)
 {
-    if (m_remoteLayerTreeHost)
+    if (!m_remoteLayerTreeHost)
+        return;
+
+    if (auto* scrollingCoordinator = m_webPageProxy->scrollingCoordinatorProxy()) {
+        scrollingCoordinator->willCommitLayerAndScrollingTrees();
         m_remoteLayerTreeHost->remotePageProcessCrashed(processIdentifier);
+        scrollingCoordinator->didCommitLayerAndScrollingTrees();
+    }
 }
 
 void RemoteLayerTreeDrawingAreaProxy::viewWillStartLiveResize()
@@ -283,9 +289,13 @@ void RemoteLayerTreeDrawingAreaProxy::commitLayerTreeTransaction(IPC::Connection
         }
 
 #if ENABLE(ASYNC_SCROLLING)
-        // FIXME: Making scrolling trees work with site isolation.
-        if (layerTreeTransaction.isMainFrameProcessTransaction())
-            requestedScroll = webPageProxy->scrollingCoordinatorProxy()->commitScrollingTreeState(scrollingTreeTransaction);
+#if PLATFORM(IOS_FAMILY)
+        if (!layerTreeTransaction.isMainFrameProcessTransaction()) {
+            // TODO: rdar://123104203 Making scrolling trees work with site isolation on iOS.
+            return;
+        }
+#endif
+        requestedScroll = webPageProxy->scrollingCoordinatorProxy()->commitScrollingTreeState(scrollingTreeTransaction, layerTreeTransaction.remoteContextHostedIdentifier());
 #endif
     };
 

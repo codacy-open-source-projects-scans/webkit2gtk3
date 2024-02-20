@@ -42,6 +42,10 @@ messages -> WebExtensionContextProxy {
 #if ENABLE(INSPECTOR_EXTENSIONS)
     // DevTools
     AddInspectorBackgroundPageIdentifier(WebCore::PageIdentifier pageID, std::optional<WebKit::WebExtensionTabIdentifier> tabIdentifier, std::optional<WebKit::WebExtensionWindowIdentifier> windowIdentifier)
+    DispatchDevToolsExtensionPanelShownEvent(Inspector::ExtensionTabID identifier, WebCore::FrameIdentifier frameIdentifier)
+    DispatchDevToolsExtensionPanelHiddenEvent(Inspector::ExtensionTabID identifier)
+    DispatchDevToolsNetworkNavigatedEvent(URL url)
+    DispatchDevToolsPanelsThemeChangedEvent(Inspector::ExtensionAppearance appearance)
 #endif
 
     // Extension
@@ -60,14 +64,14 @@ messages -> WebExtensionContextProxy {
     DispatchPortDisconnectEvent(WebKit::WebExtensionPortChannelIdentifier channelIdentifier)
 
     // Runtime
-    DispatchRuntimeMessageEvent(WebKit::WebExtensionContentWorldType contentWorldType, String messageJSON, std::optional<WebKit::WebExtensionFrameIdentifier> targetFrameIdentifier, struct WebKit::WebExtensionMessageSenderParameters senderParameters) -> (std::optional<String> replyJSON)
+    DispatchRuntimeMessageEvent(WebKit::WebExtensionContentWorldType contentWorldType, String messageJSON, std::optional<WebKit::WebExtensionFrameIdentifier> targetFrameIdentifier, struct WebKit::WebExtensionMessageSenderParameters senderParameters) -> (String replyJSON)
     DispatchRuntimeConnectEvent(WebKit::WebExtensionContentWorldType contentWorldType, WebKit::WebExtensionPortChannelIdentifier channelIdentifier, String name, std::optional<WebKit::WebExtensionFrameIdentifier> targetFrameIdentifier, struct WebKit::WebExtensionMessageSenderParameters senderParameters) -> (size_t firedEventCount)
     DispatchRuntimeInstalledEvent(WebKit::WebExtensionContext::InstallReason installReason, String previousVersion)
     DispatchRuntimeStartupEvent()
 
     // Storage
     SetStorageAccessLevel(bool allowedInContentScripts)
-    DispatchStorageChangedEvent(String onChangedJSON, WebKit::WebExtensionStorageType storageType, WebKit::WebExtensionContentWorldType contentWorldType)
+    DispatchStorageChangedEvent(String onChangedJSON, WebKit::WebExtensionDataType dataType, WebKit::WebExtensionContentWorldType contentWorldType)
 
     // Tabs Events
     DispatchTabsCreatedEvent(WebKit::WebExtensionTabParameters tabParameters)

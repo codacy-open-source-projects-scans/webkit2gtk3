@@ -46,11 +46,13 @@ public:
     using PageIndex = size_t; // This is a zero-based index.
 
     enum class DisplayMode : uint8_t {
-        SinglePage,
-        Continuous,
-        TwoUp,
+        SinglePageDiscrete,
+        SinglePageContinuous,
+        TwoUpDiscrete,
         TwoUpContinuous,
     };
+
+    enum class ShouldUpdateAutoSizeScale : bool { No, Yes };
 
     PDFDocumentLayout();
     ~PDFDocumentLayout();
@@ -62,13 +64,24 @@ public:
     static constexpr WebCore::FloatSize documentMargin { 6, 8 };
     static constexpr WebCore::FloatSize pageMargin { 4, 6 };
 
+    bool isLeftPageIndex(PageIndex) const;
+    bool isRightPageIndex(PageIndex) const;
+    bool isLastPageIndex(PageIndex) const;
+
     RetainPtr<PDFPage> pageAtIndex(PageIndex) const;
     std::optional<unsigned> indexForPage(RetainPtr<PDFPage>) const;
+    PDFDocumentLayout::PageIndex nearestPageIndexForDocumentPoint(WebCore::FloatPoint) const;
 
     // This is not scaled by scale().
-    WebCore::FloatRect boundsForPageAtIndex(PageIndex) const;
+    WebCore::FloatRect layoutBoundsForPageAtIndex(PageIndex) const;
     // Returns 0, 90, 180, 270.
     WebCore::IntDegrees rotationForPageAtIndex(PageIndex) const;
+
+    WebCore::FloatPoint documentToPDFPage(WebCore::FloatPoint documentPoint, PageIndex) const;
+    WebCore::FloatRect documentToPDFPage(WebCore::FloatRect documentRect, PageIndex) const;
+
+    WebCore::FloatPoint pdfPageToDocument(WebCore::FloatPoint pagePoint, PageIndex) const;
+    WebCore::FloatRect pdfPageToDocument(WebCore::FloatRect pageRect, PageIndex) const;
 
     // This is the scale that scales the largest page or pair of pages up or down to fit the available width.
     float scale() const { return m_scale; }
@@ -78,6 +91,13 @@ public:
 
     void setDisplayMode(DisplayMode displayMode) { m_displayMode = displayMode; }
     DisplayMode displayMode() const { return m_displayMode; }
+    bool isSinglePageDisplayMode() const { return m_displayMode == DisplayMode::SinglePageDiscrete || m_displayMode == DisplayMode::SinglePageContinuous; }
+    bool isTwoUpDisplayMode() const { return m_displayMode == DisplayMode::TwoUpDiscrete || m_displayMode == DisplayMode::TwoUpContinuous; }
+
+    unsigned pagesPerRow() const { return isSinglePageDisplayMode() ? 1 : 2; }
+
+    void setShouldUpdateAutoSizeScale(ShouldUpdateAutoSizeScale autoSizeState) { m_autoSizeState = autoSizeState; }
+    ShouldUpdateAutoSizeScale shouldUpdateAutoSizeScale() const { return m_autoSizeState; }
 
 private:
     void layoutPages(float availableWidth, float maxRowWidth);
@@ -86,15 +106,19 @@ private:
     void layoutTwoUpColumn(float availableWidth, float maxRowWidth);
 
     struct PageGeometry {
-        WebCore::FloatRect normalizedBounds;
+        WebCore::FloatRect cropBox;
+        WebCore::FloatRect layoutBounds;
         WebCore::IntDegrees rotation { 0 };
     };
+
+    WebCore::AffineTransform toPageTransform(const PageGeometry&) const;
 
     RetainPtr<PDFDocument> m_pdfDocument;
     Vector<PageGeometry> m_pageGeometry;
     WebCore::FloatRect m_documentBounds;
     float m_scale { 1 };
-    DisplayMode m_displayMode { DisplayMode::Continuous };
+    DisplayMode m_displayMode { DisplayMode::SinglePageContinuous };
+    ShouldUpdateAutoSizeScale m_autoSizeState { ShouldUpdateAutoSizeScale::Yes };
 };
 
 } // namespace WebKit

@@ -184,7 +184,7 @@ static void prepareContextForQRCode(ContextMenuContext& context)
 
     RefPtr<Element> element;
     RefPtr nodeElement = dynamicDowncast<Element>(*node);
-    for (auto& lineage : lineageOfType<Element>(nodeElement ? *nodeElement : *node->parentElement())) {
+    for (auto& lineage : lineageOfType<Element>(nodeElement ? *nodeElement : *node->protectedParentElement())) {
         if (is<HTMLTableElement>(lineage) || is<HTMLCanvasElement>(lineage) || is<HTMLImageElement>(lineage) || is<SVGSVGElement>(lineage)) {
             element = &lineage;
             break;
@@ -298,9 +298,9 @@ void ContextMenuController::contextMenuItemSelected(ContextMenuAction action, co
         return;
     }
 
-    auto& document = m_context.hitTestResult().innerNonSharedNode()->document();
+    Ref document = m_context.hitTestResult().innerNonSharedNode()->document();
 
-    RefPtr frame = document.frame();
+    RefPtr frame = document->frame();
     if (!frame)
         return;
 
@@ -402,6 +402,13 @@ void ContextMenuController::contextMenuItemSelected(ContextMenuAction action, co
 #endif // ENABLE(ACCESSIBILITY_ANIMATION_CONTROL)
     case ContextMenuItemTagCopy:
         frame->checkedEditor()->copy();
+        break;
+    case ContextMenuItemTagCopyLinkToHighlight:
+        if (Page* page = frame->page()) {
+            auto url = page->fragmentDirectiveURLForSelectedText();
+            if (url.isValid())
+                frame->editor().copyURL(url, { });
+        }
         break;
     case ContextMenuItemTagGoBack:
         if (RefPtr page = frame->page())
@@ -641,6 +648,14 @@ void ContextMenuController::contextMenuItemSelected(ContextMenuAction action, co
         }
 #endif
         break;
+
+    case ContextMenuItemTagSwapCharacters:
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+        if (RefPtr view = frame->view())
+            m_client->handleSwapCharacters(view->contentsToRootView(enclosingIntRect(frame->selection().selectionBounds())));
+#endif
+        break;
+
 #if ENABLE(PDFJS)
     case ContextMenuItemPDFAutoSize:
         performPDFJSAction(*frame, "context-menu-auto-size"_s);
@@ -962,6 +977,7 @@ void ContextMenuController::populate()
     ContextMenuItem AddHighlightItem(ContextMenuItemType::Action, ContextMenuItemTagAddHighlightToCurrentQuickNote, contextMenuItemTagAddHighlightToCurrentQuickNote());
     ContextMenuItem AddHighlightToNewQuickNoteItem(ContextMenuItemType::Action, ContextMenuItemTagAddHighlightToNewQuickNote, contextMenuItemTagAddHighlightToNewQuickNote());
 #endif
+    ContextMenuItem CopyLinkToHighlightItem(ContextMenuItemType::Action, ContextMenuItemTagCopyLinkToHighlight, contextMenuItemTagCopyLinkToHighlight());
 #if !PLATFORM(GTK)
     ContextMenuItem SearchWebItem(ContextMenuItemType::Action, ContextMenuItemTagSearchWeb, contextMenuItemTagSearchWeb());
 #endif
@@ -1031,6 +1047,11 @@ void ContextMenuController::populate()
 #if HAVE(TRANSLATION_UI_SERVICES)
         ContextMenuItem translateItem(ContextMenuItemType::Action, ContextMenuItemTagTranslate, contextMenuItemTagTranslate(selectedText));
         appendItem(translateItem, m_contextMenu.get());
+#endif
+
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+        ContextMenuItem swapCharactersItem(ContextMenuItemType::Action, ContextMenuItemTagSwapCharacters, contextMenuItemTagSwapCharacters());
+        appendItem(swapCharactersItem, m_contextMenu.get());
 #endif
 
 #if !PLATFORM(GTK)
@@ -1156,6 +1177,8 @@ void ContextMenuController::populate()
                 addSelectedTextActionsIfNeeded(selectedText);
 
                 appendItem(CopyItem, m_contextMenu.get());
+                if (!selectionIsInsideImageOverlay && isMainFrame && page && page->settings().scrollToTextFragmentGenerationEnabled())
+                    appendItem(CopyLinkToHighlightItem, m_contextMenu.get());
 #if PLATFORM(COCOA)
                 appendItem(*separatorItem(), m_contextMenu.get());
 
@@ -1428,6 +1451,19 @@ void ContextMenuController::addDebuggingItems()
 #endif // ENABLE(VIDEO)
 }
 
+bool ContextMenuController::shouldEnableCopyLinkToHighlight() const
+{
+    RefPtr frame = m_context.hitTestResult().innerNonSharedNode()->document().frame();
+    if (!frame)
+        return false;
+
+    auto selectedRange = frame->selection().selection().range();
+    bool selectionIsInsideImageOverlay = selectedRange && ImageOverlay::isInsideOverlay(*selectedRange);
+    if (frame->page() && frame->page()->settings().scrollToTextFragmentGenerationEnabled() && !selectionIsInsideImageOverlay)
+        return frame->selection().isRange();
+    return false;
+}
+
 void ContextMenuController::checkOrEnableIfNeeded(ContextMenuItem& item) const
 {
     if (item.type() == ContextMenuItemType::Separator)
@@ -1489,6 +1525,9 @@ void ContextMenuController::checkOrEnableIfNeeded(ContextMenuItem& item) const
             break;
         case ContextMenuItemTagPaste:
             shouldEnable = frame->editor().canDHTMLPaste() || frame->editor().canPaste();
+            break;
+        case ContextMenuItemTagCopyLinkToHighlight:
+            shouldEnable = shouldEnableCopyLinkToHighlight();
             break;
 #if PLATFORM(GTK)
         case ContextMenuItemTagPasteAsPlainText:
@@ -1760,6 +1799,7 @@ void ContextMenuController::checkOrEnableIfNeeded(ContextMenuItem& item) const
             break;
         case ContextMenuItemTagLookUpImage:
         case ContextMenuItemTagTranslate:
+        case ContextMenuItemTagSwapCharacters:
             break;
     }
 

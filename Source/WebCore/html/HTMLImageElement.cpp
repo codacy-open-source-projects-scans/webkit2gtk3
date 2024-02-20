@@ -70,6 +70,10 @@
 #include "ImageControlsMac.h"
 #endif
 
+#if USE(APPLE_INTERNAL_SDK)
+#include <WebKitAdditions/MultiRepresentationHEICAdditions.h>
+#endif
+
 namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(HTMLImageElement);
@@ -468,7 +472,7 @@ void HTMLImageElement::didAttachRenderers()
     RenderImageResource& renderImageResource = renderImage->imageResource();
     if (renderImageResource.cachedImage())
         return;
-    renderImageResource.setCachedImage(m_imageLoader->image());
+    renderImageResource.setCachedImage(m_imageLoader->protectedImage());
 
     // If we have no image at all because we have no src attribute, set
     // image height and width for the alt text instead.
@@ -914,6 +918,17 @@ bool HTMLImageElement::isSystemPreviewImage() const
     if (auto* pictureElement = dynamicDowncast<HTMLPictureElement>(parent))
         return pictureElement->isSystemPreviewImage();
     return false;
+}
+#endif
+
+#if ENABLE(MULTI_REPRESENTATION_HEIC)
+bool HTMLImageElement::isMultiRepresentationHEIC() const
+{
+    if (!m_sourceElement)
+        return false;
+
+    auto& typeAttribute = m_sourceElement->attributeWithoutSynchronization(typeAttr);
+    return typeAttribute == MULTI_REPRESENTATION_HEIC_MIME_TYPE_STRING;
 }
 #endif
 

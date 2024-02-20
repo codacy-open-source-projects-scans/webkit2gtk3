@@ -56,6 +56,7 @@ OBJC_CLASS WebCoreAVFPullDelegate;
 
 typedef struct CGImage *CGImageRef;
 typedef struct __CVBuffer *CVPixelBufferRef;
+typedef struct OpaqueFigVideoTarget *FigVideoTargetRef;
 typedef NSString *AVMediaCharacteristic;
 typedef double NSTimeInterval;
 
@@ -369,6 +370,14 @@ private:
 
     std::optional<VideoPlaybackQualityMetrics> videoPlaybackQualityMetrics(AVPlayerLayer*) const;
 
+    void setVideoReceiverEndpoint(const VideoReceiverEndpoint&) final;
+    void clearVideoReceiverEndpoint();
+
+#if HAVE(SPATIAL_TRACKING_LABEL)
+    const String& spatialTrackingLabel() const final;
+    void setSpatialTrackingLabel(String&&) final;
+#endif
+
     RetainPtr<AVURLAsset> m_avAsset;
     RetainPtr<AVPlayer> m_avPlayer;
     RetainPtr<AVPlayerItem> m_avPlayerItem;
@@ -381,6 +390,10 @@ private:
     bool m_videoFrameHasDrawn { false };
     bool m_haveCheckedPlayability { false };
     bool m_createAssetPending { false };
+
+#if ENABLE(LINEAR_MEDIA_PLAYER)
+    RetainPtr<FigVideoTargetRef> m_videoTarget;
+#endif
 
 #if ENABLE(WEB_AUDIO) && USE(MEDIATOOLBOX)
     RefPtr<AudioSourceProviderAVFObjC> m_provider;
@@ -493,6 +506,9 @@ private:
     PlatformTimeRanges m_buffered;
     TrackID m_currentTextTrackID { 0 };
     Ref<WorkQueue> m_targetQueue { WorkQueue::main() };
+#if HAVE(SPATIAL_TRACKING_LABEL)
+    String m_spatialTrackingLabel;
+#endif
 };
 
 }

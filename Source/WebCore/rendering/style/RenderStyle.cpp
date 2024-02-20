@@ -458,13 +458,13 @@ bool RenderStyle::hasUniquePseudoStyle() const
     return false;
 }
 
-RenderStyle* RenderStyle::getCachedPseudoStyle(PseudoId pseudo) const
+RenderStyle* RenderStyle::getCachedPseudoStyle(const Style::PseudoElementIdentifier& pseudoElementIdentifier) const
 {
     if (!m_cachedPseudoStyles)
         return nullptr;
 
     for (auto& pseudoStyle : m_cachedPseudoStyles->styles) {
-        if (pseudoStyle->pseudoElementType() == pseudo)
+        if (pseudoStyle->pseudoElementType() == pseudoElementIdentifier.pseudoId && pseudoStyle->pseudoElementNameArgument() == pseudoElementIdentifier.nameArgument)
             return pseudoStyle.get();
     }
 
@@ -1081,10 +1081,10 @@ bool RenderStyle::changeRequiresLayout(const RenderStyle& other, OptionSet<Style
         return true;
 
     if (hasFirstLineStyle) {
-        auto* firstLineStyle = getCachedPseudoStyle(PseudoId::FirstLine);
+        auto* firstLineStyle = getCachedPseudoStyle({ PseudoId::FirstLine });
         if (!firstLineStyle)
             return true;
-        auto* otherFirstLineStyle = other.getCachedPseudoStyle(PseudoId::FirstLine);
+        auto* otherFirstLineStyle = other.getCachedPseudoStyle({ PseudoId::FirstLine });
         if (!otherFirstLineStyle)
             return true;
         // FIXME: Not all first line style changes actually need layout.
@@ -2779,7 +2779,7 @@ int RenderStyle::computeLineHeight(const Length& lineHeightLength) const
 {
     // Negative value means the line height is not set. Use the font's built-in spacing.
     if (lineHeightLength.isNegative())
-        return metricsOfPrimaryFont().lineSpacing();
+        return metricsOfPrimaryFont().intLineSpacing();
 
     if (lineHeightLength.isPercentOrCalculated())
         return minimumValueForLength(lineHeightLength, computedFontSize());

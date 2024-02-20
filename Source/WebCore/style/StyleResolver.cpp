@@ -61,6 +61,7 @@
 #include "RenderView.h"
 #include "ResolvedStyle.h"
 #include "RuleSet.h"
+#include "RuleSetBuilder.h"
 #include "SVGDocumentExtensions.h"
 #include "SVGElement.h"
 #include "SVGFontFaceElement.h"
@@ -216,10 +217,22 @@ void Resolver::appendAuthorStyleSheets(const Vector<RefPtr<CSSStyleSheet>>& styl
         renderView->style().fontCascade().update(&document().fontSelector());
 }
 
+KeyframesRuleMap& Resolver::userAgentKeyframes()
+{
+    static NeverDestroyed<KeyframesRuleMap> keyframes;
+    return keyframes;
+}
+
+void Resolver::addUserAgentKeyframeStyle(Ref<StyleRuleKeyframes>&& rule)
+{
+    const auto& animationName = rule->name();
+    userAgentKeyframes().set(animationName, WTFMove(rule));
+}
+
 // This is a simplified style setting function for keyframe styles
 void Resolver::addKeyframeStyle(Ref<StyleRuleKeyframes>&& rule)
 {
-    auto& animationName = rule->name();
+    const auto& animationName = rule->name();
     m_keyframesRuleMap.set(animationName, WTFMove(rule));
     document().keyframesRuleDidChange(animationName);
 }
@@ -344,7 +357,8 @@ std::unique_ptr<RenderStyle> Resolver::styleForKeyframe(const Element& element, 
 
 bool Resolver::isAnimationNameValid(const String& name)
 {
-    return m_keyframesRuleMap.find(AtomString(name)) != m_keyframesRuleMap.end();
+    return m_keyframesRuleMap.find(AtomString(name)) != m_keyframesRuleMap.end()
+        || userAgentKeyframes().find(AtomString(name)) != userAgentKeyframes().end();
 }
 
 Vector<Ref<StyleRuleKeyframe>> Resolver::keyframeRulesForName(const AtomString& animationName) const
@@ -354,9 +368,13 @@ Vector<Ref<StyleRuleKeyframe>> Resolver::keyframeRulesForName(const AtomString& 
 
     m_keyframesRuleMap.checkConsistency();
 
+    // Check author map first then check user-agent map.
     auto it = m_keyframesRuleMap.find(animationName);
-    if (it == m_keyframesRuleMap.end())
-        return { };
+    if (it == m_keyframesRuleMap.end()) {
+        it = userAgentKeyframes().find(animationName);
+        if (it == userAgentKeyframes().end())
+            return { };
+    }
 
     auto compositeOperationForKeyframe = [](Ref<StyleRuleKeyframe> keyframe) -> CompositeOperation {
         if (auto compositeOperationCSSValue = keyframe->properties().getPropertyCSSValue(CSSPropertyAnimationComposition)) {
@@ -612,7 +630,7 @@ void Resolver::applyMatchedProperties(State& state, const MatchResult& matchResu
     auto hasUsableEntry = cacheEntry && MatchedDeclarationsCache::isCacheable(element, style, parentStyle);
     if (hasUsableEntry) {
         // We can build up the style by copying non-inherited properties from an earlier style object built using the same exact
-        // style declarations. We then only need to apply the inherited properties, if any, as their values can depend on the 
+        // style declarations. We then only need to apply the inherited properties, if any, as their values can depend on the
         // element context. This is fast and saves memory by reusing the style data structures.
         style.copyNonInheritedFrom(*cacheEntry->renderStyle);
 
@@ -700,6 +718,28 @@ bool Resolver::hasViewportDependentMediaQueries() const
 std::optional<DynamicMediaQueryEvaluationChanges> Resolver::evaluateDynamicMediaQueries()
 {
     return m_ruleSets.evaluateDynamicMediaQueryRules(m_mediaQueryEvaluator);
+}
+
+
+void Resolver::setViewTransitionGroupStyles(const AtomString& name, Ref<MutableStyleProperties> properties)
+{
+    if (!m_document)
+        return;
+
+    auto* viewTransitionsStyle = m_ruleSets.dynamicViewTransitionsStyle();
+    RuleSetBuilder builder(*viewTransitionsStyle, mediaQueryEvaluator(), this);
+    CSSSelectorParserContext context(*m_document.get());
+
+    MutableCSSSelectorList selectorList;
+    selectorList.append(MutableCSSSelector::parsePseudoClassSelector("root"_s, context));
+    auto groupSelector = MutableCSSSelector::parsePseudoElementSelector("view-transition-group"_s, context);
+    groupSelector->setArgumentList({ { name } });
+
+    selectorList.first()->appendTagHistory(CSSSelector::Relation::Subselector, WTFMove(groupSelector));
+
+    auto styleRule = StyleRule::create(WTFMove(properties), true, CSSSelectorList(WTFMove(selectorList)));
+
+    builder.addStyleRule(styleRule);
 }
 
 } // namespace Style

@@ -134,6 +134,7 @@ private:
     Indentation<4> m_indent { 0 };
     std::optional<AST::StructureRole> m_structRole;
     std::optional<ShaderStage> m_entryPointStage;
+    AST::Function* m_currentFunction { nullptr };
     unsigned m_functionConstantIndex { 0 };
     AST::Continuing*m_continuing { nullptr };
     HashSet<AST::Function*> m_visitedFunctions;
@@ -470,12 +471,16 @@ void FunctionDefinitionWriter::visit(AST::Function& functionDefinition)
         }
         first = false;
     }
+
     // Clear the flag set while serializing StageAttribute
     m_entryPointStage = std::nullopt;
 
+    m_currentFunction = &functionDefinition;
     m_stringBuilder.append(")\n");
     checkErrorAndVisit(functionDefinition.body());
     m_stringBuilder.append("\n\n");
+
+    m_currentFunction = nullptr;
 }
 
 void FunctionDefinitionWriter::visit(AST::Structure& structDecl)
@@ -1570,6 +1575,11 @@ static void emitStorageBarrier(FunctionDefinitionWriter* writer, AST::CallExpres
     writer->stringBuilder().append("threadgroup_barrier(mem_flags::mem_device)");
 }
 
+static void emitTextureBarrier(FunctionDefinitionWriter* writer, AST::CallExpression&)
+{
+    writer->stringBuilder().append("threadgroup_barrier(mem_flags::mem_texture)");
+}
+
 static void emitWorkgroupBarrier(FunctionDefinitionWriter* writer, AST::CallExpression&)
 {
     writer->stringBuilder().append("threadgroup_barrier(mem_flags::mem_threadgroup)");
@@ -1645,10 +1655,9 @@ static void emitAtomicExchange(FunctionDefinitionWriter* writer, AST::CallExpres
     atomicFunction("atomic_exchange_explicit", writer, call);
 }
 
-static void emitArrayLength(FunctionDefinitionWriter* writer, AST::CallExpression& call)
+[[noreturn]] static void emitArrayLength(FunctionDefinitionWriter*, AST::CallExpression&)
 {
-    writer->visit(call.arguments()[0]);
-    writer->stringBuilder().append(".size()");
+    RELEASE_ASSERT_NOT_REACHED();
 }
 
 static void emitDistance(FunctionDefinitionWriter* writer, AST::CallExpression& call)
@@ -1841,6 +1850,7 @@ void FunctionDefinitionWriter::visit(const Type* type, AST::CallExpression& call
             { "quantizeToF16", emitQuantizeToF16 },
             { "radians", emitRadians },
             { "storageBarrier", emitStorageBarrier },
+            { "textureBarrier", emitTextureBarrier },
             { "textureDimensions", emitTextureDimensions },
             { "textureGather", emitTextureGather },
             { "textureGatherCompare", emitTextureGatherCompare },
@@ -2227,12 +2237,50 @@ void FunctionDefinitionWriter::visit(AST::PhonyAssignmentStatement& statement)
     m_stringBuilder.append(")");
 }
 
+static std::optional<std::pair<String, String>> fragDepthIdentifierForFunction(AST::Function* function)
+{
+    if (!function || function->stage() != ShaderStage::Fragment)
+        return std::nullopt;
+
+    if (auto expression = function->maybeReturnType()) {
+        if (auto* inferredType = expression->inferredType()) {
+            auto& type = *inferredType;
+            auto* returnStruct = std::get_if<WGSL::Types::Struct>(&type);
+            if (!returnStruct)
+                return std::nullopt;
+
+            for (auto& member : returnStruct->structure.members()) {
+                if (member.builtin() == WGSL::Builtin::FragDepth)
+                    return std::make_pair(returnStruct->structure.name(), member.name());
+                for (auto& attribute : member.attributes()) {
+                    if (attribute.kind() != AST::NodeKind::BuiltinAttribute)
+                        continue;
+                    auto& builtinAttribute = downcast<AST::BuiltinAttribute>(attribute);
+                    if (builtinAttribute.builtin() == WGSL::Builtin::FragDepth)
+                        return std::make_pair(returnStruct->structure.name(), member.name());
+                }
+            }
+        }
+    }
+
+    return std::nullopt;
+}
+
 void FunctionDefinitionWriter::visit(AST::ReturnStatement& statement)
 {
-    m_stringBuilder.append("return");
+    auto fragDepthIdentifier = fragDepthIdentifierForFunction(m_currentFunction);
+    if (fragDepthIdentifier)
+        m_stringBuilder.append(fragDepthIdentifier->first, " __wgslFragmentReturnResult = ");
+    else
+        m_stringBuilder.append("return");
     if (statement.maybeExpression()) {
         m_stringBuilder.append(" ");
         visit(*statement.maybeExpression());
+    }
+
+    if (fragDepthIdentifier) {
+        m_stringBuilder.append(";\n__wgslFragmentReturnResult.", fragDepthIdentifier->second, " = clamp(__wgslFragmentReturnResult.", fragDepthIdentifier->second, ", as_type<float>(__DynamicOffsets[0]), as_type<float>(__DynamicOffsets[1]));\n");
+        m_stringBuilder.append("return __wgslFragmentReturnResult");
     }
 }
 

@@ -1100,8 +1100,6 @@ webkit.org/b/138697 fast/events/overflow-scroll-fake-mouse-move.html [ Pass Fail
 
 webkit.org/b/82747 fast/events/scroll-div-with-prevent-default-in-subframe.html [ Failure ]
 
-webkit.org/b/112533 media/auto-play-in-sandbox-with-allow-scripts.html [ Pass Timeout ]
-
 webkit.org/b/139778 fullscreen/exit-full-screen-iframe.html [ Skip ]
 
 webkit.org/b/139778 fullscreen/enter-fullscreen-main-frame-window-open-iframe.html [ Skip ]
@@ -1387,6 +1385,7 @@ imported/w3c/web-platform-tests/webrtc/RTCPeerConnection-setLocalDescription-off
 imported/w3c/web-platform-tests/webrtc-encoded-transform [ Skip ]
 imported/w3c/web-platform-tests/webrtc-stats/supported-stats.https.html [ Failure ]
 imported/w3c/web-platform-tests/webrtc-stats/hardware-capability-stats.https.html [ Failure ]
+http/tests/inspector/gatherWebInspectorRTCLogs.html [ Skip ]
 
 # These tests test the Shadow DOM based HTML form validation UI but Mac WK1 is using native dialogs instead.
 fast/forms/validation-message-on-listbox.html
@@ -1464,6 +1463,9 @@ storage/indexeddb/modern/exceed-open-file-limit.html
 imported/w3c/web-platform-tests/cookies/secure/set-from-ws.sub.html [ Failure ]
 
 webkit.org/b/244308 imported/w3c/web-platform-tests/cookies/attributes/attributes-ctl.sub.html [ Pass Failure ]
+
+# Only flakey in WK1
+webarchive/loading/test-loading-archive-subresource-null-mimetype.html [ Failure Pass ]
 
 # WebKit1 frames use native scrollbars causing these tests to fail.
 
@@ -1543,8 +1545,6 @@ imported/w3c/web-platform-tests/secure-contexts/basic-dedicated-worker.html [ Du
 fast/dom/HTMLAnchorElement/anchor-file-blob-convert-to-download.html [ Skip ]
 fast/dom/HTMLAnchorElement/anchor-file-blob-convert-to-download-async-delegate.html [ Skip ]
 http/tests/download/convert-cached-load-to-download.html [ Skip ]
-
-webkit.org/b/157007 fast/layers/no-clipping-overflow-hidden-added-after-transform.html [ Pass ImageOnlyFailure ]
 
 # dumpPolicyDelegateCallbacks is not supported in DumpRenderTree
 fast/loader/iframe-src-invalid-url.html [ Skip ]
@@ -1698,12 +1698,6 @@ webkit.org/b/154612 compositing/repaint/fixed-background-scroll.html [ Pass Fail
 
 webkit.org/b/165589 pointer-lock/lock-lost-on-esc-in-fullscreen.html [ Skip ]
 
-# webkit.org/b/163585
-media/track/track-cues-enter-exit.html [ Pass Crash ]
-
-# <rdar://problem/61744994> media/track/track-cues-cuechange.html is flaky timing out.
-media/track/track-cues-cuechange.html [ Pass Crash Timeout ]
-
 webkit.org/b/167127 pointer-lock/locked-element-removed-from-dom.html
 
 webkit.org/b/167857 pageoverlay/overlay-remove-reinsert-view.html [ Skip ]
@@ -1795,6 +1789,8 @@ webkit.org/b/184569 [ Debug ] animations/missing-from-to.html [ Skip ]
 webkit.org/b/184458 media/remote-control-command-is-user-gesture.html [ Pass Timeout ]
 
 webkit.org/b/185404 http/tests/security/contentSecurityPolicy/block-all-mixed-content/insecure-iframe-in-main-frame.html [ Pass Failure ]
+http/tests/security/contentSecurityPolicy/block-all-mixed-content/insecure-css-in-iframe.html [ Failure Pass ]
+http/tests/security/contentSecurityPolicy/block-all-mixed-content/insecure-image-in-xslt-document-in-iframe-with-inherited-policy.html [ Failure Pass ]
 http/tests/security/contentSecurityPolicy/block-all-mixed-content/insecure-image-in-iframe-with-enforced-and-report-policies.html [ Pass Failure ]
 
 webkit.org/b/186581 [ Debug ] fast/parser/xml-error-adopted.xml [ Timeout Pass ]
@@ -1942,8 +1938,6 @@ webkit.org/b/206668 fast/loader/redirect-to-invalid-url-using-meta-refresh-calls
 webkit.org/b/180760 fast/loader/redirect-to-invalid-url-using-meta-refresh-disallowed-async-delegates.html [ Pass Failure ]
 
 webkit.org/b/190830 [ Debug ] media/track/video-track-addition-and-frame-removal.html [ Pass Crash ]
-
-webkit.org/b/206974 http/tests/security/contentSecurityPolicy/block-all-mixed-content/insecure-image-in-xslt-document-in-iframe-with-inherited-policy.html [ Pass Failure ]
 
 webkit.org/b/207066 editing/execCommand/insert-nested-lists.html [ Pass Failure ]
 
@@ -2432,8 +2426,6 @@ imported/w3c/web-platform-tests/compression [ Skip ]
 # webkit.org/b/243733 [ Mac wk1 ] Many recently imported mixed-content WPT tests are failing on Mac wk1
 imported/w3c/web-platform-tests/mixed-content/gen/top.http-rp/opt-in/audio-tag.https.html [ Failure ]
 imported/w3c/web-platform-tests/mixed-content/gen/top.http-rp/opt-in/video-tag.https.html [ Failure ]
-imported/w3c/web-platform-tests/mixed-content/gen/top.meta/unset/audio-tag.https.html [ Failure ]
-imported/w3c/web-platform-tests/mixed-content/gen/top.meta/unset/video-tag.https.html [ Failure ]
 
 # WebKitLegacy does not support Shared Workers, so skip related tests.
 imported/w3c/web-platform-tests/mixed-content/gen/sharedworker-classic-data.http-rp [ Skip ]
@@ -2536,7 +2528,6 @@ imported/w3c/web-platform-tests/websockets/interfaces/WebSocket/bufferedAmount/b
 imported/w3c/web-platform-tests/websockets/interfaces/WebSocket/bufferedAmount/bufferedAmount-unicode.html?wss [ Pass Failure ]
 
 #webkit.org/b/248537 Batch mark expectations for Ventura test failures
-[ Ventura+ ] transitions/extra-transition.html [ Pass Failure ]
 [ Ventura+ arm64 ] svg/transforms/transformed-text-fill-pattern.html [ ImageOnlyFailure ]
 [ Ventura+ ] media/accessiblity-describes-video.html [ Crash ]
 [ Ventura+ ] media/track/track-mode.html  [ Crash ]

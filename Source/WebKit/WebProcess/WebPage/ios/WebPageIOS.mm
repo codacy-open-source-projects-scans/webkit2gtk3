@@ -243,12 +243,15 @@ void WebPage::platformInitializeAccessibility()
     m_mockAccessibilityElement = adoptNS([[WKAccessibilityWebPageObject alloc] init]);
     [m_mockAccessibilityElement setWebPage:this];
 
-    accessibilityTransferRemoteToken(accessibilityRemoteTokenData());
+    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_page->mainFrame());
+    if (localMainFrame)
+        accessibilityTransferRemoteToken(accessibilityRemoteTokenData(), localMainFrame->frameID());
 }
 
 void WebPage::platformReinitialize()
 {
-    accessibilityTransferRemoteToken(accessibilityRemoteTokenData());
+    Ref frame = CheckedRef(m_page->focusController())->focusedOrMainFrame();
+    accessibilityTransferRemoteToken(accessibilityRemoteTokenData(), frame->frameID());
 }
 
 RetainPtr<NSData> WebPage::accessibilityRemoteTokenData() const
@@ -644,6 +647,16 @@ NSObject *WebPage::accessibilityObjectForMainFramePlugin()
     return nil;
 }
     
+void WebPage::updateRemotePageAccessibilityOffset(WebCore::FrameIdentifier, WebCore::IntPoint)
+{
+    // FIXME: Implement
+}
+
+void WebPage::registerRemoteFrameAccessibilityTokens(pid_t, std::span<const uint8_t>)
+{
+    // FIXME: Implement
+}
+
 void WebPage::registerUIProcessAccessibilityTokens(std::span<const uint8_t> elementToken, std::span<const uint8_t>)
 {
     NSData *elementTokenData = [NSData dataWithBytes:elementToken.data() length:elementToken.size()];
@@ -660,6 +673,12 @@ void WebPage::getDataSelectionForPasteboard(const String, CompletionHandler<void
 {
     notImplemented();
     completionHandler({ });
+}
+
+WebCore::IntPoint WebPage::accessibilityRemoteFrameOffset()
+{
+    notImplemented();
+    return { };
 }
 
 WKAccessibilityWebPageObject* WebPage::accessibilityRemoteObject()
@@ -3550,6 +3569,8 @@ std::optional<FocusedElementInformation> WebPage::focusedElementInformation()
     if (htmlElement)
         information.isSpellCheckingEnabled = htmlElement->spellcheck();
 
+    information.isWritingSuggestionsEnabled = focusedElement->isWritingSuggestionsEnabled();
+
     if (RefPtr formControlElement = dynamicDowncast<HTMLFormControlElement>(focusedElement))
         information.isFocusingWithValidationMessage = formControlElement->isFocusingWithValidationMessage();
 
@@ -4939,8 +4960,19 @@ void WebPage::requestDocumentEditingContext(DocumentEditingContextRequest&& requ
     context.contextAfter = makeString(rangeOfInterestInSelection.end, contextAfterEnd);
     if (auto compositionVisiblePositionRange = makeVisiblePositionRange(compositionRange); intersects(rangeOfInterest, compositionVisiblePositionRange)) {
         context.markedText = makeString(compositionVisiblePositionRange.start, compositionVisiblePositionRange.end);
-        context.selectedRangeInMarkedText.location = distanceBetweenPositions(rangeOfInterestInSelection.start, compositionVisiblePositionRange.start);
-        context.selectedRangeInMarkedText.length = [context.selectedText.string length];
+        auto markedTextLength = context.markedText.string.length();
+
+        ptrdiff_t distanceToSelectionStart = distanceBetweenPositions(rangeOfInterestInSelection.start, compositionVisiblePositionRange.start);
+        ptrdiff_t distanceToSelectionEnd = distanceToSelectionStart + [context.selectedText.string length];
+
+        distanceToSelectionStart = clampTo<ptrdiff_t>(distanceToSelectionStart, 0, markedTextLength);
+        distanceToSelectionEnd = clampTo<ptrdiff_t>(distanceToSelectionEnd, 0, markedTextLength);
+        RELEASE_ASSERT(distanceToSelectionStart <= distanceToSelectionEnd);
+
+        context.selectedRangeInMarkedText = {
+            static_cast<uint64_t>(distanceToSelectionStart),
+            static_cast<uint64_t>(distanceToSelectionEnd - distanceToSelectionStart)
+        };
     }
 
     auto characterRectsForRange = [](const SimpleRange& range, unsigned startOffset) {

@@ -323,12 +323,25 @@
 #endif
 
 #if !defined(USE_TZONE_MALLOC)
-#if CPU(ARM64)
+#if CPU(ARM64) && OS(DARWIN)
 // Only MacroAssemblerARM64 is known to build.
 // Building with TZONE_MALLOC currently disabled for all platforms.
 #define USE_TZONE_MALLOC 0
 #else
 #define USE_TZONE_MALLOC 0
+#endif
+#endif
+
+#if OS(DARWIN) && USE(APPLE_INTERNAL_SDK) && USE(TZONE_MALLOC)
+#define USE_DARWIN_TZONE_SEED 1
+#endif
+
+#if !defined(USE_WK_TZONE_MALLOC)
+#if USE(TZONE_MALLOC)
+// Separately control the use of TZone allocation in WebKit
+#define USE_WK_TZONE_MALLOC 1
+#else
+#define USE_WK_TZONE_MALLOC 0
 #endif
 #endif
 

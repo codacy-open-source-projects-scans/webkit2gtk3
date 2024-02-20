@@ -155,7 +155,7 @@ void JSTestGenerateAddOpaqueRoot::destroy(JSC::JSCell* cell)
 
 JSC_DEFINE_CUSTOM_GETTER(jsTestGenerateAddOpaqueRootConstructor, (JSGlobalObject* lexicalGlobalObject, EncodedJSValue thisValue, PropertyName))
 {
-    Ref vm = JSC::getVM(lexicalGlobalObject);
+    auto& vm = JSC::getVM(lexicalGlobalObject);
     auto throwScope = DECLARE_THROW_SCOPE(vm);
     auto* prototype = jsDynamicCast<JSTestGenerateAddOpaqueRootPrototype*>(JSValue::decode(thisValue));
     if (UNLIKELY(!prototype))
@@ -165,7 +165,7 @@ JSC_DEFINE_CUSTOM_GETTER(jsTestGenerateAddOpaqueRootConstructor, (JSGlobalObject
 
 static inline JSValue jsTestGenerateAddOpaqueRoot_someAttributeGetter(JSGlobalObject& lexicalGlobalObject, JSTestGenerateAddOpaqueRoot& thisObject)
 {
-    Ref vm = JSC::getVM(&lexicalGlobalObject);
+    auto& vm = JSC::getVM(&lexicalGlobalObject);
     auto throwScope = DECLARE_THROW_SCOPE(vm);
     auto& impl = thisObject.wrapped();
     RELEASE_AND_RETURN(throwScope, (toJS<IDLDOMString>(lexicalGlobalObject, throwScope, impl.someAttribute())));
@@ -218,7 +218,7 @@ void JSTestGenerateAddOpaqueRootOwner::finalize(JSC::Handle<JSC::Unknown> handle
 {
     auto* jsTestGenerateAddOpaqueRoot = static_cast<JSTestGenerateAddOpaqueRoot*>(handle.slot()->asCell());
     auto& world = *static_cast<DOMWrapperWorld*>(context);
-    uncacheWrapper(world, &jsTestGenerateAddOpaqueRoot->wrapped(), jsTestGenerateAddOpaqueRoot);
+    uncacheWrapper(world, jsTestGenerateAddOpaqueRoot->protectedWrapped().ptr(), jsTestGenerateAddOpaqueRoot);
 }
 
 #if ENABLE(BINDING_INTEGRITY)

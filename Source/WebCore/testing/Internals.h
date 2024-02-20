@@ -319,6 +319,11 @@ public:
 
     ExceptionOr<Ref<DOMRect>> absoluteCaretBounds();
     ExceptionOr<bool> isCaretBlinkingSuspended();
+    ExceptionOr<bool> isCaretBlinkingSuspended(Document&);
+
+#if ENABLE(ACCESSIBILITY_NON_BLINKING_CURSOR)
+    void setPrefersNonBlinkingCursor(bool);
+#endif
 
     Ref<DOMRect> boundingBox(Element&);
 
@@ -373,8 +378,8 @@ public:
     ExceptionOr<void> invalidateControlTints();
 
     RefPtr<Range> rangeFromLocationAndLength(Element& scope, unsigned rangeLocation, unsigned rangeLength);
-    unsigned locationFromRange(Element& scope, const Range&, const Vector<String>& behaviors = { });
-    unsigned lengthFromRange(Element& scope, const Range&, const Vector<String>& behaviors = { });
+    unsigned locationFromRange(Element& scope, const Range&);
+    unsigned lengthFromRange(Element& scope, const Range&);
     String rangeAsText(const Range&);
     String rangeAsTextUsingBackwardsTextIterator(const Range&);
     Ref<Range> subrange(Range&, unsigned rangeLocation, unsigned rangeLength);
@@ -385,7 +390,7 @@ public:
         String text;
         RefPtr<Range> range;
     };
-    Vector<TextIteratorState> statesOfTextIterator(const Range&, const Vector<String>& behaviors = { });
+    Vector<TextIteratorState> statesOfTextIterator(const Range&);
 
     ExceptionOr<void> setDelegatesScrolling(bool enabled);
 
@@ -484,7 +489,7 @@ public:
     ExceptionOr<uint64_t> layerIDForElement(Element&);
     ExceptionOr<String> repaintRectsAsText() const;
         
-    ExceptionOr<uint64_t> scrollingNodeIDForNode(Node*);
+    ExceptionOr<Vector<uint64_t>> scrollingNodeIDForNode(Node*);
 
     enum {
         // Values need to be kept in sync with Internals.idl.
@@ -721,7 +726,7 @@ public:
     void setWebRTCVP9Support(bool supportVP9Profile0, bool supportVP9Profile2);
     void disableWebRTCHardwareVP9();
     bool isSupportingVP9HardwareDecoder() const;
-    void isVP9HardwareDeccoderUsed(RTCPeerConnection&, DOMPromiseDeferred<IDLBoolean>&&);
+    void isVP9HardwareDecoderUsed(RTCPeerConnection&, DOMPromiseDeferred<IDLBoolean>&&);
 
     void setSFrameCounter(RTCRtpSFrameTransform&, const String&);
     uint64_t sframeCounter(const RTCRtpSFrameTransform&);

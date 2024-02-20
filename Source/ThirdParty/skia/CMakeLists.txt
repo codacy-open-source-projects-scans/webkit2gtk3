@@ -3,6 +3,7 @@ set_property(DIRECTORY . PROPERTY FOLDER "skia")
 # Skia dependencies not used directly in WebKit.
 find_package(Freetype 2.9.0 REQUIRED)
 find_package(Fontconfig 2.13.0 REQUIRED)
+find_package(WebP REQUIRED COMPONENTS mux)
 
 #
 # SKIA_ROOT_DIR may point to a checkout from the upstream Skia repository,
@@ -76,7 +77,7 @@ if (DEVELOPER_MODE AND (SKIA_ROOT_DIR OR NOT "$ENV{SKIA_ROOT_DIR}" STREQUAL ""))
     add_library(Skia UNKNOWN IMPORTED GLOBAL)
     set_target_properties(Skia PROPERTIES
         IMPORTED_LOCATION "${SKIA_LIBRARY}"
-        INTERFACE_INCLUDE_DIRECTORIES "${FORWARDING_HEADERS_DIR};${SKIA_INCLUDE_DIR}"
+        INTERFACE_INCLUDE_DIRECTORIES "${Skia_FRAMEWORK_HEADERS_DIR};${SKIA_INCLUDE_DIR}"
         INTERFACE_COMPILE_DEFINITIONS "${SKIA_COMPILE_DEFINITIONS}"
     )
 
@@ -86,17 +87,19 @@ if (DEVELOPER_MODE AND (SKIA_ROOT_DIR OR NOT "$ENV{SKIA_ROOT_DIR}" STREQUAL ""))
     target_link_libraries(Skia INTERFACE
         Fontconfig::Fontconfig
         Freetype::Freetype
+        JPEG::JPEG
         OpenGL::GLES
         PNG::PNG
+        WebP::mux
         ${EGL_LIBRARIES}
     )
 
     add_custom_target(Skia_headers_symlink
         COMMAND ${CMAKE_COMMAND} -E create_symlink
             "${SKIA_INCLUDE_DIR}/include"
-            "${FORWARDING_HEADERS_DIR}/skia"
+            "${Skia_FRAMEWORK_HEADERS_DIR}/skia"
         BYPRODUCTS
-            "${FORWARDING_HEADERS_DIR}/skia"
+            "${Skia_FRAMEWORK_HEADERS_DIR}/skia"
         COMMENT "Link Skia headers"
         VERBATIM
     )
@@ -139,6 +142,14 @@ add_library(Skia STATIC
     src/base/SkTime.cpp
     src/base/SkUTF.cpp
     src/base/SkUtils.cpp
+
+    src/codec/SkCodec.cpp
+    src/codec/SkColorPalette.cpp
+    src/codec/SkEncodedInfo.cpp
+    src/codec/SkPixmapUtils.cpp
+    src/codec/SkPngCodec.cpp
+    src/codec/SkSampler.cpp
+    src/codec/SkSwizzler.cpp
 
     src/core/SkAAClip.cpp
     src/core/SkATrace.cpp
@@ -591,6 +602,7 @@ add_library(Skia STATIC
     src/image/SkRescaleAndReadPixels.cpp
     src/image/SkSurface.cpp
     src/image/SkSurface_Base.cpp
+    src/image/SkSurface_Null.cpp
     src/image/SkSurface_Raster.cpp
 
     src/effects/Sk1DPathEffect.cpp
@@ -632,7 +644,10 @@ add_library(Skia STATIC
 
     src/encode/SkEncoder.cpp
     src/encode/SkICC.cpp
+    src/encode/SkJPEGWriteUtility.cpp
+    src/encode/SkJpegEncoderImpl.cpp
     src/encode/SkPngEncoderImpl.cpp
+    src/encode/SkWebpEncoderImpl.cpp
 
     src/pathops/SkAddIntersections.cpp
     src/pathops/SkDConicLineIntersection.cpp
@@ -852,7 +867,9 @@ target_link_libraries(Skia PRIVATE
     Epoxy::Epoxy
     Fontconfig::Fontconfig
     Freetype::Freetype
+    JPEG::JPEG
     PNG::PNG
+    WebP::mux
 )
 
 WEBKIT_ADD_TARGET_CXX_FLAGS(Skia
@@ -873,9 +890,9 @@ WEBKIT_ADD_TARGET_CXX_FLAGS(Skia
 add_custom_target(Skia_headers_symlink
     COMMAND ${CMAKE_COMMAND} -E create_symlink
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
-        "${FORWARDING_HEADERS_DIR}/skia"
+        "${Skia_FRAMEWORK_HEADERS_DIR}/skia"
     BYPRODUCTS
-        "${FORWARDING_HEADERS_DIR}/skia"
+        "${Skia_FRAMEWORK_HEADERS_DIR}/skia"
     COMMENT "Link Skia headers"
     VERBATIM
 )
@@ -885,11 +902,13 @@ target_include_directories(Skia PRIVATE
 )
 target_include_directories(Skia INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}"
-    "${FORWARDING_HEADERS_DIR}"
+    "${Skia_FRAMEWORK_HEADERS_DIR}"
 )
 
 target_compile_definitions(Skia PRIVATE
     SKIA_IMPLEMENTATION=1
+
+    SK_CODEC_DECODES_PNG
 
     SK_GAMMA_APPLY_TO_A8
 )

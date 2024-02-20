@@ -70,6 +70,7 @@
 #include "FilterRenderingMode.h"
 #include "FocusController.h"
 #include "FontCache.h"
+#include "FragmentDirectiveGenerator.h"
 #include "FrameLoader.h"
 #include "FrameSelection.h"
 #include "FrameTree.h"
@@ -208,6 +209,11 @@
 
 #if USE(ATSPI)
 #include "AccessibilityRootAtspi.h"
+#endif
+
+#if PLATFORM(IOS_FAMILY) && ENABLE(WEBXR)
+#include "NavigatorWebXR.h"
+#include "WebXRSystem.h"
 #endif
 
 namespace WebCore {
@@ -851,7 +857,7 @@ inline std::optional<std::pair<WeakRef<MediaCanStartListener>, WeakRef<Document,
             continue;
         if (!localFrame->document())
             continue;
-        if (MediaCanStartListener* listener = localFrame->document()->takeAnyMediaCanStartListener())
+        if (MediaCanStartListener* listener = localFrame->protectedDocument()->takeAnyMediaCanStartListener())
             return { { *listener, *localFrame->document() } };
     }
     return std::nullopt;
@@ -868,7 +874,7 @@ void Page::setCanStartMedia(bool canStartMedia)
         auto listener = takeAnyMediaCanStartListener();
         if (!listener)
             break;
-        listener->first->mediaCanStart(listener->second);
+        listener->first->mediaCanStart(Ref { listener->second.get() });
     }
 }
 
@@ -2203,11 +2209,18 @@ bool Page::shouldUpdateAccessibilityRegions() const
     ASSERT(m_lastRenderingUpdateTimestamp >= m_lastAccessibilityObjectRegionsUpdate);
     if ((m_lastRenderingUpdateTimestamp - m_lastAccessibilityObjectRegionsUpdate) < updateInterval) {
         // We've already updated accessibility object rects recently, so skip this update and schedule another for later.
-        auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
-        RefPtr mainDocument = localMainFrame ? localMainFrame->document() : nullptr;
+
+        RefPtr<Document> protectedMainDocument;
+        if (auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame()))
+            protectedMainDocument = localMainFrame ? localMainFrame->document() : nullptr;
+        else if (auto* remoteFrame = dynamicDowncast<RemoteFrame>(mainFrame())) {
+            if (auto* owner = remoteFrame->ownerElement())
+                protectedMainDocument = &(owner->document());
+        }
+
         // If accessibility is enabled and we have a main document, that document should have an AX object cache.
-        ASSERT(!mainDocument || mainDocument->existingAXObjectCache());
-        if (CheckedPtr topAxObjectCache = mainDocument ? mainDocument->existingAXObjectCache() : nullptr)
+        ASSERT(!protectedMainDocument || protectedMainDocument->existingAXObjectCache());
+        if (CheckedPtr topAxObjectCache = protectedMainDocument ? protectedMainDocument->existingAXObjectCache() : nullptr)
             topAxObjectCache->scheduleObjectRegionsUpdate();
         return false;
     }
@@ -2233,6 +2246,13 @@ void Page::setSystemAllowsAnimationControls(bool isAllowed)
     m_systemAllowsAnimationControls = isAllowed;
 }
 #endif // ENABLE(ACCESSIBILITY_ANIMATION_CONTROL)
+
+#if ENABLE(ACCESSIBILITY_NON_BLINKING_CURSOR)
+void Page::setPrefersNonBlinkingCursor(bool enabled)
+{
+    m_prefersNonBlinkingCursor = enabled;
+}
+#endif
 
 void Page::suspendScriptedAnimations()
 {
@@ -3763,14 +3783,14 @@ void Page::effectiveAppearanceDidChange(bool useDarkAppearance, bool useElevated
 bool Page::useDarkAppearance() const
 {
 #if ENABLE(DARK_MODE_CSS)
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
-    auto* view = localMainFrame ? localMainFrame->view() : nullptr;
+    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+    RefPtr view = localMainFrame ? localMainFrame->view() : nullptr;
     if (!view || view->mediaType() != screenAtom())
         return false;
     if (m_useDarkAppearanceOverride)
         return m_useDarkAppearanceOverride.value();
 
-    if (auto* documentLoader = localMainFrame->loader().documentLoader()) {
+    if (RefPtr documentLoader = localMainFrame->loader().documentLoader()) {
         auto colorSchemePreference = documentLoader->colorSchemePreference();
         if (colorSchemePreference != ColorSchemePreference::NoPreference)
             return colorSchemePreference == ColorSchemePreference::Dark;
@@ -3971,7 +3991,7 @@ bool Page::hasLocalDataForURL(const URL& url)
     if (url.protocolIsFile())
         return true;
 
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
+    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(mainFrame());
     RefPtr documentLoader = localMainFrame ? localMainFrame->loader().documentLoader() : nullptr;
     if (documentLoader && documentLoader->subresource(MemoryCache::removeFragmentIdentifierIfNeeded(url)))
         return true;
@@ -4138,7 +4158,7 @@ void Page::configureLoggingChannel(const String& channelName, WTFLogChannelState
         channel->level = level;
 
 #if USE(LIBWEBRTC)
-        auto* localMainFrame = dynamicDowncast<LocalFrame>(m_mainFrame.get());
+        RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_mainFrame.get());
         if (channel == &LogWebRTC && localMainFrame && localMainFrame->document() && !sessionID().isEphemeral())
             webRTCProvider().setLoggingLevel(LogWebRTC.level);
 #endif
@@ -4219,6 +4239,15 @@ bool Page::shouldDisableCorsForRequestTo(const URL& url) const
     });
 }
 
+const URL Page::fragmentDirectiveURLForSelectedText()
+{
+    if (auto range = CheckedRef(focusController())->focusedOrMainFrame().selection().selection().range()) {
+        FragmentDirectiveGenerator fragmentDirectiveGenerator(range.value());
+        return fragmentDirectiveGenerator.urlWithFragment();
+    }
+    return URL();
+}
+
 void Page::revealCurrentSelection()
 {
     checkedFocusController()->focusedOrMainFrame().checkedSelection()->revealSelection(SelectionRevealMode::Reveal, ScrollAlignment::alignCenterIfNeeded);
@@ -4264,7 +4293,7 @@ void Page::removeInjectedUserStyleSheet(UserStyleSheet& userStyleSheet)
     }
 
     if (userStyleSheet.injectedFrames() == UserContentInjectedFrames::InjectInTopFrameOnly) {
-        auto* localMainFrame = dynamicDowncast<LocalFrame>(m_mainFrame.get());
+        RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_mainFrame.get());
         if (RefPtr document = localMainFrame ? localMainFrame->document() : nullptr)
             document->checkedExtensionStyleSheets()->removePageSpecificUserStyleSheet(userStyleSheet);
     } else {
@@ -4582,7 +4611,7 @@ void Page::setMediaKeysStorageDirectory(const String& directory)
 
 void Page::reloadExecutionContextsForOrigin(const ClientOrigin& origin, std::optional<FrameIdentifier> triggeringFrame) const
 {
-    auto* localMainFrame = dynamicDowncast<LocalFrame>(m_mainFrame.get());
+    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_mainFrame.get());
     if (!localMainFrame || localMainFrame->document()->topOrigin().data() != origin.topOrigin)
         return;
 
@@ -4669,5 +4698,25 @@ void Page::setAccessibilityRootObject(AccessibilityRootAtspi* rootObject)
     m_accessibilityRootObject = rootObject;
 }
 #endif // USE(ATSPI)
+
+#if PLATFORM(IOS_FAMILY) && ENABLE(WEBXR)
+bool Page::hasActiveImmersiveSession() const
+{
+    for (RefPtr frame = &m_mainFrame.get(); frame; frame = frame->tree().traverseNext()) {
+        RefPtr localFrame = dynamicDowncast<LocalFrame>(frame);
+        RefPtr window = localFrame ? localFrame->window() : nullptr;
+        if (!window)
+            continue;
+
+        RefPtr navigator = window->optionalNavigator();
+        if (!navigator)
+            continue;
+
+        if (NavigatorWebXR::xr(*navigator).hasActiveImmersiveSession())
+            return true;
+    }
+    return false;
+}
+#endif // PLATFORM(IOS_FAMILY) && ENABLE(WEBXR)
 
 } // namespace WebCore

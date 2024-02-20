@@ -433,12 +433,12 @@ static WebCore::Cursor::Type toWebCoreCursorType(PDFLayerControllerCursorType cu
 
 - (void)performWebSearch:(NSString *)string
 {
-    _pdfPlugin->performWebSearch(string);
+    _pdfPlugin->performWebSearch({ string });
 }
 
 - (void)performSpotlightSearch:(NSString *)string
 {
-    _pdfPlugin->performSpotlightSearch(string);
+    _pdfPlugin->performSpotlightSearch({ string });
 }
 
 - (void)openWithNativeApplication
@@ -1347,11 +1347,11 @@ bool PDFPlugin::findString(const String& target, WebCore::FindOptions options, u
         auto searchSelection = [m_pdfLayerController searchSelection];
         [m_pdfLayerController findString:target caseSensitive:caseSensitive highlightMatches:YES];
         [m_pdfLayerController setSearchSelection:searchSelection];
-        m_lastFoundString = emptyString();
+        m_lastFindString = emptyString();
         return false;
     }
 
-    if (m_lastFoundString == target) {
+    if (m_lastFindString == target) {
         auto selection = nextMatchForString(target, searchForward, caseSensitive, wrapSearch, [m_pdfLayerController searchSelection], NO);
         if (!selection)
             return false;
@@ -1359,7 +1359,7 @@ bool PDFPlugin::findString(const String& target, WebCore::FindOptions options, u
         [m_pdfLayerController gotoSelection:selection];
     } else {
         [m_pdfLayerController findString:target caseSensitive:caseSensitive highlightMatches:YES];
-        m_lastFoundString = target;
+        m_lastFindString = target;
     }
 
     return foundMatch;
@@ -1393,7 +1393,7 @@ void PDFPlugin::focusPreviousAnnotation()
     [m_pdfLayerController activateNextAnnotation:true];
 }
 
-String PDFPlugin::getSelectionString() const
+String PDFPlugin::selectionString() const
 {
     return [[m_pdfLayerController currentSelection] string];
 }
@@ -1442,7 +1442,7 @@ static NSPoint pointInLayoutSpaceForPointInWindowSpace(PDFLayerController* pdfLa
     return NSPointFromCGPoint(newPoint);
 }
 
-std::pair<String, PDFSelection *> PDFPlugin::lookupTextAtLocation(const WebCore::FloatPoint& locationInViewCoordinates, WebHitTestResultData& data) const
+LookupTextResult PDFPlugin::lookupTextAtLocation(const WebCore::FloatPoint& locationInViewCoordinates, WebHitTestResultData& data)
 {
     auto selection = [m_pdfLayerController currentSelection];
     if (existingSelectionContainsPoint(locationInViewCoordinates))
@@ -1540,20 +1540,6 @@ CGFloat PDFPlugin::scaleFactor() const
     return [m_pdfLayerController contentScaleFactor];
 }
 
-void PDFPlugin::performWebSearch(NSString *string)
-{
-    if (!m_frame || !m_frame->page())
-        return;
-    m_frame->page()->send(Messages::WebPageProxy::SearchTheWeb(string));
-}
-
-void PDFPlugin::performSpotlightSearch(NSString *string)
-{
-    if (!m_frame || !m_frame->page())
-        return;
-    m_frame->page()->send(Messages::WebPageProxy::SearchWithSpotlight(string));
-}
-
 bool PDFPlugin::handleWheelEvent(const WebWheelEvent& event)
 {
     PDFDisplayMode displayMode = [m_pdfLayerController displayMode];
@@ -1606,17 +1592,6 @@ NSData *PDFPlugin::liveData() const
         return [m_pdfDocument dataRepresentation];
 
     return originalData();
-}
-
-id PDFPlugin::accessibilityAssociatedPluginParentForElement(WebCore::Element* element) const
-{
-    if (!m_activeAnnotation)
-        return nil;
-
-    if (m_activeAnnotation->element() != element)
-        return nil;
-
-    return [m_activeAnnotation->annotation() accessibilityNode];
 }
 
 id PDFPlugin::accessibilityHitTest(const WebCore::IntPoint& point) const

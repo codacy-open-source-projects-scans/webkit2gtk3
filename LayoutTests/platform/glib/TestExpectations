@@ -129,6 +129,12 @@ http/tests/storageAccess/ [ Pass ]
 http/tests/storageAccess/deny-with-prompt-does-not-preserve-gesture.html [ Skip ]
 webkit.org/b/208400 http/tests/storageAccess/has-storage-access-true-if-third-party-has-cookies-ephemeral.html [ Failure ]
 
+# Failures from upgrading mixed-content
+imported/w3c/web-platform-tests/mixed-content/gen/top.meta/unset/video-tag.https.html [ Failure ]
+imported/w3c/web-platform-tests/mixed-content/tentative/autoupgrades/mixed-content-cors.https.sub.html [ Failure ]
+imported/w3c/web-platform-tests/mixed-content/tentative/autoupgrades/video-upgrade.https.sub.html [ Failure ]
+imported/w3c/web-platform-tests/service-workers/service-worker/navigation-redirect.https.html [ Failure ]
+
 webkit.org/b/172056 fast/text/multiglyph-characters.html [ Pass ]
 
 imported/w3c/web-platform-tests/css/css-text/hyphens/hyphens-auto-001.html [ Pass ]
@@ -1052,7 +1058,7 @@ webkit.org/b/213699 http/wpt/mediarecorder/MediaRecorder-AV-audio-video-dataavai
 webkit.org/b/218317 media/media-source/media-source-trackid-change.html [ Failure ]
 webkit.org/b/238201 media/media-source/media-mp4-hevc-bframes.html [ Failure ]
 
-# GStreamer doesn't set the track's id to the container's value.
+# GStreamer (< 1.24) doesn't set the track's id to the container's value.
 webkit.org/b/265919 media/track/media-audio-track.html [ Failure ]
 webkit.org/b/265919 media/track/media-source-audio-track.html [ Failure ]
 
@@ -1863,9 +1869,6 @@ webkit.org/b/258296 webrtc/canvas-to-peer-connection.html [ Failure Timeout ]
 # WebRTC-related bugs
 #////////////////////////////////////////////////////////////////////////////////////////
 
-webkit.org/b/268902 webrtc/release-after-getting-track.html [ Pass Crash ]
-webkit.org/b/268906 webrtc/receiver-track-should-stay-live-even-if-receiver-is-inactive.html [ Pass Crash ]
-
 # The MediaStream implementation is not completed yet
 webkit.org/b/79203 fast/mediastream/RTCPeerConnection-ice.html [ Failure Timeout Crash ]
 webkit.org/b/79203 fast/mediastream/RTCPeerConnection-inspect-offer-bundlePolicy-bundle-only.html [ Failure Crash ]
@@ -1918,8 +1921,6 @@ webkit.org/b/256758 fast/mediastream/captureStream/canvas3d.html [ Failure ]
 
 webkit.org/b/194611 http/wpt/webrtc/getUserMedia-processSwapping.html [ Failure ]
 
-webkit.org/b/261099 webrtc/video-lowercase-media-subtype.html [ Skip ]
-
 fast/mediastream/getDisplayMedia-max-constraints4.html [ Skip ]
 
 # DataChannel GstWebRTC implementation incomplete, missing stats support.
@@ -1930,7 +1931,7 @@ webkit.org/b/187064 imported/w3c/web-platform-tests/webrtc/RTCPeerConnection-get
 
 webrtc/video-av1.html [ Skip ]
 
-webrtc/h265.html [ Pass Timeout ]
+webkit.org/b/269285 webrtc/h265.html [ Pass Timeout Failure ]
 
 # GStreamer's DTLS agent currently generates RSA certificates only. DTLS 1.2 is not supported yet (AFAIK).
 webrtc/datachannel/dtls10.html [ Failure ]
@@ -1969,7 +1970,8 @@ imported/w3c/web-platform-tests/webrtc-extensions/RTCRtpTransceiver-headerExtens
 # GStreamerRtpReceiverBackend::getSynchronizationSources() unimplemented and also hitting srtpenc errors.
 webkit.org/b/235885 webrtc/video-addTransceiver.html [ Skip ]
 
-# GstWebRTC doesn't support transceiver direction changes.
+# GstWebRTC (< 1.24) doesn't support transceiver direction changes.
+webrtc/receiver-track-should-stay-live-even-if-receiver-is-inactive.html [ Failure ]
 webkit.org/b/193641 webkit.org/b/235885 webrtc/video-setDirection.html [ Skip ]
 webkit.org/b/235885 webrtc/direction-change.html [ Skip ]
 # This test calls pc.removeTrack() which implies a transceiver direction change.
@@ -2038,6 +2040,9 @@ imported/w3c/web-platform-tests/mediacapture-streams/MediaStream-MediaElement-pr
 
 imported/w3c/web-platform-tests/mediacapture-insertable-streams/VideoTrackGenerator-with-window-tracks.https.html [ Skip ]
 
+# Libwebrtc log test
+http/tests/inspector/gatherWebInspectorRTCLogs.html [ Skip ]
+
 # In these tests only one canvas frame is pushed towards the sender webrtcbin,
 # this is not enough for the receiver webrtcbin to create its video source pad,
 # because on sender side we need at least a complete GOP... So the tests time
@@ -2071,8 +2076,6 @@ webkit.org/b/235885 imported/w3c/web-platform-tests/webrtc/RTCRtpReceiver-getSyn
 webkit.org/b/235885 imported/w3c/web-platform-tests/webrtc/protocol/rtp-clockrate.html [ Skip ]
 webkit.org/b/235885 imported/w3c/web-platform-tests/webrtc-extensions/RTCRtpSynchronizationSource-senderCaptureTimeOffset.html [ Skip ]
 
-# GStreamerRtpSenderBackend::setParameters() unimplemented.
-webkit.org/b/215005 webkit.org/b/218787 webrtc/h264-baseline.html [ Failure Timeout ]
 webkit.org/b/215007 webrtc/h264-high.html [ Failure Timeout ]
 
 # We don't support spatial encoding yet.
@@ -2520,8 +2523,6 @@ media/modern-media-controls/watchos-media-controls [ Skip ]
 
 # Opera-submitted tests to W3C for <track>, a lot of failures still.
 webkit.org/b/103926 media/track/opera/idl/media-idl-tests.html [ Skip ]
-webkit.org/b/103926 media/track/opera/interfaces/HTMLElement/HTMLMediaElement/crossOrigin.html [ Skip ]
-webkit.org/b/103926 media/track/opera/interfaces/HTMLElement/HTMLTrackElement/kind.html [ Skip ]
 webkit.org/b/103926 media/track/opera/interfaces/HTMLElement/HTMLTrackElement/src.html [ Skip ]
 webkit.org/b/103926 media/track/opera/interfaces/TextTrackCue/getCueAsHTML.html [ Skip ]
 webkit.org/b/103926 media/track/opera/interfaces/TextTrackCue/line.html [ Skip ]
@@ -2531,6 +2532,9 @@ webkit.org/b/103926 media/track/opera/interfaces/TextTrackCue/vertical.html [ Sk
 webkit.org/b/103926 media/track/opera/track/webvtt/rendering/adhoc/12345_timestamps.html [ Skip ]
 webkit.org/b/103926 media/track/opera/track/webvtt/rendering/adhoc/cue_font_size_transition.html [ Skip ]
 webkit.org/b/103926 media/track/opera/track/webvtt/rendering/adhoc/voice_with_evil_timestamp.html [ Skip ]
+webkit.org/b/269680 imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/track/track-element/track-mode-disabled.html [ Skip ]
+imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/track/track-element/track-cues-enter-seeking.html [ Skip ]
+imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/track/track-element/track-cues-seeking.html [ Skip ]
 
 # PiP / presentation-mode is not supported yet
 webkit.org/b/202756 media/airplay-wirelessvideoplaybackdisabled.html [ Skip ]
@@ -3278,7 +3282,6 @@ http/tests/media/video-preload.html [ Pass Slow ]
 webkit.org/b/108925 http/tests/media/video-play-stall.html [ Failure Timeout ]
 
 webkit.org/b/137698 media/video-controls-drag.html [ Timeout ]
-webkit.org/b/130971 media/track/track-remove-track.html [ Timeout ]
 webkit.org/b/113127 media/track/track-prefer-captions.html [ Timeout ]
 
 webkit.org/b/168373 media/media-fullscreen-loop-inline.html [ Timeout ]

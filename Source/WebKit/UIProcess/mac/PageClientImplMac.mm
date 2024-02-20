@@ -581,9 +581,9 @@ void PageClientImpl::setTextIndicatorAnimationProgress(float progress)
     m_impl->setTextIndicatorAnimationProgress(progress);
 }
 
-void PageClientImpl::accessibilityWebProcessTokenReceived(std::span<const uint8_t> data)
+void PageClientImpl::accessibilityWebProcessTokenReceived(std::span<const uint8_t> data, WebCore::FrameIdentifier frameID, pid_t pid)
 {
-    m_impl->setAccessibilityWebProcessToken([NSData dataWithBytes:data.data() length:data.size()]);
+    m_impl->setAccessibilityWebProcessToken([NSData dataWithBytes:data.data() length:data.size()], frameID, pid);
 }
     
 void PageClientImpl::enterAcceleratedCompositingMode(const LayerTreeContext& layerTreeContext)
@@ -1080,6 +1080,13 @@ void PageClientImpl::handleContextMenuTranslation(const TranslationContextMenuIn
 }
 
 #endif // HAVE(TRANSLATION_UI_SERVICES) && ENABLE(CONTEXT_MENUS)
+
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT) && ENABLE(CONTEXT_MENUS)
+void PageClientImpl::handleContextMenuSwapCharacters(IntRect selectionBoundsInRootView)
+{
+    m_impl->handleContextMenuSwapCharacters(selectionBoundsInRootView);
+}
+#endif
 
 #if ENABLE(DATA_DETECTION)
 

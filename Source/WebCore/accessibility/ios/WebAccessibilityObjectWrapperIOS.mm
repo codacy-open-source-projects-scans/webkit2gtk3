@@ -1112,6 +1112,7 @@ static AccessibilityObjectWrapper *ancestorWithRole(const AXCoreObject& descenda
     case AccessibilityRole::Ignored:
     case AccessibilityRole::LineBreak:
     case AccessibilityRole::Presentational:
+    case AccessibilityRole::RemoteFrame:
     case AccessibilityRole::Unknown:
         return false;
     }
@@ -1701,7 +1702,8 @@ static void appendStringToResult(NSMutableString *result, NSString *string)
     if (![self _prepareAccessibilityCall])
         return;
 
-    self.axBackingObject->axObjectCache()->relayNotification({ notificationName }, notificationData);
+    if (auto* cache = self.axBackingObject->axObjectCache())
+        cache->relayNotification({ notificationName }, notificationData);
 }
 
 - (CGRect)_accessibilityRelativeFrame

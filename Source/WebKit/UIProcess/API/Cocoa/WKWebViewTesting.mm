@@ -48,6 +48,7 @@
 #import "_WKInspectorInternal.h"
 #import <WebCore/NowPlayingInfo.h>
 #import <WebCore/RuntimeApplicationChecks.h>
+#import <WebCore/ScrollingNodeID.h>
 #import <WebCore/ValidationBubble.h>
 #import <wtf/RetainPtr.h>
 
@@ -334,7 +335,7 @@ static void dumpCALayer(TextStream& ts, CALayer *layer, bool traverse)
 - (void)_processDidResumeForTesting
 {
     if (_page)
-        _page->process().sendProcessDidResume(WebKit::ProcessThrottlerClient::ResumeReason::ForegroundActivity);
+        _page->process().sendProcessDidResume(WebKit::AuxiliaryProcessProxy::ResumeReason::ForegroundActivity);
 }
 
 - (void)_setThrottleStateForTesting:(int)value
@@ -427,10 +428,10 @@ static void dumpCALayer(TextStream& ts, CALayer *layer, bool traverse)
     return _page && _page->hasSleepDisabler();
 }
 
-- (NSString*)_scrollbarStateForScrollingNodeID:(uint64_t)scrollingNodeID isVertical:(bool)isVertical
+- (NSString*)_scrollbarStateForScrollingNodeID:(uint64_t)scrollingNodeID processID:(uint64_t)processID isVertical:(bool)isVertical
 {
     if (_page)
-        return _page->scrollbarStateForScrollingNodeID(scrollingNodeID, isVertical);
+        return _page->scrollbarStateForScrollingNodeID(WebCore::ScrollingNodeID(ObjectIdentifier<WebCore::ScrollingNodeIDType>(scrollingNodeID), ObjectIdentifier<WebCore::ProcessIdentifierType>(processID)), isVertical);
     return @"";
 }
 

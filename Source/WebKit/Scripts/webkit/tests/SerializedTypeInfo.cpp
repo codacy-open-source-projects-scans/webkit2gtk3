@@ -80,6 +80,15 @@
 #include <wtf/CreateUsingClass.h>
 #include <wtf/Seconds.h>
 
+static_asssert(std::is_same_v<WebCore::SharedStringHash, uint32_t>);
+static_asssert(std::is_same_v<WebCore::UsingWithSemicolon, uint32_t>);
+#if OS(WINDOWS)
+static_asssert(std::is_same_v<WTF::ProcessID, int>);
+#endif
+#if !(OS(WINDOWS))
+static_asssert(std::is_same_v<WTF::ProcessID, pid_t>);
+#endif
+
 #if ENABLE(IPC_TESTING_API)
 
 namespace WebKit {
@@ -359,93 +368,29 @@ Vector<SerializedTypeInfo> allSerializedTypes()
                 "request"_s
             },
         } },
-        { "webkit_secure_coding AVOutputContext"_s, {
-            {
-                "AVOutputContextSerializationKeyContextID"_s,
-                "WebKit::CoreIPCString"_s
-            },
-            {
-                "AVOutputContextSerializationKeyContextType"_s,
-                "WebKit::CoreIPCString"_s
-            },
-        } },
         { "WebKit::CoreIPCAVOutputContext"_s, {
-            {
-                "WebKit::CoreIPCDictionary"_s,
-                "m_propertyList"_s
-            },
-        } },
-        { "webkit_secure_coding NSSomeFoundationType"_s, {
-            {
-                "StringKey"_s,
-                "WebKit::CoreIPCString"_s
-            },
-            {
-                "NumberKey"_s,
-                "WebKit::CoreIPCNumber"_s
-            },
-            {
-                "OptionalNumberKey"_s,
-                "WebKit::CoreIPCNumber?"_s
-            },
-            {
-                "ArrayKey"_s,
-                "WebKit::CoreIPCArray"_s
-            },
-            {
-                "OptionalArrayKey"_s,
-                "WebKit::CoreIPCArray?"_s
-            },
-            {
-                "DictionaryKey"_s,
-                "WebKit::CoreIPCDictionary"_s
-            },
-            {
-                "OptionalDictionaryKey"_s,
-                "WebKit::CoreIPCDictionary?"_s
-            },
+            { "RetainPtr<NSString>"_s , "AVOutputContextSerializationKeyContextID"_s },
+            { "RetainPtr<NSString>"_s , "AVOutputContextSerializationKeyContextType"_s },
         } },
         { "WebKit::CoreIPCNSSomeFoundationType"_s, {
-            {
-                "WebKit::CoreIPCDictionary"_s,
-                "m_propertyList"_s
-            },
-        } },
-        { "webkit_secure_coding DDScannerResult"_s, {
-            {
-                "StringKey"_s,
-                "WebKit::CoreIPCString"_s
-            },
-            {
-                "NumberKey"_s,
-                "WebKit::CoreIPCNumber"_s
-            },
-            {
-                "OptionalNumberKey"_s,
-                "WebKit::CoreIPCNumber?"_s
-            },
-            {
-                "ArrayKey"_s,
-                "WebKit::CoreIPCArray<WebKit::CoreIPCDDScannerResult>"_s
-            },
-            {
-                "OptionalArrayKey"_s,
-                "WebKit::CoreIPCArray<WebKit::CoreIPCDDScannerResult>?"_s
-            },
-            {
-                "DictionaryKey"_s,
-                "WebKit::CoreIPCDictionary<WebKit::CoreIPCString, WebKit::CoreIPCNumber>"_s
-            },
-            {
-                "OptionalDictionaryKey"_s,
-                "WebKit::CoreIPCDictionary<WebKit::CoreIPCString, WebKit::CoreIPCDDScannerResult>?"_s
-            },
+            { "RetainPtr<NSString>"_s , "StringKey"_s },
+            { "RetainPtr<NSNumber>"_s , "NumberKey"_s },
+            { "RetainPtr<NSNumber>"_s , "OptionalNumberKey"_s },
+            { "RetainPtr<NSArray>"_s , "ArrayKey"_s },
+            { "RetainPtr<NSArray>"_s , "OptionalArrayKey"_s },
+            { "RetainPtr<NSDictionary>"_s , "DictionaryKey"_s },
+            { "RetainPtr<NSDictionary>"_s , "OptionalDictionaryKey"_s },
         } },
         { "WebKit::CoreIPCDDScannerResult"_s, {
-            {
-                "WebKit::CoreIPCDictionary"_s,
-                "m_propertyList"_s
-            },
+            { "RetainPtr<NSString>"_s , "StringKey"_s },
+            { "RetainPtr<NSNumber>"_s , "NumberKey"_s },
+            { "RetainPtr<NSNumber>"_s , "OptionalNumberKey"_s },
+            { "Vector<RetainPtr<DDScannerResult>>"_s , "ArrayKey"_s },
+            { "std::optional<Vector<RetainPtr<DDScannerResult>>>"_s , "OptionalArrayKey"_s },
+            { "Vector<std::pair<String, RetainPtr<Number>>>"_s , "DictionaryKey"_s },
+            { "std::optional<Vector<std::pair<String, RetainPtr<DDScannerResult>>>>"_s , "OptionalDictionaryKey"_s },
+            { "Vector<RetainPtr<NSData>>"_s , "DataArrayKey"_s },
+            { "Vector<RetainPtr<SecTrustRef>>"_s , "SecTrustArrayKey"_s },
         } },
         { "WebKit::RValueWithFunctionCalls"_s, {
             {

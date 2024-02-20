@@ -28,12 +28,20 @@
 #include "config.h"
 #include "SharedBuffer.h"
 
+#include "SharedMemory.h"
 #include <JavaScriptCore/ArrayBuffer.h>
 #include <algorithm>
 #include <wtf/HexNumber.h>
 #include <wtf/persistence/PersistentCoders.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/unicode/UTF8Conversion.h>
+
+static constexpr size_t minimumPageSize = 4096;
+#if USE(UNIX_DOMAIN_SOCKETS)
+static constexpr bool useUnixDomainSockets = true;
+#else
+static constexpr bool useUnixDomainSockets = false;
+#endif
 
 namespace WebCore {
 
@@ -65,6 +73,38 @@ Ref<FragmentedSharedBuffer> FragmentedSharedBuffer::create(Vector<uint8_t>&& vec
 Ref<FragmentedSharedBuffer> FragmentedSharedBuffer::create(DataSegment::Provider&& provider)
 {
     return adoptRef(*new FragmentedSharedBuffer(WTFMove(provider)));
+}
+
+std::optional<Ref<FragmentedSharedBuffer>> FragmentedSharedBuffer::fromIPCData(IPCData&& ipcData)
+{
+    return WTF::switchOn(WTFMove(ipcData), [](Vector<std::span<const uint8_t>>&& data) -> std::optional<Ref<FragmentedSharedBuffer>> {
+        if (!data.size())
+            return SharedBuffer::create();
+
+        CheckedSize size = 0;
+        for (auto span : data)
+            size += span.size();
+        if (size.hasOverflowed())
+            return std::nullopt;
+
+        if (useUnixDomainSockets || size < minimumPageSize) {
+            if (data.size() == 1)
+                return SharedBuffer::create(data[0]);
+            Ref sharedMemoryBuffer = FragmentedSharedBuffer::create();
+            for (auto span : data)
+                sharedMemoryBuffer->append(span);
+            return sharedMemoryBuffer;
+        }
+        return std::nullopt;
+    }, [](std::optional<WebCore::SharedMemoryHandle>&& handle) -> std::optional<Ref<FragmentedSharedBuffer>> {
+        if (useUnixDomainSockets || !handle.has_value() || handle->size() < minimumPageSize)
+            return std::nullopt;
+
+        RefPtr sharedMemoryBuffer = SharedMemory::map(WTFMove(handle.value()), SharedMemory::Protection::ReadOnly);
+        if (!sharedMemoryBuffer)
+            return std::nullopt;
+        return SharedBuffer::create(static_cast<unsigned char*>(sharedMemoryBuffer->data()), sharedMemoryBuffer->size());
+    });
 }
 
 FragmentedSharedBuffer::FragmentedSharedBuffer() = default;
@@ -119,6 +159,18 @@ Ref<SharedBuffer> FragmentedSharedBuffer::makeContiguous() const
         return SharedBuffer::create(m_segments[0].segment.copyRef());
     auto combinedData = combineSegmentsData(m_segments, m_size);
     return SharedBuffer::create(WTFMove(combinedData));
+}
+
+auto FragmentedSharedBuffer::toIPCData() const -> IPCData
+{
+    if (useUnixDomainSockets || size() < minimumPageSize) {
+        return WTF::map(m_segments, [](auto& segment) {
+            return std::span { segment.segment->data(), segment.segment->size() };
+        });
+    }
+
+    RefPtr sharedMemoryBuffer = SharedMemory::copyBuffer(*this);
+    return sharedMemoryBuffer->createHandle(SharedMemory::Protection::ReadOnly);
 }
 
 Vector<uint8_t> FragmentedSharedBuffer::copyData() const

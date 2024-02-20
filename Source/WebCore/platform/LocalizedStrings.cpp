@@ -503,15 +503,17 @@ String contextMenuItemTagTranslate(const String& selectedString)
 }
 #endif
 
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+String contextMenuItemTagSwapCharacters()
+{
+    return WEB_UI_STRING("Swap characters", "Swap characters context menu item");
+}
+#endif
+
 #if ENABLE(UNIFIED_PDF)
 String contextMenuItemPDFOpenWithPreview()
 {
     return WEB_UI_STRING("Open with Preview", "Open with Preview context menu item");
-}
-
-String contextMenuItemPDFCopy()
-{
-    return WEB_UI_STRING("Copy", "Copy context menu item");
 }
 #endif
 
@@ -550,9 +552,7 @@ String contextMenuItemPDFActualSize()
 {
     return WEB_UI_STRING_WITH_MNEMONIC("Actual Size", "_Actual Size", "Actual Size context menu item");
 }
-#endif
 
-#if ENABLE(PDFJS)
 String contextMenuItemPDFAutoSize()
 {
     return WEB_UI_STRING_WITH_MNEMONIC("Automatically Resize", "_Automatically Resize", "Automatically Resize context menu item");
@@ -568,6 +568,7 @@ String contextMenuItemPDFPreviousPage()
     return WEB_UI_STRING_WITH_MNEMONIC("Previous Page", "_Previous Page", "Previous Page context menu item");
 }
 #endif
+
 #endif // ENABLE(CONTEXT_MENUS)
 
 #if !PLATFORM(COCOA)
@@ -1540,5 +1541,25 @@ String genericTouchIDPromptTitle()
     return WEB_UI_STRING("Continue with Touch ID.", "Continue with Touch ID.");
 }
 #endif // ENABLE(WEB_AUTHN)
+
+String pdfPasswordFormTitle()
+{
+    return WEB_UI_STRING("This document is password protected.", "Title when a PDF needs a password to be unlocked");
+}
+
+String pdfPasswordFormSubtitle()
+{
+    return WEB_UI_STRING("Please enter the password below.", "Subtitle when a PDF needs a password to be unlocked");
+}
+
+String pdfPasswordFormInvalidPasswordSubtitle()
+{
+    return WEB_UI_STRING("Invalid Password", "Message when a PDF fails to unlock with the given password");
+}
+
+String contextMenuItemTagCopyLinkToHighlight()
+{
+    return WEB_UI_STRING("Copy Link to Highlight", "Copy link to highlight context menu item");
+}
 
 } // namespace WebCore

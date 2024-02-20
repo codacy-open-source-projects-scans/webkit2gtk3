@@ -2272,12 +2272,14 @@ private:
             fixEdge<CellUse>(node->child2());
             break;
 
-        case InById: {
+        case InById:
+        case InByIdMegamorphic: {
             fixEdge<CellUse>(node->child1());
             break;
         }
 
-        case InByVal: {
+        case InByVal:
+        case InByValMegamorphic: {
             if ((node->child1()->shouldSpeculateObject()
                 || (node->child1()->shouldSpeculateObjectOrOther() && !m_graph.hasExitSite(node->origin.semantic, BadType)))
                 && node->child2()->shouldSpeculateInt32()) {
@@ -2285,6 +2287,10 @@ private:
                 break;
             }
 
+            if (node->op() == InByValMegamorphic) {
+                node->setArrayMode(node->arrayMode().withType(Array::Generic));
+                fixEdge<StringUse>(node->child2());
+            }
             fixEdge<CellUse>(node->child1());
             break;
         }

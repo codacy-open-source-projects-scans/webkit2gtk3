@@ -17,6 +17,7 @@ contact-picker/contacts-select.html [ Pass ]
 css3/scroll-snap/ios [ Pass ]
 fast/attachment/cocoa [ Pass ]
 fast/device-orientation [ Pass ]
+fast/text-extraction [ Pass ]
 http/tests/app-privacy-report/ [ Pass ]
 http/tests/device-orientation [ Pass ]
 fast/history/ios [ Pass ]
@@ -829,7 +830,6 @@ http/tests/cookies/double-quoted-value-with-semi-colon.html
 storage/domstorage/sessionstorage/window-open.html
 transitions/cubic-bezier-overflow-transform.html
 transitions/default-timing-function.html
-transitions/extra-transition.html
 transitions/interrupt-transform-transition.html
 
 # Crashes when running all tests, but not by itself.
@@ -2392,9 +2392,14 @@ webkit.org/b/269033 fast/events/ios/select-all-with-existing-selection.html [ Pa
 
 webkit.org/b/269086 [ Release ] imported/w3c/web-platform-tests/feature-policy/feature-policy-frame-policy-allowed-for-all.https.sub.html [ Pass Failure ]
 
-webkit.org/b/269088 imported/w3c/web-platform-tests/webrtc-extensions/RTCRtpSynchronizationSource-senderCaptureTimeOffset.html [ Pass Failure ]
-
 webkit.org/b/269116 imported/w3c/web-platform-tests/css/css-flexbox/negative-overflow-002.html [ Failure ]
 
-webkit.org/b/269246 imported/w3c/web-platform-tests/css/css-fonts/font-size-adjust-zero-1.html [ ImageOnlyFailure ]
+webkit.org/b/269321 webgl/1.0.3/conformance/uniforms/out-of-bounds-uniform-array-access.html [ Timeout ]
 
+webkit.org/b/269483 [ Debug ] http/wpt/webcodecs/h264-encoder-default-config.https.any.worker.html [ Skip ]
+
+# webkit.org/b/123266095  (REGRESSION (274957@main) [ iOS Debug ] 2x imported/w3c/web-platform-tests/css/css-view-transitions tests are constant crash)
+[ Debug ] imported/w3c/web-platform-tests/css/css-view-transitions/new-content-captures-different-size.html [ Skip ]
+[ Debug ] imported/w3c/web-platform-tests/css/css-view-transitions/old-content-captures-different-size.html [ Skip ]
+
+webkit.org/b/269760 mathml/presentation/scripts-underover.html [ Failure ]

@@ -70,6 +70,7 @@
 #include "HTMLDialogElement.h"
 #include "HTMLDocument.h"
 #include "HTMLHtmlElement.h"
+#include "HTMLInputElement.h"
 #include "HTMLLabelElement.h"
 #include "HTMLNameCollection.h"
 #include "HTMLObjectElement.h"
@@ -79,8 +80,10 @@
 #include "HTMLScriptElement.h"
 #include "HTMLSelectElement.h"
 #include "HTMLTemplateElement.h"
+#include "HTMLTextAreaElement.h"
 #include "IdChangeInvalidation.h"
 #include "IdTargetObserverRegistry.h"
+#include "InputType.h"
 #include "InspectorInstrumentation.h"
 #include "JSDOMPromiseDeferred.h"
 #include "JSLazyEventListener.h"
@@ -2546,18 +2549,16 @@ void Element::parserSetAttributes(std::span<const Attribute> attributes)
             m_elementData = sharedObjectPool->cachedShareableElementDataWithAttributes(attributes);
         else
             m_elementData = ShareableElementData::createWithAttributes(attributes);
-
     }
 
-    parserDidSetAttributes();
+    if (auto* inputElement = dynamicDowncast<HTMLInputElement>(*this)) {
+        DelayedUpdateValidityScope delayedUpdateValidityScope(*inputElement);
+        inputElement->parserInitializeInputType();
+    }
 
     // Use attributes instead of m_elementData because attributeChanged might modify m_elementData.
     for (const auto& attribute : attributes)
-        notifyAttributeChanged(attribute.name(), nullAtom(), attribute.value(), AttributeModificationReason::Directly);
-}
-
-void Element::parserDidSetAttributes()
-{
+        notifyAttributeChanged(attribute.name(), nullAtom(), attribute.value(), AttributeModificationReason::Parser);
 }
 
 void Element::didMoveToNewDocument(Document& oldDocument, Document& newDocument)
@@ -2946,10 +2947,14 @@ static bool canAttachAuthorShadowRoot(const Element& element)
 
 ExceptionOr<ShadowRoot&> Element::attachShadow(const ShadowRootInit& init)
 {
+    if (init.mode == ShadowRootMode::UserAgent)
+        return Exception { ExceptionCode::TypeError };
     if (!canAttachAuthorShadowRoot(*this))
         return Exception { ExceptionCode::NotSupportedError };
     if (RefPtr shadowRoot = this->shadowRoot()) {
         if (shadowRoot->isDeclarativeShadowRoot()) {
+            if (init.mode != shadowRoot->mode())
+                return Exception { ExceptionCode::NotSupportedError };
             ChildListMutationScope mutation(*shadowRoot);
             shadowRoot->removeChildren();
             shadowRoot->setIsDeclarativeShadowRoot(false);
@@ -2957,8 +2962,6 @@ ExceptionOr<ShadowRoot&> Element::attachShadow(const ShadowRootInit& init)
         }
         return Exception { ExceptionCode::NotSupportedError };
     }
-    if (init.mode == ShadowRootMode::UserAgent)
-        return Exception { ExceptionCode::TypeError };
     Ref shadow = ShadowRoot::create(document(), init.mode, init.slotAssignment,
         init.delegatesFocus ? ShadowRoot::DelegatesFocus::Yes : ShadowRoot::DelegatesFocus::No,
         init.clonable ? ShadowRoot::Clonable::Yes : ShadowRoot::Clonable::No,
@@ -2967,9 +2970,11 @@ ExceptionOr<ShadowRoot&> Element::attachShadow(const ShadowRootInit& init)
     return shadow.get();
 }
 
-ExceptionOr<ShadowRoot&> Element::attachDeclarativeShadow(ShadowRootMode mode, bool delegatesFocus)
+ExceptionOr<ShadowRoot&> Element::attachDeclarativeShadow(ShadowRootMode mode, bool delegatesFocus, bool clonable)
 {
-    auto exceptionOrShadowRoot = attachShadow({ mode, delegatesFocus, /* clonable */ true });
+    if (this->shadowRoot())
+        return Exception { ExceptionCode::NotSupportedError };
+    auto exceptionOrShadowRoot = attachShadow({ mode, delegatesFocus, clonable });
     if (exceptionOrShadowRoot.hasException())
         return exceptionOrShadowRoot.releaseException();
     Ref shadowRoot = exceptionOrShadowRoot.releaseReturnValue();
@@ -2990,10 +2995,15 @@ RefPtr<ShadowRoot> Element::shadowRootForBindings(JSC::JSGlobalObject& lexicalGl
     return nullptr;
 }
 
-RefPtr<ShadowRoot> Element::userAgentShadowRoot() const
+ShadowRoot* Element::userAgentShadowRoot() const
 {
     ASSERT(!shadowRoot() || shadowRoot()->mode() == ShadowRootMode::UserAgent);
     return shadowRoot();
+}
+
+RefPtr<ShadowRoot> Element::protectedUserAgentShadowRoot() const
+{
+    return userAgentShadowRoot();
 }
 
 ShadowRoot& Element::ensureUserAgentShadowRoot()
@@ -4006,7 +4016,7 @@ const RenderStyle* Element::renderOrDisplayContentsStyle(PseudoId pseudoId) cons
             return pseudoElement->renderOrDisplayContentsStyle();
 
         if (auto* style = renderOrDisplayContentsStyle()) {
-            if (auto* cachedPseudoStyle = style->getCachedPseudoStyle(pseudoId))
+            if (auto* cachedPseudoStyle = style->getCachedPseudoStyle({ pseudoId }))
                 return cachedPseudoStyle;
         }
         return nullptr;
@@ -4114,7 +4124,7 @@ const RenderStyle& Element::resolvePseudoElementStyle(const Style::PseudoElement
 
     auto* parentStyle = existingComputedStyle();
     ASSERT(parentStyle);
-    ASSERT(!parentStyle->getCachedPseudoStyle(pseudoElementIdentifier.pseudoId));
+    ASSERT(!parentStyle->getCachedPseudoStyle(pseudoElementIdentifier));
 
     Ref document = this->document();
     Style::PostResolutionCallbackDisabler disabler(document, Style::PostResolutionCallbackDisabler::DrainCallbacks::No);
@@ -4130,8 +4140,8 @@ const RenderStyle& Element::resolvePseudoElementStyle(const Style::PseudoElement
     }
 
     auto* computedStyle = style.get();
-    if (!pseudoElementIdentifier.nameArgument)
-        const_cast<RenderStyle*>(parentStyle)->addCachedPseudoStyle(WTFMove(style));
+    const_cast<RenderStyle*>(parentStyle)->addCachedPseudoStyle(WTFMove(style));
+    ASSERT(parentStyle->getCachedPseudoStyle(pseudoElementIdentifier));
     return *computedStyle;
 }
 
@@ -4151,10 +4161,8 @@ const RenderStyle* Element::computedStyle(const std::optional<Style::PseudoEleme
         style = resolveComputedStyle();
 
     if (pseudoElementIdentifier) {
-        if (!pseudoElementIdentifier->nameArgument) {
-            if (auto* cachedPseudoStyle = style->getCachedPseudoStyle(pseudoElementIdentifier->pseudoId))
-                return cachedPseudoStyle;
-        }
+        if (auto* cachedPseudoStyle = style->getCachedPseudoStyle(*pseudoElementIdentifier))
+            return cachedPseudoStyle;
         return &resolvePseudoElementStyle(*pseudoElementIdentifier);
     }
 
@@ -4737,6 +4745,53 @@ bool Element::isSpellCheckingEnabled() const
         if (equalLettersIgnoringASCIICase(value, "false"_s))
             return false;
     }
+    return true;
+}
+
+bool Element::isWritingSuggestionsEnabled() const
+{
+    // If none of the following conditions are true, then return `false`.
+
+    // `element` is an `input` element whose `type` attribute is in either the
+    // `Text`, `Search`, `URL`, `Email` state and is `mutable`.
+    auto isEligibleInputElement = [&] {
+        RefPtr input = dynamicDowncast<HTMLInputElement>(*this);
+        if (!input)
+            return false;
+
+        return !input->isDisabledFormControl() && input->supportsWritingSuggestions();
+    };
+
+    // `element` is a `textarea` element that is `mutable`.
+    auto isEligibleTextArea = [&] {
+        RefPtr textArea = dynamicDowncast<HTMLTextAreaElement>(*this);
+        if (!textArea)
+            return false;
+
+        return !textArea->isDisabledFormControl();
+    };
+
+    // `element` is an `editing host` or is `editable`.
+
+    if (!isEligibleInputElement() && !isEligibleTextArea() && !hasEditableStyle())
+        return false;
+
+    // If `element` has an 'inclusive ancestor' with a `writingsuggestions` content attribute that's
+    // not in the `default` state and the nearest such ancestor's `writingsuggestions` content attribute
+    // is in the `false` state, then return `false`.
+
+    for (auto* ancestor = this; ancestor; ancestor = ancestor->parentElementInComposedTree()) {
+        auto& value = ancestor->attributeWithoutSynchronization(HTMLNames::writingsuggestionsAttr);
+
+        if (value.isNull())
+            continue;
+        if (value.isEmpty() || equalLettersIgnoringASCIICase(value, "true"_s))
+            return true;
+        if (equalLettersIgnoringASCIICase(value, "false"_s))
+            return false;
+    }
+
+    // Otherwise, return `true`.
     return true;
 }
 

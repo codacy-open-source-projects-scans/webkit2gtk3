@@ -232,6 +232,10 @@ messages -> WebPageProxy {
     HandleContextMenuTranslation(struct WebCore::TranslationContextMenuInfo info)
 #endif
 
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT) && ENABLE(CONTEXT_MENUS)
+    HandleContextMenuSwapCharacters(WebCore::IntRect selectionBoundsInRootView)
+#endif
+
 #if ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS) && USE(UICONTEXTMENU)
     ShowMediaControlsContextMenu(WebCore::FloatRect targetFrame, Vector<WebCore::MediaControlsContextMenuItem> items) -> (WebCore::MediaControlsContextMenuItem::ID selectedItemID)
 #endif // ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS) && USE(UICONTEXTMENU)
@@ -254,6 +258,7 @@ messages -> WebPageProxy {
 
 #if ENABLE(CONTEXT_MENUS)
     ShowContextMenu(WebKit::ContextMenuContextData contextMenuContextData, WebKit::UserData userData)
+    ShowContextMenuFromFrame(WebCore::FrameIdentifier frameID, WebKit::ContextMenuContextData contextMenuContextData, WebKit::UserData userData)
 #endif
 
     DidFinishServiceWorkerPageRegistration(bool success)
@@ -320,7 +325,7 @@ messages -> WebPageProxy {
     ExecuteSavedCommandBySelector(String selector) -> (bool handled) Synchronous
 
     # Remote accessibility messages
-    RegisterWebProcessAccessibilityToken(std::span<const uint8_t> data)
+    RegisterWebProcessAccessibilityToken(std::span<const uint8_t> data, WebCore::FrameIdentifier frameID)
 
     # Speech messages
     GetIsSpeaking() -> (bool isSpeaking) Synchronous
@@ -382,8 +387,8 @@ messages -> WebPageProxy {
     UpdateInputContextAfterBlurringAndRefocusingElement()
     UpdateFocusedElementInformation(struct WebKit::FocusedElementInformation information)
     FocusedElementDidChangeInputMode(enum:uint8_t WebCore::InputMode mode)
-    ScrollingNodeScrollWillStartScroll(uint64_t nodeID)
-    ScrollingNodeScrollDidEndScroll(uint64_t nodeID)
+    ScrollingNodeScrollWillStartScroll(std::optional<WebCore::ScrollingNodeID> nodeID)
+    ScrollingNodeScrollDidEndScroll(std::optional<WebCore::ScrollingNodeID> nodeID)
     ShowInspectorHighlight(struct WebCore::InspectorOverlay::Highlight highlight)
     HideInspectorHighlight()
 
@@ -626,4 +631,6 @@ messages -> WebPageProxy {
     FocusRemoteFrame(WebCore::FrameIdentifier frameID)
     PostMessageToRemote(WebCore::FrameIdentifier source, String sourceOrigin, WebCore::FrameIdentifier target, std::optional<WebCore::SecurityOriginData> targetOrigin, struct WebCore::MessageWithMessagePorts message)
     RenderTreeAsText(WebCore::FrameIdentifier identifier, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag> behavior) -> (String renderTreeDump) Synchronous
+    BindRemoteAccessibilityFrames(int processIdentifier, WebCore::FrameIdentifier frameID, std::span<const uint8_t> dataToken) -> (std::span<const uint8_t> token, int processIdentifier) Synchronous
+    UpdateRemoteFrameAccessibilityOffset(WebCore::FrameIdentifier frameID, WebCore::IntPoint offset)
 }

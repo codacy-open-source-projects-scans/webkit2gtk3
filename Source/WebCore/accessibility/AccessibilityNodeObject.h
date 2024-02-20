@@ -144,6 +144,10 @@ public:
 
     LayoutRect elementRect() const override;
 
+#if ENABLE(AX_THREAD_TEXT_APIS)
+    bool shouldEmitNewlinesBeforeAndAfterNode() const final;
+#endif
+
 protected:
     explicit AccessibilityNodeObject(Node*);
     void detachRemoteParts(AccessibilityDetachmentType) override;
@@ -227,7 +231,7 @@ private:
     void setNeedsToUpdateSubtree() override { m_subtreeDirty = true; }
 
     bool isDescendantOfElementType(const HashSet<QualifiedName>&) const;
-
+protected:
     WeakPtr<Node, WeakPtrImplWithEventTargetData> m_node;
 };
 

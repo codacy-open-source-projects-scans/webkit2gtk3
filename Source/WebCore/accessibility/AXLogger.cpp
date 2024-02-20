@@ -295,11 +295,6 @@ TextStream& operator<<(TextStream& stream, AccessibilitySearchKey searchKey)
     case AccessibilitySearchKey::Graphic:
         stream << "Graphic";
         break;
-#if ENABLE(AX_THREAD_TEXT_APIS)
-    case AccessibilitySearchKey::HasTextRuns:
-        stream << "HasTextRuns";
-        break;
-#endif
     case AccessibilitySearchKey::HeadingLevel1:
         stream << "HeadingLevel1";
         break;
@@ -779,6 +774,11 @@ TextStream& operator<<(TextStream& stream, AXObjectCache::AXNotification notific
     case AXObjectCache::AXNotification::AXTextCompositionChanged:
         stream << "AXTextCompositionChanged";
         break;
+#if ENABLE(AX_THREAD_TEXT_APIS)
+    case AXObjectCache::AXNotification::AXTextRunsChanged:
+        stream << "AXTextRunsChanged";
+        break;
+#endif
     case AXObjectCache::AXNotification::AXTextSecurityChanged:
         stream << "AXTextSecurityChanged";
         break;
@@ -887,6 +887,9 @@ void streamAXCoreObject(TextStream& stream, const AXCoreObject& object, const Op
 
     if (options & AXStreamOptions::Role)
         stream.dumpProperty("role", object.roleValue());
+
+    if (object.renderer())
+        stream.dumpProperty("renderName", object.renderer()->renderName());
 
     if (options & AXStreamOptions::ParentID) {
         auto* parent = object.parentObjectUnignored();

@@ -29,6 +29,7 @@
 
 #include "GraphicsContext.h"
 #include <skia/core/SkCanvas.h>
+#include <skia/effects/SkDashPathEffect.h>
 
 IGNORE_CLANG_WARNINGS_BEGIN("cast-align")
 #include <skia/core/SkSurface.h>
@@ -99,6 +100,7 @@ public:
     RenderingMode renderingMode() const final;
 
     SkPaint createFillPaint(std::optional<Color> fillColor = std::nullopt) const;
+    SkPaint createStrokeStylePaint() const;
     SkPaint createStrokePaint(std::optional<Color> strokeColor = std::nullopt) const;
 
 private:
@@ -109,9 +111,10 @@ private:
         SkiaState() = default;
 
         struct {
-            SkScalar miter { 0 };
+            SkScalar miter { SkFloatToScalar(4) };
             SkPaint::Cap cap { SkPaint::kButt_Cap };
             SkPaint::Join join { SkPaint::kMiter_Join };
+            sk_sp<SkPathEffect> dash;
         } m_stroke;
     };
 

@@ -204,6 +204,7 @@ AcceleratedEffectValues RemoteAcceleratedEffectStack::computeValues(MonotonicTim
 
 void RemoteAcceleratedEffectStack::clear(PlatformLayer *layer)
 {
+#if PLATFORM(MAC)
     ASSERT(m_presentationModifierGroup);
 
     for (auto& filterPresentationModifier : m_filterPresentationModifiers)
@@ -219,6 +220,7 @@ void RemoteAcceleratedEffectStack::clear(PlatformLayer *layer)
     m_opacityPresentationModifier = nil;
     m_transformPresentationModifier = nil;
     m_presentationModifierGroup = nil;
+#endif
 }
 
 } // namespace WebKit

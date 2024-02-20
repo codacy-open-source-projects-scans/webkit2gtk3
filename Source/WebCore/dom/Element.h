@@ -315,7 +315,7 @@ public:
     // For exposing to DOM only.
     WEBCORE_EXPORT NamedNodeMap& attributes() const;
 
-    enum class AttributeModificationReason : bool { Directly, ByCloning };
+    enum class AttributeModificationReason : uint8_t { Directly, ByCloning, Parser };
     // This function is called whenever an attribute is added, changed or removed.
     // Do not call this function directly. notifyAttributeChanged() should be used instead
     // in order to update state dependent on attribute changes.
@@ -362,9 +362,10 @@ public:
     RefPtr<ShadowRoot> shadowRootForBindings(JSC::JSGlobalObject&) const;
 
     WEBCORE_EXPORT ExceptionOr<ShadowRoot&> attachShadow(const ShadowRootInit&);
-    ExceptionOr<ShadowRoot&> attachDeclarativeShadow(ShadowRootMode, bool delegatesFocus);
+    ExceptionOr<ShadowRoot&> attachDeclarativeShadow(ShadowRootMode, bool delegatesFocus, bool clonable);
 
-    RefPtr<ShadowRoot> userAgentShadowRoot() const;
+    ShadowRoot* userAgentShadowRoot() const;
+    RefPtr<ShadowRoot> protectedUserAgentShadowRoot() const;
     WEBCORE_EXPORT ShadowRoot& ensureUserAgentShadowRoot();
     WEBCORE_EXPORT ShadowRoot& createUserAgentShadowRoot();
 
@@ -619,6 +620,8 @@ public:
     void clearPopoverData();
     bool isPopoverShowing() const;
 
+    virtual void handleInvokeInternal(const AtomString&) { }
+
     ExceptionOr<void> setPointerCapture(int32_t);
     ExceptionOr<void> releasePointerCapture(int32_t);
     bool hasPointerCapture(int32_t);
@@ -628,6 +631,7 @@ public:
 #endif
 
     bool isSpellCheckingEnabled() const;
+    WEBCORE_EXPORT bool isWritingSuggestionsEnabled() const;
 
     inline bool hasID() const;
     inline bool hasClass() const;
@@ -776,7 +780,6 @@ protected:
     void removedFromAncestor(RemovalType, ContainerNode&) override;
     void childrenChanged(const ChildChange&) override;
     void removeAllEventListeners() override;
-    virtual void parserDidSetAttributes();
 
     void setTabIndexExplicitly(std::optional<int>);
 

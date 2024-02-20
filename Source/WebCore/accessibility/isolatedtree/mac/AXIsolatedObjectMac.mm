@@ -63,6 +63,8 @@ void AXIsolatedObject::initializePlatformProperties(const Ref<const Accessibilit
         }
     }
 
+    setProperty(AXPropertyName::RemoteFramePlatformElement, object->remoteFramePlatformElement());
+
     // Cache the StringValue only if it differs from the AttributedText.
     auto value = object->stringValue();
     if (!attributedText || value != String([attributedText string]))
@@ -150,10 +152,13 @@ AXTextMarkerRange AXIsolatedObject::textMarkerRange() const
         // {ID 5, Role Group}
         //
         // We would expect the returned range to be: {ID 2, offset 0} to {ID 4, offset 3}
-        auto* sibling = this->sibling(AXDirection::Next);
+        auto* stopObject = sibling(AXDirection::Next);
+        if (!stopObject)
+            stopObject = parentObject();
+
         auto thisMarker = AXTextMarker { tree()->treeID(), objectID(), 0 };
         AXTextMarkerRange range { thisMarker, thisMarker };
-        auto endMarker = thisMarker.findLastBefore(sibling ? std::make_optional(sibling->objectID()) : std::nullopt);
+        auto endMarker = thisMarker.findLastBefore(stopObject ? std::make_optional(stopObject->objectID()) : std::nullopt);
         if (endMarker.isValid() && endMarker.isInTextLeaf()) {
             // One or more of our descendants have text, so let's form a range from the first and last text positions.
             range = { thisMarker.toTextLeafMarker(), WTFMove(endMarker) };
@@ -200,6 +205,11 @@ unsigned AXIsolatedObject::textLength() const
     if (auto attributedText = propertyValue<RetainPtr<NSAttributedString>>(AXPropertyName::AttributedText))
         return [attributedText length];
     return 0;
+}
+
+RetainPtr<id> AXIsolatedObject::remoteFramePlatformElement() const
+{
+    return propertyValue<RetainPtr<id>>(AXPropertyName::RemoteFramePlatformElement);
 }
 
 RetainPtr<NSAttributedString> AXIsolatedObject::attributedStringForTextMarkerRange(AXTextMarkerRange&& markerRange, SpellCheck spellCheck) const

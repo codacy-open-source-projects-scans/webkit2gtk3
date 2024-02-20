@@ -131,10 +131,6 @@ void AuthenticatorCoordinator::create(const Document& document, CredentialCreati
     // Step 8.
     if (!options.rp.id)
         options.rp.id = callerOrigin.domain();
-    else if (!callerOrigin.isMatchingRegistrableDomainSuffix(*options.rp.id)) {
-        promise.reject(Exception { ExceptionCode::SecurityError, "The provided RP ID is not a registrable domain suffix of the effective domain of the document."_s });
-        return;
-    }
 
     // Step 9-11.
     // Most of the jobs are done by bindings.
@@ -157,15 +153,23 @@ void AuthenticatorCoordinator::create(const Document& document, CredentialCreati
     AuthenticationExtensionsClientInputs extensionInputs = {
         String(),
         false,
+        std::nullopt,
         std::nullopt
     };
 
     if (auto extensions = options.extensions) {
         extensionInputs.credProps = extensions->credProps;
         extensionInputs.largeBlob = extensions->largeBlob;
+        extensionInputs.prf = extensions->prf;
     }
 
     options.extensions = extensionInputs;
+    if (options.extensions && options.extensions->largeBlob) {
+        if (options.extensions->largeBlob->read || options.extensions->largeBlob->write) {
+            promise.reject(Exception { ExceptionCode::NotAllowedError, "Read and write may not be present in largeBlob for registration."_s });
+            return;
+        }
+    }
 
     // Step 4, 18-22.
     if (!m_client) {
@@ -245,10 +249,6 @@ void AuthenticatorCoordinator::discoverFromExternalSource(const Document& docume
     }
 
     // Step 7.
-    if (!options.rpId.isEmpty() && !callerOrigin.isMatchingRegistrableDomainSuffix(options.rpId)) {
-        promise.reject(Exception { ExceptionCode::SecurityError, "The provided RP ID is not a registrable domain suffix of the effective domain of the document."_s });
-        return;
-    }
     if (options.rpId.isEmpty())
         options.rpId = callerOrigin.domain();
 
@@ -262,6 +262,17 @@ void AuthenticatorCoordinator::discoverFromExternalSource(const Document& docume
             return;
         }
         options.extensions->appid = appid;
+    }
+
+    if (options.extensions && options.extensions->largeBlob) {
+        if (!options.extensions->largeBlob->support.isEmpty()) {
+            promise.reject(Exception { ExceptionCode::NotAllowedError, "Support should not be present in largeBlob for assertion."_s });
+            return;
+        }
+        if (options.extensions->largeBlob->read && options.extensions->largeBlob->write) {
+            promise.reject(Exception { ExceptionCode::NotAllowedError, "Both read and write may not be present together in largeBlob."_s });
+            return;
+        }
     }
 
     // Step 4, 14-19.

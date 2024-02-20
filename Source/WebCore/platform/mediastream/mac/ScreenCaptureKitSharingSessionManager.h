@@ -100,7 +100,8 @@ public:
 
     void cancelPicking();
 
-    RefPtr<ScreenCaptureSessionSource> createSessionSourceForDevice(WeakPtr<ScreenCaptureSessionSource::Observer>, const CaptureDevice&, SCStreamConfiguration*, SCStreamDelegate*);
+    RetainPtr<SCContentFilter> contentFilterFromCaptureDevice(const CaptureDevice&);
+    RefPtr<ScreenCaptureSessionSource> createSessionSourceForDevice(WeakPtr<ScreenCaptureSessionSource::Observer>, SCContentFilter*, SCStreamConfiguration*, SCStreamDelegate*);
     void cancelPendingSessionForDevice(const CaptureDevice&);
 
     WEBCORE_EXPORT void promptForGetDisplayMedia(DisplayCapturePromptType, CompletionHandler<void(std::optional<CaptureDevice>)>&&);
@@ -113,7 +114,7 @@ private:
     bool promptWithSCContentSharingSession(DisplayCapturePromptType);
     bool promptWithSCContentSharingPicker(DisplayCapturePromptType);
 
-    bool promptingInProgress() const { return !!m_completionHandler; }
+    bool promptingInProgress() const;
 
     void cleanupSessionSource(ScreenCaptureSessionSource&);
 

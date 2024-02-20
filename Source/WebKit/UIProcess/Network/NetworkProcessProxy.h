@@ -33,7 +33,6 @@
 #include "NetworkResourceLoadIdentifier.h"
 #include "ProcessLauncher.h"
 #include "ProcessThrottler.h"
-#include "ProcessThrottlerClient.h"
 #include "QuotaIncreaseRequestIdentifier.h"
 #include "UserContentControllerIdentifier.h"
 #include "WebsiteDataStore.h"
@@ -76,7 +75,7 @@ class SecurityOrigin;
 class SecurityOriginData;
 enum class ShouldSample : bool;
 enum class StorageAccessPromptWasShown : bool;
-enum class StorageAccessWasGranted : bool;
+enum class StorageAccessWasGranted : uint8_t;
 enum class StoredCredentialsPolicy : uint8_t;
 struct ClientOrigin;
 struct NotificationData;
@@ -232,6 +231,8 @@ public:
     void requestTermination();
 
     ProcessThrottler& throttler() final { return m_throttler; }
+    const ProcessThrottler& throttler() const final { return m_throttler; }
+
     void updateProcessAssertion();
 
 #if ENABLE(CONTENT_EXTENSIONS)

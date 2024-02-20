@@ -1548,9 +1548,6 @@ webarchive/test-css-url-resources-in-stylesheets.html [ Failure ]
 webarchive/test-css-url-resources-inline-styles.html [ Failure ]
 webarchive/test-link-rel-icon.html [ Failure ]
 
-# The following two tests are expected to fail until <rdar://problem/34063313> is available on test systems.
-webarchive/loading/cache-expired-subresource.html [ Failure ]
-
 # Webarchive tests that fail due to <https://bugs.webkit.org/show_bug.cgi?id=82665>:
 http/tests/webarchive/test-css-url-encoding-shift-jis.html
 http/tests/webarchive/test-css-url-encoding-utf-8.html
@@ -2489,7 +2486,6 @@ media/video-webkit-playsinline.html
 
 webkit.org/b/103926 media/track/opera
 
-webkit.org/b/35297 media/video-display-aspect-ratio.html [ Pass Failure ]
 webkit.org/b/112659 media/video-playing-and-pause.html [ Skip ]
 
 webkit.org/b/112492 media/track/track-prefer-captions.html
@@ -4586,7 +4582,8 @@ http/tests/site-isolation/mouse-events/ [ Skip ]
 webkit.org/b/257904 http/tests/site-isolation/draw-after-navigation.html [ Skip ]
 webkit.org/b/257904 http/tests/site-isolation/selection-focus.html [ Skip ]
 webkit.org/b/257904 http/tests/site-isolation/basic-iframe-render-output.html [ Failure Timeout Pass ]
-webkit.org/b/257904 http/tests/site-isolation/iframe-process-termination.html [ Skip ]
+
+webkit.org/b/269550 http/tests/site-isolation/scrolling/basic-scrolling-tree.html [ Skip ]
 
 # This test can't be enabled on iOS until EventSenderProxyIOS::keyDown() is implemented.
 http/tests/site-isolation/key-events.html [ Skip ]
@@ -4694,6 +4691,15 @@ webkit.org/b/266996 imported/w3c/web-platform-tests/css/css-writing-modes/mongol
 
 webkit.org/b/263317 media/media-controller-play-then-pause.html [ Failure ]
 
-webkit.org/b/268947 imported/w3c/web-platform-tests/mathml/relations/css-styling/floats/not-floating-001.html [ Failure ]
+webkit.org/b/269507 http/tests/download/area-download.html [ Pass Failure ]
 
 webkit.org/b/268929 imported/w3c/web-platform-tests/xhr/xmlhttprequest-timeout-worker-aborted.html [ Skip ]
+webkit.org/b/268929 imported/w3c/web-platform-tests/xhr/xmlhttprequest-timeout-worker-aborted.html?aborted%20immediately%20after%20send() [ Skip ]
+webkit.org/b/268929 imported/w3c/web-platform-tests/xhr/xmlhttprequest-timeout-worker-aborted.html?call%20abort()%20after%20TIME_NORMAL_LOAD [ Skip ]
+webkit.org/b/268929 imported/w3c/web-platform-tests/xhr/xmlhttprequest-timeout-worker-aborted.html?only%20open()ed,%20not%20aborted [ Skip ]
+
+# web-platform-tests/svg/painting/reftests failures
+imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-002.svg [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-021.svg [ Failure ]
+imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-022.svg [ Failure ]
+imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-023.svg [ Failure ]

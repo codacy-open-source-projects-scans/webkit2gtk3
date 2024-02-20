@@ -284,7 +284,7 @@ static ALWAYS_INLINE MacroAssemblerCodeRef<JITThunkPtrTag> jitWriteThunkGenerato
     // to appear in the console or anywhere in memory, via the PrintStream buffer.
     // The second is we can't guarantee that the code is readable when using the
     // asyncDisassembly option as our caller will set our pages execute only.
-    return linkBuffer.finalizeCodeWithoutDisassembly<JITThunkPtrTag>();
+    return linkBuffer.finalizeCodeWithoutDisassembly<JITThunkPtrTag>(nullptr);
 }
 #else // not USE(EXECUTE_ONLY_JIT_WRITE_FUNCTION)
 static void genericWriteToJITRegion(off_t offset, const void* data, size_t dataSize)
@@ -436,6 +436,7 @@ static ALWAYS_INLINE JITReservation initializeJITPageReservation()
         g_jscConfig.endExecutableMemory = reservationEnd;
 
 #if !USE(SYSTEM_MALLOC) && ENABLE(UNIFIED_AND_FREEZABLE_CONFIG_RECORD)
+        static_assert(WebConfig::reservedSlotsForExecutableAllocator >= 2);
         WebConfig::g_config[0] = bitwise_cast<uintptr_t>(reservation.base);
         WebConfig::g_config[1] = bitwise_cast<uintptr_t>(reservationEnd);
 #endif

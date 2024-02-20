@@ -47,6 +47,10 @@
 #include <wtf/RetainPtr.h>
 #include <wtf/StdLibExtras.h>
 
+#if ENABLE(MULTI_REPRESENTATION_HEIC)
+#include "MultiRepresentationHEICMetrics.h"
+#endif
+
 #include <pal/cf/CoreTextSoftLink.h>
 
 namespace WebCore {
@@ -221,7 +225,7 @@ void Font::platformInit()
             else
                 xHeight = CTFontGetXHeight(m_platformData.font());
         } else
-            xHeight = verticalRightOrientationFont().fontMetrics().xHeight();
+            xHeight = verticalRightOrientationFont().fontMetrics().xHeight().value_or(0);
     }
 
     if (CTFontGetSymbolicTraits(m_platformData.font()) & kCTFontTraitColorGlyphs) {
@@ -938,5 +942,16 @@ bool Font::hasAnyComplexColorFormatGlyphs(const GlyphBufferGlyph* glyphs, unsign
     }
     return false;
 }
+
+#if USE(APPLE_INTERNAL_SDK)
+#include <WebKitAdditions/FontCoreTextAdditions.cpp>
+#else
+#if ENABLE(MULTI_REPRESENTATION_HEIC)
+MultiRepresentationHEICMetrics Font::metricsForMultiRepresentationHEIC() const
+{
+    return { };
+}
+#endif
+#endif
 
 } // namespace WebCore

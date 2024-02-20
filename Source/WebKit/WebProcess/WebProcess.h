@@ -48,6 +48,7 @@
 #include <wtf/HashCountedSet.h>
 #include <wtf/HashSet.h>
 #include <wtf/RefCounter.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakHashMap.h>
 #include <wtf/text/ASCIILiteral.h>
 #include <wtf/text/AtomString.h>
@@ -65,6 +66,9 @@
 #include <WebCore/ScreenProperties.h>
 #include <dispatch/dispatch.h>
 #include <wtf/MachSendRight.h>
+
+OBJC_CLASS NSMutableDictionary;
+
 #endif
 
 #if PLATFORM(GTK)
@@ -86,6 +90,7 @@
 #if USE(RUNNINGBOARD)
 #include "WebSQLiteDatabaseTracker.h"
 #endif
+
 
 namespace API {
 class Object;
@@ -174,7 +179,7 @@ class SpeechRecognitionRealtimeMediaSourceManager;
 
 class WebProcess : public AuxiliaryProcess
 {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_WK_TZONE_ALLOCATED(WebProcess);
 public:
     using TopFrameDomain = WebCore::RegistrableDomain;
     using SubResourceDomain = WebCore::RegistrableDomain;
@@ -421,6 +426,9 @@ public:
 
     bool isLockdownModeEnabled() const { return m_isLockdownModeEnabled; }
     bool imageAnimationEnabled() const { return m_imageAnimationEnabled; }
+#if ENABLE(ACCESSIBILITY_NON_BLINKING_CURSOR)
+    bool prefersNonBlinkingCursor() const { return m_prefersNonBlinkingCursor; }
+#endif
 
     void setHadMainFrameMainResourcePrivateRelayed() { m_hadMainFrameMainResourcePrivateRelayed = true; }
     bool hadMainFrameMainResourcePrivateRelayed() const { return m_hadMainFrameMainResourcePrivateRelayed; }
@@ -511,6 +519,7 @@ private:
     void platformSetCacheModel(CacheModel);
 
     void setEnhancedAccessibility(bool);
+    void bindAccessibilityFrameWithData(WebCore::FrameIdentifier, std::span<const uint8_t>);
 
     void startMemorySampler(SandboxExtension::Handle&&, const String&, const double);
     void stopMemorySampler();
@@ -629,6 +638,7 @@ private:
 #endif
 
     void accessibilityPreferencesDidChange(const AccessibilityPreferences&);
+    void updatePageAccessibilitySettings();
 #if HAVE(MEDIA_ACCESSIBILITY_FRAMEWORK)
     void setMediaAccessibilityPreferences(WebCore::CaptionUserPreferences::CaptionDisplayMode, const Vector<String>&);
 #endif
@@ -826,6 +836,7 @@ private:
 #if PLATFORM(COCOA)
     HashCountedSet<String> m_pendingPasteboardWriteCounts;
     std::optional<audit_token_t> m_auditTokenForSelf;
+    RetainPtr<NSMutableDictionary> m_accessibilityRemoteFrameTokenCache;
 #endif
 
 #if ENABLE(GPU_PROCESS)
@@ -844,6 +855,9 @@ private:
     bool m_imageAnimationEnabled { true };
     bool m_hasEverHadAnyWebPages { false };
     bool m_hasPendingAccessibilityUnsuspension { false };
+#if ENABLE(ACCESSIBILITY_NON_BLINKING_CURSOR)
+    bool m_prefersNonBlinkingCursor { false };
+#endif
 
     HashSet<WebCore::RegistrableDomain> m_allowedFirstPartiesForCookies;
     String m_mediaKeysStorageDirectory;

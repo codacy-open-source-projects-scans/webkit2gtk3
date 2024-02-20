@@ -36,10 +36,12 @@
 #include "NotImplemented.h"
 #include <skia/core/SkImage.h>
 #include <skia/core/SkPath.h>
+#include <skia/core/SkPathEffect.h>
 #include <skia/core/SkPathTypes.h>
 #include <skia/core/SkRRect.h>
 #include <skia/core/SkRegion.h>
 #include <skia/core/SkTileMode.h>
+#include <skia/effects/SkImageFilters.h>
 #include <wtf/MathExtras.h>
 
 #if USE(THEME_ADWAITA)
@@ -304,6 +306,33 @@ SkPaint GraphicsContextSkia::createFillPaint(std::optional<Color> fillColor) con
         paint.setColor(SkColorSetARGB(a, r, g, b));
     }
 
+    // Outset shadow
+    // FIXME: Don't add the effect if the shadow is inset
+    if (hasDropShadow()) {
+        const auto shadow = dropShadow();
+        ASSERT(shadow);
+
+        const auto sigma = shadow->radius / 2.0;
+        auto globalAlpha = state.alpha();
+        auto shadowColor = shadow->color;
+        if (globalAlpha < 1)
+            shadowColor = shadowColor.colorWithAlphaMultipliedBy(globalAlpha);
+        auto [r, g, b, a] = shadowColor.toColorTypeLossy<SRGBA<uint8_t>>().resolved();
+        paint.setImageFilter(SkImageFilters::DropShadow(shadow->offset.width(), shadow->offset.height(), sigma, sigma, SkColorSetARGB(a, r, g, b), nullptr));
+    }
+
+    return paint;
+}
+
+SkPaint GraphicsContextSkia::createStrokeStylePaint() const
+{
+    SkPaint paint;
+    paint.setStyle(SkPaint::kStroke_Style);
+    paint.setStrokeCap(m_skiaState.m_stroke.cap);
+    paint.setStrokeJoin(m_skiaState.m_stroke.join);
+    paint.setStrokeMiter(m_skiaState.m_stroke.miter);
+    paint.setStrokeWidth(SkFloatToScalar(state().strokeThickness()));
+    paint.setPathEffect(m_skiaState.m_stroke.dash);
     return paint;
 }
 
@@ -311,25 +340,14 @@ SkPaint GraphicsContextSkia::createStrokePaint(std::optional<Color> strokeColor)
 {
     const auto& state = this->state();
 
-    SkPaint paint;
+    SkPaint paint = createStrokeStylePaint();
     paint.setAntiAlias(true);
-    paint.setStyle(SkPaint::kStroke_Style);
 
-    // Additional state information from SkiaState
-    paint.setStrokeCap(m_skiaState.m_stroke.cap);
-    paint.setStrokeJoin(m_skiaState.m_stroke.join);
-    paint.setStrokeMiter(m_skiaState.m_stroke.miter);
-    paint.setStrokeWidth(SkFloatToScalar(state.strokeThickness()));
-
-    if (auto strokePattern = state.strokeBrush().pattern()) {
-        // FIXME: Implement stroke patterns.
-        UNUSED_PARAM(strokePattern);
-        notImplemented();
-    } else if (auto strokeGradient = state.strokeBrush().gradient()) {
-        // FIXME: Implement stroke gradients.
-        UNUSED_PARAM(strokeGradient);
-        notImplemented();
-    } else {
+    if (auto strokePattern = state.strokeBrush().pattern())
+        paint.setShader(strokePattern->createPlatformPattern({ }));
+    else if (auto strokeGradient = state.strokeBrush().gradient())
+        paint.setShader(strokeGradient->shader(state.alpha(), state.strokeBrush().gradientSpaceTransform()));
+    else {
         auto [r, g, b, a] = strokeColor.value_or(state.strokeBrush().color()).toColorTypeLossy<SRGBA<uint8_t>>().resolved();
         paint.setColor(SkColorSetARGB(a, r, g, b));
     }
@@ -534,9 +552,16 @@ void GraphicsContextSkia::setLineCap(LineCap lineCap)
     m_skiaState.m_stroke.cap = toSkiaCap(lineCap);
 }
 
-void GraphicsContextSkia::setLineDash(const DashArray&, float /*dashOffset*/)
+void GraphicsContextSkia::setLineDash(const DashArray& dashArray, float dashOffset)
 {
-    notImplemented();
+    ASSERT(!(dashArray.size() % 2));
+
+    if (dashArray.isEmpty()) {
+        m_skiaState.m_stroke.dash = nullptr;
+        return;
+    }
+
+    m_skiaState.m_stroke.dash = SkDashPathEffect::Make(dashArray.data(), dashArray.size(), dashOffset);
 }
 
 void GraphicsContextSkia::setLineJoin(LineJoin lineJoin)

@@ -176,7 +176,7 @@ private:
     void gestureEventWasNotHandledByWebCore(const NativeWebGestureEvent&) override;
 #endif
 
-    void accessibilityWebProcessTokenReceived(std::span<const uint8_t>) override;
+    void accessibilityWebProcessTokenReceived(std::span<const uint8_t>, WebCore::FrameIdentifier, pid_t) override;
 
     void makeFirstResponder() override;
     void assistiveTechnologyMakeFirstResponder() override;
@@ -300,6 +300,10 @@ private:
 #if HAVE(TRANSLATION_UI_SERVICES) && ENABLE(CONTEXT_MENUS)
     bool canHandleContextMenuTranslation() const override;
     void handleContextMenuTranslation(const WebCore::TranslationContextMenuInfo&) override;
+#endif
+
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT) && ENABLE(CONTEXT_MENUS)
+    void handleContextMenuSwapCharacters(WebCore::IntRect selectionBoundsInRootView) override;
 #endif
 
 #if ENABLE(DATA_DETECTION)

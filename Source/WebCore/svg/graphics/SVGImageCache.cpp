@@ -76,7 +76,7 @@ RefPtr<SVGImage> SVGImageCache::protectedSVGImage() const
 
 FloatSize SVGImageCache::imageSizeForRenderer(const RenderObject* renderer) const
 {
-    auto* image = findImageForRenderer(renderer);
+    SUPPRESS_UNCOUNTED_LOCAL auto* image = findImageForRenderer(renderer);
     return image ? image->size() : m_svgImage->size();
 }
 

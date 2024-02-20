@@ -82,7 +82,8 @@ FloatRect LegacyRenderSVGImage::calculateObjectBoundingBox() const
     if (CachedImage* cachedImage = imageResource().cachedImage())
         intrinsicSize = cachedImage->imageSizeForRenderer(nullptr, style().effectiveZoom());
 
-    SVGLengthContext lengthContext(&imageElement());
+    Ref imageElement = this->imageElement();
+    SVGLengthContext lengthContext(imageElement.ptr());
 
     Length width = style().width();
     Length height = style().height();
@@ -103,7 +104,7 @@ FloatRect LegacyRenderSVGImage::calculateObjectBoundingBox() const
     else
         concreteHeight = intrinsicSize.height();
 
-    return { imageElement().x().value(lengthContext), imageElement().y().value(lengthContext), concreteWidth, concreteHeight };
+    return { imageElement->x().value(lengthContext), imageElement->y().value(lengthContext), concreteWidth, concreteHeight };
 }
 
 bool LegacyRenderSVGImage::updateImageViewport()
@@ -241,7 +242,7 @@ bool LegacyRenderSVGImage::nodeAtFloatPoint(const HitTestRequest& request, HitTe
         if (hitRules.canHitFill) {
             if (m_objectBoundingBox.contains(localPoint)) {
                 updateHitTestResult(result, LayoutPoint(localPoint));
-                if (result.addNodeToListBasedTestResult(nodeForHitTest(), request, flooredLayoutPoint(localPoint)) == HitTestProgress::Stop)
+                if (result.addNodeToListBasedTestResult(protectedNodeForHitTest().get(), request, flooredLayoutPoint(localPoint)) == HitTestProgress::Stop)
                     return true;
             }
         }

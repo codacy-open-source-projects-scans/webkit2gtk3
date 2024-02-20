@@ -60,6 +60,8 @@
 #import "WebPage.h"
 #import "WebPageProxy.h"
 #import "WebPreferences.h"
+#import "WebTextReplacementData.h"
+#import "WebUnifiedTextReplacementContextData.h"
 #import "_WKActivatedElementInfoInternal.h"
 #import <WebCore/ColorCocoa.h>
 #import <WebCore/GraphicsContextCG.h>
@@ -90,6 +92,10 @@
 
 #if HAVE(UI_EVENT_ATTRIBUTION)
 #import <UIKit/UIEventAttribution.h>
+#endif
+
+#if USE(APPLE_INTERNAL_SDK)
+#import <WebKitAdditions/WKWebViewIOSAdditionsBefore.mm>
 #endif
 
 #define FORWARD_ACTION_TO_WKCONTENTVIEW(_action) \
@@ -1226,8 +1232,8 @@ static void configureScrollViewWithOverlayRegionsIDs(WKBaseScrollView* scrollVie
         overlayRegionRects.add(WebCore::enclosingIntRect(snappedRect));
     }
 
-    [scrollView _updateOverlayRegionRects:overlayRegionRects];
     [scrollView _updateOverlayRegionsBehavior:true];
+    [scrollView _updateOverlayRegionRects:overlayRegionRects];
 }
 
 - (bool)_scrollViewCanHaveOverlayRegions:(WKBaseScrollView*)scrollView
@@ -4599,6 +4605,10 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
 
     return nil;
 }
+
+#if USE(APPLE_INTERNAL_SDK)
+#import <WebKitAdditions/WKWebViewIOSAdditionsAfter.mm>
+#endif
 
 @end // WKWebView (WKPrivateIOS)
 

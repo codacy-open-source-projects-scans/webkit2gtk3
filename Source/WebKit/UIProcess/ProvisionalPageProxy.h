@@ -35,7 +35,6 @@
 #include "WebFramePolicyListenerProxy.h"
 #include "WebPageProxyIdentifier.h"
 #include "WebPageProxyMessageReceiverRegistration.h"
-#include "WebsitePoliciesData.h"
 #include <WebCore/DiagnosticLoggingClient.h>
 #include <WebCore/FrameIdentifier.h>
 #include <WebCore/ResourceRequest.h>
@@ -73,6 +72,7 @@ struct BackForwardListItemState;
 struct FrameInfoData;
 struct NavigationActionData;
 struct URLSchemeTaskParameters;
+struct WebsitePoliciesData;
 struct WebBackForwardListCounts;
 struct WebNavigationDataStore;
 
@@ -83,7 +83,7 @@ using LayerHostingContextID = uint32_t;
 class ProvisionalPageProxy : public IPC::MessageReceiver, public IPC::MessageSender {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    ProvisionalPageProxy(WebPageProxy&, Ref<WebProcessProxy>&&, std::unique_ptr<SuspendedPageProxy>, API::Navigation&, bool isServerRedirect, const WebCore::ResourceRequest&, ProcessSwapRequestedByClient, bool isProcessSwappingOnNavigationResponse, API::WebsitePolicies*);
+    ProvisionalPageProxy(WebPageProxy&, Ref<WebProcessProxy>&&, std::unique_ptr<SuspendedPageProxy>, API::Navigation&, bool isServerRedirect, const WebCore::ResourceRequest&, ProcessSwapRequestedByClient, bool isProcessSwappingOnNavigationResponse, API::WebsitePolicies*, WebsiteDataStore* replacedDataStoreForWebArchiveLoad = nullptr);
     ~ProvisionalPageProxy();
 
     WebPageProxy& page() { return m_page.get(); }
@@ -98,6 +98,7 @@ public:
     ProcessSwapRequestedByClient processSwapRequestedByClient() const { return m_processSwapRequestedByClient; }
     uint64_t navigationID() const { return m_navigationID; }
     const URL& provisionalURL() const { return m_provisionalLoadURL; }
+    RefPtr<WebsiteDataStore> replacedDataStoreForWebArchiveLoad() const { return m_replacedDataStoreForWebArchiveLoad; }
 
     bool isProcessSwappingOnNavigationResponse() const { return m_isProcessSwappingOnNavigationResponse; }
 
@@ -135,6 +136,8 @@ public:
 
     bool needsCookieAccessAddedInNetworkProcess() const { return m_needsCookieAccessAddedInNetworkProcess; }
 
+    WebsitePoliciesData* mainFrameWebsitePoliciesData() const { return m_mainFrameWebsitePoliciesData.get(); }
+
 private:
     RefPtr<WebFrameProxy> protectedMainFrame() const;
 
@@ -171,7 +174,7 @@ private:
     void requestPasswordForQuickLookDocumentInMainFrame(const String& fileName, CompletionHandler<void(const String&)>&&);
 #endif
 #if PLATFORM(COCOA)
-    void registerWebProcessAccessibilityToken(std::span<const uint8_t>);
+    void registerWebProcessAccessibilityToken(std::span<const uint8_t>, WebCore::FrameIdentifier);
 #endif
 #if PLATFORM(GTK) || PLATFORM(WPE)
     void bindAccessibilityTree(const String&);
@@ -194,6 +197,7 @@ private:
     std::unique_ptr<DrawingAreaProxy> m_drawingArea;
     RefPtr<WebFrameProxy> m_mainFrame;
     RefPtr<BrowsingContextGroup> m_browsingContextGroup;
+    RefPtr<WebsiteDataStore> m_replacedDataStoreForWebArchiveLoad;
     RemotePageProxyState m_remotePageProxyState;
     uint64_t m_navigationID;
     bool m_isServerRedirect;
@@ -205,6 +209,7 @@ private:
     bool m_needsDidStartProvisionalLoad { true };
     URL m_provisionalLoadURL;
     WebPageProxyMessageReceiverRegistration m_messageReceiverRegistration;
+    std::unique_ptr<WebsitePoliciesData> m_mainFrameWebsitePoliciesData;
 
 #if PLATFORM(COCOA)
     Vector<uint8_t> m_accessibilityToken;

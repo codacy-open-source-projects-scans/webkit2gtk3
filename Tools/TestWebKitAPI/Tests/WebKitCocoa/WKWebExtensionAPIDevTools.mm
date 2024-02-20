@@ -85,6 +85,282 @@ TEST(WKWebExtensionAPIDevTools, Basics)
     [manager loadAndRun];
 }
 
+TEST(WKWebExtensionAPIDevTools, CreatePanel)
+{
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, ""_s } },
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *devToolsScript = Util::constructScript(@[
+        @"let cachedPanelWindow = null",
+
+        @"let panel = await browser.test.assertSafeResolve(() => browser.devtools.panels.create('Test Panel', 'icon.svg', 'panel.html'))",
+        @"browser.test.assertEq(typeof panel, 'object', 'panel should be an object')",
+
+        @"panel?.onShown.addListener((panelWindow) => {",
+        @"  browser.test.assertEq(typeof panelWindow, 'object', 'panelWindow should be an object')",
+
+        @"  cachedPanelWindow = panelWindow",
+        @"})",
+
+        @"panel?.onHidden.addListener(() => {",
+        @"  browser.test.assertTrue(cachedPanelWindow !== null, 'panel should be shown first')",
+        @"  browser.test.assertEq(typeof cachedPanelWindow?.notifyHidden, 'function', 'cachedPanelWindow should have the notifyHidden function')",
+
+        @"  cachedPanelWindow?.notifyHidden()",
+        @"})",
+
+        @"browser.test.yield('Panel Created')",
+    ]);
+
+    auto *panelScript = Util::constructScript(@[
+        @"window.notifyHidden = () => {",
+        @"  browser.test.yield('Panel Hidden')",
+        @"}",
+
+        @"browser.test.yield('Panel Loaded')",
+    ]);
+
+    auto *iconSVG = @"<svg width='16' height='16' xmlns='http://www.w3.org/2000/svg'><circle cx='8' cy='8' r='8' fill='red' /></svg>";
+
+    auto *resources = @{
+        @"background.js": @"// This script is intentionally left blank.",
+        @"devtools.html": @"<script type='module' src='devtools.js'></script>",
+        @"devtools.js": devToolsScript,
+        @"panel.html": @"<script type='module' src='panel.js'></script>",
+        @"panel.js": panelScript,
+        @"icon.svg": iconSVG,
+    };
+
+    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:devToolsManifest resources:resources]);
+    auto manager = adoptNS([[TestWebExtensionManager alloc] initForExtension:extension.get()]);
+
+    [manager.get().defaultTab.mainWebView loadRequest:server.requestWithLocalhost()];
+    [manager.get().defaultTab.mainWebView._inspector show];
+
+    [manager loadAndRun];
+
+    EXPECT_NS_EQUAL(manager.get().yieldMessage, @"Panel Created");
+
+    NSString *extensionIdentifier = [NSString stringWithFormat:@"WebExtensionTab-%@-1", manager.get().context.uniqueIdentifier];
+    [manager.get().defaultTab.mainWebView._inspector showExtensionTabWithIdentifier:extensionIdentifier completionHandler:^(NSError *error) {
+        EXPECT_NULL(error);
+    }];
+
+    [manager run];
+
+    EXPECT_NS_EQUAL(manager.get().yieldMessage, @"Panel Loaded");
+
+    [manager.get().defaultTab.mainWebView._inspector showResources];
+
+    [manager run];
+
+    EXPECT_NS_EQUAL(manager.get().yieldMessage, @"Panel Hidden");
+}
+
+TEST(WKWebExtensionAPIDevTools, InspectedWindowEval)
+{
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, "<title>Test Page</title><script>const secretNumber = 42; window.customTitle = 'Dynamic Title'</script>"_s } },
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *devToolsScript = Util::constructScript(@[
+        // Evaluate a simple expression that should succeed
+        @"await browser.test.assertSafeResolve(async () => {",
+        @"  const [result, exceptionInfo] = await browser.devtools.inspectedWindow.eval('document.title')",
+        @"  browser.test.assertEq(result, 'Test Page', 'Evaluated document.title should match the title element')",
+        @"})",
+
+        // Evaluate an expression that should result in an exception
+        @"await browser.test.assertSafeResolve(async () => {",
+        @"  const [result, exceptionInfo] = await browser.devtools.inspectedWindow.eval('nonExistentFunction();')",
+        @"  browser.test.assertTrue(!!exceptionInfo, 'Eval should catch an exception for non-existent function')",
+        @"})",
+
+        // Evaluate a script that accesses a variable defined in the page
+        @"await browser.test.assertSafeResolve(async () => {",
+        @"  const [result, exceptionInfo] = await browser.devtools.inspectedWindow.eval('secretNumber')",
+        @"  browser.test.assertEq(result, 42, 'Evaluated secretNumber should match the value defined in the page script')",
+        @"})",
+
+        // Evaluate a script to change a property and verify
+        @"await browser.test.assertSafeResolve(async () => {",
+        @"  const [result, exceptionInfo] = await browser.devtools.inspectedWindow.eval('window.customTitle = \"Updated Title\"; window.customTitle')",
+        @"  browser.test.assertEq(result, 'Updated Title', 'The evaluated script should update the window.customTitle')",
+        @"})",
+
+        @"browser.test.notifyPass()",
+    ]);
+
+    auto *resources = @{
+        @"background.js": @"// This script is intentionally left blank.",
+        @"devtools.html": @"<script type='module' src='devtools.js'></script>",
+        @"devtools.js": devToolsScript
+    };
+
+    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:devToolsManifest resources:resources]);
+    auto manager = adoptNS([[TestWebExtensionManager alloc] initForExtension:extension.get()]);
+
+    [manager.get().defaultTab.mainWebView loadRequest:server.requestWithLocalhost()];
+    [manager.get().defaultTab.mainWebView._inspector show];
+
+    [manager loadAndRun];
+}
+
+TEST(WKWebExtensionAPIDevTools, InspectedWindowReload)
+{
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s }, { "Cache-Control"_s, "max-age=3600"_s } }, ""_s } },
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *devToolsScript = Util::constructScript(@[
+        @"browser.test.assertSafe(() => browser.devtools.inspectedWindow.reload())",
+
+        @"browser.test.yield('Reload Called')",
+    ]);
+
+    auto *resources = @{
+        @"background.js": @"// This script is intentionally left blank.",
+        @"devtools.html": @"<script type='module' src='devtools.js'></script>",
+        @"devtools.js": devToolsScript
+    };
+
+    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:devToolsManifest resources:resources]);
+    auto manager = adoptNS([[TestWebExtensionManager alloc] initForExtension:extension.get()]);
+
+    [manager.get().defaultTab.mainWebView loadRequest:server.requestWithLocalhost()];
+    [manager.get().defaultTab.mainWebView._inspector show];
+
+    [manager loadAndRun];
+
+    EXPECT_NS_EQUAL(manager.get().yieldMessage, @"Reload Called");
+
+    [manager runForTimeInterval:3];
+
+    // Reload without { ignoreCache: true } should hit the cache.
+    // That isn't guaranteed, so allow for both results here.
+    EXPECT_TRUE(server.totalRequests() == 1lu || server.totalRequests() == 2lu);
+}
+
+TEST(WKWebExtensionAPIDevTools, InspectedWindowReloadIgnoringCache)
+{
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s }, { "Cache-Control"_s, "max-age=3600"_s } }, ""_s } },
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *devToolsScript = Util::constructScript(@[
+        @"browser.test.assertSafe(() => browser.devtools.inspectedWindow.reload({ ignoreCache: true }))",
+
+        @"browser.test.yield('Reload Called')",
+    ]);
+
+    auto *resources = @{
+        @"background.js": @"// This script is intentionally left blank.",
+        @"devtools.html": @"<script type='module' src='devtools.js'></script>",
+        @"devtools.js": devToolsScript
+    };
+
+    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:devToolsManifest resources:resources]);
+    auto manager = adoptNS([[TestWebExtensionManager alloc] initForExtension:extension.get()]);
+
+    [manager.get().defaultTab.mainWebView loadRequest:server.requestWithLocalhost()];
+    [manager.get().defaultTab.mainWebView._inspector show];
+
+    [manager loadAndRun];
+
+    EXPECT_NS_EQUAL(manager.get().yieldMessage, @"Reload Called");
+
+    [manager runForTimeInterval:3];
+
+    // Two requests to the server are expected (original and reload).
+    EXPECT_EQ(server.totalRequests(), 2ul);
+}
+
+TEST(WKWebExtensionAPIDevTools, NetworkNavigatedEvent)
+{
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, ""_s } },
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *devToolsScript = Util::constructScript(@[
+        @"browser.devtools.network.onNavigated.addListener((url) => {",
+        @"  browser.test.assertEq(typeof url, 'string', 'url should be a string')",
+        @"  browser.test.assertTrue(url?.startsWith('http://127.0.0.1:'), 'url should be local IP address')",
+
+        @"  browser.test.notifyPass()",
+        @"})",
+
+        @"browser.test.yield('Load Next Page')",
+    ]);
+
+    auto *resources = @{
+        @"background.js": @"// This script is intentionally left blank.",
+        @"devtools.html": @"<script type='module' src='devtools.js'></script>",
+        @"devtools.js": devToolsScript
+    };
+
+    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:devToolsManifest resources:resources]);
+    auto manager = adoptNS([[TestWebExtensionManager alloc] initForExtension:extension.get()]);
+
+    [manager.get().defaultTab.mainWebView loadRequest:server.requestWithLocalhost()];
+    [manager.get().defaultTab.mainWebView._inspector show];
+
+    [manager loadAndRun];
+
+    EXPECT_NS_EQUAL(manager.get().yieldMessage, @"Load Next Page");
+
+    [manager.get().context setPermissionStatus:_WKWebExtensionContextPermissionStatusGrantedExplicitly forURL:server.request().URL];
+    [manager.get().defaultTab.mainWebView loadRequest:server.request()];
+
+    [manager run];
+}
+
+TEST(WKWebExtensionAPIDevTools, PanelsThemeName)
+{
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, ""_s } },
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *devToolsScript = Util::constructScript(@[
+        @"browser.test.assertEq(browser?.devtools?.panels?.themeName, 'light', 'panels.themeName should be light')",
+
+        @"browser?.devtools?.panels?.onThemeChanged.addListener((newTheme) => {",
+        @"  browser.test.assertEq(newTheme, 'dark', 'newTheme should be dark')",
+        @"  browser.test.assertEq(browser?.devtools?.panels?.themeName, 'dark', 'panels.themeName should be dark')",
+
+        @"  browser.test.notifyPass();",
+        @"})",
+
+        @"browser.test.yield('Change Theme')",
+    ]);
+
+    auto *resources = @{
+        @"background.js": @"// This script is intentionally left blank.",
+        @"devtools.html": @"<script type='module' src='devtools.js'></script>",
+        @"devtools.js": devToolsScript
+    };
+
+    // Force light mode for the app, so the switch to dark will trigger the event.
+    NSApp.appearance = [NSAppearance appearanceNamed:NSAppearanceNameAqua];
+
+    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:devToolsManifest resources:resources]);
+    auto manager = adoptNS([[TestWebExtensionManager alloc] initForExtension:extension.get()]);
+
+    auto *mainWebView = manager.get().defaultTab.mainWebView;
+
+    [mainWebView loadRequest:server.requestWithLocalhost()];
+    [mainWebView._inspector show];
+
+    [manager loadAndRun];
+
+    EXPECT_NS_EQUAL(manager.get().yieldMessage, @"Change Theme");
+
+    // Force dark mode on the inspector to tigger the theme change.
+    mainWebView._inspector.extensionHostWebView.appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
+
+    [manager run];
+}
+
 } // namespace TestWebKitAPI
 
 #endif // ENABLE(WK_WEB_EXTENSIONS) && ENABLE(INSPECTOR_EXTENSIONS)

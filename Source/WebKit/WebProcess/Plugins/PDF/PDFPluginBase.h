@@ -38,6 +38,7 @@
 #include <WebCore/PluginViewBase.h>
 #include <WebCore/ScrollTypes.h>
 #include <WebCore/ScrollableArea.h>
+#include <WebCore/TextIndicator.h>
 #include <wtf/RetainPtr.h>
 #include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/TypeTraits.h>
@@ -47,6 +48,9 @@ OBJC_CLASS NSDictionary;
 OBJC_CLASS PDFAnnotation;
 OBJC_CLASS PDFDocument;
 OBJC_CLASS PDFSelection;
+#if PLATFORM(MAC)
+OBJC_CLASS WKAccessibilityPDFDocumentObject;
+#endif
 
 namespace WebCore {
 class FragmentedSharedBuffer;
@@ -70,6 +74,7 @@ class WebFrame;
 class WebKeyboardEvent;
 class WebMouseEvent;
 class WebWheelEvent;
+struct LookupTextResult;
 struct WebHitTestResultData;
 
 class PDFPluginBase : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<PDFPluginBase>, public WebCore::ScrollableArea, public PDFScriptEvaluator::Client {
@@ -108,14 +113,13 @@ public:
     virtual void paint(WebCore::GraphicsContext&, const WebCore::IntRect&) { }
 
     virtual CGFloat scaleFactor() const = 0;
-    virtual CGSize contentSizeRespectingZoom() const = 0;
 
     virtual CGFloat minScaleFactor() const { return 0.25; }
     virtual CGFloat maxScaleFactor() const { return 5; }
 
     bool isLocked() const;
 
-    RetainPtr<PDFDocument> pdfDocumentForPrinting() const { return m_pdfDocument; }
+    RetainPtr<PDFDocument> pdfDocument() const { return m_pdfDocument; }
     WebCore::FloatSize pdfDocumentSizeForPrinting() const;
 
     virtual bool geometryDidChange(const WebCore::IntSize& pluginSize, const WebCore::AffineTransform& pluginToRootViewTransform);
@@ -141,19 +145,25 @@ public:
     virtual bool handleEditingCommand(const String& commandName, const String& argument) = 0;
     virtual bool isEditingCommandEnabled(const String& commandName) = 0;
 
-    virtual String getSelectionString() const = 0;
+    virtual String selectionString() const = 0;
     virtual bool existingSelectionContainsPoint(const WebCore::FloatPoint&) const = 0;
     virtual WebCore::FloatRect rectForSelectionInRootView(PDFSelection *) const = 0;
 
     virtual unsigned countFindMatches(const String& target, WebCore::FindOptions, unsigned maxMatchCount) = 0;
     virtual bool findString(const String& target, WebCore::FindOptions, unsigned maxMatchCount) = 0;
+    virtual Vector<WebCore::FloatRect> rectsForTextMatchesInRect(const WebCore::IntRect&) const { return { }; }
+    virtual bool drawsFindOverlay() const = 0;
+    virtual RefPtr<WebCore::TextIndicator> textIndicatorForSelection(OptionSet<WebCore::TextIndicatorOption>, WebCore::TextIndicatorPresentationTransition) { return { }; }
 
     virtual bool performDictionaryLookupAtLocation(const WebCore::FloatPoint&) = 0;
-    virtual std::pair<String, PDFSelection *> lookupTextAtLocation(const WebCore::FloatPoint&, WebHitTestResultData&) const = 0;
+    void performSpotlightSearch(const String& query);
+    void performWebSearch(const String& query);
+
+    virtual LookupTextResult lookupTextAtLocation(const WebCore::FloatPoint&, WebHitTestResultData&) = 0;
 
     virtual id accessibilityHitTest(const WebCore::IntPoint&) const = 0;
     virtual id accessibilityObject() const = 0;
-    virtual id accessibilityAssociatedPluginParentForElement(WebCore::Element*) const = 0;
+    id accessibilityAssociatedPluginParentForElement(WebCore::Element*) const;
 
     bool isBeingDestroyed() const { return m_isBeingDestroyed; }
 
@@ -170,13 +180,19 @@ public:
     WebCore::IntPoint convertFromPluginToRootView(const WebCore::IntPoint&) const;
     WebCore::IntRect convertFromPluginToRootView(const WebCore::IntRect&) const;
     WebCore::IntRect boundsOnScreen() const;
+    WebCore::FloatRect convertFromPDFViewToScreenForAccessibility(const WebCore::FloatRect&) const;
+    WebCore::IntPoint convertFromPDFViewToRootView(const WebCore::IntPoint&) const;
+    WebCore::IntPoint convertFromRootViewToPDFView(const WebCore::IntPoint&) const;
+
+    bool showContextMenuAtPoint(const WebCore::IntPoint&);
+    WebCore::AXObjectCache* axObjectCache() const;
 
     WebCore::ScrollPosition scrollPositionForTesting() const { return scrollPosition(); }
     WebCore::Scrollbar* horizontalScrollbar() const override { return m_horizontalScrollbar.get(); }
     WebCore::Scrollbar* verticalScrollbar() const override { return m_verticalScrollbar.get(); }
+    void setScrollOffset(const WebCore::ScrollOffset&) final;
 
     virtual void didAttachScrollingNode() { }
-
     virtual void didChangeSettings() { }
 
     // HUD Actions.
@@ -191,6 +207,9 @@ public:
 
     WebCore::ScrollPosition scrollPosition() const final;
 
+#if PLATFORM(MAC)
+    PDFPluginAnnotation* activeAnnotation() const { return m_activeAnnotation.get(); }
+#endif
     virtual void setActiveAnnotation(RetainPtr<PDFAnnotation>&&) = 0;
     void didMutatePDFDocument() { m_pdfDocumentWasMutated = true; }
 
@@ -266,7 +285,6 @@ protected:
     bool isScrollableOrRubberbandable() final { return true; }
     bool hasScrollableOrRubberbandableAncestor() final { return true; }
     WebCore::IntRect scrollableAreaBoundingBox(bool* = nullptr) const final;
-    void setScrollOffset(const WebCore::ScrollOffset&) final;
     bool isActive() const final;
     bool isScrollCornerVisible() const final { return false; }
     WebCore::ScrollPosition minimumScrollPosition() const final;
@@ -323,8 +341,13 @@ protected:
     uint64_t m_streamedBytes { 0 };
 
     RetainPtr<PDFDocument> m_pdfDocument;
+#if PLATFORM(MAC)
+    RetainPtr<WKAccessibilityPDFDocumentObject> m_accessibilityDocumentObject;
+#endif
 
     String m_suggestedFilename;
+
+    String m_lastFindString;
 
     WebCore::IntSize m_size;
     WebCore::AffineTransform m_rootViewToPluginTransform;
@@ -356,31 +379,60 @@ protected:
     // will break rubber-banding.
     static constexpr auto annotationStyle =
     "#annotationContainer {"
-    "    overflow: hidden; "
-    "    position: absolute; "
-    "    pointer-events: none; "
-    "    top: 0; "
-    "    left: 0; "
-    "    right: 0; "
-    "    bottom: 0; "
-    "    display: -webkit-box; "
-    "    -webkit-box-align: center; "
-    "    -webkit-box-pack: center; "
-    "} "
-    ".annotation { "
-    "    position: absolute; "
-    "    pointer-events: auto; "
-    "} "
+    "    overflow: hidden;"
+    "    position: absolute;"
+    "    pointer-events: none;"
+    "    top: 0;"
+    "    left: 0;"
+    "    right: 0;"
+    "    bottom: 0;"
+    "    display: flex;"
+    "    flex-direction: column;"
+    "    justify-content: center;"
+    "    align-items: center;"
+    "}"
+    ""
+    ".annotation {"
+    "    position: absolute;"
+    "    pointer-events: auto;"
+    "}"
+    ""
     "textarea.annotation { "
-    "    resize: none; "
-    "} "
-    "input.annotation[type='password'] { "
-    "    position: static; "
-    "    width: 238px; "
-    "    height: 20px; "
-    "    margin-top: 110px; "
-    "    font-size: 15px; "
-    "} "_s;
+    "    resize: none;"
+    "}"
+    ""
+    "input.annotation[type='password'] {"
+    "    position: static;"
+    "    width: 238px;"
+    "    margin-top: 110px;"
+    "    font-size: 15px;"
+    "}"
+    ""
+    ".lock-icon {"
+    "    width: 64px;"
+    "    height: 64px;"
+    "    margin-bottom: 12px;"
+    "}"
+    ""
+    ".password-form {"
+    "    position: static;"
+    "    display: block;"
+    "    text-align: center;"
+    "    font-family: system-ui;"
+    "    font-size: 15px;"
+    "}"
+    ""
+    ".password-form p {"
+    "    margin: 4pt;"
+    "}"
+    ""
+    ".password-form .subtitle {"
+    "    font-size: 12px;"
+    "}"
+    ""
+    ".password-form + input.annotation[type='password'] {"
+    "    margin-top: 16px;"
+    "}"_s;
 };
 
 } // namespace WebKit

@@ -153,8 +153,8 @@ bool CaptionUserPreferences::userPrefersTextDescriptions() const
     if (!page)
         return false;
 
-    auto& settings = page->settings();
-    return settings.shouldDisplayTextDescriptions() && (settings.audioDescriptionsEnabled() || settings.extendedAudioDescriptionsEnabled());
+    Ref settings = page->settings();
+    return settings->shouldDisplayTextDescriptions() && (settings->audioDescriptionsEnabled() || settings->extendedAudioDescriptionsEnabled());
 }
 
 void CaptionUserPreferences::setUserPrefersTextDescriptions(bool preference)
@@ -352,7 +352,7 @@ int CaptionUserPreferences::textTrackSelectionScore(TextTrack* track, HTMLMediaE
         if (testingMode())
             audioTrackLanguage = primaryAudioTrackLanguageOverride();
         else
-            audioTrackLanguage = mediaElement->player()->languageOfPrimaryAudioTrack();
+            audioTrackLanguage = mediaElement->protectedPlayer()->languageOfPrimaryAudioTrack();
 
         if (audioTrackLanguage.isEmpty())
             return 0;

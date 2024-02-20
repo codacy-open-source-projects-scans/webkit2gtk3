@@ -339,10 +339,13 @@ static void addMediaEngine(std::unique_ptr<MediaPlayerFactory>&& factory)
     mutableInstalledMediaEnginesVector().append(WTFMove(factory));
 }
 
-static const AtomString& applicationOctetStream()
+static String applicationOctetStream()
 {
-    static MainThreadNeverDestroyed<const AtomString> applicationOctetStream("application/octet-stream"_s);
-    return applicationOctetStream;
+    if (isMainThread()) {
+        static MainThreadNeverDestroyed<AtomString> applicationOctetStream("application/octet-stream"_s);
+        return applicationOctetStream.get();
+    }
+    return String { "application/octet-stream"_s };
 }
 
 const MediaPlayerPrivateInterface* MediaPlayer::playerPrivate() const
@@ -1927,6 +1930,16 @@ bool MediaPlayer::pauseAtHostTime(const MonotonicTime& hostTime)
 void MediaPlayer::setShouldCheckHardwareSupport(bool value)
 {
     m_private->setShouldCheckHardwareSupport(value);
+}
+
+const String& MediaPlayer::spatialTrackingLabel() const
+{
+    return m_private->spatialTrackingLabel();
+}
+
+void MediaPlayer::setSpatialTrackingLabel(String&& spatialTrackingLabel)
+{
+    m_private->setSpatialTrackingLabel(WTFMove(spatialTrackingLabel));
 }
 
 #if !RELEASE_LOG_DISABLED

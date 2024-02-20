@@ -327,7 +327,7 @@ enum class WebCore::EnterKeyHint : uint8_t {
     Send
 };
 
-enum class WebCore::DownloadableBinaryFontAllowedTypes : uint8_t {
+enum class WebCore::DownloadableBinaryFontTrustedTypes : uint8_t {
     Any,
     Restricted,
     None
@@ -1485,7 +1485,7 @@ struct WebCore::WebLockManagerSnapshot {
     RefPtr<JSC::ArrayBuffer> userHandle;
 };
 
-using WebCore::AuthenticatorResponseDataSerializableForm = std::variant<std::nullptr_t, WebCore::AuthenticatorResponseDataBase, WebCore::AuthenticatorAttestationResponseData, WebCore::AuthenticatorAssertionResponseData>;
+using WebCore::AuthenticatorResponseDataSerializableForm = std::variant<std::nullptr_t, WebCore::AuthenticatorResponseBaseData, WebCore::AuthenticatorAttestationResponseData, WebCore::AuthenticatorAssertionResponseData>;
 
 struct WebCore::AuthenticatorResponseData {
     WebCore::AuthenticatorResponseDataSerializableForm getSerializableForm();
@@ -1495,12 +1495,23 @@ struct WebCore::AuthenticatorResponseData {
     String support;
     std::optional<bool> read;
     std::optional<WebCore::BufferSource> write;
-}
+};
+
+[Nested] struct WebCore::AuthenticationExtensionsClientInputs::PRFValues {
+    WebCore::BufferSource first;
+    std::optional<WebCore::BufferSource> second;
+};
+
+[Nested] struct WebCore::AuthenticationExtensionsClientInputs::PRFInputs {
+    std::optional<WebCore::AuthenticationExtensionsClientInputs::PRFValues> eval;
+    std::optional<Vector<KeyValuePair<String, WebCore::AuthenticationExtensionsClientInputs::PRFValues>>> evalByCredential;
+};
 
 [LegacyPopulateFromEmptyConstructor] struct WebCore::AuthenticationExtensionsClientInputs {
     String appid;
     [NotSerialized] bool credProps;
     std::optional<WebCore::AuthenticationExtensionsClientInputs::LargeBlobInputs> largeBlob;
+    std::optional<WebCore::AuthenticationExtensionsClientInputs::PRFInputs> prf;
 }
 
 [Nested] struct WebCore::AuthenticationExtensionsClientOutputs::CredentialPropertiesOutput {
@@ -1513,10 +1524,21 @@ struct WebCore::AuthenticatorResponseData {
     std::optional<bool> written;
 };
 
+[Nested] struct WebCore::AuthenticationExtensionsClientOutputs::PRFValues {
+    RefPtr<JSC::ArrayBuffer> first;
+    RefPtr<JSC::ArrayBuffer> second;
+};
+
+[Nested] struct WebCore::AuthenticationExtensionsClientOutputs::PRFOutputs {
+    std::optional<bool> enabled;
+    std::optional<WebCore::AuthenticationExtensionsClientOutputs::PRFValues> results;
+};
+
 struct WebCore::AuthenticationExtensionsClientOutputs {
     std::optional<bool> appid;
     std::optional<WebCore::AuthenticationExtensionsClientOutputs::CredentialPropertiesOutput> credProps;
     std::optional<WebCore::AuthenticationExtensionsClientOutputs::LargeBlobOutputs> largeBlob;
+    std::optional<WebCore::AuthenticationExtensionsClientOutputs::PRFOutputs> prf;
 }
 
 [Nested] struct WebCore::PublicKeyCredentialCreationOptions::Parameters {
@@ -2321,6 +2343,7 @@ header: <WebCore/DataListSuggestionInformation.h>
     ControlClicked,
     IndicatorClicked,
     TextChanged,
+    DataListMayHaveChanged,
 };
 
 header: <WebCore/DataListSuggestionInformation.h>
@@ -2690,15 +2713,15 @@ header: <WebCore/KeyboardScroll.h>
 
 #if PLATFORM(COCOA)
 struct AudioStreamBasicDescription {
-    double  mSampleRate;
-    UInt32  mFormatID;
-    UInt32  mFormatFlags;
-    UInt32  mBytesPerPacket;
-    UInt32  mFramesPerPacket;
-    UInt32  mBytesPerFrame;
-    UInt32  mChannelsPerFrame;
-    UInt32  mBitsPerChannel;
-    UInt32  mReserved;
+    double mSampleRate;
+    UInt32 mFormatID;
+    UInt32 mFormatFlags;
+    UInt32 mBytesPerPacket;
+    UInt32 mFramesPerPacket;
+    UInt32 mBytesPerFrame;
+    UInt32 mChannelsPerFrame;
+    UInt32 mBitsPerChannel;
+    UInt32 mReserved;
 };
 
 class WebCore::CAAudioStreamDescription {
@@ -4964,7 +4987,11 @@ struct WebCore::MessageWithMessagePorts {
     Vector<WebCore::TransferredMessagePort> transferredPorts;
 };
 
-enum class WebCore::StorageAccessWasGranted : bool
+enum class WebCore::StorageAccessWasGranted : uint8_t {
+    No,
+    Yes,
+    YesWithException
+};
 
 enum class WebCore::StorageAccessPromptWasShown : bool
 
@@ -5909,6 +5936,15 @@ enum class WebCore::StorageType : uint8_t {
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
 
+header: <WebCore/RenderStyleConstants.h>
+[CustomHeader] enum class WebCore::TransformBox : uint8_t {
+    StrokeBox,
+    ContentBox,
+    BorderBox,
+    FillBox,
+    ViewBox
+};
+
 class WebCore::OffsetRotation {
     bool hasAuto();
     float angle();
@@ -5959,7 +5995,9 @@ enum class WebCore::CompositeOperation : uint8_t {
 
 struct WebCore::AcceleratedEffectValues {
     float opacity;
+    std::optional<WebCore::TransformOperationData> transformOperationData;
     WebCore::LengthPoint transformOrigin;
+    WebCore::TransformBox transformBox;
     WebCore::TransformOperations transform;
     RefPtr<WebCore::TransformOperation> translate;
     RefPtr<WebCore::TransformOperation> scale;
@@ -6142,18 +6180,24 @@ header: <WebCore/RenderTreeAsText.h>
 };
 
 header: <WebCore/TextExtractionTypes.h>
+[CustomHeader] struct WebCore::TextExtraction::Editable {
+    String label;
+    String placeholder;
+    bool isSecure;
+    bool isFocused;
+};
+
+header: <WebCore/TextExtractionTypes.h>
 [CustomHeader] struct WebCore::TextExtraction::TextItemData {
+    Vector<std::pair<URL, WebCore::CharacterRange>> links;
+    std::optional<WebCore::CharacterRange> selectedRange;
     String content;
+    std::optional<WebCore::TextExtraction::Editable> editable;
 };
 
 header: <WebCore/TextExtractionTypes.h>
 [CustomHeader] struct WebCore::TextExtraction::ScrollableItemData {
     WebCore::FloatSize contentSize;
-};
-
-header: <WebCore/TextExtractionTypes.h>
-[CustomHeader] struct WebCore::TextExtraction::EditableItemData {
-    bool isFocused;
 };
 
 header: <WebCore/TextExtractionTypes.h>
@@ -6163,26 +6207,21 @@ header: <WebCore/TextExtractionTypes.h>
 };
 
 header: <WebCore/TextExtractionTypes.h>
-[CustomHeader] struct WebCore::TextExtraction::InteractiveItemData {
-    bool isEnabled;
-};
-
-header: <WebCore/TextExtractionTypes.h>
 [CustomHeader] enum class WebCore::TextExtraction::ContainerType : uint8_t {
     Root,
     ViewportConstrained,
-    Link,
     List,
     ListItem,
     BlockQuote,
     Article,
     Section,
-    Nav
+    Nav,
+    Button
 };
 
 header: <WebCore/TextExtractionTypes.h>
 [CustomHeader] struct WebCore::TextExtraction::Item {
-    std::variant<WebCore::TextExtraction::ContainerType, WebCore::TextExtraction::TextItemData, WebCore::TextExtraction::ScrollableItemData, WebCore::TextExtraction::EditableItemData, WebCore::TextExtraction::ImageItemData, WebCore::TextExtraction::InteractiveItemData> data;
+    std::variant<WebCore::TextExtraction::ContainerType, WebCore::TextExtraction::TextItemData, WebCore::TextExtraction::ScrollableItemData, WebCore::TextExtraction::ImageItemData> data;
     WebCore::FloatRect rectInRootView;
     Vector<WebCore::TextExtraction::Item> children;
 };
@@ -6504,8 +6543,9 @@ struct WebCore::PrewarmInformation {
     WebCore::FontCachePrewarmInformation fontCache;
 };
 
-using WebCore::PlatformLayerIdentifier = ProcessQualified<ObjectIdentifier<WebCore::PlatformLayerIdentifierType>>;
-using WebCore::ScriptExecutionContextIdentifier = ProcessQualified<WTF::UUID>;
+using WebCore::ScrollingNodeID = WebCore::ProcessQualified<ObjectIdentifier<WebCore::ScrollingNodeIDType>>;
+using WebCore::PlatformLayerIdentifier = WebCore::ProcessQualified<ObjectIdentifier<WebCore::PlatformLayerIdentifierType>>;
+using WebCore::ScriptExecutionContextIdentifier = WebCore::ProcessQualified<WTF::UUID>;
 
 header: <WebCore/FontSelectionAlgorithm.h>
 using WebCore::FontSelectionValue::BackingType = int16_t;
@@ -7180,6 +7220,9 @@ headers: <JavaScriptCore/WasmModule.h> <WebCore/ImageBitmap.h> <WebCore/MessageP
     [NotSerialized] Vector<WebCore::WebCodecsVideoFrameData> serializedVideoFrames;
     [NotSerialized] Vector<WebCore::WebCodecsAudioInternalData> serializedAudioData;
 #endif
+#if ENABLE(MEDIA_SOURCE_IN_WORKERS)
+    [NotSerialized] Vector<RefPtr<WebCore::DetachedMediaSourceHandle>> detachedMediaSourceHandles;
+#endif
 #if ENABLE(MEDIA_STREAM)
     [NotSerialized] Vector<std::unique_ptr<WebCore::MediaStreamTrackDataHolder>> serializedMediaStreamTracks;
 #endif
@@ -7490,6 +7533,7 @@ enum class WebCore::ContextMenuItemType : uint8_t {
 };
 
 #if PLATFORM(COCOA)
+
 header: <WebCore/TextAttachmentForSerialization.h>
 [CustomHeader] struct WebCore::TextAttachmentMissingImage {
 }
@@ -7502,6 +7546,23 @@ header: <WebCore/TextAttachmentForSerialization.h>
     RetainPtr<CFDataRef> data;
     String accessibilityLabel;
 }
+
+#if ENABLE(MULTI_REPRESENTATION_HEIC)
+
+[CustomHeader] struct WebCore::MultiRepresentationHEICAttachmentSingleImage {
+    RefPtr<WebCore::Image> image;
+    WebCore::FloatSize size;
+}
+
+[CustomHeader] struct WebCore::MultiRepresentationHEICAttachmentData {
+    String identifier;
+    String description;
+    Vector<WebCore::MultiRepresentationHEICAttachmentSingleImage> images;
+    [NotSerialized] RetainPtr<CFDataRef> data;
+}
+
+#endif
+
 #endif
 
 [Nested] enum class WebCore::PopupMenuStyle::Size : uint8_t {
@@ -7761,4 +7822,9 @@ class WebCore::SerializedPlatformDataCueValue {
     RetainPtr<NSLocale> locale;
     std::variant<std::nullptr_t, RetainPtr<NSString>, RetainPtr<NSDate>, RetainPtr<NSNumber>, RetainPtr<NSData>> value;
 #endif
+};
+
+header: <WebCore/SharedBuffer.h>
+[RefCounted, CustomHeader, CreateUsing=fromIPCData] class WebCore::FragmentedSharedBuffer {
+    std::variant<std::optional<WebCore::SharedMemoryHandle>, Vector<std::span<const uint8_t>>> toIPCData();
 };

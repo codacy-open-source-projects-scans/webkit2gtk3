@@ -219,8 +219,10 @@ $(PROJECT_DIR)/Shared/Cocoa/CacheStoragePolicy.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/CoreIPCAVOutputContext.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/CoreIPCArray.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/CoreIPCAuditToken.serialization.in
+$(PROJECT_DIR)/Shared/Cocoa/CoreIPCCFCharacterSet.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/CoreIPCCFType.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/CoreIPCCFURL.serialization.in
+$(PROJECT_DIR)/Shared/Cocoa/CoreIPCCVPixelBufferRef.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/CoreIPCColor.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/CoreIPCContacts.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/CoreIPCDDActionContext.serialization.in
@@ -233,6 +235,8 @@ $(PROJECT_DIR)/Shared/Cocoa/CoreIPCError.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/CoreIPCFont.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/CoreIPCLocale.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/CoreIPCNSCFObject.serialization.in
+$(PROJECT_DIR)/Shared/Cocoa/CoreIPCNSShadow.serialization.in
+$(PROJECT_DIR)/Shared/Cocoa/CoreIPCNSURLProtectionSpace.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/CoreIPCNSValue.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/CoreIPCNull.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/CoreIPCPassKit.serialization.in
@@ -241,7 +245,6 @@ $(PROJECT_DIR)/Shared/Cocoa/CoreIPCPresentationIntent.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/CoreIPCSecureCoding.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/CoreIPCString.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/CoreIPCURL.serialization.in
-$(PROJECT_DIR)/Shared/Cocoa/CoreIPCCFCharacterSet.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/DataDetectionResult.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/InsertTextOptions.serialization.in
 $(PROJECT_DIR)/Shared/Cocoa/RevealItem.serialization.in
@@ -280,6 +283,7 @@ $(PROJECT_DIR)/Shared/FontInfo.serialization.in
 $(PROJECT_DIR)/Shared/FrameInfoData.serialization.in
 $(PROJECT_DIR)/Shared/FrameTreeCreationParameters.serialization.in
 $(PROJECT_DIR)/Shared/FrameTreeNodeData.serialization.in
+$(PROJECT_DIR)/Shared/FullScreenMediaDetails.serialization.in
 $(PROJECT_DIR)/Shared/GPUProcessConnectionParameters.serialization.in
 $(PROJECT_DIR)/Shared/GPUProcessPreferencesForWebProcess.serialization.in
 $(PROJECT_DIR)/Shared/Gamepad/GamepadData.serialization.in
@@ -542,6 +546,8 @@ $(PROJECT_DIR)/WebProcess/Extensions/Interfaces/WebExtensionAPITabs.idl
 $(PROJECT_DIR)/WebProcess/Extensions/Interfaces/WebExtensionAPITest.idl
 $(PROJECT_DIR)/WebProcess/Extensions/Interfaces/WebExtensionAPIWebNavigation.idl
 $(PROJECT_DIR)/WebProcess/Extensions/Interfaces/WebExtensionAPIWebNavigationEvent.idl
+$(PROJECT_DIR)/WebProcess/Extensions/Interfaces/WebExtensionAPIWebPageNamespace.idl
+$(PROJECT_DIR)/WebProcess/Extensions/Interfaces/WebExtensionAPIWebPageRuntime.idl
 $(PROJECT_DIR)/WebProcess/Extensions/Interfaces/WebExtensionAPIWebRequest.idl
 $(PROJECT_DIR)/WebProcess/Extensions/Interfaces/WebExtensionAPIWebRequestEvent.idl
 $(PROJECT_DIR)/WebProcess/Extensions/Interfaces/WebExtensionAPIWindows.idl

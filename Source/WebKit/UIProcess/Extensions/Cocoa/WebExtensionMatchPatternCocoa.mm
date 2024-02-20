@@ -35,6 +35,7 @@
 #import "WebProcessMessages.h"
 #import "WebProcessPool.h"
 #import "_WKWebExtensionMatchPatternInternal.h"
+#import <WebCore/PublicSuffix.h>
 #import <wtf/HashMap.h>
 #import <wtf/HashSet.h>
 #import <wtf/NeverDestroyed.h>
@@ -65,6 +66,16 @@ WebExtensionMatchPattern::URLSchemeSet& WebExtensionMatchPattern::supportedSchem
 {
     static MainThreadNeverDestroyed<URLSchemeSet> schemes = std::initializer_list<String> { "*"_s, "http"_s, "https"_s, "webkit-extension"_s };
     return schemes;
+}
+
+bool WebExtensionMatchPattern::patternsMatchURL(const MatchPatternSet& matchPatterns, URL& url)
+{
+    for (auto& matchPattern : matchPatterns) {
+        if (matchPattern->matchesURL(url))
+            return true;
+    }
+
+    return false;
 }
 
 static HashMap<String, RefPtr<WebExtensionMatchPattern>>& patternCache()
@@ -118,7 +129,7 @@ Ref<WebExtensionMatchPattern> WebExtensionMatchPattern::allHostsAndSchemesMatchP
     return getOrCreate(allHostsAndSchemesPattern).releaseNonNull();
 }
 
-bool WebExtensionMatchPattern::patternsMatchAllHosts(HashSet<Ref<WebExtensionMatchPattern>>& patterns)
+bool WebExtensionMatchPattern::patternsMatchAllHosts(const MatchPatternSet& patterns)
 {
     for (auto& pattern : patterns) {
         if (pattern->matchesAllHosts())
@@ -276,6 +287,15 @@ String WebExtensionMatchPattern::path() const
     if (!isValid() || matchesAllURLs())
         return nullString();
     return pattern().path();
+}
+
+bool WebExtensionMatchPattern::hostIsPublicSuffix() const
+{
+    auto host = pattern().host();
+    if (host.startsWith("*."_s))
+        host = host.substring(2);
+
+    return isPublicSuffix(host);
 }
 
 String WebExtensionMatchPattern::stringWithScheme(const String& differentScheme) const

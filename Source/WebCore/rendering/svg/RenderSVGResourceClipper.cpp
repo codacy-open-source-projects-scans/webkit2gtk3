@@ -167,9 +167,9 @@ void RenderSVGResourceClipper::applyMaskClipping(PaintInfo& paintInfo, const Ren
     // - masker/filter not applied when rendering the children
     // - fill is set to the initial fill paint server (solid, black)
     // - stroke is set to the initial stroke paint server (none)
-    auto& frameView = view().frameView();
-    auto oldBehavior = frameView.paintBehavior();
-    frameView.setPaintBehavior(oldBehavior | PaintBehavior::RenderingSVGClipOrMask);
+    Ref frameView = view().frameView();
+    auto oldBehavior = frameView->paintBehavior();
+    frameView->setPaintBehavior(oldBehavior | PaintBehavior::RenderingSVGClipOrMask);
 
     if (!compositedMask || flattenCompositingLayers) {
         pushTransparencyLayer = true;
@@ -183,7 +183,7 @@ void RenderSVGResourceClipper::applyMaskClipping(PaintInfo& paintInfo, const Ren
 
     if (pushTransparencyLayer)
         context.endTransparencyLayer();
-    frameView.setPaintBehavior(oldBehavior);
+    frameView->setPaintBehavior(oldBehavior);
 }
 
 bool RenderSVGResourceClipper::hitTestClipContent(const FloatRect& objectBoundingBox, const LayoutPoint& nodeAtPoint)
@@ -223,7 +223,7 @@ FloatRect RenderSVGResourceClipper::resourceBoundingBox(const RenderObject& obje
 
     SVGVisitedRendererTracking::Scope recursionScope(recursionTracking, *this);
 
-    auto clipContentRepaintRect = clipPathElement().calculateClipContentRepaintRect(repaintRectCalculation);
+    auto clipContentRepaintRect = protectedClipPathElement()->calculateClipContentRepaintRect(repaintRectCalculation);
     if (clipPathUnits() == SVGUnitTypes::SVG_UNIT_TYPE_OBJECTBOUNDINGBOX) {
         AffineTransform contentTransform;
         contentTransform.translate(targetBoundingBox.location());
@@ -242,12 +242,12 @@ void RenderSVGResourceClipper::updateFromStyle()
 void RenderSVGResourceClipper::applyTransform(TransformationMatrix& transform, const RenderStyle& style, const FloatRect& boundingBox, OptionSet<RenderStyle::TransformOperationOption> options) const
 {
     ASSERT(document().settings().layerBasedSVGEngineEnabled());
-    applySVGTransform(transform, clipPathElement(), style, boundingBox, std::nullopt, std::nullopt, options);
+    applySVGTransform(transform, protectedClipPathElement(), style, boundingBox, std::nullopt, std::nullopt, options);
 }
 
 bool RenderSVGResourceClipper::needsHasSVGTransformFlags() const
 {
-    return clipPathElement().hasTransformRelatedAttributes();
+    return protectedClipPathElement()->hasTransformRelatedAttributes();
 }
 
 }

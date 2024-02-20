@@ -155,7 +155,7 @@ crypto/cocoa/CryptoAlgorithmAESCBCMac.cpp
 crypto/cocoa/CryptoAlgorithmAESCFBMac.cpp
 crypto/cocoa/CryptoAlgorithmAESCTRMac.cpp
 crypto/cocoa/CryptoAlgorithmAESGCMMac.mm
-crypto/cocoa/CryptoAlgorithmAESKWMac.cpp
+crypto/cocoa/CryptoAlgorithmAESKWMac.mm
 crypto/cocoa/CryptoAlgorithmECDHMac.cpp
 crypto/cocoa/CryptoAlgorithmECDSAMac.cpp
 crypto/cocoa/CryptoAlgorithmEd25519Cocoa.cpp
@@ -441,6 +441,7 @@ platform/graphics/cocoa/IconCocoa.mm
 platform/graphics/cocoa/IntRectCocoa.mm
 platform/graphics/cocoa/MediaEngineConfigurationFactoryCocoa.cpp
 platform/graphics/cocoa/MediaPlaybackTargetContext.mm
+platform/graphics/cocoa/MediaPlayerCocoa.mm
 platform/graphics/cocoa/MediaPlayerPrivateWebM.mm
 platform/graphics/cocoa/SourceBufferParser.cpp
 platform/graphics/cocoa/SourceBufferParserWebM.cpp
@@ -543,7 +544,6 @@ platform/ios/PlatformPasteboardIOS.mm
 platform/ios/PlatformScreenIOS.mm
 platform/ios/PlaybackSessionInterfaceAVKit.mm @no-unify
 platform/ios/PlaybackSessionInterfaceIOS.mm @no-unify
-platform/ios/PlaybackSessionInterfaceLMK.mm @no-unify
 platform/ios/PreviewConverterIOS.mm
 platform/ios/QuickLook.mm
 platform/ios/ScrollAnimatorIOS.mm

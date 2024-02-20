@@ -73,6 +73,7 @@
 #include <wtf/text/TextStream.h>
 
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#include "AcceleratedEffect.h"
 #include "AcceleratedTimeline.h"
 #endif
 
@@ -1583,6 +1584,9 @@ bool KeyframeEffect::canBeAccelerated() const
     if (m_hasReferenceFilter)
         return false;
 
+    if (m_animatesSizeAndSizeDependentTransform)
+        return false;
+
 #if ENABLE(THREADED_ANIMATION_RESOLUTION)
     if (threadedAnimationResolutionEnabled())
         return true;
@@ -1598,9 +1602,6 @@ bool KeyframeEffect::canBeAccelerated() const
         return false;
 
     if (m_hasKeyframeComposingAcceleratedProperty)
-        return false;
-
-    if (m_animatesSizeAndSizeDependentTransform)
         return false;
 
     return true;
@@ -2289,8 +2290,13 @@ bool KeyframeEffect::ticksContinuouslyWhileActive() const
     if (!renderer() && !targetHasDisplayContents())
         return false;
 
-    if (isCompletelyAccelerated() && isRunningAccelerated())
+    if (isCompletelyAccelerated() && isRunningAccelerated()) {
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+        if (threadedAnimationResolutionEnabled())
+            return !m_acceleratedRepresentation || !m_acceleratedRepresentation->disallowedProperties().isEmpty();
+#endif
         return false;
+    }
 
     return true;
 }

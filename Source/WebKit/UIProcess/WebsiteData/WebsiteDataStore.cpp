@@ -1673,7 +1673,7 @@ void WebsiteDataStore::sendNetworkProcessWillSuspendImminentlyForTesting()
 
 void WebsiteDataStore::sendNetworkProcessDidResume()
 {
-    protectedNetworkProcess()->sendProcessDidResume(ProcessThrottlerClient::ResumeReason::ForegroundActivity);
+    protectedNetworkProcess()->sendProcessDidResume(AuxiliaryProcessProxy::ResumeReason::ForegroundActivity);
 }
 
 bool WebsiteDataStore::trackingPreventionEnabled() const
@@ -1691,6 +1691,7 @@ void WebsiteDataStore::setTrackingPreventionEnabled(bool enabled)
     if (enabled == trackingPreventionEnabled())
         return;
 
+    RELEASE_LOG(Storage, "%p - WebsiteDataStore::setTrackingPreventionEnabled sessionID=%" PRIu64 ", enabled=%d", this, m_sessionID.toUInt64(), enabled);
     if (enabled) {
         m_trackingPreventionEnabled = true;
         

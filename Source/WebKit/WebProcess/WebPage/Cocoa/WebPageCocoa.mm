@@ -77,6 +77,7 @@
 #import <WebCore/UTIRegistry.h>
 #import <WebCore/UTIUtilities.h>
 #import <pal/spi/cocoa/LaunchServicesSPI.h>
+#import <pal/spi/cocoa/NSAccessibilitySPI.h>
 #import <pal/spi/cocoa/QuartzCoreSPI.h>
 #import <wtf/spi/darwin/SandboxSPI.h>
 
@@ -253,7 +254,7 @@ DictionaryPopupInfo WebPage::dictionaryPopupInfoForRange(LocalFrame& frame, cons
     IntRect rangeRect = frame.view()->contentsToWindow(quads[0].enclosingBoundingBox());
 
     const RenderStyle* style = range.startContainer().renderStyle();
-    float scaledAscent = style ? style->metricsOfPrimaryFont().ascent() * pageScaleFactor() : 0;
+    float scaledAscent = style ? style->metricsOfPrimaryFont().intAscent() * pageScaleFactor() : 0;
     dictionaryPopupInfo.origin = FloatPoint(rangeRect.x(), rangeRect.y() + scaledAscent);
 
 #if PLATFORM(MAC)
@@ -404,10 +405,51 @@ void WebPage::clearDictationAlternatives(Vector<DictationContext>&& contexts)
     }, DocumentMarker::Type::DictationAlternatives);
 }
 
-void WebPage::accessibilityTransferRemoteToken(RetainPtr<NSData> remoteToken)
+void WebPage::accessibilityTransferRemoteToken(RetainPtr<NSData> remoteToken, FrameIdentifier frameID)
 {
     std::span dataToken(reinterpret_cast<const uint8_t*>([remoteToken bytes]), [remoteToken length]);
-    send(Messages::WebPageProxy::RegisterWebProcessAccessibilityToken(dataToken));
+    send(Messages::WebPageProxy::RegisterWebProcessAccessibilityToken(dataToken, frameID));
+}
+
+void WebPage::accessibilityManageRemoteElementStatus(bool registerStatus, int processIdentifier)
+{
+#if PLATFORM(MAC)
+    if (registerStatus)
+        [NSAccessibilityRemoteUIElement registerRemoteUIProcessIdentifier:processIdentifier];
+    else
+        [NSAccessibilityRemoteUIElement unregisterRemoteUIProcessIdentifier:processIdentifier];
+#else
+    UNUSED_PARAM(registerStatus);
+    UNUSED_PARAM(processIdentifier);
+#endif
+}
+
+void WebPage::bindRemoteAccessibilityFrames(int processIdentifier, WebCore::FrameIdentifier frameID, std::span<const uint8_t> dataToken, CompletionHandler<void(std::span<const uint8_t>, int)>&& completionHandler)
+{
+    RefPtr webFrame = WebProcess::singleton().webFrame(frameID);
+    if (!webFrame) {
+        ASSERT_NOT_REACHED();
+        return completionHandler({ }, 0);
+    }
+
+    RefPtr coreLocalFrame = webFrame->coreLocalFrame();
+    if (!coreLocalFrame) {
+        ASSERT_NOT_REACHED();
+        return completionHandler({ }, 0);
+    }
+
+    auto* renderer = coreLocalFrame->contentRenderer();
+    if (!renderer) {
+        ASSERT_NOT_REACHED();
+        return completionHandler({ }, 0);
+    }
+
+    registerRemoteFrameAccessibilityTokens(processIdentifier, dataToken);
+
+    // Get our remote token data and send back to the RemoteFrame.
+    auto remoteToken = accessibilityRemoteTokenData();
+    std::span remoteDataToken(reinterpret_cast<const uint8_t*>([remoteToken bytes]), [remoteToken length]);
+    completionHandler(remoteDataToken, getpid());
 }
 
 #if ENABLE(APPLE_PAY)
@@ -584,6 +626,8 @@ void WebPage::getPlatformEditorStateCommon(const LocalFrame& frame, EditorState&
         }
 
         postLayoutData.baseWritingDirection = frame.editor().baseWritingDirectionForSelectionStart();
+
+        postLayoutData.canEnableWritingSuggestions = selection.canEnableWritingSuggestions();
     }
 
     if (RefPtr editableRootOrFormControl = enclosingTextFormControl(selection.start()) ?: selection.rootEditableElement()) {
@@ -804,7 +848,7 @@ URL WebPage::allowedQueryParametersForAdvancedPrivacyProtections(const URL& url)
 {
 #if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
     if (m_allowedQueryParametersForAdvancedPrivacyProtections.isEmpty()) {
-        RELEASE_LOG_ERROR(ResourceLoadStatistics, "Unable to allow query parameters (missing data)");
+        RELEASE_LOG_ERROR(ResourceLoadStatistics, "Unable to hide query parameters from script (missing data)");
         return url;
     }
 
@@ -877,6 +921,16 @@ void WebPage::textReplacementSessionDidReceiveEditAction(const WTF::UUID& uuid, 
 
 std::optional<SimpleRange> WebPage::autocorrectionContextRange()
 {
+    // The algorithm this function uses is essentially:
+    //
+    // 1. Get the current start and end positions of the selection.
+    //
+    // 2. Ideally, the selection range will simply just be extended to the edges of the sentence each
+    //    position is part of. If this has enough words and characters, the algorithm is finished.
+    //
+    // 3. Otherwise, leave the end position alone, and start moving the start position backwards,
+    //    word-by-word, until the minimum word count / maximum context length has been reached.
+
     Ref frame = CheckedRef(m_page->focusController())->focusedOrMainFrame();
 
     VisiblePosition contextStartPosition;
@@ -888,10 +942,18 @@ std::optional<SimpleRange> WebPage::autocorrectionContextRange()
     constexpr unsigned maxContextLength = 100;
 
     auto firstPositionInEditableContent = startOfEditableContent(startPosition);
+
+    // If the start position is at the very start of the editable content, we can't go back any more
+    // than that, so use the original start position if that is the case.
     if (startPosition != firstPositionInEditableContent) {
+        // Otherwise, start going backwards to find an ideal start position.
+
         contextStartPosition = startPosition;
         unsigned totalContextLength = 0;
 
+        // Keep trying to go back as much as possible until the minimum word count or context length
+        // has been reached; and only go back word-by-word, so that the range doesn't cut off part
+        // of a word.
         for (unsigned i = 0; i < minContextWordCount; ++i) {
             auto previousPosition = startOfWord(positionOfNextBoundaryOfGranularity(contextStartPosition, TextGranularity::WordGranularity, SelectionDirection::Backward));
             if (previousPosition.isNull())
@@ -909,12 +971,21 @@ std::optional<SimpleRange> WebPage::autocorrectionContextRange()
             contextStartPosition = previousPosition;
         }
 
+        // If the beginning of the sentence the original position is a part of is before the new start position,
+        // use that, since it will not cut off a sentence, and will provide at least equal or more context.
         VisiblePosition sentenceContextStartPosition = startOfSentence(startPosition);
         if (sentenceContextStartPosition.isNotNull() && sentenceContextStartPosition < contextStartPosition)
             contextStartPosition = sentenceContextStartPosition;
     }
 
+    // Otherwise, just use the original start position.
+    if (contextStartPosition.isNull())
+        contextStartPosition = startPosition;
+
+    // If the end position is at the very end of the editable content, we can't go forward any more
+    // than that, so use the original end position if that is the case.
     if (endPosition != endOfEditableContent(endPosition)) {
+        // Otherwise, move the end position to the end of the sentence the original end position is part of, if applicable.
         VisiblePosition nextPosition = endOfSentence(endPosition);
         if (nextPosition.isNotNull() && nextPosition > endPosition)
             endPosition = nextPosition;

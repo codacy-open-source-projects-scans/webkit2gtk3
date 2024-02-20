@@ -235,6 +235,7 @@ static bool isValidContextMenuAction(WebCore::ContextMenuAction action)
     case ContextMenuAction::ContextMenuItemTagTextDirectionRightToLeft:
     case ContextMenuAction::ContextMenuItemTagAddHighlightToCurrentQuickNote:
     case ContextMenuAction::ContextMenuItemTagAddHighlightToNewQuickNote:
+    case ContextMenuAction::ContextMenuItemTagCopyLinkToHighlight:
 #if PLATFORM(COCOA)
     case ContextMenuAction::ContextMenuItemTagCorrectSpellingAutomatically:
     case ContextMenuAction::ContextMenuItemTagSubstitutionsMenu:
@@ -265,6 +266,7 @@ static bool isValidContextMenuAction(WebCore::ContextMenuAction action)
     case ContextMenuAction::ContextMenuItemTagToggleVideoEnhancedFullscreen:
     case ContextMenuAction::ContextMenuItemTagLookUpImage:
     case ContextMenuAction::ContextMenuItemTagTranslate:
+    case ContextMenuAction::ContextMenuItemTagSwapCharacters:
     case ContextMenuAction::ContextMenuItemBaseCustomTag:
     case ContextMenuAction::ContextMenuItemLastCustomTag:
     case ContextMenuAction::ContextMenuItemBaseApplicationTag:

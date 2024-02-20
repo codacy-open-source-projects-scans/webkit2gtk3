@@ -30,11 +30,13 @@
 #import "config.h"
 #import "WebExtensionAPIDevToolsNetwork.h"
 
+#if ENABLE(WK_WEB_EXTENSIONS) && ENABLE(INSPECTOR_EXTENSIONS)
+
 #import "CocoaHelpers.h"
 #import "JSWebExtensionWrapper.h"
 #import "MessageSenderInlines.h"
-
-#if ENABLE(WK_WEB_EXTENSIONS) && ENABLE(INSPECTOR_EXTENSIONS)
+#import "WebExtensionAPIEvent.h"
+#import "WebExtensionAPINamespace.h"
 
 namespace WebKit {
 
@@ -43,9 +45,20 @@ WebExtensionAPIEvent& WebExtensionAPIDevToolsNetwork::onNavigated()
     // Documentation: https://developer.mozilla.org/docs/Mozilla/Add-ons/WebExtensions/API/devtools/network/onNavigated
 
     if (!m_onNavigated)
-        m_onNavigated = WebExtensionAPIEvent::create(forMainWorld(), runtime(), extensionContext(), WebExtensionEventListenerType::DevToolsNetworkOnNavigated);
+        m_onNavigated = WebExtensionAPIEvent::create(*this, WebExtensionEventListenerType::DevToolsNetworkOnNavigated);
 
     return *m_onNavigated;
+}
+
+void WebExtensionContextProxy::dispatchDevToolsNetworkNavigatedEvent(const URL& url)
+{
+    // Documentation: https://developer.mozilla.org/docs/Mozilla/Add-ons/WebExtensions/API/devtools/network/onNavigated
+
+    NSString *urlString = url.string();
+
+    enumerateNamespaceObjects([&](auto& namespaceObject) {
+        namespaceObject.devtools().network().onNavigated().invokeListenersWithArgument(urlString);
+    });
 }
 
 } // namespace WebKit

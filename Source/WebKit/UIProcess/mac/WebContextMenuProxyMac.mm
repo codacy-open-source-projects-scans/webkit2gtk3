@@ -581,6 +581,9 @@ static NSString *menuItemIdentifier(const WebCore::ContextMenuAction action)
     case ContextMenuItemTagAddHighlightToNewQuickNote:
         return _WKMenuItemIdentifierAddHighlightToNewQuickNote;
 
+    case ContextMenuItemTagCopyLinkToHighlight:
+        return _WKMenuItemIdentifierCopyLinkToHighlight;
+
     case ContextMenuItemTagOpenFrameInNewWindow:
         return _WKMenuItemIdentifierOpenFrameInNewWindow;
 
@@ -622,6 +625,9 @@ static NSString *menuItemIdentifier(const WebCore::ContextMenuAction action)
 
     case ContextMenuItemTagTranslate:
         return _WKMenuItemIdentifierTranslate;
+
+    case ContextMenuItemTagSwapCharacters:
+        return _WKMenuItemIdentifierSwapCharacters;
 
     case ContextMenuItemTagCopySubject:
         return _WKMenuItemIdentifierCopySubject;

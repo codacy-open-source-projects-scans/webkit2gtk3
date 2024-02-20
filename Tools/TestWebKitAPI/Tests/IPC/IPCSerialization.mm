@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2023-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,9 +30,14 @@
 #import "Encoder.h"
 #import "MessageSenderInlines.h"
 #import "test.h"
+#import <CoreVideo/CoreVideo.h>
 #import <Foundation/NSValue.h>
 #import <Security/Security.h>
+#import <WebCore/AttributedString.h>
+#import <WebCore/CVUtilities.h>
+#import <WebCore/ColorCocoa.h>
 #import <WebCore/FontCocoa.h>
+#import <WebCore/IOSurface.h>
 #import <limits.h>
 #import <pal/spi/cocoa/ContactsSPI.h>
 #import <wtf/RetainPtr.h>
@@ -44,6 +49,7 @@
 #import <pal/cocoa/ContactsSoftLink.h>
 #import <pal/cocoa/DataDetectorsCoreSoftLink.h>
 #import <pal/cocoa/PassKitSoftLink.h>
+#import <pal/ios/UIKitSoftLink.h>
 #import <pal/mac/DataDetectorsSoftLink.h>
 
 // This test makes it trivial to test round trip encoding and decoding of a particular object type.
@@ -52,6 +58,11 @@
 // To test a new ObjC type:
 // 1 - Add that type to ObjCHolderForTesting's ValueType variant
 // 2 - Run a test exercising that type
+
+@interface NSURLProtectionSpace (WebKitNSURLProtectionSpace)
+- (void)_setServerTrust:(nullable SecTrustRef)serverTrust;
+- (void)_setDistinguishedNames:(nullable NSArray<NSData *> *)distinguishedNames;
+@end
 
 class SerializationTestSender final : public IPC::MessageSender {
 public:
@@ -66,7 +77,7 @@ private:
 
 bool SerializationTestSender::performSendWithAsyncReplyWithoutUsingIPCConnection(UniqueRef<IPC::Encoder>&& encoder, CompletionHandler<void(IPC::Decoder*)>&& completionHandler) const
 {
-    auto decoder = IPC::Decoder::create({ encoder->buffer(), encoder->bufferSize() }, { });
+    auto decoder = IPC::Decoder::create({ encoder->buffer(), encoder->bufferSize() }, encoder->releaseAttachments());
     ASSERT(decoder);
 
     completionHandler(decoder.get());
@@ -100,6 +111,7 @@ struct CFHolderForTesting {
         RetainPtr<CFNumberRef>,
         RetainPtr<CFStringRef>,
         RetainPtr<CFURLRef>,
+        RetainPtr<CVPixelBufferRef>,
         RetainPtr<CGColorRef>,
         RetainPtr<CGColorSpaceRef>,
         RetainPtr<SecCertificateRef>,
@@ -133,6 +145,22 @@ std::optional<CFHolderForTesting> CFHolderForTesting::decode(IPC::Decoder& decod
     return { {
         WTFMove(*value)
     } };
+}
+
+static bool cvPixelBufferRefsEqual(CVPixelBufferRef pixelBuffer1, CVPixelBufferRef pixelBuffer2)
+{
+    CVPixelBufferLockBaseAddress(pixelBuffer1, 0);
+    CVPixelBufferLockBaseAddress(pixelBuffer2, 0);
+    size_t pixelBuffer1Size = CVPixelBufferGetDataSize(pixelBuffer1);
+    size_t pixelBuffer2Size = CVPixelBufferGetDataSize(pixelBuffer2);
+    if (pixelBuffer1Size != pixelBuffer2Size)
+        return false;
+    auto base1 = CVPixelBufferGetBaseAddress(pixelBuffer1);
+    auto base2 = CVPixelBufferGetBaseAddress(pixelBuffer2);
+    bool areEqual = !memcmp(base1, base2, pixelBuffer1Size);
+    CVPixelBufferUnlockBaseAddress(pixelBuffer1, 0);
+    CVPixelBufferUnlockBaseAddress(pixelBuffer2, 0);
+    return areEqual;
 }
 
 static bool secTrustRefsEqual(SecTrustRef trust1, SecTrustRef trust2)
@@ -238,6 +266,8 @@ CFHolderForTesting cfHolder(CFTypeRef type)
         return { (CFStringRef)type };
     if (typeID == CFURLGetTypeID())
         return { (CFURLRef)type };
+    if (typeID == CVPixelBufferGetTypeID())
+        return { (CVPixelBufferRef)type };
     if (typeID == CGColorSpaceGetTypeID())
         return { (CGColorSpaceRef)type };
     if (typeID == CGColorGetTypeID())
@@ -284,6 +314,10 @@ inline bool operator==(const CFHolderForTesting& a, const CFHolderForTesting& b)
 
     auto aTypeID = CFGetTypeID(aObject);
     auto bTypeID = CFGetTypeID(bObject);
+
+    if (aTypeID == CVPixelBufferGetTypeID() && bTypeID == CVPixelBufferGetTypeID())
+        return cvPixelBufferRefsEqual((CVPixelBufferRef)aObject, (CVPixelBufferRef)bObject);
+
     if (aTypeID == SecTrustGetTypeID() && bTypeID == SecTrustGetTypeID())
         return secTrustRefsEqual((SecTrustRef)aObject, (SecTrustRef)bObject);
 
@@ -380,6 +414,7 @@ struct ObjCHolderForTesting {
 #endif
         RetainPtr<NSPersonNameComponents>,
         RetainPtr<NSPresentationIntent>,
+        RetainPtr<NSURLProtectionSpace>,
 #if USE(PASSKIT) && !PLATFORM(WATCHOS) && !PLATFORM(APPLETV)
         RetainPtr<CNContact>,
         RetainPtr<CNPhoneNumber>,
@@ -393,6 +428,7 @@ struct ObjCHolderForTesting {
         RetainPtr<PKShippingMethod>,
         RetainPtr<PKPayment>,
 #endif
+        RetainPtr<NSShadow>,
         RetainPtr<NSValue>
     > ValueType;
 
@@ -474,6 +510,26 @@ static BOOL wkDDActionContext_isEqual(WKDDActionContext *a, SEL, WKDDActionConte
 }
 #endif
 
+static bool wkNSURLProtectionSpace_isEqual(NSURLProtectionSpace *a, SEL, NSURLProtectionSpace* b)
+{
+    if (![a.host isEqual: b.host])
+        return false;
+    if (!(a.port == b.port))
+        return false;
+    if (![a.protocol isEqual:b.protocol])
+        return false;
+    if (!([a.realm isEqual:b.realm] || (!a.realm && a.realm == b.realm)))
+        return false;
+    if (![a.authenticationMethod isEqual:b.authenticationMethod])
+        return false;
+    if (!([a.distinguishedNames isEqual:b.distinguishedNames] || (!a.distinguishedNames && a.distinguishedNames == b.distinguishedNames)))
+        return false;
+    if (!((!a.serverTrust && a.serverTrust == b.serverTrust) || secTrustRefsEqual(a.serverTrust, a.serverTrust)))
+        return false;
+
+    return true;
+}
+
 #if USE(PASSKIT) && !PLATFORM(WATCHOS) && !PLATFORM(APPLETV)
 static BOOL wkSecureCoding_isEqual(id a, SEL, id b)
 {
@@ -496,6 +552,10 @@ inline bool operator==(const ObjCHolderForTesting& a, const ObjCHolderForTesting
         auto oldIsEqual = class_getMethodImplementation([NSDateComponents class], @selector(isEqual:));
         class_replaceMethod([NSDateComponents class], @selector(isEqual:), (IMP)nsDateComponentsTesting_isEqual, "v@:@");
         class_addMethod([NSDateComponents class], @selector(oldIsEqual:), oldIsEqual, "v@:@");
+
+        auto oldIsEqual2 = class_getMethodImplementation([NSURLProtectionSpace class], @selector(isEqual:));
+        class_replaceMethod([NSURLProtectionSpace class], @selector(isEqual:), (IMP)wkNSURLProtectionSpace_isEqual, "v@:@");
+        class_addMethod([NSURLProtectionSpace class], @selector(oldIsEqual:), oldIsEqual2, "v@:@");
 
 #if USE(PASSKIT) && !PLATFORM(WATCHOS) && !PLATFORM(APPLETV)
         class_addMethod(PAL::getPKPaymentMethodClass(), @selector(isEqual:), (IMP)wkSecureCoding_isEqual, "v@:@");
@@ -762,38 +822,46 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 }
 #endif // USE(PASSKIT) && !PLATFORM(WATCHOS) && !PLATFORM(APPLETV)
 
+static void runTestNS(ObjCHolderForTesting&& holderArg)
+{
+    __block bool done = false;
+    __block ObjCHolderForTesting holder = WTFMove(holderArg);
+    auto sender = SerializationTestSender { };
+    sender.sendWithAsyncReplyWithoutUsingIPCConnection(ObjCPingBackMessage(holder), ^(ObjCHolderForTesting&& result) {
+        EXPECT_TRUE(holder == result);
+        done = true;
+    });
+
+    // The completion handler should be called synchronously, so this should be true already.
+    EXPECT_TRUE(done);
+};
+
+static void runTestCFWithExpectedResult(const CFHolderForTesting& holderArg, const CFHolderForTesting& expectedResult)
+{
+    __block bool done = false;
+    __block CFHolderForTesting holder = expectedResult;
+    auto sender = SerializationTestSender { };
+    sender.sendWithAsyncReplyWithoutUsingIPCConnection(CFPingBackMessage(holderArg), ^(CFHolderForTesting&& result) {
+        EXPECT_TRUE(holder == result);
+        done = true;
+    });
+
+    // The completion handler should be called synchronously, so this should be true already.
+    EXPECT_TRUE(done);
+};
+
+static void runTestCF(const CFHolderForTesting& holderArg)
+{
+    runTestCFWithExpectedResult(holderArg, holderArg);
+};
 
 TEST(IPCSerialization, Basic)
 {
-    auto runTestNS = [](ObjCHolderForTesting&& holderArg) {
-        __block bool done = false;
-        __block ObjCHolderForTesting holder = WTFMove(holderArg);
-        auto sender = SerializationTestSender { };
-        sender.sendWithAsyncReplyWithoutUsingIPCConnection(ObjCPingBackMessage(holder), ^(ObjCHolderForTesting&& result) {
-            EXPECT_TRUE(holder == result);
-            done = true;
-        });
+    // CVPixelBuffer
+    auto s1 = WebCore::IOSurface::create(nullptr, { 5, 5 }, WebCore::DestinationColorSpace::SRGB());
+    auto pixelBuffer = WebCore::createCVPixelBuffer(s1->surface());
 
-        // The completion handler should be called synchronously, so this should be true already.
-        EXPECT_TRUE(done);
-    };
-
-    auto runTestCFWithExpectedResult = [](const CFHolderForTesting& holderArg, const CFHolderForTesting& expectedResult) {
-        __block bool done = false;
-        __block CFHolderForTesting holder = expectedResult;
-        auto sender = SerializationTestSender { };
-        sender.sendWithAsyncReplyWithoutUsingIPCConnection(CFPingBackMessage(holderArg), ^(CFHolderForTesting&& result) {
-            EXPECT_TRUE(holder == result);
-            done = true;
-        });
-
-        // The completion handler should be called synchronously, so this should be true already.
-        EXPECT_TRUE(done);
-    };
-
-    auto runTestCF = [&] (const CFHolderForTesting& holderArg) {
-        runTestCFWithExpectedResult(holderArg, holderArg);
-    };
+    runTestCF({ pixelBuffer->get() });
 
     // NSString/CFString
     runTestNS({ @"Hello world" });
@@ -992,6 +1060,7 @@ TEST(IPCSerialization, Basic)
     runValueTest([NSValue valueWithRange:NSMakeRange(1, 2)]);
     runValueTest([NSValue valueWithRect:NSMakeRect(1, 2, 79, 80)]);
 
+
     // SecTrust -- evaluate the trust of the cert created above
     SecTrustRef trustRef = NULL;
     auto policy = adoptCF(SecPolicyCreateBasicX509());
@@ -1129,6 +1198,33 @@ TEST(IPCSerialization, Basic)
     runTestCF({ kCFNull });
     runTestNS({ nil });
     runTestCF({ nullptr });
+
+    // NSURLProtectionSpace
+    RetainPtr<NSURLProtectionSpace> protectionSpace = adoptNS([[NSURLProtectionSpace alloc] initWithHost:@"127.0.0.1" port:8000 protocol:NSURLProtectionSpaceHTTP realm:@"testrealm" authenticationMethod:NSURLAuthenticationMethodHTTPBasic]);
+    runTestNS({ protectionSpace.get() });
+
+    RetainPtr<NSURLProtectionSpace> protectionSpace2 = adoptNS([[NSURLProtectionSpace alloc] initWithHost:@"127.0.0.1" port:443 protocol:NSURLProtectionSpaceHTTPS realm:nil authenticationMethod:NSURLAuthenticationMethodServerTrust]);
+    NSData *distinguishedNamesData = [NSData dataWithBytes:"AAAA" length:4];
+    NSArray *distinguishedNames = @[distinguishedNamesData];
+    [protectionSpace2.get() _setServerTrust:trustRef];
+    [protectionSpace2.get() _setDistinguishedNames:distinguishedNames];
+    runTestNS({ protectionSpace2.get() });
+}
+
+TEST(IPCSerialization, NSShadow)
+{
+    auto runTestNSShadow = [&](CGSize shadowOffset, CGFloat shadowBlurRadius, PlatformColor *shadowColor) {
+        RetainPtr<NSShadow> shadow = adoptNS([[PlatformNSShadow alloc] init]);
+        [shadow setShadowOffset:shadowOffset];
+        [shadow setShadowBlurRadius:shadowBlurRadius];
+        [shadow setShadowColor:shadowColor];
+        runTestNS({ shadow.get() });
+    };
+
+    runTestNSShadow({ 5.7, 10.5 }, 0.49, nil);
+
+    RetainPtr<PlatformColor> platformColor = cocoaColor(WebCore::Color::blue);
+    runTestNSShadow({ 10.5, 5.7 }, 0.79, platformColor.get());
 }
 
 #if PLATFORM(MAC)
@@ -1175,19 +1271,6 @@ static RetainPtr<DDScannerResult> fakeDataDetectorResultForTesting()
 
 TEST(IPCSerialization, SecureCoding)
 {
-    auto runTestNS = [](ObjCHolderForTesting&& holderArg) {
-        __block bool done = false;
-        __block ObjCHolderForTesting holder = WTFMove(holderArg);
-        auto sender = SerializationTestSender { };
-        sender.sendWithAsyncReplyWithoutUsingIPCConnection(ObjCPingBackMessage(holder), ^(ObjCHolderForTesting&& result) {
-            EXPECT_TRUE(holder == result);
-            done = true;
-        });
-
-        // The completion handler should be called synchronously, so this should be true already.
-        EXPECT_TRUE(done);
-    };
-
     // DDScannerResult
     //   - Note: For now, there's no reasonable way to create anything but an empty DDScannerResult object
     auto scannerResult = fakeDataDetectorResultForTesting();
@@ -1242,6 +1325,8 @@ TEST(IPCSerialization, SecureCoding)
     RetainPtr<CNPostalAddress> address = postalAddressForTesting();
     RetainPtr<CNLabeledValue> labeledPostalAddress = adoptNS([[PAL::getCNLabeledValueClass() alloc] initWithLabel:@"Work" value:address.get()]);
 
+    RetainPtr<CNLabeledValue> labeledEmailAddress = adoptNS([[PAL::getCNLabeledValueClass() alloc] initWithLabel:@"WorkSPAM" value:@"spam@webkit.org"]);
+
     RetainPtr<CNMutableContact> billingContact = adoptNS([PAL::getCNMutableContactClass() new]);
     billingContact.get().contactType = CNContactTypePerson;
     billingContact.get().namePrefix = @"Mrs";
@@ -1252,8 +1337,8 @@ TEST(IPCSerialization, SecureCoding)
     billingContact.get().organizationName = @"WebKit";
     billingContact.get().jobTitle = @"Web Kitten";
     billingContact.get().note = @"The Coolest Kitten out there";
-    billingContact.get().postalAddresses = @[ labeledPostalAddress.get(), labeledPostalAddress.get() ];
-
+    billingContact.get().postalAddresses = @[ labeledPostalAddress.get() ];
+    billingContact.get().emailAddresses = @[ labeledEmailAddress.get() ];
     runTestNS({ billingContact.get() });
 
     RetainPtr<PKPaymentMethod> paymentMethod = adoptNS([PAL::getPKPaymentMethodClass() new]);

@@ -2943,10 +2943,15 @@ void NetworkProcess::addWebPageNetworkParameters(PAL::SessionID sessionID, WebPa
 
 void NetworkProcess::removeWebPageNetworkParameters(PAL::SessionID sessionID, WebPageProxyIdentifier pageID)
 {
-    if (auto* session = networkSession(sessionID)) {
-        session->removeWebPageNetworkParameters(pageID);
-        session->storageManager().clearStorageForWebPage(pageID);
-    }
+    auto* session = networkSession(sessionID);
+    if (!session)
+        return;
+
+    session->removeWebPageNetworkParameters(pageID);
+    session->storageManager().clearStorageForWebPage(pageID);
+
+    if (auto* resourceLoadStatistics = session->resourceLoadStatistics())
+        resourceLoadStatistics->clearFrameLoadRecordsForStorageAccess(pageID);
 }
 
 void NetworkProcess::countNonDefaultSessionSets(PAL::SessionID sessionID, CompletionHandler<void(size_t)>&& completionHandler)
@@ -2970,7 +2975,7 @@ void NetworkProcess::setIsHoldingLockedFiles(bool isHoldingLockedFiles)
     if (!isHoldingLockedFiles) {
         m_holdingLockedFileAssertion = nullptr;
 #if USE(EXTENSIONKIT)
-        invalidateGrant();
+        invalidateFileActivity();
 #endif
         return;
     }
@@ -2979,9 +2984,9 @@ void NetworkProcess::setIsHoldingLockedFiles(bool isHoldingLockedFiles)
         return;
 
 #if USE(EXTENSIONKIT)
-    if (hasAcquiredGrant())
+    if (hasAcquiredFileActivity())
         return;
-    if (acquireLockedFileGrant())
+    if (acquireLockedFileActivity())
         return;
 #endif
 
