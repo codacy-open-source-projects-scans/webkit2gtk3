@@ -267,6 +267,13 @@ void AXIsolatedObject::initializeProperties(const Ref<AccessibilityObject>& axOb
     if (object.isListBox())
         setObjectVectorProperty(AXPropertyName::VisibleChildren, object.visibleChildren());
 
+    if (object.isDateTime()) {
+        setProperty(AXPropertyName::DateTimeValue, object.dateTimeValue().isolatedCopy());
+#if PLATFORM(MAC)
+        setProperty(AXPropertyName::DateTimeComponents, object.dateTimeComponents());
+#endif
+    }
+
     if (object.isSpinButton()) {
         // FIXME: These properties get out of date every time AccessibilitySpinButton::{clearChildren, addChildren} is called. We should probably just not cache these properties.
         setObjectProperty(AXPropertyName::DecrementButton, object.decrementButton());
@@ -479,6 +486,7 @@ void AXIsolatedObject::setProperty(AXPropertyName propertyName, AXPropertyValueV
 #if ENABLE(AX_THREAD_TEXT_APIS)
         [](AXTextRuns& runs) { return !runs.size(); },
 #endif
+        [] (WallTime& time) { return !time; },
         [](auto&) {
             ASSERT_NOT_REACHED();
             return false;
@@ -585,6 +593,12 @@ AXCoreObject* AXIsolatedObject::sibling(AXDirection direction) const
     if (direction == AXDirection::Next)
         return indexOfThis + 1 < siblings.size() ? siblings[indexOfThis + 1].get() : nullptr;
     return indexOfThis > 0 ? siblings[indexOfThis - 1].get() : nullptr;
+}
+
+AXCoreObject* AXIsolatedObject::siblingOrParent(AXDirection direction) const
+{
+    auto* sibling = this->sibling(direction);
+    return sibling ? sibling : parentObjectUnignored();
 }
 
 bool AXIsolatedObject::isDetachedFromParent()
@@ -1266,10 +1280,9 @@ FloatRect AXIsolatedObject::relativeFrame() const
     } else if (roleValue() == AccessibilityRole::Column || roleValue() == AccessibilityRole::TableHeaderContainer)
         relativeFrame = exposedTableAncestor() ? relativeFrameFromChildren() : FloatRect();
 
-
     // Mock objects and SVG objects need use the main thread since they do not have render nodes and are not painted with layers, respectively.
     // FIXME: Remove isNonLayerSVGObject when LBSE is enabled & SVG frames are cached.
-    if (!AXObjectCache::shouldServeInitialCachedFrame() || isMockObject() || isNonLayerSVGObject()) {
+    if (!AXObjectCache::shouldServeInitialCachedFrame() || isNonLayerSVGObject()) {
         return Accessibility::retrieveValueFromMainThread<FloatRect>([this] () -> FloatRect {
             if (auto* axObject = associatedAXObject())
                 return axObject->relativeFrame();
@@ -1277,18 +1290,21 @@ FloatRect AXIsolatedObject::relativeFrame() const
         });
     }
 
-    // InitialFrameRect stores the correct size, but not position, of the element before it is painted.
-    // We find the position of the nearest painted ancestor to use as the position until the object's frame
-    // is cached during painting.
-    auto* ancestor = Accessibility::findAncestor<AXIsolatedObject>(*this, false, [] (const auto& object) {
-        return object.hasCachedRelativeFrame();
-    });
-    auto frameRect = rectAttributeValue<FloatRect>(AXPropertyName::InitialFrameRect);
-    if (ancestor && frameRect.location() == FloatPoint())
-        frameRect.setLocation(ancestor->relativeFrame().location());
+    // Having an empty relative frame at this point means a frame hasn't been cached yet.
+    if (relativeFrame.isEmpty()) {
+        // InitialFrameRect stores the correct size, but not position, of the element before it is painted.
+        // We find the position of the nearest painted ancestor to use as the position until the object's frame
+        // is cached during painting.
+        auto* ancestor = Accessibility::findAncestor<AXIsolatedObject>(*this, false, [] (const auto& object) {
+            return object.hasCachedRelativeFrame();
+        });
+        relativeFrame = rectAttributeValue<FloatRect>(AXPropertyName::InitialFrameRect);
+        if (ancestor && relativeFrame.location() == FloatPoint())
+            relativeFrame.setLocation(ancestor->relativeFrame().location());
+    }
 
-    frameRect.moveBy({ remoteFrameOffset() });
-    return frameRect;
+    relativeFrame.moveBy({ remoteFrameOffset() });
+    return relativeFrame;
 }
 
 FloatRect AXIsolatedObject::relativeFrameFromChildren() const
@@ -1402,6 +1418,11 @@ String AXIsolatedObject::identifierAttribute() const
 
 CharacterRange AXIsolatedObject::doAXRangeForLine(unsigned lineIndex) const
 {
+#if ENABLE(AX_THREAD_TEXT_APIS)
+    if (AXObjectCache::useAXThreadTextApis())
+        return AXTextMarker { treeID(), objectID(), 0 }.rangeForLine(lineIndex);
+#endif
+
     return Accessibility::retrieveValueFromMainThread<CharacterRange>([&lineIndex, this] () -> CharacterRange {
         if (auto* object = associatedAXObject())
             return object->doAXRangeForLine(lineIndex);
@@ -1466,6 +1487,11 @@ IntRect AXIsolatedObject::doAXBoundsForRangeUsingCharacterOffset(const Character
 
 unsigned AXIsolatedObject::doAXLineForIndex(unsigned index)
 {
+#if ENABLE(AX_THREAD_TEXT_APIS)
+    if (AXObjectCache::useAXThreadTextApis())
+        return AXTextMarker { treeID(), objectID(), 0 }.lineNumberForIndex(index);
+#endif
+
     return Accessibility::retrieveValueFromMainThread<unsigned>([&index, this] () -> unsigned {
         if (auto* object = associatedAXObject())
             return object->doAXLineForIndex(index);

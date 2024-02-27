@@ -488,6 +488,7 @@ void MediaPlayerPrivateRemote::rateChanged(double rate)
 
 void MediaPlayerPrivateRemote::playbackStateChanged(bool paused, MediaTime&& mediaTime, MonotonicTime&& wallTime)
 {
+    INFO_LOG(LOGIDENTIFIER, mediaTime);
     m_cachedState.paused = paused;
     m_currentTimeEstimator.setTime(mediaTime, wallTime);
     if (auto player = m_player.get())
@@ -517,6 +518,9 @@ void MediaPlayerPrivateRemote::sizeChanged(WebCore::FloatSize naturalSize)
 
 void MediaPlayerPrivateRemote::currentTimeChanged(const MediaTime& mediaTime, const MonotonicTime& queryTime, bool timeIsProgressing)
 {
+    INFO_LOG(LOGIDENTIFIER, mediaTime, " seeking:", bool(m_seeking));
+    if (m_seeking)
+        return;
     auto oldCachedTime = m_currentTimeEstimator.cachedTime();
     auto oldTimeIsProgressing = m_currentTimeEstimator.timeIsProgressing();
     auto reverseJump = mediaTime < oldCachedTime;
@@ -580,11 +584,7 @@ void MediaPlayerPrivateRemote::acceleratedRenderingStateChanged()
 
 void MediaPlayerPrivateRemote::updateConfiguration(RemoteMediaPlayerConfiguration&& configuration)
 {
-    bool oldSupportsAcceleraterRendering = supportsAcceleratedRendering();
     m_configuration = WTFMove(configuration);
-    // player->renderingCanBeAccelerated() result is dependent on m_configuration.supportsAcceleratedRendering value.
-    if (RefPtr player = m_player.get(); player && oldSupportsAcceleraterRendering != supportsAcceleratedRendering())
-        player->renderingModeChanged();
 }
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
@@ -1020,9 +1020,6 @@ void MediaPlayerPrivateRemote::setVideoFullscreenLayer(PlatformLayer* videoFulls
 #if PLATFORM(COCOA)
     m_videoLayerManager->setVideoFullscreenLayer(videoFullscreenLayer, WTFMove(completionHandler), nullptr);
 #endif
-    // A Fullscreen layer has been set, this could update the value returned by player->renderingCanBeAccelerated().
-    if (RefPtr player = m_player.get())
-        player->renderingModeChanged();
 }
 
 void MediaPlayerPrivateRemote::updateVideoFullscreenInlineImage()
@@ -1541,12 +1538,13 @@ void MediaPlayerPrivateRemote::setPreferredDynamicRangeMode(WebCore::DynamicRang
     connection().send(Messages::RemoteMediaPlayerProxy::SetPreferredDynamicRangeMode(mode), m_id);
 }
 
-bool MediaPlayerPrivateRemote::performTaskAtTime(WTF::Function<void()>&& completionHandler, const MediaTime& mediaTime)
+bool MediaPlayerPrivateRemote::performTaskAtTime(WTF::Function<void()>&& task, const MediaTime& mediaTime)
 {
-    auto asyncReplyHandler = [weakThis = WeakPtr { *this }, completionHandler = WTFMove(completionHandler)](std::optional<MediaTime> currentTime, std::optional<MonotonicTime> queryTime) mutable {
-        if (RefPtr protectedThis = weakThis.get(); protectedThis && currentTime && queryTime)
-            protectedThis->m_currentTimeEstimator.setTime(*currentTime, *queryTime);
-        completionHandler();
+    auto asyncReplyHandler = [weakThis = WeakPtr { *this }, task = WTFMove(task)](std::optional<MediaTime> currentTime, std::optional<MonotonicTime> queryTime) mutable {
+        if (!weakThis || !currentTime || !queryTime)
+            return;
+        weakThis->m_currentTimeEstimator.setTime(*currentTime, *queryTime);
+        task();
     };
 
     connection().sendWithAsyncReply(Messages::RemoteMediaPlayerProxy::PerformTaskAtTime(mediaTime, MonotonicTime::now()), WTFMove(asyncReplyHandler), m_id);

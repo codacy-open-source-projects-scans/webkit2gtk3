@@ -115,8 +115,6 @@ public:
     Ref<ComputeSeekPromise> computeSeekTime(const SeekTarget&);
     void seekToTime(const MediaTime&);
 
-    bool canPlayThroughRange(const PlatformTimeRanges&);
-
     bool hasVideo() const;
 
     bool active() const { return m_active; }
@@ -190,7 +188,7 @@ private:
     void videoTrackSelectedChanged(VideoTrack&) final;
 
     // EventTarget
-    EventTargetInterface eventTargetInterface() const final { return SourceBufferEventTargetInterfaceType; }
+    enum EventTargetInterfaceType eventTargetInterface() const final { return EventTargetInterfaceType::SourceBuffer; }
 
     bool isRemoved() const;
     void scheduleEvent(const AtomString& eventName);

@@ -81,6 +81,7 @@ const TestFeatures& TestOptions::defaults()
             { "BroadcastChannelOriginPartitioningEnabled", false },
             { "BuiltInNotificationsEnabled", false },
             { "CSSOMViewScrollingAPIEnabled", true },
+            { "CSSUnprefixedBackdropFilterEnabled", true },
             { "CaptureAudioInGPUProcessEnabled", captureAudioInGPUProcessEnabledValue },
             { "CaptureAudioInUIProcessEnabled", false },
             { "CaptureVideoInGPUProcessEnabled", captureVideoInGPUProcessEnabledValue },
@@ -129,6 +130,7 @@ const TestFeatures& TestOptions::defaults()
             { "TabsToLinks", false },
             { "TextAutosizingEnabled", false },
             { "TextAutosizingUsesIdempotentMode", false },
+            { "UnifiedPDFEnabled", false },
             { "UsesBackForwardCache", false },
             { "WebAuthenticationEnabled", true },
 #if ENABLE(WEBGL) && PLATFORM(COCOA)

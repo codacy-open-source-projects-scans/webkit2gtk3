@@ -32,6 +32,7 @@
 #import "ColorCocoa.h"
 #import "CompositionHighlight.h"
 #import "CompositionUnderline.h"
+#import "DateComponents.h"
 #import "Editor.h"
 #import "ElementAncestorIteratorInlines.h"
 #import "FrameSelection.h"
@@ -464,20 +465,19 @@ String AccessibilityObject::rolePlatformDescription() const
         return AXHeadingText();
 
     if ([axRole isEqualToString:NSAccessibilityTextFieldRole]) {
-        auto* node = this->node();
-        if (is<HTMLInputElement>(node)) {
-            auto& input = downcast<HTMLInputElement>(*node);
-            if (input.isEmailField())
+        if (RefPtr input = dynamicDowncast<HTMLInputElement>(node())) {
+            if (input->isEmailField())
                 return AXEmailFieldText();
-            if (input.isTelephoneField())
+            if (input->isTelephoneField())
                 return AXTelephoneFieldText();
-            if (input.isURLField())
+            if (input->isURLField())
                 return AXURLFieldText();
-            if (input.isNumberField())
+            if (input->isNumberField())
                 return AXNumberFieldText();
 
             // These input types are not enabled on mac yet, we check the type attribute for now.
-            auto& type = input.attributeWithoutSynchronization(HTMLNames::typeAttr);
+            // FIXME: "date", "time", and "datetime-local" are enabled on macOS.
+            auto& type = input->attributeWithoutSynchronization(HTMLNames::typeAttr);
             if (equalLettersIgnoringASCIICase(type, "date"_s))
                 return AXDateFieldText();
             if (equalLettersIgnoringASCIICase(type, "time"_s))
@@ -510,6 +510,44 @@ String AccessibilityObject::rolePlatformDescription() const
         return AXSummaryText();
 
     return String();
+}
+
+// VO requests a bit-wise combination of these constants via the API
+// AXDateTimeComponents to determine which fields of a datetime value are presented to the user.
+typedef NS_OPTIONS(NSUInteger, AXFDateTimeComponent) {
+    AXFDateTimeComponentSeconds = 0x0002,
+    AXFDateTimeComponentMinutes = 0x0004,
+    AXFDateTimeComponentHours = 0x0008,
+    AXFDateTimeComponentDays = 0x0020,
+    AXFDateTimeComponentMonths = 0x0040,
+    AXFDateTimeComponentYears = 0x0080,
+    AXFDateTimeComponentEras = 0x0100
+};
+
+unsigned AccessibilityObject::dateTimeComponents() const
+{
+    if (!isDateTime())
+        return 0;
+
+    auto* input = dynamicDowncast<HTMLInputElement>(node());
+    if (!input)
+        return 0;
+
+    switch (input->dateType()) {
+    case DateComponentsType::Invalid:
+        return 0;
+    case DateComponentsType::Date:
+        return AXFDateTimeComponentDays | AXFDateTimeComponentMonths | AXFDateTimeComponentYears;
+    case DateComponentsType::DateTimeLocal:
+        return AXFDateTimeComponentSeconds | AXFDateTimeComponentMinutes | AXFDateTimeComponentHours
+            | AXFDateTimeComponentDays | AXFDateTimeComponentMonths | AXFDateTimeComponentYears;
+    case DateComponentsType::Month:
+        return AXFDateTimeComponentMonths;
+    case DateComponentsType::Time:
+        return AXFDateTimeComponentSeconds | AXFDateTimeComponentMinutes | AXFDateTimeComponentHours;
+    case DateComponentsType::Week:
+        return 0;
+    };
 }
 
 // NSAttributedString support.
@@ -625,11 +663,15 @@ static void attributedStringSetExpandedText(NSMutableAttributedString *attrStrin
 
 static void attributedStringSetElement(NSMutableAttributedString *attrString, NSString *attribute, AccessibilityObject* object, const NSRange& range)
 {
-    if (!attributedStringContainsRange(attrString, range) || !is<AccessibilityRenderObject>(object))
+    if (!attributedStringContainsRange(attrString, range))
+        return;
+
+    auto* renderObject = dynamicDowncast<AccessibilityRenderObject>(object);
+    if (!renderObject)
         return;
 
     // Make a serializable AX object.
-    auto* renderer = downcast<AccessibilityRenderObject>(*object).renderer();
+    auto* renderer = renderObject->renderer();
     if (!renderer)
         return;
 
@@ -816,7 +858,7 @@ PlatformRoleMap createPlatformRoleMap()
         { AccessibilityRole::Meter, NSAccessibilityLevelIndicatorRole },
         { AccessibilityRole::Incrementor, NSAccessibilityIncrementorRole },
         { AccessibilityRole::ComboBox, NSAccessibilityComboBoxRole },
-        { AccessibilityRole::DateTime, NSAccessibilityTextFieldRole },
+        { AccessibilityRole::DateTime, @"AXDateTimeArea" },
         { AccessibilityRole::Splitter, NSAccessibilitySplitterRole },
         { AccessibilityRole::Code, NSAccessibilityGroupRole },
         { AccessibilityRole::ColorWell, NSAccessibilityColorWellRole },

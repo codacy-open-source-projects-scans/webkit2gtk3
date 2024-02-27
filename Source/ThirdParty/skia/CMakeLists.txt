@@ -165,7 +165,6 @@ add_library(Skia STATIC
     src/core/SkBitmapProcState.cpp
     src/core/SkBitmapProcState_matrixProcs.cpp
     src/core/SkBitmapProcState_opts.cpp
-    src/core/SkBitmapProcState_opts_hsw.cpp
     src/core/SkBitmapProcState_opts_ssse3.cpp
     src/core/SkBlendMode.cpp
     src/core/SkBlendModeBlender.cpp
@@ -236,6 +235,7 @@ add_library(Skia STATIC
     src/core/SkImageFilterTypes.cpp
     src/core/SkImageGenerator.cpp
     src/core/SkImageInfo.cpp
+    src/core/SkKnownRuntimeEffects.cpp
     src/core/SkLatticeIter.cpp
     src/core/SkLineClipper.cpp
     src/core/SkLocalMatrixImageFilter.cpp
@@ -329,7 +329,6 @@ add_library(Skia STATIC
     src/core/SkSwizzler_opts_ssse3.cpp
     src/core/SkTaskGroup.cpp
     src/core/SkTextBlob.cpp
-    src/core/SkTextBlobTrace.cpp
     src/core/SkTypeface.cpp
     src/core/SkTypefaceCache.cpp
     src/core/SkTypeface_remote.cpp
@@ -517,7 +516,6 @@ add_library(Skia STATIC
     src/gpu/ganesh/gl/builders/GrGLProgramBuilder.cpp
     src/gpu/ganesh/gl/builders/GrGLShaderStringBuilder.cpp
     src/gpu/ganesh/gl/epoxy/GrGLMakeEpoxyEGLInterface.cpp
-    src/gpu/ganesh/gl/epoxy/GrGLMakeNativeInterface_epoxy.cpp
     src/gpu/ganesh/glsl/GrGLSLBlend.cpp
     src/gpu/ganesh/glsl/GrGLSLFragmentShaderBuilder.cpp
     src/gpu/ganesh/glsl/GrGLSLProgramBuilder.cpp
@@ -846,7 +844,6 @@ add_library(Skia STATIC
     src/ports/SkFontMgr_fontconfig.cpp
     src/ports/SkGlobalInitialization_default.cpp
     src/ports/SkImageGenerator_skia.cpp
-    src/ports/SkMemory_malloc.cpp
     src/ports/SkOSFile_posix.cpp
     src/ports/SkOSFile_stdio.cpp
 
@@ -858,6 +855,20 @@ add_library(Skia STATIC
     modules/skcms/src/skcms_TransformHsw.cc
     modules/skcms/src/skcms_TransformSkx.cc
 )
+
+if (USE_SYSTEM_MALLOC)
+    target_sources(Skia PRIVATE src/ports/SkMemory_malloc.cpp)
+else ()
+    # Using WTF headers needs including Source/WTF/config.h first, and
+    # in turn that needs cmakeconfig.h from the top build directory, so
+    # arrange the include directories accordingly.
+    target_sources(Skia PRIVATE ${WEBCORE_DIR}/platform/skia/SkiaAllocatorFastMalloc.cpp)
+    set_property(
+        SOURCE ${WEBCORE_DIR}/platform/skia/SkiaAllocatorFastMalloc.cpp
+        APPEND PROPERTY INCLUDE_DIRECTORIES ${WTF_DIR} ${CMAKE_BINARY_DIR}
+    )
+    target_link_libraries(Skia PRIVATE WebKit::WTF)
+endif ()
 
 set_target_properties(Skia PROPERTIES
     CXX_STANDARD 17
@@ -914,6 +925,7 @@ target_compile_definitions(Skia PRIVATE
 )
 
 target_compile_definitions(Skia PUBLIC
+    SK_DISABLE_LEGACY_GL_MAKE_NATIVE_INTERFACE
     SK_DISABLE_LEGACY_IMAGE_READBUFFER
     SK_DISABLE_LEGACY_INIT_DECODERS
     SK_DISABLE_LEGACY_PNG_WRITEBUFFER

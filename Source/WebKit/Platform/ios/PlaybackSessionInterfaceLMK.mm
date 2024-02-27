@@ -28,10 +28,11 @@
 
 #if ENABLE(LINEAR_MEDIA_PLAYER)
 
+#import "WKSLinearMediaPlayer.h"
+#import "WKSLinearMediaTypes.h"
 #import <WebCore/MediaSelectionOption.h>
 #import <WebCore/PlaybackSessionModel.h>
 #import <WebCore/TimeRanges.h>
-#import <WebKitSwift/WebKitSwift.h>
 #import <wtf/OSObjectPtr.h>
 #import <wtf/WeakPtr.h>
 
@@ -206,6 +207,8 @@ WKSLinearMediaPlayer *PlaybackSessionInterfaceLMK::linearMediaPlayer() const
 
 void PlaybackSessionInterfaceLMK::durationChanged(double duration)
 {
+    [m_player setStartTime:0];
+    [m_player setEndTime:duration];
     [m_player setDuration:duration];
     [m_player setCanTogglePlayback:YES];
 }
@@ -213,6 +216,7 @@ void PlaybackSessionInterfaceLMK::durationChanged(double duration)
 void PlaybackSessionInterfaceLMK::currentTimeChanged(double currentTime, double)
 {
     [m_player setCurrentTime:currentTime];
+    [m_player setRemainingTime:std::max([m_player duration] - currentTime, 0.0)];
 }
 
 void PlaybackSessionInterfaceLMK::rateChanged(OptionSet<PlaybackSessionModel::PlaybackState> playbackState, double playbackRate, double)

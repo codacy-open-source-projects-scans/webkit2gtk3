@@ -35,6 +35,7 @@
 #include "TransformationMatrix.h"
 #include <wtf/Function.h>
 #include <wtf/RunLoop.h>
+#include <wtf/WorkerPool.h>
 #include <wtf/text/StringHash.h>
 
 #if USE(SKIA)
@@ -63,7 +64,9 @@ public:
     virtual Nicosia::PaintingEngine& paintingEngine() = 0;
 #elif USE(SKIA)
     virtual SkiaAcceleratedBufferPool* skiaAcceleratedBufferPool() const = 0;
+    virtual WorkerPool* skiaUnacceleratedThreadedRenderingPool() const = 0;
 #endif
+
     virtual RefPtr<Nicosia::ImageBackingStore> imageBackingStore(uint64_t, Function<RefPtr<Nicosia::Buffer>()>) = 0;
 };
 
@@ -131,6 +134,7 @@ public:
     void removeAnimation(const String&, std::optional<AnimatedProperty>) override;
     void suspendAnimations(MonotonicTime) override;
     void resumeAnimations() override;
+    void transformRelatedPropertyDidChange() override;
     bool usesContentsLayer() const override;
     void dumpAdditionalProperties(WTF::TextStream&, OptionSet<LayerTreeAsTextOptions>) const override;
 

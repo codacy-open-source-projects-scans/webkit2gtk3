@@ -95,6 +95,7 @@
 #include "StyleResolver.h"
 #include "Styleable.h"
 #include "TextAutoSizing.h"
+#include "ViewTransition.h"
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/MathExtras.h>
 #include <wtf/StackStats.h>
@@ -2061,6 +2062,24 @@ bool RenderElement::hasSelfPaintingLayer() const
         return false;
     auto& layerModelObject = downcast<RenderLayerModelObject>(*this);
     return layerModelObject.hasSelfPaintingLayer();
+}
+
+bool RenderElement::capturedInViewTransition() const
+{
+    if (!hasViewTransitionName())
+        return false;
+
+    return !!document().activeViewTransition();
+}
+
+bool RenderElement::hasViewTransitionName() const
+{
+    return !!style().viewTransitionName();
+}
+
+bool RenderElement::isViewTransitionPseudo() const
+{
+    return style().pseudoElementType() == PseudoId::ViewTransitionNew || style().pseudoElementType() == PseudoId::ViewTransitionOld;
 }
 
 bool RenderElement::checkForRepaintDuringLayout() const

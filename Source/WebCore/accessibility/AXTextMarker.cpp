@@ -492,8 +492,8 @@ AXTextRunLineID AXTextMarker::lineID() const
 {
     if (!isValid())
         return { };
-    if (!isInTextLeaf())
-        return toTextLeafMarker().lineID();
+    if (!isInTextRun())
+        return toTextRunMarker().lineID();
 
     const auto* runs = this->runs();
     size_t runIndex = runs->indexForOffset(offset());
@@ -504,8 +504,8 @@ int AXTextMarker::lineIndex() const
 {
     if (!isValid())
         return -1;
-    if (!isInTextLeaf())
-        return toTextLeafMarker().lineIndex();
+    if (!isInTextRun())
+        return toTextRunMarker().lineIndex();
 
     AXTextMarker startMarker;
     RefPtr object = isolatedObject();
@@ -541,6 +541,71 @@ int AXTextMarker::lineIndex() const
     return index;
 }
 
+CharacterRange AXTextMarker::rangeForLine(unsigned lineIndex) const
+{
+    if (!isValid())
+        return { };
+
+    RefPtr object = isolatedObject();
+    if (!object || !object->isTextControl())
+        return { };
+    // This implementation doesn't respect the offset as the only known callsite hardcodes zero. We'll need to make changes to support this if a usecase arrives for it.
+    RELEASE_ASSERT(!offset());
+
+    auto* stopObject = object->siblingOrParent(AXDirection::Next);
+    auto stopAtID = stopObject ? std::make_optional(stopObject->objectID()) : std::nullopt;
+
+    auto textRunMarker = toTextRunMarker(stopAtID);
+    // If we couldn't convert this object to a text-run marker, it means we are a text control with no text descendant.
+    if (!textRunMarker.isValid())
+        return { };
+
+    unsigned precedingLength = 0;
+    auto currentLineRange = textRunMarker.lineRange(LineRangeType::Current);
+    while (lineIndex && currentLineRange) {
+        precedingLength += currentLineRange.toString().length();
+        auto lineEndMarker = currentLineRange.end().nextLineEnd(stopAtID);
+        currentLineRange = { lineEndMarker.previousLineStart(stopAtID), WTFMove(lineEndMarker) };
+        --lineIndex;
+    }
+    return currentLineRange ? CharacterRange(precedingLength, currentLineRange.toString().length()) : CharacterRange();
+}
+
+int AXTextMarker::lineNumberForIndex(unsigned index) const
+{
+    RefPtr object = isolatedObject();
+    if (!object)
+        return -1;
+    auto* stopObject = object->siblingOrParent(AXDirection::Next);
+    auto stopAtID = stopObject ? std::make_optional(stopObject->objectID()) : std::nullopt;
+
+    // To match the behavior of the VisiblePosition implementation of this functionality, we need to
+    // check an extra position ahead (as tested by ax-thread-text-apis/textarea-line-for-index.html),
+    // so increment index.
+    ++index;
+
+    unsigned lineIndex = 0;
+    auto currentMarker = *this;
+    while (index) {
+        auto oldMarker = WTFMove(currentMarker);
+        currentMarker = oldMarker.findMarker(AXDirection::Next, stopAtID);
+        if (!currentMarker.isValid())
+            break;
+
+        object = currentMarker.isolatedObject();
+        // Skip line breaks to avoid double-counting a line change.
+        if (object && object->roleValue() == AccessibilityRole::LineBreak)
+            continue;
+
+        if (oldMarker.lineID() != currentMarker.lineID())
+            ++lineIndex;
+
+        --index;
+    }
+    // Only return the line number if the index was a valid offset into our descendants.
+    return !index ? lineIndex : -1;
+}
+
 bool AXTextMarker::atLineBoundaryForDirection(AXDirection direction) const
 {
     auto adjacentMarker = findMarker(direction);
@@ -557,7 +622,7 @@ unsigned AXTextMarker::offsetFromRoot() const
     if (RefPtr root = tree ? tree->rootNode() : nullptr) {
         AXTextMarker rootMarker { root->treeID(), root->objectID(), 0 };
         unsigned offset = 0;
-        auto current = rootMarker.toTextLeafMarker();
+        auto current = rootMarker.toTextRunMarker();
         while (current.isValid() && !hasSameObjectAndOffset(current)) {
             current = current.findMarker(AXDirection::Next);
             offset++;
@@ -575,8 +640,8 @@ AXTextMarker AXTextMarker::nextMarkerFromOffset(unsigned offset) const
 
     if (!isValid())
         return { };
-    if (!isInTextLeaf())
-        return toTextLeafMarker().nextMarkerFromOffset(offset);
+    if (!isInTextRun())
+        return toTextRunMarker().nextMarkerFromOffset(offset);
 
     auto marker = *this;
     while (offset) {
@@ -596,14 +661,14 @@ AXTextMarker AXTextMarker::findLastBefore(std::optional<AXID> stopAtID) const
 
     if (!isValid())
         return { };
-    if (!isInTextLeaf()) {
-        auto textLeafMarker = toTextLeafMarker();
-        // We couldn't turn this non-text-leaf marker into a marker pointing to actual text, e.g. because
+    if (!isInTextRun()) {
+        auto textRunMarker = toTextRunMarker();
+        // We couldn't turn this non-text-run marker into a marker pointing to actual text, e.g. because
         // this marker points at an empty container / group at the end of the document. In this case, we
         // call ourselves the last marker.
-        if (!textLeafMarker.isValid())
+        if (!textRunMarker.isValid())
             return *this;
-        return textLeafMarker.findLastBefore(stopAtID);
+        return textRunMarker.findLastBefore(stopAtID);
     }
 
     AXTextMarker marker;
@@ -620,10 +685,10 @@ String AXTextMarkerRange::toString() const
 {
     RELEASE_ASSERT(!isMainThread());
 
-    auto start = m_start.toTextLeafMarker();
+    auto start = m_start.toTextRunMarker();
     if (!start.isValid())
         return emptyString();
-    auto end = m_end.toTextLeafMarker();
+    auto end = m_end.toTextRunMarker();
     if (!end.isValid())
         return emptyString();
 
@@ -668,8 +733,8 @@ AXTextMarker AXTextMarker::findMarker(AXDirection direction, std::optional<AXID>
 {
     if (!isValid())
         return { };
-    if (!isInTextLeaf())
-        return toTextLeafMarker().findMarker(direction, stopAtID);
+    if (!isInTextRun())
+        return toTextRunMarker().findMarker(direction, stopAtID);
 
     if ((direction == AXDirection::Next && offset() < runs()->totalLength()) || (direction == AXDirection::Previous && offset() > 0))
         return { treeID(), objectID(), direction == AXDirection::Next ? offset() + 1 : offset() - 1 };
@@ -683,23 +748,23 @@ AXTextMarker AXTextMarker::findMarker(AXDirection direction, std::optional<AXID>
     return { };
 }
 
-AXTextMarker AXTextMarker::findMarker(AXDirection direction, AXTextUnit textUnit, AXTextUnitBoundary boundary) const
+AXTextMarker AXTextMarker::findMarker(AXDirection direction, AXTextUnit textUnit, AXTextUnitBoundary boundary, std::optional<AXID> stopAtID) const
 {
     if (!isValid())
         return { };
-    if (!isInTextLeaf())
-        return toTextLeafMarker().findMarker(direction, textUnit, boundary);
+    if (!isInTextRun())
+        return toTextRunMarker(stopAtID).findMarker(direction, textUnit, boundary, stopAtID);
 
     if (textUnit == AXTextUnit::Line) {
         // If, for example, we are asked to find the next line end, and are at the very end of a line already,
         // we need the end position of the next line instead. Determine this by checking the next or previous marker.
-        auto adjacentMarker = findMarker(direction);
+        auto adjacentMarker = findMarker(direction, stopAtID);
         if (adjacentMarker.lineID() != lineID()) {
             bool findOnNextLine = (direction == AXDirection::Previous && boundary == AXTextUnitBoundary::Start)
                 || (direction == AXDirection::Next && boundary == AXTextUnitBoundary::End);
 
             if (findOnNextLine)
-                return adjacentMarker.findMarker(direction, textUnit, boundary);
+                return adjacentMarker.findMarker(direction, textUnit, boundary, stopAtID);
         }
 
         size_t runIndex = runs()->indexForOffset(offset());
@@ -723,7 +788,7 @@ AXTextMarker AXTextMarker::findMarker(AXDirection direction, AXTextUnit textUnit
                     return linePosition;
                 linePosition = AXTextMarker(currentObject->treeID(), currentObject->objectID(), computeOffset(cumulativeOffset, currentRuns->runLength(i)));
             }
-            currentObject = findObjectWithRuns(*currentObject, direction);
+            currentObject = findObjectWithRuns(*currentObject, direction, stopAtID);
             if (currentObject)
                 currentRuns = currentObject->textRuns();
         }
@@ -734,32 +799,32 @@ AXTextMarker AXTextMarker::findMarker(AXDirection direction, AXTextUnit textUnit
     return { };
 }
 
-AXTextMarker AXTextMarker::toTextLeafMarker() const
+AXTextMarker AXTextMarker::toTextRunMarker(std::optional<AXID> stopAtID) const
 {
-    if (!isValid() || isInTextLeaf()) {
-        // If something has constructed a leaf marker, it should've done so with an in-bounds offset.
+    if (!isValid() || isInTextRun()) {
+        // If something has constructed a text-run marker, it should've done so with an in-bounds offset.
         RELEASE_ASSERT(!isValid() || isolatedObject()->textRuns()->totalLength() >= offset());
         return *this;
     }
 
-    // Find the leaf node our offset points to. For example:
+    // Find the node our offset points to. For example:
     // AXTextMarker { ID 1: Group, Offset 6 }
     // ID 1: Group
     //  - ID 2: Foo
     //  - ID 3: Line1
     //          Line2
-    // Calling toTextLeafMarker() on the original marker should yield new marker:
+    // Calling toTextRunMarker() on the original marker should yield new marker:
     // AXTextMarker { ID 3: StaticText, Offset 3 }
     // Because we had to walk over ID 2 which had length 3 text.
     size_t precedingOffset = 0;
     RefPtr start = isolatedObject();
-    RefPtr current = start->hasTextRuns() ? WTFMove(start) : findObjectWithRuns(*start, AXDirection::Next);
+    RefPtr current = start->hasTextRuns() ? WTFMove(start) : findObjectWithRuns(*start, AXDirection::Next, stopAtID);
     while (current) {
         unsigned totalLength = current->textRuns()->totalLength();
         if (precedingOffset + totalLength >= offset())
             break;
         precedingOffset += totalLength;
-        current = findObjectWithRuns(*current, AXDirection::Next);
+        current = findObjectWithRuns(*current, AXDirection::Next, stopAtID);
     }
 
     if (!current)
@@ -769,11 +834,10 @@ AXTextMarker AXTextMarker::toTextLeafMarker() const
     return { current->treeID(), current->objectID(), static_cast<unsigned>(offset() - precedingOffset) };
 }
 
-bool AXTextMarker::isInTextLeaf() const
+bool AXTextMarker::isInTextRun() const
 {
-    RefPtr object = this->isolatedObject();
-    // FIXME: Is it possible for non-leaf nodes to have text runs? If so, we don't handle them correctly.
-    return !object || (!object->children().size() && object->textRuns());
+    const auto* runs = this->runs();
+    return runs && runs->size();
 }
 
 AXTextMarkerRange AXTextMarker::lineRange(LineRangeType type) const

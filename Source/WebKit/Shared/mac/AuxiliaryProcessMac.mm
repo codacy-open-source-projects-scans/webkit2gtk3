@@ -294,15 +294,9 @@ static String sandboxDirectory(WebCore::AuxiliaryProcessType processType, const 
     return directory.toString();
 }
 
-static String sandboxFilePath(const String& directoryPath, const CString& header)
+static String sandboxFilePath(const String& directoryPath)
 {
-    // Make the filename semi-unique based on the contents of the header.
-
-    auto crypto = PAL::CryptoDigest::create(PAL::CryptoDigest::Algorithm::SHA_256);
-    crypto->addBytes(header.data(), header.length());
-    auto hash = crypto->computeHash();
-
-    return makeString(directoryPath, "/CompiledSandbox+", base64URLEncoded(hash.data(), hash.size()));
+    return makeString(directoryPath, "/CompiledSandbox");
 }
 
 static bool ensureSandboxCacheDirectory(const SandboxInfo& info)
@@ -506,8 +500,6 @@ static bool tryApplyCachedSandbox(const SandboxInfo& info)
     ASSERT(static_cast<void *>(sandboxDataPtr + profile.size) <= static_cast<void *>(cachedSandboxContents.data() + cachedSandboxContents.size()));
     profile.data = sandboxDataPtr;
 
-    AuxiliaryProcess::setNotifyOptions();
-
     if (sandbox_apply(&profile)) {
         WTFLogAlways("%s: Could not apply cached sandbox: %s\n", getprogname(), safeStrerror(errno).data());
         return false;
@@ -546,8 +538,6 @@ static bool compileAndApplySandboxSlowCase(const String& profileOrProfilePath, b
     char* errorBuf;
     CString temp = isProfilePath ? FileSystem::fileSystemRepresentation(profileOrProfilePath) : profileOrProfilePath.utf8();
     uint64_t flags = isProfilePath ? SANDBOX_NAMED_EXTERNAL : 0;
-
-    AuxiliaryProcess::setNotifyOptions();
 
 ALLOW_DEPRECATED_DECLARATIONS_BEGIN
     if (sandbox_init_with_parameters(temp.data(), flags, parameters.namedParameterArray(), &errorBuf)) {
@@ -590,7 +580,7 @@ static bool applySandbox(const AuxiliaryProcessInitializationParameters& paramet
     }
 
     String directoryPath { sandboxDirectory(parameters.processType, dataVaultParentDirectory) };
-    String filePath = sandboxFilePath(directoryPath, *header);
+    String filePath = sandboxFilePath(directoryPath);
     SandboxInfo info {
         dataVaultParentDirectory,
         directoryPath,
@@ -610,8 +600,6 @@ static bool applySandbox(const AuxiliaryProcessInitializationParameters& paramet
     if (!sandboxProfile)
         return compileAndApplySandboxSlowCase(profileOrProfilePath, isProfilePath, sandboxInitializationParameters);
 
-    AuxiliaryProcess::setNotifyOptions();
-    
     if (sandbox_apply(sandboxProfile.get())) {
         WTFLogAlways("%s: Could not apply compiled sandbox: %s\n", getprogname(), safeStrerror(errno).data());
         CRASH();

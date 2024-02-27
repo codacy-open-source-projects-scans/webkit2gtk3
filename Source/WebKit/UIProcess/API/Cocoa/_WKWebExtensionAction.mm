@@ -51,12 +51,7 @@ using CocoaMenuItem = UIMenuElement;
 
 #if ENABLE(WK_WEB_EXTENSIONS)
 
-- (void)dealloc
-{
-    ASSERT(isMainRunLoop());
-
-    _webExtensionAction->~WebExtensionAction();
-}
+WK_OBJECT_DEALLOC_IMPL_ON_MAIN_THREAD(_WKWebExtensionAction, WebExtensionAction, _webExtensionAction);
 
 - (BOOL)isEqual:(id)object
 {
@@ -123,6 +118,13 @@ using CocoaMenuItem = UIMenuElement;
 {
     return _webExtensionAction->presentsPopup();
 }
+
+#if PLATFORM(IOS_FAMILY)
+- (UIViewController *)popupViewController
+{
+    return _webExtensionAction->popupViewController();
+}
+#endif
 
 - (WKWebView *)popupWebView
 {
@@ -196,6 +198,13 @@ using CocoaMenuItem = UIMenuElement;
 {
     return NO;
 }
+
+#if PLATFORM(IOS_FAMILY)
+- (UIViewController *)popupViewController
+{
+    return nil;
+}
+#endif
 
 - (WKWebView *)popupWebView
 {

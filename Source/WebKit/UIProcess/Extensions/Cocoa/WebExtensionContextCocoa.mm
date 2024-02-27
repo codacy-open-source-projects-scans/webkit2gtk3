@@ -1406,7 +1406,7 @@ RefPtr<WebExtensionWindow> WebExtensionContext::getWindow(WebExtensionWindowIden
 
     if (isCurrent(identifier)) {
         if (webPageProxyIdentifier) {
-            if (auto tab = getCurrentTab(webPageProxyIdentifier.value(), ignoreExtensionAccess))
+            if (auto tab = getCurrentTab(webPageProxyIdentifier.value(), IncludeExtensionViews::Yes, ignoreExtensionAccess))
                 result = tab->window();
         }
 
@@ -1488,20 +1488,51 @@ RefPtr<WebExtensionTab> WebExtensionContext::getTab(WebExtensionTabIdentifier id
     return result;
 }
 
-RefPtr<WebExtensionTab> WebExtensionContext::getTab(WebPageProxyIdentifier webPageProxyIdentifier, std::optional<WebExtensionTabIdentifier> identifier, IgnoreExtensionAccess ignoreExtensionAccess) const
+RefPtr<WebExtensionTab> WebExtensionContext::getTab(WebPageProxyIdentifier webPageProxyIdentifier, std::optional<WebExtensionTabIdentifier> identifier, IncludeExtensionViews includeExtensionViews, IgnoreExtensionAccess ignoreExtensionAccess) const
 {
     if (identifier)
-        return getTab(identifier.value());
+        return getTab(identifier.value(), ignoreExtensionAccess);
 
-    if (m_backgroundWebView && webPageProxyIdentifier == m_backgroundWebView.get()._page->identifier())
+    return getCurrentTab(webPageProxyIdentifier, includeExtensionViews, ignoreExtensionAccess);
+}
+
+RefPtr<WebExtensionTab> WebExtensionContext::getCurrentTab(WebPageProxyIdentifier webPageProxyIdentifier, IncludeExtensionViews includeExtensionViews, IgnoreExtensionAccess ignoreExtensionAccess) const
+{
+    if (includeExtensionViews == IncludeExtensionViews::Yes && m_backgroundWebView && webPageProxyIdentifier == m_backgroundWebView.get()._page->identifier()) {
+        if (RefPtr window = frontmostWindow())
+            return window->activeTab();
         return nullptr;
+    }
 
     RefPtr<WebExtensionTab> result;
 
-    for (auto entry : m_extensionPageTabMap) {
-        if (entry.key.identifier() == webPageProxyIdentifier) {
-            result = m_tabMap.get(entry.value);
+    // Search actions for the page.
+    if (includeExtensionViews == IncludeExtensionViews::Yes) {
+        for (auto entry : m_popupPageActionMap) {
+            if (entry.key.identifier() != webPageProxyIdentifier)
+                continue;
+
+            RefPtr tab = entry.value->tab();
+            RefPtr window = tab ? tab->window() : entry.value->window();
+
+            if (!tab && window)
+                tab = window->activeTab();
+
+            if (!tab)
+                continue;
+
+            result = tab;
             break;
+        }
+    }
+
+    // Search open tabs for the page.
+    if (!result) {
+        for (auto entry : m_extensionPageTabMap) {
+            if (entry.key.identifier() == webPageProxyIdentifier) {
+                result = m_tabMap.get(entry.value);
+                break;
+            }
         }
     }
 
@@ -1518,55 +1549,6 @@ RefPtr<WebExtensionTab> WebExtensionContext::getTab(WebPageProxyIdentifier webPa
                 break;
         }
     }
-
-    if (!result) {
-        RELEASE_LOG_ERROR(Extensions, "Tab for page %{public}llu was not found", webPageProxyIdentifier.toUInt64());
-        return nullptr;
-    }
-
-    if (!result->isValid()) {
-        RELEASE_LOG_ERROR(Extensions, "Tab %{public}llu has nil delegate; reference not removed via didCloseTab: before release", result->identifier().toUInt64());
-        forgetTab(result->identifier());
-        return nullptr;
-    }
-
-    if (ignoreExtensionAccess == IgnoreExtensionAccess::No && !result->extensionHasAccess())
-        return nullptr;
-
-    return result;
-}
-
-RefPtr<WebExtensionTab> WebExtensionContext::getCurrentTab(WebPageProxyIdentifier webPageProxyIdentifier, IgnoreExtensionAccess ignoreExtensionAccess) const
-{
-    if (m_backgroundWebView && webPageProxyIdentifier == m_backgroundWebView.get()._page->identifier()) {
-        if (RefPtr window = frontmostWindow())
-            return window->activeTab();
-        return nullptr;
-    }
-
-    RefPtr<WebExtensionTab> result;
-
-    // Search actions for the page.
-    for (auto entry : m_popupPageActionMap) {
-        if (entry.key.identifier() != webPageProxyIdentifier)
-            continue;
-
-        RefPtr tab = entry.value->tab();
-        RefPtr window = tab ? tab->window() : entry.value->window();
-
-        if (!tab && window)
-            tab = window->activeTab();
-
-        if (!tab)
-            continue;
-
-        result = tab;
-        break;
-    }
-
-    // Search open tabs for the page.
-    if (!result)
-        result = getTab(webPageProxyIdentifier, std::nullopt, ignoreExtensionAccess);
 
     if (!result) {
         RELEASE_LOG_ERROR(Extensions, "Tab for page %{public}llu was not found", webPageProxyIdentifier.toUInt64());
@@ -2507,6 +2489,22 @@ Vector<WebExtensionContext::PageIdentifierTuple> WebExtensionContext::inspectorB
 
     return result;
 }
+
+Vector<WebExtensionContext::PageIdentifierTuple> WebExtensionContext::inspectorPageIdentifiers() const
+{
+    Vector<PageIdentifierTuple> result;
+
+    for (auto [inspector, tab] : loadedInspectors()) {
+        RefPtr window = tab ? tab->window() : nullptr;
+
+        auto tabIdentifier = tab ? std::optional(tab->identifier()) : std::nullopt;
+        auto windowIdentifier = window ? std::optional(window->identifier()) : std::nullopt;
+
+        result.append({ inspector->inspectorPage()->webPageID(), tabIdentifier, windowIdentifier });
+    }
+
+    return result;
+}
 #endif // ENABLE(INSPECTOR_EXTENSIONS)
 
 Vector<WebExtensionContext::PageIdentifierTuple> WebExtensionContext::popupPageIdentifiers() const
@@ -2886,7 +2884,7 @@ void WebExtensionContext::performTasksAfterBackgroundContentLoads()
     }).get());
 }
 
-void WebExtensionContext::wakeUpBackgroundContentIfNecessaryToFireEvents(EventListenerTypeSet types, CompletionHandler<void()>&& completionHandler)
+void WebExtensionContext::wakeUpBackgroundContentIfNecessaryToFireEvents(EventListenerTypeSet&& types, CompletionHandler<void()>&& completionHandler)
 {
     if (extension().backgroundContentIsPersistent()) {
         completionHandler();
@@ -3214,6 +3212,7 @@ void WebExtensionContext::loadInspectorBackgroundPage(WebInspectorUIProxy& inspe
 
         Ref process = webView._page->process();
         ASSERT(inspectorWebView._page->process() == process);
+        process->send(Messages::WebExtensionContextProxy::AddInspectorPageIdentifier(inspectorWebView._page->webPageID(), tab->identifier(), windowIdentifier), identifier());
         process->send(Messages::WebExtensionContextProxy::AddInspectorBackgroundPageIdentifier(webView._page->webPageID(), tab->identifier(), windowIdentifier), identifier());
         process->send(Messages::WebExtensionContextProxy::DispatchDevToolsPanelsThemeChangedEvent(appearance), identifier());
 

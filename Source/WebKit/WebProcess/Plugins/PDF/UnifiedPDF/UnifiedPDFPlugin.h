@@ -67,7 +67,7 @@ enum class RepaintRequirement : uint8_t {
 class AnnotationTrackingState {
 public:
     OptionSet<RepaintRequirement> startAnnotationTracking(RetainPtr<PDFAnnotation>&&, WebEventType, WebMouseEventButton);
-    OptionSet<RepaintRequirement> finishAnnotationTracking(WebEventType, WebMouseEventButton);
+    OptionSet<RepaintRequirement> finishAnnotationTracking(PDFAnnotation* annotationUnderMouse, WebEventType, WebMouseEventButton);
 
     PDFAnnotation *trackedAnnotation() const { return m_trackedAnnotation.get(); }
     bool isBeingHovered() const;
@@ -136,6 +136,7 @@ private:
     float scaleForFitToView() const;
 
     CGFloat scaleFactor() const override;
+    float contentScaleFactor() const final;
 
     void didBeginMagnificationGesture() override;
     void didEndMagnificationGesture() override;
@@ -144,7 +145,8 @@ private:
     WebCore::IntSize documentSize() const;
     WebCore::IntSize contentsSize() const override;
     unsigned firstPageHeight() const override;
-    unsigned heightForPage(PDFDocumentLayout::PageIndex) const;
+    unsigned heightForPageAtIndex(PDFDocumentLayout::PageIndex) const;
+    WebCore::FloatRect layoutBoundsForPageAtIndex(PDFDocumentLayout::PageIndex) const;
 
     void scheduleRenderingUpdate();
 
@@ -163,6 +165,7 @@ private:
 
     void scrollbarStyleChanged(WebCore::ScrollbarStyle, bool forceUpdate) override;
     void updateScrollbars() override;
+    void willAttachScrollingNode() final;
     void didAttachScrollingNode() final;
 
     bool geometryDidChange(const WebCore::IntSize&, const WebCore::AffineTransform&) override;
@@ -247,7 +250,9 @@ private:
     void continueTrackingSelection(PDFDocumentLayout::PageIndex, const WebCore::FloatPoint& pagePoint);
     void stopTrackingSelection();
     void setCurrentSelection(RetainPtr<PDFSelection>&&);
-    void repaintOnSelectionActiveStateChangeIfNeeded(ActiveStateChangeReason);
+    RetainPtr<PDFSelection> protectedCurrentSelection() const;
+    Vector<WebCore::FloatRect> selectionBoundsAcrossDocument(const PDFSelection *) const;
+    void repaintOnSelectionActiveStateChangeIfNeeded(ActiveStateChangeReason, const Vector<WebCore::FloatRect>& additionalDocumentRectsToRepaint = { });
     bool isSelectionActiveAfterContextMenuInteraction() const;
 
     String selectionString() const override;
@@ -350,11 +355,13 @@ private:
     void followLinkAnnotation(PDFAnnotation *);
 
     void startTrackingAnnotation(RetainPtr<PDFAnnotation>&&, WebEventType, WebMouseEventButton);
-    void finishTrackingAnnotation(WebEventType, WebMouseEventButton, OptionSet<RepaintRequirement> = { });
+    void updateTrackedAnnotation(PDFAnnotation *annotationUnderMouse);
+    void finishTrackingAnnotation(PDFAnnotation *annotationUnderMouse, WebEventType, WebMouseEventButton, OptionSet<RepaintRequirement> = { });
 
     RefPtr<WebCore::GraphicsLayer> createGraphicsLayer(const String& name, WebCore::GraphicsLayer::Type);
 
     void setNeedsRepaintInDocumentRect(OptionSet<RepaintRequirement>, const WebCore::FloatRect&);
+    void setNeedsRepaintInDocumentRects(OptionSet<RepaintRequirement>, const Vector<WebCore::FloatRect>&);
 
     /*
         Unified PDF Plugin coordinate spaces, in depth order:
@@ -399,7 +406,7 @@ private:
 
     bool isTaggedPDF() const;
 
-    std::pair<bool, bool> shouldShowDebugIndicators() const;
+    bool shouldShowDebugIndicators() const;
 
 #if PLATFORM(MAC)
     void createPasswordEntryForm();
@@ -407,6 +414,8 @@ private:
 
     Ref<AsyncPDFRenderer> asyncRenderer();
     RefPtr<AsyncPDFRenderer> asyncRendererIfExists() const;
+
+    void paintBackgroundLayerForPage(const WebCore::GraphicsLayer*, WebCore::GraphicsContext&, const WebCore::FloatRect&);
 
     PDFDocumentLayout m_documentLayout;
     RefPtr<WebCore::GraphicsLayer> m_rootLayer;

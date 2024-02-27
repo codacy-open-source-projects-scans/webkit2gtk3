@@ -426,6 +426,9 @@ NSURL *WebExtension::resourceFileURLForPath(NSString *path)
 {
     ASSERT(path);
 
+    if ([path hasPrefix:@"/"])
+        path = [path substringFromIndex:1];
+
     if (!path.length || !m_resourceBaseURL)
         return nil;
 
@@ -1615,8 +1618,11 @@ void WebExtension::populateCommandsIfNeeded()
             continue;
         }
 
-        if (isActionCommand && !description.length)
+        if (isActionCommand && !description.length) {
             description = displayActionLabel();
+            if (!description.length)
+                description = displayShortName();
+        }
 
         commandData.description = description;
 

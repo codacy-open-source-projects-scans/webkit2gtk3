@@ -103,6 +103,7 @@ ALWAYS_INLINE auto ContainerNode::removeAllChildrenWithScriptAssertion(ChildChan
         return hadElementChild ? DidRemoveElements::Yes : DidRemoveElements::No;
     }
 
+    ASSERT_WITH_SECURITY_IMPLICATION(ScriptDisallowedScope::InMainThread::isEventDispatchAllowedInSubtree(*this));
     if (source == ChildChange::Source::API) {
         ChildListMutationScope mutation(*this);
         for (auto& child : children) {
@@ -151,8 +152,13 @@ ALWAYS_INLINE auto ContainerNode::removeAllChildrenWithScriptAssertion(ChildChan
 
     ASSERT_WITH_SECURITY_IMPLICATION(!document().selection().selection().isOrphan());
 
-    if (deferChildrenChanged == DeferChildrenChanged::No)
+    if (deferChildrenChanged == DeferChildrenChanged::No) {
+#if ASSERT_ENABLED || ENABLE(SECURITY_ASSERTIONS)
+        auto treeVersion = document().domTreeVersion();
+#endif
         childrenChanged(childChange);
+        ASSERT_WITH_SECURITY_IMPLICATION(document().domTreeVersion() > treeVersion);
+    }
 
     return hadElementChild ? DidRemoveElements::Yes : DidRemoveElements::No;
 }
@@ -186,12 +192,10 @@ ALWAYS_INLINE bool ContainerNode::removeNodeWithScriptAssertion(Node& childToRem
         ChildListMutationScope(*this).willRemoveChild(childToRemove);
     }
 
+    ASSERT_WITH_SECURITY_IMPLICATION(ScriptDisallowedScope::InMainThread::isEventDispatchAllowedInSubtree(childToRemove));
     if (source == ChildChange::Source::API) {
         childToRemove.notifyMutationObserversNodeWillDetach();
-        if (!document().shouldNotFireMutationEvents()) {
-            RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(ScriptDisallowedScope::InMainThread::isEventDispatchAllowedInSubtree(childToRemove));
-            dispatchChildRemovalEvents(protectedChildToRemove);
-        }
+        dispatchChildRemovalEvents(protectedChildToRemove);
         if (childToRemove.parentNode() != this)
             return false;
     }
@@ -1079,7 +1083,7 @@ static void dispatchChildRemovalEvents(Ref<Node>& child)
     RefAllowingPartiallyDestroyed<Document> document = child->document();
     InspectorInstrumentation::willRemoveDOMNode(document, child.get());
 
-    if (child->isInShadowTree())
+    if (child->isInShadowTree() || document->shouldNotFireMutationEvents())
         return;
 
     // dispatch pre-removal mutation events

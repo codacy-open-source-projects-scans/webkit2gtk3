@@ -31,6 +31,7 @@
 #include "NotImplemented.h"
 #include "PathStream.h"
 #include <skia/core/SkPathUtils.h>
+#include <skia/core/SkRRect.h>
 #include <wtf/NeverDestroyed.h>
 
 namespace WebCore {
@@ -91,35 +92,48 @@ void PathSkia::add(PathBezierCurveTo cubicTo)
         SkFloatToScalar(cubicTo.endPoint.x()), SkFloatToScalar(cubicTo.endPoint.y()));
 }
 
-void PathSkia::add(PathArcTo)
+void PathSkia::add(PathArcTo arcTo)
 {
-    notImplemented();
+    m_platformPath.arcTo(SkFloatToScalar(arcTo.controlPoint1.x()), SkFloatToScalar(arcTo.controlPoint1.y()), SkFloatToScalar(arcTo.controlPoint2.x()), SkFloatToScalar(arcTo.controlPoint2.y()),
+        SkFloatToScalar(arcTo.radius));
 }
 
-void PathSkia::addEllipse(const FloatPoint& center, float radiusX, float radiusY, float startAngle, float endAngle)
+void PathSkia::addEllipse(const FloatPoint& center, float radiusX, float radiusY, float startAngle, float endAngle, RotationDirection direction)
 {
     auto x = SkFloatToScalar(center.x());
     auto y = SkFloatToScalar(center.y());
     auto radiusXScalar = SkFloatToScalar(radiusX);
     auto radiusYScalar = SkFloatToScalar(radiusY);
     SkRect oval = { x - radiusXScalar, y - radiusYScalar, x + radiusXScalar, y + radiusYScalar };
+
+    if (direction == RotationDirection::Clockwise && startAngle > endAngle)
+        endAngle = startAngle + (2 * piFloat - fmodf(startAngle - endAngle, 2 * piFloat));
+    else if (direction == RotationDirection::Counterclockwise && startAngle < endAngle)
+        endAngle = startAngle - (2 * piFloat - fmodf(endAngle - startAngle, 2 * piFloat));
+
     auto sweepAngle = endAngle - startAngle;
     SkScalar startDegrees = SkFloatToScalar(startAngle * 180 / piFloat);
     SkScalar sweepDegrees = SkFloatToScalar(sweepAngle * 180 / piFloat);
-    SkScalar s360 = SkIntToScalar(360);
 
-    if (SkScalarNearlyEqual(sweepDegrees, s360) || SkScalarNearlyEqual(sweepDegrees, -s360)) {
-        SkScalar startOver90 = startDegrees / SkIntToScalar(90);
-        SkScalar startOver90I = SkScalarRoundToScalar(startOver90);
-        SkScalar startIndex = std::fmod(startOver90I + SkIntToScalar(1), SkIntToScalar(4));
-        m_platformPath.addOval(oval, sweepDegrees > 0 ? SkPathDirection::kCW : SkPathDirection::kCCW, static_cast<unsigned>(startIndex));
+    // SkPath::arcTo can't handle the sweepAngle that is equal to 360, so in those
+    // cases we add two arcs with sweepAngle = 180. SkPath::addOval can handle sweepAngle
+    // that is 360, but it creates a closed path.
+    SkScalar s360 = SkIntToScalar(360);
+    if (SkScalarNearlyEqual(sweepDegrees, s360)) {
+        SkScalar s180 = SkIntToScalar(180);
+        m_platformPath.arcTo(oval, startDegrees, s180, false);
+        m_platformPath.arcTo(oval, startDegrees + s180, s180, false);
+    } else if (SkScalarNearlyEqual(sweepDegrees, -s360)) {
+        SkScalar s180 = SkIntToScalar(180);
+        m_platformPath.arcTo(oval, startDegrees, -s180, false);
+        m_platformPath.arcTo(oval, startDegrees - s180, -s180, false);
     } else
         m_platformPath.arcTo(oval, startDegrees, sweepDegrees, false);
 }
 
 void PathSkia::add(PathArc arc)
 {
-    addEllipse(arc.center, arc.radius, arc.radius, arc.startAngle, arc.endAngle);
+    addEllipse(arc.center, arc.radius, arc.radius, arc.startAngle, arc.endAngle, arc.direction);
 }
 
 void PathSkia::add(PathClosedArc closedArc)
@@ -131,7 +145,7 @@ void PathSkia::add(PathClosedArc closedArc)
 void PathSkia::add(PathEllipse ellipse)
 {
     if (!ellipse.rotation) {
-        addEllipse(ellipse.center, ellipse.radiusX, ellipse.radiusY, ellipse.startAngle, ellipse.endAngle);
+        addEllipse(ellipse.center, ellipse.radiusX, ellipse.radiusY, ellipse.startAngle, ellipse.endAngle, ellipse.direction);
         return;
     }
 
@@ -139,7 +153,7 @@ void PathSkia::add(PathEllipse ellipse)
     transform.translate(ellipse.center.x(), ellipse.center.y()).rotateRadians(ellipse.rotation);
     auto inverseTransform = transform.inverse().value();
     m_platformPath.transform(inverseTransform, nullptr);
-    addEllipse({ }, ellipse.radiusX, ellipse.radiusY, ellipse.startAngle, ellipse.endAngle);
+    addEllipse({ }, ellipse.radiusX, ellipse.radiusY, ellipse.startAngle, ellipse.endAngle, ellipse.direction);
     m_platformPath.transform(transform);
 }
 
@@ -155,7 +169,10 @@ void PathSkia::add(PathRect rect)
 
 void PathSkia::add(PathRoundedRect roundedRect)
 {
-    addBeziersForRoundedRect(roundedRect.roundedRect);
+    if (roundedRect.strategy == PathRoundedRect::Strategy::PreferNative)
+        m_platformPath.addRRect(roundedRect.roundedRect);
+    else
+        addBeziersForRoundedRect(roundedRect.roundedRect);
 }
 
 void PathSkia::add(PathCloseSubpath)
@@ -291,14 +308,20 @@ FloatRect PathSkia::boundingRect() const
     return m_platformPath.computeTightBounds();
 }
 
-FloatRect PathSkia::strokeBoundingRect(const Function<void(GraphicsContext&)>&) const
+FloatRect PathSkia::strokeBoundingRect(const Function<void(GraphicsContext&)>& strokeStyleApplier) const
 {
     if (isEmpty())
         return { };
 
-    // FIXME: Respect stroke style!
-    notImplemented();
-    return m_platformPath.getBounds();
+    GraphicsContextSkia graphicsContext(SkSurfaces::Null(1, 1));
+    strokeStyleApplier(graphicsContext);
+
+    // Skia stroke resolution scale for reduced-precision requirements.
+    constexpr float strokePrecision = 0.3f;
+    SkPaint paint = graphicsContext.createStrokeStylePaint();
+    SkPath strokePath;
+    skpathutils::FillPathWithPaint(m_platformPath, paint, &strokePath, nullptr, strokePrecision);
+    return strokePath.computeTightBounds();
 }
 
 } // namespace WebCore

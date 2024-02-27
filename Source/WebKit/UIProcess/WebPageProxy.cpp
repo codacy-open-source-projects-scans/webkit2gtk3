@@ -1109,14 +1109,16 @@ void WebPageProxy::handleSynchronousMessage(IPC::Connection& connection, const S
     });
 }
 
-bool WebPageProxy::hasSameGPUProcessPreferencesAs(const API::PageConfiguration& configuration) const
+bool WebPageProxy::hasSameGPUAndNetworkProcessPreferencesAs(const API::PageConfiguration& configuration) const
 {
 #if ENABLE(GPU_PROCESS)
-    return preferencesForGPUProcess() == configuration.preferencesForGPUProcess();
-#else
-    UNUSED_PARAM(configuration);
-    return true;
+    if (preferencesForGPUProcess() != configuration.preferencesForGPUProcess())
+        return false;
 #endif
+    if (preferencesForNetworkProcess() != configuration.preferencesForNetworkProcess())
+        return false;
+    return true;
+
 }
 
 void WebPageProxy::launchProcess(const RegistrableDomain& registrableDomain, ProcessLaunchReason reason)
@@ -1136,7 +1138,7 @@ void WebPageProxy::launchProcess(const RegistrableDomain& registrableDomain, Pro
     Ref processPool = m_process->processPool();
 
     RefPtr relatedPage = m_configuration->relatedPage();
-    if (relatedPage && !relatedPage->isClosed() && reason == ProcessLaunchReason::InitialProcess && hasSameGPUProcessPreferencesAs(*relatedPage)) {
+    if (relatedPage && !relatedPage->isClosed() && reason == ProcessLaunchReason::InitialProcess && hasSameGPUAndNetworkProcessPreferencesAs(*relatedPage)) {
         m_process = relatedPage->ensureRunningProcess();
         WEBPAGEPROXY_RELEASE_LOG(Loading, "launchProcess: Using process (process=%p, PID=%i) from related page", m_process.ptr(), m_process->processID());
     } else
@@ -2813,11 +2815,15 @@ void WebPageProxy::updateThrottleState()
             WEBPAGEPROXY_RELEASE_LOG(ProcessSuspension, "updateThrottleState: UIProcess is taking a foreground assertion because we are playing audio");
             m_processActivityState.takeAudibleActivity();
         }
-        internals().audibleActivityTimer.stop();
+        if (internals().audibleActivityTimer.isActive()) {
+            WEBPAGEPROXY_RELEASE_LOG(ProcessSuspension, "updateThrottleState: Cancelling timer to release foreground assertion");
+            internals().audibleActivityTimer.stop();
+        }
     } else if (m_processActivityState.hasValidAudibleActivity()) {
-        WEBPAGEPROXY_RELEASE_LOG(ProcessSuspension, "updateThrottleState: UIProcess will release a foreground assertion in %g seconds because we are no longer playing audio", audibleActivityClearDelay.seconds());
-        if (!internals().audibleActivityTimer.isActive())
+        if (!internals().audibleActivityTimer.isActive()) {
+            WEBPAGEPROXY_RELEASE_LOG(ProcessSuspension, "updateThrottleState: UIProcess starting timer to release a foreground assertion in %g seconds if audio doesn't start to play", audibleActivityClearDelay.seconds());
             internals().audibleActivityTimer.startOneShot(audibleActivityClearDelay);
+        }
     }
 
     bool isCapturingMedia = internals().activityState.contains(ActivityState::IsCapturingMedia);
@@ -2835,8 +2841,16 @@ void WebPageProxy::updateThrottleState()
 
 void WebPageProxy::clearAudibleActivity()
 {
-    WEBPAGEPROXY_RELEASE_LOG(ProcessSuspension, "updateThrottleState: UIProcess is releasing a foreground assertion because we are no longer playing audio");
+    WEBPAGEPROXY_RELEASE_LOG(ProcessSuspension, "clearAudibleActivity: UIProcess is releasing a foreground assertion because we are no longer playing audio");
     m_processActivityState.dropAudibleActivity();
+#if ENABLE(EXTENSION_CAPABILITIES)
+    updateMediaCapability();
+#endif
+}
+
+bool WebPageProxy::hasValidAudibleActivity() const
+{
+    return m_processActivityState.hasValidAudibleActivity();
 }
 
 void WebPageProxy::updateHiddenPageThrottlingAutoIncreases()
@@ -4541,7 +4555,7 @@ void WebPageProxy::continueNavigationInNewProcess(API::Navigation& navigation, W
     if (navigation.currentRequest().url().protocolIsFile())
         newProcess->addPreviouslyApprovedFileURL(navigation.currentRequest().url());
 
-    if (m_provisionalPage) {
+    if (m_provisionalPage && frame.isMainFrame()) {
         WEBPAGEPROXY_RELEASE_LOG(ProcessSwapping, "continueNavigationInNewProcess: There is already a pending provisional load, cancelling it (provisonalNavigationID=%" PRIu64 ", navigationID=%" PRIu64 ")", m_provisionalPage->navigationID(), navigation.navigationID());
         if (m_provisionalPage->navigationID() != navigation.navigationID())
             m_provisionalPage->cancel();
@@ -6312,11 +6326,6 @@ void WebPageProxy::didCommitLoadForFrame(FrameIdentifier frameID, FrameInfoData&
     if (m_userMediaPermissionRequestManager)
         m_userMediaPermissionRequestManager->didCommitLoadForFrame(frameID);
 #endif
-
-#if ENABLE(EXTENSION_CAPABILITIES)
-    if (frame->isMainFrame())
-        updateMediaCapability();
-#endif
 }
 
 void WebPageProxy::setCrossSiteLoadWithLinkDecorationForTesting(const URL& fromURL, const URL& toURL, bool wasFiltered, CompletionHandler<void()>&& completionHandler)
@@ -6592,25 +6601,29 @@ void WebPageProxy::didSameDocumentNavigationForFrameViaJSHistoryAPI(SameDocument
 
 void WebPageProxy::didChangeMainDocument(FrameIdentifier frameID)
 {
+    RefPtr frame = WebFrameProxy::webFrame(frameID);
+
 #if ENABLE(MEDIA_STREAM)
     if (m_userMediaPermissionRequestManager) {
         m_userMediaPermissionRequestManager->resetAccess(frameID);
 
 #if ENABLE(GPU_PROCESS)
         if (RefPtr gpuProcess = m_process->processPool().gpuProcess()) {
-            if (RefPtr frame = WebFrameProxy::webFrame(frameID))
+            if (frame)
                 gpuProcess->updateCaptureOrigin(SecurityOriginData::fromURLWithoutStrictOpaqueness(frame->url()), m_process->coreProcessIdentifier());
         }
 #endif
     }
-
-#else
-    UNUSED_PARAM(frameID);
 #endif
-    
+
     m_isQuotaIncreaseDenied = false;
 
     m_speechRecognitionPermissionManager = nullptr;
+
+#if ENABLE(EXTENSION_CAPABILITIES)
+    if (frame && frame->isMainFrame())
+        resetMediaCapability();
+#endif
 }
 
 #if ENABLE(GPU_PROCESS)
@@ -6619,6 +6632,11 @@ GPUProcessPreferencesForWebProcess WebPageProxy::preferencesForGPUProcess() cons
     return configuration().preferencesForGPUProcess();
 }
 #endif
+
+NetworkProcessPreferencesForWebProcess WebPageProxy::preferencesForNetworkProcess() const
+{
+    return configuration().preferencesForNetworkProcess();
+}
 
 void WebPageProxy::viewIsBecomingVisible()
 {
@@ -9909,13 +9927,16 @@ bool WebPageProxy::useGPUProcessForDOMRenderingEnabled() const
 }
 #endif
 
-WebPageCreationParameters WebPageProxy::creationParameters(WebProcessProxy& process, DrawingAreaProxy& drawingArea, RefPtr<API::WebsitePolicies>&& websitePolicies)
+WebPageCreationParameters WebPageProxy::creationParameters(WebProcessProxy& process, DrawingAreaProxy& drawingArea, bool isProcessSwap, RefPtr<API::WebsitePolicies>&& websitePolicies, std::optional<WebCore::FrameIdentifier>&& mainFrameIdentifier, SubframeProcessPageParameters* subframeProcessPageParameters, std::optional<float> topContentInset)
 {
     WebPageCreationParameters parameters;
 
     parameters.processDisplayName = configuration().processDisplayName();
 
+    if (subframeProcessPageParameters)
+        parameters.subframeProcessPageParameters = *subframeProcessPageParameters;
     parameters.openerFrameIdentifier = m_openerFrame ? std::optional(m_openerFrame->frameID()) : std::nullopt;
+    parameters.mainFrameIdentifier = WTFMove(mainFrameIdentifier);
     parameters.viewSize = protectedPageClient()->viewSize();
     parameters.activityState = internals().activityState;
     parameters.drawingAreaType = drawingArea.type();
@@ -9952,7 +9973,7 @@ WebPageCreationParameters WebPageProxy::creationParameters(WebProcessProxy& proc
     parameters.viewScaleFactor = m_viewScaleFactor;
     parameters.textZoomFactor = m_textZoomFactor;
     parameters.pageZoomFactor = m_pageZoomFactor;
-    parameters.topContentInset = m_topContentInset;
+    parameters.topContentInset = topContentInset ? *topContentInset : m_topContentInset;
     parameters.mediaVolume = m_mediaVolume;
     parameters.muted = internals().mutedState;
     parameters.openedByDOM = m_openedByDOM;
@@ -9970,6 +9991,7 @@ WebPageCreationParameters WebPageProxy::creationParameters(WebProcessProxy& proc
     parameters.backgroundExtendsBeyondPage = m_backgroundExtendsBeyondPage;
     parameters.layerHostingMode = internals().layerHostingMode;
     parameters.controlledByAutomation = m_controlledByAutomation;
+    parameters.isProcessSwap = isProcessSwap;
     parameters.useDarkAppearance = useDarkAppearance();
     parameters.useElevatedUserInterfaceLevel = useElevatedUserInterfaceLevel();
 #if PLATFORM(MAC)
@@ -10174,6 +10196,19 @@ WebPageCreationParameters WebPageProxy::creationParameters(WebProcessProxy& proc
     return parameters;
 }
 
+WebPageCreationParameters WebPageProxy::creationParametersForProvisionalPage(WebProcessProxy& process, DrawingAreaProxy& drawingArea, RefPtr<API::WebsitePolicies>&& websitePolicies, std::optional<WebCore::FrameIdentifier> mainFrameIdentifier)
+{
+    constexpr bool isProcessSwap = true;
+    return creationParameters(process, drawingArea, isProcessSwap, WTFMove(websitePolicies), WTFMove(mainFrameIdentifier));
+}
+
+WebPageCreationParameters WebPageProxy::creationParametersForRemotePage(WebProcessProxy& process, DrawingAreaProxy& drawingArea, SubframeProcessPageParameters&& subframeProcessPageParameters)
+{
+    constexpr bool isProcessSwap = true;
+    constexpr float topContentInset = 0.0;
+    return creationParameters(process, drawingArea, isProcessSwap, nullptr, std::nullopt, &subframeProcessPageParameters, topContentInset);
+}
+
 void WebPageProxy::isJITEnabled(CompletionHandler<void(bool)>&& completionHandler)
 {
     launchInitialProcessIfNecessary();
@@ -10304,15 +10339,6 @@ void WebPageProxy::makeStorageSpaceRequest(FrameIdentifier frameID, const String
 
     Ref origin = API::SecurityOrigin::create(originData->securityOrigin());
     m_uiClient->exceededDatabaseQuota(this, frame.get(), origin.ptr(), databaseName, displayName, currentQuota, currentOriginUsage, currentDatabaseUsage, expectedUsage, WTFMove(completionHandler));
-}
-
-void WebPageProxy::reachedApplicationCacheOriginQuota(const String& originIdentifier, uint64_t currentQuota, uint64_t totalBytesNeeded, CompletionHandler<void(uint64_t)>&& reply)
-{
-    auto securityOriginData = SecurityOriginData::fromDatabaseIdentifier(originIdentifier);
-    MESSAGE_CHECK(m_process, securityOriginData);
-
-    Ref securityOrigin = securityOriginData->securityOrigin();
-    m_uiClient->reachedApplicationCacheOriginQuota(this, securityOrigin.get(), currentQuota, totalBytesNeeded, WTFMove(reply));
 }
 
 void WebPageProxy::requestGeolocationPermissionForFrame(GeolocationIdentifier geolocationID, FrameInfoData&& frameInfo)

@@ -86,6 +86,9 @@ enum class WebCore::ApplePayFeature : uint8_t {
 #if ENABLE(APPLE_PAY_SHIPPING_METHOD_DATE_COMPONENTS_RANGE)
     ShippingMethodDateComponentsRange,
 #endif
+#if ENABLE(APPLE_PAY_DISBURSEMENTS)
+    PaymentRequestDisbursements
+#endif
 };
 
 enum class WebCore::ApplePayPaymentTiming : uint8_t {
@@ -1003,6 +1006,11 @@ struct WebCore::ApplePayDeferredPaymentRequest {
 };
 #endif
 
+#if ENABLE(APPLE_PAY_DISBURSEMENTS)
+struct WebCore::ApplePayDisbursementPaymentRequest {
+};
+#endif
+
 #if ENABLE(APPLE_PAY_PAYMENT_ORDER_DETAILS)
 struct WebCore::ApplePayPaymentOrderDetails {
     String orderTypeIdentifier
@@ -1051,6 +1059,12 @@ struct WebCore::ApplePaySetupConfiguration {
 };
 
 [Nested] enum class WebCore::ApplePayLineItem::Type : bool;
+#if ENABLE(APPLE_PAY_DISBURSEMENTS)
+[Nested] enum class WebCore::ApplePayLineItem::DisbursementLineItemType : uint8_t {
+    Disbursement,
+    InstantFundsOutFee
+};
+#endif
 
 struct WebCore::ApplePayLineItem {
     WebCore::ApplePayLineItem::Type type
@@ -1068,6 +1082,9 @@ struct WebCore::ApplePayLineItem {
 #endif
 #if ENABLE(APPLE_PAY_AUTOMATIC_RELOAD_LINE_ITEM)
     String automaticReloadPaymentThresholdAmount
+#endif
+#if ENABLE(APPLE_PAY_DISBURSEMENTS)
+    std::optional<WebCore::ApplePayLineItem::DisbursementLineItemType> disbursementLineItemType
 #endif
 }
 
@@ -1109,6 +1126,9 @@ struct WebCore::ApplePayDetailsUpdateBase {
 #endif
 #if ENABLE(APPLE_PAY_DEFERRED_PAYMENTS)
     std::optional<WebCore::ApplePayDeferredPaymentRequest> newDeferredPaymentRequest;
+#endif
+#if ENABLE(APPLE_PAY_DISBURSEMENTS)
+    std::optional<WebCore::ApplePayDisbursementPaymentRequest> newDisbursementPaymentRequest;
 #endif
 }
 
@@ -5231,37 +5251,33 @@ struct WebCore::CaptureDeviceWithCapabilities {
 
 [Nested] enum class WebCore::RealtimeMediaSourceCapabilities::EchoCancellation : bool
 
-[Nested] struct WebCore::CapabilityRange::DoubleRange {
-    double max;
-    [Validator='min <= max'] double min;
-};
-
-[Nested] struct WebCore::CapabilityRange::LongRange {
-    int max;
-    [Validator='min <= max'] int min;
+header: <WebCore/RealtimeMediaSourceCapabilities.h>
+[CustomHeader] class WebCore::DoubleCapabilityRange {
+    double min();
+    [Validator='min <= max'] double max();
 };
 
 header: <WebCore/RealtimeMediaSourceCapabilities.h>
-[CustomHeader, LegacyPopulateFromEmptyConstructor] class WebCore::CapabilityRange {
-    std::optional<WebCore::CapabilityRange::DoubleRange> m_doubleRange;
-    std::optional<WebCore::CapabilityRange::LongRange> m_longRange;
+[CustomHeader] class WebCore::LongCapabilityRange {
+    int min();
+    [Validator='min <= max'] int max();
 };
 
 class WebCore::RealtimeMediaSourceCapabilities {
-    WebCore::CapabilityRange width();
-    WebCore::CapabilityRange height();
-    WebCore::CapabilityRange aspectRatio();
-    WebCore::CapabilityRange frameRate();
+    WebCore::LongCapabilityRange width();
+    WebCore::LongCapabilityRange height();
+    WebCore::DoubleCapabilityRange aspectRatio();
+    WebCore::DoubleCapabilityRange frameRate();
     Vector<WebCore::VideoFacingMode> facingMode();
-    WebCore::CapabilityRange volume();
-    WebCore::CapabilityRange sampleRate();
-    WebCore::CapabilityRange sampleSize();
+    WebCore::DoubleCapabilityRange volume();
+    WebCore::LongCapabilityRange sampleRate();
+    WebCore::LongCapabilityRange sampleSize();
     WebCore::RealtimeMediaSourceCapabilities::EchoCancellation echoCancellation();
     String deviceId();
     String groupId();
-    WebCore::CapabilityRange focusDistance();
+    WebCore::DoubleCapabilityRange focusDistance();
     Vector<WebCore::MeteringMode> whiteBalanceModes();
-    WebCore::CapabilityRange zoom();
+    WebCore::DoubleCapabilityRange zoom();
     bool torch();
     WebCore::RealtimeMediaSourceSupportedConstraints supportedConstraints();
 };

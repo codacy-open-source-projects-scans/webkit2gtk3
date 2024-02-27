@@ -1698,8 +1698,28 @@ RegisterID* BytecodeGenerator::emitBinaryOp(OpcodeID opcodeID, RegisterID* dst, 
         return emitBinaryOp<OpRshift>(dst, src1, src2, types);
     case op_urshift:
         return emitBinaryOp<OpUrshift>(dst, src1, src2, types);
-    case op_add:
+    case op_add: {
+        auto isConstantEmptyString = [&](RegisterID* src) {
+            if (!src->virtualRegister().isConstant())
+                return false;
+            if (!m_codeBlock->constantRegister(src->virtualRegister()).get().isString())
+                return false;
+            String value = asString(m_codeBlock->constantRegister(src->virtualRegister()).get())->tryGetValue();
+            return value.isEmpty();
+        };
+
+        if (isConstantEmptyString(src1)) {
+            emitToPrimitive(dst, src2);
+            return emitToString(dst, dst);
+        }
+
+        if (isConstantEmptyString(src2)) {
+            emitToPrimitive(dst, src1);
+            return emitToString(dst, dst);
+        }
+
         return emitBinaryOp<OpAdd>(dst, src1, src2, types);
+    }
     case op_mul:
         return emitBinaryOp<OpMul>(dst, src1, src2, types);
     case op_div:
@@ -2485,6 +2505,28 @@ void BytecodeGenerator::createVariable(
         RegisterID* local = addVar();
         RELEASE_ASSERT(local->index() == varOffset.stackOffset().offset());
     }
+}
+
+std::optional<Variable> BytecodeGenerator::tryResolveVariable(ExpressionNode* expr)
+{
+    if (expr->isResolveNode())
+        return variable(static_cast<ResolveNode*>(expr)->identifier());
+
+    if (expr->isAssignResolveNode())
+        return variable(static_cast<AssignResolveNode*>(expr)->identifier());
+
+    if (expr->isThisNode()) {
+        // After generator.ensureThis (which must be invoked in |base|'s materialization), we can ensure that |this| is in local this-register.
+        return variable(propertyNames().builtinNames().thisPrivateName(), ThisResolutionType::Local);
+    }
+
+    if (expr->isCommaNode()) {
+        CommaNode* node = static_cast<CommaNode*>(expr);
+        for (; node->next(); node = node->next()) { }
+        return tryResolveVariable(node->expr());
+    }
+
+    return std::nullopt;
 }
 
 RegisterID* BytecodeGenerator::emitOverridesHasInstance(RegisterID* dst, RegisterID* constructor, RegisterID* hasInstanceValue)

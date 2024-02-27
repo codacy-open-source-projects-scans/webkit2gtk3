@@ -721,7 +721,6 @@ webkit.org/b/121803 media/video-object-fit-change.html [ Pass ImageOnlyFailure ]
 webkit.org/b/122033 media/video-duration-known-after-eos.html [ Pass Timeout ]
 webkit.org/b/122042 media/media-controller-playback.html [ Pass Timeout ]
 webkit.org/b/123099 media/media-controller-time-clamp.html [ Pass Timeout ]
-webkit.org/b/131855 media/event-attributes.html [ Pass Failure Timeout ]
 webkit.org/b/133363 media/video-rtl.html [ Pass ImageOnlyFailure ]
 webkit.org/b/133686 media/track/w3c/interfaces/TextTrackCue/align.html [ Pass Failure ]
 
@@ -744,7 +743,7 @@ webkit.org/b/136708 media/media-fullscreen-not-in-document.html
 webkit.org/b/236722 http/tests/media/video-play-waiting.html [ Timeout ]
 
 # This test requires generation of progress events during loading
-webkit.org/b/100984 media/progress-events-generated-correctly.html [ Failure ]
+webkit.org/b/100984 http/tests/media/progress-events-generated-correctly.html [ Failure ]
 
 # needs enhanced eventSender.contextMenu() return value
 webkit.org/b/116651 media/context-menu-actions.html [ Skip ]
@@ -1216,9 +1215,6 @@ webkit.org/b/178127 media/modern-media-controls/media-controller/media-controlle
 media/modern-media-controls/media-documents/background-color-and-centering.html [ Pass ImageOnlyFailure ]
 
 webkit.org/b/178083 media/media-source/media-source-paint-to-canvas.html [ Failure ]
-
-webkit.org/b/175102 workers/wasm-hashset-many.html [ Skip ]
-webkit.org/b/175102 workers/wasm-hashset-many-2.html [ Skip ]
 
 webkit.org/b/175193 fast/images/async-image-body-background-image.html [ Pass Timeout ]
 
@@ -2570,10 +2566,17 @@ accessibility/mac/prefers-non-blinking-cursor.html [ Skip ]
 http/tests/media/fairplay/fps-mse-unmuxed-mpts.html [ Skip ]
 
 # web-platform-tests/svg/painting/reftests failures
-imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-021.svg [ Failure ]
-imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-022.svg [ Failure ]
-imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-023.svg [ Failure ]
+imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-021.svg [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-022.svg [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-023.svg [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/svg/painting/reftests/percentage-attribute.svg [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/svg/painting/reftests/percentage.svg [ ImageOnlyFailure ]
 
-webkit.org/b/269598 [ Debug ] workers/wasm-hashset.html [ Skip ]
+webkit.org/b/269852 imported/w3c/web-platform-tests/css/filter-effects/backdrop-filter-edge-behavior.html [ ImageOnlyFailure ]
+
+webkit.org/b/269873 imported/w3c/web-platform-tests/webrtc-extensions/transfer-datachannel-service-worker.https.html [ Pass Failure ]
+
+# webkit.org/b/269955 (REGRESSION (274945@main): [ MacOS ] Multiple editing/selection tests are constant failures)
+[ Ventura ] editing/selection/3690703.html  [ Failure ]
+[ Ventura ] editing/selection/3690703-2.html  [ Failure ]
+[ Ventura ] editing/selection/3690719.html  [ Failure ]

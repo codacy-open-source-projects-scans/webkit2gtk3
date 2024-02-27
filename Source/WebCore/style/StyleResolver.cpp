@@ -336,7 +336,10 @@ std::unique_ptr<RenderStyle> Resolver::styleForKeyframe(const Element& element, 
     state.setParentStyle(RenderStyle::clonePtr(context.parentStyle ? *context.parentStyle : elementStyle));
 
     ElementRuleCollector collector(element, m_ruleSets, context.selectorMatchingState);
-    collector.setPseudoElementRequest({ elementStyle.pseudoElementType() });
+
+    if (elementStyle.pseudoElementType() != PseudoId::None)
+        collector.setPseudoElementRequest(Style::PseudoElementIdentifier { elementStyle.pseudoElementType(), elementStyle.pseudoElementNameArgument() });
+
     if (hasRevert) {
         // In the animation origin, 'revert' rolls back the cascaded value to the user level.
         // Therefore, we need to collect UA and user rules.
@@ -349,7 +352,7 @@ std::unique_ptr<RenderStyle> Resolver::styleForKeyframe(const Element& element, 
     builder.state().setIsBuildingKeyframeStyle();
     builder.applyAllProperties();
 
-    Adjuster adjuster(document(), *state.parentStyle(), nullptr, nullptr);
+    Adjuster adjuster(document(), *state.parentStyle(), nullptr, elementStyle.pseudoElementType() == PseudoId::None ? &element : nullptr);
     adjuster.adjust(*state.style(), state.userAgentAppearanceStyle());
 
     return state.takeStyle();
@@ -488,7 +491,8 @@ std::optional<ResolvedStyle> Resolver::styleForPseudoElement(const Element& elem
     }
 
     ElementRuleCollector collector(element, m_ruleSets, context.selectorMatchingState);
-    collector.setPseudoElementRequest(pseudoElementRequest);
+    if (pseudoElementRequest.pseudoId() != PseudoId::None)
+        collector.setPseudoElementRequest(pseudoElementRequest);
     collector.setMedium(m_mediaQueryEvaluator);
     collector.matchUARules();
 
@@ -562,10 +566,10 @@ std::unique_ptr<RenderStyle> Resolver::defaultStyleForElement(const Element* ele
 
 Vector<RefPtr<const StyleRule>> Resolver::styleRulesForElement(const Element* element, unsigned rulesToInclude)
 {
-    return pseudoStyleRulesForElement(element, PseudoId::None, rulesToInclude);
+    return pseudoStyleRulesForElement(element, { }, rulesToInclude);
 }
 
-Vector<RefPtr<const StyleRule>> Resolver::pseudoStyleRulesForElement(const Element* element, PseudoId pseudoId, unsigned rulesToInclude)
+Vector<RefPtr<const StyleRule>> Resolver::pseudoStyleRulesForElement(const Element* element, const std::optional<Style::PseudoElementRequest>& pseudoElementIdentifier, unsigned rulesToInclude)
 {
     if (!element)
         return { };
@@ -574,7 +578,8 @@ Vector<RefPtr<const StyleRule>> Resolver::pseudoStyleRulesForElement(const Eleme
 
     ElementRuleCollector collector(*element, m_ruleSets, nullptr);
     collector.setMode(SelectorChecker::Mode::CollectingRules);
-    collector.setPseudoElementRequest({ pseudoId });
+    if (pseudoElementIdentifier)
+        collector.setPseudoElementRequest(*pseudoElementIdentifier);
     collector.setMedium(m_mediaQueryEvaluator);
     collector.setIncludeEmptyRules(rulesToInclude & EmptyCSSRules);
 
@@ -721,24 +726,56 @@ std::optional<DynamicMediaQueryEvaluationChanges> Resolver::evaluateDynamicMedia
 }
 
 
-void Resolver::setViewTransitionGroupStyles(const AtomString& name, Ref<MutableStyleProperties> properties)
+static CSSSelectorList viewTransitionSelector(CSSSelector::PseudoElement element, const AtomString& name)
 {
-    if (!m_document)
-        return;
-
-    auto* viewTransitionsStyle = m_ruleSets.dynamicViewTransitionsStyle();
-    RuleSetBuilder builder(*viewTransitionsStyle, mediaQueryEvaluator(), this);
-    CSSSelectorParserContext context(*m_document.get());
-
     MutableCSSSelectorList selectorList;
-    selectorList.append(MutableCSSSelector::parsePseudoClassSelector("root"_s, context));
-    auto groupSelector = MutableCSSSelector::parsePseudoElementSelector("view-transition-group"_s, context);
+
+    auto rootSelector = makeUnique<MutableCSSSelector>();
+    rootSelector->setMatch(CSSSelector::Match::PseudoClass);
+    rootSelector->setPseudoClass(CSSSelector::PseudoClass::Root);
+    selectorList.append(WTFMove(rootSelector));
+
+    auto groupSelector = makeUnique<MutableCSSSelector>();
+    groupSelector->setMatch(CSSSelector::Match::PseudoElement);
+    groupSelector->setPseudoElement(element);
+
+    AtomString selectorName;
+    switch (element) {
+    case CSSSelector::PseudoElement::ViewTransitionGroup:
+        selectorName = "view-transition-group"_s;
+        break;
+    case CSSSelector::PseudoElement::ViewTransitionImagePair:
+        selectorName = "view-transition-image-pair"_s;
+        break;
+    case CSSSelector::PseudoElement::ViewTransitionNew:
+        selectorName = "view-transition-new"_s;
+        break;
+    case CSSSelector::PseudoElement::ViewTransitionOld:
+        selectorName = "view-transition-old"_s;
+        break;
+    default:
+        ASSERT_NOT_REACHED();
+        break;
+    }
+
+    groupSelector->setValue(selectorName);
     groupSelector->setArgumentList({ { name } });
 
     selectorList.first()->appendTagHistory(CSSSelector::Relation::Subselector, WTFMove(groupSelector));
 
-    auto styleRule = StyleRule::create(WTFMove(properties), true, CSSSelectorList(WTFMove(selectorList)));
+    return CSSSelectorList(WTFMove(selectorList));
+}
 
+
+void Resolver::setViewTransitionStyles(CSSSelector::PseudoElement element, const AtomString& name, Ref<MutableStyleProperties> properties)
+{
+    if (!m_document)
+        return;
+
+    auto styleRule = StyleRule::create(WTFMove(properties), true, viewTransitionSelector(element, name));
+
+    auto* viewTransitionsStyle = m_ruleSets.dynamicViewTransitionsStyle();
+    RuleSetBuilder builder(*viewTransitionsStyle, mediaQueryEvaluator(), this);
     builder.addStyleRule(styleRule);
 }
 

@@ -589,7 +589,6 @@ void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters& para
 void WebProcess::platformSetWebsiteDataStoreParameters(WebProcessDataStoreParameters&& parameters)
 {
 #if ENABLE(SANDBOX_EXTENSIONS)
-    SandboxExtension::consumePermanently(parameters.applicationCacheDirectoryExtensionHandle);
 #if !ENABLE(GPU_PROCESS)
     SandboxExtension::consumePermanently(parameters.mediaCacheDirectoryExtensionHandle);
 #endif
@@ -867,7 +866,6 @@ static void registerLogHook()
 
 void WebProcess::platformInitializeProcess(const AuxiliaryProcessInitializationParameters& parameters)
 {
-    setNotifyOptions();
 #if ENABLE(LOGD_BLOCKING_IN_WEBCONTENT)
     prewarmLogs();
     registerLogHook();
@@ -1536,9 +1534,16 @@ void WebProcess::revokeLaunchServicesSandboxExtension()
 }
 #endif
 
-#if ENABLE(NOTIFYD_BLOCKING_IN_WEBCONTENT)
-void WebProcess::postNotification(const String& message)
+#if ENABLE(NOTIFY_BLOCKING)
+void WebProcess::postNotification(const String& message, std::optional<uint64_t> state)
 {
+    if (state) {
+        int token = 0;
+        if (notify_register_check(message.ascii().data(), &token) == NOTIFY_STATUS_OK) {
+            notify_set_state(token, *state);
+            notify_cancel(token);
+        }
+    }
     notify_post(message.ascii().data());
 }
 

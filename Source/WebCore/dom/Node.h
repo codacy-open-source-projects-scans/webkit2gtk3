@@ -507,7 +507,7 @@ public:
 
     WEBCORE_EXPORT unsigned short compareDocumentPosition(Node&);
 
-    EventTargetInterface eventTargetInterface() const override;
+    enum EventTargetInterfaceType eventTargetInterface() const override;
     ScriptExecutionContext* scriptExecutionContext() const final; // Implemented in DocumentInlines.h.
 
     WEBCORE_EXPORT bool addEventListener(const AtomString& eventType, Ref<EventListener>&&, const AddEventListenerOptions&) override;
@@ -777,7 +777,7 @@ private:
     mutable OptionSet<StateFlag> m_stateFlags;
 
     ContainerNode* m_parentNode { nullptr };
-    CheckedPtr<TreeScope> m_treeScope;
+    TreeScope* m_treeScope { nullptr };
     Node* m_previous { nullptr };
     Node* m_next { nullptr };
     CompactPointerTuple<RenderObject*, uint16_t> m_rendererWithStyleFlags;

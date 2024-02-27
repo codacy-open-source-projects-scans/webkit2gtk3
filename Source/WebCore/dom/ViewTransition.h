@@ -28,6 +28,7 @@
 #include "Document.h"
 #include "Element.h"
 #include "ExceptionOr.h"
+#include "ImageBuffer.h"
 #include "JSValueInWrappedObject.h"
 #include "MutableStyleProperties.h"
 #include "ViewTransitionUpdateCallback.h"
@@ -51,20 +52,13 @@ enum class ViewTransitionPhase : uint8_t {
 struct CapturedElement {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    // FIXME: Add the following:
-    // old image (2d bitmap)
+    RefPtr<ImageBuffer> oldImage;
+    LayoutRect oldOverflowRect;
     LayoutSize oldSize;
     RefPtr<MutableStyleProperties> oldProperties;
-    // old transform
     WeakPtr<Element, WeakPtrImplWithEventTargetData> newElement;
 
     RefPtr<MutableStyleProperties> groupStyleProperties;
-
-    // FIXME: Also handle these:
-    // group keyframes
-    // group animation name rule
-    // image pair isolation rule
-    // image animation name rule
 };
 
 struct OrderedNamedElementsMap {
@@ -157,6 +151,7 @@ private:
     Ref<MutableStyleProperties> copyElementBaseProperties(Element&);
 
     void updatePseudoElementStyles();
+    void setupDynamicStyleSheet(const AtomString&, const CapturedElement&);
 
     WeakPtr<Document, WeakPtrImplWithEventTargetData> m_document;
 

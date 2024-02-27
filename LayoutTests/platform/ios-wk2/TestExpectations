@@ -61,6 +61,10 @@ media/modern-media-controls/overflow-support [ Pass ]
 http/tests/media/modern-media-controls/overflow-support [ Pass ]
 media/modern-media-controls/tracks-support [ Pass ]
 
+media/media-source/media-managedmse-airplay.html [ Pass ]
+media/media-source/media-managedmse-idl.html [ Pass ]
+webkit.org/b/269897 media/media-source/media-managedmse-poster.html [ Skip ]
+
 webkit.org/b/231187 media/modern-media-controls/overflow-support/button-state.html [ Skip ]
 webkit.org/b/231187 media/modern-media-controls/overflow-support/playback-speed.html [ Skip ]
 webkit.org/b/231187 media/modern-media-controls/overflow-support/chapters.html [ Skip ]
@@ -84,6 +88,7 @@ accessibility/ios-simulator/image-overlay-elements.html [ Pass ]
 http/tests/ssl/applepay [ Pass ]
 webkit.org/b/212975 http/tests/ssl/applepay/PaymentRequest.https.html [ Pass Timeout ]
 
+http/tests/paymentrequest/ApplePayModifier-disbursementPaymentRequest.https.html [ Skip ]
 http/tests/paymentrequest [ Pass ]
 imported/w3c/web-platform-tests/payment-request [ Pass ]
 webkit.org/b/175611 imported/w3c/web-platform-tests/payment-request/allowpaymentrequest/allowpaymentrequest-attribute-cross-origin-bc-containers.https.html [ Skip ]
@@ -2364,8 +2369,6 @@ webkit.org/b/263044 [ Debug ] imported/w3c/web-platform-tests/webrtc-stats/suppo
 
 webkit.org/b/268422 fast/events/ios/keyboard-should-not-trigger-resize.html [ Pass Failure ]
 
-webkit.org/b/268555 [ Debug ] http/wpt/webcodecs/h264-encoder-default-config.https.any.html [ Skip ]
-
 webkit.org/b/268557 [ Debug ] imported/w3c/web-platform-tests/html/dom/elements/global-attributes/the-anchor-attribute-003-crash.tentative.html [ Skip ]
 
 # webkit.org/b/268581 (18 webgl/1.0.3/conformance/textures/* tests are consistently/flakily timing out.)
@@ -2395,11 +2398,5 @@ webkit.org/b/269086 [ Release ] imported/w3c/web-platform-tests/feature-policy/f
 webkit.org/b/269116 imported/w3c/web-platform-tests/css/css-flexbox/negative-overflow-002.html [ Failure ]
 
 webkit.org/b/269321 webgl/1.0.3/conformance/uniforms/out-of-bounds-uniform-array-access.html [ Timeout ]
-
-webkit.org/b/269483 [ Debug ] http/wpt/webcodecs/h264-encoder-default-config.https.any.worker.html [ Skip ]
-
-# webkit.org/b/123266095  (REGRESSION (274957@main) [ iOS Debug ] 2x imported/w3c/web-platform-tests/css/css-view-transitions tests are constant crash)
-[ Debug ] imported/w3c/web-platform-tests/css/css-view-transitions/new-content-captures-different-size.html [ Skip ]
-[ Debug ] imported/w3c/web-platform-tests/css/css-view-transitions/old-content-captures-different-size.html [ Skip ]
 
 webkit.org/b/269760 mathml/presentation/scripts-underover.html [ Failure ]

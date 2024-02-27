@@ -161,6 +161,7 @@ public:
     using EventListenerTypeCountedSet = HashCountedSet<WebExtensionEventListenerType>;
     using EventListenerTypePageMap = HashMap<WebExtensionEventListenerTypeWorldPair, WeakPageCountedSet>;
     using EventListenerTypeSet = HashSet<WebExtensionEventListenerType>;
+    using ContentWorldTypeSet = HashSet<WebExtensionContentWorldType>;
     using VoidCompletionHandlerVector = Vector<CompletionHandler<void()>>;
 
     using WindowIdentifierMap = HashMap<WebExtensionWindowIdentifier, Ref<WebExtensionWindow>>;
@@ -209,6 +210,7 @@ public:
     enum class SuppressEvents : bool { No, Yes };
     enum class UpdateWindowOrder : bool { No, Yes };
     enum class IgnoreExtensionAccess : bool { No, Yes };
+    enum class IncludeExtensionViews : bool { No, Yes };
 
     enum class Error : uint8_t {
         Unknown = 1,
@@ -341,8 +343,8 @@ public:
 
     Ref<WebExtensionTab> getOrCreateTab(_WKWebExtensionTab *) const;
     RefPtr<WebExtensionTab> getTab(WebExtensionTabIdentifier, IgnoreExtensionAccess = IgnoreExtensionAccess::No) const;
-    RefPtr<WebExtensionTab> getTab(WebPageProxyIdentifier, std::optional<WebExtensionTabIdentifier> = std::nullopt, IgnoreExtensionAccess = IgnoreExtensionAccess::No) const;
-    RefPtr<WebExtensionTab> getCurrentTab(WebPageProxyIdentifier, IgnoreExtensionAccess = IgnoreExtensionAccess::No) const;
+    RefPtr<WebExtensionTab> getTab(WebPageProxyIdentifier, std::optional<WebExtensionTabIdentifier> = std::nullopt, IncludeExtensionViews = IncludeExtensionViews::No, IgnoreExtensionAccess = IgnoreExtensionAccess::No) const;
+    RefPtr<WebExtensionTab> getCurrentTab(WebPageProxyIdentifier, IncludeExtensionViews = IncludeExtensionViews::Yes, IgnoreExtensionAccess = IgnoreExtensionAccess::No) const;
     void forgetTab(WebExtensionTabIdentifier) const;
 
     void openNewTab(const WebExtensionTabParameters&, CompletionHandler<void(RefPtr<WebExtensionTab>)>&&);
@@ -446,6 +448,7 @@ public:
     std::optional<WebCore::PageIdentifier> backgroundPageIdentifier() const;
 #if ENABLE(INSPECTOR_EXTENSIONS)
     Vector<PageIdentifierTuple> inspectorBackgroundPageIdentifiers() const;
+    Vector<PageIdentifierTuple> inspectorPageIdentifiers() const;
 #endif
     Vector<PageIdentifierTuple> popupPageIdentifiers() const;
     Vector<PageIdentifierTuple> tabPageIdentifiers() const;
@@ -463,10 +466,19 @@ public:
     void cookiesDidChange(API::HTTPCookieStore&);
 
     void wakeUpBackgroundContentIfNecessary(CompletionHandler<void()>&&);
-    void wakeUpBackgroundContentIfNecessaryToFireEvents(EventListenerTypeSet, CompletionHandler<void()>&&);
+    void wakeUpBackgroundContentIfNecessaryToFireEvents(EventListenerTypeSet&&, CompletionHandler<void()>&&);
 
-    HashSet<Ref<WebProcessProxy>> processes(WebExtensionEventListenerType, WebExtensionContentWorldType) const;
-    HashSet<Ref<WebProcessProxy>> processes(EventListenerTypeSet, WebExtensionContentWorldType) const;
+    HashSet<Ref<WebProcessProxy>> processes(WebExtensionEventListenerType type, WebExtensionContentWorldType contentWorldType) const
+    {
+        return processes(EventListenerTypeSet { type }, contentWorldType);
+    }
+
+    HashSet<Ref<WebProcessProxy>> processes(EventListenerTypeSet&& typeSet, WebExtensionContentWorldType contentWorldType) const
+    {
+        return processes(WTFMove(typeSet), ContentWorldTypeSet { contentWorldType });
+    }
+
+    HashSet<Ref<WebProcessProxy>> processes(EventListenerTypeSet&&, ContentWorldTypeSet&&) const;
 
     const UserContentControllerProxySet& userContentControllers() const;
 
@@ -479,7 +491,7 @@ public:
     void sendToProcessesForEvent(WebExtensionEventListenerType, const T& message) const;
 
     template<typename T>
-    void sendToProcessesForEvents(EventListenerTypeSet, const T& message) const;
+    void sendToProcessesForEvents(EventListenerTypeSet&&, const T& message) const;
 
     template<typename T>
     void sendToContentScriptProcessesForEvent(WebExtensionEventListenerType, const T& message) const;
@@ -725,7 +737,7 @@ private:
 
     // Tabs APIs
     void tabsCreate(std::optional<WebPageProxyIdentifier>, const WebExtensionTabParameters&, CompletionHandler<void(Expected<std::optional<WebExtensionTabParameters>, WebExtensionError>&&)>&&);
-    void tabsUpdate(WebExtensionTabIdentifier, const WebExtensionTabParameters&, CompletionHandler<void(Expected<std::optional<WebExtensionTabParameters>, WebExtensionError>&&)>&&);
+    void tabsUpdate(WebPageProxyIdentifier, std::optional<WebExtensionTabIdentifier>, const WebExtensionTabParameters&, CompletionHandler<void(Expected<std::optional<WebExtensionTabParameters>, WebExtensionError>&&)>&&);
     void tabsDuplicate(WebExtensionTabIdentifier, const WebExtensionTabParameters&, CompletionHandler<void(Expected<std::optional<WebExtensionTabParameters>, WebExtensionError>&&)>&&);
     void tabsGet(WebExtensionTabIdentifier, CompletionHandler<void(Expected<std::optional<WebExtensionTabParameters>, WebExtensionError>&&)>&&);
     void tabsGetCurrent(WebPageProxyIdentifier, CompletionHandler<void(Expected<std::optional<WebExtensionTabParameters>, WebExtensionError>&&)>&&);
@@ -886,9 +898,9 @@ void WebExtensionContext::sendToProcessesForEvent(WebExtensionEventListenerType 
 }
 
 template<typename T>
-void WebExtensionContext::sendToProcessesForEvents(EventListenerTypeSet typeSet, const T& message) const
+void WebExtensionContext::sendToProcessesForEvents(EventListenerTypeSet&& typeSet, const T& message) const
 {
-    sendToProcesses(processes(typeSet, WebExtensionContentWorldType::Main), message);
+    sendToProcesses(processes(WTFMove(typeSet), WebExtensionContentWorldType::Main), message);
 }
 
 template<typename T>

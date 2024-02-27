@@ -67,6 +67,7 @@ fast/visual-viewport/rubberbanding-viewport-rects-header-footer.html  [ Pass ]
 
 webkit.org/b/229423 [ BigSur Debug arm64 ] http/tests/paymentrequest/payment-response-reference-cycle-leak.https.html [ Pass Crash ]
 
+http/tests/paymentrequest/ApplePayModifier-disbursementPaymentRequest.https.html [ Skip ]
 http/tests/paymentrequest [ Pass ]
 http/tests/inspector/paymentrequest [ Pass ]
 imported/w3c/web-platform-tests/payment-request [ Pass ]
@@ -1595,7 +1596,7 @@ webkit.org/b/253343 [ Ventura+ ] http/tests/workers/service/shownotification-all
 [ Ventura+ ] http/wpt/service-workers/push-console-messages-showNotification-late.https.html [ Pass ]
 [ Ventura+ ] http/wpt/service-workers/push-console-messages-showNotification-sync.https.html [ Pass ]
 
-webkit.org/b/242164 [ Debug ] imported/w3c/web-platform-tests/service-workers/service-worker/navigation-timing.https.html [ Failure ]
+webkit.org/b/242164 [ Monterey+ ] imported/w3c/web-platform-tests/service-workers/service-worker/navigation-timing.https.html [ Failure ]
 
 webkit.org/b/242138 imported/w3c/web-platform-tests/css/css-transforms/huge-length-tiny-scale.html [ Pass Crash ImageOnlyFailure ]
 
@@ -1732,11 +1733,9 @@ fast/forms/file/entries-api/image-no-transcode-open-panel.html [ Pass Crash ]
 [ Debug Ventura arm64 ] http/tests/media/modern-media-controls/overflow-support/playback-speed-live-broadcast.html [ Pass Crash ]
 [ Debug arm64 ] media/track/track-css-visible-stroke.html [ Pass Crash ]
 [ Ventura Debug arm64 ] http/tests/media/modern-media-controls/skip-back-support/skip-back-support-button-click.html [ Pass Crash ]
-media/track/track-cues-missed.html [ Pass Crash ]
 media/track/video-track-addition-and-frame-removal.html [ Pass Crash ]
 media/track/track-cue-left-align.html [ Pass Crash ]
 http/tests/media/modern-media-controls/skip-back-support/skip-back-support-live-broadcast.html [ Pass Crash ]
-media/track/track-cue-mutable-fragment.html [ Pass Crash ]
 http/tests/workers/service/postmessage-after-terminating-hung-worker.html [ Pass Crash ]
 fast/mediastream/getUserMedia-video-rescaling.html [ Pass Crash ]
 media/video-source-load.html [ Pass Crash ]
@@ -1967,20 +1966,7 @@ webkit.org/b/268018 [ Sonoma+ Release ] fast/images/text-recognition/mac/select-
 
 webkit.org/b/268047 [ Monterey+ ] http/wpt/webrtc/video-script-transform-simulcast.html [ Pass Failure ]
 
-webkit.org/b/268098 [ Monterey+ ] imported/w3c/web-platform-tests/webrtc/RTCPeerConnection-GC.https.html [ Pass Failure ]
-
 webkit.org/b/268200 [ Sonoma+ Release ] inspector/console/console-screenshot.html [ Pass Failure ]
-
-webkit.org/b/268332 [ Monterey+ x86_64 ] imported/w3c/web-platform-tests/webrtc/simulcast/getStats.https.html [ Failure ]
-
-# webkit.org/b/268347 REGRESSION(273637@main?): [ Sonoma+ wk2 Release arm64] 7 http/wpt/webcodecs (layout-tests) are constant text failures
-[ Sonoma+ Release arm64 ] http/tests/webcodecs/h264-reordering.html [ Failure ]
-[ Sonoma+ Release arm64 ] http/wpt/webrtc/audiovideo-script-transform.html [ Failure ]
-[ Sonoma+ Release arm64 ] http/wpt/webcodecs/webcodecs-gc.html [ Failure ]
-[ Sonoma+ Release arm64 ] http/wpt/webcodecs/videoFrame-negative-timestamp.html [ Failure ]
-[ Sonoma+ Release arm64 ] http/wpt/webcodecs/hevc-decoder-annexb.https.any.worker.html [ Failure ]
-[ Sonoma+ Release arm64 ] http/wpt/webcodecs/hevc-decoder-annexb.https.any.html [ Failure ]
-[ Sonoma+ Release arm64 ] http/tests/webcodecs/hevc-reordering.html [ Failure ]
 
 webkit.org/b/268406 transitions/flex-transitions.html [ Pass Failure ]
 
@@ -2012,6 +1998,22 @@ webkit.org/b/268398 [ Sonoma+ ] compositing/plugins/pdf/pdf-in-iframe-scrolling-
 
 webkit.org/b/269581 http/tests/site-isolation/mouse-events/context-menu-event-twice.html [ Skip ]
 
-# webkit.org/b/123266095  (REGRESSION (274957@main) [ Monterrey+ Debug ] 2x imported/w3c/web-platform-tests/css/css-view-transitions tests are constant crash)
-[ Monterey+ Debug ] imported/w3c/web-platform-tests/css/css-view-transitions/new-content-captures-different-size.html [ Skip ]
-[ Monterey+ Debug ] imported/w3c/web-platform-tests/css/css-view-transitions/old-content-captures-different-size.html [ Skip ]
+# webkit.org/b/269798 REGRESSION (274409@main): [ macOS wk2 ] 2 tests in http/tests/navigation/ping-attribute are flaky
+[ Monterey+ ] http/tests/navigation/ping-attribute/area-cross-origin-from-https.html [ Pass Failure ]
+[ Monterey+ ] http/tests/navigation/ping-attribute/area-cross-origin-from-https-UpgradeMixedContent.html [ Pass Failure ]
+
+webkit.org/b/269996 [ Monterey+ Debug ] imported/w3c/web-platform-tests/css/css-view-transitions/offscreen-element-modified-before-coming-onscreen.html [ Skip ]
+
+# webkit.org/b/270014 REGRESSION (275227@main): [ macOS wk2 Debug ] ASSERTION FAILED fixedPositionContainerLayer result of 5 tests in imported/w3c/web-platform-tests/css/css-view-transitions to flaky crash or constant failure
+[ Monterey+ Debug ] imported/w3c/web-platform-tests/css/css-view-transitions/massive-element-below-viewport-offscreen-new.html [ Skip ]
+[ Monterey+ Debug ] imported/w3c/web-platform-tests/css/css-view-transitions/massive-element-below-viewport-offscreen-old.html [ Skip ]
+[ Monterey+ Debug ] imported/w3c/web-platform-tests/css/css-view-transitions/massive-element-right-of-viewport-offscreen-new.html [ Skip ]
+[ Monterey+ Debug ] imported/w3c/web-platform-tests/css/css-view-transitions/massive-element-right-of-viewport-offscreen-old.html [ Skip ]
+
+# webkit.org/b/270092  (REGRESSION (275274@main): [ Sonoma+ wk2 ] Multiple compositing/plugins/pdf/pdf are constant failures)
+[ Sonoma+ ] compositing/plugins/pdf/pdf-in-embed.html [ Failure ]
+[ Sonoma+ ] compositing/plugins/pdf/pdf-in-styled-embed.html [ Failure ]
+[ Sonoma+ ] compositing/plugins/pdf/pdf-scrolling-tree-dynamic.html [ Failure ]
+[ Sonoma+ ] compositing/plugins/pdf/pdf-scrolling-tree.html [ Failure ]
+
+webkit.org/b/270096 [ Monterey+ Debug ] webrtc/h265.html [ Timeout ]

@@ -2217,7 +2217,7 @@ accessibility/heading-level.html [ Pass ]
 accessibility/html5-required-attribute.html [ Pass ]
 accessibility/iframe-with-role.html [ Pass ]
 accessibility/input-type-hidden-in-aria-hidden-false.html [ Pass ]
-accessibility/input-time-label-value.html [ Pass ]
+accessibility/datetime/input-time-label-value.html [ Pass ]
 accessibility/invalid-inputs.html [ Pass ]
 accessibility/insert-text-into-password-field.html [ Pass ]
 accessibility/list-with-dynamically-changing-content.html [ Pass ]
@@ -2508,7 +2508,6 @@ media/audio-mpeg-supported.html [ Failure ]
 media/event-attributes.html [ Failure ]
 media/media-can-play-webm.html [ Failure ]
 media/media-higher-prio-audio-stream.html [ Failure ]
-media/progress-events-generated-correctly.html [ Failure ]
 media/restore-from-page-cache.html [ Failure ]
 media/track/track-forced-subtitles-in-band.html [ Failure ]
 media/track/track-in-band-mode.html [ Pass Failure ]
@@ -2785,8 +2784,8 @@ webkit.org/b/177366 http/tests/security/frameNavigation/sandbox-ALLOWED-top-navi
 webkit.org/b/177395 fast/mediastream/RTCPeerConnection-overloaded-operations.html [ Pass Failure ]
 fast/mediastream/getUserMedia-webaudio.html [ Pass Failure ]
 fast/mediastream/getUserMedia-grant-persistency3.html [ Pass Failure ]
+
 # These tests are timing out and should be investigated.
-fast/mediastream/device-change-event-2.html [ Skip ]
 fast/mediastream/get-display-media-muted.html [ Skip ]
 fast/mediastream/media-stream-page-muted.html [ Skip ]
 fast/mediastream/MediaStream-add-ended-tracks.html [ Skip ]
@@ -3410,10 +3409,6 @@ webkit.org/b/222844 imported/blink/compositing/draws-content/webgl-simple-backgr
 fast/text/line-break-with-locale.html [ ImageOnlyFailure ]
 
 webkit.org/b/229154 webrtc/peer-connection-audio-mute2.html [ Pass Failure ]
-
-# Skip WebXR tests on iOS
-imported/w3c/web-platform-tests/webxr [ Skip ]
-http/wpt/webxr [ Skip ]
 
 # WebM is not supported on iOS
 http/tests/media/video-webm-stall.html [ Skip ]
@@ -4449,7 +4444,6 @@ webkit.org/b/259160 http/tests/privateClickMeasurement/triggering-event-with-att
 # webkit.org/b/259157REGRESSION(264419@Main): [ iOS ] 264419@Main introduced multiple flaky ImageOnlyFailures (259157)
 imported/w3c/web-platform-tests/html/dom/elements/global-attributes/dir_auto-textarea-script-mixed.html [ Pass ImageOnlyFailure ]
 fast/block/transparent-outline-with-and-without-border-radius.html [ Pass ImageOnlyFailure ]
-fast/forms/basic-textareas-quirks-simple-lines.html [ Pass ImageOnlyFailure ]
 imported/w3c/web-platform-tests/html/dom/elements/global-attributes/dir_auto-textarea-mixed.html [ Pass ImageOnlyFailure ]
 
 webkit.org/b/259228 [ Release ] fast/dom/lazy-image-loading-document-leak.html [ Pass Failure ]
@@ -4553,7 +4547,7 @@ imported/w3c/web-platform-tests/css/css-tables/visibility-collapse-rowspan-004-d
 imported/w3c/web-platform-tests/dom/events/scrolling/scrollend-event-fired-after-sequence-of-scrolls.tentative.html [ Failure ]
 imported/w3c/web-platform-tests/editing/run/caret-navigation-around-line-break.html [ Failure ]
 imported/w3c/web-platform-tests/html/semantics/popovers/light-dismiss-event-ordering.html [ Failure ]
-imported/w3c/web-platform-tests/html/semantics/popovers/popover-anchor-nesting.html [ Failure ]
+imported/w3c/web-platform-tests/html/semantics/popovers/popover-anchor-nesting.tentative.html [ Failure ]
 imported/w3c/web-platform-tests/service-workers/service-worker/fetch-request-redirect.https.html [ Failure ]
 imported/w3c/web-platform-tests/xhr/open-method-case-sensitive.htm [ Failure ]
 media/media-can-play-h265-video.html [ Failure ]
@@ -4563,6 +4557,16 @@ platform/ipad/fast/viewport/viewport-unchanged-by-minimum-effective-width-if-not
 imported/w3c/web-platform-tests/html/semantics/popovers/popover-hover-hide-hide.tentative.html [ Crash ]
 imported/w3c/web-platform-tests/html/semantics/popovers/popover-hover-hide-show.tentative.html [ Crash ]
 imported/w3c/web-platform-tests/html/semantics/popovers/popover-hover-hide-toggle.tentative.html [ Crash ]
+imported/w3c/web-platform-tests/html/semantics/popovers/popover-close-request.html [ Skip ]
+imported/w3c/web-platform-tests/html/semantics/popovers/popover-focus-2.html [ Failure ]
+imported/w3c/web-platform-tests/html/semantics/popovers/popover-focus-harness.html [ Failure ]
+imported/w3c/web-platform-tests/html/semantics/popovers/popover-light-dismiss-hint.tentative.html [ Failure ]
+imported/w3c/web-platform-tests/html/semantics/popovers/popover-light-dismiss-with-anchor.tentative.tentative.html [ Failure ]
+imported/w3c/web-platform-tests/html/semantics/popovers/popover-top-layer-nesting-anchor.tentative.html [ Skip ]
+imported/w3c/web-platform-tests/html/semantics/popovers/popover-top-layer-nesting-hints.tentative.html [ Failure ]
+imported/w3c/web-platform-tests/html/semantics/popovers/popover-top-layer-nesting.tentative.html [ Skip ]
+imported/w3c/web-platform-tests/html/semantics/popovers/popover-open-in-beforetoggle.html [ Failure ]
+imported/w3c/web-platform-tests/html/semantics/popovers/popover-change-type.html [ Failure ]
 
 editing/selection/ios/show-grammar-replacements-on-tap.html [ Pass ]
 
@@ -4700,6 +4704,10 @@ webkit.org/b/268929 imported/w3c/web-platform-tests/xhr/xmlhttprequest-timeout-w
 
 # web-platform-tests/svg/painting/reftests failures
 imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-002.svg [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-021.svg [ Failure ]
-imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-022.svg [ Failure ]
-imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-023.svg [ Failure ]
+imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-021.svg [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-022.svg [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-023.svg [ ImageOnlyFailure ]
+
+webkit.org/b/269852 imported/w3c/web-platform-tests/css/filter-effects/backdrop-filter-edge-behavior.html [ ImageOnlyFailure ]
+
+webkit.org/b/269873 imported/w3c/web-platform-tests/webrtc-extensions/transfer-datachannel-service-worker.https.html [ Pass Failure ]

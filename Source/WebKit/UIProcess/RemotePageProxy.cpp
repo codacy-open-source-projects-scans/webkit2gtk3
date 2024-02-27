@@ -33,6 +33,7 @@
 #include "HandleMessage.h"
 #include "NativeWebMouseEvent.h"
 #include "NavigationActionData.h"
+#include "PageLoadState.h"
 #include "RemotePageDrawingAreaProxy.h"
 #include "RemotePageVisitedLinkStoreRegistration.h"
 #include "WebFrameProxy.h"
@@ -79,15 +80,15 @@ void RemotePageProxy::injectPageIntoNewProcess()
     m_drawingArea = makeUnique<RemotePageDrawingAreaProxy>(*drawingArea, m_process);
     m_visitedLinkStoreRegistration = makeUnique<RemotePageVisitedLinkStoreRegistration>(*page, m_process);
 
-    auto parameters = page->creationParameters(m_process, *drawingArea);
-    parameters.subframeProcessPageParameters = WebPageCreationParameters::SubframeProcessPageParameters {
-        URL(page->currentURL()),
-        page->mainFrame()->frameTreeCreationParameters(),
-        page->mainFrameWebsitePoliciesData() ? std::make_optional(*page->mainFrameWebsitePoliciesData()) : std::nullopt
-    };
-    parameters.isProcessSwap = true; // FIXME: This should be a parameter to creationParameters rather than doctoring up the parameters afterwards. <rdar://116201784>
-    parameters.topContentInset = 0;
-    m_process->send(Messages::WebProcess::CreateWebPage(m_webPageID, WTFMove(parameters)), 0);
+    m_process->send(
+        Messages::WebProcess::CreateWebPage(
+            m_webPageID,
+            page->creationParametersForRemotePage(m_process, *drawingArea, SubframeProcessPageParameters {
+                URL(page->pageLoadState().url()),
+                page->mainFrame()->frameTreeCreationParameters(),
+                page->mainFrameWebsitePoliciesData() ? std::make_optional(*page->mainFrameWebsitePoliciesData()) : std::nullopt
+            })),
+        0);
 }
 
 void RemotePageProxy::processDidTerminate(WebCore::ProcessIdentifier processIdentifier)

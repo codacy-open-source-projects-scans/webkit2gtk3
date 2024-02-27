@@ -146,6 +146,7 @@
 #include "TransformOperationData.h"
 #include "TransformationMatrix.h"
 #include "TranslateTransformOperation.h"
+#include "ViewTransition.h"
 #include "WheelEventTestMonitor.h"
 #include <stdio.h>
 #include <wtf/HexNumber.h>
@@ -574,6 +575,8 @@ static bool canCreateStackingContext(const RenderLayer& layer)
         || renderer.hasBackdropFilter()
         || renderer.hasBlendMode()
         || renderer.isTransparent()
+        || renderer.hasViewTransitionName()
+        || renderer.isViewTransitionPseudo()
         || renderer.isPositioned() // Note that this only creates stacking context in conjunction with explicit z-index.
         || renderer.hasReflection()
         || renderer.style().hasIsolation()
@@ -599,7 +602,7 @@ bool RenderLayer::shouldBeNormalFlowOnly() const
 
 bool RenderLayer::shouldBeCSSStackingContext() const
 {
-    return !renderer().style().hasAutoUsedZIndex() || renderer().shouldApplyLayoutOrPaintContainment() || isRenderViewLayer();
+    return !renderer().style().hasAutoUsedZIndex() || renderer().shouldApplyLayoutOrPaintContainment() || renderer().hasViewTransitionName() || renderer().isViewTransitionPseudo() || isRenderViewLayer();
 }
 
 bool RenderLayer::computeCanBeBackdropRoot() const
@@ -613,6 +616,7 @@ bool RenderLayer::computeCanBeBackdropRoot() const
         || renderer().hasFilter()
         || renderer().hasBlendMode()
         || renderer().hasMask()
+        || renderer().hasViewTransitionName()
         || renderer().isDocumentElementRenderer()
         || (renderer().style().willChange() && renderer().style().willChange()->canBeBackdropRoot());
 }
@@ -2840,7 +2844,12 @@ void RenderLayer::paintSVGResourceLayer(GraphicsContext& context, const AffineTr
 
     auto localPaintDirtyRect = LayoutRect::infiniteRect();
 
-    auto* rootPaintingLayer = enclosingSVGRootLayer();
+    auto* rootPaintingLayer = [&] () {
+        auto* curr = parent();
+        while (curr && !(curr->renderer().isAnonymous() && is<RenderSVGViewportContainer>(curr->renderer())))
+            curr = curr->parent();
+        return curr;
+    }();
     ASSERT(rootPaintingLayer);
 
     LayerPaintingInfo paintingInfo(rootPaintingLayer, localPaintDirtyRect, PaintBehavior::Normal, LayoutSize());
@@ -3366,7 +3375,7 @@ void RenderLayer::paintLayerContents(GraphicsContext& context, const LayerPainti
             if (!localPaintingInfo.clipToDirtyRect && renderer().hasNonVisibleOverflow()) {
                 // We can turn clipping back by requesting full repaint for the overflow area.
                 localPaintingInfo.clipToDirtyRect = true;
-                paintDirtyRect = clipRectRelativeToAncestor(localPaintingInfo.rootLayer, offsetFromRoot, LayoutRect::infiniteRect());
+                paintDirtyRect = clipRectRelativeToAncestor(localPaintingInfo.rootLayer, offsetFromRoot, LayoutRect::infiniteRect(), !!(localPaintFlags & PaintLayerFlag::TemporaryClipRects));
             }
 
             auto clipRectOptions = isPaintingOverflowContents ? clipRectOptionsForPaintingOverflowControls : clipRectDefaultOptions;
@@ -3511,8 +3520,11 @@ void RenderLayer::paintList(LayerList layerIterator, GraphicsContext& context, c
     LayerListMutationDetector mutationChecker(*this);
 #endif
 
-    for (auto* childLayer : layerIterator)
+    for (auto* childLayer : layerIterator) {
+        if (paintFlags.contains(PaintLayerFlag::PaintingSkipDescendantViewTransition) && childLayer->renderer().capturedInViewTransition())
+            continue;
         childLayer->paintLayer(context, paintingInfo, paintFlags);
+    }
 }
 
 RenderLayer* RenderLayer::enclosingPaginationLayerInSubtree(const RenderLayer* rootLayer, PaginationInclusionMode mode) const
@@ -4038,14 +4050,6 @@ RenderLayer* RenderLayer::enclosingFragmentedFlowAncestor() const
             return nullptr;
         }
     }
-    return curr;
-}
-
-RenderLayer* RenderLayer::enclosingSVGRootLayer() const
-{
-    auto* curr = parent();
-    while (curr && !curr->renderer().isRenderSVGRoot())
-        curr = curr->parent();
     return curr;
 }
 
@@ -4815,12 +4819,12 @@ LayoutRect RenderLayer::childrenClipRect() const
     return intersection(absoluteClippingRect, renderer().view().unscaledDocumentRect());
 }
 
-LayoutRect RenderLayer::clipRectRelativeToAncestor(RenderLayer* ancestor, LayoutSize offsetFromAncestor, const LayoutRect& constrainingRect) const
+LayoutRect RenderLayer::clipRectRelativeToAncestor(RenderLayer* ancestor, LayoutSize offsetFromAncestor, const LayoutRect& constrainingRect, bool temporaryClipRects) const
 {
     LayoutRect layerBounds;
     ClipRect backgroundRect;
     ClipRect foregroundRect;
-    auto clipRectType = !m_enclosingPaginationLayer || m_enclosingPaginationLayer == ancestor ? PaintingClipRects : TemporaryClipRects;
+    auto clipRectType = (!m_enclosingPaginationLayer || m_enclosingPaginationLayer == ancestor) && !temporaryClipRects ? PaintingClipRects : TemporaryClipRects;
     ClipRectsContext clipRectsContext(ancestor, clipRectType);
     calculateRects(clipRectsContext, constrainingRect, layerBounds, backgroundRect, foregroundRect, offsetFromAncestor);
     return backgroundRect.rect();

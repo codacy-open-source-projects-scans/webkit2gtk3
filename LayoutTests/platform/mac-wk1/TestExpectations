@@ -816,7 +816,9 @@ fast/speechrecognition/start-recognition-after-gum.html [ Skip ]
 fast/speechrecognition/start-recognition-after-denied-gum.html [ Skip ]
 fast/speechrecognition/start-recognition-without-devices.html [ Skip ]
 
-accessibility/input-time-label-value.html [ WontFix ]
+accessibility/datetime/input-date-field-labels-and-value-changes.html [ WontFix ]
+accessibility/datetime/input-time-field-labels-and-value-changes.html [ WontFix ]
+accessibility/datetime/input-time-label-value.html [ WontFix ]
 accessibility/announcement-notification.html [ WontFix ]
 accessibility/menuitem-is-selected.html [ WontFix ]
 accessibility/relationships.html [ WontFix ]
@@ -1055,7 +1057,10 @@ media/media-sources-selection.html [ ImageOnlyFailure ]
 media/media-source/media-source-webm-configuration-change.html [ Failure ]
 media/media-source/media-source-webm-configuration-framerate.html [ Failure ]
 media/media-source/media-source-webm-configuration-vp9-header-color.html [ Failure ]
-media/media-source/media-managedmse-multipletracks-bufferedchange.html [ Failure ]
+
+# Managed MediaSource isn't enabled on WK1
+media/media-source/media-managedmse-multipletracks-bufferedchange.html [ Skip ]
+media/media-source/media-managedmse-poster.html [ Skip ]
 
 # CRABS WebM isn't supported in WK1
 media/media-webm-opus-buffered.html [ Failure ]
@@ -1174,6 +1179,8 @@ http/tests/security/contentSecurityPolicy/upgrade-insecure-requests/upgrade-inse
 imported/w3c/web-platform-tests/xhr/xhr-timeout-longtask.any.html
 
 webkit.org/b/187230 editing/mac/pasteboard/can-copy-url-without-title.html [ Skip ]
+
+webkit.org/b/270055 imported/w3c/web-platform-tests/navigation-api/currententrychange-event/navigation-back-forward-cross-doc.html [ Skip ]
 
 ### END OF (1) Failures with bug reports
 ########################################
@@ -1297,6 +1304,7 @@ imported/w3c/web-platform-tests/worklets/audio-worklet-service-worker-intercepti
 imported/w3c/web-platform-tests/worklets/layout-worklet-service-worker-interception.https.html [ Skip ]
 imported/w3c/web-platform-tests/worklets/paint-worklet-service-worker-interception.https.html [ Skip ]
 http/wpt/webrtc/transfer-datachannel-service-worker.https.html [ Skip ]
+imported/w3c/web-platform-tests/webrtc-extensions/transfer-datachannel-service-worker.https.html [ Skip ]
 imported/w3c/web-platform-tests/content-security-policy/script-src/script-src-strict_dynamic_worker.https.html [ Skip ]
 imported/w3c/web-platform-tests/content-security-policy/wasm-unsafe-eval/default-src-blocks-wasm.any.serviceworker.html [ Skip ]
 imported/w3c/web-platform-tests/content-security-policy/wasm-unsafe-eval/default-src-unsafe-eval-allows-wasm.any.serviceworker.html [ Skip ]
@@ -2005,7 +2013,6 @@ webkit.org/b/210079 [ Debug ] inspector/debugger/evaluateOnCallFrame-errors.html
 webkit.org/b/230072 [ Release ] inspector/dom/shadow-and-non-shadow-children.html [ Pass Failure ]
 
 webkit.org/b/208477 accessibility/mac/text-marker-for-index.html [ Skip ]
-webkit.org/b/251544 accessibility/date-input-aria-label-and-value.html [ Skip ]
 accessibility/mac/textmarker-range-for-range.html [ Skip ]
 accessibility/aria-current-state-changed-notification.html [ Skip ]
 accessibility/aria-current.html [ Skip ]
@@ -2530,7 +2537,6 @@ imported/w3c/web-platform-tests/websockets/interfaces/WebSocket/bufferedAmount/b
 #webkit.org/b/248537 Batch mark expectations for Ventura test failures
 [ Ventura+ arm64 ] svg/transforms/transformed-text-fill-pattern.html [ ImageOnlyFailure ]
 [ Ventura+ ] media/accessiblity-describes-video.html [ Crash ]
-[ Ventura+ ] media/track/track-mode.html  [ Crash ]
 [ Ventura+ ] media/modern-media-controls/pip-support/pip-support-click.html [ Pass Crash ]
 [ Ventura+ ] media/audio-playback-restriction-removed-track-enabled.html  [ Crash ]
 [ Ventura+ ] media/modern-media-controls/media-controller/media-controller-auto-hide-rewind-with-mouse-enter.html  [ Crash ]
@@ -2539,7 +2545,6 @@ imported/w3c/web-platform-tests/websockets/interfaces/WebSocket/bufferedAmount/b
 [ Ventura+ ] media/track/track-in-band-cues-added-once.html  [ Crash ]
 [ Ventura+ ] media/track/track-in-band.html  [ Crash ]
 [ Ventura+ ] media/track/track-long-captions-file.html  [ Crash ]
-[ Ventura+ ] media/track/track-mode-disabled-crash.html  [ Crash ]
 [ Monterey+ ] imported/w3c/web-platform-tests/secure-contexts/basic-popup-and-iframe-tests.html [ Pass Failure ]
 [ Ventura+ ] http/wpt/webaudio/audioworklet-addModule-cors.sub.https.html
 [ Monterey+ ] http/wpt/fetch/fetch-metadata-websocket.html [ Failure ]
@@ -2626,8 +2631,6 @@ imported/w3c/web-platform-tests/html/semantics/embedded-content/the-iframe-eleme
 # rdar://111704637 - 'mousemove' not emitted from 'eventSender.moveMouseTo()'
 fast/html/transient-activation.html [ Skip ]
 fast/html/history-action-user-activation.html [ Skip ]
-
-webkit.org/b/259485 [ Ventura+ ] http/tests/media/hls/track-in-band-multiple-cues.html [ Crash ]
 
 webkit.org/b/259546 [ Debug ] media/modern-media-controls/tracks-support/text-track-selected-via-media-api.html [ Skip ]
 
@@ -2768,9 +2771,15 @@ imported/w3c/web-platform-tests/dom/events/scrolling/scrollend-event-for-user-sc
 imported/w3c/web-platform-tests/html/semantics/popovers/popover-light-dismiss.html [ Skip ]
 imported/w3c/web-platform-tests/pointerevents/pointerevent_touch-action-mouse.html [ Skip ]
 
+imported/w3c/web-platform-tests/html/semantics/popovers/popover-top-layer-nesting.tentative.html [ Failure ]
+imported/w3c/web-platform-tests/html/semantics/popovers/popover-top-layer-nesting-hints.tentative.html [ Failure ]
+imported/w3c/web-platform-tests/html/semantics/popovers/popover-top-layer-nesting-anchor.tentative.html [ Failure ]
+
 #test uses test helper functions not implemented on WK1
 fast/dom/no-scroll-when-command-click-fragment-URL.html [ Skip ]
 
 # webkit.org/b/267799 [ Ventura wk1 ] 2 tests in media/track are constant crash
 [ Ventura ] media/track/track-in-band-layout.html [ Crash ]
 [ Ventura ] media/track/track-paint-on-captions.html [ Crash ]
+
+webkit.org/b/270133 [ Sonoma+ ] imported/w3c/web-platform-tests/accname/name/comp_host_language_label.html [ Failure ]

@@ -226,6 +226,7 @@ MESSAGE_RECEIVERS = \
 	WebProcess/Inspector/RemoteWebInspectorUI \
 	WebProcess/MediaSession/RemoteMediaSessionCoordinator \
 	WebProcess/Model/ModelProcessConnection \
+	WebProcess/Model/ModelProcessModelPlayer \
 	WebProcess/Network/WebSocketChannel \
 	WebProcess/Network/NetworkProcessConnection \
 	WebProcess/Network/WebResourceLoader \
@@ -326,6 +327,8 @@ MESSAGE_RECEIVERS = \
 	GPUProcess/media/RemoteSourceBufferProxy \
 	ModelProcess/ModelConnectionToWebProcess \
 	ModelProcess/ModelProcess \
+	ModelProcess/ModelProcessModelPlayerManagerProxy \
+	ModelProcess/ModelProcessModelPlayerProxy \
 	webpushd/PushClientConnection \
 #
 
@@ -559,6 +562,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/Cocoa/CoreIPCLocale.serialization.in \
 	Shared/Cocoa/CoreIPCNSCFObject.serialization.in \
 	Shared/Cocoa/CoreIPCNSShadow.serialization.in \
+	Shared/Cocoa/CoreIPCNSURLCredential.serialization.in \
 	Shared/Cocoa/CoreIPCNSURLProtectionSpace.serialization.in \
 	Shared/Cocoa/CoreIPCNSValue.serialization.in \
 	Shared/Cocoa/CoreIPCNull.serialization.in \
@@ -628,6 +632,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/MonotonicObjectIdentifier.serialization.in \
 	Shared/NavigationActionData.serialization.in \
 	Shared/NetworkProcessConnectionParameters.serialization.in \
+	Shared/NetworkProcessPreferencesForWebProcess.serialization.in \
 	Shared/Pasteboard.serialization.in \
 	Shared/PlatformPopupMenuData.serialization.in \
 	Shared/PolicyDecision.serialization.in \

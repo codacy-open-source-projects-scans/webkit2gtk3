@@ -1511,6 +1511,14 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     return nil;
 }
 
+// VoiceOver expects the datetime value in the local time zone. Since we store it in GMT, we need to convert it to local before returning it to VoiceOver.
+// This helper funtion computes the offset to go from local to GMT and returns its opposite.
+static inline NSInteger gmtToLocalTimeOffset()
+{
+    NSDate *now = [NSDate date];
+    return -1 * [[NSTimeZone localTimeZone] secondsFromGMTForDate:now];
+}
+
 // FIXME: split up this function in a better way.
 // suggestions: Use a hash table that maps attribute names to function calls,
 // or maybe pointers to member functions
@@ -1691,7 +1699,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
         return backingObject->descriptionAttributeValue();
     }
 
-    if ([attributeName isEqualToString: NSAccessibilityValueAttribute]) {
+    if ([attributeName isEqualToString:NSAccessibilityValueAttribute]) {
         if (backingObject->isAttachment()) {
             id attachmentView = [self attachmentView];
             if ([[attachmentView accessibilityAttributeNames] containsObject:NSAccessibilityValueAttribute])
@@ -1704,11 +1712,20 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
             [] (unsigned& typedValue) -> id { return @(typedValue); },
             [] (float& typedValue) -> id { return @(typedValue); },
             [] (String& typedValue) -> id { return (NSString *)typedValue; },
+            [] (WallTime& typedValue) -> id {
+                NSInteger offset = gmtToLocalTimeOffset();
+                auto time = typedValue.secondsSinceEpoch().value();
+                NSDate *gmtDate = [NSDate dateWithTimeIntervalSince1970:time];
+                return [NSDate dateWithTimeInterval:offset sinceDate:gmtDate];
+            },
             [] (AccessibilityButtonState& typedValue) -> id { return @((unsigned)typedValue); },
             [] (AXCoreObject*& typedValue) { return typedValue ? (id)typedValue->wrapper() : nil; },
             [] (auto&) { return nil; }
         );
     }
+
+    if ([attributeName isEqualToString:@"AXDateTimeComponents"])
+        return @(backingObject->dateTimeComponents());
 
     if ([attributeName isEqualToString:(NSString *)kAXMenuItemMarkCharAttribute]) {
         const unichar ch = 0x2713; // ✓ used on Mac for selected menu items.
@@ -2267,6 +2284,9 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
     // Used by LayoutTests only, not by AT clients.
     if (UNLIKELY([attributeName isEqualToString:@"AXARIARole"]))
         return backingObject->computedRoleString();
+
+    if (UNLIKELY([attributeName isEqualToString:@"AXStringValue"]))
+        return backingObject->stringValue();
 
     if (UNLIKELY([attributeName isEqualToString:@"AXControllers"]))
         return makeNSArray(backingObject->controllers());

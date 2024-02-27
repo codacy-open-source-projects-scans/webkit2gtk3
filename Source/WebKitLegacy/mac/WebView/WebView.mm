@@ -43,7 +43,6 @@
 #import "SocketStreamHandleImpl.h"
 #import "StorageThread.h"
 #import "WebAlternativeTextClient.h"
-#import "WebApplicationCacheInternal.h"
 #import "WebArchive.h"
 #import "WebBackForwardListInternal.h"
 #import "WebBroadcastChannelRegistry.h"
@@ -1381,6 +1380,32 @@ static void WebKitInitializeGamepadProviderIfNecessary()
 }
 #endif
 
+static NSString *applicationCacheBundleIdentifier()
+{
+    NSString *appName = [[NSBundle mainBundle] bundleIdentifier];
+    if (!appName)
+        appName = [[NSProcessInfo processInfo] processName];
+
+    ASSERT(appName);
+    return appName;
+}
+
+static NSString *applicationCachePath()
+{
+    return [NSString _webkit_localCacheDirectoryWithBundleIdentifier:applicationCacheBundleIdentifier()];
+}
+
+static WebCore::ApplicationCacheStorage& webApplicationCacheStorage()
+{
+    static std::once_flag onceFlag;
+    std::call_once(onceFlag, [] {
+        FileSystem::deleteNonEmptyDirectory(applicationCachePath());
+    });
+    static WebCore::ApplicationCacheStorage& storage = WebCore::ApplicationCacheStorage::create(emptyString(), emptyString()).leakRef();
+
+    return storage;
+}
+
 - (void)_commonInitializationWithFrameName:(NSString *)frameName groupName:(NSString *)groupName
 {
     WebCoreThreadViolationCheckRoundTwo();
@@ -2021,8 +2046,10 @@ static void WebKitInitializeGamepadProviderIfNecessary()
         WebCore::TextIndicatorOption::IncludeSnapshotWithSelectionHighlight,
         WebCore::TextIndicatorOption::RespectTextColor
     };
-    auto& frame = page->focusController().focusedOrMainFrame();
-    if (auto range = frame.selection().selection().toNormalizedRange()) {
+    RefPtr frame = page->focusController().focusedOrMainFrame();
+    if (!frame)
+        return;
+    if (auto range = frame->selection().selection().toNormalizedRange()) {
         if (auto textIndicator = WebCore::TextIndicator::createWithRange(*range, defaultEditDragTextIndicatorOptions, WebCore::TextIndicatorPresentationTransition::None, WebCore::FloatSize()))
             _private->dataOperationTextIndicator = adoptNS([[WebUITextIndicatorData alloc] initWithImage:nil textIndicatorData:textIndicator->data() scale:page->deviceScaleFactor()]);
     }
@@ -2912,9 +2939,6 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 
     // FIXME: Is this relevent to WebKitLegacy? If not, we should remove it.
     WebCore::DeprecatedGlobalSettings::setTrackingPreventionEnabled([preferences resourceLoadStatisticsEnabled]);
-
-    // Application Cache Preferences are stored on the global cache storage manager, not in Settings.
-    [WebApplicationCache setDefaultOriginQuota:[preferences applicationCacheDefaultOriginQuota]];
 
     BOOL zoomsTextOnly = [preferences zoomsTextOnly];
     if (_private->zoomsTextOnly != zoomsTextOnly)
@@ -4031,8 +4055,13 @@ IGNORE_WARNINGS_END
 
 - (void)_executeCoreCommandByName:(NSString *)name value:(NSString *)value
 {
-    if (RefPtr page = _private->page)
-        page->focusController().focusedOrMainFrame().editor().command(name).execute(value);
+    RefPtr page = _private->page;
+    if (!page)
+        return;
+    RefPtr focusedOrMainFrame = page->focusController().focusedOrMainFrame();
+    if (!focusedOrMainFrame)
+        return;
+    focusedOrMainFrame->editor().command(name).execute(value);
 }
 
 - (void)_clearMainFrameName

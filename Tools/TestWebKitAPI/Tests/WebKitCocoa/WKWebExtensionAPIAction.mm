@@ -167,6 +167,10 @@ TEST(WKWebExtensionAPIAction, PresentPopupForAction)
         EXPECT_NOT_NULL(largeIcon);
         EXPECT_TRUE(CGSizeEqualToSize(largeIcon.size, CGSizeMake(32, 32)));
 
+#if PLATFORM(IOS_FAMILY)
+        EXPECT_NOT_NULL(action.popupViewController);
+#endif
+
         EXPECT_NOT_NULL(action.popupWebView);
         EXPECT_FALSE(action.popupWebView.loading);
 
@@ -198,6 +202,51 @@ TEST(WKWebExtensionAPIAction, GetCurrentTabAndWindowFromPopupPage)
         @"const window = await browser.windows.getCurrent()",
         @"browser.test.assertEq(typeof window, 'object', 'The window should be')",
         @"browser.test.assertTrue(window.focused, 'The current window should be focused')",
+
+        @"browser.test.notifyPass()"
+    ]);
+
+    auto *backgroundScript = Util::constructScript(@[
+        @"browser.test.yield('Test Popup Action')"
+    ]);
+
+    auto *resources = @{
+        @"background.js": backgroundScript,
+        @"popup.html": @"<script type='module' src='popup.js'></script>",
+        @"popup.js": popupScript
+    };
+
+    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:actionPopupManifest resources:resources]);
+    auto manager = adoptNS([[TestWebExtensionManager alloc] initForExtension:extension.get()]);
+
+    manager.get().internalDelegate.presentPopupForAction = ^(_WKWebExtensionAction *action) {
+        EXPECT_TRUE(action.presentsPopup);
+        EXPECT_NOT_NULL(action.popupWebView);
+    };
+
+    [manager loadAndRun];
+
+    EXPECT_NS_EQUAL(manager.get().yieldMessage, @"Test Popup Action");
+
+    [manager.get().context performActionForTab:manager.get().defaultTab];
+
+    [manager run];
+}
+
+TEST(WKWebExtensionAPIAction, UpdateTabFromPopupPage)
+{
+    auto *popupScript = Util::constructScript(@[
+        @"const tab = await browser.tabs.getCurrent()",
+        @"browser.test.assertEq(typeof tab, 'object', 'The tab should be')",
+        @"browser.test.assertTrue(tab.active, 'The current tab should be active')",
+
+        @"browser.test.assertFalse(tab.mutedInfo.muted, 'The tab should not be initially muted')",
+
+        @"const updatedTab = await browser.tabs.update({",
+        @"  muted: true,",
+        @"})",
+
+        @"browser.test.assertTrue(updatedTab.mutedInfo.muted, 'The tab should be muted after update')",
 
         @"browser.test.notifyPass()"
     ]);
@@ -273,7 +322,7 @@ TEST(WKWebExtensionAPIAction, SetDefaultActionProperties)
         EXPECT_NS_EQUAL(defaultAction.badgeText, @"42");
         EXPECT_FALSE(defaultAction.hasUnreadBadgeText);
 
-        EXPECT_NULL(action.associatedTab);
+        EXPECT_NS_EQUAL(action.associatedTab, manager.get().defaultTab);
 
         EXPECT_FALSE(action.isEnabled);
         EXPECT_NS_EQUAL(action.label, @"Modified Title");
@@ -810,7 +859,7 @@ TEST(WKWebExtensionAPIAction, BrowserAction)
         EXPECT_NS_EQUAL(defaultAction.badgeText, @"42");
         EXPECT_FALSE(defaultAction.hasUnreadBadgeText);
 
-        EXPECT_NULL(action.associatedTab);
+        EXPECT_NS_EQUAL(action.associatedTab, manager.get().defaultTab);
 
         EXPECT_FALSE(action.isEnabled);
         EXPECT_NS_EQUAL(action.label, @"Modified Title");
@@ -823,6 +872,10 @@ TEST(WKWebExtensionAPIAction, BrowserAction)
 
         EXPECT_TRUE(action.presentsPopup);
         EXPECT_FALSE(action.isEnabled);
+
+#if PLATFORM(IOS_FAMILY)
+        EXPECT_NOT_NULL(action.popupViewController);
+#endif
 
         EXPECT_NOT_NULL(action.popupWebView);
         EXPECT_FALSE(action.popupWebView.loading);
@@ -896,7 +949,7 @@ TEST(WKWebExtensionAPIAction, PageAction)
         EXPECT_NS_EQUAL(defaultAction.badgeText, @"42");
         EXPECT_FALSE(defaultAction.hasUnreadBadgeText);
 
-        EXPECT_NULL(action.associatedTab);
+        EXPECT_NS_EQUAL(action.associatedTab, manager.get().defaultTab);
 
         EXPECT_FALSE(action.isEnabled);
         EXPECT_NS_EQUAL(action.label, @"Modified Title");
@@ -909,6 +962,10 @@ TEST(WKWebExtensionAPIAction, PageAction)
 
         EXPECT_TRUE(action.presentsPopup);
         EXPECT_FALSE(action.isEnabled);
+
+#if PLATFORM(IOS_FAMILY)
+        EXPECT_NOT_NULL(action.popupViewController);
+#endif
 
         EXPECT_NOT_NULL(action.popupWebView);
         EXPECT_FALSE(action.popupWebView.loading);

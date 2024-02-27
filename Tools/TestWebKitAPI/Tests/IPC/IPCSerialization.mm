@@ -213,6 +213,7 @@ static bool secTrustRefsEqual(SecTrustRef trust1, SecTrustRef trust2)
     if (!equal)
         return false;
 
+#if HAVE(SECTRUST_COPYPROPERTIES)
     array1 = SecTrustCopyProperties(trust1);
     array2 = SecTrustCopyProperties(trust2);
     EXPECT_TRUE(array1);
@@ -223,6 +224,7 @@ static bool secTrustRefsEqual(SecTrustRef trust1, SecTrustRef trust2)
     EXPECT_TRUE(equal);
     if (!equal)
         return false;
+#endif
 
     Boolean bool1, bool2;
     EXPECT_TRUE(SecTrustGetNetworkFetchAllowed(trust1, &bool1) == errSecSuccess);
@@ -415,6 +417,7 @@ struct ObjCHolderForTesting {
         RetainPtr<NSPersonNameComponents>,
         RetainPtr<NSPresentationIntent>,
         RetainPtr<NSURLProtectionSpace>,
+        RetainPtr<NSURLCredential>,
 #if USE(PASSKIT) && !PLATFORM(WATCHOS) && !PLATFORM(APPLETV)
         RetainPtr<CNContact>,
         RetainPtr<CNPhoneNumber>,
@@ -530,6 +533,21 @@ static bool wkNSURLProtectionSpace_isEqual(NSURLProtectionSpace *a, SEL, NSURLPr
     return true;
 }
 
+static bool NSURLCredentialTesting_isEqual(NSURLCredential *a, NSURLCredential *b)
+{
+    if (a.persistence != b.persistence)
+        return false;
+    if (a.user && ![a.user isEqualToString:b.user])
+        return false;
+    if (a.password && ![a.password isEqualToString:b.password])
+        return false;
+    if (a.hasPassword != b.hasPassword)
+        return false;
+    if (a.certificates.count != b.certificates.count)
+        return false;
+    return true;
+}
+
 #if USE(PASSKIT) && !PLATFORM(WATCHOS) && !PLATFORM(APPLETV)
 static BOOL wkSecureCoding_isEqual(id a, SEL, id b)
 {
@@ -577,6 +595,9 @@ inline bool operator==(const ObjCHolderForTesting& a, const ObjCHolderForTesting
 
     EXPECT_TRUE(aObject != nil);
     EXPECT_TRUE(bObject != nil);
+
+    if ([aObject isKindOfClass:NSURLCredential.class])
+        return NSURLCredentialTesting_isEqual(aObject, bObject);
 
     return [aObject isEqual:bObject];
 }
@@ -1209,6 +1230,13 @@ TEST(IPCSerialization, Basic)
     [protectionSpace2.get() _setServerTrust:trustRef];
     [protectionSpace2.get() _setDistinguishedNames:distinguishedNames];
     runTestNS({ protectionSpace2.get() });
+
+    runTestNS({ [NSURLCredential credentialForTrust:trust.get()] });
+#if HAVE(DICTIONARY_SERIALIZABLE_NSURLCREDENTIAL)
+    runTestNS({ [NSURLCredential credentialWithIdentity:identity.get() certificates:@[(id)cert.get()] persistence:NSURLCredentialPersistencePermanent] });
+    runTestNS({ [NSURLCredential credentialWithIdentity:identity.get() certificates:nil persistence:NSURLCredentialPersistenceForSession] });
+#endif
+    runTestNS({ [NSURLCredential credentialWithUser:@"user" password:@"password" persistence:NSURLCredentialPersistenceSynchronizable] });
 }
 
 TEST(IPCSerialization, NSShadow)

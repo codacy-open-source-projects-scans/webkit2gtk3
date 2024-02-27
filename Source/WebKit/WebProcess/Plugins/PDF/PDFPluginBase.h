@@ -113,6 +113,7 @@ public:
     virtual void paint(WebCore::GraphicsContext&, const WebCore::IntRect&) { }
 
     virtual CGFloat scaleFactor() const = 0;
+    virtual float contentScaleFactor() const = 0;
 
     virtual CGFloat minScaleFactor() const { return 0.25; }
     virtual CGFloat maxScaleFactor() const { return 5; }
@@ -192,6 +193,7 @@ public:
     WebCore::Scrollbar* verticalScrollbar() const override { return m_verticalScrollbar.get(); }
     void setScrollOffset(const WebCore::ScrollOffset&) final;
 
+    virtual void willAttachScrollingNode() { }
     virtual void didAttachScrollingNode() { }
     virtual void didChangeSettings() { }
 

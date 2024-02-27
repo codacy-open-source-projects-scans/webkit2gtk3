@@ -725,6 +725,14 @@ ScrollingNodeID PluginView::scrollingNodeID() const
     return protectedPlugin()->scrollingNodeID();
 }
 
+void PluginView::willAttachScrollingNode()
+{
+    if (!m_isInitialized)
+        return;
+
+    return protectedPlugin()->willAttachScrollingNode();
+}
+
 void PluginView::didAttachScrollingNode()
 {
     if (!m_isInitialized)
@@ -928,7 +936,7 @@ void PluginView::invalidateRect(const IntRect& dirtyRect)
 
 void PluginView::loadMainResource()
 {
-    auto referrer = SecurityPolicy::generateReferrerHeader(frame()->document()->referrerPolicy(), m_mainResourceURL, frame()->loader().outgoingReferrer(), OriginAccessPatternsForWebProcess::singleton());
+    auto referrer = SecurityPolicy::generateReferrerHeader(frame()->document()->referrerPolicy(), m_mainResourceURL, frame()->loader().outgoingReferrerURL(), OriginAccessPatternsForWebProcess::singleton());
     if (referrer.isEmpty())
         referrer = { };
 
@@ -985,7 +993,7 @@ WebCore::FloatRect PluginView::rectForSelectionInRootView(PDFSelection *selectio
 
 CGFloat PluginView::contentScaleFactor() const
 {
-    return protectedPlugin()->scaleFactor();
+    return protectedPlugin()->contentScaleFactor();
 }
 
 bool PluginView::isUsingUISideCompositing() const

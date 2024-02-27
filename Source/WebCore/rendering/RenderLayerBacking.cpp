@@ -101,6 +101,7 @@
 #include "AcceleratedEffectValues.h"
 #include "KeyframeEffect.h"
 #include "KeyframeEffectStack.h"
+#include <wtf/WeakListHashSet.h>
 #endif
 
 namespace WebCore {
@@ -1399,6 +1400,15 @@ void RenderLayerBacking::updateGeometry(const RenderLayer* compositedAncestor)
 
     ASSERT(compositedAncestor == m_owningLayer.ancestorCompositingLayer());
     LayoutRect parentGraphicsLayerRect = computeParentGraphicsLayerRect(compositedAncestor);
+
+    // If our content is being used in a view-transition, then all positioning
+    // is handled using a synthesized 'transform' property on the wrapping
+    // ::view-transition-new element. Move the parent graphics layer rect to our
+    // position so that layer positions are computed relative to our origin.
+    if (renderer().capturedInViewTransition()) {
+        ComputedOffsets computedOffsets(m_owningLayer, compositedAncestor, compositedBounds(), { }, { });
+        parentGraphicsLayerRect.move(computedOffsets.fromParentGraphicsLayer());
+    }
 
     if (m_ancestorClippingStack)
         updateClippingStackLayerGeometry(*m_ancestorClippingStack, compositedAncestor, parentGraphicsLayerRect);
@@ -4073,6 +4083,7 @@ bool RenderLayerBacking::updateAcceleratedEffectsAndBaseValues()
     }();
 
     AcceleratedEffects acceleratedEffects;
+    WeakListHashSet<AcceleratedEffect> weakAcceleratedEffects;
     if (auto* effectStack = target->keyframeEffectStack()) {
         auto animatesWidth = effectStack->containsProperty(CSSPropertyWidth);
         auto animatesHeight = effectStack->containsProperty(CSSPropertyHeight);
@@ -4090,8 +4101,10 @@ bool RenderLayerBacking::updateAcceleratedEffectsAndBaseValues()
             if (!hasInterpolatingEffect && effect->isRunningAccelerated())
                 hasInterpolatingEffect = true;
             effect->setAcceleratedRepresentation(acceleratedEffect.get());
+            weakAcceleratedEffects.add(*acceleratedEffect);
             acceleratedEffects.append(acceleratedEffect.releaseNonNull());
         }
+        effectStack->setAcceleratedEffects(WTFMove(weakAcceleratedEffects));
     }
 
     // If all of the effects in the stack are either idle, paused or filling, then the
