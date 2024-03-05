@@ -183,10 +183,8 @@ bool PDFPluginBase::isFullFramePlugin() const
     if (!m_frame || !m_frame->coreLocalFrame())
         return false;
 
-    RefPtr document = m_frame->coreLocalFrame()->document();
-    if (!is<PluginDocument>(document))
-        return false;
-    return downcast<PluginDocument>(*document).pluginWidget() == m_view;
+    RefPtr document = dynamicDowncast<PluginDocument>(m_frame->coreLocalFrame()->document());
+    return document && document->pluginWidget() == m_view;
 }
 
 bool PDFPluginBase::handlesPageScaleFactor() const
@@ -427,17 +425,6 @@ void PDFPluginBase::receivedNonLinearizedPDFSentinel()
 }
 
 #endif // HAVE(INCREMENTAL_PDF_APIS)
-
-void PDFPluginBase::performSpotlightSearch(const String& query)
-{
-    if (!m_frame || !m_frame->page())
-        return;
-
-    if (!query || !query.trim(isASCIIWhitespace) || query.utf8().isNull())
-        return;
-
-    m_frame->protectedPage()->send(Messages::WebPageProxy::SearchWithSpotlight(query));
-}
 
 void PDFPluginBase::performWebSearch(const String& query)
 {
@@ -1007,6 +994,13 @@ void PDFPluginBase::navigateToURL(const URL& url)
 
     frame->loader().changeLocation(url, emptyAtom(), coreEvent.get(), ReferrerPolicy::NoReferrer, ShouldOpenExternalURLsPolicy::ShouldAllow);
 }
+
+#if PLATFORM(MAC)
+RefPtr<PDFPluginAnnotation> PDFPluginBase::protectedActiveAnnotation() const
+{
+    return m_activeAnnotation;
+}
+#endif
 
 id PDFPluginBase::accessibilityAssociatedPluginParentForElement(Element* element) const
 {

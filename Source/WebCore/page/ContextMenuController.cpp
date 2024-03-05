@@ -562,11 +562,6 @@ void ContextMenuController::contextMenuItemSelected(ContextMenuAction action, co
     case ContextMenuItemTagTextDirectionRightToLeft:
         frame->editor().command("MakeTextWritingDirectionRightToLeft"_s).execute();
         break;
-#if PLATFORM(COCOA)
-    case ContextMenuItemTagSearchInSpotlight:
-        m_client->searchWithSpotlight();
-        break;
-#endif
     case ContextMenuItemTagShowSpellingPanel:
         frame->checkedEditor()->showSpellingGuessPanel();
         break;
@@ -953,10 +948,6 @@ void ContextMenuController::populate()
 #if PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE)
     ContextMenuItem ToggleVideoEnhancedFullscreen(ContextMenuItemType::Action, ContextMenuItemTagToggleVideoEnhancedFullscreen, contextMenuItemTagEnterVideoEnhancedFullscreen());
 #endif
-#if PLATFORM(COCOA)
-    ContextMenuItem SearchSpotlightItem(ContextMenuItemType::Action, ContextMenuItemTagSearchInSpotlight,
-        contextMenuItemTagSearchInSpotlight());
-#endif
 
 #if ENABLE(PDFJS)
     ContextMenuItem PDFAutoSizeItem(ContextMenuItemType::Action, ContextMenuItemPDFAutoSize, contextMenuItemPDFAutoSize());
@@ -1065,7 +1056,7 @@ void ContextMenuController::populate()
         if (!frame->page() || !frame->page()->settings().imageAnimationControlEnabled())
             return false;
 
-        return frame->page()->systemAllowsAnimationControls() || frame->page()->settings().allowAnimationControlsOverride();
+        return Image::systemAllowsAnimationControls() || frame->page()->settings().allowAnimationControlsOverride();
     };
 
     bool shouldAddPlayAllPauseAllAnimationsItem = canAddAnimationControls();
@@ -1753,7 +1744,6 @@ void ContextMenuController::checkOrEnableIfNeeded(ContextMenuItem& item) const
         case ContextMenuItemTagOpenFrameInNewWindow:
         case ContextMenuItemTagSpellingGuess:
         case ContextMenuItemTagOther:
-        case ContextMenuItemTagSearchInSpotlight:
         case ContextMenuItemTagSearchWeb:
         case ContextMenuItemTagOpenWithDefaultApplication:
         case ContextMenuItemPDFActualSize:

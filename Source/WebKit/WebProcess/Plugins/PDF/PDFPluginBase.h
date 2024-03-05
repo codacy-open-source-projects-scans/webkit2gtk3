@@ -157,7 +157,6 @@ public:
     virtual RefPtr<WebCore::TextIndicator> textIndicatorForSelection(OptionSet<WebCore::TextIndicatorOption>, WebCore::TextIndicatorPresentationTransition) { return { }; }
 
     virtual bool performDictionaryLookupAtLocation(const WebCore::FloatPoint&) = 0;
-    void performSpotlightSearch(const String& query);
     void performWebSearch(const String& query);
 
     virtual LookupTextResult lookupTextAtLocation(const WebCore::FloatPoint&, WebHitTestResultData&) = 0;
@@ -211,6 +210,7 @@ public:
 
 #if PLATFORM(MAC)
     PDFPluginAnnotation* activeAnnotation() const { return m_activeAnnotation.get(); }
+    RefPtr<PDFPluginAnnotation> protectedActiveAnnotation() const;
 #endif
     virtual void setActiveAnnotation(RetainPtr<PDFAnnotation>&&) = 0;
     void didMutatePDFDocument() { m_pdfDocumentWasMutated = true; }

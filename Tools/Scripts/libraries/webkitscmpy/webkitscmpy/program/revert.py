@@ -59,7 +59,7 @@ class Revert(Command):
         )
         parser.add_argument(
             '--pr', '--no-pr',
-            default=True,
+            default=None,
             action=arguments.NoAction,
             help='Create a pull request (or do not) after reverting'
         )
@@ -95,10 +95,6 @@ class Revert(Command):
             args.issue = args.reason
 
         issue = Tracker.from_string(args.issue)
-
-        if not issue.title:
-            sys.stderr.write('Could not fetch {} from link. Please verify that the issue exists.\n'.format(issue.tracker.NAME))
-            return None
 
         # Create a new bug if no issue exists
         if not issue and Tracker.instance() and getattr(args, 'update_issue', True):
@@ -139,6 +135,9 @@ class Revert(Command):
             print("Created '{}'".format(issue))
         elif not Tracker.instance():
             sys.stderr.write('Could not find tracker instance.\n')
+        elif not issue or not issue.title:
+            sys.stderr.write('Could not fetch {} from link. Please verify that the issue exists.\n'.format(issue.tracker.NAME))
+            return None
 
         rdar = Branch.cc_radar(args, repository, issue)
         if rdar:
@@ -237,17 +236,25 @@ class Revert(Command):
         for r_link in CommitProgram.bug_urls(issue):
             r_issue = Tracker.from_string(r_link)
             for c_issue in commit_issues.get(r_issue.tracker.NAME, []):
-                c_issue.open(why="Reopened {}.\n{}, tracking revert in {}.".format(r_issue.tracker.NAME, revert_reason, r_issue.link))
+                try:
+                    c_issue.open(why="Reopened {}.\n{}, tracking revert in {}.".format(r_issue.tracker.NAME, revert_reason, r_issue.link))
+                except radar.Tracker.radarclient().exceptions.UnsuccessfulResponseException as e:
+                    sys.stderr.write('Failed to re-open {}\n'.format(c_issue.link))
+                    sys.stderr.write('{}\n'.format(str(e)))
+                    c_issue.add_comment('{}, tracking revert in {}.'.format(revert_reason, r_issue.link))
+
                 # Revert tracking bug blocks commit bugs, revert tracking radar caused by commit radars
                 if isinstance(c_issue.tracker, bugzilla.Tracker):
                     r = r_issue.relate(blocks=c_issue)
                 elif isinstance(c_issue.tracker, radar.Tracker):
                     try:
                         r = c_issue.relate(cause_of=r_issue)
-                    except c_issue.radarclient().exceptions.UnsuccessfulResponseException:
+                    except radar.Tracker.radarclient().exceptions.UnsuccessfulResponseException:
                         r = None
                 if not r:
                     sys.stderr.write('Failed to relate {} and {}.\n'.format(c_issue.link, r_issue.link))
+                else:
+                    log.info('Related {} and {}.'.format(c_issue.link, r_issue.link))
         return 0
 
     @classmethod
@@ -291,7 +298,15 @@ class Revert(Command):
         if cls.relate_issues(args, repository, issue, commit_issues, revert_reason):
             return 1
 
-        if args.safe is not None and args.pr:
+        if args.safe is not None:
+            if args.pr is False:
+                response = Terminal.choose(
+                    '--no-pr is set. Do you want to create a PR and land the revert?', options=('Yes', 'No'), default='No',
+                )
+                if response == 'No':
+                    return 0
+                if response == 'Yes':
+                    log.info('Creating PR...')
             return Land.main(args, repository, identifier_template=None, canonical_svn=False, hooks=None)
 
         if args.pr:

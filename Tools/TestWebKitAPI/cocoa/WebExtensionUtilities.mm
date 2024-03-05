@@ -62,6 +62,10 @@
     _context = [[_WKWebExtensionContext alloc] initForExtension:extension];
     _controller = [[_WKWebExtensionController alloc] initWithConfiguration:configuration ?: _WKWebExtensionControllerConfiguration.nonPersistentConfiguration];
 
+    // Grant all requested API permissions.
+    for (_WKWebExtensionPermission permission in _extension.requestedPermissions)
+        [_context setPermissionStatus:_WKWebExtensionContextPermissionStatusGrantedExplicitly forPermission:permission];
+
     _controller._testingMode = YES;
 
     // This should always be self. If you need the delegate, use the controllerDelegate property.
@@ -337,6 +341,24 @@ static WKUserContentController *userContentController(BOOL usingPrivateBrowsing)
     }
 
     return self;
+}
+
+- (void)assignWindow:(TestWebExtensionWindow *)window
+{
+    _window = window;
+}
+
+- (void)setWindow:(TestWebExtensionWindow *)newWindow
+{
+    auto *oldWindow = _window;
+
+    _window = newWindow;
+
+    NSUInteger oldIndex = oldWindow ? [oldWindow removeTab:self] : NSNotFound;
+    if (newWindow)
+        [newWindow insertTab:self atIndex:newWindow.tabs.count];
+
+    [_extensionController didMoveTab:self fromIndex:oldIndex inWindow:oldWindow];
 }
 
 - (id<_WKWebExtensionWindow>)windowForWebExtensionContext:(_WKWebExtensionContext *)context
@@ -629,6 +651,27 @@ static WKUserContentController *userContentController(BOOL usingPrivateBrowsing)
         [_extensionController didActivateTab:_activeTab previousActiveTab:previousActiveTab];
 }
 
+- (NSUInteger)removeTab:(TestWebExtensionTab *)tab
+{
+    NSUInteger oldIndex = [_tabs indexOfObject:tab];
+    if (oldIndex == NSNotFound)
+        return oldIndex;
+
+    [_tabs removeObjectAtIndex:oldIndex];
+
+    if (_activeTab == tab)
+        _activeTab = _tabs.firstObject;
+
+    return oldIndex;
+}
+
+- (void)insertTab:(TestWebExtensionTab *)tab atIndex:(NSUInteger)index
+{
+    ASSERT(index <= _tabs.count);
+
+    [_tabs insertObject:tab atIndex:index];
+}
+
 - (TestWebExtensionTab *)openNewTab
 {
     return [self openNewTabAtIndex:_tabs.count];
@@ -707,7 +750,7 @@ static WKUserContentController *userContentController(BOOL usingPrivateBrowsing)
         [oldWindow->_tabs removeObjectAtIndex:oldIndex];
         [_tabs insertObject:tab atIndex:newIndex];
 
-        tab.window = self;
+        [tab assignWindow:self];
 
         [_extensionController didMoveTab:tab fromIndex:oldIndex inWindow:oldWindow];
 
@@ -720,7 +763,7 @@ static WKUserContentController *userContentController(BOOL usingPrivateBrowsing)
     [_tabs removeObjectAtIndex:oldIndex];
     [_tabs insertObject:tab atIndex:newIndex];
 
-    [_extensionController didMoveTab:tab fromIndex:oldIndex inWindow:nil];
+    [_extensionController didMoveTab:tab fromIndex:oldIndex inWindow:self];
 }
 
 - (NSArray<id<_WKWebExtensionTab>> *)tabsForWebExtensionContext:(_WKWebExtensionContext *)context

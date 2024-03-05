@@ -2770,21 +2770,21 @@ void RenderStyle::setLineHeight(Length&& height)
     SET_VAR(m_inheritedData, lineHeight, WTFMove(height));
 }
 
-int RenderStyle::computedLineHeight() const
+float RenderStyle::computedLineHeight() const
 {
     return computeLineHeight(lineHeight());
 }
 
-int RenderStyle::computeLineHeight(const Length& lineHeightLength) const
+float RenderStyle::computeLineHeight(const Length& lineHeightLength) const
 {
     // Negative value means the line height is not set. Use the font's built-in spacing.
     if (lineHeightLength.isNegative())
-        return metricsOfPrimaryFont().intLineSpacing();
+        return metricsOfPrimaryFont().lineSpacing();
 
     if (lineHeightLength.isPercentOrCalculated())
-        return minimumValueForLength(lineHeightLength, computedFontSize());
+        return minimumValueForLength(lineHeightLength, computedFontSize()).toFloat();
 
-    return clampTo<int>(lineHeightLength.value());
+    return lineHeightLength.value();
 }
 
 // FIXME: Remove this after all old calls to whiteSpace() are replaced with appropriate
@@ -3463,6 +3463,20 @@ const CSSCustomPropertyValue* RenderStyle::customPropertyValue(const AtomString&
             return value;
     }
     return nullptr;
+}
+
+bool RenderStyle::customPropertyValueEqual(const RenderStyle& other, const AtomString& name) const
+{
+    if (&nonInheritedCustomProperties() == &other.nonInheritedCustomProperties() && &inheritedCustomProperties() == &other.inheritedCustomProperties())
+        return true;
+
+    auto* value = customPropertyValue(name);
+    auto* otherValue = other.customPropertyValue(name);
+    if (value == otherValue)
+        return true;
+    if (!value || !otherValue)
+        return false;
+    return *value == *otherValue;
 }
 
 bool RenderStyle::customPropertiesEqual(const RenderStyle& other) const

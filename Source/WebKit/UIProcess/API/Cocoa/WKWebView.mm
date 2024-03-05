@@ -2470,11 +2470,16 @@ static RetainPtr<NSArray> wkTextManipulationErrors(NSArray<_WKTextManipulationIt
 #endif
 }
 
-- (void)_dataTaskWithRequest:(NSURLRequest *)request completionHandler:(void(^)(_WKDataTask *))completionHandler
+- (void)_dataTaskWithRequest:(NSURLRequest *)request runAtForegroundPriority:(BOOL)runAtForegroundPriority completionHandler:(void(^)(_WKDataTask *))completionHandler
 {
-    _page->dataTaskWithRequest(request, std::nullopt, [completionHandler = makeBlockPtr(completionHandler)] (Ref<API::DataTask>&& task) {
+    _page->dataTaskWithRequest(request, std::nullopt, !!runAtForegroundPriority, [completionHandler = makeBlockPtr(completionHandler)] (Ref<API::DataTask>&& task) {
         completionHandler(wrapper(task));
     });
+}
+
+- (void)_dataTaskWithRequest:(NSURLRequest *)request completionHandler:(void(^)(_WKDataTask *))completionHandler
+{
+    [self _dataTaskWithRequest:request runAtForegroundPriority:NO completionHandler:completionHandler];
 }
 
 - (void)_takeFindStringFromSelection:(id)sender
@@ -4025,8 +4030,8 @@ static inline OptionSet<WebKit::FindOptions> toFindOptions(_WKFindOptions wkFind
 - (void)_setFullscreenDelegate:(id<_WKFullscreenDelegate>)delegate
 {
 #if ENABLE(FULLSCREEN_API)
-    if (is<WebKit::FullscreenClient>(_page->fullscreenClient()))
-        downcast<WebKit::FullscreenClient>(_page->fullscreenClient()).setDelegate(delegate);
+    if (auto* client = dynamicDowncast<WebKit::FullscreenClient>(_page->fullscreenClient()))
+        client->setDelegate(delegate);
 #endif
 }
 
@@ -4034,8 +4039,8 @@ static inline OptionSet<WebKit::FindOptions> toFindOptions(_WKFindOptions wkFind
 - (id<_WKFullscreenDelegate>)_fullscreenDelegate
 {
 #if ENABLE(FULLSCREEN_API)
-    if (is<WebKit::FullscreenClient>(_page->fullscreenClient()))
-        return downcast<WebKit::FullscreenClient>(_page->fullscreenClient()).delegate().autorelease();
+    if (auto* client = dynamicDowncast<WebKit::FullscreenClient>(_page->fullscreenClient()))
+        return client->delegate().autorelease();
 #endif
     return nil;
 }
@@ -4215,6 +4220,11 @@ static inline OptionSet<WebKit::FindOptions> toFindOptions(_WKFindOptions wkFind
         return;
 
     WebKit::WebProcessProxy::permissionChanged(*name, origin->_securityOrigin->securityOrigin());
+}
+
+- (NSURL *)_requiredWebExtensionBaseURL
+{
+    return [_configuration _requiredWebExtensionBaseURL];
 }
 
 @end

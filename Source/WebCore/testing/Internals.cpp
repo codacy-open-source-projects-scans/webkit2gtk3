@@ -108,6 +108,7 @@
 #include "HTMLTextAreaElement.h"
 #include "HTMLVideoElement.h"
 #include "HighlightRegistry.h"
+#include "History.h"
 #include "HistoryController.h"
 #include "HistoryItem.h"
 #include "HitTestResult.h"
@@ -574,6 +575,9 @@ void Internals::resetToConsistentState(Page& page)
         if (auto* backing = mainFrameView->tiledBacking())
             backing->setTileSizeUpdateDelayDisabledForTesting(false);
     }
+
+    if (RefPtr window = localMainFrame->window())
+        window->history().setTotalStateObjectPayloadLimitOverride(std::nullopt);
 
     WTF::clearDefaultPortForProtocolMapForTesting();
     overrideUserPreferredLanguages(Vector<String>());
@@ -1120,8 +1124,14 @@ bool Internals::isImageAnimating(HTMLImageElement& element)
 #if ENABLE(ACCESSIBILITY_ANIMATION_CONTROL)
 void Internals::setImageAnimationEnabled(bool enabled)
 {
-    if (auto* page = contextDocument() ? contextDocument()->page() : nullptr)
+    if (auto* page = contextDocument() ? contextDocument()->page() : nullptr) {
+        if (!page->settings().imageAnimationControlEnabled())
+            return;
+
+        // We need to set this here to mimic the behavior of the AX preference changing
+        Image::setSystemAllowsAnimationControls(!enabled);
         page->setImageAnimationEnabled(enabled);
+    }
 }
 
 void Internals::resumeImageAnimation(HTMLImageElement& element)
@@ -4567,6 +4577,13 @@ void Internals::initializeMockMediaSource()
     platformStrategies()->mediaStrategy().enableMockMediaSource();
 }
 
+void Internals::setMaximumSourceBufferSize(SourceBuffer& buffer, uint64_t maximumSize, DOMPromiseDeferred<void>&& promise)
+{
+    buffer.setMaximumSourceBufferSize(maximumSize)->whenSettled(RunLoop::current(), [promise = WTFMove(promise)]() mutable {
+        promise.resolve();
+    });
+}
+
 void Internals::bufferedSamplesForTrackId(SourceBuffer& buffer, const AtomString& trackId, BufferedSamplesPromise&& promise)
 {
     buffer.bufferedSamplesForTrackId(parseInteger<uint64_t>(trackId).value_or(0))->whenSettled(RunLoop::current(), [promise = WTFMove(promise)](auto&& samples) mutable {
@@ -5246,8 +5263,7 @@ String Internals::createTemporaryFile(const String& name, const String& contents
     if (name.isEmpty())
         return nullString();
 
-    auto file = FileSystem::invalidPlatformFileHandle;
-    auto path = FileSystem::openTemporaryFile(makeString("WebCoreTesting-", name), file);
+    auto [path, file] = FileSystem::openTemporaryFile(makeString("WebCoreTesting-", name));
     if (!FileSystem::isHandleValid(file))
         return nullString();
 
@@ -7322,6 +7338,14 @@ bool Internals::hasScopeBreakingHasSelectors() const
 {
     contextDocument()->styleScope().flushPendingUpdate();
     return !!contextDocument()->styleScope().resolver().ruleSets().scopeBreakingHasPseudoClassInvalidationRuleSet();
+}
+
+void Internals::setHistoryTotalStateObjectPayloadLimitOverride(uint32_t limit)
+{
+    RefPtr window = contextDocument() ? contextDocument()->domWindow() : nullptr;
+    if (!window)
+        return;
+    window->history().setTotalStateObjectPayloadLimitOverride(limit);
 }
 
 } // namespace WebCore

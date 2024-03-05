@@ -683,6 +683,91 @@ TEST(WKWebExtensionAPIRuntime, SendMessageFromContentScriptWithNoReply)
     [manager run];
 }
 
+TEST(WKWebExtensionAPIRuntime, SendMessageWithTabFrameAndAsyncReply)
+{
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, ""_s } },
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *extensionManifest = @{
+        @"manifest_version": @3,
+
+        @"name": @"Runtime Test",
+        @"description": @"Runtime Test",
+        @"version": @"1",
+
+        @"background": @{
+            @"scripts": @[ @"background.js" ],
+            @"type": @"module",
+            @"persistent": @NO,
+        },
+
+        @"content_scripts": @[ @{
+            @"js": @[ @"content.js" ],
+            @"matches": @[ @"*://localhost/*" ],
+        } ],
+
+        @"web_accessible_resources": @[ @{
+            @"resources": @[ @"*.html" ],
+            @"matches": @[ @"*://localhost/*" ]
+        } ],
+    };
+
+    auto *backgroundScript = Util::constructScript(@[
+        @"browser.runtime.onMessage.addListener((message, sender, sendResponse) => {",
+        @"  if (message?.content === 'Hello from iframe')",
+        @"    setTimeout(() => sendResponse({ content: 'Async reply from background' }), 500)",
+
+        @"  return true",
+        @"})",
+
+        @"browser.test.yield('Load Tab')",
+    ]);
+
+    auto *iframeScript = Util::constructScript(@[
+        @"browser.runtime.onMessage.addListener((message, sender, sendResponse) => {",
+        @"  // This listener should not be called since it is in the same frame as the sender,",
+        @"  // but having it is needed to verify the background script is the responder.",
+
+        @"  browser.test.notifyFail('Frame listener should not be called')",
+        @"})",
+
+        @"const response = await browser.runtime.sendMessage({ content: 'Hello from iframe' })",
+        @"browser.test.assertEq(response?.content, 'Async reply from background', 'Should receive the correct async reply from background script')",
+
+        @"browser.test.notifyPass()",
+    ]);
+
+    auto *contentScript = Util::constructScript(@[
+        @"(function() {",
+        @"  const iframe = document.createElement('iframe')",
+        @"  iframe.src = browser.runtime.getURL('extension-frame.html')",
+        @"  document.body.appendChild(iframe)",
+        @"})()",
+    ]);
+
+    auto *resources = @{
+        @"background.js": backgroundScript,
+        @"content.js": contentScript,
+        @"extension-frame.js": iframeScript,
+        @"extension-frame.html": @"<script type='module' src='extension-frame.js'></script>",
+    };
+
+    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:extensionManifest resources:resources]);
+    auto manager = adoptNS([[TestWebExtensionManager alloc] initForExtension:extension.get()]);
+
+    auto *urlRequest = server.requestWithLocalhost();
+    [manager.get().context setPermissionStatus:_WKWebExtensionContextPermissionStatusGrantedExplicitly forURL:urlRequest.URL];
+
+    [manager loadAndRun];
+
+    EXPECT_NS_EQUAL(manager.get().yieldMessage, @"Load Tab");
+
+    [manager.get().defaultTab.mainWebView loadRequest:urlRequest];
+
+    [manager run];
+}
+
 TEST(WKWebExtensionAPIRuntime, ConnectFromContentScript)
 {
     TestWebKitAPI::HTTPServer server({
@@ -1223,6 +1308,51 @@ TEST(WKWebExtensionAPIRuntime, ConnectFromWebPage)
     [manager run];
 }
 
+TEST(WKWebExtensionAPIRuntime, ConnectFromWebPageWithWrongIdentifier)
+{
+    auto *backgroundScript = Util::constructScript(@[
+        @"browser.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {",
+        @"  browser.test.notifyFail('The page should not be able to connect')",
+        @"})",
+
+        @"browser.test.yield('Load Tab')"
+    ]);
+
+    auto *webpageScript = Util::constructScript(@[
+        @"<script>",
+        @"  const startTime = performance.now()",
+
+        @"  let port = browser.runtime.connect('org.webkit.test.extension (Incorrect)', { name: 'testPort' })",
+        @"  browser.test.assertTrue(!!port, 'Port should be returned even with a wrong extension identifier')",
+
+        @"  port.onDisconnect.addListener((port) => {",
+        @"    browser.test.assertTrue((performance.now() - startTime) >= 100, 'Disconnect should happen after a delay of at least 100ms')",
+
+        @"    browser.test.notifyPass()",
+        @"  })",
+        @"</script>"
+    ]);
+
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, webpageScript } },
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *urlRequest = server.requestWithLocalhost();
+
+    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:externallyConnectableManifest resources:@{ @"background.js": backgroundScript }]);
+    auto manager = adoptNS([[TestWebExtensionManager alloc] initForExtension:extension.get()]);
+
+    [manager.get().context setPermissionStatus:_WKWebExtensionContextPermissionStatusGrantedExplicitly forURL:urlRequest.URL];
+
+    [manager loadAndRun];
+
+    EXPECT_NS_EQUAL(manager.get().yieldMessage, @"Load Tab");
+
+    [manager.get().defaultTab.mainWebView loadRequest:urlRequest];
+
+    [manager run];
+}
+
 TEST(WKWebExtensionAPIRuntime, SendMessageFromWebPage)
 {
     auto *uniqueIdentifier = @"org.webkit.test.extension (SendMessageTest)";
@@ -1270,6 +1400,151 @@ TEST(WKWebExtensionAPIRuntime, SendMessageFromWebPage)
 
     // Set an uniqueIdentifier so it is a known value and not the default random one.
     manager.get().context.uniqueIdentifier = uniqueIdentifier;
+
+    [manager loadAndRun];
+
+    EXPECT_NS_EQUAL(manager.get().yieldMessage, @"Load Tab");
+
+    [manager.get().defaultTab.mainWebView loadRequest:urlRequest];
+
+    [manager run];
+}
+
+TEST(WKWebExtensionAPIRuntime, SendMessageFromWebPageWithTabFrameAndAsyncReply)
+{
+    auto *extensionManifest = @{
+        @"manifest_version": @3,
+
+        @"name": @"Runtime Test",
+        @"description": @"Runtime Test",
+        @"version": @"1",
+
+        @"background": @{
+            @"scripts": @[ @"background.js" ],
+            @"type": @"module",
+            @"persistent": @NO,
+        },
+
+        @"content_scripts": @[ @{
+            @"js": @[ @"content.js" ],
+            @"matches": @[ @"*://localhost/*" ],
+        } ],
+
+        @"web_accessible_resources": @[ @{
+            @"resources": @[ @"*.html" ],
+            @"matches": @[ @"*://localhost/*" ]
+        } ],
+
+        @"externally_connectable": @{
+            @"matches": @[ @"*://localhost/*" ]
+        },
+    };
+
+    auto *backgroundScript = Util::constructScript(@[
+        @"browser.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {",
+        @"  browser.test.assertEq(message?.content, 'Hello from webpage', 'Should receive the correct message from the web page')",
+
+        @"  setTimeout(() => sendResponse({ content: 'Async reply from background' }), 500)",
+
+        @"  return true",
+        @"})",
+
+        @"browser.test.yield('Load Tabs')"
+    ]);
+
+    auto *iframeScript = Util::constructScript(@[
+        @"browser.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {",
+        @"  browser.test.assertEq(message?.content, 'Hello from webpage', 'Should receive the correct message from the web page')",
+        @"})",
+    ]);
+
+    auto *contentScript = Util::constructScript(@[
+        @"(function() {",
+        @"  const iframe = document.createElement('iframe')",
+        @"  iframe.src = browser.runtime.getURL('extension-frame.html')",
+        @"  document.body.appendChild(iframe)",
+        @"})()",
+    ]);
+
+    auto *webpageScript = Util::constructScript(@[
+        @"<script>",
+        @"setTimeout(() => {",
+        @"  browser.runtime.sendMessage('org.webkit.test.extension (SendMessageTest)', { content: 'Hello from webpage' }, (response) => {",
+        @"    browser.test.assertEq(response?.content, 'Async reply from background', 'Should receive the correct reply from the extension frame')",
+
+        @"    browser.test.notifyPass()",
+        @"  })",
+        @"}, 1000)",
+        @"</script>"
+    ]);
+
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, webpageScript } },
+        { "/second-tab.html"_s, { { { "Content-Type"_s, "text/html"_s } }, ""_s } },
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *urlRequest = server.requestWithLocalhost();
+
+    auto *resources = @{
+        @"background.js": backgroundScript,
+        @"content.js": contentScript,
+        @"extension-frame.js": iframeScript,
+        @"extension-frame.html": @"<script type='module' src='extension-frame.js'></script>",
+    };
+
+    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:extensionManifest resources:resources]);
+    auto manager = adoptNS([[TestWebExtensionManager alloc] initForExtension:extension.get()]);
+
+    [manager.get().context setPermissionStatus:_WKWebExtensionContextPermissionStatusGrantedExplicitly forURL:urlRequest.URL];
+
+    // Set an uniqueIdentifier so it is a known value and not the default random one.
+    manager.get().context.uniqueIdentifier = @"org.webkit.test.extension (SendMessageTest)";
+
+    [manager loadAndRun];
+
+    EXPECT_NS_EQUAL(manager.get().yieldMessage, @"Load Tabs");
+
+    [manager.get().defaultTab.mainWebView loadRequest:urlRequest];
+
+    auto *secondTab = [manager.get().defaultWindow openNewTab];
+    [secondTab.mainWebView loadRequest:server.requestWithLocalhost("/second-tab.html"_s)];
+
+    [manager run];
+}
+
+TEST(WKWebExtensionAPIRuntime, SendMessageFromWebPageWithWrongIdentifier)
+{
+    auto *backgroundScript = Util::constructScript(@[
+        @"browser.runtime.onMessageExternal.addListener(async (message, sender, sendResponse) => {",
+        @"  browser.test.notifyFail('The page should not be able to send a message with a wrong identifier')",
+        @"})",
+
+        @"browser.test.yield('Load Tab')"
+    ]);
+
+    auto *webpageScript = Util::constructScript(@[
+        @"<script type='module'>",
+        @"  const startTime = performance.now()",
+
+        @"  const response = await browser.runtime.sendMessage('org.webkit.test.extension (Incorrect)', 'Hello')",
+        @"  browser.test.assertEq(response, undefined, 'The response should be undefined')",
+
+        @"  browser.test.assertTrue((performance.now() - startTime) >= 100, 'Should take at least 100ms to attempt the message send')",
+
+        @"  browser.test.notifyPass()",
+        @"</script>"
+    ]);
+
+    TestWebKitAPI::HTTPServer server({
+        { "/"_s, { { { "Content-Type"_s, "text/html"_s } }, webpageScript } },
+    }, TestWebKitAPI::HTTPServer::Protocol::Http);
+
+    auto *urlRequest = server.requestWithLocalhost();
+
+    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:externallyConnectableManifest resources:@{ @"background.js": backgroundScript }]);
+    auto manager = adoptNS([[TestWebExtensionManager alloc] initForExtension:extension.get()]);
+
+    [manager.get().context setPermissionStatus:_WKWebExtensionContextPermissionStatusGrantedExplicitly forURL:urlRequest.URL];
 
     [manager loadAndRun];
 

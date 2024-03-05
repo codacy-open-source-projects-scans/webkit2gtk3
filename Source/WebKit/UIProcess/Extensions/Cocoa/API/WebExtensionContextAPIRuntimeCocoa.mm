@@ -74,7 +74,7 @@ void WebExtensionContext::runtimeOpenOptionsPage(CompletionHandler<void(Expected
     if (respondsToOpenOptionsPage) {
         [delegate webExtensionController:extensionController()->wrapper() openOptionsPageForExtensionContext:wrapper() completionHandler:makeBlockPtr([completionHandler = WTFMove(completionHandler)](NSError *error) mutable {
             if (error) {
-                RELEASE_LOG_ERROR(Extensions, "Error opening options page: %{private}@", error);
+                RELEASE_LOG_ERROR(Extensions, "Error opening options page: %{public}@", privacyPreservingDescription(error));
                 completionHandler(toWebExtensionError(apiName, nil, error.localizedDescription));
                 return;
             }
@@ -98,7 +98,7 @@ void WebExtensionContext::runtimeOpenOptionsPage(CompletionHandler<void(Expected
 
     [delegate webExtensionController:extensionController()->wrapper() openNewTabWithOptions:creationOptions forExtensionContext:wrapper() completionHandler:makeBlockPtr([completionHandler = WTFMove(completionHandler)](id<_WKWebExtensionTab> newTab, NSError *error) mutable {
         if (error) {
-            RELEASE_LOG_ERROR(Extensions, "Error opening options page in new tab: %{private}@", error);
+            RELEASE_LOG_ERROR(Extensions, "Error opening options page in new tab: %{public}@", privacyPreservingDescription(error));
             completionHandler(toWebExtensionError(apiName, nil, error.localizedDescription));
             return;
         }
@@ -145,6 +145,11 @@ void WebExtensionContext::runtimeSendMessage(const String& extensionID, const St
 
     for (auto& process : mainWorldProcesses) {
         process->sendWithAsyncReply(Messages::WebExtensionContextProxy::DispatchRuntimeMessageEvent(targetContentWorldType, messageJSON, std::nullopt, completeSenderParameters), [callbackAggregator](String&& replyJSON) {
+            // A null reply means no listeners replied. Don't call the callbackAggregator
+            // to give other listeners in a different process a chance to reply.
+            if (replyJSON.isNull())
+                return;
+
             callbackAggregator.get()(WTFMove(replyJSON));
         }, identifier());
     }
@@ -260,16 +265,12 @@ void WebExtensionContext::runtimeConnectNative(const String& applicationID, WebE
 void WebExtensionContext::runtimeWebPageSendMessage(const String& extensionID, const String& messageJSON, const WebExtensionMessageSenderParameters& senderParameters, CompletionHandler<void(Expected<String, WebExtensionError>&&)>&& completionHandler)
 {
     RefPtr destinationExtension = extensionController()->extensionContext(extensionID);
-    if (!destinationExtension) {
-        // FIXME: <https://webkit.org/b/269539> Return after a random delay.
-        completionHandler({ });
-        return;
-    }
-
     RefPtr tab = getTab(senderParameters.pageProxyIdentifier);
-    if (!tab) {
-        // FIXME: <https://webkit.org/b/269539> Return after a random delay.
-        completionHandler({ });
+    if (!destinationExtension || !tab) {
+        callAfterRandomDelay([completionHandler = WTFMove(completionHandler)]() mutable {
+            completionHandler({ });
+        });
+
         return;
     }
 
@@ -279,8 +280,10 @@ void WebExtensionContext::runtimeWebPageSendMessage(const String& extensionID, c
     auto url = completeSenderParameters.url;
     auto validMatchPatterns = destinationExtension->extension().externallyConnectableMatchPatterns();
     if (!hasPermission(url, tab.get()) || !WebExtensionMatchPattern::patternsMatchURL(validMatchPatterns, url)) {
-        // FIXME: <https://webkit.org/b/269539> Return after a random delay.
-        completionHandler({ });
+        callAfterRandomDelay([completionHandler = WTFMove(completionHandler)]() mutable {
+            completionHandler({ });
+        });
+
         return;
     }
 
@@ -294,6 +297,11 @@ void WebExtensionContext::runtimeWebPageSendMessage(const String& extensionID, c
 
     for (auto& process : mainWorldProcesses) {
         process->sendWithAsyncReply(Messages::WebExtensionContextProxy::DispatchRuntimeMessageEvent(WebExtensionContentWorldType::Main, messageJSON, std::nullopt, completeSenderParameters), [callbackAggregator](String&& replyJSON) {
+            // A null reply means no listeners replied. Don't call the callbackAggregator
+            // to give other listeners in a different process a chance to reply.
+            if (replyJSON.isNull())
+                return;
+
             callbackAggregator.get()(WTFMove(replyJSON));
         }, identifier());
     }
@@ -306,20 +314,14 @@ void WebExtensionContext::runtimeWebPageConnect(const String& extensionID, WebEx
     constexpr auto targetContentWorldType = WebExtensionContentWorldType::Main;
 
     RefPtr destinationExtension = extensionController()->extensionContext(extensionID);
-    if (!destinationExtension) {
-        // FIXME: <https://webkit.org/b/269539> Return after a random delay.
-        completionHandler({ });
-        firePortDisconnectEventIfNeeded(sourceContentWorldType, targetContentWorldType, channelIdentifier);
-        clearQueuedPortMessages(targetContentWorldType, channelIdentifier);
-        return;
-    }
-
     RefPtr tab = getTab(senderParameters.pageProxyIdentifier);
-    if (!tab) {
-        // FIXME: <https://webkit.org/b/269539> Return after a random delay.
-        completionHandler({ });
-        firePortDisconnectEventIfNeeded(sourceContentWorldType, targetContentWorldType, channelIdentifier);
-        clearQueuedPortMessages(targetContentWorldType, channelIdentifier);
+    if (!destinationExtension || !tab) {
+        callAfterRandomDelay([=, this, protectedThis = Ref { *this }, completionHandler = WTFMove(completionHandler)]() mutable {
+            completionHandler({ });
+            firePortDisconnectEventIfNeeded(sourceContentWorldType, targetContentWorldType, channelIdentifier);
+            clearQueuedPortMessages(targetContentWorldType, channelIdentifier);
+        });
+
         return;
     }
 
@@ -329,10 +331,12 @@ void WebExtensionContext::runtimeWebPageConnect(const String& extensionID, WebEx
     auto url = completeSenderParameters.url;
     auto validMatchPatterns = destinationExtension->extension().externallyConnectableMatchPatterns();
     if (!hasPermission(url, tab.get()) || !WebExtensionMatchPattern::patternsMatchURL(validMatchPatterns, url)) {
-        // FIXME: <https://webkit.org/b/269539> Return after a random delay.
-        completionHandler({ });
-        firePortDisconnectEventIfNeeded(sourceContentWorldType, targetContentWorldType, channelIdentifier);
-        clearQueuedPortMessages(targetContentWorldType, channelIdentifier);
+        callAfterRandomDelay([=, this, protectedThis = Ref { *this }, completionHandler = WTFMove(completionHandler)]() mutable {
+            completionHandler({ });
+            firePortDisconnectEventIfNeeded(sourceContentWorldType, targetContentWorldType, channelIdentifier);
+            clearQueuedPortMessages(targetContentWorldType, channelIdentifier);
+        });
+
         return;
     }
 

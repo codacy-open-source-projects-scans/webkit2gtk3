@@ -94,7 +94,6 @@ GPUProcess/webrtc/RemoteSampleBufferDisplayLayerManager.cpp
 ModelProcess/ModelProcess.cpp
 ModelProcess/ModelConnectionToWebProcess.cpp
 ModelProcess/ModelProcessModelPlayerManagerProxy.cpp
-ModelProcess/ModelProcessModelPlayerProxy.cpp
 
 NetworkProcess/BackgroundFetchLoad.cpp
 NetworkProcess/DatabaseUtilities.cpp
@@ -385,6 +384,7 @@ UIProcess/DisplayLinkProcessProxyClient.cpp
 UIProcess/DrawingAreaProxy.cpp
 UIProcess/FindStringCallbackAggregator.cpp
 UIProcess/FrameLoadState.cpp
+UIProcess/FrameProcess.cpp
 UIProcess/GeolocationPermissionRequestManagerProxy.cpp
 UIProcess/GeolocationPermissionRequestProxy.cpp
 UIProcess/LegacyGlobalSettings.cpp
@@ -881,7 +881,6 @@ IPCTesterMessageReceiver.cpp
 IPCTesterReceiverMessageReceiver.cpp
 ModelProcessModelPlayerManagerProxyMessageReceiver.cpp
 ModelProcessModelPlayerMessageReceiver.cpp
-ModelProcessModelPlayerProxyMessageReceiver.cpp
 NetworkBroadcastChannelRegistryMessageReceiver.cpp
 NetworkTransportSessionMessageReceiver.cpp
 RTCDataChannelRemoteManagerMessageReceiver.cpp

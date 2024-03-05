@@ -4581,17 +4581,11 @@ static void adjustSettingsForLockdownMode(Settings& settings, const WebPreferenc
 #if ENABLE(WEB_AUDIO)
     settings.setWebAudioEnabled(false);
 #endif
-    switch (settings.downloadableBinaryFontTrustedTypes()) {
-    case DownloadableBinaryFontTrustedTypes::Any:
+    if (settings.downloadableBinaryFontTrustedTypes() != DownloadableBinaryFontTrustedTypes::None) {
         settings.setDownloadableBinaryFontTrustedTypes(
             settings.lockdownFontParserEnabled()
                 ? DownloadableBinaryFontTrustedTypes::FallbackParser
                 : DownloadableBinaryFontTrustedTypes::Restricted);
-        break;
-    case DownloadableBinaryFontTrustedTypes::FallbackParser:
-    case DownloadableBinaryFontTrustedTypes::Restricted:
-    case DownloadableBinaryFontTrustedTypes::None:
-        break;
     }
 #if ENABLE(WEB_CODECS)
     settings.setWebCodecsVideoEnabled(false);
@@ -6201,14 +6195,16 @@ void WebPage::effectiveAppearanceDidChange(bool useDarkAppearance, bool useEleva
         m_inspectorUI->effectiveAppearanceDidChange(useDarkAppearance ? WebCore::InspectorFrontendClient::Appearance::Dark : WebCore::InspectorFrontendClient::Appearance::Light);
 }
 
-void WebPage::freezeLayerTreeDueToSwipeAnimation()
+void WebPage::swipeAnimationDidStart()
 {
     freezeLayerTree(LayerTreeFreezeReason::SwipeAnimation);
+    corePage()->setIsInSwipeAnimation(true);
 }
 
-void WebPage::unfreezeLayerTreeDueToSwipeAnimation()
+void WebPage::swipeAnimationDidEnd()
 {
     unfreezeLayerTree(LayerTreeFreezeReason::SwipeAnimation);
+    corePage()->setIsInSwipeAnimation(false);
 }
 
 void WebPage::beginPrinting(FrameIdentifier frameID, const PrintInfo& printInfo)
@@ -9125,7 +9121,6 @@ void WebPage::generateTestReport(String&& message, String&& group)
 void WebPage::updateImageAnimationEnabled()
 {
     corePage()->setImageAnimationEnabled(WebProcess::singleton().imageAnimationEnabled());
-    corePage()->setSystemAllowsAnimationControls(!WebProcess::singleton().imageAnimationEnabled());
 }
 
 void WebPage::pauseAllAnimations(CompletionHandler<void()>&& completionHandler)

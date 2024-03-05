@@ -1978,8 +1978,6 @@ webkit.org/b/268494 [ Monterey+ Release ] media/track/media-element-enqueue-even
 
 webkit.org/b/264001 [ Debug ] imported/w3c/web-platform-tests/requestidlecallback/callback-multiple-calls.html [ Pass Failure ]
 
-webkit.org/b/268836 [ Monterey+ Debug ] loader/stateobjects/pushstate-size-iframe.html [ Skip ]
-
 # webkit.org/b/269003 Umbrella bug for flaky test failures impacting EWS 
 [ Monterey+ Release X86_64 ] compositing/clipping/border-radius-async-overflow-non-stacking.html [ Pass ImageOnlyFailure ]
 [ Monterey+ Release ] imported/w3c/web-platform-tests/css/css-view-transitions/rotated-cat-off-top-edge.html [ Pass ImageOnlyFailure ]
@@ -2004,16 +2002,16 @@ webkit.org/b/269581 http/tests/site-isolation/mouse-events/context-menu-event-tw
 
 webkit.org/b/269996 [ Monterey+ Debug ] imported/w3c/web-platform-tests/css/css-view-transitions/offscreen-element-modified-before-coming-onscreen.html [ Skip ]
 
-# webkit.org/b/270014 REGRESSION (275227@main): [ macOS wk2 Debug ] ASSERTION FAILED fixedPositionContainerLayer result of 5 tests in imported/w3c/web-platform-tests/css/css-view-transitions to flaky crash or constant failure
-[ Monterey+ Debug ] imported/w3c/web-platform-tests/css/css-view-transitions/massive-element-below-viewport-offscreen-new.html [ Skip ]
-[ Monterey+ Debug ] imported/w3c/web-platform-tests/css/css-view-transitions/massive-element-below-viewport-offscreen-old.html [ Skip ]
-[ Monterey+ Debug ] imported/w3c/web-platform-tests/css/css-view-transitions/massive-element-right-of-viewport-offscreen-new.html [ Skip ]
-[ Monterey+ Debug ] imported/w3c/web-platform-tests/css/css-view-transitions/massive-element-right-of-viewport-offscreen-old.html [ Skip ]
-
 # webkit.org/b/270092  (REGRESSION (275274@main): [ Sonoma+ wk2 ] Multiple compositing/plugins/pdf/pdf are constant failures)
 [ Sonoma+ ] compositing/plugins/pdf/pdf-in-embed.html [ Failure ]
 [ Sonoma+ ] compositing/plugins/pdf/pdf-in-styled-embed.html [ Failure ]
 [ Sonoma+ ] compositing/plugins/pdf/pdf-scrolling-tree-dynamic.html [ Failure ]
 [ Sonoma+ ] compositing/plugins/pdf/pdf-scrolling-tree.html [ Failure ]
 
-webkit.org/b/270096 [ Monterey+ Debug ] webrtc/h265.html [ Timeout ]
+webkit.org/b/270235 [ Ventura+ Debug x86_64 ] webgl/pending/conformance/glsl/misc/shader-with-reserved-words-2.html [ Timeout ]
+
+webkit.org/b/270319 [ Ventura ] accessibility/datetime/input-time-label-value.html [ Failure ]
+
+# webkit.org/b/266168 Two wheel/mousewheel passive event listeners WPT test pass on macOS Sonoma and up
+[ Sonoma+ ] imported/w3c/web-platform-tests/dom/events/non-cancelable-when-passive/passive-mousewheel-event-listener-on-div.html [ Pass ]
+[ Sonoma+ ] imported/w3c/web-platform-tests/dom/events/non-cancelable-when-passive/passive-wheel-event-listener-on-div.html [ Pass ]

@@ -171,6 +171,10 @@ TEST(WKWebExtensionAPIAction, PresentPopupForAction)
         EXPECT_NOT_NULL(action.popupViewController);
 #endif
 
+#if PLATFORM(MAC)
+        EXPECT_NOT_NULL(action.popupPopover);
+#endif
+
         EXPECT_NOT_NULL(action.popupWebView);
         EXPECT_FALSE(action.popupWebView.loading);
 
@@ -178,7 +182,7 @@ TEST(WKWebExtensionAPIAction, PresentPopupForAction)
         EXPECT_NS_EQUAL(webViewURL.scheme, @"webkit-extension");
         EXPECT_NS_EQUAL(webViewURL.path, @"/popup.html");
 
-        [action closePopupWebView];
+        [action closePopup];
 
         [manager done];
     };
@@ -343,7 +347,7 @@ TEST(WKWebExtensionAPIAction, SetDefaultActionProperties)
         EXPECT_NS_EQUAL(webViewURL.scheme, @"webkit-extension");
         EXPECT_NS_EQUAL(webViewURL.path, @"/alt-popup.html");
 
-        [action closePopupWebView];
+        [action closePopup];
 
         [manager done];
     };
@@ -457,9 +461,9 @@ TEST(WKWebExtensionAPIAction, TabSpecificActionProperties)
         EXPECT_NS_EQUAL(webViewURL.scheme, @"webkit-extension");
         EXPECT_NS_EQUAL(webViewURL.path, @"/popup.html");
 
-        [secondTabAction closePopupWebView];
-        [secondWindowAction closePopupWebView];
-        [action closePopupWebView];
+        [secondTabAction closePopup];
+        [secondWindowAction closePopup];
+        [action closePopup];
 
         [manager done];
     };
@@ -551,8 +555,8 @@ TEST(WKWebExtensionAPIAction, WindowSpecificActionProperties)
         EXPECT_NS_EQUAL(webViewURL.scheme, @"webkit-extension");
         EXPECT_NS_EQUAL(webViewURL.path, @"/popup.html");
 
-        [secondWindowAction closePopupWebView];
-        [action closePopupWebView];
+        [secondWindowAction closePopup];
+        [action closePopup];
 
         [manager done];
     };
@@ -575,6 +579,7 @@ TEST(WKWebExtensionAPIAction, SetIconSinglePath)
     auto *resources = @{
         @"background.js": backgroundScript,
         @"toolbar-48.png": extraLargeToolbarIcon,
+        @"popup.html": @"Hello world!",
     };
 
     auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:actionPopupManifest resources:resources]);
@@ -608,6 +613,7 @@ TEST(WKWebExtensionAPIAction, SetIconMultipleSizes)
         @"toolbar-48.png": largeToolbarIcon,
         @"toolbar-96.png": extraLargeToolbarIcon,
         @"toolbar-128.png": superExtraLargeToolbarIcon,
+        @"popup.html": @"Hello world!",
     };
 
     auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:actionPopupManifest resources:resources]);
@@ -654,7 +660,12 @@ TEST(WKWebExtensionAPIAction, SetIconWithImageData)
         @"browser.action.openPopup()"
     ]);
 
-    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:actionPopupManifest resources:@{ @"background.js": backgroundScript }]);
+    auto *resources = @{
+        @"background.js": backgroundScript,
+        @"popup.html": @"Hello world!",
+    };
+
+    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:actionPopupManifest resources:resources]);
     auto manager = adoptNS([[TestWebExtensionManager alloc] initForExtension:extension.get()]);
 
     manager.get().internalDelegate.presentPopupForAction = ^(_WKWebExtensionAction *action) {
@@ -689,7 +700,12 @@ TEST(WKWebExtensionAPIAction, SetIconWithMultipleImageDataSizes)
         @"browser.action.openPopup()"
     ]);
 
-    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:actionPopupManifest resources:@{ @"background.js": backgroundScript }]);
+    auto *resources = @{
+        @"background.js": backgroundScript,
+        @"popup.html": @"Hello world!",
+    };
+
+    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:actionPopupManifest resources:resources]);
     auto manager = adoptNS([[TestWebExtensionManager alloc] initForExtension:extension.get()]);
 
     manager.get().internalDelegate.presentPopupForAction = ^(_WKWebExtensionAction *action) {
@@ -738,7 +754,12 @@ TEST(WKWebExtensionAPIAction, SetIconWithSVGDataURL)
         @"browser.action.openPopup()"
     ]);
 
-    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:actionPopupManifest resources:@{ @"background.js": backgroundScript }]);
+    auto *resources = @{
+        @"background.js": backgroundScript,
+        @"popup.html": @"Hello world!",
+    };
+
+    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:actionPopupManifest resources:resources]);
     auto manager = adoptNS([[TestWebExtensionManager alloc] initForExtension:extension.get()]);
 
     manager.get().internalDelegate.presentPopupForAction = ^(_WKWebExtensionAction *action) {
@@ -780,7 +801,12 @@ TEST(WKWebExtensionAPIAction, SetIconWithMultipleDataURLs)
         @"browser.action.openPopup();"
     ]);
 
-    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:actionPopupManifest resources:@{ @"background.js": backgroundScript }]);
+    auto *resources = @{
+        @"background.js": backgroundScript,
+        @"popup.html": @"Hello world!",
+    };
+
+    auto extension = adoptNS([[_WKWebExtension alloc] _initWithManifestDictionary:actionPopupManifest resources:resources]);
     auto manager = adoptNS([[TestWebExtensionManager alloc] initForExtension:extension.get()]);
 
     manager.get().internalDelegate.presentPopupForAction = ^(_WKWebExtensionAction *action) {
@@ -877,6 +903,10 @@ TEST(WKWebExtensionAPIAction, BrowserAction)
         EXPECT_NOT_NULL(action.popupViewController);
 #endif
 
+#if PLATFORM(MAC)
+        EXPECT_NOT_NULL(action.popupPopover);
+#endif
+
         EXPECT_NOT_NULL(action.popupWebView);
         EXPECT_FALSE(action.popupWebView.loading);
 
@@ -884,7 +914,7 @@ TEST(WKWebExtensionAPIAction, BrowserAction)
         EXPECT_NS_EQUAL(webViewURL.scheme, @"webkit-extension");
         EXPECT_NS_EQUAL(webViewURL.path, @"/alt-popup.html");
 
-        [action closePopupWebView];
+        [action closePopup];
 
         [manager done];
     };
@@ -967,6 +997,10 @@ TEST(WKWebExtensionAPIAction, PageAction)
         EXPECT_NOT_NULL(action.popupViewController);
 #endif
 
+#if PLATFORM(MAC)
+        EXPECT_NOT_NULL(action.popupPopover);
+#endif
+
         EXPECT_NOT_NULL(action.popupWebView);
         EXPECT_FALSE(action.popupWebView.loading);
 
@@ -974,7 +1008,7 @@ TEST(WKWebExtensionAPIAction, PageAction)
         EXPECT_NS_EQUAL(webViewURL.scheme, @"webkit-extension");
         EXPECT_NS_EQUAL(webViewURL.path, @"/alt-popup.html");
 
-        [action closePopupWebView];
+        [action closePopup];
 
         [manager done];
     };

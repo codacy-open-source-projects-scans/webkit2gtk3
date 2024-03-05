@@ -524,12 +524,6 @@
             (deny mach-message-send)
             (deny mach-message-send (with no-report) (message-number 1023))
             (deny mach-message-send (with telemetry-backtrace) (notifyd-message-numbers)))))
-(with-filter (require-not (state-flag "EnableExperimentalSandbox"))
-    (allow mach-lookup (global-name "com.apple.system.notification_center")
-        (apply-message-filter
-            (deny mach-message-send)
-            (deny mach-message-send (with no-report) (message-number 1023))
-            (allow mach-message-send (with report) (with telemetry-backtrace) (notifyd-message-numbers)))))
 #endif
 
 (managed-configuration-read-public)
@@ -927,6 +921,8 @@
 (with-filter (system-attribute apple-internal)
     (allow mach-lookup
         (global-name "com.apple.diagnosticd")
+        ;; This is only added temporarily. See rdar://123786910.
+        (global-name "com.apple.analyticsd")
         (global-name "com.apple.osanalytics.osanalyticshelper")))
 
 (define (mach-extension-list)

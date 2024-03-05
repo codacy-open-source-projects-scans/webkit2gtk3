@@ -116,6 +116,13 @@ static inline Ref<ArrayBuffer> toArrayBuffer(NSData *data)
     return ArrayBuffer::create(reinterpret_cast<const uint8_t *>(data.bytes), data.length);
 }
 
+static inline RefPtr<ArrayBuffer> toArrayBufferNilIfEmpty(NSData *data)
+{
+    if (!data || !data.length)
+        return nullptr;
+    return ArrayBuffer::create(reinterpret_cast<const uint8_t *>(data.bytes), data.length);
+}
+
 static inline RetainPtr<NSData> toNSData(const Vector<uint8_t>& data)
 {
     return adoptNS([[NSData alloc] initWithBytes:data.data() length:data.size()]);
@@ -320,13 +327,24 @@ RetainPtr<NSArray> WebAuthenticatorCoordinatorProxy::requestsForAssertion(const 
     return requests;
 }
 
-void WebAuthenticatorCoordinatorProxy::pauseConditionalAssertion()
+WeakPtr<WebAuthenticatorCoordinatorProxy>& WebAuthenticatorCoordinatorProxy::activeConditionalMediationProxy()
 {
-    if (m_paused)
+    static MainThreadNeverDestroyed<WeakPtr<WebAuthenticatorCoordinatorProxy>> proxy;
+    return proxy.get();
+}
+
+void WebAuthenticatorCoordinatorProxy::pauseConditionalAssertion(CompletionHandler<void()>&& completionHandler)
+{
+    if (m_paused) {
+        completionHandler();
         return;
+    }
     m_paused = true;
-    if (m_isConditionalMediation)
+    if (m_isConditionalMediation) {
+        m_cancelHandler = WTFMove(completionHandler);
         [m_controller cancel];
+    } else
+        completionHandler();
 }
 
 void WebAuthenticatorCoordinatorProxy::unpauseConditionalAssertion()
@@ -337,6 +355,19 @@ void WebAuthenticatorCoordinatorProxy::unpauseConditionalAssertion()
         [m_controller performAutoFillAssistedRequests];
 
     m_paused = false;
+}
+
+void WebAuthenticatorCoordinatorProxy::makeActiveConditionalAssertion()
+{
+    if (auto& activeProxy = activeConditionalMediationProxy()) {
+        if (activeProxy == this)
+            return;
+        activeProxy->pauseConditionalAssertion([weakThis = WeakPtr { *this }] () {
+            if (!weakThis)
+                return;
+            weakThis->unpauseConditionalAssertion();
+        });
+    }
 }
 
 #endif // HAVE(WEB_AUTHN_AS_MODERN)
@@ -360,6 +391,8 @@ void WebAuthenticatorCoordinatorProxy::performRequest(WebAuthenticationRequestDa
         handler(WebCore::AuthenticatorResponseData { }, AuthenticatorAttachment::Platform, { ExceptionCode::NotAllowedError, @"" });
         return;
     }
+    if (m_isConditionalMediation)
+        activeConditionalMediationProxy() = *this;
     m_controller = WTFMove(controller);
     m_completionHandler = WTFMove(handler);
     m_delegate = adoptNS([[_WKASDelegate alloc] initWithPage:WTFMove(requestData.page) completionHandler:makeBlockPtr([weakThis = WeakPtr { *this }](ASAuthorization *auth, NSError *error) mutable {
@@ -370,7 +403,7 @@ void WebAuthenticatorCoordinatorProxy::performRequest(WebAuthenticationRequestDa
             WebCore::ExceptionData exceptionData = { ExceptionCode::NotAllowedError, @"" };
             WebCore::AuthenticatorAttachment attachment = AuthenticatorAttachment::Platform;
             if ([error.get().domain isEqualToString:ASAuthorizationErrorDomain] && error.get().code == ASAuthorizationErrorFailed && error.get().userInfo[NSUnderlyingErrorKey]) {
-                RetainPtr<NSError> underlyingError = adoptNS(error.get().userInfo[NSUnderlyingErrorKey]);
+                RetainPtr<NSError> underlyingError = retainPtr(error.get().userInfo[NSUnderlyingErrorKey]);
                 if ([underlyingError.get().domain isEqualToString:ASCAuthorizationErrorDomain] && underlyingError.get().code == ASCAuthorizationErrorSecurityError)
                     exceptionData = { ExceptionCode::SecurityError, underlyingError.get().userInfo[NSLocalizedFailureReasonErrorKey] };
             } else if ([auth.get().credential isKindOfClass:getASAuthorizationPlatformPublicKeyCredentialRegistrationClass()]) {
@@ -397,7 +430,7 @@ void WebAuthenticatorCoordinatorProxy::performRequest(WebAuthenticationRequestDa
                 response.rawId = toArrayBuffer(credential.get().credentialID);
                 response.authenticatorData = toArrayBuffer(credential.get().rawAuthenticatorData);
                 response.signature = toArrayBuffer(credential.get().signature);
-                response.userHandle = toArrayBuffer(credential.get().userID);
+                response.userHandle = toArrayBufferNilIfEmpty(credential.get().userID);
                 response.clientDataJSON = toArrayBuffer(credential.get().rawClientDataJSON);
 
                 bool hasExtensionOutput = false;
@@ -426,20 +459,21 @@ void WebAuthenticatorCoordinatorProxy::performRequest(WebAuthenticationRequestDa
                 response.rawId = toArrayBuffer(credential.get().credentialID);
                 response.authenticatorData = toArrayBuffer(credential.get().rawAuthenticatorData);
                 response.signature = toArrayBuffer(credential.get().signature);
-                response.userHandle = toArrayBuffer(credential.get().userID);
+                response.userHandle = toArrayBufferNilIfEmpty(credential.get().userID);
                 response.clientDataJSON = toArrayBuffer(credential.get().rawClientDataJSON);
             }
 
             if (weakThis) {
-                if (auto cancelHandler = WTFMove(weakThis->m_cancelHandler))
-                    cancelHandler();
-
+                if (activeConditionalMediationProxy() == weakThis)
+                    activeConditionalMediationProxy() = nullptr;
                 if (!weakThis->m_paused) {
                     weakThis->m_completionHandler(response, attachment, exceptionData);
                     weakThis->m_delegate.clear();
                     weakThis->m_controller.clear();
                     weakThis->m_isConditionalMediation = false;
                 }
+                if (auto cancelHandler = WTFMove(weakThis->m_cancelHandler))
+                    cancelHandler();
             }
         });
     }).get()]);
@@ -831,7 +865,7 @@ static inline void continueAfterRequest(RetainPtr<id <ASCCredentialProtocol>> cr
         response.rawId = toArrayBuffer(assertionCredential.credentialID);
         response.authenticatorData = toArrayBuffer(assertionCredential.authenticatorData);
         response.signature = toArrayBuffer(assertionCredential.signature);
-        response.userHandle = toArrayBuffer(assertionCredential.userHandle);
+        response.userHandle = toArrayBufferNilIfEmpty(assertionCredential.userHandle);
         response.clientDataJSON = toArrayBuffer(assertionCredential.rawClientDataJSON);
         rawAttachment = assertionCredential.attachment;
         if ([assertionCredential respondsToSelector:@selector(extensionOutputsCBOR)])
@@ -843,7 +877,7 @@ static inline void continueAfterRequest(RetainPtr<id <ASCCredentialProtocol>> cr
         response.rawId = toArrayBuffer(assertionCredential.credentialID);
         response.authenticatorData = toArrayBuffer(assertionCredential.authenticatorData);
         response.signature = toArrayBuffer(assertionCredential.signature);
-        response.userHandle = toArrayBuffer(assertionCredential.userHandle);
+        response.userHandle = toArrayBufferNilIfEmpty(assertionCredential.userHandle);
         response.clientDataJSON = toArrayBuffer(assertionCredential.rawClientDataJSON);
         rawAttachment = assertionCredential.attachment;
         if ([assertionCredential respondsToSelector:@selector(extensionOutputsCBOR)])
@@ -1029,7 +1063,16 @@ void WebAuthenticatorCoordinatorProxy::cancel(CompletionHandler<void()>&& handle
 #else
     if (m_proxy) {
 #endif
-        m_cancelHandler = WTFMove(handler);
+        m_cancelHandler = [weakThis = WeakPtr { *this }, handler = WTFMove(handler)]() mutable {
+#if HAVE(WEB_AUTHN_AS_MODERN)
+            if (weakThis) {
+                weakThis->m_controller.clear();
+                weakThis->m_delegate.clear();
+                weakThis->m_completionHandler = nullptr;
+            }
+#endif
+            handler();
+        };
     } else
         handler();
 
@@ -1038,12 +1081,8 @@ void WebAuthenticatorCoordinatorProxy::cancel(CompletionHandler<void()>&& handle
         m_proxy.clear();
     }
 #if HAVE(WEB_AUTHN_AS_MODERN)
-    if (m_controller) {
+    if (m_controller)
         [m_controller cancel];
-        m_controller.clear();
-        m_delegate.clear();
-        m_completionHandler = nullptr;
-    }
 #endif
 }
 

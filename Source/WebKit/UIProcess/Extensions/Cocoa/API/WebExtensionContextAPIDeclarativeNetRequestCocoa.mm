@@ -36,6 +36,7 @@
 #import "WebExtensionConstants.h"
 #import "WebExtensionUtilities.h"
 #import "_WKWebExtensionDeclarativeNetRequestSQLiteStore.h"
+#import "_WKWebExtensionPermission.h"
 #import "_WKWebExtensionSQLiteStore.h"
 #import <wtf/BlockPtr.h>
 #import <wtf/cocoa/VectorCocoa.h>
@@ -44,6 +45,11 @@ static NSString * const declarativeNetRequestRulesetStateKey = @"DeclarativeNetR
 static NSString * const displayBlockedResourceCountAsBadgeTextStateKey = @"DisplayBlockedResourceCountAsBadgeText";
 
 namespace WebKit {
+
+bool WebExtensionContext::isDeclarativeNetRequestMessageAllowed()
+{
+    return isLoaded() && (hasPermission(_WKWebExtensionPermissionDeclarativeNetRequest) || hasPermission(_WKWebExtensionPermissionDeclarativeNetRequestWithHostAccess));
+}
 
 void WebExtensionContext::declarativeNetRequestGetEnabledRulesets(CompletionHandler<void(Vector<String>&&)>&& completionHandler)
 {
@@ -285,7 +291,7 @@ void WebExtensionContext::updateDeclarativeNetRequestRulesInStorage(_WKWebExtens
 {
     [storage createSavepointWithCompletionHandler:makeBlockPtr([this, protectedThis = Ref { *this }, completionHandler = WTFMove(completionHandler), storage, storageType, apiName, rulesToAdd, ruleIDsToRemove](NSUUID *savepointIdentifier, NSString *errorMessage) mutable {
         if (errorMessage)
-            RELEASE_LOG_ERROR(Extensions, "Unable to create %{public}@ rules savepoint for extension %{private}@. Error: %{private}@", storageType, (NSString *)uniqueIdentifier(), errorMessage);
+            RELEASE_LOG_ERROR(Extensions, "Unable to create %{public}@ rules savepoint for extension %{private}@. Error: %{public}@", storageType, (NSString *)uniqueIdentifier(), errorMessage);
 
         if (errorMessage.length) {
             completionHandler(toWebExtensionError(apiName, nil, errorMessage));
@@ -294,13 +300,13 @@ void WebExtensionContext::updateDeclarativeNetRequestRulesInStorage(_WKWebExtens
 
         [storage updateRulesByRemovingIDs:ruleIDsToRemove addRules:rulesToAdd completionHandler:makeBlockPtr([this, protectedThis = Ref { *this }, completionHandler = WTFMove(completionHandler), storage, storageType, apiName, savepointIdentifier](NSString *errorMessage) mutable {
             if (errorMessage)
-                RELEASE_LOG_ERROR(Extensions, "Unable to update %{public}@ rules for extension %{private}@. Error: %{private}@", storageType, (NSString *)uniqueIdentifier(), errorMessage);
+                RELEASE_LOG_ERROR(Extensions, "Unable to update %{public}@ rules for extension %{private}@. Error: %{public}@", storageType, (NSString *)uniqueIdentifier(), errorMessage);
 
             if (errorMessage.length) {
                 // Update was unsucessful, rollback the changes to the database.
                 [storage rollbackToSavepoint:savepointIdentifier completionHandler:makeBlockPtr([this, protectedThis = Ref { *this }, completionHandler = WTFMove(completionHandler), storageType, apiName, errorMessage](NSString *savepointErrorMessage) mutable {
                     if (savepointErrorMessage)
-                        RELEASE_LOG_ERROR(Extensions, "Unable to rollback to %{public}@ rules savepoint for extension %{private}@. Error: %{private}@", storageType, (NSString *)uniqueIdentifier(), savepointErrorMessage);
+                        RELEASE_LOG_ERROR(Extensions, "Unable to rollback to %{public}@ rules savepoint for extension %{private}@. Error: %{public}@", storageType, (NSString *)uniqueIdentifier(), savepointErrorMessage);
 
                     completionHandler(toWebExtensionError(apiName, nil, errorMessage));
                 }).get()];
@@ -314,7 +320,7 @@ void WebExtensionContext::updateDeclarativeNetRequestRulesInStorage(_WKWebExtens
                     // Load was unsucessful, rollback the changes to the database.
                     [storage rollbackToSavepoint:savepointIdentifier completionHandler:makeBlockPtr([this, protectedThis = Ref { *this }, completionHandler = WTFMove(completionHandler), storageType, apiName](NSString *savepointErrorMessage) mutable {
                         if (savepointErrorMessage)
-                            RELEASE_LOG_ERROR(Extensions, "Unable to rollback to %{public}@ rules savepoint for extension %{private}@. Error: %{private}@", storageType, (NSString *)uniqueIdentifier(), savepointErrorMessage);
+                            RELEASE_LOG_ERROR(Extensions, "Unable to rollback to %{public}@ rules savepoint for extension %{private}@. Error: %{public}@", storageType, (NSString *)uniqueIdentifier(), savepointErrorMessage);
 
                         // Load the declarativeNetRequest rules again after rolling back the dynamic update.
                         loadDeclarativeNetRequestRules([completionHandler = WTFMove(completionHandler), apiName](bool success) mutable {
@@ -331,7 +337,7 @@ void WebExtensionContext::updateDeclarativeNetRequestRulesInStorage(_WKWebExtens
                 // Load was sucessful, commit the changes to the database.
                 [storage commitSavepoint:savepointIdentifier completionHandler:makeBlockPtr([this, protectedThis = Ref { *this }, completionHandler = WTFMove(completionHandler), storageType](NSString *savepointErrorMessage) mutable {
                     if (savepointErrorMessage)
-                        RELEASE_LOG_ERROR(Extensions, "Unable to commit %{public}@ rules savepoint for extension %{private}@. Error: %{private}@", storageType, (NSString *)uniqueIdentifier(), savepointErrorMessage);
+                        RELEASE_LOG_ERROR(Extensions, "Unable to commit %{public}@ rules savepoint for extension %{private}@. Error: %{public}@", storageType, (NSString *)uniqueIdentifier(), savepointErrorMessage);
 
                     completionHandler({ });
                 }).get()];

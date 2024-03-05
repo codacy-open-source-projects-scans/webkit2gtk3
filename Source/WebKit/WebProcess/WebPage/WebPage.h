@@ -46,6 +46,7 @@
 #include "TransactionID.h"
 #include "UserContentControllerIdentifier.h"
 #include "UserData.h"
+#include "VisitedLinkTableIdentifier.h"
 #include "WebBackForwardListProxy.h"
 #include "WebEventType.h"
 #include "WebPageProxyIdentifier.h"
@@ -908,6 +909,7 @@ public:
 #endif
     void willInsertFinalDictationResult();
     void didInsertFinalDictationResult();
+    bool shouldRemoveDictationAlternativesAfterEditing() const;
     void replaceDictatedText(const String& oldText, const String& newText);
     void replaceSelectedText(const String& oldText, const String& newText);
     void requestAutocorrectionData(const String& textForAutocorrection, CompletionHandler<void(WebAutocorrectionData)>&& reply);
@@ -986,8 +988,8 @@ public:
     void markLayersVolatile(CompletionHandler<void(bool)>&& completionHandler = { });
     void cancelMarkLayersVolatile();
 
-    void freezeLayerTreeDueToSwipeAnimation();
-    void unfreezeLayerTreeDueToSwipeAnimation();
+    void swipeAnimationDidStart();
+    void swipeAnimationDidEnd();
 
     NotificationPermissionRequestManager* notificationPermissionRequestManager();
 
@@ -1542,7 +1544,7 @@ public:
 #if ENABLE(IPC_TESTING_API)
     bool ipcTestingAPIEnabled() const { return m_ipcTestingAPIEnabled; }
     uint64_t webPageProxyID() const { return messageSenderDestinationID(); }
-    uint64_t visitedLinkTableID() const { return m_visitedLinkTableID; }
+    VisitedLinkTableIdentifier visitedLinkTableID() const { return m_visitedLinkTableID; }
 #endif
 
     void getProcessDisplayName(CompletionHandler<void(String&&)>&&);
@@ -2693,7 +2695,7 @@ private:
 
 #if ENABLE(IPC_TESTING_API)
     bool m_ipcTestingAPIEnabled { false };
-    uint64_t m_visitedLinkTableID;
+    VisitedLinkTableIdentifier m_visitedLinkTableID;
 #endif
 
 #if ENABLE(MEDIA_SESSION_COORDINATOR)

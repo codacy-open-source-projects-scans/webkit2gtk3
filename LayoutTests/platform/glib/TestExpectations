@@ -270,6 +270,8 @@ media/mediacapabilities/mediacapabilities-types.html [ Pass ]
 media/video-controller-currentTime-rate.html [ Pass ]
 webaudio/codec-tests/aac/vbr-128kbps-44khz.html [ Pass ]
 webaudio/codec-tests/mp3/128kbps-44khz.html [ Pass ]
+media/now-playing-webaudio.html [ Failure ]
+media/webaudio-background-playback.html [ Failure ]
 
 # uiController.simulateRotationLikeSafari() is not implemented on glib ports.
 fast/screen-orientation/orientation-in-resize-event.html [ Skip ]
@@ -486,6 +488,10 @@ accessibility/display-contents/end-text-marker.html [ Skip ]
 # Need to implement AccessibilityUIElement::insertText.
 accessibility/insert-text-into-password-field.html [ Skip ]
 
+# Missing AccessibilityUIElement::brailleLabel and AccessibilityUIElement::brailleRoleDescription implementations.
+accessibility/aria-braillelabel.html [ Skip ]
+accessibility/aria-brailleroledescription.html [ Skip ]
+
 # Need to implement AccessibilityUIElement::hasDocumentRoleAncestor(), AccessibilityUIElement::hasWebApplicationAncestor(),
 # AccessibilityUIElement::isInDescriptionListDetail(), AccessibilityUIElement::isInDescriptionListTerm(), and
 # AccessibilityUIElement::isInCell().
@@ -543,9 +549,8 @@ accessibility/display-contents/tree-and-treeitems.html [ Skip ]
 
 webkit.org/b/212805 accessibility/svg-text.html [ Failure ]
 
-webkit.org/b/251544 accessibility/datetime/input-date-field-labels-and-value-changes.html [ Skip ]
-accessibility/datetime/input-time-field-labels-and-value-changes.html [ Skip ]
-accessibility/datetime/input-time-label-value.html [ Skip ]
+# AX support for datetime input elements needs to be completed in glib platforms.
+accessibility/datetime [ Skip ]
 
 # Added in r263823. Both tests are timing out.
 webkit.org/b/213874 accessibility/keyevents-for-increment-actions-with-node-removal.html [ Skip ]
@@ -3876,6 +3881,7 @@ imported/w3c/web-platform-tests/css/css-view-transitions/fragmented-at-start-ign
 imported/w3c/web-platform-tests/css/css-view-transitions/massive-element-below-viewport-partially-onscreen-new.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-view-transitions/offscreen-element-modified-before-coming-onscreen.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-view-transitions/pseudo-rendering-invalidation.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-view-transitions/fractional-translation-from-transform.html [ ImageOnlyFailure ]
 
 # End: Common failures between GTK and WPE.
 

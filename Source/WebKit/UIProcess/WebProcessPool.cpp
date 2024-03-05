@@ -137,6 +137,7 @@
 #include <WebCore/HIDGamepadProvider.h>
 #include <WebCore/MultiGamepadProvider.h>
 #include <WebCore/PowerSourceNotifier.h>
+#include <wtf/cocoa/Entitlements.h>
 #include <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
 #endif
 
@@ -253,8 +254,6 @@ WebProcessPool::WebProcessPool(API::ProcessPoolConfiguration& configuration)
         WebCore::NetworkStorageSession::permitProcessToUseCookieAPI(true);
         Process::setIdentifier(WebCore::ProcessIdentifier::generate());
 #if PLATFORM(COCOA)
-        determineTrackingPreventionState();
-
         // This can be removed once Safari calls _setLinkedOnOrAfterEverything everywhere that WebKit deploys.
 #if PLATFORM(IOS_FAMILY)
         bool isSafari = WebCore::IOSApplication::isMobileSafari();
@@ -761,12 +760,6 @@ void WebProcessPool::resolvePathsForSandboxExtensions()
 
 Ref<WebProcessProxy> WebProcessPool::createNewWebProcess(WebsiteDataStore* websiteDataStore, WebProcessProxy::LockdownMode lockdownMode, WebProcessProxy::IsPrewarmed isPrewarmed, CrossOriginMode crossOriginMode)
 {
-#if PLATFORM(COCOA)
-    m_tccPreferenceEnabled = doesAppHaveTrackingPreventionEnabled();
-    if (websiteDataStore && !websiteDataStore->isTrackingPreventionStateExplicitlySet())
-        websiteDataStore->setTrackingPreventionEnabled(m_tccPreferenceEnabled);
-#endif
-
     auto processProxy = WebProcessProxy::create(*this, websiteDataStore, lockdownMode, isPrewarmed, crossOriginMode);
     initializeNewWebProcess(processProxy, websiteDataStore, isPrewarmed);
     m_processes.append(processProxy.copyRef());
@@ -1887,15 +1880,19 @@ void WebProcessPool::setFontAllowList(API::Array* array)
     }
 }
 
-void WebProcessPool::updateHiddenPageThrottlingAutoIncreaseLimit()
+Seconds WebProcessPool::hiddenPageThrottlingAutoIncreaseLimit() const
 {
     // We're estimating an upper bound for a set of background timer fires for a page to be 200ms
     // (including all timer fires, all paging-in, and any resulting GC). To ensure this does not
     // result in more than 1% CPU load allow for one timer fire per 100x this duration.
     static int maximumTimerThrottlePerPageInMS = 200 * 100;
-
     int limitInMilliseconds = maximumTimerThrottlePerPageInMS * m_hiddenPageThrottlingAutoIncreasesCounter.value();
-    sendToAllProcesses(Messages::WebProcess::SetHiddenPageDOMTimerThrottlingIncreaseLimit(limitInMilliseconds));
+    return Seconds::fromMilliseconds(limitInMilliseconds);
+}
+
+void WebProcessPool::updateHiddenPageThrottlingAutoIncreaseLimit()
+{
+    sendToAllProcesses(Messages::WebProcess::SetHiddenPageDOMTimerThrottlingIncreaseLimit(hiddenPageThrottlingAutoIncreaseLimit()), ShouldSkipSuspendedProcesses::Yes);
 }
 
 void WebProcessPool::reportWebContentCPUTime(Seconds cpuTime, uint64_t activityState)
@@ -1973,9 +1970,9 @@ void WebProcessPool::removeProcessFromOriginCacheSet(WebProcessProxy& process)
     });
 }
 
-void WebProcessPool::processForNavigation(WebPageProxy& page, WebFrameProxy& frame, const API::Navigation& navigation, Ref<WebProcessProxy>&& sourceProcess, const URL& sourceURL, ProcessSwapRequestedByClient processSwapRequestedByClient, WebProcessProxy::LockdownMode lockdownMode, const FrameInfoData& frameInfo, Ref<WebsiteDataStore>&& dataStore, CompletionHandler<void(Ref<WebProcessProxy>&&, SuspendedPageProxy*, ASCIILiteral)>&& completionHandler)
+void WebProcessPool::processForNavigation(WebPageProxy& page, WebFrameProxy& frame, const API::Navigation& navigation, const URL& sourceURL, ProcessSwapRequestedByClient processSwapRequestedByClient, WebProcessProxy::LockdownMode lockdownMode, const FrameInfoData& frameInfo, Ref<WebsiteDataStore>&& dataStore, CompletionHandler<void(Ref<WebProcessProxy>&&, SuspendedPageProxy*, ASCIILiteral)>&& completionHandler)
 {
-    auto registrableDomain = RegistrableDomain { navigation.currentRequest().url() };
+    RegistrableDomain registrableDomain { navigation.currentRequest().url() };
     if (page.preferences().siteIsolationEnabled() && !registrableDomain.isEmpty()) {
         RegistrableDomain mainFrameDomain(URL(page.pageLoadState().activeURL()));
         if (!frame.isMainFrame() && registrableDomain == mainFrameDomain) {
@@ -1984,10 +1981,15 @@ void WebProcessPool::processForNavigation(WebPageProxy& page, WebFrameProxy& fra
                 return completionHandler(mainFrameProcess.copyRef(), nullptr, "Found process for the same registration domain as mainFrame domain"_s);
         }
         RefPtr process = page.processForRegistrableDomain(registrableDomain);
-        if (process && !process->isInProcessCache())
-            return completionHandler(process.releaseNonNull(), nullptr, "Found process for the same registration domain"_s);
+        if (process && !process->isInProcessCache()) {
+            dataStore->networkProcess().addAllowedFirstPartyForCookies(*process, mainFrameDomain, LoadedWebArchive::No, [completionHandler = WTFMove(completionHandler), process] () mutable {
+                completionHandler(process.releaseNonNull(), nullptr, "Found process for the same registration domain"_s);
+            });
+            return;
+        }
     }
 
+    Ref sourceProcess = frame.process();
     auto [process, suspendedPage, reason] = processForNavigationInternal(page, navigation, sourceProcess.copyRef(), sourceURL, processSwapRequestedByClient, lockdownMode, frameInfo, dataStore.copyRef());
 
     // We are process-swapping so automatic process prewarming would be beneficial if the client has not explicitly enabled / disabled it.
@@ -2011,9 +2013,6 @@ void WebProcessPool::processForNavigation(WebPageProxy& page, WebFrameProxy& fra
 
     process->addAllowedFirstPartyForCookies(registrableDomain);
 
-    // Cookie access will be given in WebFrameProxy::prepareForProvisionalNavigationInProcess and
-    // we need there to be no time between process selection and RemotePageProxy creation so that
-    // remotePageProxyForRegistrableDomain will always give the same process for the same domain.
     if (!frame.isMainFrame() && page.preferences().siteIsolationEnabled())
         return completionHandler(WTFMove(process), suspendedPage, reason);
 
@@ -2103,7 +2102,9 @@ std::tuple<Ref<WebProcessProxy>, SuspendedPageProxy*, ASCIILiteral> WebProcessPo
         return { WTFMove(sourceProcess), nullptr, "Browsing context been opened by DOM without 'noopener'"_s };
 
     // FIXME: We should support process swap when a window has opened other windows via window.open.
-    if (navigation.hasOpenedFrames() && page.hasOpenedPage() && !(page.preferences().processSwapOnCrossSiteWindowOpenEnabled() || page.preferences().siteIsolationEnabled()))
+    // Currently we only allow the swap if the user has performed some manual navigation action
+    // (e.g. navigated via typing in the location bar).
+    if (navigation.hasOpenedFrames() && page.hasOpenedPage() && !(isRequestFromClientOrUserInput || page.preferences().processSwapOnCrossSiteWindowOpenEnabled() || page.preferences().siteIsolationEnabled()))
         return { WTFMove(sourceProcess), nullptr, "Browsing context has opened other windows"_s };
 
     if (RefPtr targetItem = navigation.targetItem()) {
@@ -2282,7 +2283,9 @@ void WebProcessPool::sendResourceLoadStatisticsDataImmediately(CompletionHandler
     auto callbackAggregator = CallbackAggregator::create(WTFMove(completionHandler));
 
     for (Ref process : processes()) {
-        if (!process->pageCount())
+        // WebProcess already flushes outstanding stats to NetworkProcess on suspend, so there's no
+        // need to resume a suspended process to force another flush.
+        if (!process->pageCount() || process->throttler().isSuspended())
             continue;
 
         process->sendWithAsyncReply(Messages::WebProcess::SendResourceLoadStatisticsDataImmediately(), [callbackAggregator] { });
@@ -2317,8 +2320,13 @@ void WebProcessPool::updateAudibleMediaAssertions()
         return;
 
     WEBPROCESSPOOL_RELEASE_LOG(ProcessSuspension, "updateAudibleMediaAssertions: The number of processes playing audible media is now greater than zero. Taking UI process assertion.");
+#if PLATFORM(COCOA)
+    bool shouldTakeUIProcessAssertion = WTF::processHasEntitlement("com.apple.runningboard.assertions.webkit"_s);
+#else
+    bool shouldTakeUIProcessAssertion = true;
+#endif
     m_audibleMediaActivity = AudibleMediaActivity {
-        ProcessAssertion::create(getCurrentProcessID(), "WebKit Media Playback"_s, ProcessAssertionType::MediaPlayback)
+        shouldTakeUIProcessAssertion ?  RefPtr<ProcessAssertion> { ProcessAssertion::create(getCurrentProcessID(), "WebKit Media Playback"_s, ProcessAssertionType::MediaPlayback) } : nullptr
 #if ENABLE(GPU_PROCESS)
         , gpuProcess() ? RefPtr<ProcessAssertion> { ProcessAssertion::create(*gpuProcess(), "WebKit Media Playback"_s, ProcessAssertionType::MediaPlayback) } : nullptr
 #endif

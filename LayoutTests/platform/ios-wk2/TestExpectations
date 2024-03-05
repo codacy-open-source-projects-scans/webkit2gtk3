@@ -2348,9 +2348,7 @@ http/wpt/opener/child-access-parent-via-windowproxy.html [ Pass ]
 http/wpt/opener/iframe-access-top-via-windowproxy.html [ Pass ]
 http/wpt/opener/parent-access-child-via-windowproxy.html [ Pass ]
 
-# webkit.org/b/267890 REGRESSION (273260@main): [ iOS17 ]ASSERTION FAILED: isStackingContext() result of 5 tests in fast/forms/switch to consistent timeout/crash
-[ Debug ] fast/forms/switch/click-animation-disabled.html [ Crash ]
-[ Debug ] fast/forms/switch/pointer-tracking-disabled.html [ Crash ]
+# webkit.org/b/267890 REGRESSION (273260@main): [ iOS17 ] 3 tests in fast/forms/switch regularly timeout
 fast/forms/switch/pointer-tracking-there-and-back-again-rtl.html [ Timeout ]
 fast/forms/switch/pointer-tracking-there-and-back-again.html [ Timeout ]
 fast/forms/switch/pointer-tracking.html [ Timeout ]
@@ -2400,3 +2398,11 @@ webkit.org/b/269116 imported/w3c/web-platform-tests/css/css-flexbox/negative-ove
 webkit.org/b/269321 webgl/1.0.3/conformance/uniforms/out-of-bounds-uniform-array-access.html [ Timeout ]
 
 webkit.org/b/269760 mathml/presentation/scripts-underover.html [ Failure ]
+
+webkit.org/b/270315 svg/custom/svg-fonts-in-html.html [ Failure ]
+
+webkit.org/b/270477 [ Debug ] accessibility/text-marker/text-marker-range-stale-node-crash.html [ Skip ]
+
+# webkit.org/b/268557 REGRESSION (274621@main-274598@main?): [ iOS Debug ]media/video-autoplay.html and media/video-element-other-namespace-crash.html are constant crashes 
+[ Debug ] media/video-autoplay.html [ Skip ]
+[ Debug ] media/video-element-other-namespace-crash.html  [ Skip ]

@@ -197,8 +197,9 @@ bool MediaPlayerPrivateGStreamerMSE::doSeek(const SeekTarget& target, float rate
     // This will also add support for fastSeek once done (see webkit.org/b/260607)
     if (!m_mediaSourcePrivate)
         return false;
-    m_mediaSourcePrivate->waitForTarget(target)->whenSettled(RunLoop::current(), [this, weakThis = WeakPtr { *this }](auto&& result) {
-        if (!weakThis || !result)
+    m_mediaSourcePrivate->waitForTarget(target)->whenSettled(RunLoop::current(), [this, weakThis = ThreadSafeWeakPtr { *this }](auto&& result) {
+        RefPtr self = weakThis.get();
+        if (!self || !result)
             return;
 
         if (m_mediaSourcePrivate)
@@ -307,6 +308,11 @@ void MediaPlayerPrivateGStreamerMSE::didPreroll()
 
 const PlatformTimeRanges& MediaPlayerPrivateGStreamerMSE::buffered() const
 {
+    if (!m_source)
+        return PlatformTimeRanges::emptyRanges();
+
+    // When a MediaSource object is in use, the HTMLMediaElement retrieves the buffered ranges
+    // directly from it rather than from the MediaPlayer / MediaPlayerPrivate.
     ASSERT_NOT_REACHED();
     return PlatformTimeRanges::emptyRanges();
 }
@@ -315,7 +321,7 @@ void MediaPlayerPrivateGStreamerMSE::sourceSetup(GstElement* sourceElement)
 {
     ASSERT(WEBKIT_IS_MEDIA_SRC(sourceElement));
     GST_DEBUG_OBJECT(pipeline(), "Source %p setup (old was: %p)", sourceElement, m_source.get());
-    webKitMediaSrcSetPlayer(WEBKIT_MEDIA_SRC(sourceElement), WeakPtr { *this });
+    webKitMediaSrcSetPlayer(WEBKIT_MEDIA_SRC(sourceElement), ThreadSafeWeakPtr { *this });
     m_source = sourceElement;
 
     if (m_mediaSourcePrivate && m_mediaSourcePrivate->hasAllTracks())

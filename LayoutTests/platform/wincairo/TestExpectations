@@ -897,6 +897,7 @@ http/tests/subresource-integrity [ Skip ]
 http/tests/webarchive [ Skip ]
 http/tests/webcodecs [ Skip ]
 http/tests/webgpu [ Skip ]
+fast/webgpu [ Skip ]
 http/tests/webrtc [ Skip ]
 http/tests/webshare [ Skip ]
 
@@ -1444,6 +1445,7 @@ fast/forms/listbox-hit-test-zoomed.html [ Skip ]
 fast/forms/listbox-onchange.html [ Skip ]
 fast/forms/listbox-padding-clip-selected.html [ Skip ]
 fast/forms/listbox-scrollbar-incremental-load.html [ Skip ]
+fast/forms/listbox-scrollbar-dark-mode.html [ Skip ]
 fast/forms/listbox-selection.html [ Skip ]
 fast/forms/listbox-visible-size.html [ Skip ]
 fast/forms/listbox-width-change.html [ Skip ]
@@ -2522,10 +2524,6 @@ fast/css/accent-color/radio.html [ Pass ]
 fast/css/accent-color/range.html [ Pass ]
 fast/css/accent-color/text.html [ Pass ]
 
-webkit.org/b/239550 fast/text/simple-line-hyphens-with-text-align.html [ Pass ]
-webkit.org/b/239550 fast/text/simple-line-layout-hyphen-limit-after.html [ Pass ]
-webkit.org/b/239550 fast/text/simple-line-layout-hyphen-limit-before.html [ Pass ]
-
 fast/events/wheel/wheel-event-destroys-frame.html [ Skip ] # Timeout
 fast/text/install-font-style-recalc.html [ Skip ] # Timeout
 webgl/2.0.y/conformance2/state/gl-object-get-calls.html [ Skip ] # Timeout
@@ -2748,4 +2746,13 @@ webkit.org/b/267251 imported/w3c/web-platform-tests/css/selectors/invalidation/u
 webkit.org/b/124566 fast/dom/SelectorAPI/resig-SelectorsAPI-test.xhtml [ Skip ] # Timeout
 
 imported/w3c/web-platform-tests/scroll-animations/css/view-timeline-inset-animation.html [ Pass Failure ]
+imported/w3c/web-platform-tests/scroll-animations/css/view-timeline-lookup.html [ Pass Failure ]
 
+fast/text/simple-line-hyphens-with-text-align.html [ ImageOnlyFailure ]
+fast/text/simple-line-layout-hyphen-limit-after.html [ ImageOnlyFailure ]
+fast/text/simple-line-layout-hyphen-limit-before.html [ ImageOnlyFailure ]
+fast/text/simple-line-layout-hyphen-limit-lines.html [ ImageOnlyFailure ]
+
+# Failure only on Buildbot
+fast/text/justify-ideograph-leading-expansion.html [ Pass Failure ]
+fast/text/tatechuyoko.html [ Pass Failure ]

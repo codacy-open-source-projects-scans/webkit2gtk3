@@ -816,9 +816,7 @@ fast/speechrecognition/start-recognition-after-gum.html [ Skip ]
 fast/speechrecognition/start-recognition-after-denied-gum.html [ Skip ]
 fast/speechrecognition/start-recognition-without-devices.html [ Skip ]
 
-accessibility/datetime/input-date-field-labels-and-value-changes.html [ WontFix ]
-accessibility/datetime/input-time-field-labels-and-value-changes.html [ WontFix ]
-accessibility/datetime/input-time-label-value.html [ WontFix ]
+accessibility/datetime [ WontFix ]
 accessibility/announcement-notification.html [ WontFix ]
 accessibility/menuitem-is-selected.html [ WontFix ]
 accessibility/relationships.html [ WontFix ]
@@ -843,6 +841,10 @@ accessibility/dynamic-table-descendants.html [ Skip ]
 
 # Missing AccessibilityUIElement::isIndeterminate() implementation.
 accessibility/progress-indeterminate-value.html [ Skip ]
+
+# Missing AccessibilityUIElement::brailleLabel and AccessibilityUIElement::brailleRoleDescription implementations.
+accessibility/aria-braillelabel.html [ Skip ]
+accessibility/aria-brailleroledescription.html [ Skip ]
 
 # This test is only applicable to WK2 because it renders date inputs using three separate
 # role="spinbutton" elements (month, day, year). WK1 renders date inputs using a contenteditable div.
@@ -2583,6 +2585,7 @@ webkit.org/b/253533 imported/w3c/web-platform-tests/xhr/status.h2.window.html [ 
 
 # webgpu is being brought up in the GPU process, radar://106507574 tracks fixing WK1
 http/tests/webgpu [ Skip ]
+fast/webgpu [ Skip ]
 
 imported/w3c/web-platform-tests/css/css-backgrounds/background-attachment-margin-root-001.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-backgrounds/background-image-shared-stylesheet.html [ ImageOnlyFailure ]
@@ -2783,3 +2786,36 @@ fast/dom/no-scroll-when-command-click-fragment-URL.html [ Skip ]
 [ Ventura ] media/track/track-paint-on-captions.html [ Crash ]
 
 webkit.org/b/270133 [ Sonoma+ ] imported/w3c/web-platform-tests/accname/name/comp_host_language_label.html [ Failure ]
+
+# webkit.org/b/270199 [ Sonoma wk1 ] 5 tests in imported/w3c/web-platform-tests/css/filter-effects are constant failures
+[ Sonoma+ ] imported/w3c/web-platform-tests/css/filter-effects/backdrop-filters-grayscale-001.html [ ImageOnlyFailure ]
+[ Sonoma+ ] imported/w3c/web-platform-tests/css/filter-effects/backdrop-filters-sepia.html [ ImageOnlyFailure ]
+[ Sonoma+ ] imported/w3c/web-platform-tests/css/filter-effects/filters-grayscale-001-test.html [ ImageOnlyFailure ]
+[ Sonoma+ ] imported/w3c/web-platform-tests/css/filter-effects/css-filters-animation-grayscale.html [ ImageOnlyFailure ]
+[ Sonoma+ ] imported/w3c/web-platform-tests/css/filter-effects/css-filters-animation-sepia.html [ ImageOnlyFailure ]
+
+webkit.org/b/270273 [ Monterey+ Debug ] imported/w3c/web-platform-tests/scroll-animations/css/animation-inactive-outside-range-test.html [ Skip ]
+
+webkit.org/b/270274 [ Monterey+ Debug ] imported/w3c/web-platform-tests/scroll-animations/css/animation-fill-outside-range-test.html [ Skip ]
+
+# webkit.org/b/270326 ([ Sonoma+ WK1 ] 2X imported/w3c/web-platform-tests/dom/events/non-cancelable-when-passive/passive test are constant failures)
+[ Sonoma+ ] imported/w3c/web-platform-tests/dom/events/non-cancelable-when-passive/passive-wheel-event-listener-on-div.html [ Failure ]
+[ Sonoma+ ] imported/w3c/web-platform-tests/dom/events/non-cancelable-when-passive/passive-mousewheel-event-listener-on-div.html [ Failure ]
+
+webkit.org/b/270310 [ Sonoma+ ] imported/w3c/web-platform-tests/html/semantics/interactive-elements/the-dialog-element/removed-element-is-removed-from-top-layer.html [ ImageOnlyFailure ]
+webkit.org/b/270310 [ Sonoma+ ] imported/w3c/web-platform-tests/html/semantics/interactive-elements/the-dialog-element/top-layer-stacking-correct-order-remove-readd.html [ ImageOnlyFailure ]
+
+# webkit.org/b/270207 REGRESSION (Sonoma23B74 --> Sonoma23D56 ): [ macOS wk1 ] Multiple tests are failing with image diff (0.01%) in fast/ and composting/ tests
+[ Sonoma+ ] compositing/clipping/border-radius-with-composited-descendant.html [ ImageOnlyFailure ]
+[ Sonoma+ ] compositing/clipping/border-radius-with-composited-descendant-nested.html [ ImageOnlyFailure ]
+[ Sonoma+ ] fast/images/exif-orientation-composited.html [ ImageOnlyFailure ]
+[ Sonoma+ ] fast/repaint/fixed.html [ ImageOnlyFailure ]
+[ Sonoma+ ] fast/borders/hidpi-double-border-with-border-radius-always-produce-solid-line.html [ ImageOnlyFailure ]
+[ Sonoma+ ] imported/w3c/web-platform-tests/css/css-contain/content-visibility/content-visibility-013.html [ ImageOnlyFailure ]
+[ Sonoma+ ] imported/blink/compositing/will-change/stacking-context-creation.html [ ImageOnlyFailure ]
+[ Sonoma+ ] imported/w3c/web-platform-tests/css/css-transforms/transform3d-preserve3d-001.html [ ImageOnlyFailure ]
+[ Sonoma+ ] imported/w3c/web-platform-tests/css/css-transforms/ttwf-css-3d-polygon-cycle.html [ ImageOnlyFailure ]
+
+webkit.org/b/270380 [ Ventura+ ] fast/hidpi/filters-drop-shadow.html [ ImageOnlyFailure ]
+
+webkit.org/b/270385 [ Sonoma+ ] fast/images/jpegxl-with-color-profile.html [ ImageOnlyFailure ]

@@ -401,6 +401,11 @@ String Quirks::storageAccessUserAgentStringQuirkForDomain(const URL& url)
     return iterator->value;
 }
 
+bool Quirks::isYoutubeEmbedDomain() const
+{
+    return isEmbedDomain("youtube.com"_s) || isEmbedDomain("youtube-nocookie.com"_s);
+}
+
 bool Quirks::shouldDisableElementFullscreenQuirk() const
 {
 #if PLATFORM(IOS_FAMILY)
@@ -420,8 +425,9 @@ bool Quirks::shouldDisableElementFullscreenQuirk() const
     if (!m_shouldDisableElementFullscreen) {
         m_shouldDisableElementFullscreen = isDomain("vimeo.com"_s)
             || isDomain("instagram.com"_s)
+            || (PAL::currentUserInterfaceIdiomIsSmallScreen() && isDomain("digitaltrends.com"_s))
             || isEmbedDomain("twitter.com"_s)
-            || (PAL::currentUserInterfaceIdiomIsSmallScreen() && (isDomain("youtube.com"_s) || isEmbedDomain("youtube.com"_s)));
+            || (PAL::currentUserInterfaceIdiomIsSmallScreen() && (isDomain("youtube.com"_s) || isYoutubeEmbedDomain()));
     }
 
     return m_shouldDisableElementFullscreen.value();
@@ -1812,6 +1818,24 @@ bool Quirks::needsIpadMiniUserAgent(StringView host)
     if (equalLettersIgnoringASCIICase(host, "spotify.com"_s) || host.endsWithIgnoringASCIICase(".spotify.com"_s) || host.endsWithIgnoringASCIICase(".spotifycdn.com"_s))
         return true;
     return false;
+}
+
+
+bool Quirks::shouldIgnorePlaysInlineRequirementQuirk() const
+{
+#if PLATFORM(IOS_FAMILY)
+    if (!needsQuirks())
+        return false;
+
+    if (m_shouldIgnorePlaysInlineRequirementQuirk)
+        return *m_shouldIgnorePlaysInlineRequirementQuirk;
+
+    m_shouldIgnorePlaysInlineRequirementQuirk = isDomain("premierleague.com"_s);
+
+    return *m_shouldIgnorePlaysInlineRequirementQuirk;
+#else
+    return false;
+#endif
 }
 
 }

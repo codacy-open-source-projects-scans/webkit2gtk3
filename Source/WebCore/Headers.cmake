@@ -343,6 +343,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/cookie-store/CookieStoreGetOptions.h
 
     Modules/credentialmanagement/CredentialRequestOptions.h
+    Modules/credentialmanagement/DigitalCredentialRequestOptions.h
 
     Modules/encryptedmedia/CDMClient.h
     Modules/encryptedmedia/MediaKeySystemClient.h
@@ -442,6 +443,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/indexeddb/shared/IDBIndexInfo.h
     Modules/indexeddb/shared/IDBIterateCursorData.h
     Modules/indexeddb/shared/IDBObjectStoreInfo.h
+    Modules/indexeddb/shared/IDBOpenRequestData.h
     Modules/indexeddb/shared/IDBRequestData.h
     Modules/indexeddb/shared/IDBResourceIdentifier.h
     Modules/indexeddb/shared/IDBResultData.h
@@ -1050,6 +1052,10 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     dom/TreeScopeInlines.h
     dom/TreeScopeOrderedMap.h
     dom/TreeWalker.h
+    dom/TrustedHTML.h
+    dom/TrustedScript.h
+    dom/TrustedScriptURL.h
+    dom/TrustedType.h
     dom/TypedElementDescendantIterator.h
     dom/TypedElementDescendantIteratorInlines.h
     dom/UIEvent.h
@@ -2090,6 +2096,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/cv/ImageTransferSessionVT.h
 
     platform/graphics/egl/GLContext.h
+    platform/graphics/egl/GLContextWrapper.h
 
     platform/graphics/filters/DistantLightSource.h
     platform/graphics/filters/FEBlend.h

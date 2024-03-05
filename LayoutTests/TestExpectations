@@ -1072,11 +1072,6 @@ imported/w3c/web-platform-tests/css/css-ui/caret-color-020.html [ Skip ]
 # Dump console messages to stderr for all the imported Content Security Policy tests to avoid flakiness.
 imported/w3c/web-platform-tests/content-security-policy [ DumpJSConsoleLogInStdErr ]
 
-# field-sizing is not supported
-imported/w3c/web-platform-tests/html/rendering/widgets/field-sizing-input-number.html [ Skip ]
-imported/w3c/web-platform-tests/html/rendering/widgets/field-sizing-input-text.html [ Skip ]
-imported/w3c/web-platform-tests/html/rendering/widgets/field-sizing-textarea.html [ Skip ]
-
 # FIXME: Skip Content Security Policy tests that are dumping the render tree instead of text:
 imported/w3c/web-platform-tests/content-security-policy/svg/scripted.svg [ Skip ]
 imported/w3c/web-platform-tests/content-security-policy/svg/including.sub.svg [ Skip ]
@@ -2077,6 +2072,7 @@ webkit.org/b/126420 svg/custom/resource-invalidation-crash.svg [ Failure Pass ]
 webkit.org/b/139639 [ Debug ] cssom/non-subpixel-scroll-top-left-values.html [ Slow ]
 
 [ Debug ] fast/workers/worker-cloneport.html [ Slow ]
+[ Debug ] fast/webgpu/present-without-compute-pipeline.html [ Slow ]
 
 # Imported W3C HTML/DOM ref tests that are failing.
 imported/w3c/web-platform-tests/html/dom/elements/global-attributes/dir_auto-textarea-script-N-between-Rs.html [ ImageOnlyFailure ]
@@ -3300,7 +3296,6 @@ imported/w3c/web-platform-tests/css/css-pseudo/highlight-currentcolor-painting-t
 imported/w3c/web-platform-tests/css/css-pseudo/highlight-currentcolor-painting-text-shadow-002.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/highlight-currentcolor-root-explicit-default-002.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/highlight-currentcolor-root-implicit-default-001.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-pseudo/highlight-currentcolor-root-implicit-default-002.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/highlight-painting-soft-hyphens-001.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/highlight-paired-cascade-003.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/highlight-paired-cascade-004.html [ ImageOnlyFailure ]
@@ -5467,14 +5462,18 @@ webkit.org/b/261849 imported/w3c/web-platform-tests/css/css-scroll-anchoring/heu
 webkit.org/b/261849 imported/w3c/web-platform-tests/css/css-scroll-anchoring/zero-scroll-offset.html [ Skip ]
 webkit.org/b/261849 imported/w3c/web-platform-tests/css/css-scroll-anchoring/start-edge-in-block-layout-direction.html [ Skip ]
 
-# Trusted Types aren't implemented yet
+# Trusted Types aren't fully implemented yet
 webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/trusted-types-event-handlers.html [ Skip ]
 webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/block-string-assignment-to-DOMWindowTimers-setTimeout-setInterval.html [ Skip ]
 webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/WorkerGlobalScope-eval.html [ Skip ]
-webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/WorkerGlobalScope-importScripts.html [ Skip ]
-
-# require-trusted-types-for CSP directive isn't implemented yet
-webkit.org/b/267685 imported/w3c/web-platform-tests/trusted-types/trusted-types-reporting.html [ Skip ]
+webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/trusted-types-reporting.html [ Skip ]
+webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/trusted-types-navigation.html [ Skip ]
+webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/trusted-types-svg-script.html [ Skip ]
+webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/require-trusted-types-for-report-only.html [ Skip ]
+webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/trusted-types-eval-reporting-no-unsafe-eval.html [ Skip ]
+webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/trusted-types-eval-reporting-report-only.html [ Skip ]
+webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/DOMWindowTimers-setTimeout-setInterval.html [ Skip ]
+webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/WorkerGlobalScope-importScripts.html [ Pass Failure ]
 
 # These tests are image failures
 imported/w3c/web-platform-tests/css/css-scroll-anchoring/vertical-rl-viewport-size-change-000.html [ Skip ]
@@ -6951,12 +6950,10 @@ imported/w3c/web-platform-tests/css/css-view-transitions/new-content-object-fit-
 imported/w3c/web-platform-tests/css/css-view-transitions/new-content-with-overflow-zoomed.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-view-transitions/old-content-captures-opacity.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-view-transitions/old-content-captures-root.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-view-transitions/old-content-is-inline.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-view-transitions/old-content-object-fit-fill.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-view-transitions/old-content-with-object-view-box.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-view-transitions/snapshot-containing-block-static.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-view-transitions/fractional-translation-from-position.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-view-transitions/fractional-translation-from-transform.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-view-transitions/named-element-with-fix-pos-child-old.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-view-transitions/rotated-cat-off-top-edge.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-view-transitions/scroller-child-abspos.html [ ImageOnlyFailure ]

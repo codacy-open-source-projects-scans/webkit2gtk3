@@ -659,6 +659,13 @@ void RenderLayerBacking::updateOpacity(const RenderStyle& style)
 
 void RenderLayerBacking::updateTransform(const RenderStyle& style)
 {
+    if (renderer().capturedInViewTransition()) {
+        if (m_contentsContainmentLayer)
+            m_contentsContainmentLayer->setTransform({ });
+        m_graphicsLayer->setTransform({ });
+        return;
+    }
+
     TransformationMatrix t;
     if (m_owningLayer.isTransformed())
         m_owningLayer.updateTransformFromStyle(t, style, RenderStyle::individualTransformOperations());
@@ -1191,6 +1198,10 @@ bool RenderLayerBacking::updateConfiguration(const RenderLayer* compositingAnces
         // but this is a runtime decision.
         if (element->usesPlatformLayer())
             m_graphicsLayer->setContentsToPlatformLayer(element->platformLayer(), GraphicsLayer::ContentsLayerPurpose::Model);
+#if ENABLE(MODEL_PROCESS)
+        else if (auto contextID = element->layerHostingContextIdentifier(); contextID && element->document().settings().modelProcessEnabled())
+            m_graphicsLayer->setContentsToRemotePlatformContext(contextID.value(), GraphicsLayer::ContentsLayerPurpose::HostedModel);
+#endif
         else if (auto model = element->model())
             m_graphicsLayer->setContentsToModel(WTFMove(model), element->isInteractive() ? GraphicsLayer::ModelInteraction::Enabled : GraphicsLayer::ModelInteraction::Disabled);
 
@@ -1198,7 +1209,7 @@ bool RenderLayerBacking::updateConfiguration(const RenderLayer* compositingAnces
 
         layerConfigChanged = true;
     }
-#endif
+#endif // ENABLE(MODEL_ELEMENT)
     // FIXME: Why do we do this twice?
     if (CheckedPtr widget = dynamicDowncast<RenderWidget>(renderer()); widget && compositor.attachWidgetContentLayers(*widget)) {
         m_owningLayer.setNeedsCompositingGeometryUpdate();

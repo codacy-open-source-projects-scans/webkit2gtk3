@@ -80,13 +80,14 @@ GPUProcess/webrtc/RemoteAudioMediaStreamTrackRendererInternalUnitManager.cpp
 ModelProcess/EntryPoint/Cocoa/XPCService/ModelServiceEntryPoint.mm
 ModelProcess/cocoa/ModelProcessCocoa.mm
 ModelProcess/ios/ModelProcessIOS.mm
+ModelProcess/cocoa/ModelProcessModelPlayerProxy.mm
 
 Platform/classifier/cocoa/ResourceLoadStatisticsClassifierCocoa.cpp
 Platform/classifier/ResourceLoadStatisticsClassifier.cpp
 
 Platform/cocoa/AssertionCapability.mm @no-unify
 Platform/cocoa/ExtensionCapabilityGrant.mm
-Platform/cocoa/MediaCapability.mm @no-unify
+Platform/cocoa/MediaCapability.mm
 Platform/cocoa/PaymentAuthorizationPresenter.mm
 Platform/cocoa/PaymentAuthorizationViewController.mm
 Platform/cocoa/WKPaymentAuthorizationDelegate.mm
@@ -762,6 +763,7 @@ ModelConnectionToWebProcessMessageReceiver.cpp
 ModelProcessConnectionMessageReceiver.cpp
 ModelProcessProxyMessageReceiver.cpp
 ModelProcessMessageReceiver.cpp
+ModelProcessModelPlayerProxyMessageReceiver.cpp
 RemoteAudioDestinationManagerMessageReceiver.cpp
 RemoteAudioHardwareListenerMessageReceiver.cpp
 RemoteAudioSessionMessageReceiver.cpp

@@ -357,6 +357,7 @@ public:
     inline const StyleCustomPropertyData& inheritedCustomProperties() const;
     inline const StyleCustomPropertyData& nonInheritedCustomProperties() const;
     const CSSCustomPropertyValue* customPropertyValue(const AtomString&) const;
+    bool customPropertyValueEqual(const RenderStyle&, const AtomString&) const;
 
     void deduplicateCustomProperties(const RenderStyle&);
     void setCustomPropertyValue(Ref<const CSSCustomPropertyValue>&&, bool isInherited);
@@ -586,8 +587,8 @@ public:
 
     const Length& specifiedLineHeight() const;
     WEBCORE_EXPORT const Length& lineHeight() const;
-    WEBCORE_EXPORT int computedLineHeight() const;
-    int computeLineHeight(const Length&) const;
+    WEBCORE_EXPORT float computedLineHeight() const;
+    float computeLineHeight(const Length&) const;
 
     WhiteSpace whiteSpace() const;
     inline bool autoWrap() const;

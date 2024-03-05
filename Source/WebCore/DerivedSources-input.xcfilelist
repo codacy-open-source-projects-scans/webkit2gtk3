@@ -190,6 +190,7 @@ $(PROJECT_DIR)/Modules/WebGPU/GPUVertexFormat.idl
 $(PROJECT_DIR)/Modules/WebGPU/GPUVertexState.idl
 $(PROJECT_DIR)/Modules/WebGPU/GPUVertexStepMode.idl
 $(PROJECT_DIR)/Modules/WebGPU/NavigatorGPU.idl
+$(PROJECT_DIR)/Modules/WebGPU/WGSLLanguageFeatures.idl
 $(PROJECT_DIR)/Modules/WebGPU/WebExposedAPI/GPU.idl
 $(PROJECT_DIR)/Modules/WebGPU/WebExposedAPI/GPUAdapter.idl
 $(PROJECT_DIR)/Modules/WebGPU/WebExposedAPI/GPUAdapterInfo.idl
@@ -334,6 +335,7 @@ $(PROJECT_DIR)/Modules/WebGPU/WebExposedAPI/GPUVertexFormat.idl
 $(PROJECT_DIR)/Modules/WebGPU/WebExposedAPI/GPUVertexState.idl
 $(PROJECT_DIR)/Modules/WebGPU/WebExposedAPI/GPUVertexStepMode.idl
 $(PROJECT_DIR)/Modules/WebGPU/WebExposedAPI/NavigatorGPU.idl
+$(PROJECT_DIR)/Modules/WebGPU/WebExposedAPI/WGSLLanguageFeatures.idl
 $(PROJECT_DIR)/Modules/airplay/WebKitPlaybackTargetAvailabilityEvent.idl
 $(PROJECT_DIR)/Modules/applepay-ams-ui/ApplePayAMSUIRequest.idl
 $(PROJECT_DIR)/Modules/applepay/ApplePayAutomaticReloadPaymentRequest.idl
@@ -434,8 +436,8 @@ $(PROJECT_DIR)/Modules/credentialmanagement/CredentialCreationOptions.idl
 $(PROJECT_DIR)/Modules/credentialmanagement/CredentialMediationRequirement.idl
 $(PROJECT_DIR)/Modules/credentialmanagement/CredentialRequestOptions.idl
 $(PROJECT_DIR)/Modules/credentialmanagement/CredentialsContainer.idl
+$(PROJECT_DIR)/Modules/credentialmanagement/DigitalCredential.idl
 $(PROJECT_DIR)/Modules/credentialmanagement/DigitalCredentialRequestOptions.idl
-$(PROJECT_DIR)/Modules/credentialmanagement/DigitalIdentity.idl
 $(PROJECT_DIR)/Modules/credentialmanagement/IdentityCredentialProtocol.idl
 $(PROJECT_DIR)/Modules/credentialmanagement/IdentityRequestProvider.idl
 $(PROJECT_DIR)/Modules/credentialmanagement/Navigator+Credentials.idl

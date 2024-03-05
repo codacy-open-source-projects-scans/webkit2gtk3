@@ -311,7 +311,7 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/credentialmanagement/CredentialMediationRequirement.idl
     Modules/credentialmanagement/CredentialRequestOptions.idl
     Modules/credentialmanagement/CredentialsContainer.idl
-    Modules/credentialmanagement/DigitalIdentity.idl
+    Modules/credentialmanagement/DigitalCredential.idl
     Modules/credentialmanagement/DigitalCredentialRequestOptions.idl
     Modules/credentialmanagement/IdentityCredentialProtocol.idl
     Modules/credentialmanagement/IdentityRequestProvider.idl
@@ -1870,6 +1870,7 @@ list(APPEND WebCore_NON_SVG_IDL_FILES
     Modules/WebGPU/GPUVertexState.idl
     Modules/WebGPU/GPUVertexStepMode.idl
     Modules/WebGPU/NavigatorGPU.idl
+    Modules/WebGPU/WGSLLanguageFeatures.idl
 )
 
 set(WebCore_IDL_FILES

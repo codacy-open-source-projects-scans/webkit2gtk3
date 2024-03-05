@@ -27,6 +27,7 @@
 #include "WebProcessProxy.h"
 
 #include "APIFrameHandle.h"
+#include "APIPageConfiguration.h"
 #include "APIPageHandle.h"
 #include "APIUIClient.h"
 #include "AuthenticatorManager.h"
@@ -86,6 +87,7 @@
 #include <WebCore/PrewarmInformation.h>
 #include <WebCore/PublicSuffix.h>
 #include <WebCore/RealtimeMediaSourceCenter.h>
+#include <WebCore/ResourceResponse.h>
 #include <WebCore/SecurityOriginData.h>
 #include <WebCore/SuddenTermination.h>
 #include <pal/system/Sound.h>
@@ -94,6 +96,7 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/ProcessPrivilege.h>
 #include <wtf/RunLoop.h>
+#include <wtf/Scope.h>
 #include <wtf/URL.h>
 #include <wtf/Vector.h>
 #include <wtf/WeakListHashSet.h>
@@ -288,12 +291,12 @@ private:
 #endif
 
 WebProcessProxy::WebProcessProxy(WebProcessPool& processPool, WebsiteDataStore* websiteDataStore, IsPrewarmed isPrewarmed, CrossOriginMode crossOriginMode, LockdownMode lockdownMode)
-    : AuxiliaryProcessProxy(processPool.alwaysRunsAtBackgroundPriority())
+    : AuxiliaryProcessProxy(processPool.shouldTakeUIBackgroundAssertion() ? ShouldTakeUIBackgroundAssertion::Yes : ShouldTakeUIBackgroundAssertion::No
+    , processPool.alwaysRunsAtBackgroundPriority() ? AlwaysRunsAtBackgroundPriority::Yes : AlwaysRunsAtBackgroundPriority::No)
     , m_backgroundResponsivenessTimer(*this)
     , m_processPool(processPool, isPrewarmed == IsPrewarmed::Yes ? IsWeak::Yes : IsWeak::No)
     , m_mayHaveUniversalFileReadSandboxExtension(false)
     , m_numberOfTimesSuddenTerminationWasDisabled(0)
-    , m_throttler(*this, processPool.shouldTakeUIBackgroundAssertion())
     , m_isResponsive(NoOrMaybe::Maybe)
     , m_visiblePageCounter([this](RefCounterEvent) { updateBackgroundResponsivenessTimer(); })
     , m_websiteDataStore(websiteDataStore)
@@ -687,7 +690,6 @@ void WebProcessProxy::shutDown()
     m_activityForHoldingLockedFiles = nullptr;
     m_audibleMediaActivity = std::nullopt;
     m_mediaStreamingActivity = std::nullopt;
-    m_throttler.didDisconnectFromProcess();
 
     for (Ref page : pages())
         page->disconnectFramesFromPage();
@@ -770,8 +772,8 @@ bool WebProcessProxy::shouldTakeNearSuspendedAssertion() const
 #if USE(RUNNINGBOARD)
     if (m_pageMap.isEmpty()) {
         // The setting come from pages but this process has no page, we thus use the default
-        // setting value, which is true.
-        return true;
+        // setting value.
+        return defaultShouldTakeNearSuspendedAssertion();
     }
 
     for (auto& page : m_pageMap.values()) {
@@ -819,8 +821,8 @@ void WebProcessProxy::addExistingWebPage(WebPageProxy& webPage, BeginsUsingDataS
     m_pageMap.set(webPage.identifier(), webPage);
     globalPageMap().set(webPage.identifier(), webPage);
 
-    m_throttler.setShouldTakeNearSuspendedAssertion(shouldTakeNearSuspendedAssertion());
-    m_throttler.setShouldDropNearSuspendedAssertionAfterDelay(shouldDropNearSuspendedAssertionAfterDelay());
+    throttler().setShouldTakeNearSuspendedAssertion(shouldTakeNearSuspendedAssertion());
+    throttler().setShouldDropNearSuspendedAssertionAfterDelay(shouldDropNearSuspendedAssertionAfterDelay());
 
     updateRegistrationWithDataStore();
     updateBackgroundResponsivenessTimer();
@@ -1328,22 +1330,15 @@ void WebProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Connect
         protectedConnection()->setIgnoreInvalidMessageForTesting();
 #endif
 
-#if USE(RUNNINGBOARD)
-    m_throttler.didConnectToProcess(*this);
-#if USE(EXTENSIONKIT)
-    if (launcher)
-        launcher->releaseLaunchGrant();
-#endif
-#if PLATFORM(MAC)
+#if USE(RUNNINGBOARD) && PLATFORM(MAC)
     for (Ref page : pages()) {
         if (page->preferences().backgroundWebContentRunningBoardThrottlingEnabled())
             setRunningBoardThrottlingEnabled();
     }
-#endif // PLATFORM(MAC)
-#endif // USE(RUNNINGBOARD)
+#endif // USE(RUNNINGBOARD) && PLATFORM(MAC)
 
-    m_throttler.setShouldTakeNearSuspendedAssertion(shouldTakeNearSuspendedAssertion());
-    m_throttler.setShouldDropNearSuspendedAssertionAfterDelay(shouldDropNearSuspendedAssertionAfterDelay());
+    throttler().setShouldTakeNearSuspendedAssertion(shouldTakeNearSuspendedAssertion());
+    throttler().setShouldDropNearSuspendedAssertionAfterDelay(shouldDropNearSuspendedAssertionAfterDelay());
 
 #if PLATFORM(COCOA)
     unblockAccessibilityServerIfNeeded();
@@ -1757,8 +1752,11 @@ void WebProcessProxy::sendPrepareToSuspend(IsSuspensionImminent isSuspensionImmi
 void WebProcessProxy::sendProcessDidResume(ResumeReason)
 {
     WEBPROCESSPROXY_RELEASE_LOG(ProcessSuspension, "sendProcessDidResume:");
-    if (canSendMessage())
+    if (canSendMessage()) {
         send(Messages::WebProcess::ProcessDidResume(), 0);
+        if (auto* pool = processPoolIfExists())
+            send(Messages::WebProcess::SetHiddenPageDOMTimerThrottlingIncreaseLimit(pool->hiddenPageThrottlingAutoIncreaseLimit()), 0);
+    }
 }
 
 void WebProcessProxy::setThrottleStateForTesting(ProcessThrottleState state)
@@ -1907,7 +1905,7 @@ void WebProcessProxy::setIsHoldingLockedFiles(bool isHoldingLockedFiles)
     }
     if (!m_activityForHoldingLockedFiles) {
         WEBPROCESSPROXY_RELEASE_LOG(ProcessSuspension, "setIsHoldingLockedFiles: UIProcess is taking a background assertion because the WebContent process is holding locked files");
-        m_activityForHoldingLockedFiles = m_throttler.backgroundActivity("Holding locked files"_s).moveToUniquePtr();
+        m_activityForHoldingLockedFiles = throttler().backgroundActivity("Holding locked files"_s).moveToUniquePtr();
     }
 }
 
@@ -2005,6 +2003,8 @@ void WebProcessProxy::didExceedMemoryFootprintThreshold(size_t footprint)
         return;
 
     String domain;
+    bool wasPrivateRelayed = false;
+
     for (auto& page : this->pages()) {
 #if ENABLE(PUBLIC_SUFFIX_LIST)
         String pageDomain = topPrivatelyControlledDomain(URL({ }, page->currentURL()).host().toString());
@@ -2012,6 +2012,8 @@ void WebProcessProxy::didExceedMemoryFootprintThreshold(size_t footprint)
             domain = WTFMove(pageDomain);
         else if (domain != pageDomain)
             domain = "multiple"_s;
+
+        wasPrivateRelayed = wasPrivateRelayed || page->pageLoadState().wasPrivateRelayed();
 #endif
     }
 
@@ -2019,7 +2021,7 @@ void WebProcessProxy::didExceedMemoryFootprintThreshold(size_t footprint)
         domain = "unknown"_s;
 
     auto activeTime = totalForegroundTime() + totalBackgroundTime() + totalSuspendedTime();
-    dataStore->client().didExceedMemoryFootprintThreshold(footprint, domain, pageCount(), activeTime, throttler().currentState() == ProcessThrottleState::Foreground);
+    dataStore->client().didExceedMemoryFootprintThreshold(footprint, domain, pageCount(), activeTime, throttler().currentState() == ProcessThrottleState::Foreground, wasPrivateRelayed ? WebCore::WasPrivateRelayed::Yes : WebCore::WasPrivateRelayed::No);
 }
 
 void WebProcessProxy::didExceedCPULimit()
@@ -2293,7 +2295,7 @@ void WebProcessProxy::startBackgroundActivityForFullscreenInput()
     if (m_backgroundActivityForFullscreenFormControls)
         return;
 
-    m_backgroundActivityForFullscreenFormControls = m_throttler.backgroundActivity("Fullscreen input"_s).moveToUniquePtr();
+    m_backgroundActivityForFullscreenFormControls = throttler().backgroundActivity("Fullscreen input"_s).moveToUniquePtr();
     WEBPROCESSPROXY_RELEASE_LOG(ProcessSuspension, "startBackgroundActivityForFullscreenInput: UIProcess is taking a background assertion because it is presenting fullscreen UI for form controls.");
 }
 
@@ -2354,7 +2356,7 @@ void WebProcessProxy::updateRemoteWorkerProcessAssertion(RemoteWorkerType worker
     });
     if (shouldTakeForegroundActivity) {
         if (!ProcessThrottler::isValidForegroundActivity(workerInformation->activity))
-            workerInformation->activity = m_throttler.foregroundActivity("Worker for foreground view(s)"_s);
+            workerInformation->activity = throttler().foregroundActivity("Worker for foreground view(s)"_s);
         return;
     }
 
@@ -2363,14 +2365,14 @@ void WebProcessProxy::updateRemoteWorkerProcessAssertion(RemoteWorkerType worker
     });
     if (shouldTakeBackgroundActivity) {
         if (!ProcessThrottler::isValidBackgroundActivity(workerInformation->activity))
-            workerInformation->activity = m_throttler.backgroundActivity("Worker for background view(s)"_s);
+            workerInformation->activity = throttler().backgroundActivity("Worker for background view(s)"_s);
         return;
     }
 
     if (workerType == RemoteWorkerType::ServiceWorker && m_hasServiceWorkerBackgroundProcessing) {
         WEBPROCESSPROXY_RELEASE_LOG(ProcessSuspension, "Service Worker for background processing");
         if (!ProcessThrottler::isValidBackgroundActivity(workerInformation->activity))
-            workerInformation->activity = m_throttler.backgroundActivity("Service Worker for background processing"_s);
+            workerInformation->activity = throttler().backgroundActivity("Service Worker for background processing"_s);
         return;
     }
 

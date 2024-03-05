@@ -84,6 +84,7 @@ Modules/WebGPU/GPUTexture.cpp
 Modules/WebGPU/GPUTextureView.cpp
 Modules/WebGPU/GPUUncapturedErrorEvent.cpp
 Modules/WebGPU/GPUValidationError.cpp
+Modules/WebGPU/WGSLLanguageFeatures.cpp
 Modules/airplay/WebKitPlaybackTargetAvailabilityEvent.cpp
 Modules/applicationmanifest/ApplicationManifestParser.cpp
 Modules/async-clipboard/Clipboard.cpp
@@ -112,7 +113,7 @@ Modules/cookie-store/CookieStore.cpp
 Modules/cookie-store/CookieStoreManager.cpp
 Modules/credentialmanagement/BasicCredential.cpp
 Modules/credentialmanagement/CredentialsContainer.cpp
-Modules/credentialmanagement/DigitalIdentity.cpp
+Modules/credentialmanagement/DigitalCredential.cpp
 Modules/credentialmanagement/NavigatorCredentials.cpp
 Modules/entriesapi/DOMFileSystem.cpp
 Modules/entriesapi/ErrorCallback.cpp
@@ -199,6 +200,7 @@ Modules/indexeddb/shared/IDBGetRecordData.cpp
 Modules/indexeddb/shared/IDBIndexInfo.cpp
 Modules/indexeddb/shared/IDBIterateCursorData.cpp
 Modules/indexeddb/shared/IDBObjectStoreInfo.cpp
+Modules/indexeddb/shared/IDBOpenRequestData.cpp
 Modules/indexeddb/shared/IDBRequestData.cpp
 Modules/indexeddb/shared/IDBResourceIdentifier.cpp
 Modules/indexeddb/shared/IDBResultData.cpp
@@ -1214,6 +1216,7 @@ dom/TreeWalker.cpp
 dom/TrustedHTML.cpp
 dom/TrustedScript.cpp
 dom/TrustedScriptURL.cpp
+dom/TrustedType.cpp
 dom/TrustedTypePolicy.cpp
 dom/TrustedTypePolicyFactory.cpp
 dom/UIEvent.cpp
@@ -3477,7 +3480,7 @@ JSDetectedText.cpp
 JSDeviceMotionEvent.cpp
 JSDeviceOrientationEvent.cpp
 JSDeviceOrientationOrMotionPermissionState.cpp
-JSDigitalIdentity.cpp
+JSDigitalCredential.cpp
 JSDigitalCredentialRequestOptions.cpp
 JSDistanceModelType.cpp
 JSDocument.cpp
@@ -3965,6 +3968,7 @@ JSNotificationOptions.cpp
 JSNotificationPermission.cpp
 JSNotificationPermissionCallback.cpp
 JSNVShaderNoperspectiveInterpolation.cpp
+JSWGSLLanguageFeatures.cpp
 JSOESDrawBuffersIndexed.cpp
 JSOESElementIndexUint.cpp
 JSOESFBORenderMipmap.cpp
