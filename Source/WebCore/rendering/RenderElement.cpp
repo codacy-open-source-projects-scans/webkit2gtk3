@@ -881,17 +881,17 @@ void RenderElement::styleWillChange(StyleDifference diff, const RenderStyle& new
         }
 
         auto needsInvalidateEventRegion = [&] {
-            if (m_style.effectivePointerEvents() != newStyle.effectivePointerEvents())
+            if (m_style.usedPointerEvents() != newStyle.usedPointerEvents())
                 return true;
 #if ENABLE(TOUCH_ACTION_REGIONS)
-            if (m_style.effectiveTouchActions() != newStyle.effectiveTouchActions())
+            if (m_style.usedTouchActions() != newStyle.usedTouchActions())
                 return true;
 #endif
             if (m_style.eventListenerRegionTypes() != newStyle.eventListenerRegionTypes())
                 return true;
 #if ENABLE(EDITABLE_REGION)
-            bool wasEditable = m_style.effectiveUserModify() != UserModify::ReadOnly;
-            bool isEditable = newStyle.effectiveUserModify() != UserModify::ReadOnly;
+            bool wasEditable = m_style.usedUserModify() != UserModify::ReadOnly;
+            bool isEditable = newStyle.usedUserModify() != UserModify::ReadOnly;
             if (wasEditable != isEditable)
                 return page().shouldBuildEditableRegion();
 #endif
@@ -1238,7 +1238,7 @@ static bool mustRepaintFillLayers(const RenderElement& renderer, const FillLayer
 
     // Make sure we have a valid image.
     RefPtr image = layer.image();
-    if (!image || !image->canRender(&renderer, renderer.style().effectiveZoom()))
+    if (!image || !image->canRender(&renderer, renderer.style().usedZoom()))
         return false;
 
     if (!layer.xPosition().isZero() || !layer.yPosition().isZero())
@@ -1477,7 +1477,7 @@ bool RenderElement::borderImageIsLoadedAndCanBeRendered() const
     ASSERT(style().hasBorder());
 
     RefPtr borderImage = style().borderImage().image();
-    return borderImage && borderImage->canRender(this, style().effectiveZoom()) && borderImage->isLoaded(this);
+    return borderImage && borderImage->canRender(this, style().usedZoom()) && borderImage->isLoaded(this);
 }
 
 bool RenderElement::mayCauseRepaintInsideViewport(const IntRect* optionalViewportRect) const
@@ -1726,7 +1726,7 @@ Color RenderElement::selectionColor(CSSPropertyID colorProperty) const
 {
     // If the element is unselectable, or we are only painting the selection,
     // don't override the foreground color with the selection foreground color.
-    if (style().effectiveUserSelect() == UserSelect::None
+    if (style().usedUserSelect() == UserSelect::None
         || (view().frameView().paintBehavior().containsAny({ PaintBehavior::SelectionOnly, PaintBehavior::SelectionAndBackgroundsOnly })))
         return Color();
 
@@ -1772,7 +1772,7 @@ Color RenderElement::selectionEmphasisMarkColor() const
 
 Color RenderElement::selectionBackgroundColor() const
 {
-    if (style().effectiveUserSelect() == UserSelect::None)
+    if (style().usedUserSelect() == UserSelect::None)
         return Color();
 
     if (frame().selection().shouldShowBlockCursor() && frame().selection().isCaret())
@@ -2211,7 +2211,7 @@ void RenderElement::repaintRendererOrClientsOfReferencedSVGResources() const
 {
     auto* enclosingResourceContainer = lineageOfType<RenderSVGResourceContainer>(*this).first();
     if (!enclosingResourceContainer) {
-        repaint();
+        repaintOldAndNewPositionsForSVGRenderer();
         return;
     }
 
@@ -2226,6 +2226,37 @@ void RenderElement::repaintClientsOfReferencedSVGResources() const
 
     if (auto* enclosingResourceContainer = lineageOfType<RenderSVGResourceContainer>(*this).first())
         enclosingResourceContainer->repaintAllClients();
+}
+
+void RenderElement::repaintOldAndNewPositionsForSVGRenderer() const
+{
+    auto useUpdateLayerPositionsLogic = [&]() -> std::optional<CheckedPtr<RenderLayer>> {
+        if (!document().settings().layerBasedSVGEngineEnabled())
+            return std::nullopt;
+
+        // Don't attempt to update anything during layout - the post-layout phase will invoke RenderLayer::updateLayerPosition(), if necessary.
+        if (document().view()->layoutContext().isInLayout())
+            return std::nullopt;
+
+        // If no layers are available, always use the renderer based repaint() logic.
+        if (!hasLayer())
+            return std::nullopt;
+
+        // Use the cheaper update mechanism for all SVG renderers -- in proper subtrees, that do not need layout themselves.
+        if (!isSVGLayerAwareRenderer() || needsLayout())
+            return std::nullopt;
+
+        return std::make_optional(downcast<RenderLayerModelObject>(*this).checkedLayer());
+    };
+
+    // LBSE: Instead of repainting the current boundaries, utilize RenderLayer::updateLayerPositionsAfterStyleChange() to repaint
+    // the old and the new repaint boundaries, if they differ -- instead of just the new boundaries.
+    if (auto layer = useUpdateLayerPositionsLogic()) {
+        (*layer.value()).updateLayerPositionsAfterStyleChange();
+        return;
+    }
+
+    repaint();
 }
 #endif
 

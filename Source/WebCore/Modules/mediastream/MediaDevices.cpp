@@ -253,7 +253,7 @@ void MediaDevices::getDisplayMedia(DisplayMediaStreamConstraints&& constraints, 
 
     bool isUserGesturePriviledged = computeUserGesturePriviledge(GestureAllowedRequest::Display);
     if (!isUserGesturePriviledged) {
-        promise.reject(Exception { ExceptionCode::InvalidAccessError, "getDisplayMedia must be called from a user gesture handler."_s });
+        promise.reject(Exception { ExceptionCode::InvalidStateError, "getDisplayMedia must be called from a user gesture handler."_s });
         return;
     }
 
@@ -362,24 +362,7 @@ void MediaDevices::enumerateDevices(EnumerateDevicesPromise&& promise)
 
 MediaTrackSupportedConstraints MediaDevices::getSupportedConstraints()
 {
-    auto& supported = RealtimeMediaSourceCenter::singleton().supportedConstraints();
-    MediaTrackSupportedConstraints result;
-    result.width = supported.supportsWidth();
-    result.height = supported.supportsHeight();
-    result.aspectRatio = supported.supportsAspectRatio();
-    result.frameRate = supported.supportsFrameRate();
-    result.facingMode = supported.supportsFacingMode();
-    result.whiteBalanceMode = supported.supportsWhiteBalanceMode();
-    result.volume = supported.supportsVolume();
-    result.sampleRate = supported.supportsSampleRate();
-    result.sampleSize = supported.supportsSampleSize();
-    result.echoCancellation = supported.supportsEchoCancellation();
-    result.deviceId = supported.supportsDeviceId();
-    result.groupId = supported.supportsGroupId();
-    result.displaySurface = supported.supportsDisplaySurface();
-    result.zoom = supported.supportsZoom();
-
-    return result;
+    return { };
 }
 
 void MediaDevices::scheduledEventTimerFired()

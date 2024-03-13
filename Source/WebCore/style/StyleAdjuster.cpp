@@ -101,7 +101,7 @@ Adjuster::Adjuster(const Document& document, const RenderStyle& parentStyle, con
 static void addIntrinsicMargins(RenderStyle& style)
 {
     // Intrinsic margin value.
-    const int intrinsicMargin = clampToInteger(2 * style.effectiveZoom());
+    const int intrinsicMargin = clampToInteger(2 * style.usedZoom());
 
     // FIXME: Using width/height alone and not also dealing with min-width/max-width is flawed.
     // FIXME: Using "hasQuirk" to decide the margin wasn't set is kind of lame.
@@ -266,7 +266,7 @@ static bool isScrollableOverflow(Overflow overflow)
     return overflow == Overflow::Scroll || overflow == Overflow::Auto;
 }
 
-static OptionSet<TouchAction> computeEffectiveTouchActions(const RenderStyle& style, OptionSet<TouchAction> effectiveTouchActions)
+static OptionSet<TouchAction> computeUsedTouchActions(const RenderStyle& style, OptionSet<TouchAction> usedTouchActions)
 {
     // https://w3c.github.io/pointerevents/#determining-supported-touch-behavior
     // "A touch behavior is supported if it conforms to the touch-action property of each element between
@@ -275,22 +275,22 @@ static OptionSet<TouchAction> computeEffectiveTouchActions(const RenderStyle& st
 
     bool hasDefaultTouchBehavior = isScrollableOverflow(style.overflowX()) || isScrollableOverflow(style.overflowY());
     if (hasDefaultTouchBehavior)
-        effectiveTouchActions = RenderStyle::initialTouchActions();
+        usedTouchActions = RenderStyle::initialTouchActions();
 
     auto touchActions = style.touchActions();
     if (touchActions == RenderStyle::initialTouchActions())
-        return effectiveTouchActions;
+        return usedTouchActions;
 
-    if (effectiveTouchActions.contains(TouchAction::None))
+    if (usedTouchActions.contains(TouchAction::None))
         return { TouchAction::None };
 
-    if (effectiveTouchActions.containsAny({ TouchAction::Auto, TouchAction::Manipulation }))
+    if (usedTouchActions.containsAny({ TouchAction::Auto, TouchAction::Manipulation }))
         return touchActions;
 
     if (touchActions.containsAny({ TouchAction::Auto, TouchAction::Manipulation }))
-        return effectiveTouchActions;
+        return usedTouchActions;
 
-    auto sharedTouchActions = effectiveTouchActions & touchActions;
+    auto sharedTouchActions = usedTouchActions & touchActions;
     if (sharedTouchActions.isEmpty())
         return { TouchAction::None };
 
@@ -713,7 +713,7 @@ void Adjuster::adjust(RenderStyle& style, const RenderStyle* userAgentAppearance
     if (m_parentBoxStyle.justifyItems().positionType() == ItemPositionType::Legacy && style.justifyItems().position() == ItemPosition::Legacy)
         style.setJustifyItems(m_parentBoxStyle.justifyItems());
 
-    style.setEffectiveTouchActions(computeEffectiveTouchActions(style, m_parentStyle.effectiveTouchActions()));
+    style.setUsedTouchActions(computeUsedTouchActions(style, m_parentStyle.usedTouchActions()));
 
     // Counterparts in Element::addToTopLayer/removeFromTopLayer & SharingResolver::canShareStyleWithElement need to match!
     auto hasInertAttribute = [] (const Element* element) -> bool {
@@ -869,7 +869,7 @@ void Adjuster::adjustSVGElementStyle(RenderStyle& style, const SVGElement& svgEl
     // (Legacy)RenderSVGRoot handles zooming for the whole SVG subtree, so foreignObject content should
     // not be scaled again.
     if (svgElement.hasTagName(SVGNames::foreignObjectTag))
-        style.setEffectiveZoom(RenderStyle::initialZoom());
+        style.setUsedZoom(RenderStyle::initialZoom());
 
     // SVG text layout code expects us to be a block-level style element.
     if ((svgElement.hasTagName(SVGNames::foreignObjectTag) || svgElement.hasTagName(SVGNames::textTag)) && style.isDisplayInlineType())

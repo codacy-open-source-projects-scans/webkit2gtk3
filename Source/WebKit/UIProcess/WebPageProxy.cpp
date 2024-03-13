@@ -193,6 +193,7 @@
 #include <WebCore/DragData.h>
 #include <WebCore/ElementContext.h>
 #include <WebCore/EventNames.h>
+#include <WebCore/ExceptionCode.h>
 #include <WebCore/ExceptionDetails.h>
 #include <WebCore/FloatRect.h>
 #include <WebCore/FocusDirection.h>
@@ -302,7 +303,7 @@
 #endif
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET) && !PLATFORM(IOS_FAMILY)
-#include <WebCore/MediaPlaybackTarget.h>
+#include "MediaPlaybackTargetContextSerialized.h"
 #include <WebCore/WebMediaSessionManager.h>
 #endif
 
@@ -1084,7 +1085,7 @@ void WebPageProxy::setResourceLoadClient(std::unique_ptr<API::ResourceLoadClient
 
 void WebPageProxy::handleMessage(IPC::Connection& connection, const String& messageName, const WebKit::UserData& messageBody)
 {
-    ASSERT(m_process->connection() == &connection);
+    ASSERT(m_process->connection() == &connection || preferences().siteIsolationEnabled());
     handleMessageShared(m_process, messageName, messageBody);
 }
 
@@ -1098,7 +1099,7 @@ void WebPageProxy::handleMessageShared(const Ref<WebProcessProxy>& process, cons
 
 void WebPageProxy::handleSynchronousMessage(IPC::Connection& connection, const String& messageName, const UserData& messageBody, CompletionHandler<void(UserData&&)>&& completionHandler)
 {
-    ASSERT(m_process->connection() == &connection);
+    ASSERT(m_process->connection() == &connection || preferences().siteIsolationEnabled());
 
     if (!m_injectedBundleClient)
         return completionHandler({ });
@@ -6220,7 +6221,8 @@ void WebPageProxy::didCommitLoadForFrame(FrameIdentifier frameID, FrameInfoData&
         if (auto* drawingAreaProxy = dynamicDowncast<RemoteLayerTreeDrawingAreaProxy>(*m_drawingArea))
             internals().firstLayerTreeTransactionIdAfterDidCommitLoad = drawingAreaProxy->nextLayerTreeTransactionID();
 #endif
-        internals().pageAllowedToRunInTheBackgroundToken = nullptr;
+        internals().pageAllowedToRunInTheBackgroundActivityDueToTitleChanges = nullptr;
+        internals().pageAllowedToRunInTheBackgroundActivityDueToNotifications = nullptr;
     }
 
     auto transaction = internals().pageLoadState.transaction();
@@ -6475,7 +6477,8 @@ void WebPageProxy::didFailLoadForFrame(FrameIdentifier frameID, FrameInfoData&& 
 
     if (isMainFrame) {
         internals().pageLoadState.didFailLoad(transaction);
-        internals().pageAllowedToRunInTheBackgroundToken = nullptr;
+        internals().pageAllowedToRunInTheBackgroundActivityDueToTitleChanges = nullptr;
+        internals().pageAllowedToRunInTheBackgroundActivityDueToNotifications = nullptr;
     }
 
     if (m_controlledByAutomation) {
@@ -6651,12 +6654,12 @@ void WebPageProxy::didReceiveTitleForFrame(FrameIdentifier frameID, const String
 
     if (frame->isMainFrame()) {
         internals().pageLoadState.setTitle(transaction, title);
-        if (!isViewVisible() && !frame->title().isNull() && frame->title() != title) {
-            WEBPAGEPROXY_RELEASE_LOG(ViewState, "didReceiveTitleForFrame: This page changes its title in the background and is allowed to run in the background");
+        if (!frame->title().isNull() && frame->title() != title) {
+            WEBPAGEPROXY_RELEASE_LOG(ViewState, "didReceiveTitleForFrame: This page updates its title and is now allowed to run in the background");
             // This page updates its title in the background and is thus able to communicate with
             // the user while in the background. Allow it to run in the background.
-            if (!internals().pageAllowedToRunInTheBackgroundToken)
-                internals().pageAllowedToRunInTheBackgroundToken = process().throttler().pageAllowedToRunInTheBackgroundToken();
+            if (!internals().pageAllowedToRunInTheBackgroundActivityDueToTitleChanges)
+                internals().pageAllowedToRunInTheBackgroundActivityDueToTitleChanges = process().throttler().backgroundActivity("Page updates its title"_s).moveToUniquePtr();
         }
     }
 
@@ -9777,7 +9780,8 @@ void WebPageProxy::resetStateAfterProcessExited(ProcessTerminationReason termina
 
     internals().pageIsUserObservableCount = nullptr;
     internals().visiblePageToken = nullptr;
-    internals().pageAllowedToRunInTheBackgroundToken = nullptr;
+    internals().pageAllowedToRunInTheBackgroundActivityDueToTitleChanges = nullptr;
+    internals().pageAllowedToRunInTheBackgroundActivityDueToNotifications = nullptr;
 
     m_hasRunningProcess = false;
     m_areActiveDOMObjectsAndAnimationsSuspended = false;
@@ -10659,16 +10663,16 @@ void WebPageProxy::requestNotificationPermission(const String& originString, Com
 void WebPageProxy::pageWillLikelyUseNotifications()
 {
     WEBPAGEPROXY_RELEASE_LOG(ViewState, "pageWillLikelyUseNotifications: This page is likely to use notifications and is allowed to run in the background");
-    if (!internals().pageAllowedToRunInTheBackgroundToken)
-        internals().pageAllowedToRunInTheBackgroundToken = process().throttler().pageAllowedToRunInTheBackgroundToken();
+    if (!internals().pageAllowedToRunInTheBackgroundActivityDueToNotifications)
+        internals().pageAllowedToRunInTheBackgroundActivityDueToNotifications = process().throttler().backgroundActivity("Page is likely to show notifications"_s).moveToUniquePtr();
 }
 
 void WebPageProxy::showNotification(IPC::Connection& connection, const WebCore::NotificationData& notificationData, RefPtr<WebCore::NotificationResources>&& notificationResources)
 {
     m_process->processPool().supplement<WebNotificationManagerProxy>()->show(this, connection, notificationData, WTFMove(notificationResources));
     WEBPAGEPROXY_RELEASE_LOG(ViewState, "showNotification: This page shows notifications and is allowed to run in the background");
-    if (!internals().pageAllowedToRunInTheBackgroundToken)
-        internals().pageAllowedToRunInTheBackgroundToken = process().throttler().pageAllowedToRunInTheBackgroundToken();
+    if (!internals().pageAllowedToRunInTheBackgroundActivityDueToNotifications)
+        internals().pageAllowedToRunInTheBackgroundActivityDueToNotifications = process().throttler().backgroundActivity("Page has shown notification"_s).moveToUniquePtr();
 }
 
 void WebPageProxy::cancelNotification(const WTF::UUID& notificationID)
@@ -11807,7 +11811,7 @@ void WebPageProxy::setMockMediaPlaybackTargetPickerEnabled(bool enabled)
     protectedPageClient()->mediaSessionManager().setMockMediaPlaybackTargetPickerEnabled(enabled);
 }
 
-void WebPageProxy::setMockMediaPlaybackTargetPickerState(const String& name, WebCore::MediaPlaybackTargetContext::MockState state)
+void WebPageProxy::setMockMediaPlaybackTargetPickerState(const String& name, WebCore::MediaPlaybackTargetContextMockState state)
 {
     protectedPageClient()->mediaSessionManager().setMockMediaPlaybackTargetPickerState(name, state);
 }
@@ -11822,8 +11826,7 @@ void WebPageProxy::Internals::setPlaybackTarget(PlaybackTargetClientContextIdent
     if (!page.hasRunningProcess())
         return;
 
-    auto context = target->targetContext();
-    page.send(Messages::WebPage::PlaybackTargetSelected(contextId, context));
+    page.send(Messages::WebPage::PlaybackTargetSelected(contextId, MediaPlaybackTargetContextSerialized { target->targetContext() }));
 }
 
 void WebPageProxy::Internals::externalOutputDeviceAvailableDidChange(PlaybackTargetClientContextIdentifier contextId, bool available)
@@ -13748,6 +13751,13 @@ void WebPageProxy::requestTextExtraction(std::optional<FloatRect>&& collectionRe
     if (!hasRunningProcess())
         return completion({ });
     sendWithAsyncReply(Messages::WebPage::RequestTextExtraction(WTFMove(collectionRectInRootView)), WTFMove(completion));
+}
+
+void WebPageProxy::requestRenderedTextForElementSelector(String&& selector, CompletionHandler<void(Expected<String, WebCore::ExceptionCode>&&)>&& completion)
+{
+    if (!hasRunningProcess())
+        return completion(makeUnexpected(WebCore::ExceptionCode::NotAllowedError));
+    sendWithAsyncReply(Messages::WebPage::RequestRenderedTextForElementSelector(WTFMove(selector)), WTFMove(completion));
 }
 
 void WebPageProxy::addConsoleMessage(FrameIdentifier frameID, MessageSource messageSource, MessageLevel messageLevel, const String& message, std::optional<ResourceLoaderIdentifier> coreIdentifier)

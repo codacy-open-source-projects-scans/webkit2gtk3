@@ -29,8 +29,10 @@
 
 #include <wtf/Ref.h>
 #include <wtf/ThreadSafeRefCounted.h>
+#include <wtf/ThreadSafeWeakHashSet.h>
 #include <wtf/ThreadSafeWeakPtr.h>
 #include <wtf/Threading.h>
+#include <wtf/threads/BinarySemaphore.h>
 
 OBJC_CLASS PDFDocument;
 
@@ -44,7 +46,8 @@ class ByteRangeRequest;
 class PDFPluginBase;
 class PDFPluginStreamLoaderClient;
 
-using ByteRangeRequestIdentifier = uint64_t;
+enum class ByteRangeRequestIdentifierType { };
+using ByteRangeRequestIdentifier = ObjectIdentifier<ByteRangeRequestIdentifierType>;
 using DataRequestCompletionHandler = Function<void(const uint8_t*, size_t count)>;
 
 class PDFIncrementalLoader : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<PDFIncrementalLoader> {
@@ -114,6 +117,27 @@ private:
     void logStreamLoader(WTF::TextStream&, WebCore::NetscapePlugInStreamLoader&);
 #endif
 
+    class SemaphoreWrapper : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<SemaphoreWrapper> {
+    public:
+        static Ref<SemaphoreWrapper> create() { return adoptRef(*new SemaphoreWrapper); }
+
+        void wait() { m_semaphore.wait(); }
+        void signal()
+        {
+            m_wasSignaled = true;
+            m_semaphore.signal();
+        }
+        bool wasSignaled() const { return m_wasSignaled; }
+
+    private:
+        SemaphoreWrapper() = default;
+
+        BinarySemaphore m_semaphore;
+        std::atomic<bool> m_wasSignaled { false };
+    };
+
+    RefPtr<SemaphoreWrapper> createDataSemaphore();
+
     ThreadSafeWeakPtr<PDFPluginBase> m_plugin;
 
     RetainPtr<PDFDocument> m_backgroundThreadDocument;
@@ -123,6 +147,11 @@ private:
 
     struct RequestData;
     std::unique_ptr<RequestData> m_requestData;
+
+    ThreadSafeWeakHashSet<SemaphoreWrapper> m_dataSemaphores WTF_GUARDED_BY_LOCK(m_wasPDFThreadTerminationRequestedLock);
+
+    Lock m_wasPDFThreadTerminationRequestedLock;
+    bool m_wasPDFThreadTerminationRequested WTF_GUARDED_BY_LOCK(m_wasPDFThreadTerminationRequestedLock) { false };
 
 #if !LOG_DISABLED
     std::atomic<size_t> m_threadsWaitingOnCallback { 0 };

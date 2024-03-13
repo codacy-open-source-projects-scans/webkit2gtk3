@@ -356,7 +356,6 @@ public:
 
     virtual RenderPtr<RenderElement> createElementRenderer(RenderStyle&&, const RenderTreePosition&);
     virtual bool rendererIsNeeded(const RenderStyle&);
-    virtual bool rendererIsEverNeeded() { return true; }
 
     inline ShadowRoot* shadowRoot() const; // Defined in ElementRareData.h
     RefPtr<ShadowRoot> shadowRootForBindings(JSC::JSGlobalObject&) const;
@@ -732,8 +731,8 @@ public:
     using ContainerNode::setAttributeEventListener;
     void setAttributeEventListener(const AtomString& eventType, const QualifiedName& attributeName, const AtomString& value);
 
-    IntersectionObserverData& ensureIntersectionObserverData();
-    IntersectionObserverData* intersectionObserverDataIfExists();
+    virtual IntersectionObserverData& ensureIntersectionObserverData();
+    virtual IntersectionObserverData* intersectionObserverDataIfExists();
 
     ResizeObserverData& ensureResizeObserverData();
     ResizeObserverData* resizeObserverDataIfExists();
@@ -799,6 +798,7 @@ protected:
     FormAssociatedCustomElement& formAssociatedCustomElementUnsafe() const;
     void ensureFormAssociatedCustomElement();
 
+    void disconnectFromIntersectionObservers();
     static AtomString makeTargetBlankIfHasDanglingMarkup(const AtomString& target);
 
 private:
@@ -858,7 +858,6 @@ private:
     LayoutRect absoluteEventBounds(bool& boundsIncludeAllDescendantElements, bool& includesFixedPositionElements);
     LayoutRect absoluteEventBoundsOfElementAndDescendants(bool& includesFixedPositionElements);
 
-    void disconnectFromIntersectionObservers();
     void disconnectFromIntersectionObserversSlow(IntersectionObserverData&);
 
     void disconnectFromResizeObservers();

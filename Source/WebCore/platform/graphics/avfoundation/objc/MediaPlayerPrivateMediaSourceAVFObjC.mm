@@ -371,7 +371,7 @@ void MediaPlayerPrivateMediaSourceAVFObjC::pauseInternal(std::optional<Monotonic
 
 bool MediaPlayerPrivateMediaSourceAVFObjC::paused() const
 {
-    return ![m_synchronizer rate];
+    return !m_isPlaying;
 }
 
 void MediaPlayerPrivateMediaSourceAVFObjC::setVolume(float volume)
@@ -476,9 +476,9 @@ MediaTime MediaPlayerPrivateMediaSourceAVFObjC::currentTime() const
     return synchronizerTime;
 }
 
-bool MediaPlayerPrivateMediaSourceAVFObjC::currentTimeMayProgress() const
+bool MediaPlayerPrivateMediaSourceAVFObjC::timeIsProgressing() const
 {
-    return m_mediaSourcePrivate ? m_mediaSourcePrivate->hasFutureTime(currentTime()) : false;
+    return m_isPlaying && [m_synchronizer rate];
 }
 
 MediaTime MediaPlayerPrivateMediaSourceAVFObjC::clampTimeToLastSeekTime(const MediaTime& time) const

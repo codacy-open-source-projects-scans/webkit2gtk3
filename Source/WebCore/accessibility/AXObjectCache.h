@@ -197,7 +197,7 @@ public:
     void childrenChanged(Node*, Node* newChild = nullptr);
     void childrenChanged(RenderObject*, RenderObject* newChild = nullptr);
     void childrenChanged(AccessibilityObject*);
-    void onFocusChange(Node* oldFocusedNode, Node* newFocusedNode);
+    void onFocusChange(Element* oldElement, Element* newElement);
     void onPopoverToggle(const HTMLElement&);
     void onScrollbarFrameRectChange(const Scrollbar&);
     void onSelectedChanged(Node*);
@@ -209,7 +209,13 @@ public:
     void valueChanged(Element*);
     void checkedStateChanged(Node*);
     void autofillTypeChanged(Node*);
-    void handleRoleChanged(AccessibilityObject*);
+    void handleRoleChanged(AccessibilityObject&);
+
+#if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
+    void columnIndexChanged(AccessibilityObject&);
+    void rowIndexChanged(AccessibilityObject&);
+#endif
+
     // Called when a RenderObject is created for an Element. Depending on the
     // presence of a RenderObject, we may have instatiated an AXRenderObject or
     // an AXNodeObject. This occurs when an Element with no renderer is
@@ -354,6 +360,8 @@ public:
         AXAnnouncementRequested,
         AXAutocorrectionOccured,
         AXAutofillTypeChanged,
+        AXARIAColumnIndexChanged,
+        AXARIARowIndexChanged,
         AXBrailleLabelChanged,
         AXBrailleRoleDescriptionChanged,
         AXCellSlotsChanged,
@@ -432,6 +440,7 @@ public:
         AXSortDirectionChanged,
         AXTextChanged,
         AXTextCompositionChanged,
+        AXTextUnderElementChanged,
 #if ENABLE(AX_THREAD_TEXT_APIS)
         AXTextRunsChanged,
 #endif
@@ -447,6 +456,12 @@ public:
     void postNotification(RenderObject*, AXNotification, PostTarget = PostTarget::Element);
     void postNotification(Node*, AXNotification, PostTarget = PostTarget::Element);
     void postNotification(AccessibilityObject*, Document*, AXNotification, PostTarget = PostTarget::Element);
+    void postNotification(AccessibilityObject* object, AXNotification notification)
+    {
+        if (object)
+            postNotification(*object, notification);
+    }
+    void postNotification(AccessibilityObject&, AXNotification);
     // Requests clients to announce to the user the given message in the way they deem appropriate.
     WEBCORE_EXPORT void announce(const String&);
 
@@ -493,7 +508,7 @@ public:
     void deferRecomputeTableCellSlots(AccessibilityTable&);
     void deferTextChangedIfNeeded(Node*);
     void deferSelectedChildrenChangedIfNeeded(Element&);
-    void performDeferredCacheUpdate(ForceLayout);
+    WEBCORE_EXPORT void performDeferredCacheUpdate(ForceLayout);
     void deferTextReplacementNotificationForTextControl(HTMLTextFormControlElement&, const String& previousValue);
 
     std::optional<SimpleRange> rangeMatchesTextNearRange(const SimpleRange&, const String&);
@@ -674,6 +689,10 @@ private:
     const HashSet<AXID>& relationTargetIDs();
     bool isDescendantOfRelatedNode(Node&);
 
+#if PLATFORM(MAC)
+    AXTextStateChangeIntent inferDirectionFromIntent(AccessibilityObject&, const AXTextStateChangeIntent&, const VisibleSelection&);
+#endif
+
     // Object creation.
     Ref<AccessibilityObject> createObjectFromRenderer(RenderObject*);
 
@@ -762,6 +781,11 @@ private:
 
 #if USE(ATSPI)
     ListHashSet<RefPtr<AXCoreObject>> m_deferredParentChangedList;
+#endif
+
+#if PLATFORM(MAC)
+    AXID m_lastTextFieldAXID;
+    VisibleSelection m_lastSelection;
 #endif
 };
 

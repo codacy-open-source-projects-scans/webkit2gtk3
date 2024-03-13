@@ -717,13 +717,11 @@ String AccessibilityRenderObject::textUnderElement(AccessibilityTextUnderElement
         if (WeakPtr renderText = dynamicDowncast<RenderText>(*m_renderer)) {
             if (WeakPtr renderTextFragment = dynamicDowncast<RenderTextFragment>(*renderText)) {
                 // The alt attribute may be set on a text fragment through CSS, which should be honored.
-                const auto& altText = renderTextFragment->altText();
-                if (!altText.isEmpty())
+                if (auto& altText = renderTextFragment->altText(); !altText.isNull())
                     return altText;
-                return renderTextFragment ? renderTextFragment->contentString() : String();
+                return renderTextFragment->contentString();
             }
-
-            return renderText ? renderText->text() : String();
+            return renderText->text();
         }
     }
 
@@ -1360,10 +1358,6 @@ bool AccessibilityRenderObject::computeAccessibilityIsIgnored() const
         return false;
     
     if (isStyleFormatGroup())
-        return false;
-    
-    // Make sure that ruby containers are not ignored.
-    if (m_renderer->isRenderRubyRun() || m_renderer->isRenderRubyAsBlock() || m_renderer->isRenderRubyAsInline())
         return false;
 
     switch (m_renderer->style().display()) {
@@ -2207,17 +2201,6 @@ AccessibilityRole AccessibilityRenderObject::determineAccessibilityRole()
         return AccessibilityRole::SVGRoot;
     
     // Check for Ruby elements
-    if (m_renderer->isRenderRubyText())
-        return AccessibilityRole::RubyText;
-    if (m_renderer->isRenderRubyBase())
-        return AccessibilityRole::RubyBase;
-    if (m_renderer->isRenderRubyRun())
-        return AccessibilityRole::RubyRun;
-    if (m_renderer->isRenderRubyAsBlock())
-        return AccessibilityRole::RubyBlock;
-    if (m_renderer->isRenderRubyAsInline())
-        return AccessibilityRole::RubyInline;
-
     switch (m_renderer->style().display()) {
     case DisplayType::Ruby:
         return AccessibilityRole::RubyInline;
@@ -2564,7 +2547,7 @@ void AccessibilityRenderObject::updateRoleAfterChildrenCreation()
 
     if (role != m_role) {
         if (auto* cache = axObjectCache())
-            cache->handleRoleChanged(this);
+            cache->handleRoleChanged(*this);
     }
 }
     
@@ -2680,7 +2663,7 @@ bool AccessibilityRenderObject::isApplePayButton() const
 {
     if (!m_renderer)
         return false;
-    return m_renderer->style().effectiveAppearance() == StyleAppearance::ApplePayButton;
+    return m_renderer->style().usedAppearance() == StyleAppearance::ApplePayButton;
 }
 
 ApplePayButtonType AccessibilityRenderObject::applePayButtonType() const

@@ -138,10 +138,6 @@ public:
     virtual void inflateRectForControlRenderer(const RenderObject&, FloatRect&) { }
     virtual void adjustRepaintRect(const RenderBox&, FloatRect&) { }
 
-    // This method is called whenever the theme changes on the system in order to flush cached resources from the
-    // old theme.
-    virtual void themeChanged() { }
-
     // A method asking if the theme is able to draw the focus ring.
     virtual bool supportsFocusRing(const RenderStyle&) const;
 
@@ -329,9 +325,6 @@ protected:
 
     virtual void adjustMeterStyle(RenderStyle&, const Element*) const;
     virtual bool paintMeter(const RenderObject&, const PaintInfo&, const IntRect&) { return true; }
-
-    virtual void adjustCapsLockIndicatorStyle(RenderStyle&, const Element*) const { }
-    virtual bool paintCapsLockIndicator(const RenderObject&, const PaintInfo&, const IntRect&) { return false; }
 
 #if ENABLE(APPLE_PAY)
     virtual void adjustApplePayButtonStyle(RenderStyle&, const Element*) const { }

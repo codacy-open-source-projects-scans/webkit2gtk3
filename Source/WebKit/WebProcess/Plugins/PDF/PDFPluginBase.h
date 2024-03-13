@@ -39,6 +39,7 @@
 #include <WebCore/ScrollTypes.h>
 #include <WebCore/ScrollableArea.h>
 #include <WebCore/TextIndicator.h>
+#include <wtf/Identified.h>
 #include <wtf/RetainPtr.h>
 #include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/TypeTraits.h>
@@ -63,6 +64,7 @@ class Scrollbar;
 class ShareableBitmap;
 class SharedBuffer;
 enum class PlatformCursorType : uint8_t;
+struct DictionaryPopupInfo;
 }
 
 namespace WebKit {
@@ -74,10 +76,12 @@ class WebFrame;
 class WebKeyboardEvent;
 class WebMouseEvent;
 class WebWheelEvent;
-struct LookupTextResult;
 struct WebHitTestResultData;
 
-class PDFPluginBase : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<PDFPluginBase>, public WebCore::ScrollableArea, public PDFScriptEvaluator::Client {
+enum class ByteRangeRequestIdentifierType;
+using ByteRangeRequestIdentifier = ObjectIdentifier<ByteRangeRequestIdentifierType>;
+
+class PDFPluginBase : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<PDFPluginBase>, public WebCore::ScrollableArea, public PDFScriptEvaluator::Client, public Identified<PDFPluginIdentifier> {
     WTF_MAKE_FAST_ALLOCATED;
     WTF_MAKE_NONCOPYABLE(PDFPluginBase);
     friend class PDFIncrementalLoader;
@@ -95,8 +99,6 @@ public:
 
     virtual bool isUnifiedPDFPlugin() const { return false; }
     virtual bool isLegacyPDFPlugin() const { return false; }
-
-    PDFPluginIdentifier identifier() const { return m_identifier; }
 
     virtual WebCore::PluginLayerHostingStrategy layerHostingStrategy() const = 0;
     virtual PlatformLayer* platformLayer() const { return nullptr; }
@@ -154,12 +156,14 @@ public:
     virtual bool findString(const String& target, WebCore::FindOptions, unsigned maxMatchCount) = 0;
     virtual Vector<WebCore::FloatRect> rectsForTextMatchesInRect(const WebCore::IntRect&) const { return { }; }
     virtual bool drawsFindOverlay() const = 0;
-    virtual RefPtr<WebCore::TextIndicator> textIndicatorForSelection(OptionSet<WebCore::TextIndicatorOption>, WebCore::TextIndicatorPresentationTransition) { return { }; }
+    virtual RefPtr<WebCore::TextIndicator> textIndicatorForCurrentSelection(OptionSet<WebCore::TextIndicatorOption>, WebCore::TextIndicatorPresentationTransition) { return { }; }
+    virtual WebCore::DictionaryPopupInfo dictionaryPopupInfoForSelection(PDFSelection *, WebCore::TextIndicatorPresentationTransition);
 
     virtual bool performDictionaryLookupAtLocation(const WebCore::FloatPoint&) = 0;
     void performWebSearch(const String& query);
 
-    virtual LookupTextResult lookupTextAtLocation(const WebCore::FloatPoint&, WebHitTestResultData&) = 0;
+    bool performImmediateActionHitTestAtLocation(const WebCore::FloatPoint&, WebHitTestResultData&);
+    virtual std::pair<String, RetainPtr<PDFSelection>> textForImmediateActionHitTestAtPoint(const WebCore::FloatPoint&, WebHitTestResultData&) = 0;
 
     virtual id accessibilityHitTest(const WebCore::IntPoint&) const = 0;
     virtual id accessibilityObject() const = 0;
@@ -180,9 +184,6 @@ public:
     WebCore::IntPoint convertFromPluginToRootView(const WebCore::IntPoint&) const;
     WebCore::IntRect convertFromPluginToRootView(const WebCore::IntRect&) const;
     WebCore::IntRect boundsOnScreen() const;
-    WebCore::FloatRect convertFromPDFViewToScreenForAccessibility(const WebCore::FloatRect&) const;
-    WebCore::IntPoint convertFromPDFViewToRootView(const WebCore::IntPoint&) const;
-    WebCore::IntPoint convertFromRootViewToPDFView(const WebCore::IntPoint&) const;
 
     bool showContextMenuAtPoint(const WebCore::IntPoint&);
     WebCore::AXObjectCache* axObjectCache() const;
@@ -226,7 +227,7 @@ public:
 #if HAVE(INCREMENTAL_PDF_APIS)
     bool incrementalPDFLoadingEnabled() const { return m_incrementalPDFLoadingEnabled; }
     void receivedNonLinearizedPDFSentinel();
-    void startByteRangeRequest(WebCore::NetscapePlugInStreamLoaderClient&, uint64_t requestIdentifier, uint64_t position, size_t count);
+    void startByteRangeRequest(WebCore::NetscapePlugInStreamLoaderClient&, ByteRangeRequestIdentifier, uint64_t position, size_t count);
     void adoptBackgroundThreadDocument(RetainPtr<PDFDocument>&&);
     void maybeClearHighLatencyDataProviderFlag();
 #endif
@@ -333,8 +334,6 @@ protected:
     SingleThreadWeakPtr<PluginView> m_view;
     WeakPtr<WebFrame> m_frame;
     WeakPtr<WebCore::HTMLPlugInElement, WebCore::WeakPtrImplWithEventTargetData> m_element;
-
-    PDFPluginIdentifier m_identifier;
 
     // m_data grows as we receive data in the primary request (PDFPluginBase::streamDidReceiveData())
     // but also as byte range requests are received via m_incrementalLoader, so it may have "holes"

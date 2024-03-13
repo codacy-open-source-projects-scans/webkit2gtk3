@@ -220,7 +220,7 @@ static bool isGraphicsElement(const RenderElement& renderer)
 
 bool RenderSVGModelObject::checkIntersection(RenderElement* renderer, const FloatRect& rect)
 {
-    if (!renderer || renderer->style().effectivePointerEvents() == PointerEvents::None)
+    if (!renderer || renderer->style().usedPointerEvents() == PointerEvents::None)
         return false;
     if (!isGraphicsElement(*renderer))
         return false;
@@ -233,7 +233,7 @@ bool RenderSVGModelObject::checkIntersection(RenderElement* renderer, const Floa
 
 bool RenderSVGModelObject::checkEnclosure(RenderElement* renderer, const FloatRect& rect)
 {
-    if (!renderer || renderer->style().effectivePointerEvents() == PointerEvents::None)
+    if (!renderer || renderer->style().usedPointerEvents() == PointerEvents::None)
         return false;
     if (!isGraphicsElement(*renderer))
         return false;
@@ -285,6 +285,11 @@ Path RenderSVGModelObject::computeClipPath(AffineTransform& transform) const
     }
 
     return pathFromGraphicsElement(Ref { downcast<SVGGraphicsElement>(element()) });
+}
+
+void RenderSVGModelObject::paintSVGOutline(PaintInfo& paintInfo, const LayoutPoint& adjustedPaintOffset)
+{
+    paintOutline(paintInfo, LayoutRect(adjustedPaintOffset, borderBoxRectEquivalent().size()));
 }
 
 } // namespace WebCore

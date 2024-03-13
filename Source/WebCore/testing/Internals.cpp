@@ -4209,6 +4209,12 @@ void Internals::setUsesOverlayScrollbars(bool enabled)
 }
 #endif
 
+void Internals::forceAXObjectCacheUpdate() const
+{
+    if (RefPtr document = contextDocument())
+        document->axObjectCache()->performDeferredCacheUpdate(ForceLayout::Yes);
+}
+
 void Internals::forceReload(bool endToEnd)
 {
     OptionSet<ReloadOption> reloadOptions;
@@ -6432,6 +6438,14 @@ void Internals::reloadWithoutContentExtensions()
 {
     if (auto* frame = this->frame())
         frame->loader().reload(ReloadOption::DisableContentBlockers);
+}
+
+void Internals::disableContentExtensionsChecks()
+{
+    RefPtr frame = this->frame();
+    RefPtr loader = frame ? frame->loader().documentLoader() : nullptr;
+    if (loader)
+        loader->setContentExtensionEnablement({ ContentExtensionDefaultEnablement::Disabled, { } });
 }
 
 void Internals::setUseSystemAppearance(bool value)

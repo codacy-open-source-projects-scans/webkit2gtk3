@@ -4489,75 +4489,6 @@ void webkit_web_view_run_javascript_in_world(WebKitWebView* webView, const gchar
     webkitWebViewEvaluateJavascriptInternal(webView, script, -1, worldName, nullptr, RunJavascriptReturnType::WebKitJavascriptResult, cancellable, callback, userData);
 }
 
-/**
- * webkit_web_view_run_async_javascript_function_in_world:
- * @web_view: a #WebKitWebView
- * @body: the JavaScript function body
- * @arguments: a #GVariant with format `{&sv}` storing the function arguments. Function argument values must be one of the following types, or contain only the following GVariant types: number, string, array, and dictionary.
- * @world_name (nullable): the name of a #WebKitScriptWorld, if no name (i.e. %NULL) is provided, the default world is used. Any value that is not %NULL is a distinct world.
- * @cancellable: (allow-none): a #GCancellable or %NULL to ignore
- * @callback: (scope async): a #GAsyncReadyCallback to call when the script finished
- * @user_data: the data to pass to callback function
- *
- * Asynchronously run @body in the script world with name @world_name of the current page context in
- * @web_view. If WebKitSettings:enable-javascript is FALSE, this method will do nothing. This API
- * differs from webkit_web_view_run_javascript_in_world() in that the JavaScript function can return a
- * Promise and its result will be properly passed to the callback.
- *
- * When the operation is finished, @callback will be called. You can then call
- * webkit_web_view_run_javascript_in_world_finish() to get the result of the operation.
- *
- * For instance here is a dummy example that shows how to pass arguments to a JS function that
- * returns a Promise that resolves with the passed argument:
- *
- * ```c
- * static void
- * web_view_javascript_finished (GObject      *object,
- *                               GAsyncResult *result,
- *                               gpointer      user_data)
- * {
- *     WebKitJavascriptResult *js_result;
- *     JSCValue               *value;
- *     GError                 *error = NULL;
- *
- *     js_result = webkit_web_view_run_javascript_finish (WEBKIT_WEB_VIEW (object), result, &error);
- *     if (!js_result) {
- *         g_warning ("Error running javascript: %s", error->message);
- *         g_error_free (error);
- *         return;
- *     }
- *
- *     value = webkit_javascript_result_get_js_value (js_result);
- *     if (jsc_value_is_number (value)) {
- *         gint32        int_value = jsc_value_to_string (value);
- *         JSCException *exception = jsc_context_get_exception (jsc_value_get_context (value));
- *         if (exception)
- *             g_warning ("Error running javascript: %s", jsc_exception_get_message (exception));
- *         else
- *             g_print ("Script result: %d\n", int_value);
- *         g_free (str_value);
- *     } else {
- *         g_warning ("Error running javascript: unexpected return value");
- *     }
- *     webkit_javascript_result_unref (js_result);
- * }
- *
- * static void
- * web_view_evaluate_promise (WebKitWebView *web_view)
- * {
- *     GVariantDict dict;
- *     g_variant_dict_init (&dict, NULL);
- *     g_variant_dict_insert (&dict, "count", "u", 42);
- *     GVariant *args = g_variant_dict_end (&dict);
- *     const gchar *body = "return new Promise((resolve) => { resolve(count); });";
- *     webkit_web_view_run_async_javascript_function_in_world (web_view, body, arguments, NULL, NULL, web_view_javascript_finished, NULL);
- * }
- * ```
- *
- * Since: 2.38
- *
- * Deprecated: 2.40: Use webkit_web_view_call_async_javascript_function() instead.
- */
 void webkit_web_view_run_async_javascript_function_in_world(WebKitWebView* webView, const gchar* body, GVariant* arguments, const char* worldName, GCancellable* cancellable, GAsyncReadyCallback callback, gpointer userData)
 {
     webkitWebViewCallAsyncJavascriptFunctionInternal(webView, body, -1, arguments, worldName, nullptr, RunJavascriptReturnType::WebKitJavascriptResult, cancellable, callback, userData);
@@ -5003,6 +4934,7 @@ void webkit_web_view_get_snapshot(WebKitWebView* webView, WebKitSnapshotRegion r
 
     GRefPtr<GTask> task = adoptGRef(g_task_new(webView, cancellable, callback, userData));
     getPage(webView).takeSnapshot({ }, { }, snapshotOptions, [task = WTFMove(task)](std::optional<ShareableBitmap::Handle>&& handle) {
+#if USE(CAIRO)
         if (handle) {
             if (auto bitmap = ShareableBitmap::create(WTFMove(*handle), SharedMemory::Protection::ReadOnly)) {
                 if (auto surface = bitmap->createCairoSurface()) {
@@ -5011,6 +4943,10 @@ void webkit_web_view_get_snapshot(WebKitWebView* webView, WebKitSnapshotRegion r
                 }
             }
         }
+#elif USE(SKIA)
+        notImplemented();
+        UNUSED_PARAM(handle);
+#endif
         g_task_return_new_error(task.get(), WEBKIT_SNAPSHOT_ERROR, WEBKIT_SNAPSHOT_ERROR_FAILED_TO_CREATE, _("There was an error creating the snapshot"));
     });
 }
@@ -5036,9 +4972,13 @@ cairo_surface_t* webkit_web_view_get_snapshot_finish(WebKitWebView* webView, GAs
 
 #if USE(GTK4)
     auto image = adoptRef(static_cast<cairo_surface_t*>(g_task_propagate_pointer(G_TASK(result), error)));
+#if USE(CAIRO)
     auto texture = image ? cairoSurfaceToGdkTexture(image.get()) : nullptr;
     if (texture)
         return texture.leakRef();
+#elif USE(SKIA)
+    notImplemented();
+#endif
     if (error && !*error)
         g_set_error_literal(error, WEBKIT_SNAPSHOT_ERROR, WEBKIT_SNAPSHOT_ERROR_FAILED_TO_CREATE, _("There was an error creating the snapshot"));
     return nullptr;

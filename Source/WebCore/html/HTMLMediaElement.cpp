@@ -7040,36 +7040,6 @@ void HTMLMediaElement::prepareForVideoFullscreenStandby()
 #endif
 }
 
-WEBCORE_EXPORT void HTMLMediaElement::setVideoFullscreenStandby(bool value)
-{
-    ASSERT(is<HTMLVideoElement>(*this));
-    if (m_videoFullscreenStandby == value)
-        return;
-
-    if (!document().page())
-        return;
-
-    if (!document().page()->chrome().client().supportsVideoFullscreenStandby())
-        return;
-
-    m_videoFullscreenStandby = value;
-
-#if ENABLE(VIDEO_PRESENTATION_MODE)
-    if (RefPtr player = m_player)
-        player->videoFullscreenStandbyChanged();
-#endif
-
-    if (m_videoFullscreenMode != VideoFullscreenModeNone)
-        return;
-
-    if (m_videoFullscreenStandby)
-        document().protectedPage()->chrome().client().enterVideoFullscreenForVideoElement(downcast<HTMLVideoElement>(*this), VideoFullscreenModeNone, m_videoFullscreenStandby);
-    else
-        document().protectedPage()->chrome().client().exitVideoFullscreenForVideoElement(downcast<HTMLVideoElement>(*this), [this, protectedThis = Ref { *this }](auto success) mutable {
-            m_videoFullscreenStandby = !success;
-        });
-}
-
 void HTMLMediaElement::willBecomeFullscreenElement(VideoFullscreenMode mode)
 {
 #if PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE)
@@ -7389,13 +7359,8 @@ void HTMLMediaElement::clearMediaCacheForOrigins(const String& path, const HashS
 
 void HTMLMediaElement::privateBrowsingStateDidChange(PAL::SessionID sessionID)
 {
-    // FIXME: We should try to reconcile this so there's no difference for PLATFORM(IOS_FAMILY).
-#if PLATFORM(IOS_FAMILY)
-    UNUSED_PARAM(sessionID);
-#else
     if (RefPtr player = m_player)
         player->setPrivateBrowsingMode(sessionID.isEphemeral());
-#endif
 }
 
 bool HTMLMediaElement::shouldForceControlsDisplay() const
@@ -7742,7 +7707,7 @@ HTMLMediaElement::SleepType HTMLMediaElement::shouldDisableSleep() const
 #if !PLATFORM(COCOA) && !PLATFORM(GTK) && !PLATFORM(WPE)
     return SleepType::None;
 #endif
-    if (m_sentEndEvent || !m_player || m_player->paused() || loop())
+    if (m_sentEndEvent || !m_player || !m_player->timeIsProgressing() || loop())
         return SleepType::None;
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)

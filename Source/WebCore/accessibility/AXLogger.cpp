@@ -412,6 +412,12 @@ TextStream& operator<<(TextStream& stream, const AccessibilitySearchCriteria& cr
     return stream;
 }
 
+TextStream& operator<<(TextStream& stream, AccessibilityText text)
+{
+    stream << text.textSource << ": " << text.text;
+    return stream;
+}
+
 TextStream& operator<<(TextStream& stream, AccessibilityTextSource source)
 {
     switch (source) {
@@ -551,6 +557,12 @@ TextStream& operator<<(TextStream& stream, AXObjectCache::AXNotification notific
         break;
     case AXObjectCache::AXNotification::AXAutofillTypeChanged:
         stream << "AXAutofillTypeChanged";
+        break;
+    case AXObjectCache::AXNotification::AXARIAColumnIndexChanged:
+        stream << "AXARIAColumnIndexChanged";
+        break;
+    case AXObjectCache::AXNotification::AXARIARowIndexChanged:
+        stream << "AXARIARowIndexChanged";
         break;
     case AXObjectCache::AXNotification::AXBrailleLabelChanged:
         stream << "AXBrailleLabelChanged";
@@ -779,6 +791,9 @@ TextStream& operator<<(TextStream& stream, AXObjectCache::AXNotification notific
         break;
     case AXObjectCache::AXNotification::AXTextCompositionChanged:
         stream << "AXTextCompositionChanged";
+        break;
+    case AXObjectCache::AXNotification::AXTextUnderElementChanged:
+        stream << "AXTextUnderElementChanged";
         break;
 #if ENABLE(AX_THREAD_TEXT_APIS)
     case AXObjectCache::AXNotification::AXTextRunsChanged:

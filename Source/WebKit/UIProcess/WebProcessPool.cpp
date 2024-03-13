@@ -818,9 +818,10 @@ void WebProcessPool::registerHighDynamicRangeChangeCallback()
 
 WebProcessDataStoreParameters WebProcessPool::webProcessDataStoreParameters(WebProcessProxy& process, WebsiteDataStore& websiteDataStore)
 {
-    websiteDataStore.resolveDirectoriesIfNecessary();
+    websiteDataStore.waitForDirectoriesToResolveIfNecessary();
 
-    String mediaCacheDirectory = websiteDataStore.resolvedMediaCacheDirectory();
+    auto& resolvedDirectories = websiteDataStore.resolvedDirectories();
+    String mediaCacheDirectory = resolvedDirectories.mediaCacheDirectory;
 #if !ENABLE(GPU_PROCESS)
     SandboxExtension::Handle mediaCacheDirectoryExtensionHandle;
     if (!mediaCacheDirectory.isEmpty()) {
@@ -829,7 +830,7 @@ WebProcessDataStoreParameters WebProcessPool::webProcessDataStoreParameters(WebP
     }
 #endif
 
-    String mediaKeyStorageDirectory = websiteDataStore.resolvedMediaKeysDirectory();
+    String mediaKeyStorageDirectory = resolvedDirectories.mediaKeysStorageDirectory;
     SandboxExtension::Handle mediaKeyStorageDirectoryExtensionHandle;
     if (!mediaKeyStorageDirectory.isEmpty()) {
         if (auto handle = SandboxExtension::createHandleWithoutResolvingPath(mediaKeyStorageDirectory, SandboxExtension::Type::ReadWrite))
@@ -841,7 +842,7 @@ WebProcessDataStoreParameters WebProcessPool::webProcessDataStoreParameters(WebP
     if (!m_javaScriptConfigurationDirectory.isEmpty())
         javaScriptConfigurationDirectory = resolvePathForSandboxExtension(m_javaScriptConfigurationDirectory);
     else if (javaScriptConfigurationFileEnabled())
-        javaScriptConfigurationDirectory = websiteDataStore.resolvedJavaScriptConfigurationDirectory();
+        javaScriptConfigurationDirectory = resolvedDirectories.javaScriptConfigurationDirectory;
 
     SandboxExtension::Handle javaScriptConfigurationDirectoryExtensionHandle;
     if (!javaScriptConfigurationDirectory.isEmpty()) {
@@ -850,7 +851,7 @@ WebProcessDataStoreParameters WebProcessPool::webProcessDataStoreParameters(WebP
     }
 
 #if ENABLE(ARKIT_INLINE_PREVIEW)
-    auto modelElementCacheDirectory = websiteDataStore.resolvedModelElementCacheDirectory();
+    auto modelElementCacheDirectory = resolvedDirectories.modelElementCacheDirectory;
     SandboxExtension::Handle modelElementCacheDirectoryExtensionHandle;
     if (!modelElementCacheDirectory.isEmpty()) {
         if (auto handle = SandboxExtension::createHandleWithoutResolvingPath(modelElementCacheDirectory, SandboxExtension::Type::ReadWrite))
@@ -2259,7 +2260,7 @@ void WebProcessPool::setDomainsWithUserInteraction(HashSet<WebCore::RegistrableD
     m_domainsWithUserInteraction = WTFMove(domains);
 }
 
-void WebProcessPool::setDomainsWithCrossPageStorageAccess(HashMap<TopFrameDomain, SubResourceDomain>&& domains, CompletionHandler<void()>&& completionHandler)
+void WebProcessPool::setDomainsWithCrossPageStorageAccess(HashMap<TopFrameDomain, Vector<SubResourceDomain>>&& domains, CompletionHandler<void()>&& completionHandler)
 {    
     Ref callbackAggregator = CallbackAggregator::create(WTFMove(completionHandler));
 
@@ -2267,7 +2268,7 @@ void WebProcessPool::setDomainsWithCrossPageStorageAccess(HashMap<TopFrameDomain
         process->sendWithAsyncReply(Messages::WebProcess::SetDomainsWithCrossPageStorageAccess(domains), [callbackAggregator] { });
 
     for (auto& topDomain : domains.keys())
-        m_domainsWithCrossPageStorageAccessQuirk.add(topDomain, domains.get(topDomain));
+        m_domainsWithCrossPageStorageAccessQuirk.set(topDomain, domains.get(topDomain));
 }
 
 void WebProcessPool::seedResourceLoadStatisticsForTesting(const RegistrableDomain& firstPartyDomain, const RegistrableDomain& thirdPartyDomain, bool shouldScheduleNotification, CompletionHandler<void()>&& completionHandler)

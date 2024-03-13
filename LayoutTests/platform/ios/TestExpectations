@@ -235,6 +235,7 @@ imported/w3c/web-platform-tests/pointerlock [ Skip ]
 http/tests/media
 imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements
 http/tests/cache/disk-cache/disk-cache-media-small.html
+http/tests/media/audio-load-loadeddata.html [ Pass ]
 
 # No touch events
 fast/events/touch [ Skip ]
@@ -1011,6 +1012,7 @@ fast/events/select-element.html [ Skip ]
 fast/events/selectstart-by-arrow-keys-prevent-default.html [ Skip ]
 fast/events/selectstart-by-arrow-keys.html [ Skip ]
 fast/events/tab-focus-anchor.html [ Skip ]
+fast/events/tab-focus-anchor-tab-to-links.html [ Skip ]
 fast/events/tab-focus-hidden.html [ Skip ]
 fast/events/tab-focus-link-in-canvas.html [ Skip ]
 fast/events/tab-imagemap.html [ Skip ]
@@ -1027,6 +1029,7 @@ fast/forms/empty-textarea-toggle-disabled.html [ Skip ]
 fast/forms/enter-clicks-buttons.html [ Skip ]
 fast/forms/focus-change-on-keypress.html [ Skip ]
 fast/forms/focus-control-to-page.html [ Skip ]
+fast/forms/focus-on-control-with-zero-size.html [ Skip ]
 fast/forms/implicit-submission.html [ Skip ]
 fast/forms/input-first-letter-edit.html [ Skip ]
 fast/forms/input-image-submit.html [ Skip ]
@@ -2211,12 +2214,14 @@ accessibility/display-contents/element-roles.html [ Pass ]
 accessibility/display-contents/object-ordering.html [ Pass ]
 accessibility/display-contents/table.html [ Pass ]
 accessibility/display-flex-shadow-dom-accname.html [ Pass ]
+accessibility/dynamic-text.html [ Pass ]
 accessibility/dynamically-ignored-canvas.html [ Pass ]
 accessibility/editable-webpage-focused-ui-element.html [ Pass ]
 accessibility/element-haspopup.html [ Pass ]
 accessibility/empty-text-under-element-cached.html [ Pass ]
 accessibility/heading-level.html [ Pass ]
 accessibility/html5-required-attribute.html [ Pass ]
+accessibility/iframe-tree-update-with-dirty-layout.html [ Pass ]
 accessibility/iframe-with-role.html [ Pass ]
 accessibility/input-type-hidden-in-aria-hidden-false.html [ Pass ]
 accessibility/datetime/input-time-label-value.html [ Pass ]
@@ -3128,8 +3133,6 @@ fast/canvas/set-colors.html [ Failure ]
 
 webkit.org/b/202958 css3/filters/svg-blur-filter-clipped.html [ ImageOnlyFailure ]
 
-webkit.org/b/203305 imported/w3c/web-platform-tests/css/css-transitions/properties-value-001.html [ Pass Failure ]
-webkit.org/b/203305 [ Debug ] imported/w3c/web-platform-tests/css/css-transitions/properties-value-inherit-001.html [ Pass Failure ]
 webkit.org/b/203356 [ Debug ] imported/w3c/web-platform-tests/css/css-transitions/properties-value-003.html [ Pass Failure ]
 
 webkit.org/b/204757 imported/w3c/web-platform-tests/fetch/api/request/destination/fetch-destination-no-load-event.https.html [ Pass Failure ]
@@ -4691,8 +4694,6 @@ imported/w3c/web-platform-tests/css/css-view-transitions/massive-element-below-v
 imported/w3c/web-platform-tests/css/selectors/invalidation/user-valid-user-invalid.html [ Failure ]
 imported/w3c/web-platform-tests/css/selectors/user-invalid.html [ Failure ]
 imported/w3c/web-platform-tests/css/selectors/valid-invalid-form-fieldset.html [ Failure ]
-
-webkit.org/b/266669 imported/w3c/web-platform-tests/webrtc-extensions/RTCRtpSynchronizationSource-captureTimestamp.html [ Pass Failure ]
 
 webkit.org/b/266996 imported/w3c/web-platform-tests/css/css-writing-modes/mongolian-orientation-002.html [ ImageOnlyFailure ]
 

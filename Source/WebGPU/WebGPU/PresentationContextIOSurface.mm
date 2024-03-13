@@ -74,6 +74,7 @@ void PresentationContextIOSurface::configure(Device& device, const WGPUSwapChain
 {
     m_renderBuffers.clear();
     m_currentIndex = 0;
+    m_invalidTexture = Texture::createInvalid(device);
 
     if (descriptor.nextInChain)
         return;
@@ -106,6 +107,10 @@ void PresentationContextIOSurface::configure(Device& device, const WGPUSwapChain
     textureDescriptor.usage = Texture::usage(descriptor.usage, effectiveFormat);
     bool needsLuminanceClampFunction = false;
     for (IOSurface *iosurface in m_ioSurfaces) {
+        if (iosurface.height != static_cast<NSInteger>(height) || iosurface.width != static_cast<NSInteger>(width))
+            return device.generateAValidationError("Invalid surface size"_s);
+    }
+    for (IOSurface *iosurface in m_ioSurfaces) {
         RefPtr<Texture> parentLuminanceClampTexture;
         if (textureDescriptor.pixelFormat == MTLPixelFormatRGBA16Float) {
             auto existingUsage = textureDescriptor.usage;
@@ -116,6 +121,7 @@ void PresentationContextIOSurface::configure(Device& device, const WGPUSwapChain
             parentLuminanceClampTexture = Texture::create(luminanceClampTexture, wgpuTextureDescriptor, WTFMove(viewFormats), device);
             parentLuminanceClampTexture->makeCanvasBacking();
             textureDescriptor.pixelFormat = MTLPixelFormatBGRA8Unorm;
+            wgpuTextureDescriptor.format = WGPUTextureFormat_BGRA8Unorm;
             textureDescriptor.usage = existingUsage | MTLTextureUsageShaderWrite;
             needsLuminanceClampFunction = true;
         }
@@ -200,7 +206,9 @@ void PresentationContextIOSurface::unconfigure()
 
 void PresentationContextIOSurface::present()
 {
-    ASSERT(m_ioSurfaces.count == m_renderBuffers.size());
+    if (m_ioSurfaces.count != m_renderBuffers.size())
+        return;
+
     auto& textureRefPtr = m_renderBuffers[m_currentIndex].luminanceClampTexture;
     if (Texture* texturePtr = textureRefPtr.get(); texturePtr && m_computePipelineState) {
         MTLCommandBufferDescriptor *descriptor = [MTLCommandBufferDescriptor new];
@@ -230,7 +238,7 @@ void PresentationContextIOSurface::present()
 Texture* PresentationContextIOSurface::getCurrentTexture()
 {
     if (m_ioSurfaces.count != m_renderBuffers.size() || m_renderBuffers.size() <= m_currentIndex)
-        return nullptr;
+        return m_invalidTexture.get();
 
     auto& texturePtr = m_renderBuffers[m_currentIndex].luminanceClampTexture;
     if (texturePtr.get()) {

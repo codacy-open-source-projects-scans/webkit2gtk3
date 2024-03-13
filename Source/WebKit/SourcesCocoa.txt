@@ -79,8 +79,9 @@ GPUProcess/webrtc/RemoteAudioMediaStreamTrackRendererInternalUnitManager.cpp
 
 ModelProcess/EntryPoint/Cocoa/XPCService/ModelServiceEntryPoint.mm
 ModelProcess/cocoa/ModelProcessCocoa.mm
-ModelProcess/ios/ModelProcessIOS.mm
+ModelProcess/cocoa/WKModelProcessModelLayer.mm
 ModelProcess/cocoa/ModelProcessModelPlayerProxy.mm
+ModelProcess/ios/ModelProcessIOS.mm
 
 Platform/classifier/cocoa/ResourceLoadStatisticsClassifierCocoa.cpp
 Platform/classifier/ResourceLoadStatisticsClassifier.cpp
@@ -88,6 +89,7 @@ Platform/classifier/ResourceLoadStatisticsClassifier.cpp
 Platform/cocoa/AssertionCapability.mm @no-unify
 Platform/cocoa/ExtensionCapabilityGrant.mm
 Platform/cocoa/MediaCapability.mm
+Platform/cocoa/MediaPlaybackTargetContextSerialized.mm
 Platform/cocoa/PaymentAuthorizationPresenter.mm
 Platform/cocoa/PaymentAuthorizationViewController.mm
 Platform/cocoa/WKPaymentAuthorizationDelegate.mm
@@ -726,8 +728,10 @@ WebProcess/WebPage/WKAccessibilityWebPageObjectIOS.mm
 WebProcess/WebPage/Cocoa/DrawingAreaCocoa.mm
 WebProcess/WebPage/Cocoa/TextCheckingControllerProxy.mm
 WebProcess/WebPage/Cocoa/WebCookieCacheCocoa.mm
+WebProcess/WebPage/Cocoa/WebCookieJarCocoa.mm
 WebProcess/WebPage/Cocoa/WebPageCocoa.mm
 WebProcess/WebPage/Cocoa/WebRemoteObjectRegistry.cpp
+WebProcess/WebPage/Cocoa/UnifiedTextReplacementController.mm
 
 WebProcess/WebPage/ios/FindControllerIOS.mm
 WebProcess/WebPage/ios/WebPageIOS.mm

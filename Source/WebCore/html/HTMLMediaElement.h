@@ -49,6 +49,7 @@
 #include "VisibilityChangeClient.h"
 #include <wtf/Forward.h>
 #include <wtf/Function.h>
+#include <wtf/Identified.h>
 #include <wtf/LoggerHelper.h>
 #include <wtf/Observer.h>
 #include <wtf/WallTime.h>
@@ -146,6 +147,7 @@ class HTMLMediaElement
     , public ActiveDOMObject
     , public MediaControllerInterface
     , public PlatformMediaSessionClient
+    , public Identified<HTMLMediaElementIdentifier>
     , private MediaCanStartListener
     , private MediaPlayerClient
     , private MediaProducer
@@ -169,8 +171,6 @@ public:
     using CanMakeWeakPtr<HTMLMediaElement, WeakPtrFactoryInitialization::Eager>::weakPtrFactory;
     using CanMakeWeakPtr<HTMLMediaElement, WeakPtrFactoryInitialization::Eager>::WeakValueType;
     using CanMakeWeakPtr<HTMLMediaElement, WeakPtrFactoryInitialization::Eager>::WeakPtrImplType;
-
-    HTMLMediaElementIdentifier identifier() const { return m_identifier; }
 
     MediaPlayer* player() const { return m_player.get(); }
     RefPtr<MediaPlayer> protectedPlayer() const { return m_player; }
@@ -488,7 +488,6 @@ public:
     WEBCORE_EXPORT void enterFullscreen() override;
     WEBCORE_EXPORT void exitFullscreen();
     WEBCORE_EXPORT void prepareForVideoFullscreenStandby();
-    WEBCORE_EXPORT void setVideoFullscreenStandby(bool);
 
     bool hasClosedCaptions() const override;
     bool closedCaptionsVisible() const override;
@@ -582,6 +581,8 @@ public:
 #endif
 
     bool supportsSeeking() const override;
+
+    using Identified<HTMLMediaElementIdentifier>::identifier;
 
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const final { return *m_logger.get(); }
@@ -730,6 +731,9 @@ protected:
     void mediaPlayerReloadAndResumePlaybackIfNeeded() final;
     void mediaPlayerQueueTaskOnEventLoop(Function<void()>&&) final;
     void mediaPlayerCharacteristicChanged() final;
+
+    bool videoFullscreenStandby() const { return m_videoFullscreenStandby; }
+    void setVideoFullscreenStandbyInternal(bool videoFullscreenStandby) { m_videoFullscreenStandby = videoFullscreenStandby; }
 
 private:
     friend class Internals;
@@ -1067,8 +1071,6 @@ private:
 #endif
 
     bool shouldDisableHDR() const;
-
-    HTMLMediaElementIdentifier m_identifier { HTMLMediaElementIdentifier::generate() };
 
     Timer m_progressEventTimer;
     Timer m_playbackProgressTimer;

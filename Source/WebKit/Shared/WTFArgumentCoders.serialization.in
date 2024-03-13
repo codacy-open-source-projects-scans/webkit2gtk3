@@ -105,10 +105,13 @@ template: enum class WebKit::RemoteRemoteCommandListenerIdentifierType
 template: enum class WebKit::RemoteSourceBufferIdentifierType
 template: enum class WebKit::RetrieveRecordResponseBodyCallbackIdentifierType
 template: enum class WebKit::SampleBufferDisplayLayerIdentifierType
+template: enum class WebKit::ScriptMessageHandlerIdentifierType
 template: enum class WebKit::ShapeDetectionIdentifierType
 template: enum class WebKit::StorageAreaImplIdentifierType
 template: enum class WebKit::StorageAreaMapIdentifierType
 template: enum class WebKit::StorageNamespaceIdentifierType
+template: enum class WebKit::UserScriptIdentifierType
+template: enum class WebKit::UserStyleSheetIdentifierType
 template: enum class WebKit::VisitedLinkTableIdentifierType
 template: enum class WebKit::WCLayerTreeHostIdentifierType
 template: enum class WebKit::WebExtensionControllerIdentifierType
@@ -181,6 +184,7 @@ template: enum class WebCore::RenderingResourceIdentifierType
 template: enum class WebCore::ServiceWorkerIdentifierType
 template: enum class WebCore::ServiceWorkerJobIdentifierType
 template: enum class WebCore::ServiceWorkerRegistrationIdentifierType
+template: enum class WebCore::IDBDatabaseConnectionIdentifierType
 template: enum class WebCore::WebLockIdentifierType
 template: enum class WebCore::WebSocketIdentifierType
 template: enum class WebCore::WorkerFileSystemStorageConnectionCallbackIdentifierType

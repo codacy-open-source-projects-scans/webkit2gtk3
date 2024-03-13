@@ -65,12 +65,14 @@ public:
 #endif
     virtual void cancelLoad() = 0;
 
-    virtual void prepareForPlayback(bool privateMode, MediaPlayer::Preload preload, bool preservesPitch, bool prepare)
+    virtual void prepareForPlayback(bool privateMode, MediaPlayer::Preload preload, bool preservesPitch, bool prepareToPlay, bool prepareToRender)
     {
         setPrivateBrowsingMode(privateMode);
         setPreload(preload);
         setPreservesPitch(preservesPitch);
-        if (prepare)
+        if (prepareToPlay)
+            this->prepareToPlay();
+        if (prepareToRender)
             prepareForRendering();
     }
 
@@ -125,7 +127,7 @@ public:
 
     WEBCORE_EXPORT virtual MediaTime currentOrPendingSeekTime() const;
     virtual MediaTime currentTime() const { return MediaTime::zeroTime(); }
-    virtual bool currentTimeMayProgress() const { return readyState() >= MediaPlayer::ReadyState::HaveFutureData; }
+    virtual bool timeIsProgressing() const { return !paused(); }
 
     virtual bool setCurrentTimeDidChangeCallback(MediaPlayer::CurrentTimeDidChangeCallback&&) { return false; }
 
@@ -147,6 +149,9 @@ public:
     virtual void setPreservesPitch(bool) { }
     virtual void setPitchCorrectionAlgorithm(MediaPlayer::PitchCorrectionAlgorithm) { }
 
+    // Indicates whether playback is currently paused indefinitely: such as having been paused
+    // explictly by the HTMLMediaElement or through remote media playback control.
+    // This excludes video potentially playing but having stalled.
     virtual bool paused() const = 0;
 
     virtual void setVolume(float) { }

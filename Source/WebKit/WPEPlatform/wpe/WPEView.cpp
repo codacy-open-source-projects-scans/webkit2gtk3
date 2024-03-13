@@ -92,6 +92,7 @@ static GParamSpec* sObjProperties[N_PROPERTIES] = { nullptr, };
 enum {
     RESIZED,
     BUFFER_RENDERED,
+    BUFFER_RELEASED,
     EVENT,
     FOCUS_IN,
     FOCUS_OUT,
@@ -266,6 +267,23 @@ static void wpe_view_class_init(WPEViewClass* viewClass)
      */
     signals[BUFFER_RENDERED] = g_signal_new(
         "buffer-rendered",
+        G_TYPE_FROM_CLASS(viewClass),
+        G_SIGNAL_RUN_LAST,
+        0, nullptr, nullptr,
+        g_cclosure_marshal_generic,
+        G_TYPE_NONE, 1,
+        WPE_TYPE_BUFFER);
+
+    /**
+     * WPEView::buffer-released:
+     * @view: a #WPEView
+     * @buffer: a #WPEBuffer
+     *
+     * Emitted to notify that the buffer is no longer used by the view
+     * and can be destroyed or reused.
+     */
+    signals[BUFFER_RELEASED] = g_signal_new(
+        "buffer-released",
         G_TYPE_FROM_CLASS(viewClass),
         G_SIGNAL_RUN_LAST,
         0, nullptr, nullptr,
@@ -685,7 +703,7 @@ gboolean wpe_view_unmaximize(WPEView* view)
  *
  * Render the given @buffer into @view.
  * If this function returns %TRUE you must call wpe_view_buffer_rendered() when the buffer
- * is rendered.
+ * is rendered and wpe_view_buffer_released() when it's no longer used by the view.
  *
  * Returns: %TRUE if buffer will be rendered, or %FALSE otherwise
  */
@@ -711,6 +729,22 @@ void wpe_view_buffer_rendered(WPEView* view, WPEBuffer* buffer)
     g_return_if_fail(WPE_IS_BUFFER(buffer));
 
     g_signal_emit(view, signals[BUFFER_RENDERED], 0, buffer);
+}
+
+/**
+ * wpe_view_buffer_released:
+ * @view: a #WPEView
+ * @buffer: a #WPEBuffer
+ *
+ * Emit #WPEView::buffer-released signal to notify that @buffer is no longer used and
+ * can be destroyed or reused.
+ */
+void wpe_view_buffer_released(WPEView* view, WPEBuffer* buffer)
+{
+    g_return_if_fail(WPE_IS_VIEW(view));
+    g_return_if_fail(WPE_IS_BUFFER(buffer));
+
+    g_signal_emit(view, signals[BUFFER_RELEASED], 0, buffer);
 }
 
 /**
@@ -834,4 +868,24 @@ GList* wpe_view_get_preferred_dma_buf_formats(WPEView* view)
         return viewClass->get_preferred_dma_buf_formats(view);
 
     return wpe_display_get_preferred_dma_buf_formats(view->priv->display.get());
+}
+
+/**
+ * wpe_view_set_opaque_rectangles:
+ * @view: a #WPEView
+ * @rects: (nullable) (array length=n_rects): opaque rectangles in view-local coordinates
+ * @n_rects: the total number of elements in @rects
+ *
+ * Set the rectangles of @view that contain opaque content.
+ * This is an optimization hint that is automatically set by WebKit when the
+ * web view background color is opaque.
+ */
+void wpe_view_set_opaque_rectangles(WPEView* view, WPERectangle* rects, guint rectsCount)
+{
+    g_return_if_fail(WPE_IS_VIEW(view));
+    g_return_if_fail(!rects || rectsCount > 0);
+
+    auto* viewClass = WPE_VIEW_GET_CLASS(view);
+    if (viewClass->set_opaque_rectangles)
+        viewClass->set_opaque_rectangles(view, rects, rectsCount);
 }

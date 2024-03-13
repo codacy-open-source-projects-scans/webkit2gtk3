@@ -70,6 +70,7 @@
 #include "HTMLDialogElement.h"
 #include "HTMLDocument.h"
 #include "HTMLHtmlElement.h"
+#include "HTMLImageElement.h"
 #include "HTMLInputElement.h"
 #include "HTMLLabelElement.h"
 #include "HTMLNameCollection.h"
@@ -261,6 +262,7 @@ Element::~Element()
     ASSERT(!afterPseudoElement());
 
     elementIdentifiersMap().remove(*this);
+    ASSERT(!is<HTMLImageElement>(*this) || !intersectionObserverDataIfExists());
     disconnectFromIntersectionObservers();
 
     disconnectFromResizeObservers();
@@ -870,7 +872,7 @@ void Element::setActive(bool value, Style::InvalidationScope invalidationScope)
     if (!renderer)
         return;
 
-    if (!isDisabledFormControl() && renderer->style().hasEffectiveAppearance())
+    if (!isDisabledFormControl() && renderer->style().hasUsedAppearance())
         renderer->repaint();
 }
 
@@ -944,7 +946,7 @@ void Element::setHovered(bool value, Style::InvalidationScope invalidationScope,
         protectedDocument()->userActionElements().setHovered(*this, value);
     }
 
-    if (auto* style = renderStyle(); style && style->hasEffectiveAppearance()) {
+    if (auto* style = renderStyle(); style && style->hasUsedAppearance()) {
         if (CheckedPtr renderer = this->renderer(); renderer && renderer->theme().supportsHover())
             renderer->repaint();
     }
@@ -1257,8 +1259,8 @@ void Element::scrollTo(const ScrollToOptions& options, ScrollClamping clamping, 
         adjustForAbsoluteZoom(renderer->scrollTop(), *renderer)
     );
     IntPoint scrollPosition(
-        clampToInteger(scrollToOptions.left.value() * renderer->style().effectiveZoom()),
-        clampToInteger(scrollToOptions.top.value() * renderer->style().effectiveZoom())
+        clampToInteger(scrollToOptions.left.value() * renderer->style().usedZoom()),
+        clampToInteger(scrollToOptions.top.value() * renderer->style().usedZoom())
     );
 
     auto animated = useSmoothScrolling(scrollToOptions.behavior.value_or(ScrollBehavior::Auto), this) ? ScrollIsAnimated::Yes : ScrollIsAnimated::No;
@@ -1280,12 +1282,12 @@ static double localZoomForRenderer(const RenderElement& renderer)
     // other out, but the alternative is that we'd have to crawl up the whole render tree every
     // time (or store an additional bit in the RenderStyle to indicate that a zoom was specified).
     double zoomFactor = 1;
-    if (renderer.style().effectiveZoom() != 1) {
+    if (renderer.style().usedZoom() != 1) {
         // Need to find the nearest enclosing RenderElement that set up
         // a differing zoom, and then we divide our result by it to eliminate the zoom.
         CheckedPtr prev = &renderer;
         for (CheckedPtr curr = prev->parent(); curr; curr = curr->parent()) {
-            if (curr->style().effectiveZoom() != prev->style().effectiveZoom()) {
+            if (curr->style().usedZoom() != prev->style().usedZoom()) {
                 zoomFactor = prev->style().zoom();
                 break;
             }
@@ -1579,7 +1581,7 @@ void Element::setScrollLeft(int newLeft)
     }
 
     if (CheckedPtr renderer = renderBox()) {
-        int clampedLeft = clampToInteger(newLeft * renderer->style().effectiveZoom());
+        int clampedLeft = clampToInteger(newLeft * renderer->style().usedZoom());
         renderer->setScrollLeft(clampedLeft, options);
         if (CheckedPtr scrollableArea = renderer && renderer->layer() ? renderer->layer()->scrollableArea() : nullptr)
             scrollableArea->setScrollShouldClearLatchedState(true);
@@ -1605,7 +1607,7 @@ void Element::setScrollTop(int newTop)
     }
 
     if (CheckedPtr renderer = renderBox()) {
-        int clampedTop = clampToInteger(newTop * renderer->style().effectiveZoom());
+        int clampedTop = clampToInteger(newTop * renderer->style().usedZoom());
         renderer->setScrollTop(clampedTop, options);
         if (CheckedPtr scrollableArea = renderer && renderer->layer() ? renderer->layer()->scrollableArea() : nullptr)
             scrollableArea->setScrollShouldClearLatchedState(true);
@@ -2681,7 +2683,7 @@ const AtomString& Element::imageSourceURL() const
 
 bool Element::rendererIsNeeded(const RenderStyle& style)
 {
-    return rendererIsEverNeeded() && style.display() != DisplayType::None && style.display() != DisplayType::Contents;
+    return style.display() != DisplayType::None && style.display() != DisplayType::Contents;
 }
 
 RenderPtr<RenderElement> Element::createElementRenderer(RenderStyle&& style, const RenderTreePosition&)
@@ -2693,36 +2695,28 @@ Node::InsertedIntoAncestorResult Element::insertedIntoAncestor(InsertionType ins
 {
     ContainerNode::insertedIntoAncestor(insertionType, parentOfInsertedTree);
 
-    if (parentOfInsertedTree.isInTreeScope()) {
-        bool becomeConnected = insertionType.connectedToDocument;
-        auto* newScope = &parentOfInsertedTree.treeScope();
-        RefPtr newDocument = becomeConnected ? dynamicDowncast<HTMLDocument>(newScope->documentScope()) : nullptr;
-        if (!insertionType.treeScopeChanged)
-            newScope = nullptr;
-
+    if (insertionType.treeScopeChanged) {
+        RefPtr<HTMLDocument> newHTMLDocument = insertionType.connectedToDocument && parentOfInsertedTree.isInDocumentTree()
+            ? dynamicDowncast<HTMLDocument>(treeScope().documentScope()) : nullptr;
         if (auto& idValue = getIdAttribute(); !idValue.isEmpty()) {
-            if (newScope)
-                newScope->addElementById(idValue, *this);
-            if (newDocument)
-                updateIdForDocument(*newDocument, nullAtom(), idValue, HTMLDocumentNamedItemMapsUpdatingCondition::Always);
+            treeScope().addElementById(idValue, *this);
+            if (newHTMLDocument)
+                updateIdForDocument(*newHTMLDocument, nullAtom(), idValue, HTMLDocumentNamedItemMapsUpdatingCondition::Always);
         }
-
         if (auto& nameValue = getNameAttribute(); !nameValue.isEmpty()) {
-            if (newScope)
-                newScope->addElementByName(nameValue, *this);
-            if (newDocument)
-                updateNameForDocument(*newDocument, nullAtom(), nameValue);
+            treeScope().addElementByName(nameValue, *this);
+            if (newHTMLDocument)
+                updateNameForDocument(*newHTMLDocument, nullAtom(), nameValue);
         }
+    }
 
-        if (becomeConnected) {
-            if (UNLIKELY(isCustomElementUpgradeCandidate())) {
-                ASSERT(isConnected());
-                CustomElementReactionQueue::tryToUpgradeElement(*this);
-            }
-            if (UNLIKELY(isDefinedCustomElement()))
-                CustomElementReactionQueue::enqueueConnectedCallbackIfNeeded(*this);
+    if (insertionType.connectedToDocument) {
+        if (UNLIKELY(isCustomElementUpgradeCandidate())) {
+            ASSERT(isConnected());
+            CustomElementReactionQueue::tryToUpgradeElement(*this);
         }
-
+        if (UNLIKELY(isDefinedCustomElement()))
+            CustomElementReactionQueue::enqueueConnectedCallbackIfNeeded(*this);
         if (shouldAutofocus(*this))
             Ref { document().topDocument() }->appendAutofocusCandidate(*this);
     }
@@ -2767,6 +2761,8 @@ bool Element::hasEffectiveLangState() const
 
 void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldParentOfRemovedTree)
 {
+    ContainerNode::removedFromAncestor(removalType, oldParentOfRemovedTree);
+
     if (RefPtr page = document().page()) {
 #if ENABLE(POINTER_LOCK)
         page->pointerLockController().elementWasRemoved(*this);
@@ -2778,40 +2774,51 @@ void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldPar
 #endif
     }
 
-    if (lastRememberedLogicalWidth() || lastRememberedLogicalHeight()) {
-        // The disconnected element could be unobserved because of other properties, here we need to make sure it is observed,
-        // so that deliver could be triggered and it would clear lastRememberedSize.
-        document().observeForContainIntrinsicSize(*this);
-        document().resetObservationSizeForContainIntrinsicSize(*this);
-    }
-
-    setSavedLayerScrollPosition({ });
-
-    if (oldParentOfRemovedTree.isInTreeScope()) {
-        TreeScope* oldScope = &oldParentOfRemovedTree.treeScope();
-        Document* oldDocument = removalType.disconnectedFromDocument ? &oldScope->documentScope() : nullptr;
-        auto* oldHTMLDocument = dynamicDowncast<HTMLDocument>(oldDocument);
-        if (!removalType.treeScopeChanged)
-            oldScope = nullptr;
+    if (removalType.treeScopeChanged) {
+        auto& oldTreeScope = oldParentOfRemovedTree.treeScope();
+        RefPtrAllowingPartiallyDestroyed<HTMLDocument> oldHTMLDocument = removalType.disconnectedFromDocument
+            && oldParentOfRemovedTree.isInDocumentTree() ? dynamicDowncast<HTMLDocument>(oldTreeScope.documentScope()) : nullptr;
 
         if (auto& idValue = getIdAttribute(); !idValue.isEmpty()) {
-            if (oldScope)
-                oldScope->removeElementById(idValue, *this);
+            oldTreeScope.removeElementById(idValue, *this);
             if (oldHTMLDocument)
                 updateIdForDocument(*oldHTMLDocument, idValue, nullAtom(), HTMLDocumentNamedItemMapsUpdatingCondition::Always);
         }
-
         if (auto& nameValue = getNameAttribute(); !nameValue.isEmpty()) {
-            if (oldScope)
-                oldScope->removeElementByName(nameValue, *this);
+            oldTreeScope.removeElementByName(nameValue, *this);
             if (oldHTMLDocument)
                 updateNameForDocument(*oldHTMLDocument, nameValue, nullAtom());
         }
+    }
 
-        if (oldDocument && oldDocument->cssTarget() == this)
+    if (removalType.disconnectedFromDocument) {
+        RefAllowingPartiallyDestroyed<Document> oldDocument = oldParentOfRemovedTree.treeScope().documentScope();
+        ASSERT(&document() == oldDocument.ptr());
+
+        if (lastRememberedLogicalWidth() || lastRememberedLogicalHeight()) {
+            // The disconnected element could be unobserved because of other properties, here we need to make sure it is observed,
+            // so that deliver could be triggered and it would clear lastRememberedSize.
+            oldDocument->observeForContainIntrinsicSize(*this);
+            oldDocument->resetObservationSizeForContainIntrinsicSize(*this);
+        }
+
+        setSavedLayerScrollPosition({ });
+
+        clearBeforePseudoElement();
+        clearAfterPseudoElement();
+
+#if ENABLE(FULLSCREEN_API)
+        if (UNLIKELY(hasFullscreenFlag()))
+            oldDocument->fullscreenManager().exitRemovedFullscreenElement(*this);
+#endif
+
+        if (UNLIKELY(isInTopLayer()))
+            removeFromTopLayer();
+
+        if (oldDocument->cssTarget() == this)
             oldDocument->setCSSTarget(nullptr);
 
-        if (removalType.disconnectedFromDocument && UNLIKELY(isDefinedCustomElement()))
+        if (UNLIKELY(isDefinedCustomElement()))
             CustomElementReactionQueue::enqueueDisconnectedCallbackIfNeeded(*this);
     }
 
@@ -2820,16 +2827,6 @@ void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldPar
             shadowRoot->hostChildElementDidChange(*this);
     }
 
-    clearBeforePseudoElement();
-    clearAfterPseudoElement();
-
-    ContainerNode::removedFromAncestor(removalType, oldParentOfRemovedTree);
-
-#if ENABLE(FULLSCREEN_API)
-    if (UNLIKELY(hasFullscreenFlag()))
-        document().fullscreenManager().exitRemovedFullscreenElement(*this);
-#endif
-
     if (!parentNode() && is<Document>(oldParentOfRemovedTree)) {
         setEffectiveLangStateOnOldDocumentElement();
         document().setDocumentElementLanguage(nullAtom());
@@ -2837,9 +2834,6 @@ void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldPar
         updateEffectiveLangStateFromParent();
 
     Styleable::fromElement(*this).elementWasRemoved();
-
-    if (UNLIKELY(isInTopLayer()))
-        removeFromTopLayer();
 
     document().userActionElements().clearAllForElement(*this);
 }
@@ -4531,6 +4525,7 @@ void Element::disconnectFromIntersectionObserversSlow(IntersectionObserverData& 
 
 IntersectionObserverData& Element::ensureIntersectionObserverData()
 {
+    ASSERT(!is<HTMLImageElement>(*this));
     auto& rareData = ensureElementRareData();
     if (!rareData.intersectionObserverData())
         rareData.setIntersectionObserverData(makeUnique<IntersectionObserverData>());
@@ -4837,7 +4832,7 @@ inline void Element::updateName(const AtomString& oldName, const AtomString& new
 
     updateNameForTreeScope(treeScope(), oldName, newName);
 
-    if (!isConnected())
+    if (!isInDocumentTree())
         return;
     if (RefPtr htmlDocument = dynamicDowncast<HTMLDocument>(document()))
         updateNameForDocument(*htmlDocument, oldName, newName);
@@ -4856,9 +4851,6 @@ void Element::updateNameForTreeScope(TreeScope& scope, const AtomString& oldName
 void Element::updateNameForDocument(HTMLDocument& document, const AtomString& oldName, const AtomString& newName)
 {
     ASSERT(oldName != newName);
-
-    if (isInShadowTree())
-        return;
 
     if (WindowNameCollection::elementMatchesIfNameAttributeMatch(*this)) {
         const AtomString& id = WindowNameCollection::elementMatchesIfIdAttributeMatch(*this) ? getIdAttribute() : nullAtom();
@@ -4887,7 +4879,7 @@ inline void Element::updateId(const AtomString& oldId, const AtomString& newId, 
 
     updateIdForTreeScope(treeScope(), oldId, newId, notifyObservers);
 
-    if (!isConnected())
+    if (!isInDocumentTree())
         return;
     if (RefPtr htmlDocument = dynamicDowncast<HTMLDocument>(document()))
         updateIdForDocument(*htmlDocument, oldId, newId, HTMLDocumentNamedItemMapsUpdatingCondition::UpdateOnlyIfDiffersFromNameAttribute);
@@ -4895,7 +4887,6 @@ inline void Element::updateId(const AtomString& oldId, const AtomString& newId, 
 
 void Element::updateIdForTreeScope(TreeScope& scope, const AtomString& oldId, const AtomString& newId, NotifyObservers notifyObservers)
 {
-    ASSERT(isInTreeScope());
     ASSERT(oldId != newId);
 
     if (!oldId.isEmpty())
@@ -4906,11 +4897,7 @@ void Element::updateIdForTreeScope(TreeScope& scope, const AtomString& oldId, co
 
 void Element::updateIdForDocument(HTMLDocument& document, const AtomString& oldId, const AtomString& newId, HTMLDocumentNamedItemMapsUpdatingCondition condition)
 {
-    ASSERT(isConnected());
     ASSERT(oldId != newId);
-
-    if (isInShadowTree())
-        return;
 
     if (WindowNameCollection::elementMatchesIfIdAttributeMatch(*this)) {
         const AtomString& name = condition == HTMLDocumentNamedItemMapsUpdatingCondition::UpdateOnlyIfDiffersFromNameAttribute && WindowNameCollection::elementMatchesIfNameAttributeMatch(*this) ? getNameAttribute() : nullAtom();

@@ -51,10 +51,9 @@ WebExtensionContext* WebExtensionContext::get(WebExtensionContextIdentifier iden
 }
 
 WebExtensionContext::WebExtensionContext()
-    : m_identifier(WebExtensionContextIdentifier::generate())
 {
-    ASSERT(!get(m_identifier));
-    webExtensionContexts().add(m_identifier, *this);
+    ASSERT(!get(identifier()));
+    webExtensionContexts().add(identifier(), *this);
 }
 
 WebExtensionContextParameters WebExtensionContext::parameters() const
@@ -93,6 +92,9 @@ const WebExtensionContext::UserContentControllerProxySet& WebExtensionContext::u
 
 bool WebExtensionContext::pageListensForEvent(const WebPageProxy& page, WebExtensionEventListenerType type, WebExtensionContentWorldType contentWorldType) const
 {
+    if (!isLoaded())
+        return false;
+
     if (!hasAccessInPrivateBrowsing() && page.sessionID().isEphemeral())
         return false;
 
@@ -119,6 +121,9 @@ bool WebExtensionContext::pageListensForEvent(const WebPageProxy& page, WebExten
 WebExtensionContext::WebProcessProxySet WebExtensionContext::processes(EventListenerTypeSet&& typeSet, ContentWorldTypeSet&& contentWorldTypeSet) const
 {
     WebProcessProxySet result;
+
+    if (!isLoaded())
+        return result;
 
 #if ENABLE(INSPECTOR_EXTENSIONS)
     // Inspector content world is a special alias of Main. Include it when Main is requested (and vice versa).

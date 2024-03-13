@@ -116,7 +116,8 @@ id<MTLCommandBuffer> Queue::commandBufferWithDescriptor(MTLCommandBufferDescript
     }
 
     id<MTLCommandBuffer> buffer = [m_commandQueue commandBufferWithDescriptor:descriptor];
-    [m_createdNotCommittedBuffers addObject:buffer];
+    if (buffer)
+        [m_createdNotCommittedBuffers addObject:buffer];
 
     return buffer;
 }
@@ -285,7 +286,7 @@ bool Queue::validateWriteBuffer(const Buffer& buffer, uint64_t bufferOffset, siz
         return false;
 
     auto end = checkedSum<uint64_t>(bufferOffset, size);
-    if (end.hasOverflowed() || end.value() > buffer.size())
+    if (end.hasOverflowed() || end.value() > buffer.currentSize())
         return false;
 
     return true;

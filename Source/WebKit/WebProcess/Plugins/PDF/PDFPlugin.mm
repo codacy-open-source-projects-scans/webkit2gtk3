@@ -1114,7 +1114,7 @@ bool PDFPlugin::handleContextMenuEvent(const WebMouseEvent& event)
     }
     PDFContextMenu contextMenu { point, WTFMove(items), WTFMove(openInPreviewTag) };
 
-    webPage->sendWithAsyncReply(Messages::WebPageProxy::ShowPDFContextMenu { contextMenu, m_identifier }, [itemCount, nsMenu = WTFMove(nsMenu), weakThis = WeakPtr { *this }](std::optional<int32_t>&& selectedIndex) {
+    webPage->sendWithAsyncReply(Messages::WebPageProxy::ShowPDFContextMenu { contextMenu, identifier() }, [itemCount, nsMenu = WTFMove(nsMenu), weakThis = WeakPtr { *this }](std::optional<int32_t>&& selectedIndex) {
         if (RefPtr protectedThis = weakThis.get()) {
             if (selectedIndex && selectedIndex.value() >= 0 && selectedIndex.value() < itemCount)
                 [nsMenu performActionForItemAtIndex:*selectedIndex];
@@ -1254,7 +1254,6 @@ void PDFPlugin::showDefinitionForAttributedString(NSAttributedString *string, CG
     DictionaryPopupInfo dictionaryPopupInfo;
     dictionaryPopupInfo.origin = convertFromPDFViewToRootView(IntPoint(point));
     dictionaryPopupInfo.platformData.attributedString = WebCore::AttributedString::fromNSAttributedString(string);
-    
     
     NSRect rangeRect;
     rangeRect.origin = NSMakePoint(point.x, point.y);
@@ -1441,7 +1440,7 @@ static NSPoint pointInLayoutSpaceForPointInWindowSpace(PDFLayerController* pdfLa
     return NSPointFromCGPoint(newPoint);
 }
 
-LookupTextResult PDFPlugin::lookupTextAtLocation(const WebCore::FloatPoint& locationInViewCoordinates, WebHitTestResultData& data)
+std::pair<String, RetainPtr<PDFSelection>> PDFPlugin::textForImmediateActionHitTestAtPoint(const WebCore::FloatPoint& locationInViewCoordinates, WebHitTestResultData& data)
 {
     auto selection = [m_pdfLayerController currentSelection];
     if (existingSelectionContainsPoint(locationInViewCoordinates))

@@ -186,7 +186,7 @@ RenderThemeMac::RenderThemeMac()
 
 bool RenderThemeMac::canCreateControlPartForRenderer(const RenderObject& renderer) const
 {
-    auto type = renderer.style().effectiveAppearance();
+    auto type = renderer.style().usedAppearance();
     return type == StyleAppearance::Button
         || type == StyleAppearance::Checkbox
 #if ENABLE(APPLE_PAY)
@@ -220,7 +220,7 @@ bool RenderThemeMac::canCreateControlPartForRenderer(const RenderObject& rendere
 
 bool RenderThemeMac::canCreateControlPartForBorderOnly(const RenderObject& renderer) const
 {
-    auto appearance = renderer.style().effectiveAppearance();
+    auto appearance = renderer.style().usedAppearance();
     return appearance == StyleAppearance::Listbox
         || appearance == StyleAppearance::TextArea
         || appearance == StyleAppearance::TextField;
@@ -228,15 +228,15 @@ bool RenderThemeMac::canCreateControlPartForBorderOnly(const RenderObject& rende
 
 bool RenderThemeMac::canCreateControlPartForDecorations(const RenderObject& renderer) const
 {
-    return renderer.style().effectiveAppearance() == StyleAppearance::MenulistButton;
+    return renderer.style().usedAppearance() == StyleAppearance::MenulistButton;
 }
 
 int RenderThemeMac::baselinePosition(const RenderBox& renderer) const
 {
-    auto appearance = renderer.style().effectiveAppearance();
+    auto appearance = renderer.style().usedAppearance();
     auto baseline = RenderTheme::baselinePosition(renderer);
     if ((appearance == StyleAppearance::Checkbox || appearance == StyleAppearance::Radio) && renderer.isHorizontalWritingMode())
-        return baseline - (2 * renderer.style().effectiveZoom());
+        return baseline - (2 * renderer.style().usedZoom());
     return baseline;
 }
 
@@ -689,7 +689,7 @@ bool RenderThemeMac::searchFieldShouldAppearAsTextField(const RenderStyle& style
 
 bool RenderThemeMac::isControlStyled(const RenderStyle& style, const RenderStyle& userAgentStyle) const
 {
-    auto appearance = style.effectiveAppearance();
+    auto appearance = style.usedAppearance();
     if (appearance == StyleAppearance::TextField || appearance == StyleAppearance::TextArea || appearance == StyleAppearance::SearchField || appearance == StyleAppearance::Listbox)
         return style.border() != userAgentStyle.border();
 
@@ -698,7 +698,7 @@ bool RenderThemeMac::isControlStyled(const RenderStyle& style, const RenderStyle
     // adjustment time so that will just have to stay broken.  We can however detect that we're zooming.  If zooming
     // is in effect we treat it like the control is styled. Additionally, treat the control like it is styled when
     // using a vertical writing mode, since the AppKit control is not height resizable.
-    if (appearance == StyleAppearance::Menulist && (style.effectiveZoom() != 1.0f || !style.isHorizontalWritingMode()))
+    if (appearance == StyleAppearance::Menulist && (style.usedZoom() != 1.0f || !style.isHorizontalWritingMode()))
         return true;
 
     return RenderTheme::isControlStyled(style, userAgentStyle);
@@ -779,7 +779,7 @@ static const int* popupButtonPadding(NSControlSize size, bool isRTL)
 
 void RenderThemeMac::inflateRectForControlRenderer(const RenderObject& renderer, FloatRect& rect)
 {
-    auto appearance = renderer.style().effectiveAppearance();
+    auto appearance = renderer.style().usedAppearance();
 
     switch (appearance) {
     case StyleAppearance::Button:
@@ -789,10 +789,10 @@ void RenderThemeMac::inflateRectForControlRenderer(const RenderObject& renderer,
     case StyleAppearance::PushButton:
     case StyleAppearance::Radio:
     case StyleAppearance::Switch:
-        ThemeMac::inflateControlPaintRect(renderer.style().effectiveAppearance(), rect, renderer.style().effectiveZoom(), !renderer.style().isHorizontalWritingMode());
+        ThemeMac::inflateControlPaintRect(renderer.style().usedAppearance(), rect, renderer.style().usedZoom(), !renderer.style().isHorizontalWritingMode());
         break;
     case StyleAppearance::Menulist: {
-        auto zoomLevel = renderer.style().effectiveZoom();
+        auto zoomLevel = renderer.style().usedZoom();
         auto controlSize = controlSizeFromPixelSize(popupButtonSizes(), IntSize(rect.size()), zoomLevel);
         auto size = popupButtonSizes()[controlSize];
         size.setHeight(size.height() * zoomLevel);
@@ -824,7 +824,7 @@ bool RenderThemeMac::controlSupportsTints(const RenderObject& o) const
         return false;
 
     // Checkboxes only have tint when checked.
-    if (o.style().effectiveAppearance() == StyleAppearance::Checkbox)
+    if (o.style().usedAppearance() == StyleAppearance::Checkbox)
         return isChecked(o);
 
     // For now assume other controls have tint if enabled.
@@ -857,18 +857,18 @@ static NSControlSize controlSizeForFont(const RenderStyle& style)
 
 static IntSize sizeForFont(const RenderStyle& style, const IntSize* sizes)
 {
-    if (style.effectiveZoom() != 1.0f) {
+    if (style.usedZoom() != 1.0f) {
         IntSize result = sizes[controlSizeForFont(style)];
-        return IntSize(result.width() * style.effectiveZoom(), result.height() * style.effectiveZoom());
+        return IntSize(result.width() * style.usedZoom(), result.height() * style.usedZoom());
     }
     return sizes[controlSizeForFont(style)];
 }
 
 static IntSize sizeForSystemFont(const RenderStyle& style, const IntSize* sizes)
 {
-    if (style.effectiveZoom() != 1.0f) {
+    if (style.usedZoom() != 1.0f) {
         IntSize result = sizes[controlSizeForSystemFont(style)];
-        return IntSize(result.width() * style.effectiveZoom(), result.height() * style.effectiveZoom());
+        return IntSize(result.width() * style.usedZoom(), result.height() * style.usedZoom());
     }
     return sizes[controlSizeForSystemFont(style)];
 }
@@ -890,8 +890,8 @@ static void setFontFromControlSize(RenderStyle& style, NSControlSize controlSize
 
     NSFont* font = [NSFont systemFontOfSize:[NSFont systemFontSizeForControlSize:controlSize]];
     fontDescription.setOneFamily("-apple-system"_s);
-    fontDescription.setComputedSize([font pointSize] * style.effectiveZoom());
-    fontDescription.setSpecifiedSize([font pointSize] * style.effectiveZoom());
+    fontDescription.setComputedSize([font pointSize] * style.usedZoom());
+    fontDescription.setSpecifiedSize([font pointSize] * style.usedZoom());
 
     // Reset line height
     style.setLineHeight(RenderStyle::initialLineHeight());
@@ -987,23 +987,23 @@ void RenderThemeMac::adjustMenuListStyle(RenderStyle& style, const Element* e) c
 
 LengthBox RenderThemeMac::popupInternalPaddingBox(const RenderStyle& style) const
 {
-    if (style.effectiveAppearance() == StyleAppearance::Menulist) {
+    if (style.usedAppearance() == StyleAppearance::Menulist) {
         const int* padding = popupButtonPadding(controlSizeForFont(style), style.direction() == TextDirection::RTL);
-        return { static_cast<int>(padding[topPadding] * style.effectiveZoom()),
-            static_cast<int>(padding[rightPadding] * style.effectiveZoom()),
-            static_cast<int>(padding[bottomPadding] * style.effectiveZoom()),
-            static_cast<int>(padding[leftPadding] * style.effectiveZoom()) };
+        return { static_cast<int>(padding[topPadding] * style.usedZoom()),
+            static_cast<int>(padding[rightPadding] * style.usedZoom()),
+            static_cast<int>(padding[bottomPadding] * style.usedZoom()),
+            static_cast<int>(padding[leftPadding] * style.usedZoom()) };
     }
 
-    if (style.effectiveAppearance() == StyleAppearance::MenulistButton) {
+    if (style.usedAppearance() == StyleAppearance::MenulistButton) {
         float arrowWidth = baseArrowWidth * (style.computedFontSize() / baseFontSize);
-        float rightPadding = ceilf(arrowWidth + (arrowPaddingBefore + arrowPaddingAfter + paddingBeforeSeparator) * style.effectiveZoom());
-        float leftPadding = styledPopupPaddingLeft * style.effectiveZoom();
+        float rightPadding = ceilf(arrowWidth + (arrowPaddingBefore + arrowPaddingAfter + paddingBeforeSeparator) * style.usedZoom());
+        float leftPadding = styledPopupPaddingLeft * style.usedZoom();
         if (style.direction() == TextDirection::RTL)
             std::swap(rightPadding, leftPadding);
-        return { static_cast<int>(styledPopupPaddingTop * style.effectiveZoom()),
+        return { static_cast<int>(styledPopupPaddingTop * style.usedZoom()),
             static_cast<int>(rightPadding),
-            static_cast<int>(styledPopupPaddingBottom * style.effectiveZoom()),
+            static_cast<int>(styledPopupPaddingBottom * style.usedZoom()),
             static_cast<int>(leftPadding) };
     }
 
@@ -1012,7 +1012,7 @@ LengthBox RenderThemeMac::popupInternalPaddingBox(const RenderStyle& style) cons
 
 PopupMenuStyle::Size RenderThemeMac::popupMenuSize(const RenderStyle& style, IntRect& rect) const
 {
-    auto size = controlSizeFromPixelSize(popupButtonSizes(), rect.size(), style.effectiveZoom());
+    auto size = controlSizeFromPixelSize(popupButtonSizes(), rect.size(), style.usedZoom());
     switch (size) {
     case NSControlSizeRegular:
         return PopupMenuStyle::Size::Normal;
@@ -1082,7 +1082,7 @@ void RenderThemeMac::adjustSearchFieldStyle(RenderStyle& style, const Element*) 
 {
     // Override border.
     style.resetBorder();
-    const short borderWidth = 2 * style.effectiveZoom();
+    const short borderWidth = 2 * style.usedZoom();
     style.setBorderLeftWidth(borderWidth);
     style.setBorderLeftStyle(BorderStyle::Inset);
     style.setBorderRightWidth(borderWidth);
@@ -1093,7 +1093,7 @@ void RenderThemeMac::adjustSearchFieldStyle(RenderStyle& style, const Element*) 
     style.setBorderTopStyle(BorderStyle::Inset);
 
     // Adjust the font size prior to adjusting height, as the adjusted size may
-    // correspond to a different control size when style.effectiveZoom() != 1.
+    // correspond to a different control size when style.usedZoom() != 1.
     setFontFromControlSize(style, controlSizeForFont(style));
 
     // Override height.
@@ -1101,7 +1101,7 @@ void RenderThemeMac::adjustSearchFieldStyle(RenderStyle& style, const Element*) 
     setSearchFieldSize(style);
 
     // Override padding size to match AppKit text positioning.
-    const int padding = 1 * style.effectiveZoom();
+    const int padding = 1 * style.usedZoom();
     style.setPaddingLeft(Length(padding, LengthType::Fixed));
     style.setPaddingRight(Length(padding, LengthType::Fixed));
     style.setPaddingTop(Length(padding, LengthType::Fixed));
@@ -1180,8 +1180,8 @@ constexpr int sliderThumbThickness = 17;
 
 void RenderThemeMac::adjustSliderThumbSize(RenderStyle& style, const Element*) const
 {
-    float zoomLevel = style.effectiveZoom();
-    if (style.effectiveAppearance() == StyleAppearance::SliderThumbHorizontal || style.effectiveAppearance() == StyleAppearance::SliderThumbVertical) {
+    float zoomLevel = style.usedZoom();
+    if (style.usedAppearance() == StyleAppearance::SliderThumbHorizontal || style.usedAppearance() == StyleAppearance::SliderThumbVertical) {
         style.setWidth(Length(static_cast<int>(sliderThumbThickness * zoomLevel), LengthType::Fixed));
         style.setHeight(Length(static_cast<int>(sliderThumbThickness * zoomLevel), LengthType::Fixed));
     }

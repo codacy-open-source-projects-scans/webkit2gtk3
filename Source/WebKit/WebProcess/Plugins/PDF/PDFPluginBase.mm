@@ -36,6 +36,7 @@
 #import "WKAccessibilityPDFDocumentObject.h"
 #import "WebEventConversion.h"
 #import "WebFrame.h"
+#import "WebHitTestResultData.h"
 #import "WebLoaderStrategy.h"
 #import "WebPage.h"
 #import "WebPageProxyMessages.h"
@@ -101,17 +102,10 @@ PluginInfo PDFPluginBase::pluginInfo()
 PDFPluginBase::PDFPluginBase(HTMLPlugInElement& element)
     : m_frame(*WebFrame::fromCoreFrame(*element.document().frame()))
     , m_element(element)
-    , m_identifier(PDFPluginIdentifier::generate())
 #if HAVE(INCREMENTAL_PDF_APIS)
     , m_incrementalPDFLoadingEnabled(element.document().settings().incrementalPDFLoadingEnabled())
 #endif
 {
-#if PLATFORM(MAC)
-    m_accessibilityDocumentObject = adoptNS([[WKAccessibilityPDFDocumentObject alloc] initWithPDFDocument:m_pdfDocument andElement:&element]);
-    [m_accessibilityDocumentObject setPDFPlugin:this];
-    if (this->isFullFramePlugin() && m_frame && m_frame->page() && m_frame->isMainFrame())
-        [m_accessibilityDocumentObject setParent:dynamic_objc_cast<NSObject>(m_frame->protectedPage()->accessibilityRemoteObject())];
-#endif
 }
 
 PDFPluginBase::~PDFPluginBase()
@@ -369,7 +363,7 @@ void PDFPluginBase::maybeClearHighLatencyDataProviderFlag()
         [m_pdfDocument setHasHighLatencyDataProvider:NO];
 }
 
-void PDFPluginBase::startByteRangeRequest(NetscapePlugInStreamLoaderClient& streamLoaderClient, uint64_t requestIdentifier, uint64_t position, size_t count)
+void PDFPluginBase::startByteRangeRequest(NetscapePlugInStreamLoaderClient& streamLoaderClient, ByteRangeRequestIdentifier requestIdentifier, uint64_t position, size_t count)
 {
     if (!m_incrementalLoader)
         return;
@@ -937,23 +931,61 @@ bool PDFPluginBase::showContextMenuAtPoint(const IntPoint& point)
     return handleContextMenuEvent(event);
 }
 
-IntPoint PDFPluginBase::convertFromPDFViewToRootView(const IntPoint& point) const
+bool PDFPluginBase::performImmediateActionHitTestAtLocation(const WebCore::FloatPoint& locationInViewCoordinates, WebHitTestResultData& data)
 {
-    // FIXME fix the coordinate space
-    IntPoint pointInPluginCoordinates(point.x(), size().height() - point.y());
-    return valueOrDefault(m_rootViewToPluginTransform.inverse()).mapPoint(pointInPluginCoordinates);
+    auto [text, selection] = textForImmediateActionHitTestAtPoint(locationInViewCoordinates, data);
+    if (!selection)
+        return false;
+
+    data.lookupText = text;
+    data.isTextNode = true;
+    data.isSelected = true;
+    data.dictionaryPopupInfo = dictionaryPopupInfoForSelection(selection.get(), TextIndicatorPresentationTransition::FadeIn);
+    return true;
 }
 
-FloatRect PDFPluginBase::convertFromPDFViewToScreenForAccessibility(const FloatRect& rect) const
+DictionaryPopupInfo PDFPluginBase::dictionaryPopupInfoForSelection(PDFSelection *selection, WebCore::TextIndicatorPresentationTransition presentationTransition)
 {
-    return WebCore::Accessibility::retrieveValueFromMainThread<WebCore::FloatRect>([&] () -> WebCore::FloatRect {
-        FloatRect updatedRect = rect;
-        updatedRect.setLocation(convertFromPDFViewToRootView(IntPoint(updatedRect.location())));
-        RefPtr page = this->page();
-        if (!page)
-            return { };
-        return page->chrome().rootViewToScreen(enclosingIntRect(updatedRect));
-    });
+    DictionaryPopupInfo dictionaryPopupInfo;
+    if (!selection.string.length)
+        return dictionaryPopupInfo;
+
+#if PLATFORM(MAC)
+    NSRect rangeRect = rectForSelectionInRootView(selection);
+    NSAttributedString *nsAttributedString = selection.attributedString;
+    RetainPtr scaledNSAttributedString = adoptNS([[NSMutableAttributedString alloc] initWithString:[nsAttributedString string]]);
+    NSFontManager *fontManager = [NSFontManager sharedFontManager];
+    CGFloat scaleFactor = contentScaleFactor();
+
+    [nsAttributedString enumerateAttributesInRange:NSMakeRange(0, [nsAttributedString length]) options:0 usingBlock:^(NSDictionary *attributes, NSRange range, BOOL *stop) {
+        RetainPtr<NSMutableDictionary> scaledAttributes = adoptNS([attributes mutableCopy]);
+
+        NSFont *font = [scaledAttributes objectForKey:NSFontAttributeName];
+        if (font) {
+            font = [fontManager convertFont:font toSize:font.pointSize * scaleFactor];
+            [scaledAttributes setObject:font forKey:NSFontAttributeName];
+        }
+
+        [scaledNSAttributedString addAttributes:scaledAttributes.get() range:range];
+    }];
+
+    rangeRect.size.height = nsAttributedString.size.height * scaleFactor;
+    rangeRect.size.width = nsAttributedString.size.width * scaleFactor;
+
+    TextIndicatorData dataForSelection;
+    dataForSelection.selectionRectInRootViewCoordinates = rangeRect;
+    dataForSelection.textBoundingRectInRootViewCoordinates = rangeRect;
+    dataForSelection.contentImageScaleFactor = scaleFactor;
+    dataForSelection.presentationTransition = presentationTransition;
+
+    dictionaryPopupInfo.origin = rangeRect.origin;
+    dictionaryPopupInfo.textIndicator = dataForSelection;
+    dictionaryPopupInfo.platformData.attributedString = WebCore::AttributedString::fromNSAttributedString(scaledNSAttributedString);
+#else
+    UNUSED_PARAM(presentationTransition);
+#endif
+
+    return dictionaryPopupInfo;
 }
 
 WebCore::AXObjectCache* PDFPluginBase::axObjectCache() const
@@ -962,13 +994,6 @@ WebCore::AXObjectCache* PDFPluginBase::axObjectCache() const
     if (!m_frame || !m_frame->coreLocalFrame() || !m_frame->coreLocalFrame()->document())
         return nullptr;
     return m_frame->coreLocalFrame()->document()->axObjectCache();
-}
-
-IntPoint PDFPluginBase::convertFromRootViewToPDFView(const IntPoint& point) const
-{
-    ASSERT(isMainRunLoop());
-    IntPoint pointInPluginCoordinates = m_rootViewToPluginTransform.mapPoint(point);
-    return IntPoint(pointInPluginCoordinates.x(), size().height() - pointInPluginCoordinates.y());
 }
 
 WebCore::IntPoint PDFPluginBase::lastKnownMousePositionInView() const

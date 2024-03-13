@@ -249,9 +249,6 @@ auto TreeResolver::resolveElement(Element& element, const RenderStyle* existingS
         return { };
     }
 
-    if (!element.rendererIsEverNeeded() && !element.hasDisplayContents())
-        return { };
-
     if (resolutionType == ResolutionType::RebuildUsingExisting) {
         return {
             ElementUpdate { RenderStyle::clonePtr(*existingStyle), Change::Renderer },
@@ -287,7 +284,7 @@ auto TreeResolver::resolveElement(Element& element, const RenderStyle* existingS
     if (RefPtr input = dynamicDowncast<HTMLInputElement>(element); (input && input->isSearchField())
         || element.hasTagName(HTMLNames::meterTag)
         || is<HTMLProgressElement>(element)) {
-        if (existingStyle && update.style->effectiveAppearance() != existingStyle->effectiveAppearance()) {
+        if (existingStyle && update.style->usedAppearance() != existingStyle->usedAppearance()) {
             update.change = Change::Renderer;
             descendantsToResolve = DescendantsToResolve::All;
         }
@@ -346,7 +343,7 @@ auto TreeResolver::resolveElement(Element& element, const RenderStyle* existingS
         m_document.setMayHaveElementsWithNonAutoTouchAction();
 #endif
 #if ENABLE(EDITABLE_REGION)
-    if (update.style->effectiveUserModify() != UserModify::ReadOnly)
+    if (update.style->usedUserModify() != UserModify::ReadOnly)
         m_document.setMayHaveEditableElements();
 #endif
 
@@ -999,7 +996,9 @@ void TreeResolver::resolveComposedTree()
         auto resolutionType = determineResolutionType(element, style, parent.descendantsToResolve, parent.change);
         if (resolutionType) {
             element.resetComputedStyle();
-            element.resetStyleRelations();
+
+            if (*resolutionType != ResolutionType::AnimationOnly)
+                element.resetStyleRelations();
 
             if (element.hasCustomStyleResolveCallbacks())
                 element.willRecalcStyle(parent.change);

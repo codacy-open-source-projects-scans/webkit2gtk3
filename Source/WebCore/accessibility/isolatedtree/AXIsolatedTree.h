@@ -337,11 +337,12 @@ public:
     template<typename U> Vector<RefPtr<AXCoreObject>> objectsForIDs(const U&);
 
     void generateSubtree(AccessibilityObject&);
+    bool shouldCreateNodeChange(AccessibilityObject&);
     void updateNode(AccessibilityObject&);
     enum class ResolveNodeChanges : bool { No, Yes };
     void updateChildren(AccessibilityObject&, ResolveNodeChanges = ResolveNodeChanges::Yes);
     void updateChildrenForObjects(const ListHashSet<RefPtr<AccessibilityObject>>&);
-    void updateNodeProperty(AXCoreObject& object, AXPropertyName property) { updateNodeProperties(object, { property }); };
+    void updateNodeProperty(AXCoreObject& object, AXPropertyName property) { updateNodeProperties(object, { property }); }
     void updateNodeProperties(AXCoreObject&, const AXPropertyNameSet&);
     void updateDependentProperties(AccessibilityObject&);
     void updatePropertiesForSelfAndDescendants(AccessibilityObject&, const AXPropertyNameSet&);
@@ -349,7 +350,7 @@ public:
     void updateRootScreenRelativePosition();
     void overrideNodeProperties(AXID, AXPropertyMap&&);
 
-    double loadingProgress() { return m_loadingProgress; }
+    double loadingProgress();
     void updateLoadingProgress(double);
 
     void addUnconnectedNode(Ref<AccessibilityObject>);
@@ -393,7 +394,7 @@ public:
 private:
     AXIsolatedTree(AXObjectCache&);
     static void storeTree(AXObjectCache&, const Ref<AXIsolatedTree>&);
-    void reportCreationProgress(AXObjectCache&, unsigned percentComplete);
+    void reportLoadingProgress(double);
 
     // Queue this isolated tree up to destroy itself on the secondary thread.
     // We can't destroy the tree on the main-thread (by removing all `Ref`s to it)
@@ -450,6 +451,10 @@ private:
     HashMap<AXID, ParentChildrenIDs> m_nodeMap;
 
     // Only accessed on the main thread.
+    // Stores all nodes that are added via addUnconnectedNode, which do not get stored in m_nodeMap.
+    HashSet<AXID> m_unconnectedNodes;
+
+    // Only accessed on the main thread.
     // The key is the ID of the object that will be resolved into an m_pendingAppends NodeChange.
     // The value is whether the wrapper should be attached on the main thread or the AX thread.
     HashMap<AXID, AttachWrapper> m_unresolvedPendingAppends;
@@ -480,6 +485,7 @@ private:
     bool m_queuedForDestruction WTF_GUARDED_BY_LOCK(m_changeLogLock) { false };
     AXID m_focusedNodeID;
     std::atomic<double> m_loadingProgress { 0 };
+    std::atomic<double> m_processingProgress { 1 };
 
     // Relationships between objects.
     HashMap<AXID, AXRelations> m_relations WTF_GUARDED_BY_LOCK(m_changeLogLock);

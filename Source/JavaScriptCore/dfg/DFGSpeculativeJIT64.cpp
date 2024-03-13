@@ -4215,6 +4215,11 @@ void SpeculativeJIT::compile(Node* node)
         break;
     }
 
+    case ToPropertyKeyOrNumber: {
+        compileToPropertyKeyOrNumber(node);
+        break;
+    }
+
     case ToNumber: {
         switch (node->child1().useKind()) {
         case StringUse: {
@@ -7150,7 +7155,7 @@ void SpeculativeJIT::compileEnumeratorPutByVal(Node* node)
             auto [ stubInfo, stubInfoConstant ] = addStructureStubInfo();
             JITPutByValGenerator gen(
                 codeBlock(), stubInfo, JITType::DFGJIT, codeOrigin, callSite, ecmaMode.isStrict() ? AccessType::PutByValStrict : AccessType::PutByValSloppy, usedRegisters,
-                baseRegs, propertyRegs, valueRegs, InvalidGPRReg, scratchGPR, ecmaMode);
+                baseRegs, propertyRegs, valueRegs, InvalidGPRReg, scratchGPR);
 
             std::visit([&](auto* stubInfo) {
                 if (m_state.forNode(m_graph.varArgChild(node, 1)).isType(SpecString))

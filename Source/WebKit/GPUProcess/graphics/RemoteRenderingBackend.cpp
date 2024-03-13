@@ -264,25 +264,29 @@ static RefPtr<ImageBuffer> allocateImageBufferInternal(const FloatSize& logicalS
     return imageBuffer;
 }
 
-RefPtr<ImageBuffer> RemoteRenderingBackend::allocateImageBuffer(const FloatSize& logicalSize, RenderingMode renderingMode, RenderingPurpose purpose, float resolutionScale, const DestinationColorSpace& colorSpace, PixelFormat pixelFormat, RenderingResourceIdentifier imageBufferIdentifier)
+RefPtr<ImageBuffer> RemoteRenderingBackend::allocateImageBuffer(const FloatSize& logicalSize, RenderingMode renderingMode, RenderingPurpose purpose, float resolutionScale, const DestinationColorSpace& colorSpace, PixelFormat pixelFormat, const ImageBufferCreationContext& creationContext, RenderingResourceIdentifier imageBufferIdentifier)
 {
     assertIsCurrent(workQueue());
 
-    ImageBufferCreationContext creationContext;
-    creationContext.resourceOwner = m_resourceOwner;
+    ASSERT(!creationContext.resourceOwner);
 #if HAVE(IOSURFACE)
-    creationContext.surfacePool = &ioSurfacePool();
+    ASSERT(!creationContext.surfacePool);
+#endif
+    ImageBufferCreationContext adjustedCreationContext = creationContext;
+    adjustedCreationContext.resourceOwner = m_resourceOwner;
+#if HAVE(IOSURFACE)
+    adjustedCreationContext.surfacePool = &ioSurfacePool();
 #endif
 
     RefPtr<ImageBuffer> imageBuffer;
 
 #if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
     if (m_gpuConnectionToWebProcess->isDynamicContentScalingEnabled() && (purpose == RenderingPurpose::LayerBacking || purpose == RenderingPurpose::DOM))
-        imageBuffer = allocateImageBufferInternal<DynamicContentScalingBifurcatedImageBuffer>(logicalSize, renderingMode, purpose, resolutionScale, colorSpace, pixelFormat, creationContext, imageBufferIdentifier);
+        imageBuffer = allocateImageBufferInternal<DynamicContentScalingBifurcatedImageBuffer>(logicalSize, renderingMode, purpose, resolutionScale, colorSpace, pixelFormat, adjustedCreationContext, imageBufferIdentifier);
 #endif
 
     if (!imageBuffer)
-        imageBuffer = allocateImageBufferInternal<ImageBuffer>(logicalSize, renderingMode, purpose, resolutionScale, colorSpace, pixelFormat, creationContext, imageBufferIdentifier);
+        imageBuffer = allocateImageBufferInternal<ImageBuffer>(logicalSize, renderingMode, purpose, resolutionScale, colorSpace, pixelFormat, adjustedCreationContext, imageBufferIdentifier);
 
     return imageBuffer;
 }
@@ -291,7 +295,7 @@ RefPtr<ImageBuffer> RemoteRenderingBackend::allocateImageBuffer(const FloatSize&
 void RemoteRenderingBackend::createImageBuffer(const FloatSize& logicalSize, RenderingMode renderingMode, RenderingPurpose purpose, float resolutionScale, const DestinationColorSpace& colorSpace, PixelFormat pixelFormat, RenderingResourceIdentifier imageBufferIdentifier)
 {
     assertIsCurrent(workQueue());
-    RefPtr<ImageBuffer> imageBuffer = allocateImageBuffer(logicalSize, renderingMode, purpose, resolutionScale, colorSpace, pixelFormat, imageBufferIdentifier);
+    RefPtr<ImageBuffer> imageBuffer = allocateImageBuffer(logicalSize, renderingMode, purpose, resolutionScale, colorSpace, pixelFormat, { }, imageBufferIdentifier);
 
     if (imageBuffer)
         didCreateImageBuffer(imageBuffer.releaseNonNull());
@@ -343,7 +347,7 @@ void RemoteRenderingBackend::cacheNativeImage(ShareableBitmap::Handle&& handle, 
     m_remoteResourceCache.cacheNativeImage(image.releaseNonNull());
 }
 
-void RemoteRenderingBackend::cacheFont(const Font::Attributes& fontAttributes, FontPlatformData::Attributes platformData, std::optional<RenderingResourceIdentifier> fontCustomPlatformDataIdentifier)
+void RemoteRenderingBackend::cacheFont(const Font::Attributes& fontAttributes, FontPlatformDataAttributes platformData, std::optional<RenderingResourceIdentifier> fontCustomPlatformDataIdentifier)
 {
     ASSERT(!RunLoop::isMain());
 

@@ -346,15 +346,21 @@ void PluginView::setPageScaleFactor(double scaleFactor, std::optional<IntPoint> 
     if (!m_isInitialized)
         return;
 
-    RefPtr webPage = m_webPage.get();
-    webPage->send(Messages::WebPageProxy::PluginScaleFactorDidChange(scaleFactor));
-    webPage->send(Messages::WebPageProxy::PluginZoomFactorDidChange(scaleFactor));
+    pluginScaleFactorDidChange();
     protectedPlugin()->setPageScaleFactor(scaleFactor, origin);
 }
 
 double PluginView::pageScaleFactor() const
 {
     return protectedPlugin()->scaleFactor();
+}
+
+void PluginView::pluginScaleFactorDidChange()
+{
+    auto scaleFactor = pageScaleFactor();
+    RefPtr webPage = m_webPage.get();
+    webPage->send(Messages::WebPageProxy::PluginScaleFactorDidChange(scaleFactor));
+    webPage->send(Messages::WebPageProxy::PluginZoomFactorDidChange(scaleFactor));
 }
 
 void PluginView::webPageDestroyed()
@@ -625,12 +631,12 @@ bool PluginView::drawsFindOverlay() const
     return protectedPlugin()->drawsFindOverlay();
 }
 
-RefPtr<TextIndicator> PluginView::textIndicatorForSelection(OptionSet<WebCore::TextIndicatorOption> options, WebCore::TextIndicatorPresentationTransition transition)
+RefPtr<TextIndicator> PluginView::textIndicatorForCurrentSelection(OptionSet<WebCore::TextIndicatorOption> options, WebCore::TextIndicatorPresentationTransition transition)
 {
     if (!m_isInitialized)
         return { };
 
-    return protectedPlugin()->textIndicatorForSelection(options, transition);
+    return protectedPlugin()->textIndicatorForCurrentSelection(options, transition);
 }
 
 String PluginView::selectionString() const
@@ -981,9 +987,9 @@ id PluginView::accessibilityHitTest(const WebCore::IntPoint& point) const
     return protectedPlugin()->accessibilityHitTest(point);
 }
 
-LookupTextResult PluginView::lookupTextAtLocation(const WebCore::FloatPoint& point, WebHitTestResultData& data) const
+bool PluginView::performImmediateActionHitTestAtLocation(const WebCore::FloatPoint& point, WebHitTestResultData& data) const
 {
-    return protectedPlugin()->lookupTextAtLocation(point, data);
+    return protectedPlugin()->performImmediateActionHitTestAtLocation(point, data);
 }
 
 WebCore::FloatRect PluginView::rectForSelectionInRootView(PDFSelection *selection) const

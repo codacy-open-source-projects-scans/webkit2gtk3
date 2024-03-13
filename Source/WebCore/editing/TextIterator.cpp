@@ -427,7 +427,7 @@ static inline bool hasDisplayContents(Node& node)
 
 static bool isRendererVisible(const RenderObject* renderer, TextIteratorBehaviors behaviors)
 {
-    return renderer && !(renderer->style().effectiveUserSelect() == UserSelect::None && behaviors.contains(TextIteratorBehavior::IgnoresUserSelectNone));
+    return renderer && !(renderer->style().usedUserSelect() == UserSelect::None && behaviors.contains(TextIteratorBehavior::IgnoresUserSelectNone));
 }
 
 void TextIterator::advance()
@@ -889,8 +889,7 @@ bool shouldEmitNewlinesBeforeAndAfterNode(Node& node)
     return !renderer->isInline()
         && is<RenderBlock>(*renderer)
         && !renderer->isFloatingOrOutOfFlowPositioned()
-        && !renderer->isBody()
-        && !renderer->isRenderRubyText();
+        && !renderer->isBody();
 }
 
 static bool shouldEmitNewlineAfterNode(Node& node, bool emitsCharactersBetweenAllVisiblePositions = false)

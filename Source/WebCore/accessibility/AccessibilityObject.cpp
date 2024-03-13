@@ -1280,7 +1280,7 @@ IntRect AccessibilityObject::boundingBoxForQuads(RenderObject* obj, const Vector
     for (const auto& quad : quads) {
         FloatRect r = quad.enclosingBoundingBox();
         if (!r.isEmpty()) {
-            if (obj->style().hasEffectiveAppearance())
+            if (obj->style().hasUsedAppearance())
                 obj->theme().inflateRectForControlRenderer(*obj, r);
             result.unite(r);
         }
@@ -1922,6 +1922,47 @@ InsideLink AccessibilityObject::insideLink() const
 bool AccessibilityObject::hasContentEditableAttributeSet() const
 {
     return contentEditableAttributeIsEnabled(element());
+}
+
+bool AccessibilityObject::dependsOnTextUnderElement() const
+{
+    switch (roleValue()) {
+    case AccessibilityRole::PopUpButton:
+        // Native popup buttons should not use their descendant's text as a title. That value is retrieved through stringValue().
+        if (hasTagName(selectTag))
+            break;
+        FALLTHROUGH;
+    case AccessibilityRole::Summary:
+        // The text node for a <summary> element should be included in its visible text, unless a title attribute is present.
+        if (!hasAttribute(titleAttr))
+            return true;
+        break;
+    case AccessibilityRole::Button:
+    case AccessibilityRole::ToggleButton:
+    case AccessibilityRole::Checkbox:
+    case AccessibilityRole::ListBoxOption:
+#if !PLATFORM(COCOA)
+    // MacOS does not expect native <li> elements to expose label information, it only expects leaf node elements to do that.
+    case AccessibilityRole::ListItem:
+#endif
+    case AccessibilityRole::MenuButton:
+    case AccessibilityRole::MenuItem:
+    case AccessibilityRole::MenuItemCheckbox:
+    case AccessibilityRole::MenuItemRadio:
+    case AccessibilityRole::RadioButton:
+    case AccessibilityRole::Switch:
+    case AccessibilityRole::Tab:
+        return true;
+    default:
+        break;
+    }
+
+    // If it's focusable but it's not content editable or a known control type, then it will appear to
+    // the user as a single atomic object, so we should use its text as the default title.
+    if (isHeading() || isLink())
+        return true;
+
+    return isOutput();
 }
 
 bool AccessibilityObject::supportsReadOnly() const
@@ -2827,7 +2868,7 @@ void AccessibilityObject::updateRole()
     m_role = determineAccessibilityRole();
     if (previousRole != m_role) {
         if (auto* cache = axObjectCache())
-            cache->handleRoleChanged(this);
+            cache->handleRoleChanged(*this);
     }
 }
 

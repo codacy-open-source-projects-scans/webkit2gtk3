@@ -1024,14 +1024,14 @@ OverscrollBehavior RenderLayerScrollableArea::verticalOverscrollBehavior() const
 Color RenderLayerScrollableArea::scrollbarThumbColorStyle() const
 {
     if (auto* renderer = m_layer.renderBox())
-        return renderer->style().effectiveScrollbarThumbColor();
+        return renderer->style().usedScrollbarThumbColor();
     return { };
 }
 
 Color RenderLayerScrollableArea::scrollbarTrackColorStyle() const
 {
     if (auto* renderer = m_layer.renderBox())
-        return renderer->style().effectiveScrollbarTrackColor();
+        return renderer->style().usedScrollbarTrackColor();
     return { };
 }
 
@@ -1250,7 +1250,7 @@ void RenderLayerScrollableArea::updateScrollbarsAfterStyleChange(const RenderSty
         return;
 
     // List box parts handle the scrollbars by themselves so we have nothing to do.
-    if (box->style().effectiveAppearance() == StyleAppearance::Listbox)
+    if (box->style().usedAppearance() == StyleAppearance::Listbox)
         return;
 
     bool hadVerticalScrollbar = hasVerticalScrollbar();
@@ -1270,7 +1270,7 @@ void RenderLayerScrollableArea::updateScrollbarsAfterLayout()
     ASSERT(box);
 
     // List box parts handle the scrollbars by themselves so we have nothing to do.
-    if (box->style().effectiveAppearance() == StyleAppearance::Listbox)
+    if (box->style().usedAppearance() == StyleAppearance::Listbox)
         return;
 
     bool hadHorizontalScrollbar = hasHorizontalScrollbar();

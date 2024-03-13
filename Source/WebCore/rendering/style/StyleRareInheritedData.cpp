@@ -84,7 +84,7 @@ StyleRareInheritedData::StyleRareInheritedData()
     , visitedLinkCaretColor(StyleColor::currentColor())
     , accentColor(StyleColor::currentColor())
     , indent(RenderStyle::initialTextIndent())
-    , effectiveZoom(RenderStyle::initialZoom())
+    , usedZoom(RenderStyle::initialZoom())
     , textUnderlineOffset(RenderStyle::initialTextUnderlineOffset())
     , textBoxEdge(RenderStyle::initialTextBoxEdge())
     , miterLimit(RenderStyle::initialStrokeMiterLimit())
@@ -138,7 +138,7 @@ StyleRareInheritedData::StyleRareInheritedData()
     , effectiveInert(false)
     , isInSubtreeWithBlendMode(false)
     , effectiveContentVisibility(static_cast<unsigned>(ContentVisibility::Visible))
-    , effectiveTouchActions(RenderStyle::initialTouchActions())
+    , usedTouchActions(RenderStyle::initialTouchActions())
     , strokeWidth(RenderStyle::initialStrokeWidth())
     , strokeColor(RenderStyle::initialStrokeColor())
 #if ENABLE(DARK_MODE_CSS)
@@ -174,7 +174,7 @@ inline StyleRareInheritedData::StyleRareInheritedData(const StyleRareInheritedDa
     , textShadow(o.textShadow ? makeUnique<ShadowData>(*o.textShadow) : nullptr)
     , cursorData(o.cursorData)
     , indent(o.indent)
-    , effectiveZoom(o.effectiveZoom)
+    , usedZoom(o.usedZoom)
     , textUnderlineOffset(o.textUnderlineOffset)
     , textBoxEdge(o.textBoxEdge)
     , miterLimit(o.miterLimit)
@@ -229,7 +229,7 @@ inline StyleRareInheritedData::StyleRareInheritedData(const StyleRareInheritedDa
     , effectiveInert(o.effectiveInert)
     , isInSubtreeWithBlendMode(o.isInSubtreeWithBlendMode)
     , effectiveContentVisibility(o.effectiveContentVisibility)
-    , effectiveTouchActions(o.effectiveTouchActions)
+    , usedTouchActions(o.usedTouchActions)
     , eventListenerRegionTypes(o.eventListenerRegionTypes)
     , strokeWidth(o.strokeWidth)
     , strokeColor(o.strokeColor)
@@ -281,7 +281,7 @@ bool StyleRareInheritedData::operator==(const StyleRareInheritedData& o) const
         && arePointingToEqualData(textShadow, o.textShadow)
         && arePointingToEqualData(cursorData, o.cursorData)
         && indent == o.indent
-        && effectiveZoom == o.effectiveZoom
+        && usedZoom == o.usedZoom
         && textUnderlineOffset == o.textUnderlineOffset
         && textBoxEdge == o.textBoxEdge
         && wordSpacing == o.wordSpacing
@@ -349,7 +349,7 @@ bool StyleRareInheritedData::operator==(const StyleRareInheritedData& o) const
         && hasVisitedLinkAutoCaretColor == o.hasVisitedLinkAutoCaretColor
         && hasAutoAccentColor == o.hasAutoAccentColor
         && isInSubtreeWithBlendMode == o.isInSubtreeWithBlendMode
-        && effectiveTouchActions == o.effectiveTouchActions
+        && usedTouchActions == o.usedTouchActions
         && eventListenerRegionTypes == o.eventListenerRegionTypes
         && effectiveInert == o.effectiveInert
         && effectiveContentVisibility == o.effectiveContentVisibility

@@ -91,7 +91,7 @@ public:
     
     RefPtr<CursorList> cursorData;
     Length indent;
-    float effectiveZoom;
+    float usedZoom;
 
     TextUnderlineOffset textUnderlineOffset;
 
@@ -166,7 +166,7 @@ public:
 
     unsigned effectiveContentVisibility : 2; // ContentVisibility
 
-    OptionSet<TouchAction> effectiveTouchActions;
+    OptionSet<TouchAction> usedTouchActions;
     OptionSet<EventListenerRegionType> eventListenerRegionTypes;
 
     Length strokeWidth;

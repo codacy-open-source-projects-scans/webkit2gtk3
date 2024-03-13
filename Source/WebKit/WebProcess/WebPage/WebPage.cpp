@@ -197,6 +197,7 @@
 #include <WebCore/ElementIterator.h>
 #include <WebCore/EventHandler.h>
 #include <WebCore/EventNames.h>
+#include <WebCore/ExceptionCode.h>
 #include <WebCore/File.h>
 #include <WebCore/FocusController.h>
 #include <WebCore/FontAttributeChanges.h>
@@ -3275,7 +3276,7 @@ void WebPage::updateDrawingAreaLayerTreeFreezeState()
 #endif
 #if PLATFORM(VISION) && ENABLE(WEBXR)
         if (RefPtr page = m_page) {
-            if (page->hasActiveImmersiveSession())
+            if (page->hasActiveImmersiveSession() && page->shouldBlockLayerTreeFreezingForVideo())
                 shouldSkipFreezingLayerTreeOnBackgrounding = true;
         }
 #endif
@@ -8114,17 +8115,17 @@ void WebPage::requestStorageAccess(RegistrableDomain&& subFrameDomain, Registrab
 
 void WebPage::addDomainWithPageLevelStorageAccess(const RegistrableDomain& topLevelDomain, const RegistrableDomain& resourceDomain)
 {
-    m_domainsWithPageLevelStorageAccess.add(topLevelDomain, resourceDomain);
+    m_domainsWithPageLevelStorageAccess.add(topLevelDomain, HashSet<RegistrableDomain> { }).iterator->value.add(resourceDomain);
 
     // Some sites have quirks where multiple login domains require storage access.
     if (auto additionalLoginDomain = NetworkStorageSession::findAdditionalLoginDomain(topLevelDomain, resourceDomain))
-        m_domainsWithPageLevelStorageAccess.add(topLevelDomain, *additionalLoginDomain);
+        m_domainsWithPageLevelStorageAccess.add(topLevelDomain, HashSet<RegistrableDomain> { }).iterator->value.add(*additionalLoginDomain);
 }
 
 bool WebPage::hasPageLevelStorageAccess(const RegistrableDomain& topLevelDomain, const RegistrableDomain& resourceDomain) const
 {
     auto it = m_domainsWithPageLevelStorageAccess.find(topLevelDomain);
-    return it != m_domainsWithPageLevelStorageAccess.end() && it->value == resourceDomain;
+    return it != m_domainsWithPageLevelStorageAccess.end() && it->value.contains(resourceDomain);
 }
 
 void WebPage::clearPageLevelStorageAccess()
@@ -9343,6 +9344,15 @@ void WebPage::renderTreeAsText(WebCore::FrameIdentifier frameID, size_t baseInde
 void WebPage::requestTextExtraction(std::optional<FloatRect>&& collectionRectInRootView, CompletionHandler<void(TextExtraction::Item&&)>&& completion)
 {
     completion(TextExtraction::extractItem(WTFMove(collectionRectInRootView), Ref { *corePage() }));
+}
+
+void WebPage::requestRenderedTextForElementSelector(String&& selector, CompletionHandler<void(Expected<String, WebCore::ExceptionCode>&&)>&& completion)
+{
+    RefPtr mainFrame = dynamicDowncast<LocalFrame>(corePage()->protectedMainFrame());
+    if (!mainFrame)
+        return completion(makeUnexpected(ExceptionCode::NotAllowedError));
+
+    completion(TextExtraction::extractRenderedText(mainFrame.releaseNonNull(), WTFMove(selector)));
 }
 
 template<typename T> void WebPage::remoteViewToRootView(WebCore::FrameIdentifier frameID, T geometry, CompletionHandler<void(T)>&& completionHandler)

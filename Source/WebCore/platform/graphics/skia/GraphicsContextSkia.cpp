@@ -411,7 +411,7 @@ SkPaint GraphicsContextSkia::createFillPaint(std::optional<Color> fillColor) con
     paint.setBlendMode(toSkiaBlendMode(state.compositeMode().operation, state.compositeMode().blendMode));
 
     if (auto fillPattern = state.fillBrush().pattern())
-        paint.setShader(fillPattern->createPlatformPattern({ }));
+        paint.setShader(fillPattern->createPlatformPattern({ }, toSkSamplingOptions(m_state.imageInterpolationQuality())));
     else if (auto fillGradient = state.fillBrush().gradient())
         paint.setShader(fillGradient->shader(state.alpha(), state.fillBrush().gradientSpaceTransform()));
     else
@@ -440,7 +440,7 @@ SkPaint GraphicsContextSkia::createStrokePaint(std::optional<Color> strokeColor)
     paint.setAntiAlias(true);
 
     if (auto strokePattern = state.strokeBrush().pattern())
-        paint.setShader(strokePattern->createPlatformPattern({ }));
+        paint.setShader(strokePattern->createPlatformPattern({ }, toSkSamplingOptions(m_state.imageInterpolationQuality())));
     else if (auto strokeGradient = state.strokeBrush().gradient())
         paint.setShader(strokeGradient->shader(state.alpha(), state.strokeBrush().gradientSpaceTransform()));
     else
@@ -671,8 +671,6 @@ void GraphicsContextSkia::setLineCap(LineCap lineCap)
 
 void GraphicsContextSkia::setLineDash(const DashArray& dashArray, float dashOffset)
 {
-    ASSERT(!(dashArray.size() % 2));
-
     if (dashArray.isEmpty()) {
         m_skiaState.m_stroke.dash = nullptr;
         return;
@@ -762,12 +760,6 @@ void GraphicsContextSkia::drawPattern(NativeImage& nativeImage, const FloatRect&
     if (!makeGLContextCurrentIfNeeded())
         return;
 
-    auto tileMode = [](float dstPoint, float dstMax, float tilePoint, float tileMax) -> SkTileMode {
-        return dstPoint >= tilePoint && dstMax <= tileMax ? SkTileMode::kClamp : SkTileMode::kRepeat;
-    };
-    auto tileModeX = tileMode(destRect.x(), destRect.maxX(), tileRect.x(), tileRect.maxX());
-    auto tileModeY = tileMode(destRect.y(), destRect.maxY(), tileRect.y(), tileRect.maxY());
-
     FloatRect rect(tileRect);
     rect.moveBy(phase);
     SkMatrix phaseMatrix;
@@ -775,6 +767,12 @@ void GraphicsContextSkia::drawPattern(NativeImage& nativeImage, const FloatRect&
     SkMatrix shaderMatrix = SkMatrix::Concat(phaseMatrix, patternTransform);
     auto samplingOptions = toSkSamplingOptions(m_state.imageInterpolationQuality());
     bool needsClip = tileRect.size() != nativeImage.size();
+
+    auto tileMode = [](float dstPoint, float dstMax, float tilePoint, float tileMax) -> SkTileMode {
+        return dstPoint >= tilePoint && dstMax <= tileMax ? SkTileMode::kClamp : SkTileMode::kRepeat;
+    };
+    auto tileModeX = tileMode(destRect.x(), destRect.maxX(), rect.x(), rect.maxX());
+    auto tileModeY = tileMode(destRect.y(), destRect.maxY(), rect.y(), rect.maxY());
 
     SkPaint paint = createFillPaint();
     paint.setBlendMode(toSkiaBlendMode(options.compositeOperator(), options.blendMode()));

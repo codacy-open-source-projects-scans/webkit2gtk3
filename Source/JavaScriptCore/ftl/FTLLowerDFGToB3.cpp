@@ -1291,6 +1291,9 @@ private:
         case ToPropertyKey:
             compileToPropertyKey();
             break;
+        case ToPropertyKeyOrNumber:
+            compileToPropertyKeyOrNumber();
+            break;
         case MakeRope:
             compileMakeRope();
             break;
@@ -1943,9 +1946,10 @@ private:
     {
         PatchpointValue* patchpoint = m_out.patchpoint(Int64);
         LazyJSValue value = m_node->lazyJSValue();
+        State* state = &m_ftlState;
         patchpoint->setGenerator(
             [=] (CCallHelpers& jit, const StackmapGenerationParams& params) {
-                value.emit(jit, JSValueRegs(params[0].gpr()));
+                value.emit(jit, JSValueRegs(params[0].gpr()), state->graph.m_plan);
             });
         patchpoint->effects = Effects::none();
         setJSValue(patchpoint);
@@ -4834,7 +4838,7 @@ private:
 
         // We emit property check during DFG generation, so we don't need
         // to check it here.
-        cachedPutById(m_node, base, value, ECMAMode::strict(), m_node->privateFieldPutKind().isDefine() ? AccessType::DefinePrivateNameById : AccessType::SetPrivateNameById);
+        cachedPutById(m_node, base, value, m_node->privateFieldPutKind().isDefine() ? AccessType::DefinePrivateNameById : AccessType::SetPrivateNameById);
     }
 
     void compilePutPrivateName()
@@ -4898,7 +4902,7 @@ private:
             auto* stubInfo = state->addStructureStubInfo();
             auto generator = Box<JITPutByValGenerator>::create(
                 jit.codeBlock(), stubInfo, JITType::FTLJIT, nodeSemanticOrigin, callSiteIndex, privateFieldPutKind.isDefine() ? AccessType::DefinePrivateNameByVal : AccessType::SetPrivateNameByVal,
-                params.unavailableRegisters(), JSValueRegs(baseGPR), JSValueRegs(propertyGPR), JSValueRegs(valueGPR), InvalidGPRReg, stubInfoGPR, ECMAMode::sloppy());
+                params.unavailableRegisters(), JSValueRegs(baseGPR), JSValueRegs(propertyGPR), JSValueRegs(valueGPR), InvalidGPRReg, stubInfoGPR);
 
             generator->stubInfo()->propertyIsSymbol = true;
 
@@ -5204,7 +5208,7 @@ private:
         }
     }
     
-    void cachedPutById(Node* node, LValue base, LValue value, ECMAMode ecmaMode, AccessType accessType)
+    void cachedPutById(Node* node, LValue base, LValue value, AccessType accessType)
     {
         CacheableIdentifier identifier = node->cacheableIdentifier();
         ASSERT(identifier);
@@ -5256,7 +5260,7 @@ private:
                 auto generator = Box<JITPutByIdGenerator>::create(
                     jit.codeBlock(), stubInfo, JITType::FTLJIT, nodeSemanticOrigin, callSiteIndex,
                     params.unavailableRegisters(), identifier, JSValueRegs(params[0].gpr()),
-                    JSValueRegs(params[1].gpr()), stubInfoGPR, GPRInfo::patchpointScratchRegister, ecmaMode,
+                    JSValueRegs(params[1].gpr()), stubInfoGPR, GPRInfo::patchpointScratchRegister,
                     accessType);
 
                 generator->generateFastPath(jit);
@@ -5304,7 +5308,7 @@ private:
         LValue base = lowCell(node->child1());
         LValue value = lowJSValue(node->child2());
         auto accessType = node->op() == PutByIdDirect ? (node->ecmaMode().isStrict() ? AccessType::PutByIdDirectStrict : AccessType::PutByIdDirectSloppy) : (node->ecmaMode().isStrict() ? AccessType::PutByIdStrict : AccessType::PutByIdSloppy);
-        cachedPutById(node, base, value, node->ecmaMode(), accessType);
+        cachedPutById(node, base, value, accessType);
     }
 
     void compilePutByIdMegamorphic()
@@ -6510,7 +6514,7 @@ IGNORE_CLANG_WARNINGS_END
                 auto* stubInfo = state->addStructureStubInfo();
                 auto generator = Box<JITPutByValGenerator>::create(
                     jit.codeBlock(), stubInfo, JITType::FTLJIT, nodeSemanticOrigin, callSiteIndex, isDirect ? (ecmaMode.isStrict() ? AccessType::PutByValDirectStrict : AccessType::PutByValDirectSloppy) : (ecmaMode.isStrict() ? AccessType::PutByValStrict : AccessType::PutByValSloppy),
-                    params.unavailableRegisters(), JSValueRegs(baseGPR), JSValueRegs(propertyGPR), JSValueRegs(valueGPR), InvalidGPRReg, stubInfoGPR, ecmaMode);
+                    params.unavailableRegisters(), JSValueRegs(baseGPR), JSValueRegs(propertyGPR), JSValueRegs(valueGPR), InvalidGPRReg, stubInfoGPR);
 
                 generator->stubInfo()->propertyIsString = propertyIsString;
                 generator->stubInfo()->propertyIsInt32 = propertyIsInt32;
@@ -9711,25 +9715,53 @@ IGNORE_CLANG_WARNINGS_END
         LBasicBlock slowPathCase = m_out.newBlock();
         LBasicBlock continuation = m_out.newBlock();
 
-        Vector<ValueFromBlock, 3> results;
-        m_out.branch(
-            isCell(value, provenType(m_node->child1())), unsure(isCellCase), unsure(slowPathCase));
+        ValueFromBlock fastResult = m_out.anchor(value);
+        m_out.branch(isCell(value, provenType(m_node->child1())), unsure(isCellCase), unsure(slowPathCase));
 
         LBasicBlock lastNext = m_out.appendTo(isCellCase, notStringCase);
-        results.append(m_out.anchor(value));
         m_out.branch(isString(value, provenType(m_node->child1())), unsure(continuation), unsure(notStringCase));
 
         m_out.appendTo(notStringCase, slowPathCase);
-        results.append(m_out.anchor(value));
         m_out.branch(isSymbol(value, provenType(m_node->child1())), unsure(continuation), unsure(slowPathCase));
 
         m_out.appendTo(slowPathCase, continuation);
-        results.append(m_out.anchor(vmCall(
-            Int64, operationToPropertyKey, weakPointer(globalObject), value)));
+        ValueFromBlock slowResult = m_out.anchor(vmCall(Int64, operationToPropertyKey, weakPointer(globalObject), value));
         m_out.jump(continuation);
 
         m_out.appendTo(continuation, lastNext);
-        setJSValue(m_out.phi(Int64, results));
+        setJSValue(m_out.phi(Int64, fastResult, slowResult));
+    }
+
+    void compileToPropertyKeyOrNumber()
+    {
+        ASSERT(m_node->child1().useKind() == UntypedUse);
+        JSGlobalObject* globalObject = m_graph.globalObjectFor(m_origin.semantic);
+        LValue value = lowJSValue(m_node->child1());
+
+        LBasicBlock notNumberCase = m_out.newBlock();
+        LBasicBlock isCellCase = m_out.newBlock();
+        LBasicBlock notStringCase = m_out.newBlock();
+        LBasicBlock slowPathCase = m_out.newBlock();
+        LBasicBlock continuation = m_out.newBlock();
+
+        ValueFromBlock fastResult = m_out.anchor(value);
+        m_out.branch(isNumber(value, provenType(m_node->child1())), unsure(continuation), unsure(notNumberCase));
+
+        LBasicBlock lastNext = m_out.appendTo(notNumberCase, isCellCase);
+        m_out.branch(isCell(value, provenType(m_node->child1())), unsure(isCellCase), unsure(slowPathCase));
+
+        m_out.appendTo(isCellCase, notStringCase);
+        m_out.branch(isString(value, provenType(m_node->child1())), unsure(continuation), unsure(notStringCase));
+
+        m_out.appendTo(notStringCase, slowPathCase);
+        m_out.branch(isSymbol(value, provenType(m_node->child1())), unsure(continuation), unsure(slowPathCase));
+
+        m_out.appendTo(slowPathCase, continuation);
+        ValueFromBlock slowResult = m_out.anchor(vmCall(Int64, operationToPropertyKeyOrNumber, weakPointer(globalObject), value));
+        m_out.jump(continuation);
+
+        m_out.appendTo(continuation, lastNext);
+        setJSValue(m_out.phi(Int64, fastResult, slowResult));
     }
     
     void compileMakeRope()
@@ -15744,7 +15776,7 @@ IGNORE_CLANG_WARNINGS_END
             auto* stubInfo = state->addStructureStubInfo();
             auto generator = Box<JITPutByValGenerator>::create(
                 jit.codeBlock(), stubInfo, JITType::FTLJIT, nodeSemanticOrigin, callSiteIndex, ecmaMode.isStrict() ? AccessType::PutByValStrict : AccessType::PutByValSloppy,
-                params.unavailableRegisters(), JSValueRegs(baseGPR), JSValueRegs(propertyGPR), JSValueRegs(valueGPR), InvalidGPRReg, stubInfoGPR, ecmaMode);
+                params.unavailableRegisters(), JSValueRegs(baseGPR), JSValueRegs(propertyGPR), JSValueRegs(valueGPR), InvalidGPRReg, stubInfoGPR);
             generator->stubInfo()->isEnumerator = true;
 
             generator->generateFastPath(jit);

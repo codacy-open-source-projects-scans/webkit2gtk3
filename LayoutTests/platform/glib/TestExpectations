@@ -535,6 +535,7 @@ accessibility/table-search-traversal.html [ Skip ]
 accessibility/tree-update-with-dirty-layout.html [ Skip ]
 accessibility/dynamically-changing-iframe-remains-accessible.html [ Skip ]
 accessibility/ignore-modals-without-any-content.html [ Skip ]
+accessibility/iframe-tree-update-with-dirty-layout.html [ Skip ]
 accessibility/iframe-with-role.html [ Skip ]
 
 accessibility/editable-webpage-focused-ui-element.html [ Skip ]
@@ -632,6 +633,12 @@ http/tests/accessibility/focus-text-field-in-iframe.html [ Skip ]
 
 # Times out due to missing AccessibilityUIElement::linkedUIElementAtIndex() implementation.
 accessibility/combobox-linked-listbox-destroyed.html [ Skip ]
+
+# Fails due to missing AccessibilityUIElement::indexInTable() implementation.
+accessibility/table-insert-second-thead.html [ Skip ]
+
+# Fails due to missing AccessibilityUIElement::columns() implementation.
+accessibility/dynamic-table-row-column-indices.html [ Skip ]
 
 #////////////////////////////////////////////////////////////////////////////////////////
 # End of Accessibility-related bugs
@@ -1064,6 +1071,7 @@ webkit.org/b/213699 http/wpt/mediarecorder/MediaRecorder-AV-audio-video-dataavai
 
 webkit.org/b/218317 media/media-source/media-source-trackid-change.html [ Failure ]
 webkit.org/b/238201 media/media-source/media-mp4-hevc-bframes.html [ Failure ]
+webkit.org/b/270622 media/media-source/media-managedmse-noresumeafterpause.html [ Timeout ]
 
 # GStreamer (< 1.24) doesn't set the track's id to the container's value.
 webkit.org/b/265919 media/track/media-audio-track.html [ Failure ]
@@ -1456,8 +1464,6 @@ webkit.org/b/212202 css3/scroll-snap/scroll-snap-wheel-event.html [ Skip ]
 css3/scroll-snap/scroll-snap-discrete-wheel-event-in-mainframe.html [ Skip ]
 css3/scroll-snap/scroll-snap-discrete-wheel-events-with-layout.html [ Skip ]
 
-fast/visual-viewport/client-coordinates-relative-to-layout-viewport.html [ Failure ]
-
 #////////////////////////////////////////////////////////////////////////////////////////
 # End of Scrolling-related bugs
 #////////////////////////////////////////////////////////////////////////////////////////
@@ -1774,6 +1780,7 @@ webkit.org/b/215945 webanimations/accelerated-css-animation-with-easing.html [ I
 
 webkit.org/b/216539 webanimations/accelerated-animation-easing-and-direction-update.html [ ImageOnlyFailure ]
 
+webkit.org/b/221021 webanimations/accelerated-animation-immediate-prevetion-direction-reverse.html [ Skip ]
 webkit.org/b/221021 webanimations/combining-transform-animations-with-different-acceleration-capabilities-2.html [ Skip ]
 webkit.org/b/221021 webanimations/combining-transform-animations-with-different-acceleration-capabilities-3.html [ Skip ]
 webkit.org/b/221021 webanimations/combining-transform-animations-with-different-acceleration-capabilities-4.html [ Skip ]
@@ -2621,6 +2628,9 @@ http/wpt/credential-management/ [ Skip ]
 http/wpt/webauthn/ [ Skip ]
 imported/w3c/web-platform-tests/credential-management/ [ Skip ]
 
+# Digital Crendentials API
+http/wpt/identity/ [ Skip ]
+
 # WebGL2
 webkit.org/b/166536 fast/canvas/webgl/webgl-transformed-varying-name-crash.html [ Skip ]
 webkit.org/b/166536 fast/canvas/webgl/shader-mix-with-bool.html [ Skip ]
@@ -2699,6 +2709,7 @@ webanimations/frame-rate/document-timeline-maximum-frame-rate.html [ Skip ]
 webanimations/transform-animation-with-delay-yields-accelerated-animation.html [ Skip ]
 webanimations/partly-accelerated-transition-by-removing-property.html [ Skip ]
 webanimations/accelerated-animations-and-composite.html [ Skip ]
+webanimations/accelerated-animations-and-implicit-keyframes.html [ Skip ]
 
 # OT-SVG is not implemented on GTK/WPE
 fast/text/otsvg-canvas.html [ ImageOnlyFailure ]
@@ -3028,7 +3039,6 @@ webkit.org/b/258150 fast/inline/partial-inline-layout-text-append-only-simple.ht
 webkit.org/b/258152 fast/lists/overlapping-nested-list-markers.html [ ImageOnlyFailure ]
 webkit.org/b/168551 http/tests/misc/slow-loading-animated-image.html [ ImageOnlyFailure ]
 webkit.org/b/168719 fast/css/paint-order-shadow.html [ ImageOnlyFailure ]
-webkit.org/b/169909 fast/block/lineboxcontain/block-with-ideographs.xhtml [ Failure ]
 webkit.org/b/169909 fast/css-generated-content/initial-letter-pagination-sunken.html [ ImageOnlyFailure ]
 webkit.org/b/169909 fast/css-generated-content/initial-letter-pagination-sunken-rl.html [ ImageOnlyFailure ]
 webkit.org/b/169910 fast/multicol/simple-line-layout-line-index-after-strut.html [ ImageOnlyFailure ]
@@ -3353,8 +3363,6 @@ media/video-remote-control-playpause.html [ Skip ]
 # Failure Pass Crash Timeout
 webkit.org/b/207062 webkit.org/b/244776 imported/w3c/web-platform-tests/media-source/mediasource-replay.html [ Skip ]
 
-webkit.org/b/229738 fast/text/whitespace/tab-character-basics.html [ Failure ]
-
 webkit.org/b/255101 imported/w3c/web-platform-tests/css/css-backgrounds/background-clip-content-box-002.html [ ImageOnlyFailure ]
 webkit.org/b/255101 imported/w3c/web-platform-tests/css/css-backgrounds/border-image-repeat-space-8.html [ ImageOnlyFailure Pass ]
 webkit.org/b/255101 imported/w3c/web-platform-tests/css/css-backgrounds/border-image-repeat-space-9.html [ ImageOnlyFailure Pass ]
@@ -3375,7 +3383,6 @@ webkit.org/b/232386 css3/filters/filters-on-svg-root.html [ ImageOnlyFailure ]
 webkit.org/b/232386 editing/deleting/delete-block-contents-004.html [ Failure ]
 webkit.org/b/232386 editing/deleting/move-nodes-001.html [ Failure ]
 webkit.org/b/232386 editing/selection/doubleclick-japanese-text.html [ Failure ]
-webkit.org/b/232386 fast/backgrounds/background-inherit-color-bug.html [ Failure ]
 webkit.org/b/232386 fast/block/float/031.html [ Failure ]
 webkit.org/b/232386 fast/block/float/033.html [ Failure ]
 webkit.org/b/232386 fast/block/float/clear-element-too-wide-for-containing-block.html [ Failure ]
@@ -3421,12 +3428,7 @@ webkit.org/b/232386 fast/forms/select-reset-multiple-selections-4-single-selecti
 webkit.org/b/232386 fast/frames/frame-name-reset.html [ Failure ]
 webkit.org/b/232386 fast/frames/invalid-frameset-compute-edge.html [ ImageOnlyFailure ]
 webkit.org/b/232386 fast/html/crash-style-first-letter.html [ Failure ]
-webkit.org/b/232386 fast/inline/inline-box-background-long-image.html [ Failure ]
-webkit.org/b/232386 fast/inline/inline-box-background-repeat-x.html [ Failure ]
-webkit.org/b/232386 fast/inline/inline-box-background-repeat-y.html [ Failure ]
-webkit.org/b/232386 fast/inline/inline-box-background.html [ Failure ]
 webkit.org/b/232386 fast/inline/line-break-loose-with-inline-box-boundary.html [ ImageOnlyFailure ]
-webkit.org/b/232386 fast/inline/vertical-align-text-bottom.html [ Failure ]
 webkit.org/b/232386 fast/multicol/float-adjacent-to-overflow-block.html [ ImageOnlyFailure ]
 webkit.org/b/232386 fast/overflow/dynamic-hidden.html [ Failure ]
 webkit.org/b/232386 fast/parser/changing-attrbutes-crash.html [ Failure ]
@@ -3469,15 +3471,11 @@ webkit.org/b/232386 svg/custom/use-animation-in-fill.html [ Failure ]
 webkit.org/b/232386 svg/custom/use-multiple-on-nested-disallowed-font.html [ Failure ]
 webkit.org/b/232386 svg/custom/xlink-prefix-in-attributes.html [ Failure ]
 webkit.org/b/232386 svg/filters/reparent-animated-filter-target.html [ Failure ]
-webkit.org/b/232386 svg/text/append-text-node-to-tspan.html [ Failure ]
-webkit.org/b/232386 svg/text/modify-text-node-in-tspan.html [ Failure ]
-webkit.org/b/232386 svg/text/remove-tspan-from-text.html [ Failure ]
 webkit.org/b/232386 svg/text/scaling-font-with-geometric-precision.html [ Failure ]
 webkit.org/b/232386 svg/text/text-rect-precision.html [ Failure ]
 webkit.org/b/232386 svg/text/text-viewbox-rescale.html [ Failure ]
 webkit.org/b/232386 tables/hittesting/filltable-outline.html [ Failure ]
 webkit.org/b/232386 tables/hittesting/filltable-stress.html [ Failure ]
-webkit.org/b/232386 tables/mozilla/bugs/bug157890.html [ Failure ]
 webkit.org/b/232386 tables/mozilla/bugs/bug222846.html [ Failure ]
 webkit.org/b/232386 tables/mozilla_expected_failures/bugs/bug104898.html [ Failure ]
 webkit.org/b/232386 fast/dom/gc-11.html [ Timeout ]
@@ -3882,6 +3880,10 @@ imported/w3c/web-platform-tests/css/css-view-transitions/massive-element-below-v
 imported/w3c/web-platform-tests/css/css-view-transitions/offscreen-element-modified-before-coming-onscreen.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-view-transitions/pseudo-rendering-invalidation.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-view-transitions/fractional-translation-from-transform.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-view-transitions/pseudo-with-classes-mismatch-ident.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-view-transitions/pseudo-with-classes-mismatch-partial.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-view-transitions/pseudo-with-classes-mismatch-wildcard.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-view-transitions/pseudo-with-classes-old-with-class-new-without.html [ ImageOnlyFailure ]
 
 # End: Common failures between GTK and WPE.
 

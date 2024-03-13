@@ -171,10 +171,10 @@ index 08b431099786e24e6b27a6539812e520c92436bb..3902781af7459dc8a880bd44f957df36
      }
  
 diff --git a/src/libANGLE/renderer/metal/ContextMtl.mm b/src/libANGLE/renderer/metal/ContextMtl.mm
-index 92f6dd08372b0a606455ea6cc6113a53e6091dc8..8cc18a48bd0519922db0d17915be44b5384b852b 100644
+index a294680f8ce300f93e2d4af6cf62458f4c6ac341..0045501e03586fe17ad34e0edc6ed29db382abec 100644
 --- a/src/libANGLE/renderer/metal/ContextMtl.mm
 +++ b/src/libANGLE/renderer/metal/ContextMtl.mm
-@@ -1067,6 +1067,13 @@ angle::Result ContextMtl::multiDrawElementsInstancedBaseVertexBaseInstance(
+@@ -1069,6 +1069,13 @@ angle::Result ContextMtl::multiDrawElementsInstancedBaseVertexBaseInstance(
  // Device loss
  gl::GraphicsResetStatus ContextMtl::getResetStatus()
  {
@@ -188,7 +188,20 @@ index 92f6dd08372b0a606455ea6cc6113a53e6091dc8..8cc18a48bd0519922db0d17915be44b5
      return gl::GraphicsResetStatus::NoError;
  }
  
-@@ -2477,8 +2484,22 @@ angle::Result ContextMtl::setupDraw(const gl::Context *context,
+@@ -1824,6 +1831,12 @@ void ContextMtl::endEncoding(bool forceSaveRenderPassContent)
+ 
+         endRenderEncoding(&mRenderEncoder);
+     }
++    // End blit encoder after render encoder, as endRenderEncoding() might create a
++    // blit encoder to resolve the visibility results.
++    if (mBlitEncoder.valid())
++    {
++        mBlitEncoder.endEncoding();
++    }
+ }
+ 
+ void ContextMtl::flushCommandBuffer(mtl::CommandBufferFinishOperation operation)
+@@ -2482,8 +2495,22 @@ angle::Result ContextMtl::setupDraw(const gl::Context *context,
              return angle::Result::Continue;
          }
          // Setup with flushed state should either produce a working encoder or fail with an error
@@ -214,7 +227,7 @@ index 92f6dd08372b0a606455ea6cc6113a53e6091dc8..8cc18a48bd0519922db0d17915be44b5
      return angle::Result::Continue;
  }
 diff --git a/src/libANGLE/renderer/metal/DisplayMtl.mm b/src/libANGLE/renderer/metal/DisplayMtl.mm
-index 61af5c836acfcc9e6b7c1b147b574477b59b63d8..ffd4dee693ed8b6013ddafeec457b8946d995d21 100644
+index 2e128f005c3fe9c8e6514b85a23b74c4b7ca0363..78571ae1ae3c5eb126ba3e2204a73aa904f7cda7 100644
 --- a/src/libANGLE/renderer/metal/DisplayMtl.mm
 +++ b/src/libANGLE/renderer/metal/DisplayMtl.mm
 @@ -184,12 +184,22 @@ void DisplayMtl::terminate()
@@ -314,7 +327,7 @@ index b0726b984f41119e930897b043a7da70a446a12a..d1877ade8fb10211d437c2d0dba8ea27
      params.srcDefaultAlphaData  = convertedFormat.defaultAlpha;
  
 diff --git a/src/libANGLE/renderer/metal/mtl_command_buffer.h b/src/libANGLE/renderer/metal/mtl_command_buffer.h
-index 8d7bc2667e4a20f1de7a513badb68e4da7fe3537..753f1b9a178c2d9c9b20307b2a837a00263f78e7 100644
+index 9d72fa50090a581422ca5ed603a60e48a6f04e1d..c5d34d0541971f49c41290cf6bb8dfd551aac88d 100644
 --- a/src/libANGLE/renderer/metal/mtl_command_buffer.h
 +++ b/src/libANGLE/renderer/metal/mtl_command_buffer.h
 @@ -101,6 +101,8 @@ class CommandQueue final : public WrappedObject<id<MTLCommandQueue>>, angle::Non
@@ -344,7 +357,7 @@ index 8d7bc2667e4a20f1de7a513badb68e4da7fe3537..753f1b9a178c2d9c9b20307b2a837a00
      uint64_t getSerial() const { return mSerial; }
  
 diff --git a/src/libANGLE/renderer/metal/mtl_command_buffer.mm b/src/libANGLE/renderer/metal/mtl_command_buffer.mm
-index 6207372fc309e2da60e269792aa1aa7a8d73d6b3..d182803b8ff855f4674d635209bd67b59f74e14d 100644
+index 470f8c1df7a8c24f9e2aaacffb5b762e844456ef..09f5fe3bda33dab8bbd0480172bb5ba3921b0707 100644
 --- a/src/libANGLE/renderer/metal/mtl_command_buffer.mm
 +++ b/src/libANGLE/renderer/metal/mtl_command_buffer.mm
 @@ -373,12 +373,20 @@ inline void SetVisibilityResultModeCmd(id<MTLRenderCommandEncoder> encoder,
@@ -397,6 +410,28 @@ index 6207372fc309e2da60e269792aa1aa7a8d73d6b3..d182803b8ff855f4674d635209bd67b5
      if (timeElapsedEntry != 0)
      {
          // Record this command buffer's elapsed time.
+diff --git a/src/libANGLE/renderer/metal/mtl_msl_utils.mm b/src/libANGLE/renderer/metal/mtl_msl_utils.mm
+index f59a62a0d291cd588762f5fcf49edb367370cbcc..92da7bb8712bf4cee7e9acc47a3454552cf15209 100644
+--- a/src/libANGLE/renderer/metal/mtl_msl_utils.mm
++++ b/src/libANGLE/renderer/metal/mtl_msl_utils.mm
+@@ -45,7 +45,7 @@ std::ostream &operator<<(std::ostream &stream, const UserDefinedNameExpr &expr)
+ struct UserDefinedNameComponentExpr
+ {
+     UserDefinedNameExpr name;
+-    const int component;
++    int component;
+ };
+ 
+ std::ostream &operator<<(std::ostream &stream, const UserDefinedNameComponentExpr &expr)
+@@ -66,7 +66,7 @@ std::ostream &operator<<(std::ostream &stream, const InternalNameExpr &expr)
+ struct InternalNameComponentExpr
+ {
+     InternalNameExpr name;
+-    const int component;
++    int component;
+ };
+ 
+ std::ostream &operator<<(std::ostream &stream, const InternalNameComponentExpr &expr)
 diff --git a/src/libANGLE/renderer/metal/mtl_render_utils.mm b/src/libANGLE/renderer/metal/mtl_render_utils.mm
 index 9e5487d393a0a2bd64106fc70e7b3f73626e2490..fec9fc3f884dfe7c87527ea19cca37c527d51e5a 100644
 --- a/src/libANGLE/renderer/metal/mtl_render_utils.mm

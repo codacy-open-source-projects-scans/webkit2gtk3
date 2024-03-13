@@ -75,6 +75,7 @@
 #include "RenderingUpdateID.h"
 #include "RetrieveRecordResponseBodyCallbackIdentifier.h"
 #include "SampleBufferDisplayLayerIdentifier.h"
+#include "ScriptMessageHandlerIdentifier.h"
 #include "ShapeDetectionIdentifier.h"
 #include "StorageAreaIdentifier.h"
 #include "StorageAreaImplIdentifier.h"
@@ -82,6 +83,8 @@
 #include "StorageNamespaceIdentifier.h"
 #include "TransactionID.h"
 #include "UserContentControllerIdentifier.h"
+#include "UserScriptIdentifier.h"
+#include "UserStyleSheetIdentifier.h"
 #include "VideoDecoderIdentifier.h"
 #include "VideoEncoderIdentifier.h"
 #include "WebExtensionContextIdentifier.h"
@@ -101,6 +104,7 @@
 #include <WebCore/FetchIdentifier.h>
 #include <WebCore/FileSystemHandleIdentifier.h>
 #include <WebCore/FileSystemSyncAccessHandleIdentifier.h>
+#include <WebCore/IDBDatabaseConnectionIdentifier.h>
 #include <WebCore/ImageDecoderIdentifier.h>
 #include <WebCore/LayerHostingContextIdentifier.h>
 #include <WebCore/LibWebRTCSocketIdentifier.h>
@@ -479,6 +483,7 @@ Vector<ASCIILiteral> serializedIdentifiers()
     static_assert(sizeof(uint64_t) == sizeof(WebCore::TextCheckingRequestIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::TextManipulationItemIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::TextManipulationTokenIdentifier));
+    static_assert(sizeof(uint64_t) == sizeof(WebCore::IDBDatabaseConnectionIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::UserMediaRequestIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::WebSocketIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebKit::AudioMediaStreamTrackRendererInternalUnitIdentifier));
@@ -528,6 +533,7 @@ Vector<ASCIILiteral> serializedIdentifiers()
     static_assert(sizeof(uint64_t) == sizeof(WebKit::RenderingUpdateID));
     static_assert(sizeof(uint64_t) == sizeof(WebKit::RetrieveRecordResponseBodyCallbackIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebKit::SampleBufferDisplayLayerIdentifier));
+    static_assert(sizeof(uint64_t) == sizeof(WebKit::ScriptMessageHandlerIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebKit::ShapeDetectionIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebKit::StorageAreaIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebKit::StorageAreaImplIdentifier));
@@ -536,6 +542,8 @@ Vector<ASCIILiteral> serializedIdentifiers()
     static_assert(sizeof(uint64_t) == sizeof(WebKit::TapIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebKit::TransactionID));
     static_assert(sizeof(uint64_t) == sizeof(WebKit::UserContentControllerIdentifier));
+    static_assert(sizeof(uint64_t) == sizeof(WebKit::UserScriptIdentifier));
+    static_assert(sizeof(uint64_t) == sizeof(WebKit::UserStyleSheetIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebKit::VideoDecoderIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebKit::VideoEncoderIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebKit::WebExtensionContextIdentifier));
@@ -587,6 +595,7 @@ Vector<ASCIILiteral> serializedIdentifiers()
         "WebCore::TextCheckingRequestIdentifier"_s,
         "WebCore::TextManipulationItemIdentifier"_s,
         "WebCore::TextManipulationTokenIdentifier"_s,
+        "WebCore::IDBDatabaseConnectionIdentifier"_s,
         "WebCore::UserMediaRequestIdentifier"_s,
         "WebCore::WebSocketIdentifier"_s,
         "WebKit::AudioMediaStreamTrackRendererInternalUnitIdentifier"_s,
@@ -636,6 +645,7 @@ Vector<ASCIILiteral> serializedIdentifiers()
         "WebKit::RenderingUpdateID"_s,
         "WebKit::RetrieveRecordResponseBodyCallbackIdentifier"_s,
         "WebKit::SampleBufferDisplayLayerIdentifier"_s,
+        "WebKit::ScriptMessageHandlerIdentifier"_s,
         "WebKit::ShapeDetectionIdentifier"_s,
         "WebKit::StorageAreaIdentifier"_s,
         "WebKit::StorageAreaImplIdentifier"_s,
@@ -644,6 +654,8 @@ Vector<ASCIILiteral> serializedIdentifiers()
         "WebKit::TapIdentifier"_s,
         "WebKit::TransactionID"_s,
         "WebKit::UserContentControllerIdentifier"_s,
+        "WebKit::UserScriptIdentifier"_s,
+        "WebKit::UserStyleSheetIdentifier"_s,
         "WebKit::VideoDecoderIdentifier"_s,
         "WebKit::VideoEncoderIdentifier"_s,
         "WebKit::WebExtensionContextIdentifier"_s,

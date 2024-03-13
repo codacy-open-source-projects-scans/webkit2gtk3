@@ -1222,7 +1222,7 @@ Quirks::StorageAccessResult Quirks::requestStorageAccessAndHandleClick(Completio
             return;
         }
 
-        ResourceLoadObserver::shared().setDomainsWithCrossPageStorageAccess({{ firstPartyDomain, domainInNeedOfStorageAccess }}, [completionHandler = WTFMove(completionHandler)] () mutable {
+        ResourceLoadObserver::shared().setDomainsWithCrossPageStorageAccess({ { firstPartyDomain, Vector<RegistrableDomain> { domainInNeedOfStorageAccess } } }, [completionHandler = WTFMove(completionHandler)] () mutable {
             completionHandler(ShouldDispatchClick::Yes);
         });
     });
@@ -1833,6 +1833,32 @@ bool Quirks::shouldIgnorePlaysInlineRequirementQuirk() const
     m_shouldIgnorePlaysInlineRequirementQuirk = isDomain("premierleague.com"_s);
 
     return *m_shouldIgnorePlaysInlineRequirementQuirk;
+#else
+    return false;
+#endif
+}
+
+bool Quirks::shouldUseEphemeralPartitionedStorageForDOMCookies(const URL& url) const
+{
+    if (!needsQuirks())
+        return false;
+
+    auto firstPartyDomain = RegistrableDomain(m_document->firstPartyForCookies()).string();
+    auto domain = RegistrableDomain(url).string();
+
+    // rdar://113830141
+    if (firstPartyDomain == "cagreatamerica.com"_s && domain == "queue-it.net"_s)
+        return true;
+
+    return false;
+}
+
+// This quirk has intentionally limited exposure to increase the odds of being able to remove it
+// again within a reasonable timeframe as the impacted apps are being updated. <rdar://122548304>
+bool Quirks::needsGetElementsByNameQuirk() const
+{
+#if PLATFORM(IOS)
+    return needsQuirks() && !PAL::currentUserInterfaceIdiomIsSmallScreen() && !linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::NoGetElementsByNameQuirk);
 #else
     return false;
 #endif

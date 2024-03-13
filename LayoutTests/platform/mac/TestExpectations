@@ -2104,9 +2104,6 @@ webkit.org/b/228364 media/track/track-in-band-duplicate-tracks-when-source-chang
 
 webkit.org/b/228642 imported/w3c/web-platform-tests/html/cross-origin-opener-policy/javascript-url.https.html [ Pass Failure ]
 
-webkit.org/b/229517 imported/w3c/web-platform-tests/webrtc-extensions/RTCRtpSynchronizationSource-captureTimestamp.html [ Pass Failure ]
-webkit.org/b/229517 imported/w3c/web-platform-tests/webrtc-extensions/RTCRtpSynchronizationSource-senderCaptureTimeOffset.html [ Pass Failure ]
-
 # accent-color is currently only supported on Cocoa platforms
 fast/css/accent-color/checkbox.html [ Pass ]
 fast/css/accent-color/progress.html [ Pass ]
@@ -2651,4 +2648,15 @@ webkit.org/b/270195 [ Monterey+ Debug ] fast/text/emoji-num-glyphs.html [ Timeou
 
 webkit.org/b/270303 [ Ventura ] tables/mozilla/bugs/bug4527.html [ Failure ]
 
-webkit.org/b/270315 [ Ventura ] svg/custom/svg-fonts-in-html.html [ Failure ]
+# webkit.org/b/270860 REGRESSION (275949@main): [ MacOS iOS ] 11X imported/w3c/web-platform-tests/css/css-text/i18n/other-lang/css-text-line-break test are consistent/flaky failures
+[ Monterey+ ] imported/w3c/web-platform-tests/css/css-text/i18n/other-lang/css-text-line-break-de-cpm-loose.html [ Pass Failure ]
+[ Monterey+ ] imported/w3c/web-platform-tests/css/css-text/i18n/other-lang/css-text-line-break-de-hyphens-loose.html [ Pass Failure ]
+[ Monterey+ ] imported/w3c/web-platform-tests/css/css-text/i18n/other-lang/css-text-line-break-de-hyphens-normal.html [ Pass Failure ]
+[ Monterey+ ] imported/w3c/web-platform-tests/css/css-text/i18n/other-lang/css-text-line-break-de-po-loose.html [ Pass Failure ]
+[ Monterey+ ] imported/w3c/web-platform-tests/css/css-text/i18n/unknown-lang/css-text-line-break-cj-loose.html [ Pass Failure ]
+[ Monterey+ ] imported/w3c/web-platform-tests/css/css-text/i18n/unknown-lang/css-text-line-break-cj-normal.html [ Pass Failure ]
+[ Monterey+ ] imported/w3c/web-platform-tests/css/css-text/i18n/unknown-lang/css-text-line-break-cpm-loose.html [ Pass Failure ]
+[ Monterey+ ] imported/w3c/web-platform-tests/css/css-text/i18n/unknown-lang/css-text-line-break-hyphens-loose.html [ Pass Failure ]
+[ Monterey+ ] imported/w3c/web-platform-tests/css/css-text/i18n/unknown-lang/css-text-line-break-hyphens-normal.html [ Pass Failure ]
+[ Monterey+ ] imported/w3c/web-platform-tests/css/css-text/i18n/unknown-lang/css-text-line-break-iteration-loose.html [ Pass Failure ]
+[ Monterey+ ] imported/w3c/web-platform-tests/css/css-text/i18n/unknown-lang/css-text-line-break-po-loose.html [ Pass Failure ]

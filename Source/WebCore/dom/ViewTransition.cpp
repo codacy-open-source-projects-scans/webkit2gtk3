@@ -342,6 +342,9 @@ ExceptionOr<void> ViewTransition::captureOldState()
             if (auto name = effectiveViewTransitionName(element); !name.isNull()) {
                 if (auto check = checkDuplicateViewTransitionName(name, usedTransitionNames); check.hasException())
                     return check.releaseException();
+
+                // FIXME: Skip fragmented content.
+
                 captureElements.append(element);
             }
             return { };
@@ -356,7 +359,7 @@ ExceptionOr<void> ViewTransition::captureOldState()
         CheckedPtr renderBox = dynamicDowncast<RenderBox>(element->renderer());
         if (renderBox)
             capture.oldSize = renderBox->size();
-        capture.oldProperties = copyElementBaseProperties(element);
+        capture.oldProperties = copyElementBaseProperties(element, capture.oldSize);
         if (m_document->frame())
             capture.oldImage = snapshotNodeVisualOverflowClippedToViewport(*m_document->frame(), element.get(), capture.oldOverflowRect);
 
@@ -493,7 +496,11 @@ void ViewTransition::activateViewTransition()
     }
 
     setupTransitionPseudoElements();
-    updatePseudoElementStyles();
+    checkFailure = updatePseudoElementStyles();
+    if (checkFailure.hasException()) {
+        skipViewTransition(checkFailure.releaseException());
+        return;
+    }
 
     m_phase = ViewTransitionPhase::Animating;
     m_ready.second->resolve();
@@ -571,7 +578,7 @@ void ViewTransition::clearViewTransition()
         documentElement->invalidateStyleInternal();
 }
 
-Ref<MutableStyleProperties> ViewTransition::copyElementBaseProperties(Element& element)
+Ref<MutableStyleProperties> ViewTransition::copyElementBaseProperties(Element& element, const LayoutSize& size)
 {
     ComputedStyleExtractor styleExtractor(&element);
 
@@ -599,10 +606,14 @@ Ref<MutableStyleProperties> ViewTransition::copyElementBaseProperties(Element& e
             break;
         LayoutSize containerOffset = renderer->offsetFromContainer(*container, LayoutPoint());
         TransformationMatrix localTransform;
-        renderer->getTransformFromContainer(nullptr, containerOffset, localTransform);
-        transform.multiply(localTransform);
+        renderer->getTransformFromContainer(container, containerOffset, localTransform);
+        transform = localTransform * transform;
         renderer = container;
     }
+    // Apply the inverse of what will be added by the default value of 'transform-origin',
+    // since the computed transform has already included it.
+    transform.translate(size.width() / 2, size.height() / 2);
+    transform.translateRight(-size.width() / 2, -size.height() / 2);
 
     if (element.renderer()) {
         Ref<CSSValue> transformListValue = CSSTransformListValue::create(ComputedStyleExtractor::matrixTransformValue(transform, element.renderer()->style()));
@@ -614,15 +625,20 @@ Ref<MutableStyleProperties> ViewTransition::copyElementBaseProperties(Element& e
 }
 
 // https://drafts.csswg.org/css-view-transitions-1/#update-pseudo-element-styles
-void ViewTransition::updatePseudoElementStyles()
+ExceptionOr<void> ViewTransition::updatePseudoElementStyles()
 {
     auto& resolver = protectedDocument()->styleScope().resolver();
 
     for (auto& [name, capturedElement] : m_namedElements.map()) {
         RefPtr<MutableStyleProperties> properties;
-        if (capturedElement->newElement)
-            properties = copyElementBaseProperties(*capturedElement->newElement);
-        else
+        if (RefPtr newElement = capturedElement->newElement.get()) {
+            // FIXME: Also check fragmented content here.
+            CheckVisibilityOptions visibilityOptions { .contentVisibilityAuto = true };
+            if (!newElement->checkVisibility(visibilityOptions))
+                return Exception { ExceptionCode::InvalidStateError, "One of the transitioned elements has become hidden."_s };
+            CheckedPtr renderBox = dynamicDowncast<RenderBox>(newElement->renderer());
+            properties = copyElementBaseProperties(*newElement, renderBox ? renderBox->size() : LayoutSize { });
+        } else
             properties = capturedElement->oldProperties;
 
         if (properties) {
@@ -636,6 +652,7 @@ void ViewTransition::updatePseudoElementStyles()
     }
 
     protectedDocument()->styleScope().didChangeStyleSheetContents();
+    return { };
 }
 
 }

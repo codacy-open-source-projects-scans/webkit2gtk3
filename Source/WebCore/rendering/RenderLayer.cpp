@@ -1341,6 +1341,17 @@ void RenderLayer::updateTransform()
     }
 }
 
+void RenderLayer::forceStackingContextIfNeeded()
+{
+    if (setIsCSSStackingContext(true)) {
+        setIsNormalFlowOnly(false);
+        if (parent()) {
+            if (!hasNotIsolatedBlendingDescendantsStatusDirty() && hasNotIsolatedBlendingDescendants())
+                parent()->dirtyAncestorChainHasBlendingDescendants();
+        }
+    }
+}
+
 TransformationMatrix RenderLayer::currentTransform(OptionSet<RenderStyle::TransformOperationOption> options) const
 {
     if (!m_transform)
@@ -2550,7 +2561,7 @@ void RenderLayer::resize(const PlatformMouseEvent& evt, const LayoutSize& oldOff
     if (!document.frame()->eventHandler().mousePressed())
         return;
 
-    float zoomFactor = renderer->style().effectiveZoom();
+    float zoomFactor = renderer->style().usedZoom();
 
     auto absolutePoint = document.view()->windowToContents(evt.position());
     auto localPoint = roundedIntPoint(absoluteToContents(absolutePoint));
@@ -3135,7 +3146,7 @@ void RenderLayer::setupClipPath(GraphicsContext& context, GraphicsContextStateSa
 
             stateSaver.save();
             context.translate(offset);
-            clipperRenderer->applyClippingToContext(context, renderer(), { { }, referenceBox.size() }, snappedClippingBounds, renderer().style().effectiveZoom());
+            clipperRenderer->applyClippingToContext(context, renderer(), { { }, referenceBox.size() }, snappedClippingBounds, renderer().style().usedZoom());
             context.translate(-offset);
             
             // FIXME: Support event regions.
@@ -5407,7 +5418,7 @@ static void determineNonLayerDescendantsPaintedContent(const RenderElement& rend
             if (!renderText->hasRenderedText())
                 continue;
 
-            if (renderer.style().effectiveUserSelect() != UserSelect::None)
+            if (renderer.style().usedUserSelect() != UserSelect::None)
                 request.setHasPaintedContent();
 
             if (!renderText->text().containsOnly<isASCIIWhitespace>())

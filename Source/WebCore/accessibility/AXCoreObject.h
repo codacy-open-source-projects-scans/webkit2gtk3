@@ -1418,7 +1418,7 @@ public:
     String helpTextAttributeValue() const;
     // This should be the visible text that's actually on the screen if possible.
     // If there's alternative text, that can override the title.
-    String titleAttributeValue() const;
+    virtual String titleAttributeValue() const;
     bool shouldComputeTitleAttributeValue() const;
 
     virtual bool hasApplePDFAnnotationAttribute() const = 0;
@@ -1629,10 +1629,8 @@ template<typename T, typename F>
 T* findChild(T& object, F&& matches)
 {
     for (auto child : object.children()) {
-        if (matches(child)) {
-            RELEASE_ASSERT(is<T>(child.get()));
-            return downcast<T>(child.get());
-        }
+        if (matches(child))
+            return checkedDowncast<T>(child.get());
     }
     return nullptr;
 }
@@ -1725,6 +1723,7 @@ WTF::TextStream& operator<<(WTF::TextStream&, AccessibilitySearchKey);
 WTF::TextStream& operator<<(WTF::TextStream&, const AccessibilitySearchCriteria&);
 WTF::TextStream& operator<<(WTF::TextStream&, AccessibilityObjectInclusion);
 WTF::TextStream& operator<<(WTF::TextStream&, const AXCoreObject&);
+WTF::TextStream& operator<<(WTF::TextStream&, AccessibilityText);
 WTF::TextStream& operator<<(WTF::TextStream&, AccessibilityTextSource);
 WTF::TextStream& operator<<(WTF::TextStream&, AXRelationType);
 

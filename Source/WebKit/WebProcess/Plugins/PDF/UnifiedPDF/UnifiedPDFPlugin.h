@@ -48,8 +48,6 @@ class PDFPluginPasswordField;
 class PDFPluginPasswordForm;
 class WebFrame;
 class WebMouseEvent;
-
-struct LookupTextResult;
 struct PDFContextMenu;
 struct PDFContextMenuItem;
 struct PDFPageCoverage;
@@ -112,6 +110,7 @@ public:
 #endif
     enum class IsAnnotationCommit : bool { No, Yes };
     static OptionSet<RepaintRequirement> repaintRequirementsForAnnotation(PDFAnnotation *, IsAnnotationCommit = IsAnnotationCommit::No);
+    void repaintAnnotationsForFormField(NSString *fieldName);
 
     void attemptToUnlockPDF(const String& password) final;
     void windowActivityDidChange() final;
@@ -119,6 +118,11 @@ public:
     void didSameDocumentNavigationForFrame(WebFrame&) final;
 
     float documentFittingScale() const { return m_documentLayout.scale(); }
+
+#if PLATFORM(MAC)
+    WebCore::FloatRect convertFromPDFPageToScreenForAccessibility(const WebCore::FloatRect&, PDFDocumentLayout::PageIndex) const;
+    void accessibilityScrollToPage(PDFDocumentLayout::PageIndex);
+#endif
 
 private:
     explicit UnifiedPDFPlugin(WebCore::HTMLPlugInElement&);
@@ -135,12 +139,30 @@ private:
     float initialScale() const;
     float scaleForFitToView() const;
 
+    /*
+        Unified PDF Plugin scales, in depth order:
+
+        - "device": same as the rest of WebKit. CSS-to-screen pixel ratio.
+
+        - "page": the scale of the WebPage.
+
+        - "scale factor": the user's chosen scale for the PDF contents (by zoom buttons, pinch-zoom, etc.).
+            for main frame plugins, this is synced with the page scale
+            for embedded plugins, this is on top of the page scale
+
+        - "document layout scale": the scale between contents and document space, to fit the pages in the scroll view's contents
+
+        Convenience names:
+
+        - "contentScaleFactor": the scale between the plugin and document space (scaleFactor * document layout scale)
+    */
     CGFloat scaleFactor() const override;
     float contentScaleFactor() const final;
 
     void didBeginMagnificationGesture() override;
     void didEndMagnificationGesture() override;
     void setPageScaleFactor(double scale, std::optional<WebCore::IntPoint> origin) final;
+    void setScaleFactor(double scale, std::optional<WebCore::IntPoint> origin = std::nullopt);
 
     WebCore::IntSize documentSize() const;
     WebCore::IntSize contentsSize() const override;
@@ -267,12 +289,13 @@ private:
     Vector<WebCore::FloatRect> rectsForTextMatchesInRect(const WebCore::IntRect&) const final;
     bool drawsFindOverlay() const final { return false; }
     void collectFindMatchRects(const String&, WebCore::FindOptions);
-    RefPtr<WebCore::TextIndicator> textIndicatorForSelection(OptionSet<WebCore::TextIndicatorOption>, WebCore::TextIndicatorPresentationTransition) final;
+    RefPtr<WebCore::TextIndicator> textIndicatorForCurrentSelection(OptionSet<WebCore::TextIndicatorOption>, WebCore::TextIndicatorPresentationTransition) final;
+    RefPtr<WebCore::TextIndicator> textIndicatorForSelection(PDFSelection *, OptionSet<WebCore::TextIndicatorOption>, WebCore::TextIndicatorPresentationTransition);
     bool performDictionaryLookupAtLocation(const WebCore::FloatPoint&) override;
-    [[maybe_unused]] bool searchInDictionary(const RetainPtr<PDFSelection>&);
     std::optional<WebCore::FloatRect> selectionBoundsForFirstPageInDocumentSpace(const RetainPtr<PDFSelection>&) const;
-    bool showDefinitionForAttributedString(RetainPtr<NSAttributedString>&&, const WebCore::FloatRect& rectInDocumentSpace);
-    LookupTextResult lookupTextAtLocation(const WebCore::FloatPoint&, WebHitTestResultData&) override;
+    bool showDefinitionForSelection(PDFSelection *);
+    std::pair<String, RetainPtr<PDFSelection>> textForImmediateActionHitTestAtPoint(const WebCore::FloatPoint&, WebHitTestResultData&) override;
+    WebCore::DictionaryPopupInfo dictionaryPopupInfoForSelection(PDFSelection *, WebCore::TextIndicatorPresentationTransition) override;
 
     id accessibilityHitTest(const WebCore::IntPoint&) const override;
     id accessibilityObject() const override;

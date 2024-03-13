@@ -1014,10 +1014,27 @@ void KeyframeEffect::setBlendingKeyframes(BlendingKeyframes&& blendingKeyframes)
     computeHasAcceleratedPropertyOverriddenByCascadeProperty();
     computeHasReferenceFilter();
     computeHasSizeDependentTransform();
+    analyzeAcceleratedProperties();
 
     checkForMatchingTransformFunctionLists();
 
     updateAcceleratedAnimationIfNecessary();
+}
+
+void KeyframeEffect::analyzeAcceleratedProperties()
+{
+    m_acceleratedProperties.clear();
+    m_acceleratedPropertiesWithImplicitKeyframe.clear();
+
+    ASSERT(document());
+    auto& settings = document()->settings();
+    for (auto& property : m_blendingKeyframes.properties()) {
+        if (!CSSPropertyAnimation::animationOfPropertyIsAccelerated(property, settings))
+            continue;
+        m_acceleratedProperties.add(property);
+        if (m_blendingKeyframes.hasImplicitKeyframeForProperty(property))
+            m_acceleratedPropertiesWithImplicitKeyframe.add(property);
+    }
 }
 
 void KeyframeEffect::checkForMatchingTransformFunctionLists()
@@ -2015,8 +2032,6 @@ void KeyframeEffect::applyPendingAcceleratedActions()
             break;
         }
     }
-
-    return;
 }
 
 Ref<const Animation> KeyframeEffect::backingAnimationForCompositedRenderer() const
@@ -2549,6 +2564,21 @@ void KeyframeEffect::effectStackNoLongerPreventsAcceleration()
 void KeyframeEffect::effectStackNoLongerAllowsAcceleration()
 {
     addPendingAcceleratedAction(AcceleratedAction::Stop);
+}
+
+void KeyframeEffect::effectStackNoLongerAllowsAccelerationDuringAcceleratedActionApplication()
+{
+#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+    if (threadedAnimationResolutionEnabled()) {
+        ASSERT_NOT_REACHED();
+        return;
+    }
+#endif
+
+    m_pendingAcceleratedActions.append(AcceleratedAction::Stop);
+    m_lastRecordedAcceleratedAction = AcceleratedAction::Stop;
+    applyPendingAcceleratedActions();
+    m_pendingAcceleratedActions.clear();
 }
 
 void KeyframeEffect::abilityToBeAcceleratedDidChange()

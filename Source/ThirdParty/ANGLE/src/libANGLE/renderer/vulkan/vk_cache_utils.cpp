@@ -328,6 +328,21 @@ void UnpackDepthStencilResolveAttachmentDesc(VkAttachmentDescription2 *desc,
     desc->finalLayout   = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 }
 
+void UnpackFragmentShadingRateAttachmentDesc(VkAttachmentDescription2 *desc)
+{
+    *desc                = {};
+    desc->sType          = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2;
+    desc->flags          = 0;
+    desc->format         = VK_FORMAT_R8_UINT;
+    desc->samples        = VK_SAMPLE_COUNT_1_BIT;
+    desc->loadOp         = VK_ATTACHMENT_LOAD_OP_LOAD;
+    desc->storeOp        = VK_ATTACHMENT_STORE_OP_NONE;
+    desc->stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    desc->stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    desc->initialLayout  = VK_IMAGE_LAYOUT_FRAGMENT_SHADING_RATE_ATTACHMENT_OPTIMAL_KHR;
+    desc->finalLayout    = VK_IMAGE_LAYOUT_FRAGMENT_SHADING_RATE_ATTACHMENT_OPTIMAL_KHR;
+}
+
 void UnpackStencilState(const PackedStencilOpState &packedState,
                         VkStencilOpState *stateOut,
                         bool writeMaskWorkaround)
@@ -2528,7 +2543,7 @@ bool RenderPassDesc::hasStencilAttachment() const
     return formatID != angle::FormatID::NONE && angle::Format::Get(formatID).stencilBits > 0;
 }
 
-size_t RenderPassDesc::attachmentCount() const
+size_t RenderPassDesc::clearableAttachmentCount() const
 {
     size_t colorAttachmentCount = 0;
     for (size_t i = 0; i < mColorAttachmentRange; ++i)
@@ -2542,6 +2557,11 @@ size_t RenderPassDesc::attachmentCount() const
     size_t depthStencilResolveCount = hasDepthStencilResolveAttachment() ? 1 : 0;
     return colorAttachmentCount + mColorResolveAttachmentMask.count() + depthStencilCount +
            depthStencilResolveCount;
+}
+
+size_t RenderPassDesc::attachmentCount() const
+{
+    return clearableAttachmentCount() + (hasFragmentShadingAttachment() ? 1 : 0);
 }
 
 void RenderPassDesc::setLegacyDither(bool enabled)
@@ -4124,6 +4144,11 @@ void GraphicsPipelineDesc::setRenderPassColorAttachmentFormat(size_t colorIndexG
     mSharedNonVertexInput.renderPass.packColorAttachment(colorIndexGL, formatID);
 }
 
+void GraphicsPipelineDesc::setRenderPassFoveation(bool isFoveated)
+{
+    mSharedNonVertexInput.renderPass.setFragmentShadingAttachment(isFoveated);
+}
+
 // AttachmentOpsArray implementation.
 AttachmentOpsArray::AttachmentOpsArray()
 {
@@ -4607,6 +4632,16 @@ void FramebufferDesc::updateDepthStencil(ImageOrBufferViewSubresourceSerial seri
 void FramebufferDesc::updateDepthStencilResolve(ImageOrBufferViewSubresourceSerial serial)
 {
     update(kFramebufferDescDepthStencilResolveIndexOffset, serial);
+}
+
+void FramebufferDesc::updateFragmentShadingRate(ImageOrBufferViewSubresourceSerial serial)
+{
+    update(kFramebufferDescFragmentShadingRateAttachmentIndexOffset, serial);
+}
+
+bool FramebufferDesc::hasFragmentShadingRateAttachment() const
+{
+    return mSerials[kFramebufferDescFragmentShadingRateAttachmentIndexOffset].viewSerial.valid();
 }
 
 size_t FramebufferDesc::hash() const
@@ -6334,6 +6369,109 @@ void PipelineCacheAccess::merge(RendererVk *renderer, const vk::PipelineCache &p
 }
 }  // namespace vk
 
+// UpdateDescriptorSetsBuilder implementation.
+UpdateDescriptorSetsBuilder::UpdateDescriptorSetsBuilder()
+{
+    // Reserve reasonable amount of spaces so that for majority of apps we don't need to grow at all
+    constexpr size_t kDescriptorBufferInfosInitialSize = 8;
+    constexpr size_t kDescriptorImageInfosInitialSize  = 4;
+    constexpr size_t kDescriptorWriteInfosInitialSize =
+        kDescriptorBufferInfosInitialSize + kDescriptorImageInfosInitialSize;
+    constexpr size_t kDescriptorBufferViewsInitialSize = 0;
+
+    mDescriptorBufferInfos.reserve(kDescriptorBufferInfosInitialSize);
+    mDescriptorImageInfos.reserve(kDescriptorImageInfosInitialSize);
+    mWriteDescriptorSets.reserve(kDescriptorWriteInfosInitialSize);
+    mBufferViews.reserve(kDescriptorBufferViewsInitialSize);
+}
+
+UpdateDescriptorSetsBuilder::~UpdateDescriptorSetsBuilder() = default;
+
+template <typename T, const T *VkWriteDescriptorSet::*pInfo>
+void UpdateDescriptorSetsBuilder::growDescriptorCapacity(std::vector<T> *descriptorVector,
+                                                         size_t newSize)
+{
+    const T *const oldInfoStart = descriptorVector->empty() ? nullptr : &(*descriptorVector)[0];
+    size_t newCapacity          = std::max(descriptorVector->capacity() << 1, newSize);
+    descriptorVector->reserve(newCapacity);
+
+    if (oldInfoStart)
+    {
+        // patch mWriteInfo with new BufferInfo/ImageInfo pointers
+        for (VkWriteDescriptorSet &set : mWriteDescriptorSets)
+        {
+            if (set.*pInfo)
+            {
+                size_t index = set.*pInfo - oldInfoStart;
+                set.*pInfo   = &(*descriptorVector)[index];
+            }
+        }
+    }
+}
+
+template <typename T, const T *VkWriteDescriptorSet::*pInfo>
+T *UpdateDescriptorSetsBuilder::allocDescriptorInfos(std::vector<T> *descriptorVector, size_t count)
+{
+    size_t oldSize = descriptorVector->size();
+    size_t newSize = oldSize + count;
+    if (newSize > descriptorVector->capacity())
+    {
+        // If we have reached capacity, grow the storage and patch the descriptor set with new
+        // buffer info pointer
+        growDescriptorCapacity<T, pInfo>(descriptorVector, newSize);
+    }
+    descriptorVector->resize(newSize);
+    return &(*descriptorVector)[oldSize];
+}
+
+VkDescriptorBufferInfo *UpdateDescriptorSetsBuilder::allocDescriptorBufferInfos(size_t count)
+{
+    return allocDescriptorInfos<VkDescriptorBufferInfo, &VkWriteDescriptorSet::pBufferInfo>(
+        &mDescriptorBufferInfos, count);
+}
+
+VkDescriptorImageInfo *UpdateDescriptorSetsBuilder::allocDescriptorImageInfos(size_t count)
+{
+    return allocDescriptorInfos<VkDescriptorImageInfo, &VkWriteDescriptorSet::pImageInfo>(
+        &mDescriptorImageInfos, count);
+}
+
+VkWriteDescriptorSet *UpdateDescriptorSetsBuilder::allocWriteDescriptorSets(size_t count)
+{
+    size_t oldSize = mWriteDescriptorSets.size();
+    size_t newSize = oldSize + count;
+    mWriteDescriptorSets.resize(newSize);
+    return &mWriteDescriptorSets[oldSize];
+}
+
+VkBufferView *UpdateDescriptorSetsBuilder::allocBufferViews(size_t count)
+{
+    return allocDescriptorInfos<VkBufferView, &VkWriteDescriptorSet::pTexelBufferView>(
+        &mBufferViews, count);
+}
+
+uint32_t UpdateDescriptorSetsBuilder::flushDescriptorSetUpdates(VkDevice device)
+{
+    if (mWriteDescriptorSets.empty())
+    {
+        ASSERT(mDescriptorBufferInfos.empty());
+        ASSERT(mDescriptorImageInfos.empty());
+        return 0;
+    }
+
+    vkUpdateDescriptorSets(device, static_cast<uint32_t>(mWriteDescriptorSets.size()),
+                           mWriteDescriptorSets.data(), 0, nullptr);
+
+    uint32_t retVal = static_cast<uint32_t>(mWriteDescriptorSets.size());
+
+    mWriteDescriptorSets.clear();
+    mDescriptorBufferInfos.clear();
+    mDescriptorImageInfos.clear();
+    mBufferViews.clear();
+
+    return retVal;
+}
+
 // FramebufferCache implementation.
 void FramebufferCache::destroy(RendererVk *rendererVk)
 {
@@ -6553,6 +6691,7 @@ angle::Result RenderPassCache::MakeRenderPass(vk::Context *context,
     gl::DrawBuffersVector<VkAttachmentReference2> colorResolveAttachmentRefs;
     VkAttachmentReference2 depthStencilAttachmentRef        = kUnusedAttachment;
     VkAttachmentReference2 depthStencilResolveAttachmentRef = kUnusedAttachment;
+    VkAttachmentReference2 fragmentShadingRateAttachmentRef = kUnusedAttachment;
 
     // The list of attachments includes all non-resolve and resolve attachments.
     vk::FramebufferAttachmentArray<VkAttachmentDescription2> attachmentDescs;
@@ -6786,6 +6925,19 @@ angle::Result RenderPassCache::MakeRenderPass(vk::Context *context,
         ++attachmentCount;
     }
 
+    // Pack fragment shading rate attachment, if any
+    if (desc.hasFragmentShadingAttachment())
+    {
+        vk::UnpackFragmentShadingRateAttachmentDesc(&attachmentDescs[attachmentCount.get()]);
+
+        fragmentShadingRateAttachmentRef.sType      = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2;
+        fragmentShadingRateAttachmentRef.attachment = attachmentCount.get();
+        fragmentShadingRateAttachmentRef.layout =
+            VK_IMAGE_LAYOUT_FRAGMENT_SHADING_RATE_ATTACHMENT_OPTIMAL_KHR;
+
+        ++attachmentCount;
+    }
+
     vk::SubpassVector<VkSubpassDescription2> subpassDesc;
 
     // If any attachment needs to be unresolved, create an initial subpass for this purpose.  Note
@@ -6871,6 +7023,19 @@ angle::Result RenderPassCache::MakeRenderPass(vk::Context *context,
         ASSERT(subpassDesc.size() == 1);
         vk::InitializeMSRTSS(context, renderToTextureSamples, &subpassDesc.back(), &msrtssResolve,
                              &msrtss, &msrtssGOOGLEX);
+    }
+
+    VkFragmentShadingRateAttachmentInfoKHR fragmentShadingRateAttachmentInfo = {};
+    if (desc.hasFragmentShadingAttachment())
+    {
+        fragmentShadingRateAttachmentInfo.sType =
+            VK_STRUCTURE_TYPE_FRAGMENT_SHADING_RATE_ATTACHMENT_INFO_KHR;
+        fragmentShadingRateAttachmentInfo.pFragmentShadingRateAttachment =
+            &fragmentShadingRateAttachmentRef;
+        fragmentShadingRateAttachmentInfo.shadingRateAttachmentTexelSize =
+            context->getRenderer()->getMaxFragmentShadingRateAttachmentTexelSize();
+
+        vk::AddToPNextChain(&subpassDesc.back(), &fragmentShadingRateAttachmentInfo);
     }
 
     std::vector<VkSubpassDependency2> subpassDependencies;

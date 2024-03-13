@@ -65,7 +65,6 @@
 #include "RenderMultiColumnFlow.h"
 #include "RenderMultiColumnSet.h"
 #include "RenderMultiColumnSpannerPlaceholder.h"
-#include "RenderRuby.h"
 #include "RenderSVGBlock.h"
 #include "RenderSVGInline.h"
 #include "RenderSVGModelObject.h"
@@ -1795,15 +1794,17 @@ static void invalidateLineLayoutAfterTreeMutationIfNeeded(RenderObject& renderer
     CheckedPtr container = LayoutIntegration::LineLayout::blockContainer(renderer);
     if (!container)
         return;
-    auto shouldInvalidateLineLayoutPath = true;
-    if (auto* modernLineLayout = container->modernLineLayout()) {
-        shouldInvalidateLineLayoutPath = LayoutIntegration::LineLayout::shouldInvalidateLineLayoutPathAfterTreeMutation(*container, renderer, *modernLineLayout, isRemoval == IsRemoval::Yes);
-        if (!shouldInvalidateLineLayoutPath) {
-            isRemoval == IsRemoval::Yes ? modernLineLayout->removedFromTree(*renderer.parent(), renderer) : modernLineLayout->insertedIntoTree(*renderer.parent(), renderer);
-            shouldInvalidateLineLayoutPath = !modernLineLayout->isDamaged();
-        }
-    }
-    if (shouldInvalidateLineLayoutPath)
+    auto shouldInvalidateLineLayoutPath = [&] {
+        auto* modernLineLayout = container->modernLineLayout();
+        if (!modernLineLayout)
+            return true;
+        if (LayoutIntegration::LineLayout::shouldInvalidateLineLayoutPathAfterTreeMutation(*container, renderer, *modernLineLayout, isRemoval == IsRemoval::Yes))
+            return true;
+        if (isRemoval == IsRemoval::Yes)
+            return !modernLineLayout->removedFromTree(*renderer.parent(), renderer);
+        return !modernLineLayout->insertedIntoTree(*renderer.parent(), renderer);
+    };
+    if (shouldInvalidateLineLayoutPath())
         container->invalidateLineLayoutPath();
 }
 
@@ -1977,14 +1978,14 @@ RenderBoxModelObject* RenderObject::offsetParent() const
     //     * Our own extension: if there is a difference in the effective zoom
 
     bool skipTables = isPositioned();
-    float currZoom = style().effectiveZoom();
+    float currZoom = style().usedZoom();
     CheckedPtr current = parent();
     while (current && (!current->element() || (!current->canContainAbsolutelyPositionedObjects() && !current->isBody()))) {
         RefPtr element = current->element();
         if (!skipTables && element && (is<HTMLTableElement>(*element) || is<HTMLTableCellElement>(*element)))
             break;
  
-        float newZoom = current->style().effectiveZoom();
+        float newZoom = current->style().usedZoom();
         if (currZoom != newZoom)
             break;
         currZoom = newZoom;
@@ -2454,7 +2455,7 @@ auto RenderObject::collectSelectionGeometriesInternal(const SimpleRange& range) 
     for (Ref node : intersectingNodesWithDeprecatedZeroOffsetStartQuirk(range)) {
         CheckedPtr renderer = node->renderer();
         // Only ask leaf render objects for their line box rects.
-        if (renderer && !renderer->firstChildSlow() && renderer->style().effectiveUserSelect() != UserSelect::None) {
+        if (renderer && !renderer->firstChildSlow() && renderer->style().usedUserSelect() != UserSelect::None) {
             bool isStartNode = renderer->node() == range.start.container.ptr();
             bool isEndNode = renderer->node() == range.end.container.ptr();
             if (hasFlippedWritingMode != renderer->style().isFlippedBlocksWritingMode())
@@ -2511,8 +2512,7 @@ auto RenderObject::collectSelectionGeometriesInternal(const SimpleRange& range) 
         int currentRectTop = geometries[i].logicalTop();
         int currentRectBottom = currentRectTop + geometries[i].logicalHeight();
 
-        // We don't want to count the ruby text as a separate line.
-        if (intervalsSufficientlyOverlap(currentRectTop, currentRectBottom, lineTop, lineBottom) || (i && geometries[i].isRubyText())) {
+        if (intervalsSufficientlyOverlap(currentRectTop, currentRectBottom, lineTop, lineBottom)) {
             // Grow the current line bounds.
             lineTop = std::min(lineTop, currentRectTop);
             lineBottom = std::max(lineBottom, currentRectBottom);
@@ -2552,8 +2552,6 @@ auto RenderObject::collectSelectionGeometriesInternal(const SimpleRange& range) 
     adjustLineHeightOfSelectionGeometries(geometries, numberOfGeometries, lineNumber, lineTop, lineBottom - lineTop);
 
     // When using SelectionRenderingBehavior::CoalesceBoundingRects, sort the rectangles and make sure there are no gaps.
-    // The rectangles could be unsorted when there is ruby text and we could have gaps on the line when adjacent elements
-    // on the line have a different orientation.
     //
     // Note that for selection geometries with SelectionRenderingBehavior::UseIndividualQuads, we avoid sorting in order to
     // preserve the fact that the resulting geometries correspond to the order in which the quads are discovered during DOM

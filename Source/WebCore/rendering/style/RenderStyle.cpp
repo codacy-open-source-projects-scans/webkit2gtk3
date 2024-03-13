@@ -551,7 +551,7 @@ static inline unsigned computeFontHash(const FontCascade& font)
 unsigned RenderStyle::hashForTextAutosizing() const
 {
     // FIXME: Not a very smart hash. Could be improved upon. See <https://bugs.webkit.org/show_bug.cgi?id=121131>.
-    unsigned hash = m_nonInheritedData->miscData->effectiveAppearance;
+    unsigned hash = m_nonInheritedData->miscData->usedAppearance;
     hash ^= m_nonInheritedData->rareData->lineClamp.value();
     hash ^= m_rareInheritedData->overflowWrap;
     hash ^= m_rareInheritedData->nbspMode;
@@ -571,7 +571,7 @@ unsigned RenderStyle::hashForTextAutosizing() const
 
 bool RenderStyle::equalForTextAutosizing(const RenderStyle& other) const
 {
-    return m_nonInheritedData->miscData->effectiveAppearance == other.m_nonInheritedData->miscData->effectiveAppearance
+    return m_nonInheritedData->miscData->usedAppearance == other.m_nonInheritedData->miscData->usedAppearance
         && m_nonInheritedData->rareData->lineClamp == other.m_nonInheritedData->rareData->lineClamp
         && m_rareInheritedData->textSizeAdjust == other.m_rareInheritedData->textSizeAdjust
         && m_rareInheritedData->overflowWrap == other.m_rareInheritedData->overflowWrap
@@ -717,10 +717,7 @@ inline bool RenderStyle::changeAffectsVisualOverflow(const RenderStyle& other) c
         || m_rareInheritedData->textUnderlinePosition != other.m_rareInheritedData->textUnderlinePosition) {
         // Underlines are always drawn outside of their textbox bounds when text-underline-position: under;
         // is specified. We can take an early out here.
-        auto isVertialWritingMode = isVerticalWritingMode() || other.isVerticalWritingMode();
-        auto isAlignedForUnder = textUnderlinePosition() == TextUnderlinePosition::Under || other.textUnderlinePosition() == TextUnderlinePosition::Under
-            || (isVertialWritingMode && (textUnderlinePosition() == TextUnderlinePosition::Right || other.textUnderlinePosition() == TextUnderlinePosition::Right || textUnderlinePosition() == TextUnderlinePosition::Left || other.textUnderlinePosition() == TextUnderlinePosition::Left));
-        if (isAlignedForUnder)
+        if (isAlignedForUnder(*this) || isAlignedForUnder(other))
             return true;
         return visualOverflowForDecorations(*this) != visualOverflowForDecorations(other);
     }
@@ -738,7 +735,7 @@ static bool miscDataChangeRequiresLayout(const StyleMiscNonInheritedData& first,
 {
     ASSERT(&first != &second);
 
-    if (first.effectiveAppearance != second.effectiveAppearance
+    if (first.usedAppearance != second.usedAppearance
         || first.textOverflow != second.textOverflow)
         return true;
 
@@ -885,7 +882,7 @@ static bool rareInheritedDataChangeRequiresLayout(const StyleRareInheritedData& 
         || first.textAlignLast != second.textAlignLast
         || first.textJustify != second.textJustify
         || first.textIndentLine != second.textIndentLine
-        || first.effectiveZoom != second.effectiveZoom
+        || first.usedZoom != second.usedZoom
         || first.textZoom != second.textZoom
 #if ENABLE(TEXT_AUTOSIZING)
         || first.textSizeAdjust != second.textSizeAdjust
@@ -1801,7 +1798,7 @@ void RenderStyle::conservativelyCollectChangedAnimatableProperties(const RenderS
         // hasExplicitlySetDirection
         // hasExplicitlySetWritingMode
         // appearance
-        // effectiveAppearance
+        // usedAppearance
         // userDrag
     };
 
@@ -2083,14 +2080,14 @@ void RenderStyle::conservativelyCollectChangedAnimatableProperties(const RenderS
         // textSizeAdjust
         // userSelect
         // isInSubtreeWithBlendMode
-        // effectiveTouchActions
+        // usedTouchActions
         // eventListenerRegionTypes
         // effectiveInert
         // effectiveContentVisibility
         // strokeColor
         // visitedLinkStrokeColor
         // hasSetStrokeColor
-        // effectiveZoom
+        // usedZoom
         // textBoxEdge
         // textSecurity
         // userModify
@@ -3098,7 +3095,7 @@ Color RenderStyle::colorWithColorFilter(const StyleColor& color) const
     return colorByApplyingColorFilter(colorResolvingCurrentColor(color));
 }
 
-Color RenderStyle::effectiveAccentColor() const
+Color RenderStyle::usedAccentColor() const
 {
     if (hasAutoAccentColor())
         return { };
@@ -3109,7 +3106,7 @@ Color RenderStyle::effectiveAccentColor() const
     return colorResolvingCurrentColor(accentColor());
 }
 
-Color RenderStyle::effectiveScrollbarThumbColor() const
+Color RenderStyle::usedScrollbarThumbColor() const
 {
     if (!scrollbarColor().has_value())
         return { };
@@ -3120,7 +3117,7 @@ Color RenderStyle::effectiveScrollbarThumbColor() const
     return colorResolvingCurrentColor(scrollbarColor().value().thumbColor);
 }
 
-Color RenderStyle::effectiveScrollbarTrackColor() const
+Color RenderStyle::usedScrollbarTrackColor() const
 {
     if (!scrollbarColor().has_value())
         return { };
@@ -3826,7 +3823,7 @@ UsedFloat RenderStyle::usedFloat(const RenderObject& renderer)
     RELEASE_ASSERT_NOT_REACHED();
 }
 
-UserSelect RenderStyle::effectiveUserSelect() const
+UserSelect RenderStyle::usedUserSelect() const
 {
     if (effectiveInert())
         return UserSelect::None;

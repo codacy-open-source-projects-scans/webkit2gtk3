@@ -515,10 +515,12 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Platform/IPC/FormDataReference.serialization.in \
 	Platform/IPC/IPCEvent.serialization.in \
 	Platform/IPC/IPCSemaphore.serialization.in \
+	Platform/IPC/MessageFlags.serialization.in \
 	Platform/IPC/ObjectIdentifierReference.serialization.in \
 	Platform/IPC/SharedBufferReference.serialization.in \
 	Platform/IPC/SharedFileHandle.serialization.in \
 	Platform/IPC/StreamServerConnection.serialization.in \
+	Platform/cocoa/MediaPlaybackTargetContextSerialized.serialization.in \
 	Shared/AuxiliaryProcessCreationParameters.serialization.in \
 	Shared/API/APIArray.serialization.in \
 	Shared/API/APIData.serialization.in \
@@ -787,6 +789,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	WebProcess/GPU/graphics/BufferIdentifierSet.serialization.in \
 	WebProcess/GPU/graphics/PrepareBackingStoreBuffersData.serialization.in \
 	WebProcess/GPU/media/MediaOverridesForTesting.serialization.in \
+	WebProcess/GPU/media/MediaTimeUpdateData.serialization.in \
 	WebProcess/GPU/media/RemoteCDMConfiguration.serialization.in \
 	WebProcess/GPU/media/RemoteCDMInstanceConfiguration.serialization.in \
 	WebProcess/GPU/media/RemoteAudioSessionConfiguration.serialization.in \
@@ -809,7 +812,6 @@ WEBCORE_SERIALIZATION_DESCRIPTION_FILES = \
 	InbandTextTrackPrivate.serialization.in \
 	IndexedDB.serialization.in \
 	LayoutMilestones.serialization.in \
-	MediaPlaybackTargetContext.serialization.in \
 	MediaProducer.serialization.in \
 	MDNSRegisterError.serialization.in \
 	PlatformEvent.serialization.in \

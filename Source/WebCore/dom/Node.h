@@ -286,6 +286,10 @@ public:
     bool isPrecustomizedCustomElement() const { return customElementState() == CustomElementState::FailedOrPrecustomized && !isUnknownElement(); }
     bool isPrecustomizedOrDefinedCustomElement() const { return isPrecustomizedCustomElement() || isDefinedCustomElement(); }
 
+    bool isInCustomElementReactionQueue() const { return hasStateFlag(StateFlag::IsInCustomElementReactionQueue); }
+    void setIsInCustomElementReactionQueue() { setStateFlag(StateFlag::IsInCustomElementReactionQueue); }
+    void clearIsInCustomElementReactionQueue() { clearStateFlag(StateFlag::IsInCustomElementReactionQueue); }
+
     // Returns null, a child of ShadowRoot, or a legacy shadow root.
     Node* nonBoundaryShadowTreeRootNode();
 
@@ -488,7 +492,7 @@ public:
 
 #if ENABLE(TREE_DEBUGGING)
     void showNode(const char* prefix = "") const;
-    void showTreeForThis() const;
+    WEBCORE_EXPORT void showTreeForThis() const;
     void showNodePathForThis() const;
     void showTreeAndMark(const Node* markedNode1, const char* markedLabel1, const Node* markedNode2 = nullptr, const char* markedLabel2 = nullptr) const;
     void showTreeForThisAcrossFrame() const;
@@ -635,6 +639,7 @@ protected:
         ContainsOnlyASCIIWhitespaceIsValid = 1 << 12, // Only used on CharacterData.
         HasHeldBackChildrenChanged = 1 << 13,
         HasStartedDeletion = 1 << 14,
+        IsInCustomElementReactionQueue = 1 << 15,
     };
 
     enum class TabIndexState : uint8_t {

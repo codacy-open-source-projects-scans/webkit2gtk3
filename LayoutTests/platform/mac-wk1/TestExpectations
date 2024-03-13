@@ -865,6 +865,9 @@ accessibility/mac/initial-relative-frame-cached.html [ Skip ]
 # New API not supported in WK1
 accessibility/mac/intersection-with-selection-range.html [ Skip ]
 
+# Skipping because AccessibilityUIElement::columns() is not supported on WK1.
+accessibility/dynamic-table-row-column-indices.html [ Skip ]
+
 # DOM paste access requests are not implemented in WebKit1.
 editing/async-clipboard/clipboard-change-data-while-reading.html [ Skip ]
 editing/async-clipboard/clipboard-do-not-read-text-from-platform-if-text-changes.html [ Skip ]
@@ -1788,6 +1791,9 @@ http/wpt/credential-management/ [ Skip ]
 http/wpt/webauthn/ [ Skip ]
 imported/w3c/web-platform-tests/credential-management/ [ Skip ]
 
+# Skip Digital Credentials API
+http/wpt/identity/ [ Skip ]
+
 webkit.org/b/182554 transitions/transition-display-property.html [ Pass ImageOnlyFailure ]
 
 webkit.org/b/184456 imported/w3c/web-platform-tests/html/semantics/embedded-content/the-embed-element/embed-in-object-fallback.html [ Pass Failure ]
@@ -1916,8 +1922,6 @@ fast/images/animated-heics-verify.html [ Skip ]
 
 # Skip IsLoggedIn
 http/tests/is-logged-in/ [ Skip ]
-
-webkit.org/b/203305 [ Debug ] imported/w3c/web-platform-tests/css/css-transitions/properties-value-inherit-001.html [ Pass Failure ]
 
 # wpt css-position failures
 webkit.org/b/203466 imported/w3c/web-platform-tests/css/css-position/z-index-blend-will-change-overlapping-layers.html [ ImageOnlyFailure ]
@@ -2730,10 +2734,6 @@ webkit.org/b/262130 imported/w3c/web-platform-tests/html/browsers/browsing-the-w
 
 webkit.org/b/262133 [ Release ] js/ShadowRealm-importValue.html [ Pass Timeout ]
 
-webkit.org/b/262340 [ Sonoma ] compositing/repaint/iframes/composited-iframe-with-fixed-background-doc-repaint.html [ Failure ]
-webkit.org/b/262340 [ Sonoma ] compositing/repaint/iframes/compositing-iframe-scroll-repaint.html [ Failure ]
-webkit.org/b/262340 [ Sonoma ] compositing/repaint/iframes/compositing-iframe-with-fixed-background-doc-repaint.html [ Failure ]
-
 # rdar://113991102 (REGRESSION ( Sonoma ): [ Sonoma ] 10 fast/text/canvas-color-fonts/..COLR tests are a consistent image failure)
 [ Sonoma+ ] fast/text/canvas-color-fonts/stroke-gradient-COLR.html [ ImageOnlyFailure ]
 
@@ -2769,6 +2769,8 @@ imported/w3c/web-platform-tests/css/css-scroll-snap/input/snap-area-overflow-bou
 imported/w3c/web-platform-tests/css/css-transforms/scroll-preserve-3d.html [ Skip ]
 imported/w3c/web-platform-tests/dom/events/non-cancelable-when-passive/non-passive-mousewheel-event-listener-on-div.html [ Skip ]
 imported/w3c/web-platform-tests/dom/events/non-cancelable-when-passive/non-passive-wheel-event-listener-on-div.html [ Skip ]
+imported/w3c/web-platform-tests/dom/events/non-cancelable-when-passive/passive-wheel-event-listener-on-div.html [ Skip ]
+imported/w3c/web-platform-tests/dom/events/non-cancelable-when-passive/passive-mousewheel-event-listener-on-div.html [ Skip ]
 imported/w3c/web-platform-tests/dom/events/scrolling/iframe-chains.html [ Skip ]
 imported/w3c/web-platform-tests/dom/events/scrolling/scrollend-event-for-user-scroll.html [ Skip ]
 imported/w3c/web-platform-tests/html/semantics/popovers/popover-light-dismiss.html [ Skip ]
@@ -2797,10 +2799,6 @@ webkit.org/b/270133 [ Sonoma+ ] imported/w3c/web-platform-tests/accname/name/com
 webkit.org/b/270273 [ Monterey+ Debug ] imported/w3c/web-platform-tests/scroll-animations/css/animation-inactive-outside-range-test.html [ Skip ]
 
 webkit.org/b/270274 [ Monterey+ Debug ] imported/w3c/web-platform-tests/scroll-animations/css/animation-fill-outside-range-test.html [ Skip ]
-
-# webkit.org/b/270326 ([ Sonoma+ WK1 ] 2X imported/w3c/web-platform-tests/dom/events/non-cancelable-when-passive/passive test are constant failures)
-[ Sonoma+ ] imported/w3c/web-platform-tests/dom/events/non-cancelable-when-passive/passive-wheel-event-listener-on-div.html [ Failure ]
-[ Sonoma+ ] imported/w3c/web-platform-tests/dom/events/non-cancelable-when-passive/passive-mousewheel-event-listener-on-div.html [ Failure ]
 
 webkit.org/b/270310 [ Sonoma+ ] imported/w3c/web-platform-tests/html/semantics/interactive-elements/the-dialog-element/removed-element-is-removed-from-top-layer.html [ ImageOnlyFailure ]
 webkit.org/b/270310 [ Sonoma+ ] imported/w3c/web-platform-tests/html/semantics/interactive-elements/the-dialog-element/top-layer-stacking-correct-order-remove-readd.html [ ImageOnlyFailure ]

@@ -49,8 +49,10 @@
 #include "PseudoClassChangeInvalidation.h"
 #include "RenderAncestorIterator.h"
 #include "RenderBoxInlines.h"
+#include "RenderImage.h"
 #include "RenderLayer.h"
 #include "RenderLayerBacking.h"
+#include "RenderVideo.h"
 #include "SVGSVGElement.h"
 #include "SimpleRange.h"
 #include "SliderThumbElement.h"
@@ -188,6 +190,21 @@ static bool shouldGetOcclusion(const RenderElement& renderer)
     return false;
 }
 
+static bool cachedImageIsPhoto(const CachedImage& cachedImage)
+{
+    if (cachedImage.errorOccurred())
+        return false;
+
+    auto* image = cachedImage.image();
+    if (!image || !image->isBitmapImage())
+        return false;
+
+    if (image->nativeImage() && image->nativeImage()->hasAlpha())
+        return false;
+
+    return true;
+}
+
 std::optional<InteractionRegion> interactionRegionForRenderedRegion(RenderObject& regionRenderer, const FloatRect& bounds)
 {
     if (bounds.isEmpty())
@@ -237,7 +254,7 @@ std::optional<InteractionRegion> interactionRegionForRenderedRegion(RenderObject
         return std::nullopt;
     auto& renderer = *matchedElement->renderer();
 
-    if (renderer.style().effectivePointerEvents() == PointerEvents::None)
+    if (renderer.style().usedPointerEvents() == PointerEvents::None)
         return std::nullopt;
 
     bool isOriginalMatch = matchedElement == originalElement;
@@ -287,9 +304,33 @@ std::optional<InteractionRegion> interactionRegionForRenderedRegion(RenderObject
     }
 
     bool isInlineNonBlock = renderer.isInline() && !renderer.isReplacedOrInlineBlock();
+    bool isPhoto = false;
+
+    float minimumPhotoArea = 200 / scale * 200 / scale;
+    if (bounds.area() > minimumPhotoArea) {
+        if (auto* renderImage = dynamicDowncast<RenderImage>(regionRenderer)) {
+            isPhoto = [&]() -> bool {
+                if (is<RenderVideo>(renderImage))
+                    return true;
+
+                if (!renderImage->cachedImage())
+                    return false;
+
+                return cachedImageIsPhoto(*renderImage->cachedImage());
+            }();
+        } else if (regionRenderer.style().hasBackgroundImage()) {
+            isPhoto = [&]() -> bool {
+                auto* backgroundImage = regionRenderer.style().backgroundLayers().image();
+                if (!backgroundImage || !backgroundImage->cachedImage())
+                    return false;
+
+                return cachedImageIsPhoto(*backgroundImage->cachedImage());
+            }();
+        }
+    }
 
     // The parent will get its own InteractionRegion.
-    if (!isOriginalMatch && !isInlineNonBlock && !renderer.style().isDisplayTableOrTablePart())
+    if (!isOriginalMatch && !isPhoto && !isInlineNonBlock && !renderer.style().isDisplayTableOrTablePart())
         return std::nullopt;
 
     auto rect = bounds;
@@ -358,7 +399,8 @@ std::optional<InteractionRegion> interactionRegionForRenderedRegion(RenderObject
     }
 
     auto& style = regionRenderer.style();
-    bool canTweakShape = !clipPath
+    bool canTweakShape = !isPhoto
+        && !clipPath
         && !style.hasBackground()
         && !style.hasOutline()
         && !style.boxShadow()
@@ -380,6 +422,7 @@ std::optional<InteractionRegion> interactionRegionForRenderedRegion(RenderObject
         rect,
         cornerRadius,
         maskedCorners,
+        isPhoto ? InteractionRegion::ContentHint::Photo : InteractionRegion::ContentHint::Default,
         clipPath
     } };
 }
@@ -390,6 +433,8 @@ TextStream& operator<<(TextStream& ts, const InteractionRegion& interactionRegio
         ? "interaction"
         : (interactionRegion.type == InteractionRegion::Type::Occlusion ? "occlusion" : "guard");
     ts.dumpProperty(regionName, interactionRegion.rectInLayerCoordinates);
+    if (interactionRegion.contentHint != InteractionRegion::ContentHint::Default)
+        ts.dumpProperty("content hint", "photo");
     auto radius = interactionRegion.cornerRadius;
     if (radius > 0) {
         if (interactionRegion.maskedCorners.isEmpty())

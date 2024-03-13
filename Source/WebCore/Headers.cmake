@@ -343,7 +343,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/cookie-store/CookieStoreGetOptions.h
 
     Modules/credentialmanagement/CredentialRequestOptions.h
-    Modules/credentialmanagement/DigitalCredentialRequestOptions.h
 
     Modules/encryptedmedia/CDMClient.h
     Modules/encryptedmedia/MediaKeySystemClient.h
@@ -393,6 +392,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/highlight/HighlightRegistry.h
     Modules/highlight/HighlightVisibility.h
 
+    Modules/identity/DigitalCredentialRequestOptions.h
+
     Modules/indexeddb/IDBActiveDOMObject.h
     Modules/indexeddb/IDBDatabaseIdentifier.h
     Modules/indexeddb/IDBDatabaseNameAndVersionRequest.h
@@ -435,6 +436,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/indexeddb/shared/IndexKey.h
     Modules/indexeddb/shared/IDBCursorInfo.h
     Modules/indexeddb/shared/IDBCursorRecord.h
+    Modules/indexeddb/shared/IDBDatabaseConnectionIdentifier.h
     Modules/indexeddb/shared/IDBDatabaseInfo.h
     Modules/indexeddb/shared/IDBDatabaseNameAndVersion.h
     Modules/indexeddb/shared/IDBError.h
@@ -2217,7 +2219,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/mediastream/WebAudioSourceProvider.h
     platform/mediastream/WebRTCProvider.h
 
-    platform/mediastream/libwebrtc/LibWebRTCEnumTraits.h
     platform/mediastream/libwebrtc/LibWebRTCMacros.h
     platform/mediastream/libwebrtc/LibWebRTCProvider.h
     platform/mediastream/libwebrtc/LibWebRTCSocketIdentifier.h

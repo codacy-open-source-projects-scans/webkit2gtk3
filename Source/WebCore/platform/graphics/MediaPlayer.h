@@ -434,7 +434,7 @@ public:
 
     using CurrentTimeDidChangeCallback = std::function<void(const MediaTime&)>;
     bool setCurrentTimeDidChangeCallback(CurrentTimeDidChangeCallback&&);
-    bool currentTimeMayProgress() const;
+    bool timeIsProgressing() const;
 
     MediaTime startTime() const;
     MediaTime initialTime() const;
@@ -576,6 +576,7 @@ public:
     unsigned videoDecodedByteCount() const;
 
     void setPrivateBrowsingMode(bool);
+    bool inPrivateBrowsingMode() const { return m_inPrivateBrowsingMode; }
 
 #if ENABLE(WEB_AUDIO)
     AudioSourceProvider* audioSourceProvider();
@@ -767,7 +768,8 @@ private:
     bool m_visibleInViewport { false };
     bool m_muted { false };
     bool m_preservesPitch { true };
-    bool m_privateBrowsing { false };
+    bool m_inPrivateBrowsingMode { false };
+    bool m_shouldPrepareToPlay { false };
     bool m_shouldPrepareToRender { false };
     bool m_contentMIMETypeWasInferredFromExtension { false };
     bool m_initializingMediaEngine { false };

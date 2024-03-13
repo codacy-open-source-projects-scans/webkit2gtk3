@@ -2566,6 +2566,15 @@
    },
    {
       "emails" : [
+         "elijahsawyers@gmail.com",
+         "esawyers@apple.com"
+      ],
+      "github" : "elijahsawyers",
+      "name" : "Elijah Sawyers",
+      "status" : "committer"
+   },
+   {
+      "emails" : [
          "fantasai.bugs@inkedblade.net",
          "fantasai@apple.com"
       ],
@@ -5079,6 +5088,13 @@
    },
    {
       "emails" : [
+         "loic.yhuel@softathome.com"
+      ],
+      "github" : "hwti",
+      "name" : "Lo\u00efc Yhuel"
+   },
+   {
+      "emails" : [
          "demarchi@webkit.org",
          "lucas.demarchi@profusion.mobi"
       ],
@@ -6170,6 +6186,18 @@
       "name" : "Pavel Podivilov",
       "nicks" : [
          "podivilov"
+      ]
+   },
+   {
+      "emails" : [
+         "pawel.lampe@gmail.com",
+         "plampe@igalia.com"
+      ],
+      "github" : "Scony",
+      "name" : "Pawel Lampe",
+      "nicks" : [
+         "Scony",
+         "plampe"
       ]
    },
    {

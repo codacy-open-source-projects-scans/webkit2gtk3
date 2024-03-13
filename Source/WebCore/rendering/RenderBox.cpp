@@ -336,10 +336,10 @@ void RenderBox::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle
 
     // If our zoom factor changes and we have a defined scrollLeft/Top, we need to adjust that value into the
     // new zoomed coordinate space.
-    if (hasNonVisibleOverflow() && layer() && oldStyle && oldStyle->effectiveZoom() != newStyle.effectiveZoom()) {
+    if (hasNonVisibleOverflow() && layer() && oldStyle && oldStyle->usedZoom() != newStyle.usedZoom()) {
         if (auto* scrollableArea = layer()->scrollableArea()) {
             ScrollPosition scrollPosition = scrollableArea->scrollPosition();
-            float zoomScaleFactor = newStyle.effectiveZoom() / oldStyle->effectiveZoom();
+            float zoomScaleFactor = newStyle.usedZoom() / oldStyle->usedZoom();
             scrollPosition.scale(zoomScaleFactor);
             scrollableArea->setPostLayoutScrollPosition(scrollPosition);
         }
@@ -1657,7 +1657,7 @@ BackgroundBleedAvoidance RenderBox::determineBackgroundBleedAvoidance(GraphicsCo
 
     if (borderObscuresBackgroundEdge(contextScaling))
         return BackgroundBleedShrinkBackground;
-    if (!style.hasEffectiveAppearance() && borderObscuresBackground() && backgroundHasOpaqueTopLayer())
+    if (!style.hasUsedAppearance() && borderObscuresBackground() && backgroundHasOpaqueTopLayer())
         return BackgroundBleedBackgroundOverBorder;
 
     return BackgroundBleedUseTransparencyLayer;
@@ -1666,7 +1666,7 @@ BackgroundBleedAvoidance RenderBox::determineBackgroundBleedAvoidance(GraphicsCo
 ControlPart* RenderBox::ensureControlPart()
 {
     auto& rareData = ensureRareData();
-    auto type = style().effectiveAppearance();
+    auto type = style().usedAppearance();
 
     // Some form-controls may change because of zooming without recreating
     // a new renderer (e.g Menulist <-> MenulistButton).
@@ -1723,7 +1723,7 @@ void RenderBox::paintBoxDecorations(PaintInfo& paintInfo, const LayoutPoint& pai
     // If we have a native theme appearance, paint that before painting our background.
     // The theme will tell us whether or not we should also paint the CSS background.
     bool borderOrBackgroundPaintingIsNeeded = true;
-    if (style().hasEffectiveAppearance()) {
+    if (style().hasUsedAppearance()) {
         if (auto* control = ensureControlPartForRenderer())
             borderOrBackgroundPaintingIsNeeded = theme().paint(*this, *control, paintInfo, paintRect);
         else
@@ -1738,7 +1738,7 @@ void RenderBox::paintBoxDecorations(PaintInfo& paintInfo, const LayoutPoint& pai
 
         backgroundPainter.paintBackground(paintRect, bleedAvoidance);
 
-        if (style().hasEffectiveAppearance()) {
+        if (style().hasUsedAppearance()) {
             if (auto* control = ensureControlPartForDecorations())
                 theme().paint(*this, *control, paintInfo, paintRect);
             else
@@ -1751,7 +1751,7 @@ void RenderBox::paintBoxDecorations(PaintInfo& paintInfo, const LayoutPoint& pai
     if (bleedAvoidance != BackgroundBleedBackgroundOverBorder) {
         bool paintCSSBorder = false;
 
-        if (!style().hasEffectiveAppearance())
+        if (!style().hasUsedAppearance())
             paintCSSBorder = true;
         else if (borderOrBackgroundPaintingIsNeeded) {
             // The theme will tell us whether or not we should also paint the CSS border.
@@ -1804,7 +1804,7 @@ bool RenderBox::backgroundIsKnownToBeOpaqueInRect(const LayoutRect& localRect) c
     // We cannot be sure if theme paints the background opaque.
     // In this case it is safe to not assume opaqueness.
     // FIXME: May be ask theme if it paints opaque.
-    if (style().hasEffectiveAppearance())
+    if (style().hasUsedAppearance())
         return false;
     // FIXME: Check the opaqueness of background images.
 
@@ -1923,7 +1923,7 @@ bool RenderBox::backgroundHasOpaqueTopLayer() const
     if (hasNonVisibleOverflow() && fillLayer.attachment() == FillAttachment::LocalBackground)
         return false;
 
-    if (fillLayer.hasOpaqueImage(*this) && fillLayer.hasRepeatXY() && fillLayer.image()->canRender(this, style().effectiveZoom()))
+    if (fillLayer.hasOpaqueImage(*this) && fillLayer.hasRepeatXY() && fillLayer.image()->canRender(this, style().usedZoom()))
         return true;
 
     // If there is only one layer and no image, check whether the background color is opaque.
@@ -2066,7 +2066,7 @@ void RenderBox::imageChanged(WrappedImagePtr image, const IntRect*)
     
     if (auto* styleImage = findLayerUsedImage(image, style().backgroundLayers())) {
         layer()->contentChanged(BackgroundImageChanged);
-        incrementVisuallyNonEmptyPixelCountIfNeeded(flooredIntSize(styleImage->imageSize(this, style().effectiveZoom())));
+        incrementVisuallyNonEmptyPixelCountIfNeeded(flooredIntSize(styleImage->imageSize(this, style().usedZoom())));
     }
 }
 
@@ -2085,7 +2085,7 @@ bool RenderBox::repaintLayerRectsForImage(WrappedImagePtr image, const FillLayer
     RenderBox* layerRenderer = nullptr;
 
     for (auto* layer = &layers; layer; layer = layer->next()) {
-        if (layer->image() && image == layer->image()->data() && (layer->image()->isLoaded(this) || layer->image()->canRender(this, style().effectiveZoom()))) {
+        if (layer->image() && image == layer->image()->data() && (layer->image()->isLoaded(this) || layer->image()->canRender(this, style().usedZoom()))) {
             // Now that we know this image is being used, compute the renderer and the rect if we haven't already.
             bool drawingRootBackground = drawingBackground && (isDocumentElementRenderer() || (isBody() && !document().documentElement()->renderer()->hasBackground()));
             if (!layerRenderer) {
@@ -2729,7 +2729,7 @@ void RenderBox::computeLogicalWidthInFragment(LogicalExtentComputedValues& compu
     // width.  Use the width from the style context.
     // FIXME: Account for block-flow in flexible boxes.
     // https://bugs.webkit.org/show_bug.cgi?id=46418
-    if (hasOverridingLogicalWidth() && (isRenderRubyRun() || (parent()->isFlexibleBoxIncludingDeprecated()))) {
+    if (hasOverridingLogicalWidth() && parent()->isFlexibleBoxIncludingDeprecated()) {
         computedValues.m_extent = overridingLogicalWidth();
         return;
     }

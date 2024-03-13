@@ -683,6 +683,7 @@ public:
 
     String toolTipFromElement(Element&) const;
 
+    void forceAXObjectCacheUpdate() const;
     void forceReload(bool endToEnd);
     void reloadExpiredOnly();
 
@@ -1177,6 +1178,7 @@ public:
     String ongoingLoadsDescriptions() const;
 
     void reloadWithoutContentExtensions();
+    void disableContentExtensionsChecks();
 
     void setUseSystemAppearance(bool);
 

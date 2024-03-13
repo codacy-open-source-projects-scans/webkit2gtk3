@@ -386,7 +386,7 @@ public:
     inline bool hasAnyLocalBackground() const;
 
     inline bool hasAppearance() const;
-    inline bool hasEffectiveAppearance() const;
+    inline bool hasUsedAppearance() const;
 
     inline bool hasBackground() const;
     
@@ -577,7 +577,7 @@ public:
     TextAutospace textAutospace() const;
 
     inline float zoom() const;
-    inline float effectiveZoom() const;
+    inline float usedZoom() const;
     
     inline TextZoom textZoom() const;
 
@@ -699,7 +699,7 @@ public:
     inline float opacity() const;
     inline bool hasOpacity() const;
     inline StyleAppearance appearance() const;
-    inline StyleAppearance effectiveAppearance() const;
+    inline StyleAppearance usedAppearance() const;
     inline AspectRatioType aspectRatioType() const;
     inline double aspectRatioWidth() const;
     inline double aspectRatioHeight() const;
@@ -826,10 +826,10 @@ public:
     inline int marqueeLoopCount() const;
     inline MarqueeBehavior marqueeBehavior() const;
     inline MarqueeDirection marqueeDirection() const;
-    inline UserModify effectiveUserModify() const;
+    inline UserModify usedUserModify() const;
     inline UserModify userModify() const;
     inline UserDrag userDrag() const;
-    WEBCORE_EXPORT UserSelect effectiveUserSelect() const;
+    WEBCORE_EXPORT UserSelect usedUserSelect() const;
     inline UserSelect userSelect() const;
     inline TextOverflow textOverflow() const;
     inline WordBreak wordBreak() const;
@@ -941,7 +941,7 @@ public:
     inline LineAlign lineAlign() const;
 
     PointerEvents pointerEvents() const { return static_cast<PointerEvents>(m_inheritedFlags.pointerEvents); }
-    inline PointerEvents effectivePointerEvents() const;
+    inline PointerEvents usedPointerEvents() const;
 
     inline const Vector<Ref<ScrollTimeline>>& scrollTimelines() const;
     inline const Vector<ScrollAxis>& scrollTimelineAxes() const;
@@ -994,7 +994,7 @@ public:
 
     inline OptionSet<TouchAction> touchActions() const;
     // 'touch-action' behavior depends on values in ancestors. We use an additional inherited property to implement that.
-    inline OptionSet<TouchAction> effectiveTouchActions() const;
+    inline OptionSet<TouchAction> usedTouchActions() const;
     inline OptionSet<EventListenerRegionType> eventListenerRegionTypes() const;
 
     inline bool effectiveInert() const;
@@ -1016,8 +1016,8 @@ public:
     const ScrollSnapAlign& scrollSnapAlign() const;
     ScrollSnapStop scrollSnapStop() const;
 
-    Color effectiveScrollbarThumbColor() const;
-    Color effectiveScrollbarTrackColor() const;
+    Color usedScrollbarThumbColor() const;
+    Color usedScrollbarTrackColor() const;
     inline std::optional<ScrollbarColor> scrollbarColor() const;
     inline const StyleColor& scrollbarThumbColor() const;
     inline const StyleColor& scrollbarTrackColor() const;
@@ -1253,8 +1253,7 @@ public:
     inline void setHasExplicitlySetDirection();
     void setLineHeight(Length&&);
     bool setZoom(float);
-    void setZoomWithoutReturnValue(float f) { setZoom(f); }
-    inline bool setEffectiveZoom(float);
+    inline bool setUsedZoom(float);
     inline void setTextZoom(TextZoom);
 
     void setTextIndentLine(TextIndentLine);
@@ -1388,7 +1387,7 @@ public:
     inline void setHasAutoAccentColor();
     inline void setOpacity(float);
     inline void setAppearance(StyleAppearance);
-    inline void setEffectiveAppearance(StyleAppearance);
+    inline void setUsedAppearance(StyleAppearance);
     inline void setBoxAlign(BoxAlignment);
     void setBoxDirection(BoxDirection d) { m_inheritedFlags.boxDirection = static_cast<unsigned>(d); }
     inline void setBoxFlex(float);
@@ -1544,7 +1543,7 @@ public:
     inline void setInitialLetter(const IntSize&);
     
     inline void setTouchActions(OptionSet<TouchAction>);
-    inline void setEffectiveTouchActions(OptionSet<TouchAction>);
+    inline void setUsedTouchActions(OptionSet<TouchAction>);
     inline void setEventListenerRegionTypes(OptionSet<EventListenerRegionType>);
 
     inline void setEffectiveInert(bool);
@@ -2139,7 +2138,7 @@ public:
     inline const StyleColor& floodColor() const;
     inline const StyleColor& lightingColor() const;
 
-    Color effectiveAccentColor() const;
+    Color usedAccentColor() const;
     inline const StyleColor& accentColor() const;
     inline bool hasAutoAccentColor() const;
 

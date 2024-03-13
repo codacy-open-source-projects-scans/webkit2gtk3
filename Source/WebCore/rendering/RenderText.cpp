@@ -50,7 +50,6 @@
 #include "RenderCombineText.h"
 #include "RenderInline.h"
 #include "RenderLayer.h"
-#include "RenderRubyText.h"
 #include "RenderTextInlines.h"
 #include "RenderView.h"
 #include "RenderedDocumentMarker.h"
@@ -467,8 +466,6 @@ void RenderText::collectSelectionGeometries(Vector<SelectionGeometry>& rects, un
             extentsRect = extentsRect.transposedRect();
         bool isFirstOnLine = !textBox->previousOnLine();
         bool isLastOnLine = !textBox->nextOnLine();
-        if (containingBlock->isRenderRubyBase() || containingBlock->isRenderRubyText())
-            isLastOnLine = !containingBlock->containingBlock()->inlineBoxWrapper()->nextOnLineExists();
 
         bool containsStart = textBox->start() <= start && textBox->end() >= start;
         bool containsEnd = textBox->start() <= end && textBox->end() >= end;
@@ -486,7 +483,7 @@ void RenderText::collectSelectionGeometries(Vector<SelectionGeometry>& rects, un
             }
         }
 
-        rects.append(SelectionGeometry(absoluteQuad, HTMLElement::selectionRenderingBehavior(textNode()), textBox->direction(), extentsRect.x(), extentsRect.maxX(), extentsRect.maxY(), 0, textBox->isLineBreak(), isFirstOnLine, isLastOnLine, containsStart, containsEnd, boxIsHorizontal, isFixed, containingBlock->isRenderRubyText(), view().pageNumberForBlockProgressionOffset(absoluteQuad.enclosingBoundingBox().x())));
+        rects.append(SelectionGeometry(absoluteQuad, HTMLElement::selectionRenderingBehavior(textNode()), textBox->direction(), extentsRect.x(), extentsRect.maxX(), extentsRect.maxY(), 0, textBox->isLineBreak(), isFirstOnLine, isLastOnLine, containsStart, containsEnd, boxIsHorizontal, isFixed, view().pageNumberForBlockProgressionOffset(absoluteQuad.enclosingBoundingBox().x())));
     }
 }
 #endif
@@ -813,8 +810,8 @@ VisiblePosition RenderText::positionForPoint(const LayoutPoint& point, const Ren
     if (!firstRun || !text().length())
         return createVisiblePosition(0, Affinity::Downstream);
 
-    LayoutUnit pointLineDirection = firstRun->isHorizontal() ? point.x() : point.y();
-    LayoutUnit pointBlockDirection = firstRun->isHorizontal() ? point.y() : point.x();
+    auto pointLineDirection = firstRun->isHorizontal() ? point.x() : point.y();
+    auto pointBlockDirection = firstRun->isHorizontal() ? point.y() : point.x();
     bool blocksAreFlipped = style().isFlippedBlocksWritingMode();
 
     InlineIterator::TextBoxIterator lastRun;
@@ -825,15 +822,15 @@ VisiblePosition RenderText::positionForPoint(const LayoutPoint& point, const Ren
         auto lineBox = run->lineBox();
         auto top = LayoutUnit { std::min(previousLineBoxContentBottomOrBorderAndPadding(*lineBox), lineBox->contentLogicalTop()) };
         if (pointBlockDirection > top || (!blocksAreFlipped && pointBlockDirection == top)) {
-            auto bottom = LineSelection::logicalBottom(*lineBox);
+            auto bottom = LayoutUnit { LineSelection::logicalBottom(*lineBox) };
             if (auto nextLineBox = lineBox->next())
-                bottom = std::min(bottom, nextLineBox->contentLogicalTop());
+                bottom = std::min(bottom, LayoutUnit { nextLineBox->contentLogicalTop() });
 
             if (pointBlockDirection < bottom || (blocksAreFlipped && pointBlockDirection == bottom)) {
                 ShouldAffinityBeDownstream shouldAffinityBeDownstream;
 #if PLATFORM(IOS_FAMILY)
                 if (pointLineDirection != run->logicalLeftIgnoringInlineDirection() && point.x() < run->visualRectIgnoringBlockDirection().x() + run->logicalWidth()) {
-                    int half = run->visualRectIgnoringBlockDirection().x() + run->logicalWidth() / 2;
+                    auto half = LayoutUnit { run->visualRectIgnoringBlockDirection().x() + run->logicalWidth() / 2.f };
                     auto affinity = point.x() < half ? Affinity::Downstream : Affinity::Upstream;
                     return createVisiblePosition(offsetForPositionInRun(*run, pointLineDirection) + run->start(), affinity);
                 }
@@ -1707,8 +1704,7 @@ static void invalidateLineLayoutPathOnContentChangeIfNeeded(const RenderText& re
         container->invalidateLineLayoutPath();
         return;
     }
-    modernLineLayout->updateTextContent(renderer, offset, delta);
-    if (!modernLineLayout->isDamaged())
+    if (!modernLineLayout->updateTextContent(renderer, offset, delta))
         container->invalidateLineLayoutPath();
 }
 
@@ -2148,21 +2144,6 @@ std::optional<bool> RenderText::emphasisMarkExistsAndIsAbove(const RenderText& r
             return { };
         return isAbove;
     }
-
-    RenderBlock* containingBlock = renderer.containingBlock();
-
-    if (!containingBlock || !containingBlock->isRenderRubyBase())
-        return isAbove; // This text is not inside a ruby base, so it does not have ruby text over it.
-
-    auto* rubyRun = dynamicDowncast<RenderRubyRun>(*containingBlock->parent());
-    if (!rubyRun)
-        return isAbove; // Cannot get the ruby text.
-
-    auto* rubyText = rubyRun->rubyText();
-
-    // The emphasis marks over are suppressed only if there is a ruby text box and it not empty.
-    if (rubyText && rubyText->hasLines())
-        return std::nullopt;
 
     return isAbove;
 }
