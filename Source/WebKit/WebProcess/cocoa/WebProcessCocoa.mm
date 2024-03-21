@@ -132,6 +132,7 @@
 #endif
 
 #if PLATFORM(IOS_FAMILY)
+#import "AccessibilityUtilitiesSPI.h"
 #import "UIKitSPI.h"
 #import <bmalloc/MemoryStatusSPI.h>
 #endif
@@ -183,12 +184,6 @@
 #import <pal/cocoa/AVFoundationSoftLink.h>
 #import <pal/cocoa/DataDetectorsCoreSoftLink.h>
 #import <pal/cocoa/MediaToolboxSoftLink.h>
-
-#if PLATFORM(IOS_FAMILY)
-@interface NSObject (UIAccessibilitySafeCategory)
-- (id)safeValueForKey:(NSString *)key;
-@end
-#endif
 
 #if HAVE(CATALYST_USER_INTERFACE_IDIOM_AND_SCALE_FACTOR)
 // FIXME: This is only for binary compatibility with versions of UIKit in macOS 11 that are missing the change in <rdar://problem/68524148>.
@@ -843,8 +838,8 @@ static void registerLogHook()
             qos = Thread::QOS::UserInteractive;
         }
 
-        Vector<uint8_t> buffer(msg->buffer, msg->buffer_sz);
-        Vector<uint8_t> privdata(msg->privdata, msg->privdata_sz);
+        Vector<uint8_t> buffer(std::span { msg->buffer, msg->buffer_sz });
+        Vector<uint8_t> privdata(std::span { msg->privdata, msg->privdata_sz });
 
         logQueue()->dispatchWithQOS([logFormat = WTFMove(logFormat), logChannel = WTFMove(logChannel), logCategory = WTFMove(logCategory), type = type, buffer = WTFMove(buffer), privdata = WTFMove(privdata), qos] {
             os_log_message_s msg;
@@ -1211,6 +1206,11 @@ void WebProcess::scrollerStylePreferenceChanged(bool useOverlayScrollbars)
 
     static_cast<ScrollbarThemeMac&>(theme).preferencesChanged();
     
+    for (auto& page : m_pageMap.values()) {
+        if (RefPtr frameView = page->localMainFrameView())
+            frameView->scrollbarStyleDidChange();
+    }
+
     NSScrollerStyle style = useOverlayScrollbars ? NSScrollerStyleOverlay : NSScrollerStyleLegacy;
     [NSScrollerImpPair _updateAllScrollerImpPairsForNewRecommendedScrollerStyle:style];
 }
@@ -1398,7 +1398,7 @@ void WebProcess::accessibilitySettingsDidChange()
 }
 #endif
 
-void WebProcess::grantAccessToAssetServices(Vector<WebKit::SandboxExtension::Handle>&& assetServicesHandles)
+void WebProcess::grantAccessToAssetServices(Vector<WebKit::SandboxExtensionHandle>&& assetServicesHandles)
 {
     if (m_assetServicesExtensions.size())
         return;
@@ -1426,7 +1426,7 @@ void WebProcess::disableURLSchemeCheckInDataDetectors() const
 #endif
 }
 
-void WebProcess::switchFromStaticFontRegistryToUserFontRegistry(Vector<WebKit::SandboxExtension::Handle>&& fontMachExtensionHandles)
+void WebProcess::switchFromStaticFontRegistryToUserFontRegistry(Vector<WebKit::SandboxExtensionHandle>&& fontMachExtensionHandles)
 {
     SandboxExtension::consumePermanently(fontMachExtensionHandles);
 #if HAVE(STATIC_FONT_REGISTRY)

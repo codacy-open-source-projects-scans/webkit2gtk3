@@ -204,34 +204,23 @@ const LineLayout* LineLayout::containing(const RenderObject& renderer)
     return containing(const_cast<RenderObject&>(renderer));
 }
 
-bool LineLayout::isEnabled(const Document& document)
-{
-    return document.settings().inlineFormattingContextIntegrationEnabled();
-}
-
 bool LineLayout::canUseFor(const RenderBlockFlow& flow)
 {
-    if (!isEnabled(flow.document()))
-        return false;
-
     return canUseForLineLayout(flow);
 }
 
 bool LineLayout::canUseForPreferredWidthComputation(const RenderBlockFlow& flow)
 {
-    ASSERT(isEnabled(flow.document()));
     return LayoutIntegration::canUseForPreferredWidthComputation(flow);
 }
 
 bool LineLayout::shouldInvalidateLineLayoutPathAfterContentChange(const RenderBlockFlow& parent, const RenderObject& rendererWithNewContent, const LineLayout& lineLayout)
 {
-    ASSERT(isEnabled(parent.document()));
     return shouldInvalidateLineLayoutPathAfterChangeFor(parent, rendererWithNewContent, lineLayout, TypeOfChangeForInvalidation::NodeMutation);
 }
 
 bool LineLayout::shouldInvalidateLineLayoutPathAfterTreeMutation(const RenderBlockFlow& parent, const RenderObject& renderer, const LineLayout& lineLayout, bool isRemoval)
 {
-    ASSERT(isEnabled(parent.document()));
     return shouldInvalidateLineLayoutPathAfterChangeFor(parent, renderer, lineLayout, isRemoval ? TypeOfChangeForInvalidation::NodeRemoval : TypeOfChangeForInvalidation::NodeInsertion);
 }
 
@@ -261,6 +250,8 @@ std::pair<LayoutUnit, LayoutUnit> LineLayout::computeIntrinsicWidthConstraints()
     if (m_lineDamage)
         m_inlineContentCache.resetMinimumMaximumContentSizes();
     // FIXME: This is where we need to switch between minimum and maximum box geometries.
+    // Currently we only support content where min == max.
+    m_boxGeometryUpdater.setGeometriesForIntrinsicWidth(Layout::IntrinsicWidthMode::Minimum);
     auto [minimumContentSize, maximumContentSize] = inlineFormattingContext.minimumMaximumContentSize(m_lineDamage.get());
     return { minimumContentSize, maximumContentSize };
 }
@@ -1048,8 +1039,9 @@ void LineLayout::shiftLinesBy(LayoutUnit blockShift)
     for (auto& object : m_boxTree.renderers()) {
         Layout::Box& layoutBox = *object->layoutBox();
         if (layoutBox.isOutOfFlowPositioned() && layoutBox.style().hasStaticBlockPosition(isHorizontalWritingMode)) {
-            CheckedRef renderer = downcast<RenderBox>(m_boxTree.rendererForLayoutBox(layoutBox));
-            ASSERT(renderer->layer());
+            CheckedRef renderer = downcast<RenderLayerModelObject>(m_boxTree.rendererForLayoutBox(layoutBox));
+            if (!renderer->layer())
+                continue;
             CheckedRef layer = *renderer->layer();
             layer->setStaticBlockPosition(layer->staticBlockPosition() + blockShift);
             renderer->setChildNeedsLayout(MarkOnlyThis);
@@ -1113,9 +1105,6 @@ bool LineLayout::updateTextContent(const RenderText& textRenderer, size_t offset
 
 void LineLayout::releaseCaches(RenderView& view)
 {
-    if (!isEnabled(view.document()))
-        return;
-
     for (auto& renderer : descendantsOfType<RenderBlockFlow>(view)) {
         if (auto* lineLayout = renderer.modernLineLayout())
             lineLayout->releaseCaches();
@@ -1157,4 +1146,3 @@ void LineLayout::outputLineTree(WTF::TextStream& stream, size_t depth) const
 
 }
 }
-

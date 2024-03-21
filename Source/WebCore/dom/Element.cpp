@@ -104,6 +104,7 @@
 #include "PointerCaptureController.h"
 #include "PointerEvent.h"
 #include "PointerLockController.h"
+#include "PointerLockOptions.h"
 #include "PopoverData.h"
 #include "PseudoClassChangeInvalidation.h"
 #include "Quirks.h"
@@ -773,7 +774,7 @@ bool Element::hasFocusableStyle() const
     auto isFocusableStyle = [](const RenderStyle* style) {
         return style && style->display() != DisplayType::None && style->display() != DisplayType::Contents
             && style->visibility() == Visibility::Visible && !style->effectiveInert()
-            && (style->effectiveContentVisibility() != ContentVisibility::Hidden || style->contentVisibility() != ContentVisibility::Visible);
+            && (style->usedContentVisibility() != ContentVisibility::Hidden || style->contentVisibility() != ContentVisibility::Visible);
     };
 
     if (renderStyle())
@@ -2055,16 +2056,13 @@ static inline AtomString makeIdForStyleResolution(const AtomString& value, bool 
 
 bool Element::isElementReflectionAttribute(const Settings& settings, const QualifiedName& name)
 {
-    return (settings.ariaReflectionForElementReferencesEnabled() && name == HTMLNames::aria_activedescendantAttr)
+    return name == HTMLNames::aria_activedescendantAttr
         || (settings.popoverAttributeEnabled() && name == HTMLNames::popovertargetAttr)
         || (settings.invokerAttributesEnabled() && name == HTMLNames::invoketargetAttr);
 }
 
-bool Element::isElementsArrayReflectionAttribute(const Settings& settings, const QualifiedName& name)
+bool Element::isElementsArrayReflectionAttribute(const QualifiedName& name)
 {
-    if (!settings.ariaReflectionForElementReferencesEnabled())
-        return false;
-
     switch (name.nodeName()) {
     case AttributeNames::aria_controlsAttr:
     case AttributeNames::aria_describedbyAttr:
@@ -2166,7 +2164,7 @@ void Element::attributeChanged(const QualifiedName& name, const AtomString& oldV
     }
     default: {
         Ref document = this->document();
-        if (isElementReflectionAttribute(document->settings(), name) || isElementsArrayReflectionAttribute(document->settings(), name)) {
+        if (isElementReflectionAttribute(document->settings(), name) || isElementsArrayReflectionAttribute(name)) {
             if (auto* map = explicitlySetAttrElementsMapIfExists())
                 map->remove(name);
         }
@@ -2245,7 +2243,7 @@ void Element::setElementAttribute(const QualifiedName& attributeName, Element* e
 
 std::optional<Vector<RefPtr<Element>>> Element::getElementsArrayAttribute(const QualifiedName& attributeName) const
 {
-    ASSERT(isElementsArrayReflectionAttribute(document().settings(), attributeName));
+    ASSERT(isElementsArrayReflectionAttribute(attributeName));
 
     if (auto* map = explicitlySetAttrElementsMapIfExists()) {
         if (auto it = map->find(attributeName); it != map->end()) {
@@ -2275,7 +2273,7 @@ std::optional<Vector<RefPtr<Element>>> Element::getElementsArrayAttribute(const 
 
 void Element::setElementsArrayAttribute(const QualifiedName& attributeName, std::optional<Vector<RefPtr<Element>>>&& elements)
 {
-    ASSERT(isElementsArrayReflectionAttribute(document().settings(), attributeName));
+    ASSERT(isElementsArrayReflectionAttribute(attributeName));
 
     if (!elements) {
         if (auto* map = explicitlySetAttrElementsMapIfExists())
@@ -4500,6 +4498,20 @@ bool Element::hasPointerCapture(int32_t pointerId)
 
 #if ENABLE(POINTER_LOCK)
 
+JSC::JSValue Element::requestPointerLock(JSC::JSGlobalObject& lexicalGlobalObject, PointerLockOptions&& options)
+{
+    RefPtr<DeferredPromise> promise;
+    if (RefPtr page = document().page()) {
+        bool optionsEnabled = document().settings().pointerLockOptionsEnabled();
+
+        if (optionsEnabled)
+            promise = DeferredPromise::create(*JSC::jsSecureCast<JSDOMGlobalObject*>(&lexicalGlobalObject), DeferredPromise::Mode::RetainPromiseOnResolve);
+
+        page->pointerLockController().requestPointerLock(this, optionsEnabled ? std::optional(WTFMove(options)) : std::nullopt, promise);
+    }
+    return promise ? promise->promise() : JSC::jsUndefined();
+}
+
 void Element::requestPointerLock()
 {
     if (RefPtr page = document().page())
@@ -4787,7 +4799,7 @@ bool Element::isWritingSuggestionsEnabled() const
     // not in the `default` state and the nearest such ancestor's `writingsuggestions` content attribute
     // is in the `false` state, then return `false`.
 
-    for (auto* ancestor = this; ancestor; ancestor = ancestor->parentElementInComposedTree()) {
+    for (RefPtr ancestor = this; ancestor; ancestor = ancestor->parentElementInComposedTree()) {
         auto& value = ancestor->attributeWithoutSynchronization(HTMLNames::writingsuggestionsAttr);
 
         if (value.isNull())
@@ -4797,6 +4809,15 @@ bool Element::isWritingSuggestionsEnabled() const
         if (equalLettersIgnoringASCIICase(value, "false"_s))
             return false;
     }
+
+    // This is not yet part of the spec, but it improves web-compatibility; if autocomplete
+    // is intentionally off, the site author probably wants writingsuggestions off too.
+    auto autocompleteValue = attributeWithoutSynchronization(HTMLNames::autocompleteAttr);
+    if (equalLettersIgnoringASCIICase(autocompleteValue, "off"_s))
+        return false;
+
+    if (protectedDocument()->quirks().shouldDisableWritingSuggestionsByDefaultQuirk())
+        return false;
 
     // Otherwise, return `true`.
     return true;
@@ -5553,11 +5574,11 @@ bool Element::checkVisibility(const CheckVisibilityOptions& options)
     RefPtr parent = parentElementInComposedTree();
     auto isSkippedContentWithReason = [&](ContentVisibility reason) -> bool {
         ASSERT(!parent || parent->computedStyle());
-        if (style->effectiveContentVisibility() != reason)
+        if (style->usedContentVisibility() != reason)
             return false;
 
-        // effectiveContentVisibility() includes the skipped content root, so we query the parent to make sure roots are not considered as skipped.
-        if (!parent || parent->computedStyle()->effectiveContentVisibility() != reason)
+        // usedContentVisibility() includes the skipped content root, so we query the parent to make sure roots are not considered as skipped.
+        if (!parent || parent->computedStyle()->usedContentVisibility() != reason)
             return false;
 
         return true;

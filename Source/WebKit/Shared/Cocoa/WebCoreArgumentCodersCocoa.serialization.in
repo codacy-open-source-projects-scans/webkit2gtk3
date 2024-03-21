@@ -30,7 +30,7 @@ headers: "ArgumentCodersCocoa.h"
     WebCore::TextRenderingMode textRenderingMode();
     bool syntheticBold();
     bool syntheticOblique();
-    std::variant<WebCore::FontPlatformSerializedData,WebCore::FontPlatformSerializedCreationData> platformSerializationData();
+    std::variant<WebCore::FontPlatformSerializedData, WebCore::FontPlatformSerializedCreationData> platformSerializationData();
 }
 
 header: <WebCore/FontPlatformData.h>
@@ -294,22 +294,65 @@ enum class WebCore::PlatformCALayerFilterType : uint8_t {
 };
 
 enum class WebCore::PlatformCALayerLayerType : uint8_t {
-        LayerTypeLayer,
-        LayerTypeWebLayer,
-        LayerTypeSimpleLayer,
-        LayerTypeTransformLayer,
-        LayerTypeTiledBackingLayer,
-        LayerTypePageTiledBackingLayer,
-        LayerTypeTiledBackingTileLayer,
-        LayerTypeRootLayer,
-        LayerTypeAVPlayerLayer,
-        LayerTypeContentsProvidedLayer,
-        LayerTypeBackdropLayer,
-        LayerTypeShapeLayer,
-        LayerTypeScrollContainerLayer,
+    LayerTypeLayer,
+    LayerTypeWebLayer,
+    LayerTypeSimpleLayer,
+    LayerTypeTransformLayer,
+    LayerTypeTiledBackingLayer,
+    LayerTypePageTiledBackingLayer,
+    LayerTypeTiledBackingTileLayer,
+    LayerTypeRootLayer,
+    LayerTypeAVPlayerLayer,
+    LayerTypeContentsProvidedLayer,
+    LayerTypeBackdropLayer,
+    LayerTypeShapeLayer,
+    LayerTypeScrollContainerLayer,
 #if ENABLE(MODEL_ELEMENT)
-        LayerTypeModelLayer,
+    LayerTypeModelLayer,
 #endif
-        LayerTypeCustom,
-        LayerTypeHost,
+    LayerTypeCustom,
+    LayerTypeHost,
 };
+
+#if USE(APPKIT)
+using WebCore::CocoaColor = NSColor;
+#endif
+
+#if PLATFORM(IOS_FAMILY)
+using WebCore::CocoaColor = UIColor;
+#endif
+
+#if USE(AVFOUNDATION)
+AVOutputContext wrapped by CoreIPCAVOutputContext
+#endif
+#if USE(PASSKIT)
+PKPaymentMethod wrapped by CoreIPCPKPaymentMethod
+PKPaymentMerchantSession wrapped by CoreIPCPKPaymentMerchantSession
+PKContact wrapped by CoreIPCPKContact
+PKPayment wrapped by CoreIPCPKPayment
+PKPaymentToken wrapped by CoreIPCPKPaymentToken
+PKShippingMethod wrapped by CoreIPCPKShippingMethod
+PKDateComponentsRange wrapped by CoreIPCPKDateComponentsRange
+CNContact wrapped by CoreIPCCNContact
+CNPhoneNumber wrapped by CoreIPCCNPhoneNumber
+CNPostalAddress wrapped by CoreIPCCNPostalAddress
+#endif
+NSURLProtectionSpace wrapped by CoreIPCNSURLProtectionSpace
+NSShadow wrapped by CoreIPCNSShadow
+NSValue wrapped by CoreIPCNSValue
+NSURLCredential wrapped by CoreIPCNSURLCredential
+NSPersonNameComponents wrapped by CoreIPCPersonNameComponents
+NSDateComponents wrapped by CoreIPCDateComponents
+PlatformColor wrapped by CoreIPCColor
+NSData wrapped by CoreIPCData
+NSURL wrapped by CoreIPCURL
+NSNull wrapped by CoreIPCNull
+WebCore::CocoaFont wrapped by CoreIPCFont
+NSDate wrapped by CoreIPCDate
+NSArray wrapped by CoreIPCArray
+NSError wrapped by CoreIPCError
+NSLocale wrapped by CoreIPCLocale
+NSNumber wrapped by CoreIPCNumber
+NSString wrapped by CoreIPCString
+NSDictionary wrapped by CoreIPCDictionary
+NSPresentationIntent wrapped by CoreIPCPresentationIntent

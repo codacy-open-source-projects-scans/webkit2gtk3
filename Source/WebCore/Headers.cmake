@@ -1014,6 +1014,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     dom/ParserContentPolicy.h
     dom/PointerEvent.h
     dom/PointerEventTypeNames.h
+    dom/PointerLockOptions.h
     dom/PopoverData.h
     dom/PortIdentifier.h
     dom/Position.h
@@ -1166,7 +1167,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     html/DOMTokenList.h
     html/DataListSuggestionInformation.h
     html/EnterKeyHint.h
-    html/FeaturePolicy.h
     html/FormAssociatedCustomElement.h
     html/FormAssociatedElement.h
     html/FormController.h
@@ -1263,6 +1263,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     html/MediaError.h
     html/OffscreenCanvas.h
     html/PDFDocument.h
+    html/PermissionsPolicy.h
     html/PluginDocument.h
     html/StepRange.h
     html/TimeRanges.h
@@ -1483,6 +1484,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/ContextMenuController.h
     page/ContextMenuProvider.h
     page/CrossSiteNavigationDataTransfer.h
+    page/CryptoClient.h
     page/DOMSelection.h
     page/DOMTimer.h
     page/DOMWindow.h
@@ -1912,6 +1914,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/FontPaletteValues.h
     platform/graphics/FontPlatformData.h
     platform/graphics/FontRanges.h
+    platform/graphics/FontRenderOptions.h
     platform/graphics/FontSelectionAlgorithm.h
     platform/graphics/FontSelector.h
     platform/graphics/FontSelectorClient.h
@@ -1979,6 +1982,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/LayoutRect.h
     platform/graphics/LayoutSize.h
     platform/graphics/LegacyCDMSession.h
+    platform/graphics/MIMESniffer.h
     platform/graphics/MIMETypeCache.h
     platform/graphics/MediaPlaybackTarget.h
     platform/graphics/MediaPlaybackTargetClient.h
@@ -1987,6 +1991,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/MediaPlayerEnums.h
     platform/graphics/MediaPlayerIdentifier.h
     platform/graphics/MediaPlayerPrivate.h
+    platform/graphics/MediaResourceSniffer.h
     platform/graphics/MediaSourcePrivate.h
     platform/graphics/MediaSourcePrivateClient.h
     platform/graphics/MediaUsageInfo.h
@@ -2033,6 +2038,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/RoundedRect.h
     platform/graphics/ScreenDataOverrides.h
     platform/graphics/ShareableBitmap.h
+    platform/graphics/ShareableBitmapHandle.h
     platform/graphics/ShouldLocalizeAxisNames.h
     platform/graphics/SourceBrush.h
     platform/graphics/SourceBrushLogicalGradient.h
@@ -2327,9 +2333,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/HitTestResult.h
     rendering/LayerAncestorClippingStack.h
     rendering/LayerFragment.h
-    rendering/LegacyEllipsisBox.h
     rendering/LegacyInlineBox.h
-    rendering/LegacyInlineElementBox.h
     rendering/LegacyInlineFlowBox.h
     rendering/LegacyInlineTextBox.h
     rendering/LegacyLineLayout.h

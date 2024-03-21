@@ -58,8 +58,6 @@
 #include "RenderStyleSetters.h"
 #include "RenderTheme.h"
 #include "RenderView.h"
-#include "RubyElement.h"
-#include "RubyTextElement.h"
 #include "SVGElement.h"
 #include "SVGGraphicsElement.h"
 #include "SVGNames.h"
@@ -387,9 +385,10 @@ static bool hasUnsupportedRubyDisplay(DisplayType display, const Element* elemen
     switch (display) {
     case DisplayType::Ruby:
     case DisplayType::RubyBlock:
-        return !element || !element->hasTagName(rubyTag);
+        // Test for localName so this also allows WebVTT ruby elements.
+        return !element || !element->hasLocalName(rubyTag->localName());
     case DisplayType::RubyAnnotation:
-        return !element || !element->hasTagName(rtTag);
+        return !element || !element->hasLocalName(rtTag->localName());
     case DisplayType::RubyBase:
         ASSERT_NOT_REACHED();
         return false;
@@ -757,7 +756,7 @@ void Adjuster::adjust(RenderStyle& style, const RenderStyle* userAgentAppearance
 #endif
     }
     if (isSkippedContentRoot(style, m_element) && m_parentStyle.contentVisibility() != ContentVisibility::Hidden)
-        style.setEffectiveContentVisibility(style.contentVisibility());
+        style.setUsedContentVisibility(style.contentVisibility());
 
     if (style.contentVisibility() == ContentVisibility::Auto) {
         style.containIntrinsicWidthAddAuto();
@@ -986,9 +985,9 @@ void Adjuster::propagateToDocumentElementAndInitialContainingBlock(Update& updat
     // "Additionally, when any containments are active on either the HTML html or body elements, propagation of
     // properties from the body element to the initial containing block, the viewport, or the canvas background, is disabled."
     auto shouldPropagateFromBody = [&] {
-        if (bodyStyle && !bodyStyle->effectiveContainment().isEmpty())
+        if (bodyStyle && !bodyStyle->usedContain().isEmpty())
             return false;
-        return documentElementStyle->effectiveContainment().isEmpty();
+        return documentElementStyle->usedContain().isEmpty();
     }();
 
     auto writingMode = [&] {

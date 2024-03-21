@@ -36,6 +36,7 @@ swipe [ Pass ]
 view-gestures [ Pass ]
 http/tests/swipe [ Pass ]
 http/tests/pdf [ Pass ]
+pdf/unifiedpdf [ Pass ]
 tiled-drawing [ Pass ]
 ipc/restrictedendpoints/mac [ Pass ]
 
@@ -940,15 +941,11 @@ webkit.org/b/186362 [ Release ] http/tests/resourceLoadStatistics/prevalent-reso
 
 webkit.org/b/189598 compositing/backing/backing-store-attachment-fill-forwards-animation.html [ Pass Failure ]
 
-# Local authenticator tests require restricted keychain entitlement, which cannot be signed with ad hoc signing.
-# Therefore, tests fail on OpenSource bots. They will be covered by Internal bots.
-http/wpt/webauthn/public-key-credential-get-failure-local-silent.https.html [ Skip ]
-http/wpt/webauthn/public-key-credential-get-success-local.https.html [ Skip ]
-
-webkit.org/b/270583 http/wpt/webauthn/public-key-credential-create-failure-local-silent.https.html [ Pass Failure Crash ]
-webkit.org/b/270583 http/wpt/webauthn/public-key-credential-create-failure-local.https.html [ Pass Failure Crash ]
-webkit.org/b/270583 http/wpt/webauthn/public-key-credential-create-success-local.https.html [ Pass Failure Crash ]
-webkit.org/b/270583 http/wpt/webauthn/public-key-credential-get-failure-local.https.html [ Pass Failure Crash ]
+webkit.org/b/271207 http/wpt/webauthn/public-key-credential-create-failure-local-silent.https.html [ Failure Crash ]
+webkit.org/b/271207 http/wpt/webauthn/public-key-credential-create-failure-local.https.html [ Failure Crash ]
+webkit.org/b/271207 http/wpt/webauthn/public-key-credential-create-success-local.https.html [ Failure Crash ]
+webkit.org/b/271207 http/wpt/webauthn/public-key-credential-get-success-local.https.html [ Failure Crash ]
+webkit.org/b/271207 http/wpt/webauthn/public-key-credential-get-failure-local.https.html [ Failure Crash ]
 
 webkit.org/b/194826 http/tests/resourceLoadStatistics/do-not-block-top-level-navigation-redirect.html [ Pass Timeout ]
 
@@ -1958,17 +1955,14 @@ webkit.org/b/267796 [ Monterey+ Release ] imported/w3c/web-platform-tests/reques
 
 webkit.org/b/268018 [ Sonoma+ Release ] fast/images/text-recognition/mac/select-word-in-transparent-image-overlay.html [ Pass ImageOnlyFailure ]
 
-webkit.org/b/270790 [ Monterey+ x86_64 ] http/wpt/webrtc/video-script-transform.html [ Pass Failure ]
-webkit.org/b/270790 [ Monterey+ x86_64 ] http/wpt/webrtc/video-script-transform-simulcast.html [ Pass Failure ]
-webkit.org/b/270790 [ Monterey+ x86_64 ] imported/w3c/web-platform-tests/webrtc/simulcast/basic.https.html [ Pass Failure ]
+webkit.org/b/271059 [ Monterey x86_64 ] http/wpt/webrtc/video-script-transform.html [ Pass Failure ]
+webkit.org/b/271059 [ Monterey x86_64 ] http/wpt/webrtc/video-script-transform-simulcast.html [ Pass Failure ]
+webkit.org/b/271059 [ Monterey x86_64 ] imported/w3c/web-platform-tests/webrtc/simulcast/basic.https.html [ Pass Failure ]
+webkit.org/b/271059 [ Monterey x86_64 ] imported/w3c/web-platform-tests/webrtc/simulcast/getStats.https.html [ Pass Failure ]
+webkit.org/b/271059 [ Monterey x86_64 ] imported/w3c/web-platform-tests/webrtc/simulcast/h264.https.html [ Pass Failure ]
+webkit.org/b/271059 [ Monterey x86_64 ] imported/w3c/web-platform-tests/webrtc/simulcast/setParameters-active.https.html [ Pass Failure ]
 
 webkit.org/b/268200 [ Sonoma+ Release ] inspector/console/console-screenshot.html [ Pass Failure ]
-
-webkit.org/b/268406 transitions/flex-transitions.html [ Pass Failure ]
-
-# webkit.org/b/268414 [ macOS ] 2 tests in imported/w3c/web-platform-tests/webrtc are flaky failure
-imported/w3c/web-platform-tests/webrtc/simulcast/setParameters-active.https.html [ Pass Failure ]
-imported/w3c/web-platform-tests/webrtc/simulcast/h264.https.html [ Pass Failure ]
 
 webkit.org/b/268494 [ Monterey+ Release ] media/track/media-element-enqueue-event-crash.html [ Pass Crash ]
 
@@ -2008,3 +2002,5 @@ webkit.org/b/270235 [ Ventura+ Debug x86_64 ] webgl/pending/conformance/glsl/mis
 # webkit.org/b/266168 Two wheel/mousewheel passive event listeners WPT test pass on macOS Sonoma and up
 [ Sonoma+ ] imported/w3c/web-platform-tests/dom/events/non-cancelable-when-passive/passive-mousewheel-event-listener-on-div.html [ Pass ]
 [ Sonoma+ ] imported/w3c/web-platform-tests/dom/events/non-cancelable-when-passive/passive-wheel-event-listener-on-div.html [ Pass ]
+
+webkit.org/b/271063 http/tests/navigation/page-cache-getUserMedia-pending-promise.html [ Pass Timeout ]

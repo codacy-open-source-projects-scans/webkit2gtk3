@@ -736,6 +736,8 @@ void WebExtensionContext::permissionsDidChange(const PermissionsSet& changedPerm
     if (!isLoaded())
         return;
 
+    extensionController()->sendToAllProcesses(Messages::WebExtensionContextProxy::UpdateGrantedPermissions(m_grantedPermissions), identifier());
+
     if (changedPermissions.contains(_WKWebExtensionPermissionClipboardWrite)) {
         bool granted = hasPermission(_WKWebExtensionPermissionClipboardWrite);
 
@@ -1366,8 +1368,7 @@ WebExtensionContext::PermissionState WebExtensionContext::permissionState(const 
     ASSERT(!permission.isEmpty());
 
     if (tab && permission == String(_WKWebExtensionPermissionTabs)) {
-        RefPtr temporaryPattern = tab->temporaryPermissionMatchPattern();
-        if (temporaryPattern && temporaryPattern->matchesURL(tab->url()))
+        if (tab->extensionHasTemporaryPermission())
             return PermissionState::GrantedExplicitly;
     }
 
@@ -3191,7 +3192,14 @@ void WebExtensionContext::scheduleBackgroundContentToUnload()
     if (!m_backgroundWebView || extension().backgroundContentIsPersistent())
         return;
 
-    static const auto delayBeforeUnloading = isNotRunningInTestRunner() ? 30_s : 3_s;
+
+#ifdef NDEBUG
+    static const auto testRunnerDelayBeforeUnloading = 3_s;
+#else
+    static const auto testRunnerDelayBeforeUnloading = 6_s;
+#endif
+
+    static const auto delayBeforeUnloading = isNotRunningInTestRunner() ? 30_s : testRunnerDelayBeforeUnloading;
 
     RELEASE_LOG_DEBUG(Extensions, "Scheduling background content to unload in %{public}.0f seconds", delayBeforeUnloading.seconds());
 
@@ -4208,7 +4216,7 @@ void WebExtensionContext::loadDeclarativeNetRequestRules(CompletionHandler<void(
         compileDeclarativeNetRequestRules(allJSONData.get(), WTFMove(completionHandler));
     };
 
-    auto addStaticRulesets = [this, protectedThis = Ref { *this }, completionHandler = WTFMove(completionHandler), applyDeclarativeNetRequestRules = WTFMove(applyDeclarativeNetRequestRules), allJSONData = RetainPtr { allJSONData }] () mutable {
+    auto addStaticRulesets = [this, protectedThis = Ref { *this }, applyDeclarativeNetRequestRules = WTFMove(applyDeclarativeNetRequestRules), allJSONData = RetainPtr { allJSONData }] () mutable {
         for (auto& ruleset : extension().declarativeNetRequestRulesets()) {
             if (!ruleset.enabled)
                 continue;
@@ -4223,8 +4231,8 @@ void WebExtensionContext::loadDeclarativeNetRequestRules(CompletionHandler<void(
         applyDeclarativeNetRequestRules();
     };
 
-    auto addDynamicAndStaticRules = [this, protectedThis = Ref { *this }, completionHandler = WTFMove(completionHandler), addStaticRulesets = WTFMove(addStaticRulesets), allJSONData = RetainPtr { allJSONData }] () mutable {
-        [declarativeNetRequestDynamicRulesStore() getRulesWithCompletionHandler:makeBlockPtr([this, protectedThis = Ref { *this }, completionHandler = WTFMove(completionHandler), addStaticRulesets = WTFMove(addStaticRulesets), allJSONData = RetainPtr { allJSONData }](NSArray *rules, NSString *errorMessage) mutable {
+    auto addDynamicAndStaticRules = [this, protectedThis = Ref { *this }, addStaticRulesets = WTFMove(addStaticRulesets), allJSONData = RetainPtr { allJSONData }] () mutable {
+        [declarativeNetRequestDynamicRulesStore() getRulesWithCompletionHandler:makeBlockPtr([this, protectedThis = Ref { *this }, addStaticRulesets = WTFMove(addStaticRulesets), allJSONData = RetainPtr { allJSONData }](NSArray *rules, NSString *errorMessage) mutable {
             if (!rules.count) {
                 m_dynamicRulesIDs.clear();
                 addStaticRulesets();
@@ -4248,7 +4256,7 @@ void WebExtensionContext::loadDeclarativeNetRequestRules(CompletionHandler<void(
         }).get()];
     };
 
-    [declarativeNetRequestSessionRulesStore() getRulesWithCompletionHandler:makeBlockPtr([this, protectedThis = Ref { *this }, completionHandler = WTFMove(completionHandler), addDynamicAndStaticRules = WTFMove(addDynamicAndStaticRules), allJSONData = RetainPtr { allJSONData }](NSArray *rules, NSString *errorMessage) mutable {
+    [declarativeNetRequestSessionRulesStore() getRulesWithCompletionHandler:makeBlockPtr([this, protectedThis = Ref { *this }, addDynamicAndStaticRules = WTFMove(addDynamicAndStaticRules), allJSONData = RetainPtr { allJSONData }](NSArray *rules, NSString *errorMessage) mutable {
         if (!rules.count) {
             m_sessionRulesIDs.clear();
             addDynamicAndStaticRules();

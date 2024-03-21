@@ -132,7 +132,6 @@ inline RenderElement::RenderElement(Type type, ContainerNode& elementOrDocument,
     , m_renderBlockHasMarginBeforeQuirk(false)
     , m_renderBlockHasMarginAfterQuirk(false)
     , m_renderBlockShouldForceRelayoutChildren(false)
-    , m_renderBlockFlowHasMarkupTruncation(false)
     , m_renderBlockFlowLineLayoutPath(RenderBlockFlow::UndeterminedPath)
     , m_isRegisteredForVisibleInViewportCallback(false)
     , m_visibleInViewportState(static_cast<unsigned>(VisibleInViewportState::Unknown))
@@ -464,7 +463,7 @@ bool RenderElement::repaintBeforeStyleChange(StyleDifference diff, const RenderS
             }
         }
 
-        if (diff > StyleDifference::RepaintLayer && oldStyle.effectiveContentVisibility() != newStyle.effectiveContentVisibility() && isOutOfFlowPositioned()) {
+        if (diff > StyleDifference::RepaintLayer && oldStyle.usedContentVisibility() != newStyle.usedContentVisibility() && isOutOfFlowPositioned()) {
             if (CheckedPtr enclosingLayer = this->enclosingLayer()) {
                 bool rendererWillBeHidden = isSkippedContent();
                 if (rendererWillBeHidden && enclosingLayer->hasVisibleContent() && (this == &enclosingLayer->renderer() || enclosingLayer->renderer().style().visibility() != Visibility::Visible))
@@ -2069,7 +2068,7 @@ bool RenderElement::capturedInViewTransition() const
     if (!hasViewTransitionName())
         return false;
 
-    return !!document().activeViewTransition();
+    return element() && element()->capturedInViewTransition();
 }
 
 bool RenderElement::hasViewTransitionName() const

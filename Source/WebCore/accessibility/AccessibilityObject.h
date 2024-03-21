@@ -65,7 +65,6 @@ public:
     virtual ~AccessibilityObject();
 
     AXID treeID() const final;
-    ProcessID processID() const override;
     String dbg() const final;
 
     // After constructing an AccessibilityObject, it must be given a
@@ -242,9 +241,7 @@ public:
     AXTextMarkerRange textInputMarkedTextMarkerRange() const final;
 
     WallTime dateTimeValue() const override { return { }; }
-#if PLATFORM(MAC)
-    unsigned dateTimeComponents() const override;
-#endif
+    DateComponentsType dateTimeComponentsType() const override;
     bool supportsDatetimeAttribute() const override;
     String datetimeAttributeValue() const override;
 
@@ -723,7 +720,7 @@ public:
     AccessibilityObjectInclusion accessibilityPlatformIncludesObject() const;
 
 #if PLATFORM(IOS_FAMILY)
-    int accessibilitySecureFieldLength() override;
+    unsigned accessibilitySecureFieldLength() final;
     bool hasTouchEventListener() const override;
 #endif
 

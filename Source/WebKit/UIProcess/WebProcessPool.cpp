@@ -313,24 +313,30 @@ WebProcessPool::WebProcessPool(API::ProcessPoolConfiguration& configuration)
 
 #if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
     m_storageAccessUserAgentStringQuirksDataUpdateObserver = StorageAccessUserAgentStringQuirkController::shared().observeUpdates([weakThis = WeakPtr { *this }] {
-        if (RefPtr protectedThis = weakThis.get()) {
-            if (StorageAccessUserAgentStringQuirkController::shared().cachedQuirks().isEmpty())
-                return;
-            // FIXME: Filter by process's site when site isolation is enabled
+        // FIXME: Filter by process's site when site isolation is enabled
+        if (RefPtr protectedThis = weakThis.get())
             protectedThis->sendToAllProcesses(Messages::WebProcess::UpdateStorageAccessUserAgentStringQuirks(StorageAccessUserAgentStringQuirkController::shared().cachedQuirks()));
-        }
     });
 
     m_storageAccessPromptQuirksDataUpdateObserver = StorageAccessPromptQuirkController::shared().observeUpdates([weakThis = WeakPtr { *this }] {
         if (RefPtr protectedThis = weakThis.get()) {
             HashSet<WebCore::RegistrableDomain> domainSet;
             for (auto&& entry : StorageAccessPromptQuirkController::shared().cachedQuirks()) {
-                for (auto&& domain : entry.domainPairings.keys())
+                if (!entry.triggerPages.isEmpty()) {
+                    for (auto&& page : entry.triggerPages)
+                        domainSet.add(RegistrableDomain::uncheckedCreateFromRegistrableDomainString(page.string()));
+                    continue;
+                }
+                for (auto&& domain : entry.quirkDomains.keys())
                     domainSet.add(domain);
             }
             protectedThis->sendToAllProcesses(Messages::WebProcess::UpdateDomainsWithStorageAccessQuirks(domainSet));
         }
     });
+    if (StorageAccessPromptQuirkController::shared().cachedQuirks().isEmpty())
+        StorageAccessPromptQuirkController::shared().initialize();
+    if (StorageAccessUserAgentStringQuirkController::shared().cachedQuirks().isEmpty())
+        StorageAccessUserAgentStringQuirkController::shared().initialize();
 #endif
 
 }
@@ -818,8 +824,6 @@ void WebProcessPool::registerHighDynamicRangeChangeCallback()
 
 WebProcessDataStoreParameters WebProcessPool::webProcessDataStoreParameters(WebProcessProxy& process, WebsiteDataStore& websiteDataStore)
 {
-    websiteDataStore.waitForDirectoriesToResolveIfNecessary();
-
     auto& resolvedDirectories = websiteDataStore.resolvedDirectories();
     String mediaCacheDirectory = resolvedDirectories.mediaCacheDirectory;
 #if !ENABLE(GPU_PROCESS)
@@ -1231,6 +1235,7 @@ Ref<WebPageProxy> WebProcessPool::createWebPage(PageClient& pageClient, Ref<API:
     RefPtr<WebProcessProxy> process;
     auto lockdownMode = pageConfiguration->lockdownModeEnabled() ? WebProcessProxy::LockdownMode::Enabled : WebProcessProxy::LockdownMode::Disabled;
     RefPtr relatedPage = pageConfiguration->relatedPage();
+    // FIXME: If site isolation is enabled, this needs to get the correct process instead of assuming we always want the process of the related page.
     if (relatedPage && !relatedPage->isClosed() && relatedPage->hasSameGPUAndNetworkProcessPreferencesAs(pageConfiguration)) {
         // Sharing processes, e.g. when creating the page via window.open().
         process = &relatedPage->ensureRunningProcess();

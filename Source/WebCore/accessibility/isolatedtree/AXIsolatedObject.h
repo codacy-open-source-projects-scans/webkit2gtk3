@@ -56,7 +56,6 @@ public:
     ~AXIsolatedObject();
 
     AXID treeID() const final { return tree()->treeID(); }
-    ProcessID processID() const final { return tree()->processID(); }
     String dbg() const final;
 
     AccessibilityRole roleValue() const final { return static_cast<AccessibilityRole>(intAttributeValue(AXPropertyName::RoleValue)); }
@@ -228,9 +227,7 @@ private:
     IntSize size() const final { return snappedIntRect(LayoutRect(relativeFrame())).size(); }
     FloatRect relativeFrameFromChildren() const;
     WallTime dateTimeValue() const final { return propertyValue<WallTime>(AXPropertyName::DateTimeValue); }
-#if PLATFORM(MAC)
-    unsigned dateTimeComponents() const final { return propertyValue<unsigned>(AXPropertyName::DateTimeComponents); }
-#endif
+    DateComponentsType dateTimeComponentsType() const final { return propertyValue<DateComponentsType>(AXPropertyName::DateTimeComponentsType); }
     bool supportsDatetimeAttribute() const final { return boolAttributeValue(AXPropertyName::SupportsDatetimeAttribute); }
     String datetimeAttributeValue() const final { return stringAttributeValue(AXPropertyName::DatetimeAttributeValue); }
     bool canSetValueAttribute() const final { return boolAttributeValue(AXPropertyName::CanSetValueAttribute); }

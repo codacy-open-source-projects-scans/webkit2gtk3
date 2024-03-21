@@ -174,19 +174,16 @@ String String::foldCase() const
 Expected<Vector<UChar>, UTF8ConversionError> String::charactersWithoutNullTermination() const
 {
     Vector<UChar> result;
+    if (!m_impl)
+        return result;
 
-    if (m_impl) {
-        if (!result.tryReserveInitialCapacity(length() + 1))
-            return makeUnexpected(UTF8ConversionError::OutOfMemory);
+    if (!result.tryReserveInitialCapacity(length() + 1))
+        return makeUnexpected(UTF8ConversionError::OutOfMemory);
 
-        if (is8Bit()) {
-            const LChar* characters8 = m_impl->characters8();
-            result.append(characters8, m_impl->length());
-        } else {
-            const UChar* characters16 = m_impl->characters16();
-            result.append(characters16, m_impl->length());
-        }
-    }
+    if (is8Bit())
+        result.append(span8());
+    else
+        result.append(span16());
 
     return result;
 }
@@ -529,13 +526,13 @@ String String::fromUTF8(const CString& s)
     return fromUTF8(s.data());
 }
 
-String String::fromUTF8WithLatin1Fallback(const LChar* string, size_t size)
+String String::fromUTF8WithLatin1Fallback(std::span<const LChar> string)
 {
-    String utf8 = fromUTF8(string, size);
+    String utf8 = fromUTF8(string);
     if (!utf8) {
         // Do this assertion before chopping the size_t down to unsigned.
-        RELEASE_ASSERT(size <= String::MaxLength);
-        return String(string, size);
+        RELEASE_ASSERT(string.size() <= String::MaxLength);
+        return String(string);
     }
     return utf8;
 }
@@ -651,7 +648,7 @@ Vector<char> asciiDebug(StringImpl* impl)
         }
     }
     CString narrowString = buffer.toString().ascii();
-    return { reinterpret_cast<const char*>(narrowString.data()), narrowString.length() + 1 };
+    return { narrowString.bytesInludingNullTerminator() };
 }
 
 Vector<char> asciiDebug(String& string)

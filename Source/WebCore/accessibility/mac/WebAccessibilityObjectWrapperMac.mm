@@ -51,6 +51,7 @@
 #import "Chrome.h"
 #import "ChromeClient.h"
 #import "ContextMenuController.h"
+#import "DateComponents.h"
 #import "ElementInlines.h"
 #import "Font.h"
 #import "FontCascade.h"
@@ -72,6 +73,7 @@
 #import "RenderTextControl.h"
 #import "RenderView.h"
 #import "RenderWidget.h"
+#import "RuntimeApplicationChecks.h"
 #import "ScrollView.h"
 #import "TextIterator.h"
 #import "VisibleUnits.h"
@@ -484,6 +486,51 @@ using namespace WebCore;
 #define kAXConvertRelativeFrameParameterizedAttribute @"AXConvertRelativeFrame"
 #endif
 
+// Date time helpers.
+
+// VO requests a bit-wise combination of these constants via the API
+// AXDateTimeComponents to determine which fields of a datetime value are presented to the user.
+typedef NS_OPTIONS(NSUInteger, AXFDateTimeComponent) {
+    AXFDateTimeComponentSeconds = 0x0002,
+    AXFDateTimeComponentMinutes = 0x0004,
+    AXFDateTimeComponentHours = 0x0008,
+    AXFDateTimeComponentDays = 0x0020,
+    AXFDateTimeComponentMonths = 0x0040,
+    AXFDateTimeComponentYears = 0x0080,
+    AXFDateTimeComponentEras = 0x0100
+};
+
+static inline unsigned convertToAXFDateTimeComponents(DateComponentsType type)
+{
+    switch (type) {
+    case DateComponentsType::Invalid:
+        return 0;
+    case DateComponentsType::Date:
+        return AXFDateTimeComponentDays | AXFDateTimeComponentMonths | AXFDateTimeComponentYears;
+    case DateComponentsType::DateTimeLocal:
+        return AXFDateTimeComponentSeconds | AXFDateTimeComponentMinutes | AXFDateTimeComponentHours
+            | AXFDateTimeComponentDays | AXFDateTimeComponentMonths | AXFDateTimeComponentYears;
+    case DateComponentsType::Month:
+        return AXFDateTimeComponentMonths | AXFDateTimeComponentYears;
+    case DateComponentsType::Time:
+        return AXFDateTimeComponentSeconds | AXFDateTimeComponentMinutes | AXFDateTimeComponentHours;
+    case DateComponentsType::Week:
+        return 0;
+    };
+}
+
+// VoiceOver expects the datetime value in the local time zone. Since we store it in GMT, we need to convert it to local before returning it to VoiceOver.
+// This helper funtion computes the offset to go from local to GMT and returns its opposite.
+static inline NSInteger gmtToLocalTimeOffset(DateComponentsType type)
+{
+    NSTimeZone *timeZone = [NSTimeZone localTimeZone];
+    NSDate *now = [NSDate date];
+    NSInteger offset = -1 * [timeZone secondsFromGMTForDate:now];
+    if (type != DateComponentsType::DateTimeLocal && [timeZone isDaylightSavingTimeForDate:now])
+        return offset + 3600; // + number of seconds in an hour.
+    return offset;
+}
+
 @implementation WebAccessibilityObjectWrapper
 
 - (void)detach
@@ -759,12 +806,8 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
     return actions;
 }
 
-- (NSArray*)additionalAccessibilityAttributeNames
+- (NSArray*)_additionalAccessibilityAttributeNames:(const RefPtr<AXCoreObject>&)backingObject
 {
-    RefPtr<AXCoreObject> backingObject = self.axBackingObject;
-    if (!backingObject)
-        return nil;
-
     NSMutableArray *additional = [NSMutableArray array];
     if (backingObject->supportsARIAOwns())
         [additional addObject:NSAccessibilityOwnsAttribute];
@@ -1245,7 +1288,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
     else if (backingObject->isVideo())
         objectAttributes = videoAttrs.get().get();
 
-    NSArray *additionalAttributes = [self additionalAccessibilityAttributeNames];
+    NSArray *additionalAttributes = [self _additionalAccessibilityAttributeNames:backingObject];
     if ([additionalAttributes count])
         objectAttributes = [objectAttributes arrayByAddingObjectsFromArray:additionalAttributes];
 
@@ -1312,9 +1355,15 @@ static void convertToVector(NSArray* array, AccessibilityObject::AccessibilityCh
     return range;
 }
 
-- (id)associatedPluginParent
+- (id)_associatedPluginParent
 {
-    if (!self.axBackingObject || !self.axBackingObject->hasApplePDFAnnotationAttribute())
+    RefPtr<AXCoreObject> backingObject = self.axBackingObject;
+    return [self _associatedPluginParentWith:self.axBackingObject];
+}
+
+- (id)_associatedPluginParentWith:(const RefPtr<AXCoreObject>&)backingObject
+{
+    if (!backingObject || !backingObject->hasApplePDFAnnotationAttribute())
         return nil;
 
     return Accessibility::retrieveAutoreleasedValueFromMainThread<id>([protectedSelf = retainPtr(self)] () -> RetainPtr<id> {
@@ -1388,22 +1437,18 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     return NSAccessibilityUnknownRole;
 }
 
-- (BOOL)isEmptyGroup
+- (BOOL)_isEmptyGroup:(const RefPtr<AXCoreObject>&)object
 {
-    RefPtr<AXCoreObject> backingObject = self.axBackingObject;
-    if (!backingObject)
-        return false;
-
 #if ENABLE(MODEL_ELEMENT)
-    if (backingObject->isModel())
+    if (object->isModel())
         return false;
 #endif
 
-    if (backingObject->isRemoteFrame())
+    if (object->isRemoteFrame())
         return false;
 
     return [[self role] isEqual:NSAccessibilityGroupRole]
-        && backingObject->children().isEmpty()
+        && object->children().isEmpty()
         && ![[self renderWidgetChildren] count];
 }
 
@@ -1414,7 +1459,7 @@ ALLOW_DEPRECATED_DECLARATIONS_BEGIN
     if (!backingObject)
         return nil;
 
-    if ([self isEmptyGroup])
+    if ([self _isEmptyGroup:backingObject])
         return @"AXEmptyGroup";
 
     auto subrole = backingObject->subrolePlatformString();
@@ -1509,14 +1554,6 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     }
 
     return nil;
-}
-
-// VoiceOver expects the datetime value in the local time zone. Since we store it in GMT, we need to convert it to local before returning it to VoiceOver.
-// This helper funtion computes the offset to go from local to GMT and returns its opposite.
-static inline NSInteger gmtToLocalTimeOffset()
-{
-    NSDate *now = [NSDate date];
-    return -1 * [[NSTimeZone localTimeZone] secondsFromGMTForDate:now];
 }
 
 // FIXME: split up this function in a better way.
@@ -1712,8 +1749,8 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
             [] (unsigned& typedValue) -> id { return @(typedValue); },
             [] (float& typedValue) -> id { return @(typedValue); },
             [] (String& typedValue) -> id { return (NSString *)typedValue; },
-            [] (WallTime& typedValue) -> id {
-                NSInteger offset = gmtToLocalTimeOffset();
+            [&backingObject] (WallTime& typedValue) -> id {
+                NSInteger offset = gmtToLocalTimeOffset(backingObject->dateTimeComponentsType());
                 auto time = typedValue.secondsSinceEpoch().value();
                 NSDate *gmtDate = [NSDate dateWithTimeIntervalSince1970:time];
                 return [NSDate dateWithTimeInterval:offset sinceDate:gmtDate];
@@ -1725,7 +1762,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
     }
 
     if ([attributeName isEqualToString:@"AXDateTimeComponents"])
-        return @(backingObject->dateTimeComponents());
+        return @(convertToAXFDateTimeComponents(backingObject->dateTimeComponentsType()));
 
     if ([attributeName isEqualToString:(NSString *)kAXMenuItemMarkCharAttribute]) {
         const unichar ch = 0x2713; // ✓ used on Mac for selected menu items.
@@ -2184,7 +2221,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
     
     // This allows us to connect to a plugin that creates a shadow node for editing (like PDFs).
     if ([attributeName isEqualToString:@"_AXAssociatedPluginParent"])
-        return [self associatedPluginParent];
+        return [self _associatedPluginParentWith:backingObject];
 
     // this is used only by DumpRenderTree for testing
     if ([attributeName isEqualToString:@"AXClickPoint"])
@@ -2287,6 +2324,9 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
 
     if (UNLIKELY([attributeName isEqualToString:@"AXStringValue"]))
         return backingObject->stringValue();
+
+    if (UNLIKELY([attributeName isEqualToString:@"AXDateTimeComponentsType"]))
+        return [NSNumber numberWithUnsignedShort:(uint8_t)backingObject->dateTimeComponentsType()];
 
     if (UNLIKELY([attributeName isEqualToString:@"AXControllers"]))
         return makeNSArray(backingObject->controllers());
@@ -3839,8 +3879,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 // until it finds something that responds to this method.
 - (pid_t)accessibilityPresenterProcessIdentifier
 {
-    RefPtr<AXCoreObject> backingObject = self.axBackingObject;
-    return backingObject ? backingObject->processID() : 0;
+    return presentingApplicationPID();
 }
 
 - (NSArray *)accessibilityArrayAttributeValues:(NSString *)attribute index:(NSUInteger)index maxCount:(NSUInteger)maxCount
@@ -3883,11 +3922,11 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 
             // The attachment view should be returned, otherwise AX palindrome errors occur.
             id attachmentView = nil;
-            if ([wrapper isKindOfClass:[WebAccessibilityObjectWrapper class]] && wrapper.axBackingObject) {
-                if (wrapper.axBackingObject->isAttachment())
+            if (RefPtr childObject = [wrapper isKindOfClass:[WebAccessibilityObjectWrapper class]] ? wrapper.axBackingObject : nullptr) {
+                if (childObject->isAttachment())
                     attachmentView = [wrapper attachmentView];
-                else if (wrapper.axBackingObject->isRemoteFrame())
-                    attachmentView = wrapper.axBackingObject->remoteFramePlatformElement().get();
+                else if (childObject->isRemoteFrame())
+                    attachmentView = childObject->remoteFramePlatformElement().get();
             }
 
             [subarray addObject:attachmentView ? attachmentView : wrapper];

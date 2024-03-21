@@ -679,7 +679,6 @@ bool CachedResourceLoader::canRequestAfterRedirection(CachedResource::Type type,
 String convertEnumerationToString(FetchOptions::Destination);
 String convertEnumerationToString(FetchOptions::Mode);
 
-#if ENABLE(PUBLIC_SUFFIX_LIST)
 static const String& convertEnumerationToString(FetchMetadataSite enumerationValue)
 {
     static NeverDestroyed<const String> none(MAKE_STATIC_STRING_IMPL("none"));
@@ -721,7 +720,6 @@ static void updateRequestFetchMetadataHeaders(ResourceRequest& request, const Re
     request.setHTTPHeaderField(HTTPHeaderName::SecFetchMode, convertEnumerationToString(options.mode));
     request.setHTTPHeaderField(HTTPHeaderName::SecFetchSite, convertEnumerationToString(site));
 }
-#endif // ENABLE(PUBLIC_SUFFIX_LIST)
 
 FetchMetadataSite CachedResourceLoader::computeFetchMetadataSite(const ResourceRequest& request, CachedResource::Type type, FetchOptions::Mode mode, const SecurityOrigin& originalOrigin, FetchMetadataSite originalSite)
 {
@@ -753,9 +751,8 @@ bool CachedResourceLoader::updateRequestAfterRedirection(CachedResource::Type ty
 
     // FIXME: We might want to align the checks done here with the ones done in CachedResourceLoader::requestResource, content extensions blocking in particular.
 
-#if ENABLE(PUBLIC_SUFFIX_LIST)
     RefPtr frame = m_documentLoader->frame();
-    if (frame && frame->settings().fetchMetadataEnabled() && (!frame->document() || !frame->document()->quirks().shouldDisableFetchMetadata())) {
+    if (frame && (!frame->document() || !frame->document()->quirks().shouldDisableFetchMetadata())) {
         Ref requestOrigin = SecurityOrigin::create(request.url());
 
         // In the case of a protocol downgrade we strip all FetchMetadata headers.
@@ -767,9 +764,6 @@ bool CachedResourceLoader::updateRequestAfterRedirection(CachedResource::Type ty
         } else
             updateRequestFetchMetadataHeaders(request, options, site);
     }
-#else
-    UNUSED_PARAM(site);
-#endif // ENABLE(PUBLIC_SUFFIX_LIST)
 
     return canRequestAfterRedirection(type, request.url(), options, preRedirectURL);
 }
@@ -910,7 +904,7 @@ void CachedResourceLoader::prepareFetch(CachedResource::Type type, CachedResourc
             request.setSelectedServiceWorkerRegistrationIdentifierIfNeeded(activeServiceWorker->registrationIdentifier());
     }
 
-    request.setAcceptHeaderIfNone(type, protectedFrame().get());
+    request.setAcceptHeaderIfNone(type);
 
     // Accept-Language value is handled in underlying port-specific code.
     // FIXME: Decide whether to support client hints
@@ -923,15 +917,13 @@ void CachedResourceLoader::updateHTTPRequestHeaders(FrameLoader& frameLoader, Ca
     // FIXME: We should reconcile handling of MainResource with other resources.
     if (type != CachedResource::Type::MainResource)
         request.updateReferrerAndOriginHeaders(frameLoader);
-#if ENABLE(PUBLIC_SUFFIX_LIST)
     // FetchMetadata depends on PSL to determine same-site relationships and without this
     // ability it is best to not set any FetchMetadata headers as sites generally expect
     // all of them or none.
-    if (frameLoader.frame().settings().fetchMetadataEnabled() && (!frameLoader.frame().document() || !frameLoader.frame().document()->quirks().shouldDisableFetchMetadata())) {
+    if (!frameLoader.frame().document() || !frameLoader.frame().document()->quirks().shouldDisableFetchMetadata()) {
         auto site = computeFetchMetadataSite(request.resourceRequest(), type, request.options().mode, frameLoader.frame().document()->protectedSecurityOrigin());
         updateRequestFetchMetadataHeaders(request.resourceRequest(), request.options(), site);
     }
-#endif // ENABLE(PUBLIC_SUFFIX_LIST)
     request.updateUserAgentHeader(frameLoader);
 
     if (frameLoader.frame().loader().loadType() == FrameLoadType::ReloadFromOrigin)
@@ -1681,8 +1673,8 @@ ResourceErrorOr<CachedResourceHandle<CachedResource>> CachedResourceLoader::prel
     if (resource && (!m_preloads || !m_preloads->contains(*resource.value().get()))) {
         CachedResourceHandle resourceValue = resource.value();
         // Fonts need special treatment since just creating the resource doesn't trigger a load.
-        if (type == CachedResource::Type::FontResource)
-            downcast<CachedFont>(resourceValue.get())->beginLoadIfNeeded(*this);
+        if (CachedResourceHandle cachedFont = dynamicDowncast<CachedFont>(resourceValue.get()))
+            cachedFont->beginLoadIfNeeded(*this);
         resourceValue->increasePreloadCount();
 
         if (!m_preloads)

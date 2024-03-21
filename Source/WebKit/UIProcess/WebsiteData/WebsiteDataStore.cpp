@@ -152,7 +152,6 @@ Ref<WebsiteDataStore> WebsiteDataStore::create(Ref<WebsiteDataStoreConfiguration
 WebsiteDataStore::WebsiteDataStore(Ref<WebsiteDataStoreConfiguration>&& configuration, PAL::SessionID sessionID)
     : m_sessionID(sessionID)
     , m_configuration(WTFMove(configuration))
-    , m_deviceIdHashSaltStorage(DeviceIdHashSaltStorage::create(isPersistent() ? m_configuration->deviceIdHashSaltsStorageDirectory() : String()))
     , m_trackingPreventionDebugMode(m_configuration->resourceLoadStatisticsDebugModeEnabled())
     , m_queue(WorkQueue::create("com.apple.WebKit.WebsiteDataStore"))
 #if ENABLE(WEB_AUTHN)
@@ -460,7 +459,18 @@ static void resolveDirectories(WebsiteDataStoreConfiguration::Directories& direc
 
 const WebsiteDataStoreConfiguration::Directories& WebsiteDataStore::resolvedDirectories() const
 {
+    ASSERT(RunLoop::isMain());
+
     Locker resolveLocker { m_resolveDirectoriesLock };
+    if (m_resolvedDirectories)
+        return *m_resolvedDirectories;
+
+    // Ensure task is dispatched before waiting.
+    RELEASE_ASSERT(m_hasDispatchedResolveDirectories);
+
+    while (!m_resolvedDirectories)
+        m_resolveDirectoriesCondition.wait(m_resolveDirectoriesLock);
+
     return *m_resolvedDirectories;
 }
 
@@ -533,21 +543,6 @@ void WebsiteDataStore::handleResolvedDirectoriesAsynchronously(const WebsiteData
         for (auto& directory : directoriesToExclude)
             FileSystem::setExcludedFromBackup(directory, true);
     });
-}
-
-void WebsiteDataStore::waitForDirectoriesToResolveIfNecessary()
-{
-    ASSERT(RunLoop::isMain());
-
-    Locker resolveLocker { m_resolveDirectoriesLock };
-    if (m_resolvedDirectories)
-        return;
-
-    // Ensure task is dispatched before wait.
-    RELEASE_ASSERT(m_hasDispatchedResolveDirectories);
-
-    while (!m_resolvedDirectories)
-        m_resolveDirectoriesCondition.wait(m_resolveDirectoriesLock);
 }
 
 Ref<WorkQueue> WebsiteDataStore::protectedQueue() const
@@ -736,7 +731,7 @@ private:
     }
 
     if (dataTypes.contains(WebsiteDataType::DeviceIdHashSalt)) {
-        m_deviceIdHashSaltStorage->getDeviceIdHashSaltOrigins([callbackAggregator](auto&& origins) {
+        ensureProtectedDeviceIdHashSaltStorage()->getDeviceIdHashSaltOrigins([callbackAggregator](auto&& origins) {
             WebsiteData websiteData;
             websiteData.entries = WTF::map(origins, [](auto& origin) {
                 return WebsiteData::Entry { origin, WebsiteDataType::DeviceIdHashSalt, 0 };
@@ -746,7 +741,6 @@ private:
     }
 
     if (dataTypes.contains(WebsiteDataType::MediaKeys) && isPersistent()) {
-        waitForDirectoriesToResolveIfNecessary();
         auto mediaKeysStorageDirectory = resolvedDirectories().mediaKeysStorageDirectory;
         protectedQueue()->dispatch([mediaKeysStorageDirectory = crossThreadCopy(WTFMove(mediaKeysStorageDirectory)), callbackAggregator] {
             WebsiteData websiteData;
@@ -855,10 +849,9 @@ void WebsiteDataStore::removeData(OptionSet<WebsiteDataType> dataTypes, WallTime
     }
 
     if (dataTypes.contains(WebsiteDataType::DeviceIdHashSalt) || (dataTypes.contains(WebsiteDataType::Cookies)))
-        m_deviceIdHashSaltStorage->deleteDeviceIdHashSaltOriginsModifiedSince(modifiedSince, [callbackAggregator] { });
+        ensureProtectedDeviceIdHashSaltStorage()->deleteDeviceIdHashSaltOriginsModifiedSince(modifiedSince, [callbackAggregator] { });
 
     if (dataTypes.contains(WebsiteDataType::MediaKeys) && isPersistent()) {
-        waitForDirectoriesToResolveIfNecessary();
         auto mediaKeysStorageDirectory = resolvedDirectories().mediaKeysStorageDirectory;
         protectedQueue()->dispatch([mediaKeysStorageDirectory = crossThreadCopy(WTFMove(mediaKeysStorageDirectory)), callbackAggregator, modifiedSince] {
             removeMediaKeysStorage(mediaKeysStorageDirectory, modifiedSince);
@@ -948,7 +941,7 @@ void WebsiteDataStore::removeData(OptionSet<WebsiteDataType> dataTypes, const Ve
     }
 
     if (dataTypes.contains(WebsiteDataType::DeviceIdHashSalt) || (dataTypes.contains(WebsiteDataType::Cookies)))
-        protectedDeviceIdHashSaltStorage()->deleteDeviceIdHashSaltForOrigins(origins, [callbackAggregator] { });
+        ensureProtectedDeviceIdHashSaltStorage()->deleteDeviceIdHashSaltForOrigins(origins, [callbackAggregator] { });
 
     if (dataTypes.contains(WebsiteDataType::MediaKeys) && isPersistent()) {
         HashSet<WebCore::SecurityOriginData> origins;
@@ -957,7 +950,6 @@ void WebsiteDataStore::removeData(OptionSet<WebsiteDataType> dataTypes, const Ve
                 origins.add(crossThreadCopy(origin));
         }
 
-        waitForDirectoriesToResolveIfNecessary();
         auto mediaKeysStorageDirectory = resolvedDirectories().mediaKeysStorageDirectory;
         protectedQueue()->dispatch([mediaKeysStorageDirectory = crossThreadCopy(WTFMove(mediaKeysStorageDirectory)), salt = mediaKeysStorageSalt(), callbackAggregator, origins = WTFMove(origins)] {
             removeMediaKeysStorage(mediaKeysStorageDirectory, origins, salt);
@@ -965,9 +957,17 @@ void WebsiteDataStore::removeData(OptionSet<WebsiteDataType> dataTypes, const Ve
     }
 }
 
-Ref<DeviceIdHashSaltStorage> WebsiteDataStore::protectedDeviceIdHashSaltStorage()
+DeviceIdHashSaltStorage& WebsiteDataStore::ensureDeviceIdHashSaltStorage()
 {
-    return m_deviceIdHashSaltStorage;
+    if (!m_deviceIdHashSaltStorage)
+        m_deviceIdHashSaltStorage = DeviceIdHashSaltStorage::create(isPersistent() ? m_configuration->deviceIdHashSaltsStorageDirectory() : String());
+
+    return *m_deviceIdHashSaltStorage;
+}
+
+Ref<DeviceIdHashSaltStorage> WebsiteDataStore::ensureProtectedDeviceIdHashSaltStorage()
+{
+    return ensureDeviceIdHashSaltStorage();
 }
 
 void WebsiteDataStore::setServiceWorkerTimeoutForTesting(Seconds seconds)
@@ -1334,7 +1334,7 @@ void WebsiteDataStore::setResourceLoadStatisticsTimeAdvanceForTesting(Seconds ti
     protectedNetworkProcess()->setResourceLoadStatisticsTimeAdvanceForTesting(m_sessionID, time, WTFMove(completionHandler));
 }
 
-void WebsiteDataStore::setStorageAccessPromptQuirkForTesting(String&& topFrameDomain, Vector<String>&& subFrameDomains, CompletionHandler<void()>&& completionHandler)
+void WebsiteDataStore::setStorageAccessPromptQuirkForTesting(String&& topFrameDomain, Vector<String>&& subFrameDomains, Vector<String>&& triggerPages, CompletionHandler<void()>&& completionHandler)
 {
     auto registrableTopFrameDomain = WebCore::RegistrableDomain::fromRawString(WTFMove(topFrameDomain));
     auto registrableTopFrameDomainString = registrableTopFrameDomain.string();
@@ -1344,7 +1344,9 @@ void WebsiteDataStore::setStorageAccessPromptQuirkForTesting(String&& topFrameDo
             KeyValuePair { WTFMove(registrableTopFrameDomain),
                 subFrameDomains.map([](auto& domain) { return WebCore::RegistrableDomain::fromRawString(String { domain }); })
             },
-        } }
+        } }, {
+            triggerPages.map([](auto& page) { return URL { page }; })
+        }
     } };
 
 #if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
@@ -1910,8 +1912,6 @@ void WebsiteDataStore::createHandleFromResolvedPathIfPossible(const String& reso
 WebsiteDataStoreParameters WebsiteDataStore::parameters()
 {
     WebsiteDataStoreParameters parameters;
-    waitForDirectoriesToResolveIfNecessary();
-
     auto& directories = resolvedDirectories();
     auto resourceLoadStatisticsDirectory = directories.resourceLoadStatisticsDirectory;
     SandboxExtension::Handle resourceLoadStatisticsDirectoryHandle;
@@ -2476,7 +2476,7 @@ void WebsiteDataStore::resumeDownload(const DownloadProxy& downloadProxy, const 
             sandboxExtensionHandle = WTFMove(*handle);
     }
 
-    protectedNetworkProcess()->send(Messages::NetworkProcess::ResumeDownload(m_sessionID, downloadProxy.downloadID(), resumeData.dataReference(), path, WTFMove(sandboxExtensionHandle), callDownloadDidStart), 0);
+    protectedNetworkProcess()->send(Messages::NetworkProcess::ResumeDownload(m_sessionID, downloadProxy.downloadID(), resumeData.bytes(), path, WTFMove(sandboxExtensionHandle), callDownloadDidStart), 0);
 }
 
 bool WebsiteDataStore::hasActivePages()

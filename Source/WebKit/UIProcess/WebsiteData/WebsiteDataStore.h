@@ -234,7 +234,7 @@ public:
     void insertExpiredStatisticForTesting(const URL&, unsigned numberOfOperatingDaysPassed, bool hadUserInteraction, bool isScheduledForAllButCookieDataRemoval, bool isPrevalent, CompletionHandler<void()>&&);
     void setNotifyPagesWhenDataRecordsWereScanned(bool, CompletionHandler<void()>&&);
     void setResourceLoadStatisticsTimeAdvanceForTesting(Seconds, CompletionHandler<void()>&&);
-    void setStorageAccessPromptQuirkForTesting(String&& topFrameDomain, Vector<String>&& subFrameDomains, CompletionHandler<void()>&&);
+    void setStorageAccessPromptQuirkForTesting(String&& topFrameDomain, Vector<String>&& subFrameDomains, Vector<String>&& triggerPages, CompletionHandler<void()>&&);
     void grantStorageAccessForTesting(String&& topFrameDomain, Vector<String>&& subFrameDomains, CompletionHandler<void()>&&);
     void setIsRunningResourceLoadStatisticsTest(bool, CompletionHandler<void()>&&);
     void setPruneEntriesDownTo(size_t, CompletionHandler<void()>&&);
@@ -273,7 +273,6 @@ public:
     void storeServiceWorkerRegistrations(CompletionHandler<void()>&&);
     void setCacheMaxAgeCapForPrevalentResources(Seconds, CompletionHandler<void()>&&);
     void resetCacheMaxAgeCapForPrevalentResources(CompletionHandler<void()>&&);
-    void waitForDirectoriesToResolveIfNecessary();
     const WebsiteDataStoreConfiguration::Directories& resolvedDirectories() const;
     FileSystem::Salt mediaKeysStorageSalt() const;
 
@@ -284,8 +283,8 @@ public:
 #endif
     void allowTLSCertificateChainForLocalPCMTesting(const WebCore::CertificateInfo&);
 
-    DeviceIdHashSaltStorage& deviceIdHashSaltStorage() { return m_deviceIdHashSaltStorage.get(); }
-    Ref<DeviceIdHashSaltStorage> protectedDeviceIdHashSaltStorage();
+    DeviceIdHashSaltStorage& ensureDeviceIdHashSaltStorage();
+    Ref<DeviceIdHashSaltStorage> ensureProtectedDeviceIdHashSaltStorage();
 
     WebsiteDataStoreParameters parameters();
     static Vector<WebsiteDataStoreParameters> parametersFromEachWebsiteDataStore();
@@ -526,17 +525,19 @@ private:
     String resolvedContainerCachesNetworkingDirectory();
     String parentBundleDirectory() const;
 #endif
+
     void handleResolvedDirectoriesAsynchronously(const WebsiteDataStoreConfiguration::Directories&, bool);
 
     const PAL::SessionID m_sessionID;
 
     mutable Lock m_resolveDirectoriesLock;
-    Condition m_resolveDirectoriesCondition;
+    mutable Condition m_resolveDirectoriesCondition;
     bool m_hasDispatchedResolveDirectories { false };
     std::optional<WebsiteDataStoreConfiguration::Directories> m_resolvedDirectories WTF_GUARDED_BY_LOCK(m_resolveDirectoriesLock);
     FileSystem::Salt m_mediaKeysStorageSalt WTF_GUARDED_BY_LOCK(m_resolveDirectoriesLock);
     Ref<const WebsiteDataStoreConfiguration> m_configuration;
-    const Ref<DeviceIdHashSaltStorage> m_deviceIdHashSaltStorage;
+    bool m_hasResolvedDirectories { false };
+    RefPtr<DeviceIdHashSaltStorage> m_deviceIdHashSaltStorage;
 #if PLATFORM(IOS_FAMILY)
     String m_resolvedContainerCachesWebContentDirectory;
     String m_resolvedContainerCachesNetworkingDirectory;

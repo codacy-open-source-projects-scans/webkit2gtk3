@@ -84,7 +84,6 @@ public:
     bool shouldExposeShowModalDialog() const;
     bool shouldNavigatorPluginsBeEmpty() const;
     bool shouldDisableNavigatorStandaloneQuirk() const;
-    static bool shouldSendLongerAcceptHeaderQuirk(const URL&, LocalFrame*);
 
     WEBCORE_EXPORT bool shouldDispatchSyntheticMouseEventsWhenModifyingSelection() const;
     WEBCORE_EXPORT bool shouldSuppressAutocorrectionAndAutocapitalizationInHiddenEditableAreas() const;
@@ -161,6 +160,10 @@ public:
     bool shouldEnableFontLoadingAPIQuirk() const;
     bool needsVideoShouldMaintainAspectRatioQuirk() const;
 
+#if PLATFORM(VISION)
+    WEBCORE_EXPORT bool shouldDisableFullscreenVideoAspectRatioAdaptiveSizing() const;
+#endif
+
     bool shouldDisableLazyIframeLoadingQuirk() const;
 
     bool shouldDisableFetchMetadata() const;
@@ -180,12 +183,13 @@ public:
 
     bool needsResettingTransitionCancelsRunningTransitionQuirk() const;
 
-    bool shouldStarBeFeaturePolicyDefaultValue() const;
+    bool shouldStarBePermissionsPolicyDefaultValue() const;
     bool shouldDisableDataURLPaddingValidation() const;
 
     bool needsDisableDOMPasteAccessQuirk() const;
 
     bool shouldDisableElementFullscreenQuirk() const;
+    bool shouldDisableWritingSuggestionsByDefaultQuirk() const;
     bool shouldIgnorePlaysInlineRequirementQuirk() const;
     WEBCORE_EXPORT bool shouldUseEphemeralPartitionedStorageForDOMCookies(const URL&) const;
 
@@ -257,7 +261,7 @@ private:
     mutable std::optional<bool> m_shouldDisableLazyIframeLoadingQuirk;
     bool m_needsConfigurableIndexedPropertiesQuirk { false };
     bool m_needsToCopyUserSelectNoneQuirk { false };
-    mutable std::optional<bool> m_shouldStarBeFeaturePolicyDefaultValueQuirk;
+    mutable std::optional<bool> m_shouldStarBePermissionsPolicyDefaultValueQuirk;
     mutable std::optional<bool> m_shouldDisableDataURLPaddingValidation;
     mutable std::optional<bool> m_needsDisableDOMPasteAccessQuirk;
     mutable std::optional<bool> m_shouldDisableElementFullscreen;

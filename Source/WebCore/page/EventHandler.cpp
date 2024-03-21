@@ -2009,6 +2009,11 @@ ScrollableArea* EventHandler::enclosingScrollableArea(Node* node)
                 return scrollableArea;
         }
 
+        if (RefPtr plugin = dynamicDowncast<RenderEmbeddedObject>(renderer)) {
+            if (auto* scrollableArea = plugin->scrollableArea())
+                return scrollableArea;
+        }
+
         auto* layer = renderer->enclosingLayer();
         if (!layer)
             return nullptr;
@@ -3127,8 +3132,6 @@ HandleUserInputEventResult EventHandler::handleWheelEventInternal(const Platform
     auto monitor = frame->page()->wheelEventTestMonitor();
     if (monitor)
         monitor->receivedWheelEventWithPhases(event.phase(), event.momentumPhase());
-
-    auto deferrer = WheelEventTestMonitorCompletionDeferrer { monitor.get(), this, WheelEventTestMonitor::DeferReason::HandlingWheelEventOnMainThread };
 #endif
 
     m_isHandlingWheelEvent = true;
@@ -3155,6 +3158,11 @@ HandleUserInputEventResult EventHandler::handleWheelEventInternal(const Platform
     // FIXME: Despite doing this up-front search for the correct scrollable area, we dispatch events via elements which
     // itself finds and tries to scroll overflow scrollers.
     determineWheelEventTarget(event, element, scrollableArea, isOverWidget);
+
+#if PLATFORM(COCOA) || PLATFORM(WIN)
+    if (scrollableArea)
+        auto deferrer = WheelEventTestMonitorCompletionDeferrer { monitor.get(), scrollableArea->scrollingNodeIDForTesting(), WheelEventTestMonitor::DeferReason::HandlingWheelEventOnMainThread };
+#endif
 
     if (element) {
         if (isOverWidget) {
@@ -4614,17 +4622,16 @@ bool EventHandler::startKeyboardScrollAnimationOnRenderBoxAndItsAncestors(Scroll
     return false;
 }
 
-bool EventHandler::startKeyboardScrollAnimationOnPlugin(ScrollDirection direction, ScrollGranularity granularity, RenderEmbeddedObject& plugin, bool isKeyRepeat)
+bool EventHandler::startKeyboardScrollAnimationOnPlugin(ScrollDirection direction, ScrollGranularity granularity, RenderEmbeddedObject& pluginRenderer, bool isKeyRepeat)
 {
-    if (!plugin.usesAsyncScrolling())
-        return false;
-    ScrollingNodeID scroller = plugin.scrollingNodeID();
-    ScrollableArea* scrollableArea = m_frame->view()->scrollableAreaForScrollingNodeID(scroller);
+    auto* scrollableArea = pluginRenderer.scrollableArea();
     if (!scrollableArea)
         return false;
+
     auto* animator = scrollableArea->scrollAnimator().keyboardScrollingAnimator();
     if (!animator)
         return false;
+
     return beginKeyboardScrollGesture(animator, direction, granularity, isKeyRepeat);
 }
 

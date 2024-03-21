@@ -95,6 +95,8 @@ class GLibPort(Port):
         self._copy_value_from_environ_if_set(environment, 'WEBKIT_GST_DMABUF_SINK_DISABLED')
         self._copy_value_from_environ_if_set(environment, 'WEBKIT_GST_HARNESS_DUMP_DIR')
         self._copy_value_from_environ_if_set(environment, 'WEBKIT_GST_USE_PLAYBIN3')
+        self._copy_value_from_environ_if_set(environment, 'WEBKIT_GST_HOLE_PUNCH_QUIRK')
+        self._copy_value_from_environ_if_set(environment, 'WEBKIT_GST_QUIRKS')
         self._copy_value_from_environ_if_set(environment, 'AT_SPI_BUS_ADDRESS')
         for gst_variable in ('DEBUG', 'DEBUG_DUMP_DOT_DIR', 'DEBUG_FILE', 'DEBUG_NO_COLOR',
                              'PLUGIN_SCANNER', 'PLUGIN_PATH', 'PLUGIN_SYSTEM_PATH', 'REGISTRY',
@@ -116,6 +118,9 @@ class GLibPort(Port):
 
         environment['WEBKIT_GST_ALLOW_PLAYBACK_OF_INVISIBLE_VIDEOS'] = '1'
         environment['WEBKIT_GST_WEBRTC_FORCE_EARLY_VIDEO_DECODING'] = '1'
+
+        # Disable SIMD optimization in GStreamer's ORC. Some bots (WPE release) crash in ORC's optimizations.
+        environment['ORC_CODE'] = 'backup'
 
         if self.get_option("leaks"):
             # Turn off GLib memory optimisations https://wiki.gnome.org/Valgrind.

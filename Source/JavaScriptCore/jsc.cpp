@@ -2489,7 +2489,7 @@ JSC_DEFINE_HOST_FUNCTION(functionDollarAgentStart, (JSGlobalObject* globalObject
         return true;
     };
 
-    if (isGigacageMemoryExhausted(Gigacage::JSValue) || isGigacageMemoryExhausted(Gigacage::Primitive))
+    if (isGigacageMemoryExhausted(Gigacage::Primitive))
         return JSValue::encode(throwOutOfMemoryError(globalObject, scope, "Gigacage is exhausted"_s));
 
     String workerPath = "worker"_s;
@@ -3697,7 +3697,7 @@ static void runWithOptions(GlobalObject* globalObject, CommandLine& options, boo
         case Script::CodeSource::File: {
             fileName = String::fromLatin1(scripts[i].argument);
             if (scripts[i].strictMode == Script::StrictMode::Strict)
-                scriptBuffer.append("\"use strict\";\n", strlen("\"use strict\";\n"));
+                scriptBuffer.append("\"use strict\";\n"_span);
 
             if (isModule) {
                 // If necessary, prepend "./" so the module loader doesn't think this is a bare-name specifier.

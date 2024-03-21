@@ -1048,6 +1048,8 @@ media/now-playing-status-without-media.html [ Skip ]
 # WebM not supported in WK1 on macOS.
 http/tests/media/cross-origin-webm-video.html [ Skip ]
 http/tests/media/video-webm-stall.html
+http/tests/media/video-src-webm-blob.html [ Failure ]
+http/tests/media/video-srcobject-webm-blob.html [ Failure ]
 media/W3C/video/canPlayType/canPlayType_codecs_order_1.html [ Failure ]
 media/W3C/video/canPlayType/canPlayType_supported_but_no_codecs_parameter_1.html [ Failure ]
 media/W3C/video/canPlayType/canPlayType_two_implies_one_1.html [ Failure ]
@@ -1055,6 +1057,7 @@ media/W3C/video/canPlayType/canPlayType_two_implies_one_2.html [ Failure ]
 media/media-can-play-webm.html [ Failure ]
 media/media-vp8-webm-error.html [ Failure ]
 media/media-vp8-webm.html [ Skip ]
+media/video-src-webm-blob.html [ Failure ]
 media/track/media-audio-track.html [ Failure ]
 media/media-sources-selection.html [ ImageOnlyFailure ]
 
@@ -2817,3 +2820,11 @@ webkit.org/b/270310 [ Sonoma+ ] imported/w3c/web-platform-tests/html/semantics/i
 webkit.org/b/270380 [ Ventura+ ] fast/hidpi/filters-drop-shadow.html [ ImageOnlyFailure ]
 
 webkit.org/b/270385 [ Sonoma+ ] fast/images/jpegxl-with-color-profile.html [ ImageOnlyFailure ]
+
+webkit.org/b/259485 [ Ventura ] http/tests/media/hls/track-in-band-multiple-cues.html [ Skip ]
+
+webkit.org/b/271323 [ Debug ] media/media-source/worker/media-managedmse-worker.html [ Skip ]
+
+# webkit.org/b/270199 [ MacOS WK1 Debug ] fast/frames/lots-of-iframes.html and fast/frames/lots-of-objects.html are consistent/flaky timeouts
+[ Debug ] fast/frames/lots-of-iframes.html [ Pass Timeout ]
+[ Debug ] fast/frames/lots-of-objects.html [ Pass Timeout ]

@@ -2552,7 +2552,8 @@
          "eddydas@gmail.com"
       ],
       "github" : "eddydas",
-      "name" : "Eddy Wong"
+      "name" : "Eddy Wong",
+      "status" : "committer"
    },
    {
       "emails" : [
@@ -3705,6 +3706,14 @@
    },
    {
       "emails" : [
+         "jahoward@nvidia.com",
+         "jameshoward@mac.com"
+      ],
+      "github" : "james-howard",
+      "name" : "James Howard"
+   },
+   {
+      "emails" : [
          "james_e_kim@apple.com"
       ],
       "github" : "james-e-kim",
@@ -4590,7 +4599,8 @@
       "name" : "Keith Cirkel",
       "nicks" : [
          "keithamus"
-      ]
+      ],
+      "status" : "committer"
    },
    {
       "emails" : [
@@ -5479,7 +5489,7 @@
       "nicks" : [
          "sysrqb"
       ],
-      "status" : "committer"
+      "status" : "reviewer"
    },
    {
       "emails" : [
@@ -5604,7 +5614,8 @@
       "name" : "Michael[tm] Smith",
       "nicks" : [
          "sideshowbarker"
-      ]
+      ],
+      "status" : "committer"
    },
    {
       "emails" : [
@@ -5942,6 +5953,13 @@
       ],
       "github" : "NKRosario",
       "name" : "Nicole Rosario"
+   },
+   {
+      "emails" : [
+         "nicole@stubbornella.org"
+      ],
+      "github" : "stubbornella",
+      "name" : "Nicole Sullivan"
    },
    {
       "emails" : [
@@ -7301,6 +7319,15 @@
    },
    {
       "emails" : [
+         "tpanigrahi@apple.com",
+         "tanmoy.panigrahi2@gmail.com",
+         "hello.tanmoy@icloud.com"
+      ],
+      "github" : "TanmoyPanigrahi",
+      "name" : "Tanmoy Panigrahi"
+   },
+   {
+      "emails" : [
          "tdanderson@chromium.org"
       ],
       "name" : "Terry Anderson",
@@ -7745,7 +7772,7 @@
       "nicks" : [
          "vitorroriz"
       ],
-      "status" : "committer"
+      "status" : "reviewer"
    },
    {
       "emails" : [

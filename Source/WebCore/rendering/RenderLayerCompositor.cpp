@@ -101,11 +101,6 @@
 #include "RenderModel.h"
 #endif
 
-#if ENABLE(3D_TRANSFORMS)
-// This symbol is used to determine from a script whether 3D rendering is enabled (via 'nm').
-WEBCORE_EXPORT bool WebCoreHas3DRendering = true;
-#endif
-
 #if !PLATFORM(MAC) && !PLATFORM(IOS_FAMILY) && !PLATFORM(GTK) && !PLATFORM(WPE)
 #define USE_COMPOSITING_FOR_SMALL_CANVASES 1
 #endif
@@ -617,7 +612,7 @@ void RenderLayerCompositor::customPositionForVisibleRectComputation(const Graphi
 
     FloatPoint scrollPosition = -position;
 
-    if (m_renderView.frameView().scrollBehaviorForFixedElements() == StickToDocumentBounds)
+    if (m_renderView.frameView().scrollBehaviorForFixedElements() == ScrollBehaviorForFixedElements::StickToDocumentBounds)
         scrollPosition = m_renderView.frameView().constrainScrollPositionForOverhang(roundedIntPoint(scrollPosition));
 
     position = -scrollPosition;
@@ -1979,7 +1974,7 @@ void RenderLayerCompositor::layerStyleChanged(StyleDifference diff, RenderLayer&
             layer.setNeedsPostLayoutCompositingUpdate();
             layer.setNeedsCompositingGeometryUpdate();
         }
-        if (m_renderView.settings().css3DTransformInteroperabilityEnabled() && oldStyle && recompositeChangeRequiresChildrenGeometryUpdate(*oldStyle, newStyle))
+        if (oldStyle && recompositeChangeRequiresChildrenGeometryUpdate(*oldStyle, newStyle))
             layer.setChildrenNeedCompositingGeometryUpdate();
     }
 }

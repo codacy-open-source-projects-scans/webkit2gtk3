@@ -185,11 +185,6 @@ void PathSkia::addPath(const PathSkia& path, const AffineTransform& transform)
     m_platformPath.addPath(*path.platformPath(), transform);
 }
 
-void PathSkia::applySegments(const PathSegmentApplier&) const
-{
-    notImplemented();
-}
-
 bool PathSkia::applyElements(const PathElementApplier& applier) const
 {
     auto convertPoints = [](FloatPoint dst[], const SkPoint src[], int count) {
@@ -288,11 +283,12 @@ bool PathSkia::strokeContains(const FloatPoint& point, const Function<void(Graph
     if (isEmpty() || !std::isfinite(point.x()) || !std::isfinite(point.y()))
         return false;
 
-    GraphicsContextSkia graphicsContext(SkSurfaces::Null(1, 1), RenderingMode::Unaccelerated, RenderingPurpose::Unspecified);
+    auto surface = SkSurfaces::Null(1, 1);
+    GraphicsContextSkia graphicsContext(*surface->getCanvas(), RenderingMode::Unaccelerated, RenderingPurpose::Unspecified);
     strokeStyleApplier(graphicsContext);
 
     // FIXME: Compute stroke precision.
-    SkPaint paint = graphicsContext.createStrokeStylePaint();
+    SkPaint paint = graphicsContext.createStrokePaint();
     SkPath strokePath;
     skpathutils::FillPathWithPaint(m_platformPath, paint, &strokePath, nullptr);
     return strokePath.contains(SkScalar(point.x()), SkScalar(point.y()));
@@ -313,12 +309,13 @@ FloatRect PathSkia::strokeBoundingRect(const Function<void(GraphicsContext&)>& s
     if (isEmpty())
         return { };
 
-    GraphicsContextSkia graphicsContext(SkSurfaces::Null(1, 1), RenderingMode::Unaccelerated, RenderingPurpose::Unspecified);
+    auto surface = SkSurfaces::Null(1, 1);
+    GraphicsContextSkia graphicsContext(*surface->getCanvas(), RenderingMode::Unaccelerated, RenderingPurpose::Unspecified);
     strokeStyleApplier(graphicsContext);
 
     // Skia stroke resolution scale for reduced-precision requirements.
     constexpr float strokePrecision = 0.3f;
-    SkPaint paint = graphicsContext.createStrokeStylePaint();
+    SkPaint paint = graphicsContext.createStrokePaint();
     SkPath strokePath;
     skpathutils::FillPathWithPaint(m_platformPath, paint, &strokePath, nullptr, strokePrecision);
     return strokePath.computeTightBounds();

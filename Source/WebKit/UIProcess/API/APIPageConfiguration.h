@@ -202,6 +202,74 @@ public:
     void setHTTPSUpgradeEnabled(bool enabled) { m_data.httpsUpgradeEnabled = enabled; }
     bool httpsUpgradeEnabled() const { return m_data.httpsUpgradeEnabled; }
 
+#if PLATFORM(MAC)
+    bool showsURLsInToolTips() const { return m_data.showsURLsInToolTips; }
+    void setShowsURLsInToolTips(bool shows) { m_data.showsURLsInToolTips = shows; }
+
+    bool serviceControlsEnabled() const { return m_data.serviceControlsEnabled; }
+    void setServiceControlsEnabled(bool enabled) { m_data.serviceControlsEnabled = enabled; }
+
+    bool imageControlsEnabled() const { return m_data.imageControlsEnabled; }
+    void setImageControlsEnabled(bool enabled) { m_data.imageControlsEnabled = enabled; }
+
+    bool contextMenuQRCodeDetectionEnabled() const { return m_data.contextMenuQRCodeDetectionEnabled; }
+    void setContextMenuQRCodeDetectionEnabled(bool enabled) { m_data.contextMenuQRCodeDetectionEnabled = enabled; }
+#endif
+
+    double incrementalRenderingSuppressionTimeout() const { return m_data.incrementalRenderingSuppressionTimeout; }
+    void setIncrementalRenderingSuppressionTimeout(double timeout) { m_data.incrementalRenderingSuppressionTimeout = timeout; }
+
+    bool allowsJavaScriptMarkup() const { return m_data.allowsJavaScriptMarkup; }
+    void setAllowsJavaScriptMarkup(bool allows) { m_data.allowsJavaScriptMarkup = allows; }
+
+    bool convertsPositionStyleOnCopy() const { return m_data.convertsPositionStyleOnCopy; }
+    void setConvertsPositionStyleOnCopy(bool converts) { m_data.convertsPositionStyleOnCopy = converts; }
+
+    bool allowsMetaRefresh() const { return m_data.allowsMetaRefresh; }
+    void setAllowsMetaRefresh(bool allows) { m_data.allowsMetaRefresh = allows; }
+
+    bool allowUniversalAccessFromFileURLs() const { return m_data.allowUniversalAccessFromFileURLs; }
+    void setAllowUniversalAccessFromFileURLs(bool allow) { m_data.allowUniversalAccessFromFileURLs = allow; }
+
+    bool allowTopNavigationToDataURLs() const { return m_data.allowTopNavigationToDataURLs; }
+    void setAllowTopNavigationToDataURLs(bool allow) { m_data.allowTopNavigationToDataURLs = allow; }
+
+    bool needsStorageAccessFromFileURLsQuirk() const { return m_data.needsStorageAccessFromFileURLsQuirk; }
+    void setNeedsStorageAccessFromFileURLsQuirk(bool needs) { m_data.needsStorageAccessFromFileURLsQuirk = needs; }
+
+    bool legacyEncryptedMediaAPIEnabled() const { return m_data.legacyEncryptedMediaAPIEnabled; }
+    void setLegacyEncryptedMediaAPIEnabled(bool enabled) { m_data.legacyEncryptedMediaAPIEnabled = enabled; }
+
+    bool allowMediaContentTypesRequiringHardwareSupportAsFallback() const { return m_data.allowMediaContentTypesRequiringHardwareSupportAsFallback; }
+    void setAllowMediaContentTypesRequiringHardwareSupportAsFallback(bool allow) { m_data.allowMediaContentTypesRequiringHardwareSupportAsFallback = allow; }
+
+    bool colorFilterEnabled() const { return m_data.colorFilterEnabled; }
+    void setColorFilterEnabled(bool enabled) { m_data.colorFilterEnabled = enabled; }
+
+    bool incompleteImageBorderEnabled() const { return m_data.incompleteImageBorderEnabled; }
+    void setIncompleteImageBorderEnabled(bool enabled) { m_data.incompleteImageBorderEnabled = enabled; }
+
+    bool shouldDeferAsynchronousScriptsUntilAfterDocumentLoad() const { return m_data.shouldDeferAsynchronousScriptsUntilAfterDocumentLoad; }
+    void setShouldDeferAsynchronousScriptsUntilAfterDocumentLoad(bool defer) { m_data.shouldDeferAsynchronousScriptsUntilAfterDocumentLoad = defer; }
+
+    bool undoManagerAPIEnabled() const { return m_data.undoManagerAPIEnabled; }
+    void setUndoManagerAPIEnabled(bool enabled) { m_data.undoManagerAPIEnabled = enabled; }
+
+    bool mainContentUserGestureOverrideEnabled() const { return m_data.mainContentUserGestureOverrideEnabled; }
+    void setMainContentUserGestureOverrideEnabled(bool enabled) { m_data.mainContentUserGestureOverrideEnabled = enabled; }
+
+    bool invisibleAutoplayForbidden() const { return m_data.invisibleAutoplayForbidden; }
+    void setInvisibleAutoplayForbidden(bool forbidden) { m_data.invisibleAutoplayForbidden = forbidden; }
+
+    bool attachmentElementEnabled() const { return m_data.attachmentElementEnabled; }
+    void setAttachmentElementEnabled(bool enabled) { m_data.attachmentElementEnabled = enabled; }
+
+    bool attachmentWideLayoutEnabled() const { return m_data.attachmentWideLayoutEnabled; }
+    void setAttachmentWideLayoutEnabled(bool enabled) { m_data.attachmentWideLayoutEnabled = enabled; }
+
+    bool allowsInlinePredictions() const { return m_data.allowsInlinePredictions; }
+    void setAllowsInlinePredictions(bool allows) { m_data.allowsInlinePredictions = allows; }
+
     void setShouldRelaxThirdPartyCookieBlocking(WebCore::ShouldRelaxThirdPartyCookieBlocking value) { m_data.shouldRelaxThirdPartyCookieBlocking = value; }
     WebCore::ShouldRelaxThirdPartyCookieBlocking shouldRelaxThirdPartyCookieBlocking() const { return m_data.shouldRelaxThirdPartyCookieBlocking; }
 
@@ -298,6 +366,32 @@ private:
 
         bool mediaCaptureEnabled { false };
         bool httpsUpgradeEnabled { true };
+
+#if PLATFORM(MAC)
+        bool showsURLsInToolTips { false };
+        bool serviceControlsEnabled { false };
+        bool imageControlsEnabled { false };
+        bool contextMenuQRCodeDetectionEnabled { false };
+#endif
+
+        double incrementalRenderingSuppressionTimeout { 5 };
+        bool allowsJavaScriptMarkup { true };
+        bool convertsPositionStyleOnCopy { false };
+        bool allowsMetaRefresh { true };
+        bool allowUniversalAccessFromFileURLs { false };
+        bool allowTopNavigationToDataURLs { false };
+        bool needsStorageAccessFromFileURLsQuirk { true };
+        bool legacyEncryptedMediaAPIEnabled { true };
+        bool allowMediaContentTypesRequiringHardwareSupportAsFallback { true };
+        bool colorFilterEnabled { false };
+        bool incompleteImageBorderEnabled { false };
+        bool shouldDeferAsynchronousScriptsUntilAfterDocumentLoad { true };
+        bool undoManagerAPIEnabled { false };
+        bool mainContentUserGestureOverrideEnabled { false };
+        bool invisibleAutoplayForbidden { false };
+        bool attachmentElementEnabled { false };
+        bool attachmentWideLayoutEnabled { false };
+        bool allowsInlinePredictions { false };
 
         WebCore::ShouldRelaxThirdPartyCookieBlocking shouldRelaxThirdPartyCookieBlocking { WebCore::ShouldRelaxThirdPartyCookieBlocking::No };
         WTF::String attributedBundleIdentifier { };

@@ -33,7 +33,6 @@
 #include "AXTreeStore.h"
 #include "PageIdentifier.h"
 #include "RenderStyleConstants.h"
-#include "RuntimeApplicationChecks.h"
 #include <wtf/HashMap.h>
 #include <wtf/Lock.h>
 #include <wtf/RefPtr.h>
@@ -88,9 +87,7 @@ enum class AXPropertyName : uint16_t {
     ColumnIndex,
     ColumnIndexRange,
     CurrentState,
-#if PLATFORM(MAC)
-    DateTimeComponents,
-#endif
+    DateTimeComponentsType,
     DateTimeValue,
     DatetimeAttributeValue,
     DecrementButton,
@@ -261,7 +258,7 @@ enum class AXPropertyName : uint16_t {
 using AXPropertyNameSet = HashSet<AXPropertyName, IntHash<AXPropertyName>, WTF::StrongEnumHashTraits<AXPropertyName>>;
 
 // If this type is modified, the switchOn statment in AXIsolatedObject::setProperty must be updated as well.
-using AXPropertyValueVariant = std::variant<std::nullptr_t, AXID, String, bool, int, unsigned, double, float, uint64_t, WallTime, AccessibilityButtonState, Color, URL, LayoutRect, FloatPoint, FloatRect, IntPoint, IntRect, std::pair<unsigned, unsigned>, Vector<AccessibilityText>, Vector<AXID>, Vector<std::pair<AXID, AXID>>, Vector<String>, Path, OptionSet<AXAncestorFlag>, InsideLink, Vector<Vector<AXID>>, CharacterRange, std::pair<AXID, CharacterRange>
+using AXPropertyValueVariant = std::variant<std::nullptr_t, AXID, String, bool, int, unsigned, double, float, uint64_t, WallTime, DateComponentsType, AccessibilityButtonState, Color, URL, LayoutRect, FloatPoint, FloatRect, IntPoint, IntRect, std::pair<unsigned, unsigned>, Vector<AccessibilityText>, Vector<AXID>, Vector<std::pair<AXID, AXID>>, Vector<String>, Path, OptionSet<AXAncestorFlag>, InsideLink, Vector<Vector<AXID>>, CharacterRange, std::pair<AXID, CharacterRange>
 #if PLATFORM(COCOA)
     , RetainPtr<NSAttributedString>
     , RetainPtr<id>
@@ -325,7 +322,6 @@ public:
 
     static RefPtr<AXIsolatedTree> treeForPageID(std::optional<PageIdentifier>);
     static RefPtr<AXIsolatedTree> treeForPageID(PageIdentifier);
-    constexpr ProcessID processID() const { return m_processID; }
     AXObjectCache* axObjectCache() const;
     constexpr AXGeometryManager* geometryManager() const { return m_geometryManager.get(); }
 
@@ -429,7 +425,6 @@ private:
     Vector<NodeChange> resolveAppends();
     void queueAppendsAndRemovals(Vector<NodeChange>&&, Vector<AXID>&&);
 
-    const ProcessID m_processID { presentingApplicationPID() };
     unsigned m_maxTreeDepth { 0 };
     WeakPtr<AXObjectCache> m_axObjectCache;
     OptionSet<ActivityState> m_pageActivityState;

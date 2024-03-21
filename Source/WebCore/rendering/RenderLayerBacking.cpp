@@ -1199,8 +1199,10 @@ bool RenderLayerBacking::updateConfiguration(const RenderLayer* compositingAnces
         if (element->usesPlatformLayer())
             m_graphicsLayer->setContentsToPlatformLayer(element->platformLayer(), GraphicsLayer::ContentsLayerPurpose::Model);
 #if ENABLE(MODEL_PROCESS)
-        else if (auto contextID = element->layerHostingContextIdentifier(); contextID && element->document().settings().modelProcessEnabled())
+        else if (auto contextID = element->layerHostingContextIdentifier(); contextID && element->document().settings().modelProcessEnabled()) {
             m_graphicsLayer->setContentsToRemotePlatformContext(contextID.value(), GraphicsLayer::ContentsLayerPurpose::HostedModel);
+            element->applyBackgroundColor(rendererBackgroundColor());
+        }
 #endif
         else if (auto model = element->model())
             m_graphicsLayer->setContentsToModel(WTFMove(model), element->isInteractive() ? GraphicsLayer::ModelInteraction::Enabled : GraphicsLayer::ModelInteraction::Disabled);
@@ -2400,7 +2402,7 @@ bool RenderLayerBacking::updateTransformFlatteningLayer(const RenderLayer* compo
 {
     bool needsFlatteningLayer = false;
     // If our parent layer has preserve-3d or perspective, and it's not our DOM parent, then we need a flattening layer to block that from being applied in 3d.
-    if (useCSS3DTransformInteroperability() && ancestorLayerWillCombineTransform(compositingAncestor) && !ancestorLayerIsDOMParent(m_owningLayer, compositingAncestor))
+    if (ancestorLayerWillCombineTransform(compositingAncestor) && !ancestorLayerIsDOMParent(m_owningLayer, compositingAncestor))
         needsFlatteningLayer = true;
 
     bool layerChanged = false;
@@ -3956,9 +3958,9 @@ bool RenderLayerBacking::useGiantTiles() const
     return renderer().settings().useGiantTiles();
 }
 
-bool RenderLayerBacking::useCSS3DTransformInteroperability() const
+bool RenderLayerBacking::cssUnprefixedBackdropFilterEnabled() const
 {
-    return renderer().settings().css3DTransformInteroperabilityEnabled();
+    return renderer().settings().cssUnprefixedBackdropFilterEnabled();
 }
 
 void RenderLayerBacking::logFilledVisibleFreshTile(unsigned blankPixelCount)

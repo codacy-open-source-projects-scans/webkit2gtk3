@@ -56,6 +56,7 @@
 #include "ContentVisibilityDocumentState.h"
 #include "ContentfulPaintChecker.h"
 #include "CookieJar.h"
+#include "CryptoClient.h"
 #include "CustomEffect.h"
 #include "CustomElementReactionQueue.h"
 #include "CustomElementRegistry.h"
@@ -2067,6 +2068,8 @@ std::optional<BoundaryPoint> Document::caretPositionFromPoint(const LayoutPoint&
     if (!node)
         return std::nullopt;
 
+    updateLayoutIgnorePendingStylesheets();
+
     CheckedPtr renderer = node->renderer();
     if (!renderer)
         return std::nullopt;
@@ -4029,7 +4032,7 @@ void Document::setURL(const URL& url)
     if (newURL == m_url)
         return;
 
-    m_fragmentDirective = newURL.consumefragmentDirective();
+    m_fragmentDirective = newURL.consumeFragmentDirective();
 
     if (SecurityOrigin::shouldIgnoreHost(newURL))
         newURL.setHostAndPort({ });
@@ -4061,7 +4064,6 @@ const URL& Document::urlForBindings() const
         if (preNavigationURL.isEmpty() || RegistrableDomain { preNavigationURL }.matches(securityOrigin().data()))
             return false;
 
-#if ENABLE(PUBLIC_SUFFIX_LIST)
         auto areSameSiteIgnoringPublicSuffix = [](StringView domain, StringView otherDomain) {
             auto domainString = topPrivatelyControlledDomain(domain.toStringWithoutCopying());
             auto otherDomainString = topPrivatelyControlledDomain(otherDomain.toStringWithoutCopying());
@@ -4078,7 +4080,6 @@ const URL& Document::urlForBindings() const
         auto currentHost = securityOrigin().data().host();
         if (areSameSiteIgnoringPublicSuffix(preNavigationURL.host(), currentHost))
             return false;
-#endif // ENABLE(PUBLIC_SUFFIX_LIST)
 
         if (!m_hasLoadedThirdPartyScript)
             return false;
@@ -4087,10 +4088,8 @@ const URL& Document::urlForBindings() const
             if (RegistrableDomain { sourceURL }.matches(securityOrigin().data()))
                 return false;
 
-#if ENABLE(PUBLIC_SUFFIX_LIST)
             if (areSameSiteIgnoringPublicSuffix(sourceURL.host(), currentHost))
                 return false;
-#endif // ENABLE(PUBLIC_SUFFIX_LIST)
         }
 
         return true;
@@ -8845,16 +8844,20 @@ void Document::ensurePlugInsInjectedScript(DOMWrapperWorld& world)
     m_hasInjectedPlugInsScript = true;
 }
 
-bool Document::wrapCryptoKey(const Vector<uint8_t>& key, Vector<uint8_t>& wrappedKey)
+std::optional<Vector<uint8_t>> Document::wrapCryptoKey(const Vector<uint8_t>& key)
 {
     RefPtr page = this->page();
-    return page && page->chrome().client().wrapCryptoKey(key, wrappedKey);
+    if (!page)
+        return std::nullopt;
+    return page->cryptoClient().wrapCryptoKey(key);
 }
 
-bool Document::unwrapCryptoKey(const Vector<uint8_t>& wrappedKey, Vector<uint8_t>& key)
+std::optional<Vector<uint8_t>>Document::unwrapCryptoKey(const Vector<uint8_t>& wrappedKey)
 {
     RefPtr page = this->page();
-    return page && page->chrome().client().unwrapCryptoKey(wrappedKey, key);
+    if (!page)
+        return std::nullopt;
+    return page->cryptoClient().unwrapCryptoKey(wrappedKey);
 }
 
 Element* Document::activeElement()
@@ -8904,7 +8907,8 @@ void Document::removePlaybackTargetPickerClient(MediaPlaybackTargetClient& clien
     m_idToClientMap.remove(clientId);
     m_clientToIDMap.remove(it);
 
-    if (RefPtr page = this->page())
+    // Unable to ref the page as it may have started destruction.
+    if (WeakPtr page = this->page())
         page->removePlaybackTargetPickerClient(clientId);
 }
 

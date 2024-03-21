@@ -34,7 +34,6 @@
 #include "InlineIteratorInlineBox.h"
 #include "InlineIteratorLineBox.h"
 #include "LayoutIntegrationLineLayout.h"
-#include "LegacyInlineElementBox.h"
 #include "LegacyInlineFlowBoxInlines.h"
 #include "LegacyInlineTextBox.h"
 #include "RenderBlock.h"
@@ -506,14 +505,20 @@ LayoutUnit RenderInline::innerPaddingBoxHeight() const
 
 IntRect RenderInline::linesBoundingBox() const
 {
+    IntRect result;
+
     if (auto* layout = LayoutIntegration::LineLayout::containing(*this)) {
         if (!layout->contains(*this))
-            return { };
+            return result;
+
+        if (!layoutBox()) {
+            // Repaint may be issued on subtrees during content mutation with newly inserted renderers.
+            ASSERT(needsLayout());
+            return result;
+        }
         return enclosingIntRect(layout->enclosingBorderBoxRectFor(*this));
     }
 
-    IntRect result;
-    
     // See <rdar://problem/5289721>, for an unknown reason the linked list here is sometimes inconsistent, first is non-zero and last is zero.  We have been
     // unable to reproduce this at all (and consequently unable to figure ot why this is happening).  The assert will hopefully catch the problem in debug
     // builds and help us someday figure out why.  We also put in a redundant check of lastLineBox() to avoid the crash for now.
@@ -569,49 +574,6 @@ LayoutRect RenderInline::linesVisualOverflowBoundingBox() const
     LayoutUnit logicalTop = firstLineBox()->logicalTopVisualOverflow(firstRootBox.lineTop());
     LayoutUnit logicalWidth = logicalRightSide - logicalLeftSide;
     LayoutUnit logicalHeight = lastLineBox()->logicalBottomVisualOverflow(lastRootBox.lineBottom()) - logicalTop;
-    
-    LayoutRect rect(logicalLeftSide, logicalTop, logicalWidth, logicalHeight);
-    if (!style().isHorizontalWritingMode())
-        rect = rect.transposedRect();
-    return rect;
-}
-
-LayoutRect RenderInline::linesVisualOverflowBoundingBoxInFragment(const RenderFragmentContainer* fragment) const
-{
-    ASSERT(fragment);
-
-    if (!firstLineBox() || !lastLineBox())
-        return LayoutRect();
-
-    // Return the width of the minimal left side and the maximal right side.
-    LayoutUnit logicalLeftSide = LayoutUnit::max();
-    LayoutUnit logicalRightSide = LayoutUnit::min();
-    LayoutUnit logicalTop;
-    LayoutUnit logicalHeight;
-    LegacyInlineFlowBox* lastInlineInFragment = 0;
-    for (auto* curr = firstLineBox(); curr; curr = curr->nextLineBox()) {
-        const LegacyRootInlineBox& root = curr->root();
-        if (root.containingFragment() != fragment) {
-            if (lastInlineInFragment)
-                break;
-            continue;
-        }
-
-        if (!lastInlineInFragment)
-            logicalTop = curr->logicalTopVisualOverflow(root.lineTop());
-
-        lastInlineInFragment = curr;
-
-        logicalLeftSide = std::min(logicalLeftSide, curr->logicalLeftVisualOverflow());
-        logicalRightSide = std::max(logicalRightSide, curr->logicalRightVisualOverflow());
-    }
-
-    if (!lastInlineInFragment)
-        return LayoutRect();
-
-    logicalHeight = lastInlineInFragment->logicalBottomVisualOverflow(lastInlineInFragment->root().lineBottom()) - logicalTop;
-    
-    LayoutUnit logicalWidth = logicalRightSide - logicalLeftSide;
     
     LayoutRect rect(logicalLeftSide, logicalTop, logicalWidth, logicalHeight);
     if (!style().isHorizontalWritingMode())

@@ -133,12 +133,6 @@ static bool defaultShouldDecidePolicyBeforeLoadingQuickLookPreview()
     WeakObjCPtr<WKWebView> _alternateWebViewForNavigationGestures;
     RetainPtr<NSString> _groupIdentifier;
     std::optional<RetainPtr<NSString>> _applicationNameForUserAgent;
-    NSTimeInterval _incrementalRenderingSuppressionTimeout;
-    BOOL _allowsJavaScriptMarkup;
-    BOOL _convertsPositionStyleOnCopy;
-    BOOL _allowsMetaRefresh;
-    BOOL _allowUniversalAccessFromFileURLs;
-    BOOL _allowTopNavigationToDataURLs;
 
 #if PLATFORM(IOS_FAMILY)
     LazyInitialized<RetainPtr<WKWebViewContentProviderRegistry>> _contentProviderRegistry;
@@ -152,39 +146,19 @@ static bool defaultShouldDecidePolicyBeforeLoadingQuickLookPreview()
     BOOL _shouldDecidePolicyBeforeLoadingQuickLookPreview;
 #endif
 
-    BOOL _invisibleAutoplayNotPermitted;
     BOOL _mediaDataLoadsAutomatically;
-    BOOL _attachmentElementEnabled;
-    BOOL _attachmentWideLayoutEnabled;
     Class _attachmentFileWrapperClass;
-    BOOL _mainContentUserGestureOverrideEnabled;
 
-#if PLATFORM(MAC)
-    BOOL _showsURLsInToolTips;
-    BOOL _serviceControlsEnabled;
-    BOOL _imageControlsEnabled;
-    BOOL _contextMenuQRCodeDetectionEnabled;
-#endif
-    BOOL _waitsForPaintAfterViewDidMoveToWindow;
     BOOL _controlledByAutomation;
 
 #if ENABLE(APPLE_PAY)
     BOOL _applePayEnabled;
 #endif
-    BOOL _needsStorageAccessFromFileURLsQuirk;
-    BOOL _legacyEncryptedMediaAPIEnabled;
-    BOOL _allowMediaContentTypesRequiringHardwareSupportAsFallback;
-    BOOL _colorFilterEnabled;
-    BOOL _incompleteImageBorderEnabled;
-    BOOL _shouldDeferAsynchronousScriptsUntilAfterDocumentLoad;
-    BOOL _drawsBackground;
-    BOOL _undoManagerAPIEnabled;
 #if ENABLE(APP_HIGHLIGHTS)
     BOOL _appHighlightsEnabled;
 #endif
     double _sampledPageTopColorMaxDifference;
     double _sampledPageTopColorMinHeight;
-    BOOL _allowsInlinePredictions;
 
     RetainPtr<NSString> _mediaContentTypesRequiringHardwareSupport;
     RetainPtr<NSArray<NSString *>> _additionalSupportedImageTypes;
@@ -220,31 +194,10 @@ static bool defaultShouldDecidePolicyBeforeLoadingQuickLookPreview()
     _mediaDataLoadsAutomatically = YES;
     _userInterfaceDirectionPolicy = WKUserInterfaceDirectionPolicyContent;
 #endif
-    _legacyEncryptedMediaAPIEnabled = YES;
-    _mainContentUserGestureOverrideEnabled = NO;
-    _invisibleAutoplayNotPermitted = NO;
-    _attachmentElementEnabled = NO;
-    _attachmentWideLayoutEnabled = NO;
-
-#if PLATFORM(MAC)
-    _showsURLsInToolTips = NO;
-    _serviceControlsEnabled = NO;
-    _imageControlsEnabled = NO;
-    _contextMenuQRCodeDetectionEnabled = NO;
-#endif
-    _waitsForPaintAfterViewDidMoveToWindow = YES;
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
     _allowsAirPlayForMediaPlayback = YES;
 #endif
-
-    _incrementalRenderingSuppressionTimeout = 5;
-    _allowsJavaScriptMarkup = YES;
-    _convertsPositionStyleOnCopy = NO;
-    _allowsMetaRefresh = YES;
-    _allowUniversalAccessFromFileURLs = NO;
-    _allowTopNavigationToDataURLs = NO;
-    _needsStorageAccessFromFileURLsQuirk = YES;
 
 #if PLATFORM(IOS_FAMILY)
     _selectionGranularity = WKSelectionGranularityDynamic;
@@ -261,14 +214,6 @@ static bool defaultShouldDecidePolicyBeforeLoadingQuickLookPreview()
 #endif // PLATFORM(IOS_FAMILY)
 
     _mediaContentTypesRequiringHardwareSupport = @"";
-    _allowMediaContentTypesRequiringHardwareSupportAsFallback = YES;
-
-    _colorFilterEnabled = NO;
-    _incompleteImageBorderEnabled = NO;
-    _shouldDeferAsynchronousScriptsUntilAfterDocumentLoad = YES;
-    _drawsBackground = YES;
-
-    _undoManagerAPIEnabled = NO;
 
 #if ENABLE(APPLE_PAY)
     _applePayEnabled = DEFAULT_VALUE_FOR_ApplePayEnabled;
@@ -281,19 +226,17 @@ static bool defaultShouldDecidePolicyBeforeLoadingQuickLookPreview()
     _sampledPageTopColorMaxDifference = DEFAULT_VALUE_FOR_SampledPageTopColorMaxDifference;
     _sampledPageTopColorMinHeight = DEFAULT_VALUE_FOR_SampledPageTopColorMinHeight;
 
-    _allowsInlinePredictions = NO;
-
     return self;
 }
 
 - (void)setAllowsInlinePredictions:(BOOL)enabled
 {
-    _allowsInlinePredictions = enabled;
+    _pageConfiguration->setAllowsInlinePredictions(enabled);
 }
 
 - (BOOL)allowsInlinePredictions
 {
-    return _allowsInlinePredictions;
+    return _pageConfiguration->allowsInlinePredictions();
 }
 
 - (NSString *)description
@@ -408,21 +351,9 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     configuration->_suppressesIncrementalRendering = self->_suppressesIncrementalRendering;
     configuration->_applicationNameForUserAgent = self->_applicationNameForUserAgent;
 
-    configuration->_incrementalRenderingSuppressionTimeout = self->_incrementalRenderingSuppressionTimeout;
-    configuration->_allowsJavaScriptMarkup = self->_allowsJavaScriptMarkup;
-    configuration->_convertsPositionStyleOnCopy = self->_convertsPositionStyleOnCopy;
-    configuration->_allowsMetaRefresh = self->_allowsMetaRefresh;
-    configuration->_allowUniversalAccessFromFileURLs = self->_allowUniversalAccessFromFileURLs;
-    configuration->_allowTopNavigationToDataURLs = self->_allowTopNavigationToDataURLs;
-
-    configuration->_invisibleAutoplayNotPermitted = self->_invisibleAutoplayNotPermitted;
     configuration->_mediaDataLoadsAutomatically = self->_mediaDataLoadsAutomatically;
-    configuration->_attachmentElementEnabled = self->_attachmentElementEnabled;
-    configuration->_attachmentWideLayoutEnabled = self->_attachmentWideLayoutEnabled;
     configuration->_attachmentFileWrapperClass = self->_attachmentFileWrapperClass;
     configuration->_mediaTypesRequiringUserActionForPlayback = self->_mediaTypesRequiringUserActionForPlayback;
-    configuration->_mainContentUserGestureOverrideEnabled = self->_mainContentUserGestureOverrideEnabled;
-    configuration->_waitsForPaintAfterViewDidMoveToWindow = self->_waitsForPaintAfterViewDidMoveToWindow;
     configuration->_controlledByAutomation = self->_controlledByAutomation;
 
 #if PLATFORM(IOS_FAMILY)
@@ -438,13 +369,6 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     configuration->_systemPreviewEnabled = self->_systemPreviewEnabled;
     configuration->_shouldDecidePolicyBeforeLoadingQuickLookPreview = self->_shouldDecidePolicyBeforeLoadingQuickLookPreview;
 #endif
-#if PLATFORM(MAC)
-    configuration->_userInterfaceDirectionPolicy = self->_userInterfaceDirectionPolicy;
-    configuration->_showsURLsInToolTips = self->_showsURLsInToolTips;
-    configuration->_serviceControlsEnabled = self->_serviceControlsEnabled;
-    configuration->_imageControlsEnabled = self->_imageControlsEnabled;
-    configuration->_contextMenuQRCodeDetectionEnabled = self->_contextMenuQRCodeDetectionEnabled;
-#endif
 #if ENABLE(DATA_DETECTION) && PLATFORM(IOS_FAMILY)
     configuration->_dataDetectorTypes = self->_dataDetectorTypes;
 #endif
@@ -454,28 +378,18 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 #if ENABLE(APPLE_PAY)
     configuration->_applePayEnabled = self->_applePayEnabled;
 #endif
-    configuration->_needsStorageAccessFromFileURLsQuirk = self->_needsStorageAccessFromFileURLsQuirk;
 
     configuration->_mediaContentTypesRequiringHardwareSupport = adoptNS([self._mediaContentTypesRequiringHardwareSupport copyWithZone:zone]);
     configuration->_additionalSupportedImageTypes = adoptNS([self->_additionalSupportedImageTypes copyWithZone:zone]);
-    configuration->_legacyEncryptedMediaAPIEnabled = self->_legacyEncryptedMediaAPIEnabled;
-    configuration->_allowMediaContentTypesRequiringHardwareSupportAsFallback = self->_allowMediaContentTypesRequiringHardwareSupportAsFallback;
 
     configuration->_groupIdentifier = adoptNS([self->_groupIdentifier copyWithZone:zone]);
-    configuration->_colorFilterEnabled = self->_colorFilterEnabled;
-    configuration->_incompleteImageBorderEnabled = self->_incompleteImageBorderEnabled;
-    configuration->_shouldDeferAsynchronousScriptsUntilAfterDocumentLoad = self->_shouldDeferAsynchronousScriptsUntilAfterDocumentLoad;
-    configuration->_drawsBackground = self->_drawsBackground;
 
-    configuration->_undoManagerAPIEnabled = self->_undoManagerAPIEnabled;
 #if ENABLE(APP_HIGHLIGHTS)
     configuration->_appHighlightsEnabled = self->_appHighlightsEnabled;
 #endif
 
     configuration->_sampledPageTopColorMaxDifference = self->_sampledPageTopColorMaxDifference;
     configuration->_sampledPageTopColorMinHeight = self->_sampledPageTopColorMinHeight;
-
-    configuration->_allowsInlinePredictions = self->_allowsInlinePredictions;
 
     return configuration;
 }
@@ -754,62 +668,62 @@ static NSString *defaultApplicationNameForUserAgent()
 
 - (NSTimeInterval)_incrementalRenderingSuppressionTimeout
 {
-    return _incrementalRenderingSuppressionTimeout;
+    return _pageConfiguration->incrementalRenderingSuppressionTimeout();
 }
 
 - (void)_setIncrementalRenderingSuppressionTimeout:(NSTimeInterval)incrementalRenderingSuppressionTimeout
 {
-    _incrementalRenderingSuppressionTimeout = incrementalRenderingSuppressionTimeout;
+    _pageConfiguration->setIncrementalRenderingSuppressionTimeout(incrementalRenderingSuppressionTimeout);
 }
 
 - (BOOL)_allowsJavaScriptMarkup
 {
-    return _allowsJavaScriptMarkup;
+    return _pageConfiguration->allowsJavaScriptMarkup();
 }
 
 - (void)_setAllowsJavaScriptMarkup:(BOOL)allowsJavaScriptMarkup
 {
-    _allowsJavaScriptMarkup = allowsJavaScriptMarkup;
+    _pageConfiguration->setAllowsJavaScriptMarkup(allowsJavaScriptMarkup);
 }
 
 - (BOOL)_allowUniversalAccessFromFileURLs
 {
-    return _allowUniversalAccessFromFileURLs;
+    return _pageConfiguration->allowUniversalAccessFromFileURLs();
 }
 
 - (void)_setAllowUniversalAccessFromFileURLs:(BOOL)allowUniversalAccessFromFileURLs
 {
-    _allowUniversalAccessFromFileURLs = allowUniversalAccessFromFileURLs;
+    _pageConfiguration->setAllowUniversalAccessFromFileURLs(allowUniversalAccessFromFileURLs);
 }
 
 - (BOOL)_allowTopNavigationToDataURLs
 {
-    return _allowTopNavigationToDataURLs;
+    return _pageConfiguration->allowTopNavigationToDataURLs();
 }
 
 - (void)_setAllowTopNavigationToDataURLs:(BOOL)allowTopNavigationToDataURLs
 {
-    _allowTopNavigationToDataURLs = allowTopNavigationToDataURLs;
+    _pageConfiguration->setAllowTopNavigationToDataURLs(allowTopNavigationToDataURLs);
 }
 
 - (BOOL)_convertsPositionStyleOnCopy
 {
-    return _convertsPositionStyleOnCopy;
+    return _pageConfiguration->convertsPositionStyleOnCopy();
 }
 
 - (void)_setConvertsPositionStyleOnCopy:(BOOL)convertsPositionStyleOnCopy
 {
-    _convertsPositionStyleOnCopy = convertsPositionStyleOnCopy;
+    _pageConfiguration->setConvertsPositionStyleOnCopy(convertsPositionStyleOnCopy);
 }
 
 - (BOOL)_allowsMetaRefresh
 {
-    return _allowsMetaRefresh;
+    return _pageConfiguration->allowsMetaRefresh();
 }
 
 - (void)_setAllowsMetaRefresh:(BOOL)allowsMetaRefresh
 {
-    _allowsMetaRefresh = allowsMetaRefresh;
+    _pageConfiguration->setAllowsMetaRefresh(allowsMetaRefresh);
 }
 
 - (BOOL)_clientNavigationsRunAtForegroundPriority
@@ -976,12 +890,12 @@ static WebKit::AttributionOverrideTesting toAttributionOverrideTesting(_WKAttrib
 
 - (BOOL)_invisibleAutoplayNotPermitted
 {
-    return _invisibleAutoplayNotPermitted;
+    return _pageConfiguration->invisibleAutoplayForbidden();
 }
 
 - (void)_setInvisibleAutoplayNotPermitted:(BOOL)notPermitted
 {
-    _invisibleAutoplayNotPermitted = notPermitted;
+    _pageConfiguration->setInvisibleAutoplayForbidden(notPermitted);
 }
 
 - (BOOL)_mediaDataLoadsAutomatically
@@ -996,22 +910,22 @@ static WebKit::AttributionOverrideTesting toAttributionOverrideTesting(_WKAttrib
 
 - (BOOL)_attachmentElementEnabled
 {
-    return _attachmentElementEnabled;
+    return _pageConfiguration->attachmentElementEnabled();
 }
 
 - (void)_setAttachmentElementEnabled:(BOOL)attachmentElementEnabled
 {
-    _attachmentElementEnabled = attachmentElementEnabled;
+    _pageConfiguration->setAttachmentElementEnabled(attachmentElementEnabled);
 }
 
 - (BOOL)_attachmentWideLayoutEnabled
 {
-    return _attachmentWideLayoutEnabled;
+    return _pageConfiguration->attachmentWideLayoutEnabled();
 }
 
 - (void)_setAttachmentWideLayoutEnabled:(BOOL)attachmentWideLayoutEnabled
 {
-    _attachmentWideLayoutEnabled = attachmentWideLayoutEnabled;
+    _pageConfiguration->setAttachmentWideLayoutEnabled(attachmentWideLayoutEnabled);
 }
 
 - (Class)_attachmentFileWrapperClass
@@ -1029,32 +943,32 @@ static WebKit::AttributionOverrideTesting toAttributionOverrideTesting(_WKAttrib
 
 - (BOOL)_colorFilterEnabled
 {
-    return _colorFilterEnabled;
+    return _pageConfiguration->colorFilterEnabled();
 }
 
 - (void)_setColorFilterEnabled:(BOOL)colorFilterEnabled
 {
-    _colorFilterEnabled = colorFilterEnabled;
+    _pageConfiguration->setColorFilterEnabled(colorFilterEnabled);
 }
 
 - (BOOL)_incompleteImageBorderEnabled
 {
-    return _incompleteImageBorderEnabled;
+    return _pageConfiguration->incompleteImageBorderEnabled();
 }
 
 - (void)_setIncompleteImageBorderEnabled:(BOOL)incompleteImageBorderEnabled
 {
-    _incompleteImageBorderEnabled = incompleteImageBorderEnabled;
+    _pageConfiguration->setIncompleteImageBorderEnabled(incompleteImageBorderEnabled);
 }
 
 - (BOOL)_shouldDeferAsynchronousScriptsUntilAfterDocumentLoad
 {
-    return _shouldDeferAsynchronousScriptsUntilAfterDocumentLoad;
+    return _pageConfiguration->shouldDeferAsynchronousScriptsUntilAfterDocumentLoad();
 }
 
 - (void)_setShouldDeferAsynchronousScriptsUntilAfterDocumentLoad:(BOOL)shouldDeferAsynchronousScriptsUntilAfterDocumentLoad
 {
-    _shouldDeferAsynchronousScriptsUntilAfterDocumentLoad = shouldDeferAsynchronousScriptsUntilAfterDocumentLoad;
+    _pageConfiguration->setShouldDeferAsynchronousScriptsUntilAfterDocumentLoad(shouldDeferAsynchronousScriptsUntilAfterDocumentLoad);
 }
 
 - (WKWebsiteDataStore *)_websiteDataStoreIfExists
@@ -1152,12 +1066,12 @@ static WebKit::AttributionOverrideTesting toAttributionOverrideTesting(_WKAttrib
 
 - (BOOL)_drawsBackground
 {
-    return _drawsBackground;
+    return _pageConfiguration->drawsBackground();
 }
 
 - (void)_setDrawsBackground:(BOOL)drawsBackground
 {
-    _drawsBackground = drawsBackground;
+    _pageConfiguration->setDrawsBackground(drawsBackground);
 }
 
 - (BOOL)_requiresUserActionForVideoPlayback
@@ -1188,12 +1102,12 @@ static WebKit::AttributionOverrideTesting toAttributionOverrideTesting(_WKAttrib
 
 - (BOOL)_mainContentUserGestureOverrideEnabled
 {
-    return _mainContentUserGestureOverrideEnabled;
+    return _pageConfiguration->mainContentUserGestureOverrideEnabled();
 }
 
 - (void)_setMainContentUserGestureOverrideEnabled:(BOOL)mainContentUserGestureOverrideEnabled
 {
-    _mainContentUserGestureOverrideEnabled = mainContentUserGestureOverrideEnabled;
+    _pageConfiguration->setMainContentUserGestureOverrideEnabled(mainContentUserGestureOverrideEnabled);
 }
 
 - (BOOL)_initialCapitalizationEnabled
@@ -1208,12 +1122,12 @@ static WebKit::AttributionOverrideTesting toAttributionOverrideTesting(_WKAttrib
 
 - (BOOL)_waitsForPaintAfterViewDidMoveToWindow
 {
-    return _waitsForPaintAfterViewDidMoveToWindow;
+    return _pageConfiguration->waitsForPaintAfterViewDidMoveToWindow();
 }
 
 - (void)_setWaitsForPaintAfterViewDidMoveToWindow:(BOOL)shouldSynchronize
 {
-    _waitsForPaintAfterViewDidMoveToWindow = shouldSynchronize;
+    _pageConfiguration->setWaitsForPaintAfterViewDidMoveToWindow(shouldSynchronize);
 }
 
 - (BOOL)_isControlledByAutomation
@@ -1239,42 +1153,42 @@ static WebKit::AttributionOverrideTesting toAttributionOverrideTesting(_WKAttrib
 #if PLATFORM(MAC)
 - (BOOL)_showsURLsInToolTips
 {
-    return _showsURLsInToolTips;
+    return _pageConfiguration->showsURLsInToolTips();
 }
 
 - (void)_setShowsURLsInToolTips:(BOOL)showsURLsInToolTips
 {
-    _showsURLsInToolTips = showsURLsInToolTips;
+    _pageConfiguration->setShowsURLsInToolTips(showsURLsInToolTips);
 }
 
 - (BOOL)_serviceControlsEnabled
 {
-    return _serviceControlsEnabled;
+    return _pageConfiguration->serviceControlsEnabled();
 }
 
 - (void)_setServiceControlsEnabled:(BOOL)serviceControlsEnabled
 {
-    _serviceControlsEnabled = serviceControlsEnabled;
+    _pageConfiguration->setServiceControlsEnabled(serviceControlsEnabled);
 }
 
 - (BOOL)_imageControlsEnabled
 {
-    return _imageControlsEnabled;
+    return _pageConfiguration->imageControlsEnabled();
 }
 
 - (void)_setImageControlsEnabled:(BOOL)imageControlsEnabled
 {
-    _imageControlsEnabled = imageControlsEnabled;
+    _pageConfiguration->setImageControlsEnabled(imageControlsEnabled);
 }
 
 - (BOOL)_contextMenuQRCodeDetectionEnabled
 {
-    return _contextMenuQRCodeDetectionEnabled;
+    return _pageConfiguration->contextMenuQRCodeDetectionEnabled();
 }
 
 - (void)_setContextMenuQRCodeDetectionEnabled:(BOOL)contextMenuQRCodeDetectionEnabled
 {
-    _contextMenuQRCodeDetectionEnabled = contextMenuQRCodeDetectionEnabled;
+    _pageConfiguration->setContextMenuQRCodeDetectionEnabled(contextMenuQRCodeDetectionEnabled);
 }
 
 - (BOOL)_requiresUserActionForEditingControlsManager
@@ -1326,12 +1240,12 @@ static WebKit::AttributionOverrideTesting toAttributionOverrideTesting(_WKAttrib
 
 - (BOOL)_needsStorageAccessFromFileURLsQuirk
 {
-    return _needsStorageAccessFromFileURLsQuirk;
+    return _pageConfiguration->needsStorageAccessFromFileURLsQuirk();
 }
 
 - (void)_setNeedsStorageAccessFromFileURLsQuirk:(BOOL)needsLocalStorageQuirk
 {
-    _needsStorageAccessFromFileURLsQuirk = needsLocalStorageQuirk;
+    _pageConfiguration->setNeedsStorageAccessFromFileURLsQuirk(needsLocalStorageQuirk);
 }
 
 - (NSString *)_overrideContentSecurityPolicy
@@ -1366,22 +1280,22 @@ static WebKit::AttributionOverrideTesting toAttributionOverrideTesting(_WKAttrib
 
 - (void)_setLegacyEncryptedMediaAPIEnabled:(BOOL)enabled
 {
-    _legacyEncryptedMediaAPIEnabled = enabled;
+    _pageConfiguration->setLegacyEncryptedMediaAPIEnabled(enabled);
 }
 
 - (BOOL)_legacyEncryptedMediaAPIEnabled
 {
-    return _legacyEncryptedMediaAPIEnabled;
+    return _pageConfiguration->legacyEncryptedMediaAPIEnabled();
 }
 
 - (void)_setAllowMediaContentTypesRequiringHardwareSupportAsFallback:(BOOL)allow
 {
-    _allowMediaContentTypesRequiringHardwareSupportAsFallback = allow;
+    _pageConfiguration->setAllowMediaContentTypesRequiringHardwareSupportAsFallback(allow);
 }
 
 - (BOOL)_allowMediaContentTypesRequiringHardwareSupportAsFallback
 {
-    return _allowMediaContentTypesRequiringHardwareSupportAsFallback;
+    return _pageConfiguration->allowMediaContentTypesRequiringHardwareSupportAsFallback();
 }
 
 - (BOOL)_mediaCaptureEnabled
@@ -1396,12 +1310,12 @@ static WebKit::AttributionOverrideTesting toAttributionOverrideTesting(_WKAttrib
 
 - (void)_setUndoManagerAPIEnabled:(BOOL)enabled
 {
-    _undoManagerAPIEnabled = enabled;
+    _pageConfiguration->setUndoManagerAPIEnabled(enabled);
 }
 
 - (BOOL)_undoManagerAPIEnabled
 {
-    return _undoManagerAPIEnabled;
+    return _pageConfiguration->undoManagerAPIEnabled();
 }
 
 - (void)_setAppHighlightsEnabled:(BOOL)enabled
@@ -1519,12 +1433,12 @@ static WebKit::AttributionOverrideTesting toAttributionOverrideTesting(_WKAttrib
 // FIXME: Remove this SPI once rdar://110277838 is resolved and all clients adopt the API.
 - (void)_setMarkedTextInputEnabled:(BOOL)enabled
 {
-    _allowsInlinePredictions = enabled;
+    _pageConfiguration->setAllowsInlinePredictions(enabled);
 }
 
 - (BOOL)_markedTextInputEnabled
 {
-    return _allowsInlinePredictions;
+    return _pageConfiguration->allowsInlinePredictions();
 }
 
 @end

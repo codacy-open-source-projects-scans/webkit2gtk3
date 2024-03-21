@@ -454,6 +454,7 @@ FloatSize WebPage::overrideScreenSize() const
 
 void WebPage::didReceiveMobileDocType(bool isMobileDoctype)
 {
+    m_isMobileDoctype = isMobileDoctype;
     resetViewportDefaultConfiguration(m_mainFrame.ptr(), isMobileDoctype);
 }
 
@@ -1012,6 +1013,20 @@ void WebPage::requestFocusedElementInformation(CompletionHandler<void(const std:
         information = focusedElementInformation();
 
     completionHandler(information);
+}
+
+void WebPage::updateFocusedElementInformation()
+{
+    m_updateFocusedElementInformationTimer.stop();
+
+    if (!m_focusedElement)
+        return;
+
+    auto information = focusedElementInformation();
+    if (!information)
+        return;
+
+    send(Messages::WebPageProxy::UpdateFocusedElementInformation(*information));
 }
 
 #if ENABLE(DRAG_SUPPORT)
@@ -2759,7 +2774,11 @@ bool WebPage::applyAutocorrectionInternal(const String& correction, const String
         // forward such that it matches the original selection as much as possible.
         if (foldQuoteMarks(textForRange) != originalTextWithFoldedQuoteMarks) {
             // Search for the original text near the selection caret.
-            if (auto searchRange = rangeExpandedAroundPositionByCharacters(position, numGraphemeClusters(originalText))) {
+            auto characterCount = numGraphemeClusters(originalText);
+            if (!characterCount) {
+                textForRange = emptyString();
+                range = makeSimpleRange(position);
+            } else if (auto searchRange = rangeExpandedAroundPositionByCharacters(position, characterCount)) {
                 if (auto foundRange = findPlainText(*searchRange, originalTextWithFoldedQuoteMarks, { DoNotSetSelection, DoNotRevealSelection }); !foundRange.collapsed()) {
                     textForRange = plainTextForContext(foundRange);
                     range = foundRange;
@@ -4101,6 +4120,10 @@ void WebPage::resetViewportDefaultConfiguration(WebFrame* frame, bool hasMobileD
     }
 
     auto parametersForStandardFrame = [&] {
+#if ENABLE(FULLSCREEN_API)
+        if (m_isInFullscreenMode == IsInFullscreenMode::Yes)
+            return m_viewportConfiguration.nativeWebpageParameters();
+#endif
         if (shouldIgnoreMetaViewport())
             return m_viewportConfiguration.nativeWebpageParameters();
         return ViewportConfiguration::webpageParameters();
@@ -4687,7 +4710,9 @@ void WebPage::drawToImage(WebCore::FrameIdentifier frameID, const PrintInfo& pri
         return;
     }
 
-    for (size_t pageIndex = 0; pageIndex < pageCount; pageIndex++) {
+    for (size_t pageIndex = 0; pageIndex < pageCount; ++pageIndex) {
+        if (pageIndex >= m_printContext->pageCount())
+            break;
         graphicsContext->save();
         graphicsContext->translate(0, pageHeight * static_cast<int>(pageIndex));
         m_printContext->spoolPage(*graphicsContext, pageIndex, pageWidth);
@@ -4900,10 +4925,8 @@ static VisiblePosition moveByGranularityRespectingWordBoundary(const VisiblePosi
         if (atBoundaryOfGranularity(currentPosition, granularity, direction))
             --granularityCount;
     } while (granularityCount);
-    if (granularity == TextGranularity::SentenceGranularity) {
-        ASSERT(atBoundaryOfGranularity(currentPosition, TextGranularity::SentenceGranularity, direction));
+    if (granularity == TextGranularity::SentenceGranularity)
         return currentPosition;
-    }
     // Note that this rounds to the nearest word, which may cross a line boundary when using line granularity.
     // For example, suppose the text is laid out as follows and the insertion point is at |:
     //     |This is the first sen

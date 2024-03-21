@@ -50,6 +50,7 @@
 #include <WebCore/ProcessIdentity.h>
 #include <WebCore/RenderingResourceIdentifier.h>
 #include <wtf/HashMap.h>
+#include <wtf/WeakPtr.h>
 
 namespace WTF {
 enum class Critical : bool;
@@ -88,7 +89,7 @@ namespace ShapeDetection {
 class ObjectHeap;
 }
 
-class RemoteRenderingBackend : private IPC::MessageSender, public IPC::StreamMessageReceiver {
+class RemoteRenderingBackend : private IPC::MessageSender, public IPC::StreamMessageReceiver, public CanMakeWeakPtr<RemoteRenderingBackend> {
 public:
     static Ref<RemoteRenderingBackend> create(GPUConnectionToWebProcess&, RemoteRenderingBackendCreationParameters&&, Ref<IPC::StreamServerConnection>&&);
     virtual ~RemoteRenderingBackend();
@@ -162,8 +163,8 @@ private:
 #endif
 
 #if PLATFORM(COCOA)
-    void prepareImageBufferSetsForDisplay(Vector<ImageBufferSetPrepareBufferForDisplayInputData> swapBuffersInput, RenderingUpdateID);
-    void prepareImageBufferSetsForDisplaySync(Vector<ImageBufferSetPrepareBufferForDisplayInputData> swapBuffersInput, RenderingUpdateID, CompletionHandler<void(Vector<SwapBuffersDisplayRequirement>&&)>&&);
+    void prepareImageBufferSetsForDisplay(Vector<ImageBufferSetPrepareBufferForDisplayInputData> swapBuffersInput);
+    void prepareImageBufferSetsForDisplaySync(Vector<ImageBufferSetPrepareBufferForDisplayInputData> swapBuffersInput, CompletionHandler<void(Vector<SwapBuffersDisplayRequirement>&&)>&&);
 
 #endif
 

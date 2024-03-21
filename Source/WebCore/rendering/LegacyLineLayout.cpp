@@ -34,7 +34,6 @@
 #include "InlineIteratorTextBox.h"
 #include "InlineTextBoxStyle.h"
 #include "InlineWalker.h"
-#include "LegacyInlineElementBox.h"
 #include "LegacyInlineFlowBoxInlines.h"
 #include "LegacyInlineIterator.h"
 #include "LegacyInlineTextBox.h"
@@ -51,7 +50,6 @@
 #include "SVGElementTypeHelpers.h"
 #include "SVGRootInlineBox.h"
 #include "Settings.h"
-#include "VerticalPositionCache.h"
 #include <wtf/StdLibExtras.h>
 
 namespace WebCore {
@@ -63,9 +61,6 @@ LegacyLineLayout::LegacyLineLayout(RenderBlockFlow& flow)
 
 LegacyLineLayout::~LegacyLineLayout()
 {
-    if (m_flow.containsFloats())
-        m_flow.floatingObjects()->clearLineBoxTreePointers();
-
     lineBoxes().deleteLineBoxTree();
 };
 
@@ -161,7 +156,7 @@ LegacyRootInlineBox* LegacyLineLayout::createAndAppendRootInlineBox()
     return rootBox;
 }
 
-LegacyInlineBox* LegacyLineLayout::createInlineBoxForRenderer(RenderObject* renderer, bool isOnlyRun)
+LegacyInlineBox* LegacyLineLayout::createInlineBoxForRenderer(RenderObject* renderer)
 {
     if (renderer == &m_flow)
         return createAndAppendRootInlineBox();
@@ -169,31 +164,19 @@ LegacyInlineBox* LegacyLineLayout::createInlineBoxForRenderer(RenderObject* rend
     if (CheckedPtr textRenderer = dynamicDowncast<RenderText>(*renderer))
         return textRenderer->createInlineTextBox();
 
-    if (CheckedPtr box = dynamicDowncast<RenderBox>(*renderer)) {
-        // FIXME: This is terrible. This branch returns an *owned* pointer!
-        return box->createInlineBox().release();
-    }
+    if (CheckedPtr renderInline = dynamicDowncast<RenderInline>(renderer))
+        return renderInline->createAndAppendInlineFlowBox();
 
-    if (CheckedPtr lineBreak = dynamicDowncast<RenderLineBreak>(*renderer)) {
-        // FIXME: This is terrible. This branch returns an *owned* pointer!
-        auto inlineBox = lineBreak->createInlineBox().release();
-        // We only treat a box as text for a <br> if we are on a line by ourself or in strict mode
-        // (Note the use of strict mode. In "almost strict" mode, we don't treat the box for <br> as text.)
-        inlineBox->setBehavesLikeText(isOnlyRun || renderer->document().inNoQuirksMode() || lineBreak->isWBR());
-        return inlineBox;
-    }
-
-    return downcast<RenderInline>(*renderer).createAndAppendInlineFlowBox();
+    ASSERT_NOT_REACHED();
+    return nullptr;
 }
 
 static inline void dirtyLineBoxesForRenderer(RenderObject& renderer, bool fullLayout)
 {
     if (CheckedPtr renderText = dynamicDowncast<RenderText>(renderer))
         renderText->dirtyLineBoxes(fullLayout);
-    else if (CheckedPtr lineBreak = dynamicDowncast<RenderLineBreak>(renderer))
-        lineBreak->dirtyLineBoxes(fullLayout);
-    else
-        downcast<RenderInline>(renderer).dirtyLineBoxes(fullLayout);
+    else if (CheckedPtr renderInline = dynamicDowncast<RenderInline>(renderer))
+        renderInline->dirtyLineBoxes(fullLayout);
 }
 
 static bool parentIsConstructedOrHaveNext(LegacyInlineFlowBox* parentBox)
@@ -213,7 +196,6 @@ LegacyInlineFlowBox* LegacyLineLayout::createLineBoxes(RenderObject* obj, const 
     unsigned lineDepth = 1;
     LegacyInlineFlowBox* parentBox = nullptr;
     LegacyInlineFlowBox* result = nullptr;
-    bool hasDefaultLineBoxContain = style().lineBoxContain() == RenderStyle::initialLineBoxContain();
     do {
         RenderInline* inlineFlow = obj != &m_flow ? &checkedDowncast<RenderInline>(*obj) : nullptr;
 
@@ -234,8 +216,6 @@ LegacyInlineFlowBox* LegacyLineLayout::createLineBoxes(RenderObject* obj, const 
             parentBox = downcast<LegacyInlineFlowBox>(newBox);
             parentBox->setIsFirstLine(lineInfo.isFirstLine());
             parentBox->setIsHorizontal(m_flow.isHorizontalWritingMode());
-            if (!hasDefaultLineBoxContain)
-                parentBox->clearDescendantsHaveSameLineHeightAndBaseline();
             constructedNewBox = true;
         }
 
@@ -264,48 +244,16 @@ LegacyInlineFlowBox* LegacyLineLayout::createLineBoxes(RenderObject* obj, const 
     return result;
 }
 
-template<typename CharacterType> static inline bool endsWithHTMLSpaces(const CharacterType* characters, unsigned position, unsigned end)
-{
-    for (unsigned i = position; i < end; ++i) {
-        if (!isASCIIWhitespace(characters[i]))
-            return false;
-    }
-    return true;
-}
-
-static bool reachedEndOfTextRenderer(const BidiRunList<BidiRun>& bidiRuns)
-{
-    BidiRun* run = bidiRuns.logicallyLastRun();
-    if (!run)
-        return true;
-    CheckedPtr renderText = dynamicDowncast<RenderText>(run->renderer());
-    if (!renderText)
-        return false;
-    auto& text = renderText->text();
-    unsigned position = run->stop();
-    unsigned length = text.length();
-    if (text.is8Bit())
-        return endsWithHTMLSpaces(text.characters8(), position, length);
-    return endsWithHTMLSpaces(text.characters16(), position, length);
-}
-
 LegacyRootInlineBox* LegacyLineLayout::constructLine(BidiRunList<BidiRun>& bidiRuns, const LineInfo& lineInfo)
 {
     ASSERT(bidiRuns.firstRun());
 
     LegacyInlineFlowBox* parentBox = 0;
-    int runCount = bidiRuns.runCount() - lineInfo.runsFromLeadingWhitespace();
-    
     for (BidiRun* r = bidiRuns.firstRun(); r; r = r->next()) {
-        // Create a box for our object.
-        bool isOnlyRun = (runCount == 1);
-        if (runCount == 2 && !r->renderer().isRenderListMarker())
-            isOnlyRun = (!style().isLeftToRightDirection() ? bidiRuns.lastRun() : bidiRuns.firstRun())->renderer().isRenderListMarker();
-
         if (lineInfo.isEmpty())
             continue;
 
-        LegacyInlineBox* box = createInlineBoxForRenderer(&r->renderer(), isOnlyRun);
+        LegacyInlineBox* box = createInlineBoxForRenderer(&r->renderer());
         r->setBox(box);
 
         // If we have no parent box yet, or if the run is not simply a sibling,
@@ -326,8 +274,6 @@ LegacyRootInlineBox* LegacyLineLayout::constructLine(BidiRunList<BidiRun>& bidiR
         if (auto* textBox = dynamicDowncast<LegacyInlineTextBox>(*box)) {
             textBox->setStart(r->m_start);
             textBox->setLen(r->m_stop - r->m_start);
-            if (r->m_hasHyphen)
-                textBox->setHasHyphen(true);
         }
     }
 
@@ -335,52 +281,11 @@ LegacyRootInlineBox* LegacyLineLayout::constructLine(BidiRunList<BidiRun>& bidiR
     // be the last continuation of our line list.
     ASSERT(lastRootBox() && !lastRootBox()->isConstructed());
 
-    // Set bits on our inline flow boxes that indicate which sides should
-    // paint borders/margins/padding. This knowledge will ultimately be used when
-    // we determine the horizontal positions and widths of all the inline boxes on
-    // the line.
-    bool isLogicallyLastRunWrapped = bidiRuns.logicallyLastRun()->renderer().isRenderText() ? !reachedEndOfTextRenderer(bidiRuns) : !is<RenderInline>(bidiRuns.logicallyLastRun()->renderer());
-    lastRootBox()->determineSpacingForFlowBoxes(lineInfo.isLastLine(), isLogicallyLastRunWrapped, &bidiRuns.logicallyLastRun()->renderer());
-
     // Now mark the line boxes as being constructed.
     lastRootBox()->setConstructed();
 
     // Return the last line.
     return lastRootBox();
-}
-
-TextAlignMode LegacyLineLayout::textAlignmentForLine(bool endsWithSoftBreak) const
-{
-    if (auto overrideAlignment = m_flow.overrideTextAlignmentForLine(endsWithSoftBreak))
-        return *overrideAlignment;
-
-    TextAlignMode alignment = style().textAlign();
-
-    if (endsWithSoftBreak)
-        return alignment;
-
-    TextAlignLast alignmentLast = style().textAlignLast();
-    switch (alignmentLast) {
-    case TextAlignLast::Start:
-        return TextAlignMode::Start;
-    case TextAlignLast::End:
-        return TextAlignMode::End;
-    case TextAlignLast::Left:
-        return TextAlignMode::Left;
-    case TextAlignLast::Right:
-        return TextAlignMode::Right;
-    case TextAlignLast::Center:
-        return TextAlignMode::Center;
-    case TextAlignLast::Justify:
-        return TextAlignMode::Justify;
-    case TextAlignLast::Auto:
-        if (alignment == TextAlignMode::Justify)
-            return TextAlignMode::Start;
-        return alignment;
-    }
-
-    ASSERT_NOT_REACHED();
-    return TextAlignMode::Start;
 }
 
 static void updateLogicalWidthForLeftAlignedBlock(bool isLeftToRightDirection, BidiRun* trailingSpaceRun, float& logicalLeft, float& totalLogicalWidth, float availableLogicalWidth)
@@ -434,138 +339,6 @@ static void updateLogicalWidthForCenterAlignedBlock(bool isLeftToRightDirection,
         logicalLeft += totalLogicalWidth > availableLogicalWidth ? (availableLogicalWidth - totalLogicalWidth) : (availableLogicalWidth - totalLogicalWidth) / 2 - trailingSpaceWidth;
 }
 
-static inline void setLogicalWidthForTextRun(LegacyRootInlineBox* lineBox, BidiRun* run, RenderText& renderer, float xPos, const LineInfo& lineInfo,
-    GlyphOverflowAndFallbackFontsMap& textBoxDataMap, VerticalPositionCache& verticalPositionCache, WordMeasurements& wordMeasurements)
-{
-    SingleThreadWeakHashSet<const Font> fallbackFonts;
-    GlyphOverflow glyphOverflow;
-
-    const FontCascade& font = lineStyle(*renderer.parent(), lineInfo).fontCascade();
-    // Always compute glyph overflow if the block's line-box-contain value is "glyphs".
-    if (lineBox->fitsToGlyphs()) {
-        // If we don't stick out of the root line's font box, then don't bother computing our glyph overflow. This optimization
-        // will keep us from computing glyph bounds in nearly all cases.
-        bool includeRootLine = lineBox->includesRootLineBoxFontOrLeading();
-        int ascent = font.metricsOfPrimaryFont().intAscent();
-        int descent = font.metricsOfPrimaryFont().intDescent();
-        int baselineShift = lineBox->verticalPositionForBox(run->box(), verticalPositionCache);
-        int rootDescent = includeRootLine ? descent : 0;
-        int rootAscent = includeRootLine ? ascent : 0;
-        int boxAscent = ascent - baselineShift;
-        int boxDescent = descent + baselineShift;
-        if (boxAscent > rootDescent ||  boxDescent > rootAscent)
-            glyphOverflow.computeBounds = true; 
-    }
-    
-    LayoutUnit hyphenWidth;
-    if (downcast<LegacyInlineTextBox>(*run->box()).hasHyphen())
-        hyphenWidth = measureHyphenWidth(renderer, font, &fallbackFonts);
-
-    float measuredWidth = 0;
-
-    bool kerningIsEnabled = font.enableKerning();
-    bool canUseSimpleFontCodePath = renderer.canUseSimpleFontCodePath();
-    
-    // Since we don't cache glyph overflows, we need to re-measure the run if
-    // the style is linebox-contain: glyph.
-    if (!lineBox->fitsToGlyphs() && canUseSimpleFontCodePath) {
-        unsigned lastEndOffset = run->m_start;
-        bool atFirstWordMeasurement = true;
-        for (size_t i = 0, size = wordMeasurements.size(); i < size && lastEndOffset < run->m_stop; ++i) {
-            WordMeasurement& wordMeasurement = wordMeasurements[i];
-            if (wordMeasurement.width <= 0 || wordMeasurement.startOffset == wordMeasurement.endOffset)
-                continue;
-            if (wordMeasurement.renderer != &renderer || wordMeasurement.startOffset != lastEndOffset || wordMeasurement.endOffset > run->m_stop)
-                continue;
-
-            lastEndOffset = wordMeasurement.endOffset;
-            if (kerningIsEnabled && lastEndOffset == run->m_stop) {
-                int wordLength = lastEndOffset - wordMeasurement.startOffset;
-                GlyphOverflow overflow;
-                measuredWidth += renderer.width(wordMeasurement.startOffset, wordLength, xPos + measuredWidth, lineInfo.isFirstLine(),
-                    &wordMeasurement.fallbackFonts, &overflow);
-                UChar c = renderer.characterAt(wordMeasurement.startOffset);
-                // renderer.width() omits word-spacing value for leading whitespace, so let's just add it back here.
-                if (!atFirstWordMeasurement && FontCascade::treatAsSpace(c))
-                    measuredWidth += renderer.style().fontCascade().wordSpacing();
-            } else
-                measuredWidth += wordMeasurement.width;
-            atFirstWordMeasurement = false;
-
-            for (auto& font : wordMeasurement.fallbackFonts)
-                fallbackFonts.add(font);
-        }
-        if (measuredWidth && lastEndOffset != run->m_stop) {
-            // If we don't have enough cached data, we'll measure the run again.
-            measuredWidth = 0;
-            fallbackFonts.clear();
-        }
-    }
-
-    if (!measuredWidth)
-        measuredWidth = renderer.width(run->m_start, run->m_stop - run->m_start, xPos, lineInfo.isFirstLine(), &fallbackFonts, &glyphOverflow);
-
-    ASSERT(measuredWidth >= 0);
-    ASSERT(hyphenWidth >= 0);
-
-    run->box()->setLogicalWidth(measuredWidth + hyphenWidth);
-    if (!fallbackFonts.isEmptyIgnoringNullReferences()) {
-        ASSERT(run->box()->behavesLikeText());
-        GlyphOverflowAndFallbackFontsMap::iterator it = textBoxDataMap.add(downcast<LegacyInlineTextBox>(run->box()), std::make_pair(Vector<SingleThreadWeakPtr<const Font>>(), GlyphOverflow())).iterator;
-        ASSERT(it->value.first.isEmpty());
-        it->value.first = copyToVector(fallbackFonts);
-        run->box()->parent()->clearDescendantsHaveSameLineHeightAndBaseline();
-    }
-
-    // Include text decoration visual overflow as part of the glyph overflow.
-    if (!renderer.style().textDecorationsInEffect().isEmpty()) {
-        auto textBox = InlineIterator::textBoxFor(downcast<LegacyInlineTextBox>(run->box()));
-        glyphOverflow.extendTo(visualOverflowForDecorations(textBox->lineBox(), renderer, textBox->logicalTop(), textBox->logicalBottom()));
-    }
-
-    if (!glyphOverflow.isEmpty()) {
-        ASSERT(run->box()->behavesLikeText());
-        GlyphOverflowAndFallbackFontsMap::iterator it = textBoxDataMap.add(downcast<LegacyInlineTextBox>(run->box()), std::make_pair(Vector<SingleThreadWeakPtr<const Font>>(), GlyphOverflow())).iterator;
-        it->value.second = glyphOverflow;
-        run->box()->clearKnownToHaveNoOverflow();
-    }
-}
-
-void LegacyLineLayout::computeExpansionForJustifiedText(BidiRun* firstRun, BidiRun* trailingSpaceRun, const Vector<unsigned, 16>& expansionOpportunities, unsigned expansionOpportunityCount, float totalLogicalWidth, float availableLogicalWidth)
-{
-    if (!expansionOpportunityCount || availableLogicalWidth <= totalLogicalWidth)
-        return;
-
-    size_t i = 0;
-    for (BidiRun* run = firstRun; run; run = run->next()) {
-        if (!run->box() || run == trailingSpaceRun)
-            continue;
-
-        // Positioned objects are only participating to figure out their correct static x position.
-        // They have no affect on the width. Similarly, line break boxes have no affect on the width.
-        if (run->renderer().isOutOfFlowPositioned() || run->box()->isLineBreak())
-            continue;
-
-        if (is<RenderText>(run->renderer())) {
-            unsigned opportunitiesInRun = expansionOpportunities[i++];
-            
-            ASSERT(opportunitiesInRun <= expansionOpportunityCount);
-            
-            // Only justify text if whitespace is collapsed.
-            if (run->renderer().style().collapseWhiteSpace()) {
-                LegacyInlineTextBox& textBox = downcast<LegacyInlineTextBox>(*run->box());
-                float expansion = (availableLogicalWidth - totalLogicalWidth) * opportunitiesInRun / expansionOpportunityCount;
-                textBox.setExpansion(expansion);
-                totalLogicalWidth += expansion;
-            }
-            expansionOpportunityCount -= opportunitiesInRun;
-        }
-
-        if (!expansionOpportunityCount)
-            break;
-    }
-}
-
 void LegacyLineLayout::updateLogicalWidthForAlignment(RenderBlockFlow& flow, const TextAlignMode& textAlign, const LegacyRootInlineBox* rootInlineBox, BidiRun* trailingSpaceRun, float& logicalLeft, float& totalLogicalWidth, float& availableLogicalWidth, int expansionOpportunityCount)
 {
     TextDirection direction;
@@ -594,7 +367,6 @@ void LegacyLineLayout::updateLogicalWidthForAlignment(RenderBlockFlow& flow, con
         updateLogicalWidthForCenterAlignedBlock(isLeftToRightDirection, trailingSpaceRun, logicalLeft, totalLogicalWidth, availableLogicalWidth);
         break;
     case TextAlignMode::Justify:
-        flow.adjustInlineDirectionLineBounds(expansionOpportunityCount, logicalLeft, availableLogicalWidth);
         if (expansionOpportunityCount) {
             if (trailingSpaceRun) {
                 totalLogicalWidth -= trailingSpaceRun->box()->logicalWidth();
@@ -616,256 +388,6 @@ void LegacyLineLayout::updateLogicalWidthForAlignment(RenderBlockFlow& flow, con
             updateLogicalWidthForLeftAlignedBlock(isLeftToRightDirection, trailingSpaceRun, logicalLeft, totalLogicalWidth, availableLogicalWidth);
         break;
     }
-}
-
-static void updateLogicalInlinePositions(RenderBlockFlow& block, float& lineLogicalLeft, float& lineLogicalRight, float& availableLogicalWidth, bool firstLine,
-    IndentTextOrNot shouldIndentText, LayoutUnit boxLogicalHeight)
-{
-    LayoutUnit lineLogicalHeight = block.minLineHeightForReplacedRenderer(firstLine, boxLogicalHeight);
-    lineLogicalLeft = block.logicalLeftOffsetForLine(block.logicalHeight(), shouldIndentText, lineLogicalHeight);
-    lineLogicalRight = block.logicalRightOffsetForLine(block.logicalHeight(), shouldIndentText, lineLogicalHeight);
-    availableLogicalWidth = lineLogicalRight - lineLogicalLeft;
-}
-
-void LegacyLineLayout::computeInlineDirectionPositionsForLine(LegacyRootInlineBox* lineBox, const LineInfo& lineInfo, BidiRun* firstRun, BidiRun* trailingSpaceRun, bool reachedEnd, GlyphOverflowAndFallbackFontsMap& textBoxDataMap, VerticalPositionCache& verticalPositionCache, WordMeasurements& wordMeasurements)
-{
-    TextAlignMode textAlign = textAlignmentForLine(!reachedEnd && !lineBox->endsWithBreak());
-
-    // CSS 2.1: "'Text-indent' only affects a line if it is the first formatted line of an element. For example, the first line of an anonymous block
-    // box is only affected if it is the first child of its parent element."
-    // CSS3 "text-indent", "each-line" affects the first line of the block container as well as each line after a forced line break,
-    // but does not affect lines after a soft wrap break.
-    bool isFirstLine = lineInfo.isFirstLine() && !(m_flow.isAnonymousBlock() && m_flow.parent()->firstChild() != &m_flow);
-    bool isAfterHardLineBreak = lineBox->prevRootBox() && lineBox->prevRootBox()->endsWithBreak();
-    IndentTextOrNot shouldIndentText = requiresIndent(isFirstLine, isAfterHardLineBreak, style());
-    float lineLogicalLeft;
-    float lineLogicalRight;
-    float availableLogicalWidth;
-    updateLogicalInlinePositions(m_flow, lineLogicalLeft, lineLogicalRight, availableLogicalWidth, isFirstLine, shouldIndentText, 0);
-    bool needsWordSpacing;
-
-    if (firstRun && firstRun->renderer().isReplacedOrInlineBlock()) {
-        RenderBox& renderBox = downcast<RenderBox>(firstRun->renderer());
-        updateLogicalInlinePositions(m_flow, lineLogicalLeft, lineLogicalRight, availableLogicalWidth, isFirstLine, shouldIndentText, renderBox.logicalHeight());
-    }
-
-    computeInlineDirectionPositionsForSegment(lineBox, lineInfo, textAlign, lineLogicalLeft, availableLogicalWidth, firstRun, trailingSpaceRun, textBoxDataMap, verticalPositionCache, wordMeasurements);
-    // The widths of all runs are now known. We can now place every inline box (and
-    // compute accurate widths for the inline flow boxes).
-    needsWordSpacing = false;
-    lineBox->placeBoxesInInlineDirection(lineLogicalLeft, needsWordSpacing);
-}
-
-static inline ExpansionBehavior expansionBehaviorForInlineTextBox(LegacyInlineTextBox& textBox, bool isAfterExpansion)
-{
-    // Tatechuyoko is modeled as the Object Replacement Character (U+FFFC), which can never have expansion opportunities inside nor intrinsically adjacent to it.
-    if (textBox.renderer().style().textCombine() == TextCombine::All)
-        return ExpansionBehavior::forbidAll();
-
-    auto result = ExpansionBehavior::forbidAll();
-    result.left = isAfterExpansion ? ExpansionBehavior::Behavior::Forbid : ExpansionBehavior::Behavior::Allow;
-    result.right = ExpansionBehavior::Behavior::Allow;
-    return result;
-}
-
-static inline void applyExpansionBehavior(LegacyInlineTextBox& textBox, ExpansionBehavior expansionBehavior)
-{
-    switch (expansionBehavior.left) {
-    case ExpansionBehavior::Behavior::Force:
-        textBox.setForceLeftExpansion();
-        break;
-    case ExpansionBehavior::Behavior::Forbid:
-        textBox.setCanHaveLeftExpansion(false);
-        break;
-    case ExpansionBehavior::Behavior::Allow:
-        textBox.setCanHaveLeftExpansion(true);
-        break;
-    default:
-        ASSERT_NOT_REACHED();
-        break;
-    };
-
-    switch (expansionBehavior.right) {
-    case ExpansionBehavior::Behavior::Force:
-        textBox.setForceRightExpansion();
-        break;
-    case ExpansionBehavior::Behavior::Forbid:
-        textBox.setCanHaveRightExpansion(false);
-        break;
-    case ExpansionBehavior::Behavior::Allow:
-        textBox.setCanHaveRightExpansion(true);
-        break;
-    default:
-        ASSERT_NOT_REACHED();
-        break;
-    }
-}
-
-static bool inlineAncestorHasStartBorderPaddingOrMargin(const RenderBlockFlow& block, const LegacyInlineBox& box)
-{
-    bool isLTR = block.style().isLeftToRightDirection();
-    for (auto* currentBox = box.parent(); currentBox; currentBox = currentBox->parent()) {
-        if ((isLTR && currentBox->marginBorderPaddingLogicalLeft() > 0)
-            || (!isLTR && currentBox->marginBorderPaddingLogicalRight() > 0))
-            return true;
-    }
-    return false;
-}
-
-static bool inlineAncestorHasEndBorderPaddingOrMargin(const RenderBlockFlow& block, const LegacyInlineBox& box)
-{
-    bool isLTR = block.style().isLeftToRightDirection();
-    for (auto* currentBox = box.parent(); currentBox; currentBox = currentBox->parent()) {
-        if ((isLTR && currentBox->marginBorderPaddingLogicalRight() > 0)
-            || (!isLTR && currentBox->marginBorderPaddingLogicalLeft() > 0))
-            return true;
-    }
-    return false;
-}
-    
-static bool isLastInFlowRun(BidiRun& runToCheck)
-{
-    for (auto* run = runToCheck.next(); run; run = run->next()) {
-        if (!run->box() || run->renderer().isOutOfFlowPositioned() || run->box()->isLineBreak())
-            continue;
-        return false;
-    }
-    return true;
-}
-
-BidiRun* LegacyLineLayout::computeInlineDirectionPositionsForSegment(LegacyRootInlineBox* lineBox, const LineInfo& lineInfo, TextAlignMode textAlign, float& lineLogicalLeft,
-    float& availableLogicalWidth, BidiRun* firstRun, BidiRun* trailingSpaceRun, GlyphOverflowAndFallbackFontsMap& textBoxDataMap, VerticalPositionCache& verticalPositionCache,
-    WordMeasurements& wordMeasurements)
-{
-    bool needsWordSpacing = false;
-    bool canHangPunctuationAtStart = style().hangingPunctuation().contains(HangingPunctuation::First);
-    bool canHangPunctuationAtEnd = style().hangingPunctuation().contains(HangingPunctuation::Last);
-    bool isLTR = style().isLeftToRightDirection();
-    float contentWidth = 0;
-    unsigned expansionOpportunityCount = 0;
-    bool isAfterExpansion = true;
-    Vector<unsigned, 16> expansionOpportunities;
-
-    HashMap<LegacyInlineTextBox*, LayoutUnit> logicalSpacingForInlineTextBoxes;
-    auto collectSpacingLogicalWidths = [&] () {
-        auto totalSpacingWidth = LayoutUnit { };
-        // Collect the spacing positions (margin, border padding) for the textboxes by traversing the inline tree of the current line.
-        Vector<LegacyInlineBox*> queue;
-        queue.append(lineBox);
-        // 1. Visit each inline box in a preorder fashion
-        // 2. Accumulate the spacing when we find an LegacyInlineFlowBox (inline container e.g. span)
-        // 3. Add the LegacyInlineTextBoxes to the hashmap
-        while (!queue.isEmpty()) {
-            while (true) {
-                auto* inlineBox = queue.last();
-                if (auto* inlineFlowBox = dynamicDowncast<LegacyInlineFlowBox>(inlineBox)) {
-                    totalSpacingWidth += inlineFlowBox->marginBorderPaddingLogicalLeft();
-                    if (auto* child = inlineFlowBox->firstChild()) {
-                        queue.append(child);
-                        continue;
-                    }
-                    break;
-                }
-                if (auto* textBox = dynamicDowncast<LegacyInlineTextBox>(inlineBox))
-                    logicalSpacingForInlineTextBoxes.add(textBox, totalSpacingWidth);
-                break;
-            }
-            while (!queue.isEmpty()) {
-                auto& inlineBox = *queue.takeLast();
-                if (auto* flowBox = dynamicDowncast<LegacyInlineFlowBox>(inlineBox))
-                    totalSpacingWidth += flowBox->marginBorderPaddingLogicalRight();
-                if (auto* nextSibling = inlineBox.nextOnLine()) {
-                    queue.append(nextSibling);
-                    break;
-                }
-            }
-        }
-    };
-    collectSpacingLogicalWidths();
-
-    BidiRun* run = firstRun;
-    for (; run; run = run->next()) {
-        auto computeExpansionOpportunities = [&] (LegacyInlineTextBox& textBox, StringView stringView, TextDirection direction)
-        {
-            if (stringView.isEmpty()) {
-                // Empty runs should still produce an entry in expansionOpportunities list so that the number of items matches the number of runs.
-                expansionOpportunities.append(0);
-                return;
-            }
-            ExpansionBehavior expansionBehavior = expansionBehaviorForInlineTextBox(textBox, isAfterExpansion);
-            applyExpansionBehavior(textBox, expansionBehavior);
-            unsigned opportunitiesInRun;
-            std::tie(opportunitiesInRun, isAfterExpansion) = FontCascade::expansionOpportunityCount(stringView, direction, expansionBehavior);
-            expansionOpportunities.append(opportunitiesInRun);
-            expansionOpportunityCount += opportunitiesInRun;
-        };
-        if (!run->box() || run->renderer().isOutOfFlowPositioned() || run->box()->isLineBreak()) {
-            // Positioned objects are only participating to figure out their correct static x position.
-            // They have no effect on the width. Similarly, line break boxes have no effect on the width.
-            continue;
-        }
-        if (CheckedPtr renderText = dynamicDowncast<RenderText>(run->renderer())) {
-            auto& textBox = downcast<LegacyInlineTextBox>(*run->box());
-            if (canHangPunctuationAtStart && lineInfo.isFirstLine() && (isLTR || isLastInFlowRun(*run))
-                && !inlineAncestorHasStartBorderPaddingOrMargin(m_flow, *run->box())) {
-                float hangStartWidth = renderText->hangablePunctuationStartWidth(run->m_start);
-                availableLogicalWidth += hangStartWidth;
-                if (style().isLeftToRightDirection())
-                    lineLogicalLeft -= hangStartWidth;
-                canHangPunctuationAtStart = false;
-            }
-            
-            if (canHangPunctuationAtEnd && lineInfo.isLastLine() && run->m_stop > 0 && (!isLTR || isLastInFlowRun(*run))
-                && !inlineAncestorHasEndBorderPaddingOrMargin(m_flow, *run->box())) {
-                float hangEndWidth = renderText->hangablePunctuationEndWidth(run->m_stop - 1);
-                availableLogicalWidth += hangEndWidth;
-                if (!style().isLeftToRightDirection())
-                    lineLogicalLeft -= hangEndWidth;
-                canHangPunctuationAtEnd = false;
-            }
-            
-            if (textAlign == TextAlignMode::Justify && run != trailingSpaceRun)
-                computeExpansionOpportunities(textBox, renderText->stringView(run->m_start, run->m_stop), run->box()->direction());
-
-            if (unsigned length = renderText->text().length()) {
-                if (!run->m_start && needsWordSpacing && deprecatedIsSpaceOrNewline(renderText->characterAt(run->m_start)))
-                    contentWidth += lineStyle(*renderText->parent(), lineInfo).fontCascade().wordSpacing();
-                // run->m_start == run->m_stop should only be true iff the run is a replaced run for bidi: isolate.
-                ASSERT(run->m_stop > 0 || run->m_start == run->m_stop);
-                needsWordSpacing = run->m_stop == length && !deprecatedIsSpaceOrNewline(renderText->characterAt(run->m_stop - 1));
-            }
-            auto currentLogicalLeftPosition = logicalSpacingForInlineTextBoxes.get(&textBox) + contentWidth;
-            setLogicalWidthForTextRun(lineBox, run, *renderText, currentLogicalLeftPosition, lineInfo, textBoxDataMap, verticalPositionCache, wordMeasurements);
-        } else {
-            canHangPunctuationAtStart = false;
-            isAfterExpansion = false;
-
-            if (!is<RenderInline>(run->renderer())) {
-                auto& renderBox = downcast<RenderBox>(run->renderer());
-                run->box()->setLogicalWidth(m_flow.logicalWidthForChild(renderBox));
-                contentWidth += m_flow.marginStartForChild(renderBox) + m_flow.marginEndForChild(renderBox);
-            }
-        }
-
-        contentWidth += run->box()->logicalWidth();
-    }
-
-    if (isAfterExpansion && !expansionOpportunities.isEmpty()) {
-        // FIXME: see <webkit.org/b/139393#c11>
-        int lastValidExpansionOpportunitiesIndex = expansionOpportunities.size() - 1;
-        while (lastValidExpansionOpportunitiesIndex >= 0 && !expansionOpportunities.at(lastValidExpansionOpportunitiesIndex))
-            --lastValidExpansionOpportunitiesIndex;
-        if (lastValidExpansionOpportunitiesIndex >= 0) {
-            ASSERT(expansionOpportunities.at(lastValidExpansionOpportunitiesIndex));
-            expansionOpportunities.at(lastValidExpansionOpportunitiesIndex)--;
-            expansionOpportunityCount--;
-        }
-    }
-
-    auto totalLogicalWidth = contentWidth + lineBox->getFlowSpacingLogicalWidth();
-    updateLogicalWidthForAlignment(m_flow, textAlign, lineBox, trailingSpaceRun, lineLogicalLeft, totalLogicalWidth, availableLogicalWidth, expansionOpportunityCount);
-    computeExpansionForJustifiedText(firstRun, trailingSpaceRun, expansionOpportunities, expansionOpportunityCount, totalLogicalWidth, availableLogicalWidth);
-    return run;
 }
 
 void LegacyLineLayout::removeInlineBox(BidiRun& run, const LegacyRootInlineBox& rootLineBox) const
@@ -897,37 +419,18 @@ void LegacyLineLayout::removeInlineBox(BidiRun& run, const LegacyRootInlineBox& 
     }
 }
 
-void LegacyLineLayout::computeBlockDirectionPositionsForLine(LegacyRootInlineBox* lineBox, BidiRun* firstRun, GlyphOverflowAndFallbackFontsMap& textBoxDataMap, VerticalPositionCache& verticalPositionCache)
+void LegacyLineLayout::removeEmptyTextBoxesAndUpdateVisualReordering(LegacyRootInlineBox* lineBox, BidiRun* firstRun)
 {
-    m_flow.setLogicalHeight(lineBox->alignBoxesInBlockDirection(m_flow.logicalHeight(), textBoxDataMap, verticalPositionCache));
-
-    // Now make sure we place replaced render objects correctly.
     for (auto* run = firstRun; run; run = run->next()) {
-        ASSERT(run->box());
-        if (!run->box())
-            continue; // Skip runs with no line boxes.
-
-        // Align positioned boxes with the top of the line box. This is
-        // a reasonable approximation of an appropriate y position.
-        auto& renderer = run->renderer();
-        if (renderer.isOutOfFlowPositioned())
-            run->box()->setLogicalTop(m_flow.logicalHeight());
-
-        // Position is used to properly position both replaced elements and
-        // to update the static normal flow x/y of positioned elements.
-        bool inlineBoxIsRedundant = false;
-        if (CheckedPtr textRenderer = dynamicDowncast<RenderText>(renderer)) {
-            auto& inlineTextBox = downcast<LegacyInlineTextBox>(*run->box());
-            textRenderer->positionLineBox(inlineTextBox);
-            inlineBoxIsRedundant = !inlineTextBox.hasTextContent();
-        } else if (CheckedPtr box = dynamicDowncast<RenderBox>(renderer)) {
-            box->positionLineBox(downcast<LegacyInlineElementBox>(*run->box()));
-            inlineBoxIsRedundant = renderer.isOutOfFlowPositioned();
-        } else if (CheckedPtr lineBreak = dynamicDowncast<RenderLineBreak>(renderer))
-            lineBreak->replaceInlineBoxWrapper(downcast<LegacyInlineElementBox>(*run->box()));
-        // Check if we need to keep this box on the line at all.
-        if (inlineBoxIsRedundant)
-            removeInlineBox(*run, *lineBox);
+        if (auto* inlineTextBox = dynamicDowncast<LegacyInlineTextBox>(*run->box())) {
+            auto& renderer = inlineTextBox->renderer();
+            if (!inlineTextBox->hasTextContent()) {
+                removeInlineBox(*run, *lineBox);
+                continue;
+            }
+            if (!inlineTextBox->isLeftToRightDirection())
+                renderer.setNeedsVisualReordering();
+        }
     }
 }
 
@@ -1004,14 +507,6 @@ inline BidiRun* LegacyLineLayout::handleTrailingSpaces(BidiRunList<BidiRun>& bid
         trailingSpaceRun->m_level = 1;
     }
     return trailingSpaceRun;
-}
-
-void LegacyLineLayout::appendFloatingObjectToLastLine(FloatingObject& floatingObject)
-{
-    ASSERT_WITH_SECURITY_IMPLICATION(!floatingObject.originatingLine());
-    ASSERT(lastRootBox());
-    floatingObject.setOriginatingLine(*lastRootBox());
-    lastRootBox()->appendFloat(floatingObject.renderer());
 }
 
 static inline void notifyResolverToResumeInIsolate(InlineBidiResolver& resolver, RenderObject* root, RenderObject* startObject)
@@ -1099,7 +594,7 @@ static inline void constructBidiRunsForSegment(InlineBidiResolver& topResolver, 
 }
 
 // This function constructs line boxes for all of the text runs in the resolver and computes their position.
-LegacyRootInlineBox* LegacyLineLayout::createLineBoxesFromBidiRuns(unsigned bidiLevel, BidiRunList<BidiRun>& bidiRuns, const LegacyInlineIterator& end, LineInfo& lineInfo, VerticalPositionCache& verticalPositionCache, BidiRun* trailingSpaceRun, WordMeasurements& wordMeasurements)
+LegacyRootInlineBox* LegacyLineLayout::createLineBoxesFromBidiRuns(unsigned bidiLevel, BidiRunList<BidiRun>& bidiRuns, const LegacyInlineIterator& end, LineInfo& lineInfo)
 {
     if (!bidiRuns.runCount())
         return nullptr;
@@ -1115,16 +610,14 @@ LegacyRootInlineBox* LegacyLineLayout::createLineBoxesFromBidiRuns(unsigned bidi
     lineBox->setEndsWithBreak(lineInfo.previousLineBrokeCleanly());
     
     bool isSVGRootInlineBox = is<SVGRootInlineBox>(*lineBox);
-    
+    ASSERT(isSVGRootInlineBox);
+
     GlyphOverflowAndFallbackFontsMap textBoxDataMap;
     
     // Now we position all of our text runs horizontally.
-    if (!isSVGRootInlineBox)
-        computeInlineDirectionPositionsForLine(lineBox, lineInfo, bidiRuns.firstRun(), trailingSpaceRun, end.atEnd(), textBoxDataMap, verticalPositionCache, wordMeasurements);
-    
-    // Now position our text runs vertically.
-    computeBlockDirectionPositionsForLine(lineBox, bidiRuns.firstRun(), textBoxDataMap, verticalPositionCache);
-    
+
+    removeEmptyTextBoxesAndUpdateVisualReordering(lineBox, bidiRuns.firstRun());
+
     // SVG text layout code computes vertical & horizontal positions on its own.
     // Note that we still need to execute computeVerticalPositionsForLine() as
     // it calls LegacyInlineTextBox::positionLineBox(), which tracks whether the box
@@ -1154,20 +647,6 @@ static void deleteLineRange(LineLayoutState& layoutState, LegacyRootInlineBox* s
     }
 }
 
-static void repaintDirtyFloats(LineLayoutState::FloatList& floats)
-{
-    // Floats that did not have layout did not repaint when we laid them out. They would have
-    // painted by now if they had moved, but if they stayed at (0, 0), they still need to be
-    // painted.
-    for (auto& floatBox : floats) {
-        if (floatBox->everHadLayout())
-            continue;
-        auto& box = floatBox->renderer();
-        if (!box.x() && !box.y() && box.checkForRepaintDuringLayout())
-            box.repaint();
-    }
-}
-
 static void repaintSelfPaintInlineBoxes(const LegacyRootInlineBox& firstRootInlineBox, const LegacyRootInlineBox& lastRootInlineBox)
 {
     for (auto* rootInlineBox = &firstRootInlineBox; rootInlineBox; rootInlineBox = rootInlineBox->nextRootBox()) {
@@ -1187,12 +666,6 @@ void LegacyLineLayout::layoutRunsAndFloats(LineLayoutState& layoutState, bool ha
     // We want to skip ahead to the first dirty line
     InlineBidiResolver resolver;
     LegacyRootInlineBox* startLine = determineStartPosition(layoutState, resolver);
-    
-    unsigned consecutiveHyphenatedLines = 0;
-    if (startLine) {
-        for (auto* line = startLine->prevRootBox(); line && line->isHyphenated(); line = line->prevRootBox())
-            consecutiveHyphenatedLines++;
-    }
 
     // FIXME: This would make more sense outside of this function, but since
     // determineStartPosition can change the fullLayout flag we have to do this here. Failure to call
@@ -1208,15 +681,11 @@ void LegacyLineLayout::layoutRunsAndFloats(LineLayoutState& layoutState, bool ha
         }
     }
 
-    if (m_flow.containsFloats())
-        layoutState.floatList().setLastFloat(m_flow.floatingObjects()->set().last().get());
-
     // We also find the first clean line and extract these lines. We will add them back
     // if we determine that we're able to synchronize after handling all our dirty lines.
     LegacyInlineIterator cleanLineStart;
-    BidiStatus cleanLineBidiStatus;
     if (!layoutState.isFullLayout() && startLine)
-        determineEndPosition(layoutState, startLine, cleanLineStart, cleanLineBidiStatus);
+        determineEndPosition(layoutState, startLine, cleanLineStart);
 
     if (startLine) {
         if (!layoutState.usesRepaintBounds())
@@ -1224,54 +693,26 @@ void LegacyLineLayout::layoutRunsAndFloats(LineLayoutState& layoutState, bool ha
         deleteLineRange(layoutState, startLine);
     }
 
-    if (!layoutState.isFullLayout() && lastRootBox() && lastRootBox()->endsWithBreak()) {
-        // If the last line before the start line ends with a line break that clear floats,
-        // adjust the height accordingly.
-        // A line break can be either the first or the last object on a line, depending on its direction.
-        if (LegacyInlineBox* lastLeafDescendant = lastRootBox()->lastLeafDescendant()) {
-            RenderObject* lastObject = &lastLeafDescendant->renderer();
-            if (!lastObject->isBR())
-                lastObject = &lastRootBox()->firstLeafDescendant()->renderer();
-            if (lastObject->isBR()) {
-                auto clear = RenderStyle::usedClear(*lastObject);
-                if (clear != UsedClear::None)
-                    m_flow.clearFloats(clear);
-            }
-        }
-    }
-
-    layoutRunsAndFloatsInRange(layoutState, resolver, cleanLineStart, cleanLineBidiStatus, consecutiveHyphenatedLines);
+    layoutRunsAndFloatsInRange(layoutState, resolver, cleanLineStart);
     linkToEndLineIfNeeded(layoutState);
-    repaintDirtyFloats(layoutState.floatList());
     if (firstRootBox())
         repaintSelfPaintInlineBoxes(*firstRootBox(), layoutState.endLine() ? *layoutState.endLine() : *lastRootBox());
 }
 
-// Before restarting the layout loop with a new logicalHeight, remove all floats that were added and reset the resolver.
-inline const LegacyInlineIterator& LegacyLineLayout::restartLayoutRunsAndFloatsInRange(LayoutUnit oldLogicalHeight, LayoutUnit newLogicalHeight,  FloatingObject* lastFloatFromPreviousLine, InlineBidiResolver& resolver,  const LegacyInlineIterator& oldEnd)
-{
-    m_flow.removeFloatingObjectsBelow(lastFloatFromPreviousLine, oldLogicalHeight);
-    m_flow.setLogicalHeight(newLogicalHeight);
-    resolver.setPositionIgnoringNestedIsolates(oldEnd);
-    return oldEnd;
-}
-
-void LegacyLineLayout::layoutRunsAndFloatsInRange(LineLayoutState& layoutState, InlineBidiResolver& resolver, const LegacyInlineIterator& cleanLineStart, const BidiStatus& cleanLineBidiStatus, unsigned consecutiveHyphenatedLines)
+void LegacyLineLayout::layoutRunsAndFloatsInRange(LineLayoutState& layoutState, InlineBidiResolver& resolver, const LegacyInlineIterator& cleanLineStart)
 {
     const RenderStyle& styleToUse = style();
-    bool paginated = layoutContext().layoutState() && layoutContext().layoutState()->isPaginated();
     LineWhitespaceCollapsingState& lineWhitespaceCollapsingState = resolver.whitespaceCollapsingState();
     LegacyInlineIterator end = resolver.position();
     bool checkForEndLineMatch = layoutState.endLine();
     RenderTextInfo renderTextInfo;
-    VerticalPositionCache verticalPositionCache;
 
     LineBreaker lineBreaker(m_flow);
 
     while (!end.atEnd()) {
         // FIXME: Is this check necessary before the first iteration or can it be moved to the end?
         if (checkForEndLineMatch) {
-            layoutState.setEndLineMatched(matchedEndLine(layoutState, resolver, cleanLineStart, cleanLineBidiStatus));
+            layoutState.setEndLineMatched(matchedEndLine(layoutState, resolver, cleanLineStart));
             if (layoutState.endLineMatched()) {
                 resolver.setPosition(LegacyInlineIterator(resolver.position().root(), 0, 0), 0);
                 layoutState.marginInfo().clearMargin();
@@ -1284,12 +725,10 @@ void LegacyLineLayout::layoutRunsAndFloatsInRange(LineLayoutState& layoutState, 
         layoutState.lineInfo().setEmpty(true);
         layoutState.lineInfo().resetRunsFromLeadingWhitespace();
 
-        const LegacyInlineIterator oldEnd = end;
         bool isNewUBAParagraph = layoutState.lineInfo().previousLineBrokeCleanly();
-        FloatingObject* lastFloatFromPreviousLine = (m_flow.containsFloats()) ? m_flow.floatingObjects()->set().last().get() : nullptr;
 
         WordMeasurements wordMeasurements;
-        end = lineBreaker.nextLineBreak(resolver, layoutState.lineInfo(), renderTextInfo, lastFloatFromPreviousLine, consecutiveHyphenatedLines, wordMeasurements);
+        end = lineBreaker.nextLineBreak(resolver, layoutState.lineInfo(), renderTextInfo, wordMeasurements);
         m_flow.cachePriorCharactersIfNeeded(renderTextInfo.lineBreakIteratorFactory);
         renderTextInfo.lineBreakIteratorFactory.priorContext().reset();
         if (resolver.position().atEnd()) {
@@ -1297,7 +736,6 @@ void LegacyLineLayout::layoutRunsAndFloatsInRange(LineLayoutState& layoutState, 
             // Once BidiRunList is separated from BidiResolver this will not be needed.
             resolver.runs().clear();
             resolver.markCurrentRunEmpty(); // FIXME: This can probably be replaced by an ASSERT (or just removed).
-            layoutState.setCheckForFloatsFromLastLine(true);
             resolver.setPosition(LegacyInlineIterator(resolver.position().root(), 0, 0), 0);
             break;
         }
@@ -1321,20 +759,14 @@ void LegacyLineLayout::layoutRunsAndFloatsInRange(LineLayoutState& layoutState, 
             constructBidiRunsForSegment(resolver, bidiRuns, end, override, layoutState.lineInfo().previousLineBrokeCleanly());
             ASSERT(resolver.position() == end);
 
-            BidiRun* trailingSpaceRun = !layoutState.lineInfo().previousLineBrokeCleanly() ? handleTrailingSpaces(bidiRuns, resolver.context()) : nullptr;
-
-            if (bidiRuns.runCount() && lineBreaker.lineWasHyphenated()) {
-                bidiRuns.logicallyLastRun()->m_hasHyphen = true;
-                consecutiveHyphenatedLines++;
-            } else
-                consecutiveHyphenatedLines = 0;
+            if (!layoutState.lineInfo().previousLineBrokeCleanly())
+                handleTrailingSpaces(bidiRuns, resolver.context());
 
             // Now that the runs have been ordered, we create the line boxes.
             // At the same time we figure out where border/padding/margin should be applied for
             // inline flow boxes.
 
-            LayoutUnit oldLogicalHeight = m_flow.logicalHeight();
-            LegacyRootInlineBox* lineBox = createLineBoxesFromBidiRuns(resolver.status().context->level(), bidiRuns, end, layoutState.lineInfo(), verticalPositionCache, trailingSpaceRun, wordMeasurements);
+            LegacyRootInlineBox* lineBox = createLineBoxesFromBidiRuns(resolver.status().context->level(), bidiRuns, end, layoutState.lineInfo());
 
             bidiRuns.clear();
             resolver.markCurrentRunEmpty(); // FIXME: This can probably be replaced by an ASSERT (or just removed).
@@ -1343,161 +775,16 @@ void LegacyLineLayout::layoutRunsAndFloatsInRange(LineLayoutState& layoutState, 
                 lineBox->setLineBreakInfo(end.renderer(), end.offset(), resolver.status());
                 if (layoutState.usesRepaintBounds())
                     layoutState.updateRepaintRangeFromBox(lineBox);
-                
-                LayoutUnit adjustment;
 
                 layoutState.marginInfo().setAtBeforeSideOfBlock(false);
-
-                if (paginated)
-                    m_flow.adjustLinePositionForPagination(lineBox, adjustment);
-                if (adjustment) {
-                    IndentTextOrNot shouldIndentText = layoutState.lineInfo().isFirstLine() ? IndentText : DoNotIndentText;
-                    LayoutUnit oldLineWidth = m_flow.availableLogicalWidthForLine(oldLogicalHeight, shouldIndentText);
-                    lineBox->adjustBlockDirectionPosition(adjustment);
-                    if (layoutState.usesRepaintBounds())
-                        layoutState.updateRepaintRangeFromBox(lineBox);
-
-                    if (m_flow.availableLogicalWidthForLine(oldLogicalHeight + adjustment, shouldIndentText) != oldLineWidth) {
-                        // We have to delete this line, remove all floats that got added, and let line layout re-run.
-                        lineBox->deleteLine();
-                        end = restartLayoutRunsAndFloatsInRange(oldLogicalHeight, oldLogicalHeight + adjustment, lastFloatFromPreviousLine, resolver, oldEnd);
-                        continue;
-                    }
-
-                    m_flow.setLogicalHeight(lineBox->lineBoxBottom());
-                }
-                    
-                if (paginated) {
-                    if (layoutState.fragmentedFlow())
-                        updateFragmentForLine(lineBox);
-                }
             }
         }
 
-        for (size_t i = 0; i < lineBreaker.positionedObjects().size(); ++i)
-            setStaticPositions(m_flow, *lineBreaker.positionedObjects()[i], DoNotIndentText);
-
-        if (!layoutState.lineInfo().isEmpty()) {
+        if (!layoutState.lineInfo().isEmpty())
             layoutState.lineInfo().setFirstLine(false);
-            m_flow.clearFloats(lineBreaker.usedClear());
-        }
-
-        if (m_flow.floatingObjects() && lastRootBox()) {
-            const FloatingObjectSet& floatingObjectSet = m_flow.floatingObjects()->set();
-            auto it = floatingObjectSet.begin();
-            auto end = floatingObjectSet.end();
-            if (auto* lastFloat = layoutState.floatList().lastFloat()) {
-                auto lastFloatIterator = floatingObjectSet.find(lastFloat);
-                ASSERT(lastFloatIterator != end);
-                ++lastFloatIterator;
-                it = lastFloatIterator;
-            }
-            for (; it != end; ++it) {
-                auto& floatingObject = *it;
-                appendFloatingObjectToLastLine(*floatingObject);
-                // If a float's geometry has changed, give up on syncing with clean lines.
-                auto* floatWithRect = layoutState.floatList().floatWithRect(floatingObject->renderer());
-                if (!floatWithRect || floatWithRect->rect() != floatingObject->frameRect())
-                    checkForEndLineMatch = false;
-            }
-            layoutState.floatList().setLastFloat(!floatingObjectSet.isEmpty() ? floatingObjectSet.last().get() : nullptr);
-        }
 
         lineWhitespaceCollapsingState.reset();
         resolver.setPosition(end, numberOfIsolateAncestors(end));
-    }
-
-    // In case we already adjusted the line positions during this layout to avoid widows
-    // then we need to ignore the possibility of having a new widows situation.
-    // Otherwise, we risk leaving empty containers which is against the block fragmentation principles.
-    if (paginated && !style().hasAutoWidows() && !m_flow.didBreakAtLineToAvoidWidow()) {
-        // Check the line boxes to make sure we didn't create unacceptable widows.
-        // However, we'll prioritize orphans - so nothing we do here should create
-        // a new orphan.
-
-        LegacyRootInlineBox* lineBox = lastRootBox();
-
-        // Count from the end of the block backwards, to see how many hanging
-        // lines we have.
-        LegacyRootInlineBox* firstLineInBlock = firstRootBox();
-        int numLinesHanging = 1;
-        while (lineBox && lineBox != firstLineInBlock && !lineBox->isFirstAfterPageBreak()) {
-            ++numLinesHanging;
-            lineBox = lineBox->prevRootBox();
-        }
-
-        // If there were no breaks in the block, we didn't create any widows.
-        if (!lineBox || !lineBox->isFirstAfterPageBreak() || lineBox == firstLineInBlock) {
-            if (m_flow.shouldBreakAtLineToAvoidWidow()) {
-                // This is the case when the previous line layout marks a line to break at to avoid widows
-                // but the current layout does not produce that line. It happens when layout constraints unexpectedly
-                // change in between layouts (note that these paginated line layouts run within the same layout frame
-                // as opposed to two subsequent full layouts).
-                ASSERT_NOT_REACHED();
-                m_flow.clearShouldBreakAtLineToAvoidWidow();
-            }
-            return;
-        }
-
-        if (numLinesHanging < style().widows()) {
-            // We have detected a widow. Now we need to work out how many
-            // lines there are on the previous page, and how many we need
-            // to steal.
-            int numLinesNeeded = style().widows() - numLinesHanging;
-            LegacyRootInlineBox* currentFirstLineOfNewPage = lineBox;
-
-            // Count the number of lines in the previous page.
-            lineBox = lineBox->prevRootBox();
-            int numLinesInPreviousPage = 1;
-            while (lineBox && lineBox != firstLineInBlock && !lineBox->isFirstAfterPageBreak()) {
-                ++numLinesInPreviousPage;
-                lineBox = lineBox->prevRootBox();
-            }
-
-            // If there was an explicit value for orphans, respect that. If not, we still
-            // shouldn't create a situation where we make an orphan bigger than the initial value.
-            // This means that setting widows implies we also care about orphans, but given
-            // the specification says the initial orphan value is non-zero, this is ok. The
-            // author is always free to set orphans explicitly as well.
-            int orphans = style().hasAutoOrphans() ? style().initialOrphans() : style().orphans();
-            int numLinesAvailable = numLinesInPreviousPage - orphans;
-            if (numLinesAvailable <= 0)
-                return;
-
-            int numLinesToTake = std::min(numLinesAvailable, numLinesNeeded);
-            // Wind back from our first widowed line.
-            lineBox = currentFirstLineOfNewPage;
-            for (int i = 0; i < numLinesToTake; ++i)
-                lineBox = lineBox->prevRootBox();
-
-            // We now want to break at this line. Remember for next layout and trigger relayout.
-            m_flow.setBreakAtLineToAvoidWidow(lineCountUntil(lineBox));
-            m_flow.markLinesDirtyInBlockRange(lastRootBox()->lineBoxBottom(), lineBox->lineBoxBottom(), lineBox);
-        }
-    }
-    m_flow.clearDidBreakAtLineToAvoidWidow();
-}
-
-void LegacyLineLayout::reattachCleanLineFloats(LegacyRootInlineBox& cleanLine, LayoutUnit delta, bool isFirstCleanLine)
-{
-    auto* cleanLineFloats = cleanLine.floatsPtr();
-    if (!cleanLineFloats)
-        return;
-
-    for (auto& floatingBox : *cleanLineFloats) {
-        if (!floatingBox)
-            continue;
-        auto* floatingObject = m_flow.insertFloatingObject(*floatingBox);
-        if (isFirstCleanLine && floatingObject->originatingLine()) {
-            // Float box does not belong to this line anymore.
-            ASSERT_WITH_SECURITY_IMPLICATION(cleanLine.prevRootBox() == floatingObject->originatingLine());
-            cleanLine.removeFloat(*floatingBox);
-            continue;
-        }
-        ASSERT_WITH_SECURITY_IMPLICATION(!floatingObject->originatingLine());
-        floatingObject->setOriginatingLine(cleanLine);
-        m_flow.setLogicalHeight(m_flow.logicalTopForChild(*floatingBox) - m_flow.marginBeforeForChild(*floatingBox) + delta);
-        m_flow.positionNewFloats();
     }
 }
 
@@ -1506,22 +793,14 @@ void LegacyLineLayout::linkToEndLineIfNeeded(LineLayoutState& layoutState)
     auto* firstCleanLine = layoutState.endLine();
     if (firstCleanLine) {
         if (layoutState.endLineMatched()) {
-            bool paginated = layoutContext().layoutState() && layoutContext().layoutState()->isPaginated();
             // Attach all the remaining lines, and then adjust their y-positions as needed.
             LayoutUnit delta = m_flow.logicalHeight() - layoutState.endLineLogicalTop();
             for (auto* line = firstCleanLine; line; line = line->nextRootBox()) {
                 line->attachLine();
-                if (paginated) {
-                    delta -= line->paginationStrut();
-                    m_flow.adjustLinePositionForPagination(line, delta);
-                }
                 if (delta) {
                     layoutState.updateRepaintRangeFromBox(line, delta);
                     line->adjustBlockDirectionPosition(delta);
                 }
-                if (layoutState.fragmentedFlow())
-                    updateFragmentForLine(line);
-                reattachCleanLineFloats(*line, delta, line == firstCleanLine);
             }
             m_flow.setLogicalHeight(lastRootBox()->lineBoxBottom());
         } else {
@@ -1529,75 +808,19 @@ void LegacyLineLayout::linkToEndLineIfNeeded(LineLayoutState& layoutState)
             deleteLineRange(layoutState, layoutState.endLine());
         }
     }
-    
-    if (m_flow.floatingObjects() && (layoutState.checkForFloatsFromLastLine() || m_flow.positionNewFloats()) && lastRootBox()) {
-        // In case we have a float on the last line, it might not be positioned up to now.
-        // This has to be done before adding in the bottom border/padding, or the float will
-        // include the padding incorrectly. -dwh
-        if (layoutState.checkForFloatsFromLastLine()) {
-            LayoutUnit bottomVisualOverflow = lastRootBox()->logicalBottomVisualOverflow();
-            LayoutUnit bottomLayoutOverflow = lastRootBox()->logicalBottomLayoutOverflow();
-            auto newLineBox = makeUnique<LegacyRootInlineBox>(m_flow);
-            newLineBox->setIsForTrailingFloats();
-            auto trailingFloatsLineBox = newLineBox.get();
-            m_lineBoxes.appendLineBox(WTFMove(newLineBox));
-            trailingFloatsLineBox->setConstructed();
-            GlyphOverflowAndFallbackFontsMap textBoxDataMap;
-            VerticalPositionCache verticalPositionCache;
-            LayoutUnit blockLogicalHeight = m_flow.logicalHeight();
-            trailingFloatsLineBox->alignBoxesInBlockDirection(blockLogicalHeight, textBoxDataMap, verticalPositionCache);
-            trailingFloatsLineBox->setLineTopBottomPositions(blockLogicalHeight, blockLogicalHeight, blockLogicalHeight, blockLogicalHeight);
-            trailingFloatsLineBox->setPaginatedLineWidth(m_flow.availableLogicalWidthForContent(blockLogicalHeight));
-            LayoutRect logicalLayoutOverflow(0_lu, blockLogicalHeight, 1_lu, bottomLayoutOverflow - blockLogicalHeight);
-            LayoutRect logicalVisualOverflow(0_lu, blockLogicalHeight, 1_lu, bottomVisualOverflow - blockLogicalHeight);
-            trailingFloatsLineBox->setOverflowFromLogicalRects(logicalLayoutOverflow, logicalVisualOverflow, trailingFloatsLineBox->lineTop(), trailingFloatsLineBox->lineBottom());
-            if (layoutState.fragmentedFlow())
-                updateFragmentForLine(trailingFloatsLineBox);
-        }
-
-        const FloatingObjectSet& floatingObjectSet = m_flow.floatingObjects()->set();
-        auto it = floatingObjectSet.begin();
-        auto end = floatingObjectSet.end();
-        if (auto* lastFloat = layoutState.floatList().lastFloat()) {
-            auto lastFloatIterator = floatingObjectSet.find(lastFloat);
-            ASSERT(lastFloatIterator != end);
-            ++lastFloatIterator;
-            it = lastFloatIterator;
-        }
-        for (; it != end; ++it)
-            appendFloatingObjectToLastLine(**it);
-        layoutState.floatList().setLastFloat(!floatingObjectSet.isEmpty() ? floatingObjectSet.last().get() : nullptr);
-    }
 }
 
 void LegacyLineLayout::layoutLineBoxes(bool relayoutChildren, LayoutUnit& repaintLogicalTop, LayoutUnit& repaintLogicalBottom)
 {
     m_flow.setLogicalHeight(m_flow.borderAndPaddingBefore());
-    
-    RenderFragmentedFlow* fragmentedFlow = m_flow.enclosingFragmentedFlow();
-    bool clearLinesForPagination = firstRootBox() && fragmentedFlow && !fragmentedFlow->hasFragments();
 
     // Figure out if we should clear out our line boxes.
     // FIXME: Handle resize eventually!
-    bool isFullLayout = !firstRootBox() || m_flow.selfNeedsLayout() || relayoutChildren || clearLinesForPagination;
-    LineLayoutState layoutState(m_flow, isFullLayout, repaintLogicalTop, repaintLogicalBottom, fragmentedFlow);
+    bool isFullLayout = !firstRootBox() || m_flow.selfNeedsLayout() || relayoutChildren;
+    LineLayoutState layoutState(m_flow, isFullLayout, repaintLogicalTop, repaintLogicalBottom);
 
     if (isFullLayout)
         lineBoxes().deleteLineBoxes();
-
-    // Text truncation kicks in in two cases:
-    //     1) If your overflow isn't visible and your text-overflow-mode isn't clip.
-    //     2) If you're an anonymous block with a block parent that satisfies #1.
-    // FIXME: CSS3 says that descendants that are clipped must also know how to truncate. This is insanely
-    // difficult to figure out in general (especially in the middle of doing layout), so we only handle the
-    // simple case of an anonymous block truncating when it's parent is clipped.
-    auto* parent = m_flow.parent();
-    bool hasTextOverflow = (style().textOverflow() == TextOverflow::Ellipsis && m_flow.hasNonVisibleOverflow())
-        || (m_flow.isAnonymousBlock() && parent && parent->isRenderBlock() && parent->style().textOverflow() == TextOverflow::Ellipsis && parent->hasNonVisibleOverflow());
-
-    // Walk all the lines and delete our ellipsis line boxes if they exist.
-    if (hasTextOverflow)
-        deleteEllipsisLineBoxes();
 
     if (m_flow.firstChild()) {
         // In full layout mode, clear the line boxes of children upfront. Otherwise,
@@ -1614,35 +837,11 @@ void LegacyLineLayout::layoutLineBoxes(bool relayoutChildren, LayoutUnit& repain
             if (!hasInlineChild && o.isInline())
                 hasInlineChild = true;
 
-            if (o.isReplacedOrInlineBlock() || o.isFloating() || o.isOutOfFlowPositioned()) {
-                RenderBox& box = downcast<RenderBox>(o);
-
-                if (relayoutChildren || box.hasRelativeDimensions())
-                    box.setChildNeedsLayout(MarkOnlyThis);
-
-                // If relayoutChildren is set and the child has percentage padding or an embedded content box, we also need to invalidate the childs pref widths.
-                if (relayoutChildren && box.needsPreferredWidthsRecalculation())
-                    box.setPreferredLogicalWidthsDirty(true, MarkOnlyThis);
-
-                if (box.isOutOfFlowPositioned())
-                    box.containingBlock()->insertPositionedObject(box);
-                else if (box.isFloating())
-                    layoutState.floatList().append(FloatWithRect::create(box));
-                else if (isFullLayout || box.needsLayout()) {
-                    // Replaced element.
-                    box.dirtyLineBoxes(isFullLayout);
-                    if (isFullLayout)
-                        replacedChildren.append(&box);
-                    else
-                        box.layoutIfNeeded();
-                }
-            } else if (o.isRenderTextOrLineBreak() || is<RenderInline>(o)) {
-                if (layoutState.isFullLayout() || o.selfNeedsLayout()) {
-                    dirtyLineBoxesForRenderer(o, layoutState.isFullLayout());
-                    hasDirtyRenderCounterWithInlineBoxParent = hasDirtyRenderCounterWithInlineBoxParent || (is<RenderCounter>(o) && is<RenderInline>(o.parent()));
-                }
-                o.clearNeedsLayout();
+            if (layoutState.isFullLayout() || o.selfNeedsLayout()) {
+                dirtyLineBoxesForRenderer(o, layoutState.isFullLayout());
+                hasDirtyRenderCounterWithInlineBoxParent = hasDirtyRenderCounterWithInlineBoxParent || (is<RenderCounter>(o) && is<RenderInline>(o.parent()));
             }
+            o.clearNeedsLayout();
         }
 
         for (size_t i = 0; i < replacedChildren.size(); i++)
@@ -1662,60 +861,15 @@ void LegacyLineLayout::layoutLineBoxes(bool relayoutChildren, LayoutUnit& repain
         layoutRunsAndFloats(layoutState, hasInlineChild);
     }
 
-    // Expand the last line to accommodate Ruby and emphasis marks.
-    int lastLineAnnotationsAdjustment = 0;
-    if (lastRootBox()) {
-        LayoutUnit lowestAllowedPosition = std::max(lastRootBox()->lineBottom(), m_flow.logicalHeight() + m_flow.paddingAfter());
-        if (!style().isFlippedLinesWritingMode())
-            lastLineAnnotationsAdjustment = lastRootBox()->computeUnderAnnotationAdjustment(lowestAllowedPosition);
-        else
-            lastLineAnnotationsAdjustment = lastRootBox()->computeOverAnnotationAdjustment(lowestAllowedPosition);
-    }
-    
     // Now do the handling of the bottom of the block, adding in our bottom border/padding and
     // determining the correct collapsed bottom margin information. This collapse is only necessary
     // if our last child was an anonymous inline block that might need to propagate margin information out to
     // us.
-    LayoutUnit afterEdge = m_flow.borderAndPaddingAfter() + m_flow.scrollbarLogicalHeight() + lastLineAnnotationsAdjustment;
+    LayoutUnit afterEdge = m_flow.borderAndPaddingAfter() + m_flow.scrollbarLogicalHeight();
     m_flow.setLogicalHeight(m_flow.logicalHeight() + afterEdge);
 
     if (!firstRootBox() && m_flow.hasLineIfEmpty())
         m_flow.setLogicalHeight(m_flow.logicalHeight() + m_flow.lineHeight(true, m_flow.isHorizontalWritingMode() ? HorizontalLine : VerticalLine, PositionOfInteriorLineBoxes));
-
-    // See if we have any lines that spill out of our block. If we do, then we will possibly need to
-    // truncate text.
-    if (hasTextOverflow)
-        checkLinesForTextOverflow();
-}
-
-void LegacyLineLayout::checkFloatInCleanLine(LegacyRootInlineBox& cleanLine, RenderBox& floatBoxOnCleanLine, FloatWithRect& matchingFloatWithRect,
-    bool& encounteredNewFloat, bool& dirtiedByFloat)
-{
-    ASSERT_WITH_SECURITY_IMPLICATION(!floatBoxOnCleanLine.style().deletionHasBegun());
-    if (&matchingFloatWithRect.renderer() != &floatBoxOnCleanLine) {
-        encounteredNewFloat = true;
-        return;
-    }
-    floatBoxOnCleanLine.layoutIfNeeded();
-    LayoutRect originalFloatRect = matchingFloatWithRect.rect();
-    LayoutSize newSize(
-        floatBoxOnCleanLine.width() + floatBoxOnCleanLine.horizontalMarginExtent(),
-        floatBoxOnCleanLine.height() + floatBoxOnCleanLine.verticalMarginExtent());
-    
-    // We have to reset the cap-height alignment done by the first-letter floats when initial-letter is set, so just always treat first-letter floats as dirty.
-    if (originalFloatRect.size() == newSize && (floatBoxOnCleanLine.style().pseudoElementType() != PseudoId::FirstLetter || !floatBoxOnCleanLine.style().initialLetterDrop()))
-        return;
-
-    LayoutUnit floatTop = m_flow.isHorizontalWritingMode() ? originalFloatRect.y() : originalFloatRect.x();
-    LayoutUnit floatHeight = m_flow.isHorizontalWritingMode() ? std::max(originalFloatRect.height(), newSize.height())
-        : std::max(originalFloatRect.width(), newSize.width());
-    floatHeight = std::min(floatHeight, LayoutUnit::max() - floatTop);
-    cleanLine.markDirty();
-    m_flow.markLinesDirtyInBlockRange(cleanLine.lineBoxBottom(), floatTop + floatHeight, &cleanLine);
-    LayoutRect newFloatRect = originalFloatRect;
-    newFloatRect.setSize(newSize);
-    matchingFloatWithRect.adjustRect(newFloatRect);
-    dirtiedByFloat = true;
 }
 
 LegacyRootInlineBox* LegacyLineLayout::determineStartPosition(LineLayoutState& layoutState, InlineBidiResolver& resolver)
@@ -1723,84 +877,19 @@ LegacyRootInlineBox* LegacyLineLayout::determineStartPosition(LineLayoutState& l
     LegacyRootInlineBox* currentLine = nullptr;
     LegacyRootInlineBox* lastLine = nullptr;
 
-    // FIXME: This entire float-checking block needs to be broken into a new function.
-    auto& floats = layoutState.floatList();
-    bool dirtiedByFloat = false;
-    if (!layoutState.isFullLayout()) {
-        // Paginate all of the clean lines.
-        bool paginated = layoutContext().layoutState() && layoutContext().layoutState()->isPaginated();
-        LayoutUnit paginationDelta;
-        auto floatsIterator = floats.begin();
-        auto end = floats.end();
-        for (currentLine = firstRootBox(); currentLine && !currentLine->isDirty(); currentLine = currentLine->nextRootBox()) {
-            if (paginated) {
-                if (lineWidthForPaginatedLineChanged(currentLine, 0, layoutState.fragmentedFlow())) {
-                    currentLine->markDirty();
-                    break;
-                }
-                paginationDelta -= currentLine->paginationStrut();
-                m_flow.adjustLinePositionForPagination(currentLine, paginationDelta);
-                if (paginationDelta) {
-                    if (m_flow.containsFloats() || !floats.isEmpty()) {
-                        // FIXME: Do better eventually. For now if we ever shift because of pagination and floats are present just go to a full layout.
-                        layoutState.markForFullLayout();
-                        break;
-                    }
-
-                    layoutState.updateRepaintRangeFromBox(currentLine, paginationDelta);
-                    currentLine->adjustBlockDirectionPosition(paginationDelta);
-                }
-                if (layoutState.fragmentedFlow())
-                    updateFragmentForLine(currentLine);
-            }
-
-            if (auto* cleanLineFloats = currentLine->floatsPtr()) {
-                // If a new float has been inserted before this line or before its last known float, just do a full layout.
-                bool encounteredNewFloat = false;
-                for (auto& floatBoxOnCleanLine : *cleanLineFloats) {
-                    ASSERT(floatsIterator != end);
-                    if (!floatBoxOnCleanLine)
-                        continue;
-                    checkFloatInCleanLine(*currentLine, *floatBoxOnCleanLine, *floatsIterator, encounteredNewFloat, dirtiedByFloat);
-                    ++floatsIterator;
-                    if (floatsIterator == end || encounteredNewFloat) {
-                        layoutState.markForFullLayout();
-                        break;
-                    }
-                }
-                if (dirtiedByFloat || encounteredNewFloat)
-                    break;
-            }
-        }
-        // Check if a new float has been inserted after the last known float.
-        if (floatsIterator != end) {
-            if (!currentLine)
-                layoutState.markForFullLayout();
-            else {
-                for (; floatsIterator != end; ++floatsIterator) {
-                    auto& floatWithRect = *floatsIterator;
-                    if (!floatWithRect->renderer().needsLayout())
-                        continue;
-                    layoutState.markForFullLayout();
-                    break;
-                }
-            }
-        }
-    }
-
     if (layoutState.isFullLayout()) {
         m_lineBoxes.deleteLineBoxTree();
-        currentLine = nullptr;
         ASSERT(!firstRootBox() && !lastRootBox());
     } else {
+        for (currentLine = firstRootBox(); currentLine && !currentLine->isDirty(); currentLine = currentLine->nextRootBox()) { }
         if (currentLine) {
             // We have a dirty line.
             if (LegacyRootInlineBox* prevRootBox = currentLine->prevRootBox()) {
                 // We have a previous line.
-                if (!dirtiedByFloat && (!prevRootBox->endsWithBreak()
+                if (!prevRootBox->endsWithBreak()
                     || !prevRootBox->lineBreakObj()
                     || (is<RenderText>(*prevRootBox->lineBreakObj())
-                    && prevRootBox->lineBreakPos() >= downcast<RenderText>(*prevRootBox->lineBreakObj()).text().length()))) {
+                    && prevRootBox->lineBreakPos() >= downcast<RenderText>(*prevRootBox->lineBreakObj()).text().length())) {
                     // The previous line didn't break cleanly or broke at a newline
                     // that has been deleted, so treat it as dirty too.
                     currentLine = prevRootBox;
@@ -1809,29 +898,6 @@ LegacyRootInlineBox* LegacyLineLayout::determineStartPosition(LineLayoutState& l
         }
         // If we have no dirty lines, then last is just the last root box.
         lastLine = currentLine ? currentLine->prevRootBox() : lastRootBox();
-    }
-
-    if (!floats.isEmpty()) {
-        LayoutUnit savedLogicalHeight = m_flow.logicalHeight();
-        // Restore floats from clean lines.
-        LegacyRootInlineBox* line = firstRootBox();
-        while (line != currentLine) {
-            if (auto* cleanLineFloats = line->floatsPtr()) {
-                for (auto& floatingBox : *cleanLineFloats) {
-                    if (!floatingBox)
-                        continue;
-                    auto* floatingObject = m_flow.insertFloatingObject(*floatingBox);
-                    ASSERT_WITH_SECURITY_IMPLICATION(!floatingObject->originatingLine() || floatingObject->originatingLine() == line);
-                    ASSERT(!floatingObject->originatingLine());
-                    floatingObject->setOriginatingLine(*line);
-                    m_flow.setLogicalHeight(m_flow.logicalTopForChild(*floatingBox) - m_flow.marginBeforeForChild(*floatingBox));
-                    m_flow.positionNewFloats();
-                    floats.setLastCleanFloat(*floatingBox);
-                }
-            }
-            line = line->nextRootBox();
-        }
-        m_flow.setLogicalHeight(savedLogicalHeight);
     }
 
     layoutState.lineInfo().setFirstLine(!lastLine);
@@ -1853,37 +919,11 @@ LegacyRootInlineBox* LegacyLineLayout::determineStartPosition(LineLayoutState& l
     return currentLine;
 }
 
-void LegacyLineLayout::determineEndPosition(LineLayoutState& layoutState, LegacyRootInlineBox* startLine, LegacyInlineIterator& cleanLineStart, BidiStatus& cleanLineBidiStatus)
+void LegacyLineLayout::determineEndPosition(LineLayoutState& layoutState, LegacyRootInlineBox* startLine, LegacyInlineIterator& cleanLineStart)
 {
-    auto iteratorForFirstDirtyFloat = [](LineLayoutState::FloatList& floats) {
-        auto lastCleanFloat = floats.lastCleanFloat();
-        if (!lastCleanFloat)
-            return floats.begin();
-        auto* lastCleanFloatWithRect = floats.floatWithRect(*lastCleanFloat);
-        ASSERT(lastCleanFloatWithRect);
-        return ++floats.find(*lastCleanFloatWithRect);
-    };
-
     ASSERT(!layoutState.endLine());
-    auto floatsIterator = iteratorForFirstDirtyFloat(layoutState.floatList());
-    auto end = layoutState.floatList().end();
     LegacyRootInlineBox* lastLine = nullptr;
     for (auto* currentLine = startLine->nextRootBox(); currentLine; currentLine = currentLine->nextRootBox()) {
-        if (!currentLine->isDirty()) {
-            if (auto* cleanLineFloats = currentLine->floatsPtr()) {
-                bool encounteredNewFloat = false;
-                bool dirtiedByFloat = false;
-                for (auto& floatBoxOnCleanLine : *cleanLineFloats) {
-                    if (!floatBoxOnCleanLine)
-                        continue;
-                    ASSERT(floatsIterator != end);
-                    checkFloatInCleanLine(*currentLine, *floatBoxOnCleanLine, *floatsIterator, encounteredNewFloat, dirtiedByFloat);
-                    ++floatsIterator;
-                    if (floatsIterator == end || encounteredNewFloat)
-                        return;
-                }
-            }
-        }
         if (currentLine->isDirty())
             lastLine = nullptr;
         else if (!lastLine)
@@ -1897,7 +937,6 @@ void LegacyLineLayout::determineEndPosition(LineLayoutState& layoutState, Legacy
     // in the block.
     LegacyRootInlineBox* previousLine = lastLine->prevRootBox();
     cleanLineStart = LegacyInlineIterator(&m_flow, previousLine->lineBreakObj(), previousLine->lineBreakPos());
-    cleanLineBidiStatus = previousLine->lineBreakBidiStatus();
     layoutState.setEndLineLogicalTop(previousLine->lineBoxBottom());
 
     for (auto* line = lastLine; line; line = line->nextRootBox()) {
@@ -1907,70 +946,10 @@ void LegacyLineLayout::determineEndPosition(LineLayoutState& layoutState, Legacy
     layoutState.setEndLine(lastLine);
 }
 
-bool LegacyLineLayout::checkPaginationAndFloatsAtEndLine(LineLayoutState& layoutState)
+bool LegacyLineLayout::matchedEndLine(LineLayoutState& layoutState, const InlineBidiResolver& resolver, const LegacyInlineIterator& endLineStart)
 {
-    LayoutUnit lineDelta = m_flow.logicalHeight() - layoutState.endLineLogicalTop();
-
-    bool paginated = layoutContext().layoutState() && layoutContext().layoutState()->isPaginated();
-    if (paginated && layoutState.fragmentedFlow()) {
-        // Check all lines from here to the end, and see if the hypothetical new position for the lines will result
-        // in a different available line width.
-        for (auto* lineBox = layoutState.endLine(); lineBox; lineBox = lineBox->nextRootBox()) {
-            if (paginated) {
-                // This isn't the real move we're going to do, so don't update the line box's pagination
-                // strut yet.
-                LayoutUnit oldPaginationStrut = lineBox->paginationStrut();
-                lineDelta -= oldPaginationStrut;
-                m_flow.adjustLinePositionForPagination(lineBox, lineDelta);
-                lineBox->setPaginationStrut(oldPaginationStrut);
-            }
-            if (lineWidthForPaginatedLineChanged(lineBox, lineDelta, layoutState.fragmentedFlow()))
-                return false;
-        }
-    }
-    
-    if (!lineDelta || !m_flow.floatingObjects())
-        return true;
-    
-    // See if any floats end in the range along which we want to shift the lines vertically.
-    LayoutUnit logicalTop = std::min(m_flow.logicalHeight(), layoutState.endLineLogicalTop());
-
-    LegacyRootInlineBox* lastLine = layoutState.endLine();
-    while (LegacyRootInlineBox* nextLine = lastLine->nextRootBox())
-        lastLine = nextLine;
-
-    LayoutUnit logicalBottom = lastLine->lineBoxBottom() + absoluteValue(lineDelta);
-
-    const FloatingObjectSet& floatingObjectSet = m_flow.floatingObjects()->set();
-    auto end = floatingObjectSet.end();
-    for (auto it = floatingObjectSet.begin(); it != end; ++it) {
-        const auto& floatingObject = *it->get();
-        if (m_flow.logicalBottomForFloat(floatingObject) >= logicalTop && m_flow.logicalBottomForFloat(floatingObject) < logicalBottom)
-            return false;
-    }
-
-    return true;
-}
-
-bool LegacyLineLayout::lineWidthForPaginatedLineChanged(LegacyRootInlineBox* rootBox, LayoutUnit lineDelta, RenderFragmentedFlow* fragmentedFlow) const
-{
-    if (!fragmentedFlow)
+    if (resolver.position() == endLineStart)
         return false;
-
-    RenderFragmentContainer* currentFragment = m_flow.fragmentAtBlockOffset(rootBox->lineBoxTop() + lineDelta);
-    // Just bail if the fragment didn't change.
-    if (rootBox->containingFragment() == currentFragment)
-        return false;
-    return rootBox->paginatedLineWidth() != m_flow.availableLogicalWidthForContent(currentFragment);
-}
-
-bool LegacyLineLayout::matchedEndLine(LineLayoutState& layoutState, const InlineBidiResolver& resolver, const LegacyInlineIterator& endLineStart, const BidiStatus& endLineStatus)
-{
-    if (resolver.position() == endLineStart) {
-        if (resolver.status() != endLineStatus)
-            return false;
-        return checkPaginationAndFloatsAtEndLine(layoutState);
-    }
 
     // The first clean line doesn't match, but we can check a handful of following lines to try
     // to match back up.
@@ -1988,7 +967,7 @@ bool LegacyLineLayout::matchedEndLine(LineLayoutState& layoutState, const Inline
             layoutState.setEndLine(result);
             if (result) {
                 layoutState.setEndLineLogicalTop(line->lineBoxBottom());
-                matched = checkPaginationAndFloatsAtEndLine(layoutState);
+                matched = true;
             }
 
             // Now delete the lines that we failed to sync.
@@ -2010,14 +989,9 @@ void LegacyLineLayout::addOverflowFromInlineChildren()
         endPadding = 1;
     for (auto* curr = firstRootBox(); curr; curr = curr->nextRootBox()) {
         m_flow.addLayoutOverflow(curr->paddedLayoutOverflowRect(endPadding));
-        RenderFragmentContainer* fragment = m_flow.enclosingFragmentedFlow() ? curr->containingFragment() : nullptr;
-        if (fragment)
-            fragment->addLayoutOverflowForBox(m_flow, curr->paddedLayoutOverflowRect(endPadding));
         if (!m_flow.hasNonVisibleOverflow()) {
             LayoutRect childVisualOverflowRect = curr->visualOverflowRect(curr->lineTop(), curr->lineBottom());
             m_flow.addVisualOverflow(childVisualOverflowRect);
-            if (fragment)
-                fragment->addVisualOverflowForBox(m_flow, childVisualOverflowRect);
         }
     }
 }
@@ -2041,155 +1015,6 @@ size_t LegacyLineLayout::lineCountUntil(const LegacyRootInlineBox* stopRootInlin
     }
 
     return count;
-}
-
-void LegacyLineLayout::deleteEllipsisLineBoxes()
-{
-    TextAlignMode textAlign = style().textAlign();
-    bool ltr = style().isLeftToRightDirection();
-    IndentTextOrNot shouldIndentText = IndentText;
-    for (auto* curr = firstRootBox(); curr; curr = curr->nextRootBox()) {
-        if (curr->hasEllipsisBox()) {
-            curr->clearTruncation();
-
-            // Shift the line back where it belongs if we cannot accomodate an ellipsis.
-            float logicalLeft = m_flow.logicalLeftOffsetForLine(curr->lineTop(), shouldIndentText);
-            float availableLogicalWidth = m_flow.logicalRightOffsetForLine(curr->lineTop(), DoNotIndentText) - logicalLeft;
-            float totalLogicalWidth = curr->logicalWidth();
-            updateLogicalWidthForAlignment(m_flow, textAlign, curr, 0, logicalLeft, totalLogicalWidth, availableLogicalWidth, 0);
-
-            if (ltr)
-                curr->adjustLogicalPosition((logicalLeft - curr->logicalLeft()), 0);
-            else
-                curr->adjustLogicalPosition(-(curr->logicalLeft() - logicalLeft), 0);
-        }
-        shouldIndentText = DoNotIndentText;
-    }
-}
-
-void LegacyLineLayout::checkLinesForTextOverflow()
-{
-    // Determine the width of the ellipsis using the current font.
-    // FIXME: CSS3 says this is configurable, also need to use 0x002E (FULL STOP) if horizontal ellipsis is "not renderable"
-    const FontCascade& font = style().fontCascade();
-    static MainThreadNeverDestroyed<const AtomString> ellipsisStr(&horizontalEllipsis, 1);
-    const FontCascade& firstLineFont = m_flow.firstLineStyle().fontCascade();
-    float firstLineEllipsisWidth = firstLineFont.width(m_flow.constructTextRun(&horizontalEllipsis, 1, m_flow.firstLineStyle()));
-    float ellipsisWidth = (font == firstLineFont) ? firstLineEllipsisWidth : font.width(m_flow.constructTextRun(&horizontalEllipsis, 1, style()));
-
-    // For LTR text truncation, we want to get the right edge of our padding box, and then we want to see
-    // if the right edge of a line box exceeds that. For RTL, we use the left edge of the padding box and
-    // check the left edge of the line box to see if it is less
-    // Include the scrollbar for overflow blocks, which means we want to use "contentWidth()"
-    bool ltr = style().isLeftToRightDirection();
-    TextAlignMode textAlign = style().textAlign();
-    bool firstLine = true;
-    for (auto* curr = firstRootBox(); curr; curr = curr->nextRootBox()) {
-        IndentTextOrNot shouldIndentText = firstLine ? IndentText : DoNotIndentText;
-        LayoutUnit blockRightEdge = m_flow.logicalRightOffsetForLine(curr->lineTop(), shouldIndentText);
-        LayoutUnit blockLeftEdge = m_flow.logicalLeftOffsetForLine(curr->lineTop(), shouldIndentText);
-        LayoutUnit lineBoxEdge { ltr ? curr->x() + curr->logicalWidth() : curr->x() };
-        if ((ltr && lineBoxEdge > blockRightEdge) || (!ltr && lineBoxEdge < blockLeftEdge)) {
-            // This line spills out of our box in the appropriate direction. Now we need to see if the line
-            // can be truncated. In order for truncation to be possible, the line must have sufficient space to
-            // accommodate our truncation string, and no replaced elements (images, tables) can overlap the ellipsis
-            // space.
-            LayoutUnit width { firstLine ? firstLineEllipsisWidth : ellipsisWidth };
-            LayoutUnit blockEdge { ltr ? blockRightEdge : blockLeftEdge };
-            if (curr->lineCanAccommodateEllipsis(ltr, blockEdge, lineBoxEdge, width)) {
-                float totalLogicalWidth = curr->placeEllipsis(ellipsisStr, ltr, blockLeftEdge, blockRightEdge, width);
-
-                float logicalLeft = 0; // We are only interested in the delta from the base position.
-                float truncatedWidth = m_flow.availableLogicalWidthForLine(curr->lineTop(), shouldIndentText);
-                updateLogicalWidthForAlignment(m_flow, textAlign, curr, nullptr, logicalLeft, totalLogicalWidth, truncatedWidth, 0);
-                if (ltr)
-                    curr->adjustLogicalPosition(logicalLeft, 0);
-                else
-                    curr->adjustLogicalPosition(-(truncatedWidth - (logicalLeft + totalLogicalWidth)), 0);
-            }
-        }
-        firstLine = false;
-    }
-}
-
-bool LegacyLineLayout::positionNewFloatOnLine(const FloatingObject& newFloat, FloatingObject* lastFloatFromPreviousLine, LineInfo& lineInfo, LineWidth& width)
-{
-    if (!m_flow.positionNewFloats())
-        return false;
-
-    width.shrinkAvailableWidthForNewFloatIfNeeded(newFloat);
-
-    // We only connect floats to lines for pagination purposes if the floats occur at the start of
-    // the line and the previous line had a hard break (so this line is either the first in the block
-    // or follows a <br>).
-    if (!newFloat.paginationStrut() || !lineInfo.previousLineBrokeCleanly() || !lineInfo.isEmpty())
-        return true;
-
-    const FloatingObjectSet& floatingObjectSet = m_flow.floatingObjects()->set();
-    ASSERT(floatingObjectSet.last().get() == &newFloat);
-
-    LayoutUnit floatLogicalTop = m_flow.logicalTopForFloat(newFloat);
-    LayoutUnit paginationStrut = newFloat.paginationStrut();
-
-    if (floatLogicalTop - paginationStrut != m_flow.logicalHeight() + lineInfo.floatPaginationStrut())
-        return true;
-
-    auto it = floatingObjectSet.end();
-    --it; // Last float is newFloat, skip that one.
-    auto begin = floatingObjectSet.begin();
-    while (it != begin) {
-        --it;
-        auto& floatingObject = *it->get();
-        if (&floatingObject == lastFloatFromPreviousLine)
-            break;
-        if (m_flow.logicalTopForFloat(floatingObject) == m_flow.logicalHeight() + lineInfo.floatPaginationStrut()) {
-            floatingObject.setPaginationStrut(paginationStrut + floatingObject.paginationStrut());
-            RenderBox& floatBox = floatingObject.renderer();
-            m_flow.setLogicalTopForChild(floatBox, m_flow.logicalTopForChild(floatBox) + m_flow.marginBeforeForChild(floatBox) + paginationStrut);
-
-            if (m_flow.updateFragmentRangeForBoxChild(floatBox))
-                floatBox.setNeedsLayout(MarkOnlyThis);
-            else if (auto* renderBlock = dynamicDowncast<RenderBlock>(floatBox))
-                renderBlock->setChildNeedsLayout(MarkOnlyThis);
-            floatBox.layoutIfNeeded();
-
-            // Save the old logical top before calling removePlacedObject which will set
-            // isPlaced to false. Otherwise it will trigger an assert in logicalTopForFloat.
-            LayoutUnit oldLogicalTop = m_flow.logicalTopForFloat(floatingObject);
-            m_flow.floatingObjects()->removePlacedObject(&floatingObject);
-            m_flow.setLogicalTopForFloat(floatingObject, oldLogicalTop + paginationStrut);
-            m_flow.floatingObjects()->addPlacedObject(&floatingObject);
-        }
-    }
-
-    // Just update the line info's pagination strut without altering our logical height yet. If the line ends up containing
-    // no content, then we don't want to improperly grow the height of the block.
-    lineInfo.setFloatPaginationStrut(lineInfo.floatPaginationStrut() + paginationStrut);
-    return true;
-}
-
-void LegacyLineLayout::updateFragmentForLine(LegacyRootInlineBox* lineBox) const
-{
-    ASSERT(lineBox);
-
-    if (!m_flow.hasFragmentRangeInFragmentedFlow())
-        lineBox->clearContainingFragment();
-    else {
-        if (auto containingFragment = m_flow.fragmentAtBlockOffset(lineBox->lineBoxTop()))
-            lineBox->setContainingFragment(*containingFragment);
-        else
-            lineBox->clearContainingFragment();
-    }
-
-    LegacyRootInlineBox* prevLineBox = lineBox->prevRootBox();
-    if (!prevLineBox)
-        return;
-
-    // This check is more accurate than the one in |adjustLinePositionForPagination| because it takes into
-    // account just the container changes between lines. The before mentioned function doesn't set the flag
-    // correctly if the line is positioned at the top of the last fragment container.
-    if (lineBox->containingFragment() != prevLineBox->containingFragment())
-        lineBox->setIsFirstAfterPageBreak(true);
 }
 
 const RenderStyle& LegacyLineLayout::style() const

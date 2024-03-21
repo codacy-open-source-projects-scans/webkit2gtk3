@@ -85,7 +85,6 @@
 #include "RenderView.h"
 #include "RenderWidget.h"
 #include "RenderedPosition.h"
-#include "RuntimeApplicationChecks.h"
 #include "Settings.h"
 #include "TextCheckerClient.h"
 #include "TextCheckingHelper.h"
@@ -117,11 +116,6 @@ AXID AccessibilityObject::treeID() const
 {
     auto* cache = axObjectCache();
     return cache ? cache->treeID() : AXID();
-}
-
-inline ProcessID AccessibilityObject::processID() const
-{
-    return presentingApplicationPID();
 }
 
 String AccessibilityObject::dbg() const
@@ -1933,10 +1927,6 @@ bool AccessibilityObject::dependsOnTextUnderElement() const
             break;
         FALLTHROUGH;
     case AccessibilityRole::Summary:
-        // The text node for a <summary> element should be included in its visible text, unless a title attribute is present.
-        if (!hasAttribute(titleAttr))
-            return true;
-        break;
     case AccessibilityRole::Button:
     case AccessibilityRole::ToggleButton:
     case AccessibilityRole::Checkbox:
@@ -2795,9 +2785,15 @@ static void initializeRoleMap()
     }
 
     // Create specific synonyms for the computedRole which is used in WPT tests and the accessibility inspector.
-    gAriaReverseRoleMap->set(enumToUnderlyingType(AccessibilityRole::Image), "image"_s);
-    gAriaReverseRoleMap->set(enumToUnderlyingType(AccessibilityRole::TextArea), "textbox"_s);
     gAriaReverseRoleMap->set(enumToUnderlyingType(AccessibilityRole::DateTime), "textbox"_s);
+    gAriaReverseRoleMap->set(enumToUnderlyingType(AccessibilityRole::TextArea), "textbox"_s);
+
+    gAriaReverseRoleMap->set(enumToUnderlyingType(AccessibilityRole::DescriptionListDetail), "definition"_s);
+    gAriaReverseRoleMap->set(enumToUnderlyingType(AccessibilityRole::DescriptionListTerm), "term"_s);
+    gAriaReverseRoleMap->set(enumToUnderlyingType(AccessibilityRole::Details), "group"_s);
+    gAriaReverseRoleMap->set(enumToUnderlyingType(AccessibilityRole::Image), "image"_s);
+    gAriaReverseRoleMap->set(enumToUnderlyingType(AccessibilityRole::ListBoxOption), "option"_s);
+    gAriaReverseRoleMap->set(enumToUnderlyingType(AccessibilityRole::MenuListOption), "option"_s);
     gAriaReverseRoleMap->set(enumToUnderlyingType(AccessibilityRole::Presentational), "none"_s);
 }
 
@@ -3009,7 +3005,7 @@ bool AccessibilityObject::supportsPressAction() const
         // Limit the amount of children we take. Some objects can have tens of thousands of children, so we don't want to unconditionally append `children()` to the candidate pool.
         const auto& children = candidate->children();
         if (size_t maxChildrenToTake = std::min(static_cast<size_t>(halfSearchLimit), candidatesLeftUntilLimit))
-            candidates.append(children.span().subspan(0, std::min(children.size(), maxChildrenToTake)));
+            candidates.append(children.subspan(0, std::min(children.size(), maxChildrenToTake)));
 
         // `candidates` should never be allowed to grow past `searchLimit`.
         ASSERT(searchLimit >= candidates.size());
@@ -4120,19 +4116,17 @@ Vector<Ref<Element>> AccessibilityObject::elementsFromAttribute(const QualifiedN
     if (!element)
         return { };
 
-    if (document()->settings().ariaReflectionForElementReferencesEnabled()) {
-        if (Element::isElementReflectionAttribute(document()->settings(), attribute)) {
-            if (RefPtr reflectedElement = element->getElementAttribute(attribute)) {
-                Vector<Ref<Element>> elements;
-                elements.append(reflectedElement.releaseNonNull());
-                return elements;
-            }
-        } else if (Element::isElementsArrayReflectionAttribute(document()->settings(), attribute)) {
-            if (auto reflectedElements = element->getElementsArrayAttribute(attribute)) {
-                return WTF::map(reflectedElements.value(), [](RefPtr<Element> element) -> Ref<Element> {
-                    return *element;
-                });
-            }
+    if (Element::isElementReflectionAttribute(document()->settings(), attribute)) {
+        if (RefPtr reflectedElement = element->getElementAttribute(attribute)) {
+            Vector<Ref<Element>> elements;
+            elements.append(reflectedElement.releaseNonNull());
+            return elements;
+        }
+    } else if (Element::isElementsArrayReflectionAttribute(attribute)) {
+        if (auto reflectedElements = element->getElementsArrayAttribute(attribute)) {
+            return WTF::map(reflectedElements.value(), [](RefPtr<Element> element) -> Ref<Element> {
+                return *element;
+            });
         }
     }
 

@@ -122,7 +122,7 @@ static void configureLayerAsGuard(CALayer *, NSString *) { }
 
 static NSString *interactionRegionGroupNameForRegion(const WebCore::PlatformLayerIdentifier& layerID, const WebCore::InteractionRegion& interactionRegion)
 {
-    return makeString("WKInteractionRegion-"_s, layerID.toString(), interactionRegion.elementIdentifier.toUInt64());
+    return makeString("WKInteractionRegion-"_s, interactionRegion.elementIdentifier.toUInt64());
 }
 
 static void configureRemoteEffect(CALayer *layer, WebCore::InteractionRegion::Type type, NSString *groupName)
@@ -289,9 +289,9 @@ void updateLayersForInteractionRegions(RemoteLayerTreeNode& node)
             [regionLayer setCornerRadius:region.cornerRadius];
             if (region.cornerRadius)
                 [regionLayer setCornerCurve:kCACornerCurveCircular];
-
+#if PLATFORM(VISION)
             reconfigureLayerContentHint(regionLayer.get(), region.contentHint);
-
+#endif
             constexpr CACornerMask allCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner | kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
             if (region.maskedCorners.isEmpty())
                 [regionLayer setMaskedCorners:allCorners];

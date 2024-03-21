@@ -50,6 +50,7 @@
 #import <pal/spi/cocoa/AVFoundationSPI.h>
 #import <wtf/Scope.h>
 #import <wtf/WorkQueue.h>
+#include <wtf/cocoa/VectorCocoa.h>
 
 #import "CoreVideoSoftLink.h"
 #import <pal/cocoa/AVFoundationSoftLink.h>
@@ -968,6 +969,7 @@ bool AVVideoCaptureSource::setupSession()
 
 #if ENABLE(EXTENSION_CAPABILITIES)
     String mediaEnvironment = RealtimeMediaSourceCenter::singleton().currentMediaEnvironment();
+    WARNING_LOG_IF(loggerPtr() && mediaEnvironment.isEmpty(), "Media environment is empty");
     // FIXME (119325252): Remove staging code for -[AVCaptureSession initWithMediaEnvironment:]
     if (!mediaEnvironment.isEmpty() && [PAL::getAVCaptureSessionClass() instancesRespondToSelector:@selector(initWithMediaEnvironment:)])
         m_session = adoptNS([PAL::allocAVCaptureSessionInstance() initWithMediaEnvironment:mediaEnvironment]);
@@ -1150,7 +1152,7 @@ void AVVideoCaptureSource::captureOutputDidFinishProcessingPhoto(RetainPtr<AVCap
     }
 
     NSData* data = [photo fileDataRepresentation];
-    resolvePendingPhotoRequest({ static_cast<const uint8_t*>(data.bytes), data.length }, "image/jpeg"_s);
+    resolvePendingPhotoRequest(toVector(data), "image/jpeg"_s);
 }
 
 void AVVideoCaptureSource::captureSessionIsRunningDidChange(bool state)

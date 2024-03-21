@@ -102,6 +102,7 @@
 #include <JavaScriptCore/WasmModule.h>
 #include <JavaScriptCore/YarrFlags.h>
 #include <limits>
+#include <optional>
 #include <wtf/CheckedArithmetic.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/DataLog.h>
@@ -116,6 +117,7 @@
 
 #if PLATFORM(COCOA)
 #include <CoreFoundation/CoreFoundation.h>
+#include <wtf/cf/VectorCF.h>
 #endif
 
 #if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
@@ -155,8 +157,9 @@ enum class SerializationReturnCode {
     UnspecifiedError
 };
 
-enum WalkerState { StateUnknown, ArrayStartState, ArrayStartVisitMember, ArrayEndVisitMember,
-    ObjectStartState, ObjectStartVisitMember, ObjectEndVisitMember,
+enum WalkerState { StateUnknown, ArrayStartState, ArrayStartVisitIndexedMember, ArrayEndVisitIndexedMember,
+    ArrayStartVisitNamedMember, ArrayEndVisitNamedMember,
+    ObjectStartState, ObjectStartVisitNamedMember, ObjectEndVisitNamedMember,
     MapDataStartVisitEntry, MapDataEndVisitKey, MapDataEndVisitValue,
     SetDataStartVisitEntry, SetDataEndVisitKey };
 
@@ -935,28 +938,35 @@ protected:
 
     JSGlobalObject* const m_lexicalGlobalObject;
     bool m_failed;
+    MarkedArgumentBuffer m_keepAliveBuffer;
     MarkedArgumentBuffer m_objectPool;
 #if ASSERT_ENABLED
     Vector<SerializationTag> m_objectPoolTags;
 #endif
 };
 
-static bool wrapCryptoKey(JSGlobalObject* lexicalGlobalObject, const Vector<uint8_t>& key, Vector<uint8_t>& wrappedKey)
+static std::optional<Vector<uint8_t>> wrapCryptoKey(JSGlobalObject* lexicalGlobalObject, const Vector<uint8_t>& key)
 {
     auto context = executionContext(lexicalGlobalObject);
-    return context && context->wrapCryptoKey(key, wrappedKey);
+    if (!context)
+        return std::nullopt;
+
+    return context->wrapCryptoKey(key);
 }
 
-static bool unwrapCryptoKey(JSGlobalObject* lexicalGlobalObject, const Vector<uint8_t>& wrappedKey, Vector<uint8_t>& key)
+static std::optional<Vector<uint8_t>> unwrapCryptoKey(JSGlobalObject* lexicalGlobalObject, const Vector<uint8_t>& wrappedKey)
 {
     auto context = executionContext(lexicalGlobalObject);
-    return context && context->unwrapCryptoKey(wrappedKey, key);
+    if (!context)
+        return std::nullopt;
+
+    return context->unwrapCryptoKey(wrappedKey);
 }
 
 #if ASSUME_LITTLE_ENDIAN
 template <typename T> static void writeLittleEndian(Vector<uint8_t>& buffer, T value)
 {
-    buffer.append(reinterpret_cast<uint8_t*>(&value), sizeof(value));
+    buffer.append(std::span { reinterpret_cast<uint8_t*>(&value), sizeof(value) });
 }
 #else
 template <typename T> static void writeLittleEndian(Vector<uint8_t>& buffer, T value)
@@ -973,15 +983,15 @@ template <> void writeLittleEndian<uint8_t>(Vector<uint8_t>& buffer, uint8_t val
     buffer.append(value);
 }
 
-template <typename T> static bool writeLittleEndian(Vector<uint8_t>& buffer, const T* values, uint32_t length)
+template <typename T> static bool writeLittleEndian(Vector<uint8_t>& buffer, std::span<const T> values)
 {
-    if (length > std::numeric_limits<uint32_t>::max() / sizeof(T))
+    if (values.size() > std::numeric_limits<uint32_t>::max() / sizeof(T))
         return false;
 
 #if ASSUME_LITTLE_ENDIAN
-    buffer.append(reinterpret_cast<const uint8_t*>(values), length * sizeof(T));
+    buffer.append(std::span { reinterpret_cast<const uint8_t*>(values.data()), values.size() * sizeof(T) });
 #else
-    for (unsigned i = 0; i < length; i++) {
+    for (unsigned i = 0; i < values.size(); i++) {
         T value = values[i];
         for (unsigned j = 0; j < sizeof(T); j++) {
             buffer.append(static_cast<uint8_t>(value & 0xFF));
@@ -992,9 +1002,9 @@ template <typename T> static bool writeLittleEndian(Vector<uint8_t>& buffer, con
     return true;
 }
 
-template <> bool writeLittleEndian<uint8_t>(Vector<uint8_t>& buffer, const uint8_t* values, uint32_t length)
+template <> bool writeLittleEndian<uint8_t>(Vector<uint8_t>& buffer, std::span<const uint8_t> values)
 {
-    buffer.append(values, length);
+    buffer.append(values);
     return true;
 }
 
@@ -1083,10 +1093,10 @@ public:
         writeLittleEndian<uint8_t>(out, StringTag);
         if (string.is8Bit()) {
             writeLittleEndian(out, string.length() | StringDataIs8BitFlag);
-            return writeLittleEndian(out, string.characters8(), string.length());
+            return writeLittleEndian(out, string.span8());
         }
         writeLittleEndian(out, string.length());
-        return writeLittleEndian(out, string.characters16(), string.length());
+        return writeLittleEndian(out, string.span16());
     }
 
 #if ASSERT_ENABLED
@@ -1601,7 +1611,7 @@ private:
             return;
         }
         write(byteLength);
-        write(static_cast<const uint8_t*>(arrayBuffer->data()), byteLength);
+        write(arrayBuffer->bytes());
     }
 
 #if ENABLE(OFFSCREEN_CANVAS_IN_WORKERS)
@@ -1844,7 +1854,7 @@ private:
                     return true;
                 }
                 write(dataLength);
-                write(data->data().data(), dataLength);
+                write(data->data().bytes());
                 write(data->colorSpace());
                 return true;
             }
@@ -1965,7 +1975,7 @@ private:
                     write(byteLength);
                     uint64_t maxByteLength = arrayBuffer->maxByteLength().value_or(0);
                     write(maxByteLength);
-                    write(static_cast<const uint8_t*>(arrayBuffer->data()), byteLength);
+                    write(arrayBuffer->bytes());
                     return true;
                 }
 
@@ -1973,7 +1983,7 @@ private:
                 write(ArrayBufferTag);
                 uint64_t byteLength = arrayBuffer->byteLength();
                 write(byteLength);
-                write(static_cast<const uint8_t*>(arrayBuffer->data()), byteLength);
+                write(arrayBuffer->bytes());
                 return true;
             }
             if (obj->inherits<JSArrayBufferView>()) {
@@ -2038,10 +2048,12 @@ private:
 #endif
                     dummyBlobHandles, serializedKey, SerializationContext::Default, dummySharedBuffers, m_forStorage);
                 rawKeySerializer.write(key);
-                Vector<uint8_t> wrappedKey;
-                if (!wrapCryptoKey(m_lexicalGlobalObject, serializedKey, wrappedKey))
+
+                auto wrappedKey = wrapCryptoKey(m_lexicalGlobalObject, serializedKey);
+                if (!wrappedKey)
                     return false;
-                write(wrappedKey);
+
+                write(*wrappedKey);
                 return true;
             }
 #if ENABLE(WEB_RTC)
@@ -2308,11 +2320,11 @@ private:
         if (!length)
             return;
         if (str.is8Bit()) {
-            if (!writeLittleEndian(m_buffer, str.characters8(), length))
+            if (!writeLittleEndian(m_buffer, str.span8()))
                 fail();
             return;
         }
-        if (!writeLittleEndian(m_buffer, str.characters16(), length))
+        if (!writeLittleEndian(m_buffer, str.span16()))
             fail();
     }
 
@@ -2336,7 +2348,7 @@ private:
     {
         uint32_t size = vector.size();
         write(size);
-        writeLittleEndian(m_buffer, vector.data(), size);
+        writeLittleEndian(m_buffer, vector.span());
     }
 
     void write(const File& file)
@@ -2366,9 +2378,9 @@ private:
 #if PLATFORM(COCOA)
     void write(const RetainPtr<CFDataRef>& data)
     {
-        uint32_t dataLength = CFDataGetLength(data.get());
-        write(dataLength);
-        write(CFDataGetBytePtr(data.get()), dataLength);
+        auto span = toSpan(data.get());
+        write(static_cast<uint32_t>(span.size()));
+        write(span);
     }
 #endif
 
@@ -2628,9 +2640,9 @@ private:
         }
     }
 
-    void write(const uint8_t* data, unsigned length)
+    void write(std::span<const uint8_t> data)
     {
-        m_buffer.append(data, length);
+        m_buffer.append(data);
     }
 
     Vector<uint8_t>& m_buffer;
@@ -2674,7 +2686,6 @@ private:
 #endif
     SerializationForStorage m_forStorage;
 
-    MarkedArgumentBuffer m_keepAliveBuffer;
 #if ASSERT_ENABLED
     bool m_didSeeComplexCases { false };
 #endif
@@ -2712,9 +2723,9 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
                 indexStack.append(0);
                 lengthStack.append(length);
             }
-            arrayStartVisitMember:
+            arrayStartVisitIndexedMember:
             FALLTHROUGH;
-            case ArrayStartVisitMember: {
+            case ArrayStartVisitIndexedMember: {
                 JSObject* array = inputObjectStack.last();
                 uint32_t index = indexStack.last();
                 if (index == lengthStack.last()) {
@@ -2729,7 +2740,7 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
                     if (propertyStack.last().size()) {
                         write(NonIndexPropertiesTag);
                         indexStack.append(0);
-                        goto objectStartVisitMember;
+                        goto startVisitNamedMember;
                     }
                     propertyStack.removeLast();
 
@@ -2742,7 +2753,7 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
                     return SerializationReturnCode::ExistingExceptionError;
                 if (!inValue) {
                     indexStack.last()++;
-                    goto arrayStartVisitMember;
+                    goto arrayStartVisitIndexedMember;
                 }
 
                 write(index);
@@ -2751,15 +2762,18 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
                     if (terminalCode != SerializationReturnCode::SuccessfullyCompleted)
                         return terminalCode;
                     indexStack.last()++;
-                    goto arrayStartVisitMember;
+                    goto arrayStartVisitIndexedMember;
                 }
-                stateStack.append(ArrayEndVisitMember);
+                stateStack.append(ArrayEndVisitIndexedMember);
                 goto stateUnknown;
             }
-            case ArrayEndVisitMember: {
+            case ArrayEndVisitIndexedMember: {
                 indexStack.last()++;
-                goto arrayStartVisitMember;
+                goto arrayStartVisitIndexedMember;
             }
+            case ArrayStartVisitNamedMember:
+            case ArrayEndVisitNamedMember:
+                RELEASE_ASSERT_NOT_REACHED();
             objectStartState:
             case ObjectStartState: {
                 ASSERT(inValue.isObject());
@@ -2782,9 +2796,9 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
                 if (UNLIKELY(scope.exception()))
                     return SerializationReturnCode::ExistingExceptionError;
             }
-            objectStartVisitMember:
+            startVisitNamedMember:
             FALLTHROUGH;
-            case ObjectStartVisitMember: {
+            case ObjectStartVisitNamedMember: {
                 JSObject* object = inputObjectStack.last();
                 uint32_t index = indexStack.last();
                 PropertyNameArray& properties = propertyStack.last();
@@ -2802,7 +2816,7 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
                 if (!inValue) {
                     // Property was removed during serialisation
                     indexStack.last()++;
-                    goto objectStartVisitMember;
+                    goto startVisitNamedMember;
                 }
                 write(properties[index]);
 
@@ -2811,19 +2825,19 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
 
                 auto terminalCode = SerializationReturnCode::SuccessfullyCompleted;
                 if (!dumpIfTerminal(inValue, terminalCode)) {
-                    stateStack.append(ObjectEndVisitMember);
+                    stateStack.append(ObjectEndVisitNamedMember);
                     goto stateUnknown;
                 }
                 if (terminalCode != SerializationReturnCode::SuccessfullyCompleted)
                     return terminalCode;
                 FALLTHROUGH;
             }
-            case ObjectEndVisitMember: {
+            case ObjectEndVisitNamedMember: {
                 if (UNLIKELY(scope.exception()))
                     return SerializationReturnCode::ExistingExceptionError;
 
                 indexStack.last()++;
-                goto objectStartVisitMember;
+                goto startVisitNamedMember;
             }
             mapStartState: {
                 ASSERT(inValue.isObject());
@@ -2853,7 +2867,7 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
                         return SerializationReturnCode::ExistingExceptionError;
                     write(NonMapPropertiesTag);
                     indexStack.append(0);
-                    goto objectStartVisitMember;
+                    goto startVisitNamedMember;
                 }
                 inValue = key;
                 m_keepAliveBuffer.appendWithCrashOnOverflow(value);
@@ -2899,7 +2913,7 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
                         return SerializationReturnCode::ExistingExceptionError;
                     write(NonSetPropertiesTag);
                     indexStack.append(0);
-                    goto objectStartVisitMember;
+                    goto startVisitNamedMember;
                 }
                 inValue = key;
                 stateStack.append(SetDataEndVisitKey);
@@ -3067,10 +3081,13 @@ private:
         {
         }
 
-        JSValue jsString(JSGlobalObject* lexicalGlobalObject)
+        JSValue jsString(CloneDeserializer& deserializer)
         {
-            if (!m_jsString)
-                m_jsString = JSC::jsString(lexicalGlobalObject->vm(), m_string);
+            if (!m_jsString) {
+                auto& vm = deserializer.m_lexicalGlobalObject->vm();
+                m_jsString = JSC::jsString(vm, m_string);
+                deserializer.m_keepAliveBuffer.appendWithCrashOnOverflow(m_jsString);
+            }
             return m_jsString;
         }
         const String& string() { return m_string; }
@@ -3248,6 +3265,47 @@ private:
     {
         if (!read(m_version))
             m_version = 0xFFFFFFFF;
+    }
+
+    enum class VisitNamedMemberResult : uint8_t { Error, Break, Start, Unknown };
+
+    template<WalkerState endState>
+    ALWAYS_INLINE VisitNamedMemberResult startVisitNamedMember(MarkedVector<JSObject*, 32>& outputObjectStack, Vector<Identifier, 16>& propertyNameStack, Vector<WalkerState, 16>& stateStack, JSValue& outValue)
+    {
+        static_assert(endState == ArrayEndVisitNamedMember || endState == ObjectEndVisitNamedMember);
+        VM& vm = m_lexicalGlobalObject->vm();
+        CachedStringRef cachedString;
+        bool wasTerminator = false;
+        if (!readStringData(cachedString, wasTerminator, ShouldAtomize::Yes)) {
+            if (!wasTerminator) {
+                SERIALIZE_TRACE("FAIL deserialize");
+                return VisitNamedMemberResult::Error;
+            }
+
+            JSObject* outObject = outputObjectStack.last();
+            outValue = outObject;
+            outputObjectStack.removeLast();
+            return VisitNamedMemberResult::Break;
+        }
+
+        Identifier identifier = Identifier::fromString(vm, cachedString->string());
+        if constexpr (endState == ArrayEndVisitNamedMember)
+            RELEASE_ASSERT(identifier != vm.propertyNames->length);
+
+        if (JSValue terminal = readTerminal()) {
+            putProperty(outputObjectStack.last(), identifier, terminal);
+            return VisitNamedMemberResult::Start;
+        }
+
+        stateStack.append(endState);
+        propertyNameStack.append(identifier);
+        return VisitNamedMemberResult::Unknown;
+    }
+
+    ALWAYS_INLINE void objectEndVisitNamedMember(MarkedVector<JSObject*, 32>& outputObjectStack, Vector<Identifier, 16>& propertyNameStack, JSValue& outValue)
+    {
+        putProperty(outputObjectStack.last(), propertyNameStack.last(), outValue);
+        propertyNameStack.removeLast();
     }
 
     DeserializationResult deserialize();
@@ -3701,9 +3759,9 @@ private:
         uint32_t size;
         if (!read(size))
             return false;
-        if (m_ptr + size > m_end)
+        if (static_cast<uint32_t>(m_end - m_ptr) < size)
             return false;
-        result.append(m_ptr, size);
+        result.append(std::span { m_ptr, size });
         m_ptr += size;
         return true;
     }
@@ -4895,7 +4953,7 @@ private:
             CachedStringRef cachedString;
             if (!readStringData(cachedString))
                 return JSValue();
-            return cachedString->jsString(m_lexicalGlobalObject);
+            return cachedString->jsString(*this);
         }
         case EmptyStringTag:
             return jsEmptyString(m_lexicalGlobalObject->vm());
@@ -4903,7 +4961,7 @@ private:
             CachedStringRef cachedString;
             if (!readStringData(cachedString))
                 return JSValue();
-            StringObject* obj = constructString(m_lexicalGlobalObject->vm(), m_globalObject, cachedString->jsString(m_lexicalGlobalObject));
+            StringObject* obj = constructString(m_lexicalGlobalObject->vm(), m_globalObject, cachedString->jsString(*this));
             addToObjectPool<StringObjectTag>(obj);
             return obj;
         }
@@ -5152,15 +5210,16 @@ private:
                 fail();
                 return JSValue();
             }
-            Vector<uint8_t> serializedKey;
-            if (!unwrapCryptoKey(m_lexicalGlobalObject, wrappedKey, serializedKey)) {
+            auto serializedKey = unwrapCryptoKey(m_lexicalGlobalObject, wrappedKey);
+            if (!serializedKey) {
                 SERIALIZE_TRACE("FAIL deserialize");
                 fail();
                 return JSValue();
             }
+
             JSValue cryptoKey;
             Vector<RefPtr<MessagePort>> dummyMessagePorts;
-            CloneDeserializer rawKeyDeserializer(m_lexicalGlobalObject, m_globalObject, dummyMessagePorts, nullptr, { }, serializedKey);
+            CloneDeserializer rawKeyDeserializer(m_lexicalGlobalObject, m_globalObject, dummyMessagePorts, nullptr, { }, *serializedKey);
             if (!rawKeyDeserializer.readCryptoKey(cryptoKey)) {
                 SERIALIZE_TRACE("FAIL deserialize");
                 fail();
@@ -5336,9 +5395,9 @@ DeserializationResult CloneDeserializer::deserialize()
             addToObjectPool<ArrayTag>(outArray);
             outputObjectStack.append(outArray);
         }
-        arrayStartVisitMember:
+        arrayStartVisitIndexedMember:
         FALLTHROUGH;
-        case ArrayStartVisitMember: {
+        case ArrayStartVisitIndexedMember: {
             uint32_t index;
             if (!read(index)) {
                 SERIALIZE_TRACE("FAIL deserialize");
@@ -5363,7 +5422,7 @@ DeserializationResult CloneDeserializer::deserialize()
                         break;
                     }
                     if (index == NonIndexPropertiesTag)
-                        goto objectStartVisitMember;
+                        goto arrayStartVisitNamedMember;
                 }
             } else {
                 if (index == TerminatorTag) {
@@ -5372,24 +5431,42 @@ DeserializationResult CloneDeserializer::deserialize()
                     outputObjectStack.removeLast();
                     break;
                 } else if (index == NonIndexPropertiesTag)
-                    goto objectStartVisitMember;
+                    goto arrayStartVisitNamedMember;
             }
 
             if (JSValue terminal = readTerminal()) {
                 putProperty(outputObjectStack.last(), index, terminal);
-                goto arrayStartVisitMember;
+                goto arrayStartVisitIndexedMember;
             }
             if (m_failed)
                 goto error;
             indexStack.append(index);
-            stateStack.append(ArrayEndVisitMember);
+            stateStack.append(ArrayEndVisitIndexedMember);
             goto stateUnknown;
         }
-        case ArrayEndVisitMember: {
+        case ArrayEndVisitIndexedMember: {
             JSObject* outArray = outputObjectStack.last();
             putProperty(outArray, indexStack.last(), outValue);
             indexStack.removeLast();
-            goto arrayStartVisitMember;
+            goto arrayStartVisitIndexedMember;
+        }
+        arrayStartVisitNamedMember:
+        case ArrayStartVisitNamedMember: {
+            switch (startVisitNamedMember<ArrayEndVisitNamedMember>(outputObjectStack, propertyNameStack, stateStack, outValue)) {
+            case VisitNamedMemberResult::Error:
+                goto error;
+            case VisitNamedMemberResult::Break:
+                break;
+            case VisitNamedMemberResult::Start:
+                goto arrayStartVisitNamedMember;
+            case VisitNamedMemberResult::Unknown:
+                goto stateUnknown;
+            }
+            break;
+        }
+        case ArrayEndVisitNamedMember: {
+            objectEndVisitNamedMember(outputObjectStack, propertyNameStack, outValue);
+            goto arrayStartVisitNamedMember;
         }
         objectStartState:
         case ObjectStartState: {
@@ -5399,35 +5476,24 @@ DeserializationResult CloneDeserializer::deserialize()
             addToObjectPool<ObjectTag>(outObject);
             outputObjectStack.append(outObject);
         }
-        objectStartVisitMember:
+        startVisitNamedMember:
         FALLTHROUGH;
-        case ObjectStartVisitMember: {
-            CachedStringRef cachedString;
-            bool wasTerminator = false;
-            if (!readStringData(cachedString, wasTerminator, ShouldAtomize::Yes)) {
-                if (!wasTerminator) {
-                    SERIALIZE_TRACE("FAIL deserialize");
-                    goto error;
-                }
-
-                JSObject* outObject = outputObjectStack.last();
-                outValue = outObject;
-                outputObjectStack.removeLast();
+        case ObjectStartVisitNamedMember: {
+            switch (startVisitNamedMember<ObjectEndVisitNamedMember>(outputObjectStack, propertyNameStack, stateStack, outValue)) {
+            case VisitNamedMemberResult::Error:
+                goto error;
+            case VisitNamedMemberResult::Break:
                 break;
+            case VisitNamedMemberResult::Start:
+                goto startVisitNamedMember;
+            case VisitNamedMemberResult::Unknown:
+                goto stateUnknown;
             }
-
-            if (JSValue terminal = readTerminal()) {
-                putProperty(outputObjectStack.last(), Identifier::fromString(vm, cachedString->string()), terminal);
-                goto objectStartVisitMember;
-            }
-            stateStack.append(ObjectEndVisitMember);
-            propertyNameStack.append(Identifier::fromString(vm, cachedString->string()));
-            goto stateUnknown;
+            break;
         }
-        case ObjectEndVisitMember: {
-            putProperty(outputObjectStack.last(), propertyNameStack.last(), outValue);
-            propertyNameStack.removeLast();
-            goto objectStartVisitMember;
+        case ObjectEndVisitNamedMember: {
+            objectEndVisitNamedMember(outputObjectStack, propertyNameStack, outValue);
+            goto startVisitNamedMember;
         }
         mapStartState: {
             if (outputObjectStack.size() > maximumFilterRecursion) {
@@ -5444,7 +5510,7 @@ DeserializationResult CloneDeserializer::deserialize()
         case MapDataStartVisitEntry: {
             if (consumeCollectionDataTerminationIfPossible<NonMapPropertiesTag>()) {
                 mapStack.removeLast();
-                goto objectStartVisitMember;
+                goto startVisitNamedMember;
             }
             stateStack.append(MapDataEndVisitKey);
             goto stateUnknown;
@@ -5475,7 +5541,7 @@ DeserializationResult CloneDeserializer::deserialize()
         case SetDataStartVisitEntry: {
             if (consumeCollectionDataTerminationIfPossible<NonSetPropertiesTag>()) {
                 setStack.removeLast();
-                goto objectStartVisitMember;
+                goto startVisitNamedMember;
             }
             stateStack.append(SetDataEndVisitKey);
             goto stateUnknown;

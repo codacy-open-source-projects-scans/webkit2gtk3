@@ -31,7 +31,6 @@ class HitTestResult;
 class LegacyInlineTextBox;
 class RenderLineBoxList;
 class Font;
-class VerticalPositionCache;
 
 struct GlyphOverflow;
 
@@ -42,31 +41,7 @@ class LegacyInlineFlowBox : public LegacyInlineBox {
 public:
     explicit LegacyInlineFlowBox(RenderBoxModelObject& renderer)
         : LegacyInlineBox(renderer)
-        , m_includeLogicalLeftEdge(false)
-        , m_includeLogicalRightEdge(false)
-        , m_hasHardLinebreak(false)
-        , m_descendantsHaveSameLineHeightAndBaseline(true)
-        , m_baselineType(AlphabeticBaseline)
-        , m_hasAnnotationsBefore(false)
-        , m_hasAnnotationsAfter(false)
-        , m_isFirstAfterPageBreak(false)
-        , m_isForTrailingFloats(false)
-        , m_hasSelfPaintInlineBox(false)
-#if !ASSERT_WITH_SECURITY_IMPLICATION_DISABLED
-        , m_hasBadChildList(false)
-#endif
-        , m_firstChild(nullptr)
-        , m_lastChild(nullptr)
-        , m_prevLineBox(nullptr)
-        , m_nextLineBox(nullptr)
     {
-        // Internet Explorer and Firefox always create a marker for list items, even when the list-style-type is none. We do not make a marker
-        // in the list-style-type: none case, since it is wasteful to do so. However, in order to match other browsers we have to pretend like
-        // an invisible marker exists. The side effect of having an invisible marker is that the quirks mode behavior of shrinking lines with no
-        // text children must not apply. This change also means that gaps will exist between image bullet list items. Even when the list bullet
-        // is an image, the line is still considered to be immune from the quirk.
-        m_hasTextChildren = renderer.style().display() == DisplayType::ListItem;
-        m_hasTextDescendants = m_hasTextChildren;
     }
 
 #if !ASSERT_WITH_SECURITY_IMPLICATION_DISABLED
@@ -111,8 +86,6 @@ public:
     virtual void attachLineBoxToRenderObject();
     virtual void removeLineBoxFromRenderObject();
 
-    void clearTruncation() override;
-
     void paint(PaintInfo&, const LayoutPoint&, LayoutUnit lineTop, LayoutUnit lineBottom) override;
     bool nodeAtPoint(const HitTestRequest&, HitTestResult&, const HitTestLocation& locationInContainer, const LayoutPoint& accumulatedOffset, LayoutUnit lineTop, LayoutUnit lineBottom, HitTestAction) override;
 
@@ -121,54 +94,16 @@ public:
     inline LayoutUnit marginBorderPaddingLogicalRight() const;
     LayoutUnit marginLogicalLeft() const
     {
-        if (!includeLogicalLeftEdge())
-            return 0;
-        return isHorizontal() ? renderer().marginLeft() : renderer().marginTop();
+        return 0;
     }
     LayoutUnit marginLogicalRight() const
     {
-        if (!includeLogicalRightEdge())
-            return 0;
-        return isHorizontal() ? renderer().marginRight() : renderer().marginBottom();
+        return 0;
     }
     inline float borderLogicalLeft() const;
     inline float borderLogicalRight() const;
     inline float paddingLogicalLeft() const;
     inline float paddingLogicalRight() const;
-
-    bool includeLogicalLeftEdge() const { return m_includeLogicalLeftEdge; }
-    bool includeLogicalRightEdge() const { return m_includeLogicalRightEdge; }
-    void setEdges(bool includeLeft, bool includeRight)
-    {
-        m_includeLogicalLeftEdge = includeLeft;
-        m_includeLogicalRightEdge = includeRight;
-    }
-
-    // Helper functions used during line construction and placement.
-    void determineSpacingForFlowBoxes(bool lastLine, bool isLogicallyLastRunWrapped, RenderObject* logicallyLastRunRenderer);
-    LayoutUnit getFlowSpacingLogicalWidth();
-    float placeBoxesInInlineDirection(float logicalLeft, bool& needsWordSpacing);
-    float placeBoxRangeInInlineDirection(LegacyInlineBox* firstChild, LegacyInlineBox* lastChild, float& logicalLeft, float& minLogicalLeft, float& maxLogicalRight, bool& needsWordSpacing);
-    void beginPlacingBoxRangesInInlineDirection(float logicalLeft) { setLogicalLeft(logicalLeft); }
-    void endPlacingBoxRangesInInlineDirection(float logicalLeft, float logicalRight, float minLogicalLeft, float maxLogicalRight)
-    {
-        setLogicalWidth(logicalRight - logicalLeft);
-        if (knownToHaveNoOverflow() && (minLogicalLeft < logicalLeft || maxLogicalRight > logicalRight))
-            clearKnownToHaveNoOverflow();
-    }
-
-    void computeLogicalBoxHeights(LegacyRootInlineBox&, LayoutUnit& maxPositionTop, LayoutUnit& maxPositionBottom,
-        LayoutUnit& maxAscent, LayoutUnit& maxDescent, bool& setMaxAscent, bool& setMaxDescent,
-        bool strictMode, GlyphOverflowAndFallbackFontsMap&, FontBaseline, VerticalPositionCache&);
-    void adjustMaxAscentAndDescent(LayoutUnit& maxAscent, LayoutUnit& maxDescent,
-        LayoutUnit maxPositionTop, LayoutUnit maxPositionBottom);
-    void placeBoxesInBlockDirection(LayoutUnit logicalTop, LayoutUnit maxHeight, LayoutUnit maxAscent, bool strictMode, LayoutUnit& lineTop, LayoutUnit& lineBottom, bool& setLineTop,
-        LayoutUnit& lineTopIncludingMargins, LayoutUnit& lineBottomIncludingMargins, bool& hasAnnotationsBefore, bool& hasAnnotationsAfter, FontBaseline);
-    void flipLinesInBlockDirection(LayoutUnit lineTop, LayoutUnit lineBottom);
-    bool requiresIdeographicBaseline(const GlyphOverflowAndFallbackFontsMap&) const;
-
-    LayoutUnit computeOverAnnotationAdjustment(LayoutUnit allowedPosition) const;
-    LayoutUnit computeUnderAnnotationAdjustment(LayoutUnit allowedPosition) const;
 
     void computeOverflow(LayoutUnit lineTop, LayoutUnit lineBottom, GlyphOverflowAndFallbackFontsMap&);
     
@@ -176,12 +111,8 @@ public:
 
     RenderObject::HighlightState selectionState() const override;
 
-    bool canAccommodateEllipsis(bool ltr, int blockEdge, int ellipsisWidth) const final;
-    float placeEllipsisBox(bool ltr, float blockLeftEdge, float blockRightEdge, float ellipsisWidth, float &truncatedWidth, bool&) override;
-
     bool hasTextChildren() const { return m_hasTextChildren; }
     bool hasTextDescendants() const { return m_hasTextDescendants; }
-    bool hasHardLinebreak() const { return m_hasHardLinebreak; }
     void setHasTextChildren() { m_hasTextChildren = true; setHasTextDescendants(); }
     void setHasTextDescendants() { m_hasTextDescendants = true; }
     
@@ -256,14 +187,6 @@ public:
     {
         return FloatRect(logicalLeft(), lineTop, logicalWidth(), lineBottom - lineTop);
     }
-    
-    bool descendantsHaveSameLineHeightAndBaseline() const { return m_descendantsHaveSameLineHeightAndBaseline; }
-    void clearDescendantsHaveSameLineHeightAndBaseline()
-    { 
-        m_descendantsHaveSameLineHeightAndBaseline = false;
-        if (parent() && parent()->descendantsHaveSameLineHeightAndBaseline())
-            parent()->clearDescendantsHaveSameLineHeightAndBaseline();
-    }
 
     bool hasSelfPaintInlineBox() const { return m_hasSelfPaintInlineBox; }
 
@@ -278,46 +201,36 @@ private:
     void addReplacedChildOverflow(const LegacyInlineBox*, LayoutRect& logicalLayoutOverflow, LayoutRect& logicalVisualOverflow);
 
 private:
-    unsigned m_includeLogicalLeftEdge : 1;
-    unsigned m_includeLogicalRightEdge : 1;
-    unsigned m_hasTextChildren : 1;
-    unsigned m_hasTextDescendants : 1;
-    unsigned m_hasHardLinebreak : 1;
-    unsigned m_descendantsHaveSameLineHeightAndBaseline : 1;
+    unsigned m_hasTextChildren : 1 { false };
+    unsigned m_hasTextDescendants : 1 { false };
 
 protected:
     // The following members are only used by RootInlineBox but moved here to keep the bits packed.
 
     // Whether or not this line uses alphabetic or ideographic baselines by default.
-    unsigned m_baselineType : 1; // FontBaseline
-
-    // If the line contains any ruby runs, then this will be true.
-    unsigned m_hasAnnotationsBefore : 1;
-    unsigned m_hasAnnotationsAfter : 1;
+    unsigned m_baselineType : 1 { AlphabeticBaseline }; // FontBaseline
 
     unsigned m_lineBreakBidiStatusEor : 5; // UCharDirection
     unsigned m_lineBreakBidiStatusLastStrong : 5; // UCharDirection
     unsigned m_lineBreakBidiStatusLast : 5; // UCharDirection
 
-    unsigned m_isFirstAfterPageBreak : 1;
-    unsigned m_isForTrailingFloats : 1;
-    unsigned m_hasSelfPaintInlineBox : 1;
+    unsigned m_hasSelfPaintInlineBox : 1 { false };
 
     // End of RootInlineBox-specific members.
 
 #if !ASSERT_WITH_SECURITY_IMPLICATION_DISABLED
 private:
-    unsigned m_hasBadChildList : 1;
+    unsigned m_hasBadChildList : 1 { false };
 #endif
 
 protected:
     RefPtr<RenderOverflow> m_overflow;
 
-    LegacyInlineBox* m_firstChild;
-    LegacyInlineBox* m_lastChild;
-    
-    LegacyInlineFlowBox* m_prevLineBox; // The previous box that also uses our RenderObject
-    LegacyInlineFlowBox* m_nextLineBox; // The next box that also uses our RenderObject
+    LegacyInlineBox* m_firstChild { nullptr };
+    LegacyInlineBox* m_lastChild { nullptr };
+
+    LegacyInlineFlowBox* m_prevLineBox { nullptr }; // The previous box that also uses our RenderObject
+    LegacyInlineFlowBox* m_nextLineBox { nullptr }; // The next box that also uses our RenderObject
 };
 
 #ifdef NDEBUG

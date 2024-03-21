@@ -233,6 +233,7 @@
 #include <WebCore/ValidationBubble.h>
 #include <WebCore/WindowFeatures.h>
 #include <WebCore/WritingDirection.h>
+#include <optional>
 #include <stdio.h>
 #include <wtf/CallbackAggregator.h>
 #include <wtf/EnumTraits.h>
@@ -383,6 +384,10 @@
 
 #if ENABLE(WK_WEB_EXTENSIONS)
 #include "WebExtensionController.h"
+#endif
+
+#if ENABLE(TEXT_EXTRACTION)
+#import "WKTextExtractionUtilities.h"
 #endif
 
 #define MESSAGE_CHECK(process, assertion) MESSAGE_CHECK_BASE(assertion, process->connection())
@@ -1421,10 +1426,7 @@ RefPtr<API::Navigation> WebPageProxy::launchProcessForReload()
         internals().pageLoadState.setPendingAPIRequest(transaction, { navigation->navigationID(), url });
     }
 
-    std::optional<String> topPrivatelyControlledDomain;
-#if ENABLE(PUBLIC_SUFFIX_LIST)
-    topPrivatelyControlledDomain = WebCore::topPrivatelyControlledDomain(URL(m_backForwardList->currentItem()->url()).host().toString());
-#endif
+    auto topPrivatelyControlledDomain = WebCore::topPrivatelyControlledDomain(URL(m_backForwardList->currentItem()->url()).host().toString());
 
     // We allow stale content when reloading a WebProcess that's been killed or crashed.
     send(Messages::WebPage::GoToBackForwardItem({ navigation->navigationID(), m_backForwardList->currentItem()->itemID(), FrameLoadType::IndexedBackForward, ShouldTreatAsContinuingLoad::No, std::nullopt, m_lastNavigationWasAppInitiated, std::nullopt, topPrivatelyControlledDomain, { } }));
@@ -1783,11 +1785,9 @@ void WebPageProxy::loadRequestWithNavigationShared(Ref<WebProcessProxy>&& proces
         internals().pageLoadState.setPendingAPIRequest(transaction, { navigation.navigationID(), url.string() });
 
     LoadParameters loadParameters;
-#if ENABLE(PUBLIC_SUFFIX_LIST)
     auto host = url.host().toString();
     loadParameters.topPrivatelyControlledDomain = WebCore::topPrivatelyControlledDomain(host);
     loadParameters.host = host;
-#endif
     loadParameters.navigationID = navigation.navigationID();
     loadParameters.request = WTFMove(request);
     loadParameters.shouldOpenExternalURLsPolicy = shouldOpenExternalURLsPolicy;
@@ -1873,9 +1873,7 @@ RefPtr<API::Navigation> WebPageProxy::loadFile(const String& fileURLString, cons
     loadParameters.request = WTFMove(request);
     loadParameters.shouldOpenExternalURLsPolicy = ShouldOpenExternalURLsPolicy::ShouldNotAllow;
     loadParameters.userData = UserData(process().transformObjectsToHandles(userData).get());
-#if ENABLE(PUBLIC_SUFFIX_LIST)
     loadParameters.topPrivatelyControlledDomain = WebCore::topPrivatelyControlledDomain(loadParameters.request.url().host().toString());
-#endif
     loadParameters.isRequestFromClientOrUserInput = isAppInitiated;
     const bool checkAssumedReadAccessToResourceURL = false;
     Ref process = m_process;
@@ -2234,10 +2232,7 @@ RefPtr<API::Navigation> WebPageProxy::goToBackForwardItem(WebBackForwardListItem
     Ref process = m_process;
     process->markProcessAsRecentlyUsed();
 
-    std::optional<String> topPrivatelyControlledDomain;
-#if ENABLE(PUBLIC_SUFFIX_LIST)
-    topPrivatelyControlledDomain = WebCore::topPrivatelyControlledDomain(URL(item.url()).host().toString());
-#endif
+    auto topPrivatelyControlledDomain = WebCore::topPrivatelyControlledDomain(URL(item.url()).host().toString());
     
     send(Messages::WebPage::GoToBackForwardItem({ navigation->navigationID(), item.itemID(), frameLoadType, ShouldTreatAsContinuingLoad::No, std::nullopt, m_lastNavigationWasAppInitiated, std::nullopt, topPrivatelyControlledDomain, { } }));
     process->startResponsivenessTimer();
@@ -5704,7 +5699,9 @@ void WebPageProxy::forceRepaint(CompletionHandler<void()>&& callback)
             return callback();
         protectedThis->callAfterNextPresentationUpdate(WTFMove(callback));
     });
-    sendWithAsyncReply(Messages::WebPage::ForceRepaint(), [aggregator] { });
+    forEachWebContentProcess([&](auto& webProcess, auto pageID) {
+        webProcess.sendWithAsyncReply(Messages::WebPage::ForceRepaint(), [aggregator] { }, pageID);
+    });
 }
 
 void WebPageProxy::preferencesDidChange()
@@ -5728,7 +5725,7 @@ void WebPageProxy::preferencesDidChange()
         send(Messages::WebPage::PreferencesDidChange(preferencesStore()));
 }
 
-void WebPageProxy::didCreateMainFrame(FrameIdentifier frameID)
+void WebPageProxy::didCreateMainFrame(IPC::Connection& connection, FrameIdentifier frameID)
 {
     // The DecidePolicyForNavigationActionSync IPC is synchronous and may therefore get processed before the DidCreateMainFrame one.
     // When this happens, decidePolicyForNavigationActionSync() calls didCreateMainFrame() and we need to ignore the DidCreateMainFrame
@@ -5741,7 +5738,7 @@ void WebPageProxy::didCreateMainFrame(FrameIdentifier frameID)
     MESSAGE_CHECK(m_process, !m_mainFrame);
     MESSAGE_CHECK(m_process, WebFrameProxy::canCreateFrame(frameID));
 
-    Ref mainFrame = WebFrameProxy::create(*this, m_browsingContextGroup->ensureProcessForDomain(mainFrameOrOpenerDomain(), protectedProcess(), preferences()), frameID);
+    Ref mainFrame = WebFrameProxy::create(*this, m_browsingContextGroup->ensureProcessForConnection(connection, *this, preferences()), frameID);
     m_mainFrame = mainFrame.copyRef();
     if (m_preferences->siteIsolationEnabled() || m_preferences->processSwapOnCrossSiteWindowOpenEnabled())
         m_browsingContextGroup->addPage(*this);
@@ -6320,6 +6317,16 @@ void WebPageProxy::didCommitLoadForFrame(FrameIdentifier frameID, FrameInfoData&
     if (m_userMediaPermissionRequestManager)
         m_userMediaPermissionRequestManager->didCommitLoadForFrame(frameID);
 #endif
+
+#if ENABLE(EXTENSION_CAPABILITIES)
+    if (frame->isMainFrame())
+        resetMediaCapability();
+#endif
+
+#if ENABLE(TEXT_EXTRACTION)
+    if (frame->isMainFrame() && preferences().textExtractionEnabled())
+        prepareTextExtractionSupportIfNeeded();
+#endif
 }
 
 void WebPageProxy::setCrossSiteLoadWithLinkDecorationForTesting(const URL& fromURL, const URL& toURL, bool wasFiltered, CompletionHandler<void()>&& completionHandler)
@@ -6591,15 +6598,13 @@ void WebPageProxy::didSameDocumentNavigationForFrameViaJSHistoryAPI(SameDocument
 
 void WebPageProxy::didChangeMainDocument(FrameIdentifier frameID)
 {
-    RefPtr frame = WebFrameProxy::webFrame(frameID);
-
 #if ENABLE(MEDIA_STREAM)
     if (m_userMediaPermissionRequestManager) {
         m_userMediaPermissionRequestManager->resetAccess(frameID);
 
 #if ENABLE(GPU_PROCESS)
         if (RefPtr gpuProcess = m_process->processPool().gpuProcess()) {
-            if (frame)
+            if (RefPtr frame = WebFrameProxy::webFrame(frameID))
                 gpuProcess->updateCaptureOrigin(SecurityOriginData::fromURLWithoutStrictOpaqueness(frame->url()), m_process->coreProcessIdentifier());
         }
 #endif
@@ -6609,11 +6614,6 @@ void WebPageProxy::didChangeMainDocument(FrameIdentifier frameID)
     m_isQuotaIncreaseDenied = false;
 
     m_speechRecognitionPermissionManager = nullptr;
-
-#if ENABLE(EXTENSION_CAPABILITIES)
-    if (frame && frame->isMainFrame())
-        resetMediaCapability();
-#endif
 }
 
 #if ENABLE(GPU_PROCESS)
@@ -6643,6 +6643,11 @@ void WebPageProxy::processIsNoLongerAssociatedWithPage(WebProcessProxy& process)
     m_navigationState->clearNavigationsFromProcess(process.coreProcessIdentifier());
 }
 
+bool WebPageProxy::hasAllowedToRunInTheBackgroundActivity() const
+{
+    return internals().pageAllowedToRunInTheBackgroundActivityDueToTitleChanges || internals().pageAllowedToRunInTheBackgroundActivityDueToNotifications;
+}
+
 void WebPageProxy::didReceiveTitleForFrame(FrameIdentifier frameID, const String& title, const UserData& userData)
 {
     Ref protectedPageClient { pageClient() };
@@ -6654,12 +6659,11 @@ void WebPageProxy::didReceiveTitleForFrame(FrameIdentifier frameID, const String
 
     if (frame->isMainFrame()) {
         internals().pageLoadState.setTitle(transaction, title);
-        if (!frame->title().isNull() && frame->title() != title) {
-            WEBPAGEPROXY_RELEASE_LOG(ViewState, "didReceiveTitleForFrame: This page updates its title and is now allowed to run in the background");
+        if (!internals().pageAllowedToRunInTheBackgroundActivityDueToTitleChanges && !frame->title().isNull() && frame->title() != title) {
+            WEBPAGEPROXY_RELEASE_LOG(ViewState, "didReceiveTitleForFrame: This page changes its title in the background and is allowed to run in the background");
             // This page updates its title in the background and is thus able to communicate with
             // the user while in the background. Allow it to run in the background.
-            if (!internals().pageAllowedToRunInTheBackgroundActivityDueToTitleChanges)
-                internals().pageAllowedToRunInTheBackgroundActivityDueToTitleChanges = process().throttler().backgroundActivity("Page updates its title"_s).moveToUniquePtr();
+            internals().pageAllowedToRunInTheBackgroundActivityDueToTitleChanges = process().throttler().backgroundActivity("Page updates its title"_s).moveToUniquePtr();
         }
     }
 
@@ -7091,14 +7095,14 @@ void WebPageProxy::logFrameNavigation(const WebFrameProxy& frame, const URL& pag
     websiteDataStore().protectedNetworkProcess()->send(Messages::NetworkProcess::LogFrameNavigation(m_websiteDataStore->sessionID(), RegistrableDomain { targetURL }, RegistrableDomain { pageURL }, RegistrableDomain { sourceURL }, isRedirect, frame.isMainFrame(), MonotonicTime::now() - internals().didFinishDocumentLoadForMainFrameTimestamp, wasPotentiallyInitiatedByUser), 0);
 }
 
-void WebPageProxy::decidePolicyForNavigationActionSync(NavigationActionData&& data, CompletionHandler<void(PolicyDecision&&)>&& reply)
+void WebPageProxy::decidePolicyForNavigationActionSync(IPC::Connection& connection, NavigationActionData&& data, CompletionHandler<void(PolicyDecision&&)>&& reply)
 {
     auto& frameInfo = data.frameInfo;
     RefPtr frame = WebFrameProxy::webFrame(frameInfo.frameID);
     if (!frame) {
         // This synchronous IPC message was processed before the asynchronous DidCreateMainFrame / DidCreateSubframe one so we do not know about this frameID yet.
         if (frameInfo.isMainFrame)
-            didCreateMainFrame(frameInfo.frameID);
+            didCreateMainFrame(connection, frameInfo.frameID);
         else {
             MESSAGE_CHECK(m_process, frameInfo.parentFrameID);
             RefPtr parentFrame = WebFrameProxy::webFrame(*frameInfo.parentFrameID);
@@ -8823,7 +8827,7 @@ void WebPageProxy::didChooseFilesForOpenPanelWithDisplayStringAndIcon(const Vect
     send(Messages::WebPage::ExtendSandboxForFilesFromOpenPanel(WTFMove(sandboxExtensionHandles)));
 #endif
 
-    send(Messages::WebPage::DidChooseFilesForOpenPanelWithDisplayStringAndIcon(fileURLs, displayString, iconData ? iconData->dataReference() : std::span<const uint8_t>()));
+    send(Messages::WebPage::DidChooseFilesForOpenPanelWithDisplayStringAndIcon(fileURLs, displayString, iconData ? iconData->bytes() : std::span<const uint8_t>()));
 
     RefPtr openPanelResultListener = std::exchange(m_openPanelResultListener, nullptr);
     openPanelResultListener->invalidate();
@@ -9918,6 +9922,7 @@ WebPageCreationParameters WebPageProxy::creationParameters(WebProcessProxy& proc
 
     parameters.processDisplayName = configuration().processDisplayName();
 
+    // FIXME: This should be std::optional<SubframeProcessPageParameters>&& instead of SubframeProcessPageParameters*
     if (subframeProcessPageParameters)
         parameters.subframeProcessPageParameters = *subframeProcessPageParameters;
     parameters.openerFrameIdentifier = m_openerFrame ? std::optional(m_openerFrame->frameID()) : std::nullopt;
@@ -11230,32 +11235,43 @@ void WebPageProxy::setOverlayScrollbarStyle(std::optional<WebCore::ScrollbarOver
         send(Messages::WebPage::SetScrollbarOverlayStyle(scrollbarStyleForMessage), internals().webPageID);
 }
 
-void WebPageProxy::wrapCryptoKey(const Vector<uint8_t>& key, CompletionHandler<void(bool, Vector<uint8_t>&&)>&& completionHandler)
+std::optional<Vector<uint8_t>> WebPageProxy::getWebCryptoMasterKey()
 {
-    Ref protectedPageClient { pageClient() };
-
-    Vector<uint8_t> masterKey;
-
+    if (auto keyData = m_websiteDataStore->client().webCryptoMasterKey())
+        return keyData;
     if (auto keyData = m_navigationClient->webCryptoMasterKey(*this))
-        masterKey = Vector(keyData->dataReference());
-
-    Vector<uint8_t> wrappedKey;
-    bool succeeded = wrapSerializedCryptoKey(masterKey, key, wrappedKey);
-    completionHandler(succeeded, WTFMove(wrappedKey));
+        return Vector(keyData->bytes());
+    return std::nullopt;
 }
 
-void WebPageProxy::unwrapCryptoKey(const Vector<uint8_t>& wrappedKey, CompletionHandler<void(bool, Vector<uint8_t>&&)>&& completionHandler)
+void WebPageProxy::wrapCryptoKey(const Vector<uint8_t>& key, CompletionHandler<void(std::optional<Vector<uint8_t>>&&)>&& completionHandler)
 {
     Ref protectedPageClient { pageClient() };
 
-    Vector<uint8_t> masterKey;
+    std::optional<Vector<uint8_t>> masterKey = getWebCryptoMasterKey();
+    if (masterKey) {
+        Vector<uint8_t> wrappedKey;
+        if (wrapSerializedCryptoKey(*masterKey, key, wrappedKey)) {
+            completionHandler(WTFMove(wrappedKey));
+            return;
+        }
+    }
+    completionHandler(std::optional<Vector<uint8_t>>());
+}
 
-    if (auto keyData = m_navigationClient->webCryptoMasterKey(*this))
-        masterKey = Vector(keyData->dataReference());
+void WebPageProxy::unwrapCryptoKey(const Vector<uint8_t>& wrappedKey, CompletionHandler<void(std::optional<Vector<uint8_t>>&&)>&& completionHandler)
+{
+    Ref protectedPageClient { pageClient() };
 
-    Vector<uint8_t> key;
-    bool succeeded = unwrapSerializedCryptoKey(masterKey, wrappedKey, key);
-    completionHandler(succeeded, WTFMove(key));
+    std::optional<Vector<uint8_t>> masterKey = getWebCryptoMasterKey();
+    if (masterKey) {
+        Vector<uint8_t> key;
+        if (unwrapSerializedCryptoKey(*masterKey, wrappedKey, key)) {
+            completionHandler(WTFMove(key));
+            return;
+        }
+    }
+    completionHandler(std::optional<Vector<uint8_t>>());
 }
 
 void WebPageProxy::addMIMETypeWithCustomContentProvider(const String& mimeType)
@@ -11982,7 +11998,10 @@ void WebPageProxy::requestPointerLock()
 
 void WebPageProxy::didAllowPointerLock()
 {
-    ASSERT(m_isPointerLockPending && !m_isPointerLocked);
+    if (!m_isPointerLockPending)
+        return;
+
+    ASSERT(!m_isPointerLocked);
     m_isPointerLocked = true;
     m_isPointerLockPending = false;
 #if PLATFORM(MAC)
@@ -11994,7 +12013,10 @@ void WebPageProxy::didAllowPointerLock()
 
 void WebPageProxy::didDenyPointerLock()
 {
-    ASSERT(m_isPointerLockPending && !m_isPointerLocked);
+    if (!m_isPointerLockPending)
+        return;
+
+    ASSERT(!m_isPointerLocked);
     m_isPointerLockPending = false;
     send(Messages::WebPage::DidNotAcquirePointerLock());
 }
@@ -13375,17 +13397,6 @@ WebProcessProxy* WebPageProxy::processForRegistrableDomain(const WebCore::Regist
 {
     auto* process = m_browsingContextGroup->processForDomain(domain);
     return process ? &process->process() : nullptr;
-}
-
-RegistrableDomain WebPageProxy::mainFrameOrOpenerDomain() const
-{
-    URL currentURL { this->currentURL() };
-    // After window.open but before a load is started in another process,
-    // currentURL is about:blank but we can use the opener to tell what
-    // domain's process the frame was in.
-    if (currentURL.isEmpty() && m_openerFrame)
-        currentURL = m_openerFrame->url();
-    return RegistrableDomain { currentURL };
 }
 
 WebPageProxy* WebPageProxy::openerPage() const

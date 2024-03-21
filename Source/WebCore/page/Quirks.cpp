@@ -426,6 +426,7 @@ bool Quirks::shouldDisableElementFullscreenQuirk() const
         m_shouldDisableElementFullscreen = isDomain("vimeo.com"_s)
             || isDomain("instagram.com"_s)
             || (PAL::currentUserInterfaceIdiomIsSmallScreen() && isDomain("digitaltrends.com"_s))
+            || (PAL::currentUserInterfaceIdiomIsSmallScreen() && isDomain("as.com"_s))
             || isEmbedDomain("twitter.com"_s)
             || (PAL::currentUserInterfaceIdiomIsSmallScreen() && (isDomain("youtube.com"_s) || isYoutubeEmbedDomain()));
     }
@@ -434,6 +435,20 @@ bool Quirks::shouldDisableElementFullscreenQuirk() const
 #else
     return false;
 #endif
+}
+
+// rdar://123642870
+bool Quirks::shouldDisableWritingSuggestionsByDefaultQuirk() const
+{
+    if (!needsQuirks())
+        return false;
+
+    return isDomain("reddit.com"_s)
+        || isDomain("discord.com"_s)
+        || isDomain("twitch.tv"_s)
+        || isDomain("godbolt.org"_s)
+        || m_document->url().host().endsWith("officeapps.live.com"_s)
+        || m_document->url().host().endsWith("onedrive.live.com"_s);
 }
 
 #if ENABLE(TOUCH_EVENTS)
@@ -1492,6 +1507,17 @@ bool Quirks::allowLayeredFullscreenVideos() const
 }
 #endif
 
+#if PLATFORM(VISION)
+// twitter.com: rdar://124180748
+bool Quirks::shouldDisableFullscreenVideoAspectRatioAdaptiveSizing() const
+{
+    if (!needsQuirks())
+        return false;
+
+    return isDomain("twitter.com"_s);
+}
+#endif
+
 bool Quirks::shouldEnableApplicationCacheQuirk() const
 {
     // FIXME: Remove this when deleting ApplicationCache APIs.
@@ -1663,16 +1689,16 @@ bool Quirks::needsResettingTransitionCancelsRunningTransitionQuirk() const
 #endif
 }
 
-bool Quirks::shouldStarBeFeaturePolicyDefaultValue() const
+bool Quirks::shouldStarBePermissionsPolicyDefaultValue() const
 {
     if (!needsQuirks())
         return false;
 
-    if (!m_shouldStarBeFeaturePolicyDefaultValueQuirk) {
+    if (!m_shouldStarBePermissionsPolicyDefaultValueQuirk) {
         auto domain = m_document->securityOrigin().domain().convertToASCIILowercase();
-        m_shouldStarBeFeaturePolicyDefaultValueQuirk = domain == "jsfiddle.net"_s;
+        m_shouldStarBePermissionsPolicyDefaultValueQuirk = domain == "jsfiddle.net"_s;
     }
-    return *m_shouldStarBeFeaturePolicyDefaultValueQuirk;
+    return *m_shouldStarBePermissionsPolicyDefaultValueQuirk;
 }
 
 // Microsoft office online generates data URLs with incorrect padding on Safari only (rdar://114573089).
@@ -1719,20 +1745,6 @@ bool Quirks::shouldDisableNavigatorStandaloneQuirk() const
     if (isDomain("oracle.com"_s))
         return true;
 #endif
-    return false;
-}
-
-// booking.com https://webkit.org/b/269875
-// FIXME: booking.com https://webkit.org/b/269876 when outreach has been successful.
-bool Quirks::shouldSendLongerAcceptHeaderQuirk(const URL& url, LocalFrame* frame)
-{
-    if (frame && !frame->settings().needsSiteSpecificQuirks())
-        return false;
-
-    auto host = url.host();
-    if (host == "booking.com"_s || host.endsWith(".booking.com"_s))
-        return true;
-
     return false;
 }
 

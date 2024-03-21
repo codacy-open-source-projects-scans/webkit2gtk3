@@ -59,9 +59,13 @@
 #import <WebCore/LocalizedStrings.h>
 #import <WebCore/MouseEvent.h>
 #import <WebCore/PluginDocument.h>
+#import <WebCore/RenderEmbeddedObject.h>
+#import <WebCore/RenderLayer.h>
+#import <WebCore/RenderLayerScrollableArea.h>
 #import <WebCore/ResourceResponse.h>
 #import <WebCore/ScrollAnimator.h>
 #import <WebCore/SharedBuffer.h>
+#import <WebCore/VoidCallback.h>
 #import <wtf/cocoa/VectorCocoa.h>
 #import <wtf/text/TextStream.h>
 
@@ -118,7 +122,10 @@ PDFPluginBase::~PDFPluginBase()
 
 void PDFPluginBase::teardown()
 {
-    m_data = nil;
+    {
+        Locker locker { m_streamedDataLock };
+        m_data = nil;
+    }
 
 #if HAVE(INCREMENTAL_PDF_APIS)
     if (m_incrementalLoader) {
@@ -200,6 +207,7 @@ void PDFPluginBase::notifySelectionChanged()
 
 NSData *PDFPluginBase::originalData() const
 {
+    Locker locker { m_streamedDataLock };
     return (__bridge NSData *)m_data.get();
 }
 
@@ -214,21 +222,18 @@ void PDFPluginBase::ensureDataBufferLength(uint64_t targetLength)
         CFDataIncreaseLength(m_data.get(), targetLength - currentLength);
 }
 
+uint64_t PDFPluginBase::streamedBytes() const
+{
+    Locker locker { m_streamedDataLock };
+    return m_streamedBytes;
+}
+
 bool PDFPluginBase::haveStreamedDataForRange(uint64_t offset, size_t count) const
 {
     if (!m_data)
         return false;
 
-    return streamedBytes() >= offset + count;
-}
-
-bool PDFPluginBase::haveDataForRange(uint64_t offset, size_t count) const
-{
-    if (!m_data)
-        return false;
-
-    uint64_t dataLength = CFDataGetLength(m_data.get());
-    return offset + count <= dataLength;
+    return m_streamedBytes >= offset + count;
 }
 
 size_t PDFPluginBase::copyDataAtPosition(void* buffer, uint64_t sourcePosition, size_t count) const
@@ -240,6 +245,8 @@ size_t PDFPluginBase::copyDataAtPosition(void* buffer, uint64_t sourcePosition, 
         LOG_WITH_STREAM(IncrementalPDF, stream << "PDFIncrementalLoader::copyDataAtPosition " << sourcePosition << " on main thread - document has not finished loading");
     }
 
+    Locker locker { m_streamedDataLock };
+
     if (!haveStreamedDataForRange(sourcePosition, count))
         return 0;
 
@@ -247,22 +254,85 @@ size_t PDFPluginBase::copyDataAtPosition(void* buffer, uint64_t sourcePosition, 
     return count;
 }
 
-const uint8_t* PDFPluginBase::dataPtrForRange(uint64_t sourcePosition, size_t count) const
+const uint8_t* PDFPluginBase::dataPtrForRange(uint64_t sourcePosition, size_t count, CheckValidRanges checkValidRanges) const
 {
-    ASSERT(isMainRunLoop());
+    Locker locker { m_streamedDataLock };
 
-    if (!haveDataForRange(sourcePosition, count))
+    auto haveValidData = [&](CheckValidRanges checkValidRanges) WTF_REQUIRES_LOCK(m_streamedDataLock) {
+        if (!m_data)
+            return false;
+
+        if (haveStreamedDataForRange(sourcePosition, count))
+            return true;
+
+        uint64_t dataLength = CFDataGetLength(m_data.get());
+        if (sourcePosition + count > dataLength)
+            return false;
+
+        if (checkValidRanges == CheckValidRanges::No)
+            return true;
+
+        return m_validRanges.contains({ sourcePosition, sourcePosition + count - 1 });
+    };
+
+    if (!haveValidData(checkValidRanges))
         return nullptr;
 
     return CFDataGetBytePtr(m_data.get()) + sourcePosition;
 }
 
+bool PDFPluginBase::getByteRanges(CFMutableArrayRef dataBuffersArray, const CFRange* ranges, size_t count) const
+{
+    Locker locker { m_streamedDataLock };
+
+    auto haveDataForRange = [&](CFRange range) WTF_REQUIRES_LOCK(m_streamedDataLock) {
+        if (!m_data)
+            return false;
+
+        RELEASE_ASSERT(range.location >= 0);
+        RELEASE_ASSERT(range.length >= 0);
+
+        if (haveStreamedDataForRange(range.location, range.length))
+            return true;
+
+        uint64_t rangeLocation = range.location;
+        uint64_t rangeLength = range.length;
+
+        uint64_t dataLength = CFDataGetLength(m_data.get());
+        if (rangeLocation + rangeLength > dataLength)
+            return false;
+
+        return m_validRanges.contains({ rangeLocation, rangeLocation + rangeLength - 1 });
+    };
+
+    for (size_t i = 0; i < count; ++i) {
+        if (!haveDataForRange(ranges[i]))
+            return false;
+    }
+
+    for (size_t i = 0; i < count; ++i) {
+        auto range = ranges[i];
+        const uint8_t* dataPtr = CFDataGetBytePtr(m_data.get()) + range.location;
+        RetainPtr cfData = adoptCF(CFDataCreate(kCFAllocatorDefault, dataPtr, range.length));
+        CFArrayAppendValue(dataBuffersArray, cfData.get());
+    }
+
+    return true;
+}
+
 void PDFPluginBase::insertRangeRequestData(uint64_t offset, const Vector<uint8_t>& requestData)
 {
+    if (!requestData.size())
+        return;
+
+    Locker locker { m_streamedDataLock };
+
     auto requiredLength = offset + requestData.size();
     ensureDataBufferLength(requiredLength);
 
     memcpy(CFDataGetMutableBytePtr(m_data.get()) + offset, requestData.data(), requestData.size());
+
+    m_validRanges.add({ offset, offset + requestData.size() - 1 });
 }
 
 void PDFPluginBase::streamDidReceiveResponse(const ResourceResponse& response)
@@ -276,14 +346,28 @@ void PDFPluginBase::streamDidReceiveResponse(const ResourceResponse& response)
 
 void PDFPluginBase::streamDidReceiveData(const SharedBuffer& buffer)
 {
-    if (!m_data)
-        m_data = adoptCF(CFDataCreateMutable(0, 0));
+#if !LOG_DISABLED
+    uint64_t streamedBytes;
+#endif
+    {
+        Locker locker { m_streamedDataLock };
 
-    ensureDataBufferLength(m_streamedBytes + buffer.size());
-    memcpy(CFDataGetMutableBytePtr(m_data.get()) + m_streamedBytes, buffer.data(), buffer.size());
-    m_streamedBytes += buffer.size();
+        if (!m_data)
+            m_data = adoptCF(CFDataCreateMutable(0, 0));
 
-    LOG_WITH_STREAM(IncrementalPDF, stream << "PDFPluginBase::streamDidReceiveData() - received " << buffer.size() << " bytes, total streamed bytes " << m_streamedBytes);
+        ensureDataBufferLength(m_streamedBytes + buffer.size());
+        memcpy(CFDataGetMutableBytePtr(m_data.get()) + m_streamedBytes, buffer.data(), buffer.size());
+        m_streamedBytes += buffer.size();
+
+        // Keep our ranges-lookup-table compact by continuously updating its first range
+        // as the entire document streams in from the network.
+        m_validRanges.add({ 0, m_streamedBytes - 1 });
+#if !LOG_DISABLED
+        streamedBytes = m_streamedBytes;
+#endif
+    }
+
+    LOG_WITH_STREAM(IncrementalPDF, stream << "PDFPluginBase::streamDidReceiveData() - received " << buffer.size() << " bytes, total streamed bytes " << streamedBytes);
 
 #if HAVE(INCREMENTAL_PDF_APIS)
     if (m_incrementalLoader)
@@ -323,7 +407,10 @@ void PDFPluginBase::streamDidFinishLoading()
 
 void PDFPluginBase::streamDidFail()
 {
-    m_data = nullptr;
+    {
+        Locker locker { m_streamedDataLock };
+        m_data = nil;
+    }
 #if HAVE(INCREMENTAL_PDF_APIS)
     if (m_incrementalLoader)
         m_incrementalLoader->incrementalPDFStreamDidFail();
@@ -440,7 +527,8 @@ void PDFPluginBase::addArchiveResource()
     auto response = adoptNS([[NSHTTPURLResponse alloc] initWithURL:m_view->mainResourceURL() statusCode:200 HTTPVersion:(NSString*)kCFHTTPVersion1_1 headerFields:headers]);
     ResourceResponse synthesizedResponse(response.get());
 
-    auto resource = ArchiveResource::create(SharedBuffer::create(m_data.get()), m_view->mainResourceURL(), "application/pdf"_s, String(), String(), synthesizedResponse);
+    RetainPtr data = originalData();
+    auto resource = ArchiveResource::create(SharedBuffer::create(data.get()), m_view->mainResourceURL(), "application/pdf"_s, String(), String(), synthesizedResponse);
     m_view->frame()->document()->loader()->addArchiveResource(resource.releaseNonNull());
 }
 
@@ -578,8 +666,22 @@ IntRect PDFPluginBase::scrollCornerRect() const
 
 ScrollableArea* PDFPluginBase::enclosingScrollableArea() const
 {
-    // FIXME: Walk up the frame tree and look for a scrollable parent frame or RenderLayer.
-    return nullptr;
+    if (!m_element)
+        return nullptr;
+
+    RefPtr renderer = dynamicDowncast<RenderEmbeddedObject>(m_element->renderer());
+    if (!renderer)
+        return nullptr;
+
+    CheckedPtr layer = renderer->enclosingLayer();
+    if (!layer)
+        return nullptr;
+
+    CheckedPtr enclosingScrollableLayer = layer->enclosingScrollableLayer(IncludeSelfOrNot::ExcludeSelf, CrossFrameBoundaries::No);
+    if (!enclosingScrollableLayer)
+        return nullptr;
+
+    return enclosingScrollableLayer->scrollableArea();
 }
 
 IntRect PDFPluginBase::scrollableAreaBoundingBox(bool*) const
@@ -999,10 +1101,14 @@ WebCore::AXObjectCache* PDFPluginBase::axObjectCache() const
 WebCore::IntPoint PDFPluginBase::lastKnownMousePositionInView() const
 {
     if (m_lastMouseEvent)
-        return convertFromRootViewToPlugin(m_lastMouseEvent->position());
+        return mousePositionInView(*m_lastMouseEvent);
     return { };
 }
 
+WebCore::IntPoint PDFPluginBase::mousePositionInView(const WebMouseEvent& event) const
+{
+    return convertFromRootViewToPlugin(event.position());
+}
 
 void PDFPluginBase::navigateToURL(const URL& url)
 {
@@ -1077,8 +1183,9 @@ void PDFPluginBase::incrementalLoaderLog(const String& message)
         return;
     }
 
+    auto streamedBytes = this->streamedBytes();
     LOG_WITH_STREAM(IncrementalPDF, stream << message);
-    verboseLog(m_incrementalLoader.get(), m_streamedBytes, m_documentFinishedLoading);
+    verboseLog(m_incrementalLoader.get(), streamedBytes, m_documentFinishedLoading);
     LOG_WITH_STREAM(IncrementalPDFVerbose, stream << message);
 #else
     UNUSED_PARAM(message);
@@ -1086,6 +1193,14 @@ void PDFPluginBase::incrementalLoaderLog(const String& message)
 }
 
 #endif // !LOG_DISABLED
+
+void PDFPluginBase::registerPDFTest(RefPtr<WebCore::VoidCallback>&& callback)
+{
+    if (m_pdfDocument && callback)
+        callback->handleEvent();
+    else
+        m_pdfTestCallback = WTFMove(callback);
+}
 
 } // namespace WebKit
 

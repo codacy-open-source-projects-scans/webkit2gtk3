@@ -45,6 +45,7 @@ class HTMLPlugInElement;
 class LocalFrame;
 class RenderEmbeddedObject;
 class ShareableBitmap;
+class VoidCallback;
 }
 
 namespace WebKit {
@@ -158,6 +159,7 @@ private:
     bool shouldAllowNavigationFromDrags() const final;
     void willDetachRenderer() final;
 
+    WebCore::ScrollableArea* scrollableArea() const final;
     bool usesAsyncScrolling() const final;
     WebCore::ScrollingNodeID scrollingNodeID() const final;
     void willAttachScrollingNode() final;
@@ -203,6 +205,9 @@ private:
 
     // This snapshot is used to avoid side effects should the plugin run JS during painting.
     RefPtr<WebCore::ShareableBitmap> m_transientPaintingSnapshot;
+
+    Vector<WebCore::FloatRect> pdfAnnotationRectsForTesting() const override;
+    void registerPDFTestCallback(RefPtr<WebCore::VoidCallback> &&) final;
 };
 
 } // namespace WebKit

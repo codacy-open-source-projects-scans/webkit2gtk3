@@ -34,9 +34,9 @@
 
 namespace WebGPU {
 
-Ref<PresentationContextIOSurface> PresentationContextIOSurface::create(const WGPUSurfaceDescriptor& surfaceDescriptor)
+Ref<PresentationContextIOSurface> PresentationContextIOSurface::create(const WGPUSurfaceDescriptor& surfaceDescriptor, const Instance& instance)
 {
-    auto presentationContextIOSurface = adoptRef(*new PresentationContextIOSurface(surfaceDescriptor));
+    auto presentationContextIOSurface = adoptRef(*new PresentationContextIOSurface(surfaceDescriptor, instance));
 
     ASSERT(surfaceDescriptor.nextInChain);
     ASSERT(surfaceDescriptor.nextInChain->sType == static_cast<WGPUSType>(WGPUSTypeExtended_SurfaceDescriptorCocoaSurfaceBacking));
@@ -50,8 +50,14 @@ Ref<PresentationContextIOSurface> PresentationContextIOSurface::create(const WGP
     return presentationContextIOSurface;
 }
 
-PresentationContextIOSurface::PresentationContextIOSurface(const WGPUSurfaceDescriptor&)
+PresentationContextIOSurface::PresentationContextIOSurface(const WGPUSurfaceDescriptor&, const Instance& instance)
+#if HAVE(IOSURFACE_SET_OWNERSHIP_IDENTITY) && HAVE(TASK_IDENTITY_TOKEN)
+    : m_webProcessID(instance.webProcessID())
+#endif
 {
+#if !(HAVE(IOSURFACE_SET_OWNERSHIP_IDENTITY) && HAVE(TASK_IDENTITY_TOKEN))
+    UNUSED_PARAM(instance);
+#endif
 }
 
 PresentationContextIOSurface::~PresentationContextIOSurface() = default;
@@ -59,6 +65,15 @@ PresentationContextIOSurface::~PresentationContextIOSurface() = default;
 void PresentationContextIOSurface::renderBuffersWereRecreated(NSArray<IOSurface *> *ioSurfaces)
 {
     m_ioSurfaces = ioSurfaces;
+#if HAVE(IOSURFACE_SET_OWNERSHIP_IDENTITY) && HAVE(TASK_IDENTITY_TOKEN)
+    if (m_webProcessID) {
+        mach_port_t webProcessID = m_webProcessID->sendRight();
+        if (webProcessID) {
+            for (IOSurface *surface in ioSurfaces)
+                IOSurfaceSetOwnershipIdentity(bridge_cast(surface), webProcessID, kIOSurfaceMemoryLedgerTagGraphics, 0);
+        }
+    }
+#endif
     m_renderBuffers.clear();
 }
 
@@ -84,6 +99,10 @@ void PresentationContextIOSurface::configure(Device& device, const WGPUSwapChain
         return format == WGPUTextureFormat_BGRA8Unorm || format == WGPUTextureFormat_RGBA8Unorm || format == WGPUTextureFormat_RGBA16Float;
     };
 
+    auto allowedViewFormat = ^(WGPUTextureFormat format) {
+        return allowedFormat(Texture::removeSRGBSuffix(format));
+    };
+
     auto& limits = device.limits();
     auto width = std::min<uint32_t>(limits.maxTextureDimension2D, descriptor.width);
     auto height = std::min<uint32_t>(limits.maxTextureDimension2D, descriptor.height);
@@ -100,8 +119,8 @@ void PresentationContextIOSurface::configure(Device& device, const WGPUSwapChain
         effectiveFormat,
         1,
         1,
-        1,
-        &effectiveFormat,
+        descriptor.viewFormats.size() ?: 1,
+        descriptor.viewFormats.size() ? &descriptor.viewFormats[0] : &effectiveFormat,
     };
     MTLTextureDescriptor *textureDescriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:Texture::pixelFormat(effectiveFormat) width:width height:height mipmapped:NO];
     textureDescriptor.usage = Texture::usage(descriptor.usage, effectiveFormat);
@@ -115,9 +134,9 @@ void PresentationContextIOSurface::configure(Device& device, const WGPUSwapChain
         if (textureDescriptor.pixelFormat == MTLPixelFormatRGBA16Float) {
             auto existingUsage = textureDescriptor.usage;
             textureDescriptor.usage |= MTLTextureUsageShaderRead;
-            id<MTLTexture> luminanceClampTexture = [device.device() newTextureWithDescriptor:textureDescriptor];
+            id<MTLTexture> luminanceClampTexture = device.newTextureWithDescriptor(textureDescriptor);
             luminanceClampTexture.label = fromAPI(descriptor.label);
-            auto viewFormats = Vector<WGPUTextureFormat> { Texture::pixelFormat(effectiveFormat) };
+            auto viewFormats = descriptor.viewFormats;
             parentLuminanceClampTexture = Texture::create(luminanceClampTexture, wgpuTextureDescriptor, WTFMove(viewFormats), device);
             parentLuminanceClampTexture->makeCanvasBacking();
             textureDescriptor.pixelFormat = MTLPixelFormatBGRA8Unorm;
@@ -126,9 +145,9 @@ void PresentationContextIOSurface::configure(Device& device, const WGPUSwapChain
             needsLuminanceClampFunction = true;
         }
 
-        id<MTLTexture> texture = [device.device() newTextureWithDescriptor:textureDescriptor iosurface:bridge_cast(iosurface) plane:0];
+        id<MTLTexture> texture = device.newTextureWithDescriptor(textureDescriptor, bridge_cast(iosurface));
         texture.label = fromAPI(descriptor.label);
-        auto viewFormats = Vector<WGPUTextureFormat> { Texture::pixelFormat(effectiveFormat) };
+        auto viewFormats = descriptor.viewFormats;
         auto parentTexture = Texture::create(texture, wgpuTextureDescriptor, WTFMove(viewFormats), device);
         parentTexture->makeCanvasBacking();
         m_renderBuffers.append({ parentTexture, parentLuminanceClampTexture });
@@ -146,7 +165,7 @@ void PresentationContextIOSurface::configure(Device& device, const WGPUSwapChain
     }
 
     for (auto viewFormat : descriptor.viewFormats) {
-        if (!allowedFormat(viewFormat)) {
+        if (!allowedViewFormat(viewFormat)) {
             device.generateAValidationError("Requested texture view format BGRA8UnormStorage is not enabled"_s);
             return;
         }

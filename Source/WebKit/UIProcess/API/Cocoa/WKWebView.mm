@@ -164,6 +164,7 @@
 #import <wtf/SystemTracing.h>
 #import <wtf/UUID.h>
 #import <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
+#import <wtf/cocoa/SpanCocoa.h>
 #import <wtf/cocoa/VectorCocoa.h>
 #import <wtf/spi/darwin/dyldSPI.h>
 #import <wtf/text/StringToIntegerConversion.h>
@@ -3089,7 +3090,7 @@ static void convertAndAddHighlight(Vector<Ref<WebCore::SharedMemory>>& buffers, 
 
     // FIXME: This should not use the legacy session state decoder.
     WebKit::SessionState sessionState;
-    if (!WebKit::decodeLegacySessionState(std::span { static_cast<const uint8_t*>(sessionStateData.bytes), sessionStateData.length }, sessionState))
+    if (!WebKit::decodeLegacySessionState(toSpan(sessionStateData), sessionState))
         return;
 
     _page->restoreFromSessionState(WTFMove(sessionState), true);
@@ -4290,8 +4291,14 @@ static inline OptionSet<WebKit::FindOptions> toFindOptions(_WKFindOptions wkFind
 #endif
     }();
 
-    _page->requestTextExtraction(WTFMove(rectInRootView), [completionHandler = makeBlockPtr(completionHandler)](auto&& item) {
-        completionHandler(WebKit::createItem(item).get());
+    _page->requestTextExtraction(WTFMove(rectInRootView), [completionHandler = makeBlockPtr(completionHandler), weakSelf = WeakObjCPtr<WKWebView>(self)](auto&& item) {
+        completionHandler(WebKit::createItem(item, [strongSelf = weakSelf.get()](auto& rectInRootView) -> WebCore::FloatRect {
+#if PLATFORM(IOS_FAMILY)
+            if (RetainPtr contentView = strongSelf ? strongSelf->_contentView : nil)
+                return { [strongSelf convertRect:rectInRootView fromView:contentView.get()] };
+#endif
+            return rectInRootView;
+        }).get());
     });
 }
 

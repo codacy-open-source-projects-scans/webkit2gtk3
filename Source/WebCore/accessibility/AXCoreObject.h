@@ -38,7 +38,6 @@
 #include <variant>
 #include <wtf/HashSet.h>
 #include <wtf/ObjectIdentifier.h>
-#include <wtf/ProcessID.h>
 #include <wtf/RefCounted.h>
 #include <wtf/ThreadSafeWeakPtr.h>
 #include <wtf/WallTime.h>
@@ -96,6 +95,8 @@ class ScrollView;
 struct AccessibilityText;
 struct CharacterRange;
 struct ScrollRectToVisibleOptions;
+
+enum class DateComponentsType : uint8_t;
 
 enum class AXIDType { };
 using AXID = ObjectIdentifier<AXIDType>;
@@ -809,7 +810,6 @@ public:
     void setObjectID(AXID axID) { m_id = axID; }
     AXID objectID() const { return m_id; }
     virtual AXID treeID() const = 0;
-    virtual ProcessID processID() const = 0;
 
     // When the corresponding WebCore object that this accessible object
     // represents is deleted, it must be detached.
@@ -997,9 +997,7 @@ public:
     virtual AXTextMarkerRange textInputMarkedTextMarkerRange() const = 0;
 
     virtual WallTime dateTimeValue() const = 0;
-#if PLATFORM(MAC)
-    virtual unsigned dateTimeComponents() const = 0;
-#endif
+    virtual DateComponentsType dateTimeComponentsType() const = 0;
     virtual bool supportsDatetimeAttribute() const = 0;
     virtual String datetimeAttributeValue() const = 0;
 
@@ -1400,7 +1398,7 @@ public:
     void detachWrapper(AccessibilityDetachmentType);
 
 #if PLATFORM(IOS_FAMILY)
-    virtual int accessibilitySecureFieldLength() = 0;
+    virtual unsigned accessibilitySecureFieldLength() = 0;
     virtual bool hasTouchEventListener() const = 0;
 #endif
 

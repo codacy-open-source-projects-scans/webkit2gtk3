@@ -345,6 +345,7 @@ ExceptionOr<void> ViewTransition::captureOldState()
 
                 // FIXME: Skip fragmented content.
 
+                element.setCapturedInViewTransition(true);
                 captureElements.append(element);
             }
             return { };
@@ -365,9 +366,13 @@ ExceptionOr<void> ViewTransition::captureOldState()
 
         auto transitionName = element->computedStyle()->viewTransitionName();
         m_namedElements.add(transitionName->name, capture);
+    }
 
+    for (auto& element : captureElements) {
+        element->setCapturedInViewTransition(false);
         element->invalidateStyleAndLayerComposition();
     }
+
     return { };
 }
 
@@ -495,6 +500,11 @@ void ViewTransition::activateViewTransition()
         return;
     }
 
+    for (auto& [name, capturedElement] : m_namedElements.map()) {
+        if (RefPtr newElement = capturedElement->newElement.get())
+            newElement->setCapturedInViewTransition(true);
+    }
+
     setupTransitionPseudoElements();
     checkFailure = updatePseudoElementStyles();
     if (checkFailure.hasException()) {
@@ -570,6 +580,11 @@ void ViewTransition::clearViewTransition()
         }
     }
 
+    for (auto& [name, capturedElement] : m_namedElements.map()) {
+        if (RefPtr newElement = capturedElement->newElement.get())
+            newElement->setCapturedInViewTransition(false);
+    }
+
     protectedDocument()->setHasViewTransitionPseudoElementTree(false);
     protectedDocument()->setActiveViewTransition(nullptr);
     protectedDocument()->styleScope().clearViewTransitionStyles();
@@ -606,7 +621,7 @@ Ref<MutableStyleProperties> ViewTransition::copyElementBaseProperties(Element& e
             break;
         LayoutSize containerOffset = renderer->offsetFromContainer(*container, LayoutPoint());
         TransformationMatrix localTransform;
-        renderer->getTransformFromContainer(container, containerOffset, localTransform);
+        renderer->getTransformFromContainer(containerOffset, localTransform);
         transform = localTransform * transform;
         renderer = container;
     }

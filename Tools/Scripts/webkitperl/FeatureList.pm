@@ -128,7 +128,6 @@ my (
     $pdfkitPluginSupport,
     $pictureInPictureAPISupport,
     $pointerLockSupport,
-    $publicSuffixListSupport,
     $quotaSupport,
     $remoteInspectorSupport,
     $resourceUsageSupport,
@@ -146,7 +145,6 @@ my (
     $systemMallocSupport,
     $telephoneNumberDetectionSupport,
     $textAutosizingSupport,
-    $threeDTransformsSupport,
     $touchEventsSupport,
     $unifiedBuildsSupport,
     $userMessageHandlersSupport,
@@ -177,9 +175,6 @@ my (
 my @features = (
     { option => "fatal-warnings", desc => "Toggle warnings as errors (CMake only)",
       define => "DEVELOPER_MODE_FATAL_WARNINGS", value => \$fatalWarnings },
-
-    { option => "3d-rendering", desc => "Toggle 3D rendering support",
-      define => "ENABLE_3D_TRANSFORMS", value => \$threeDTransformsSupport },
 
     { option => "accessibility-isolated-tree", desc => "Toggle accessibility isolated tree support",
       define => "ENABLE_ACCESSIBILITY_ISOLATED_TREE", value => \$accessibilityIsolatedTreeSupport },
@@ -378,9 +373,6 @@ my @features = (
 
     { option => "pointer-lock", desc => "Toggle pointer lock support",
       define => "ENABLE_POINTER_LOCK", value => \$pointerLockSupport },
-
-    { option => "public-suffix-list", desc => "Toggle public suffix list support",
-      define => "ENABLE_PUBLIC_SUFFIX_LIST", value => \$publicSuffixListSupport },
 
     { option => "remote-inspector", desc => "Toggle remote inspector support",
       define => "ENABLE_REMOTE_INSPECTOR", value => \$remoteInspectorSupport },

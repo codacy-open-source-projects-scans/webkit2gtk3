@@ -600,9 +600,6 @@ end
 
 macro loadCagedJSValue(source, dest, scratchOrLength)
     loadp source, dest
-    if GIGACAGE_ENABLED
-        cage(GigacageConfig + Gigacage::Config::basePtrs + GigacageJSValueBasePtrOffset, constexpr Gigacage::jsValueGigacageMask, dest, scratchOrLength)
-    end
 end
 
 macro loadVariable(get, fieldName, valueReg)
@@ -3096,7 +3093,7 @@ llintOpWithMetadata(op_put_to_scope, OpPutToScope, macro (size, get, dispatch, m
         loadi OpPutToScope::Metadata::m_getPutInfo + GetPutInfo::m_operand[t5], t0
         andi InitializationModeMask, t0
         rshifti InitializationModeShift, t0
-        bineq t0, NotInitialization, .noNeedForTDZCheck
+        bilt t0, NotInitialization, .noNeedForTDZCheck
         loadp OpPutToScope::Metadata::m_operand[t5], t0
         loadq [t0], t0
         bqeq t0, ValueEmpty, .pDynamic

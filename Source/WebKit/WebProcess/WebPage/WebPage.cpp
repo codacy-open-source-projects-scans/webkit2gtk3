@@ -95,6 +95,7 @@
 #include "WebContextMenuClient.h"
 #include "WebCookieJar.h"
 #include "WebCoreArgumentCoders.h"
+#include "WebCryptoClient.h"
 #include "WebDataListSuggestionPicker.h"
 #include "WebDatabaseProvider.h"
 #include "WebDateTimeChooser.h"
@@ -452,6 +453,10 @@ static const Seconds pageScrollHysteresisDuration { 300_ms };
 static const Seconds initialLayerVolatilityTimerInterval { 20_ms };
 static const Seconds maximumLayerVolatilityTimerInterval { 2_s };
 
+#if PLATFORM(IOS_FAMILY)
+static constexpr Seconds updateFocusedElementInformationDebounceInterval { 100_ms };
+#endif
+
 #define WEBPAGE_RELEASE_LOG(channel, fmt, ...) RELEASE_LOG(channel, "%p - [webPageID=%" PRIu64 "] WebPage::" fmt, this, m_identifier.toUInt64(), ##__VA_ARGS__)
 #define WEBPAGE_RELEASE_LOG_ERROR(channel, fmt, ...) RELEASE_LOG_ERROR(channel, "%p - [webPageID=%" PRIu64 "] WebPage::" fmt, this, m_identifier.toUInt64(), ##__VA_ARGS__)
 
@@ -580,6 +585,7 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     , m_deviceOrientation(parameters.deviceOrientation)
     , m_keyboardIsAttached(parameters.keyboardIsAttached)
     , m_canShowWhileLocked(parameters.canShowWhileLocked)
+    , m_updateFocusedElementInformationTimer(*this, &WebPage::updateFocusedElementInformation, updateFocusedElementInformationDebounceInterval)
 #endif
     , m_layerVolatilityTimer(*this, &WebPage::layerVolatilityTimerFired)
     , m_activityState(parameters.activityState)
@@ -676,7 +682,8 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
 #if ENABLE(APPLE_PAY)
         makeUniqueRef<WebPaymentCoordinator>(*this),
 #endif
-        makeUniqueRef<WebChromeClient>(*this)
+        makeUniqueRef<WebChromeClient>(*this),
+        makeUniqueRef<WebCryptoClient>(this->identifier())
     );
 
 #if ENABLE(DRAG_SUPPORT)
@@ -1850,6 +1857,10 @@ void WebPage::close()
     m_textAutoSizingAdjustmentTimer.stop();
 #endif
 
+#if PLATFORM(IOS_FAMILY)
+    m_updateFocusedElementInformationTimer.stop();
+#endif
+
 #if ENABLE(CONTEXT_MENUS)
     m_contextMenuClient = makeUnique<API::InjectedBundle::PageContextMenuClient>();
 #endif
@@ -2223,10 +2234,8 @@ void WebPage::goToBackForwardItem(GoToBackForwardItemParameters&& parameters)
 
     LOG(Loading, "In WebProcess pid %i, WebPage %" PRIu64 " is navigating to back/forward URL %s", getCurrentProcessID(), m_identifier.toUInt64(), item->url().string().utf8().data());
 
-#if ENABLE(PUBLIC_SUFFIX_LIST)
     if (parameters.topPrivatelyControlledDomain)
         WebCore::setTopPrivatelyControlledDomain(URL(item->url().string()).host().toString(), *parameters.topPrivatelyControlledDomain);
-#endif
 
     ASSERT(!m_pendingNavigationID);
     m_pendingNavigationID = parameters.navigationID;
@@ -3919,6 +3928,9 @@ void WebPage::setBackgroundColor(const std::optional<WebCore::Color>& background
     if (RefPtr frameView = localMainFrameView())
         frameView->updateBackgroundRecursively(backgroundColor);
 
+#if USE(COORDINATED_GRAPHICS) || USE(TEXTURE_MAPPER)
+    m_drawingArea->backgroundColorDidChange();
+#endif
     m_drawingArea->setNeedsDisplay();
 }
 
@@ -5141,6 +5153,18 @@ WebFullScreenManager* WebPage::fullScreenManager()
         m_fullScreenManager = WebFullScreenManager::create(*this);
     return m_fullScreenManager.get();
 }
+
+void WebPage::isInFullscreenChanged(IsInFullscreenMode isInFullscreenMode)
+{
+    if (m_isInFullscreenMode == isInFullscreenMode)
+        return;
+    m_isInFullscreenMode = isInFullscreenMode;
+
+#if ENABLE(META_VIEWPORT)
+    resetViewportDefaultConfiguration(m_mainFrame.ptr(), m_isMobileDoctype);
+#endif
+}
+
 #endif
 
 void WebPage::addConsoleMessage(FrameIdentifier frameID, MessageSource messageSource, MessageLevel messageLevel, const String& message, std::optional<WebCore::ResourceLoaderIdentifier> requestID)
@@ -6446,9 +6470,8 @@ void WebPage::drawPagesToPDFImpl(FrameIdentifier frameID, const PrintInfo& print
             if (!m_printContext)
                 return;
 
-            size_t pageCount = m_printContext->pageCount();
             for (uint32_t page = first; page < first + count; ++page) {
-                if (page >= pageCount)
+                if (page >= m_printContext->pageCount())
                     break;
 
                 RetainPtr<CFDictionaryRef> pageInfo = adoptCF(CFDictionaryCreateMutable(0, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks));
@@ -7062,6 +7085,10 @@ static bool isTextFormControlOrEditableContent(const WebCore::Element& element)
 
 void WebPage::elementDidFocus(Element& element, const FocusOptions& options)
 {
+#if PLATFORM(IOS_FAMILY)
+    m_updateFocusedElementInformationTimer.stop();
+#endif
+
     if (!shouldDispatchUpdateAfterFocusingElement(element)) {
         updateInputContextAfterBlurringAndRefocusingElementIfNeeded(element);
         m_focusedElement = &element;
@@ -7149,11 +7176,7 @@ void WebPage::focusedSelectElementDidChangeOptions(const WebCore::HTMLSelectElem
     if (m_focusedElement != &element)
         return;
 
-    auto information = focusedElementInformation();
-    if (!information)
-        return;
-
-    send(Messages::WebPageProxy::UpdateFocusedElementInformation(*information));
+    m_updateFocusedElementInformationTimer.restart();
 #else
     UNUSED_PARAM(element);
 #endif
@@ -8533,7 +8556,7 @@ void WebPage::completeTextManipulation(const Vector<WebCore::TextManipulationIte
     for (auto& item : items) {
         if (currentFrameID != item.frameID) {
             RELEASE_ASSERT(indexForCurrentItem >= itemCount);
-            completeManipulationForCurrentFrame(indexForCurrentItem - itemCount, items.span().subspan(indexForCurrentItem - itemCount, itemCount));
+            completeManipulationForCurrentFrame(indexForCurrentItem - itemCount, items.subspan(indexForCurrentItem - itemCount, itemCount));
             currentFrameID = item.frameID;
             itemCount = 0;
         }
@@ -8541,7 +8564,7 @@ void WebPage::completeTextManipulation(const Vector<WebCore::TextManipulationIte
         ++itemCount;
     }
     RELEASE_ASSERT(indexForCurrentItem >= itemCount);
-    completeManipulationForCurrentFrame(indexForCurrentItem - itemCount, items.span().subspan(indexForCurrentItem - itemCount, itemCount));
+    completeManipulationForCurrentFrame(indexForCurrentItem - itemCount, items.subspan(indexForCurrentItem - itemCount, itemCount));
 
     completionHandler(false, WTFMove(failuresForAllItems));
 }

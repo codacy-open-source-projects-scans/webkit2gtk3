@@ -1655,6 +1655,7 @@ public:
 #if ENABLE(POINTER_LOCK)
     void didAllowPointerLock();
     void didDenyPointerLock();
+    void requestPointerUnlock();
 #endif
 
     void setSuppressVisibilityUpdates(bool flag);
@@ -1735,8 +1736,8 @@ public:
     RefPtr<ViewSnapshot> takeViewSnapshot(std::optional<WebCore::IntRect>&&);
 #endif
 
-    void wrapCryptoKey(const Vector<uint8_t>&, CompletionHandler<void(bool, Vector<uint8_t>&&)>&&);
-    void unwrapCryptoKey(const Vector<uint8_t>&, CompletionHandler<void(bool, Vector<uint8_t>&&)>&&);
+    void wrapCryptoKey(const Vector<uint8_t>&, CompletionHandler<void(std::optional<Vector<uint8_t>>&&)>&&);
+    void unwrapCryptoKey(const Vector<uint8_t>&, CompletionHandler<void(std::optional<Vector<uint8_t>>&&)>&&);
 
     void takeSnapshot(WebCore::IntRect, WebCore::IntSize bitmapSize, SnapshotOptions, CompletionHandler<void(std::optional<WebCore::ShareableBitmapHandle>&&)>&&);
 
@@ -2254,7 +2255,6 @@ public:
 #endif
 
     WebProcessProxy* processForRegistrableDomain(const WebCore::RegistrableDomain&);
-    WebCore::RegistrableDomain mainFrameOrOpenerDomain() const;
 
     void createRemoteSubframesInOtherProcesses(WebFrameProxy&, const String& frameName);
     void broadcastFrameRemovalToOtherProcesses(IPC::Connection&, WebCore::FrameIdentifier);
@@ -2401,8 +2401,10 @@ public:
 #endif
 
     bool hasValidAudibleActivity() const;
+    bool hasAllowedToRunInTheBackgroundActivity() const;
 
 private:
+    std::optional<Vector<uint8_t>> getWebCryptoMasterKey();
     WebPageProxy(PageClient&, WebProcessProxy&, Ref<API::PageConfiguration>&&);
     void platformInitialize();
 
@@ -2450,10 +2452,9 @@ private:
 
 #if ENABLE(POINTER_LOCK)
     void requestPointerLock();
-    void requestPointerUnlock();
 #endif
 
-    void didCreateMainFrame(WebCore::FrameIdentifier);
+    void didCreateMainFrame(IPC::Connection&, WebCore::FrameIdentifier);
     void didCreateSubframe(WebCore::FrameIdentifier parent, WebCore::FrameIdentifier newFrameID, const String& frameName);
 
     void didStartProvisionalLoadForFrame(WebCore::FrameIdentifier, FrameInfoData&&, WebCore::ResourceRequest&&, uint64_t navigationID, URL&&, URL&& unreachableURL, const UserData&);
@@ -2487,7 +2488,7 @@ private:
 
     void decidePolicyForNavigationAction(Ref<WebProcessProxy>&&, WebFrameProxy&, NavigationActionData&&, CompletionHandler<void(PolicyDecision&&)>&&);
     void decidePolicyForNavigationActionAsync(NavigationActionData&&, CompletionHandler<void(PolicyDecision&&)>&&);
-    void decidePolicyForNavigationActionSync(NavigationActionData&&, CompletionHandler<void(PolicyDecision&&)>&&);
+    void decidePolicyForNavigationActionSync(IPC::Connection&, NavigationActionData&&, CompletionHandler<void(PolicyDecision&&)>&&);
     void decidePolicyForNewWindowAction(NavigationActionData&&, const String& frameName, CompletionHandler<void(PolicyDecision&&)>&&);
     void decidePolicyForResponse(IPC::Connection&, FrameInfoData&&, uint64_t navigationID, const WebCore::ResourceResponse&, const WebCore::ResourceRequest&, bool canShowMIMEType, const String& downloadAttribute, bool isShowingInitialAboutBlank, WebCore::CrossOriginOpenerPolicyValue activeDocumentCOOPValue, CompletionHandler<void(PolicyDecision&&)>&&);
     void beginSafeBrowsingCheck(const URL&, bool, WebFramePolicyListenerProxy&);

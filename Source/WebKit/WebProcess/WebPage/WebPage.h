@@ -84,6 +84,7 @@
 #include <WebCore/SubstituteData.h>
 #include <WebCore/TextManipulationController.h>
 #include <WebCore/TextManipulationItem.h>
+#include <WebCore/Timer.h>
 #include <WebCore/UserActivity.h>
 #include <WebCore/UserMediaRequestIdentifier.h>
 #include <WebCore/UserScriptTypes.h>
@@ -522,6 +523,9 @@ public:
 
 #if ENABLE(FULLSCREEN_API)
     WebFullScreenManager* fullScreenManager();
+
+    enum class IsInFullscreenMode : bool { No, Yes };
+    void isInFullscreenChanged(IsInFullscreenMode);
 #endif
 
     void addConsoleMessage(WebCore::FrameIdentifier, MessageSource, MessageLevel, const String&, std::optional<WebCore::ResourceLoaderIdentifier> = std::nullopt);
@@ -889,6 +893,7 @@ public:
 
     void blurFocusedElement();
     void requestFocusedElementInformation(CompletionHandler<void(const std::optional<FocusedElementInformation>&)>&&);
+    void updateFocusedElementInformation();
     void selectWithGesture(const WebCore::IntPoint&, GestureType, GestureRecognizerState, bool isInteractingWithFocusedElement, CompletionHandler<void(const WebCore::IntPoint&, GestureType, GestureRecognizerState, OptionSet<SelectionFlags>)>&&);
     void updateSelectionWithTouches(const WebCore::IntPoint&, SelectionTouch, bool baseIsStart, CompletionHandler<void(const WebCore::IntPoint&, SelectionTouch, OptionSet<SelectionFlags>)>&&);
     void selectWithTwoTouches(const WebCore::IntPoint& from, const WebCore::IntPoint& to, GestureType, GestureRecognizerState, CompletionHandler<void(const WebCore::IntPoint&, GestureType, GestureRecognizerState, OptionSet<SelectionFlags>)>&&);
@@ -2371,6 +2376,7 @@ private:
 
 #if ENABLE(FULLSCREEN_API)
     RefPtr<WebFullScreenManager> m_fullScreenManager;
+    IsInFullscreenMode m_isInFullscreenMode { IsInFullscreenMode::No };
 #endif
 
     RefPtr<WebPopupMenu> m_activePopupMenu;
@@ -2569,10 +2575,14 @@ private:
     double m_lastTransactionPageScaleFactor { 0 };
     TransactionID m_lastTransactionIDWithScaleChange;
 
+    WebCore::DeferrableOneShotTimer m_updateFocusedElementInformationTimer;
+
     CompletionHandler<void(InteractionInformationAtPosition&&)> m_pendingSynchronousPositionInformationReply;
     std::optional<std::pair<TransactionID, double>> m_lastLayerTreeTransactionIdAndPageScaleBeforeScalingPage;
     bool m_sendAutocorrectionContextAfterFocusingElement { false };
     std::unique_ptr<WebCore::IgnoreSelectionChangeForScope> m_ignoreSelectionChangeScopeForDictation;
+
+    bool m_isMobileDoctype { false };
 #endif // PLATFORM(IOS_FAMILY)
 
     WebCore::Timer m_layerVolatilityTimer;

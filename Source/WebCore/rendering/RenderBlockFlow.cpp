@@ -70,7 +70,6 @@
 #include "RenderView.h"
 #include "Settings.h"
 #include "TextAutoSizing.h"
-#include "VerticalPositionCache.h"
 #include "VisiblePosition.h"
 #include <wtf/IsoMallocInlines.h>
 
@@ -282,11 +281,6 @@ void RenderBlockFlow::rebuildFloatingObjectSetFromIntrudingFloats()
                             changeLogicalTop = std::min(changeLogicalTop, std::min(logicalTop, oldLogicalTop));
                             changeLogicalBottom = std::max(changeLogicalBottom, std::max(logicalTop, oldLogicalTop));
                         }
-                    }
-
-                    if (oldFloatingObject->originatingLine() && !selfNeedsLayout()) {
-                        ASSERT(&oldFloatingObject->originatingLine()->renderer() == this);
-                        oldFloatingObject->originatingLine()->markDirty();
                     }
                 } else {
                     changeLogicalTop = 0;
@@ -1004,15 +998,12 @@ void RenderBlockFlow::simplifiedNormalFlowLayout()
     }
 
     bool shouldUpdateOverflow = false;
-    ListHashSet<CheckedPtr<LegacyRootInlineBox>> lineBoxes;
     for (InlineWalker walker(*this); !walker.atEnd(); walker.advance()) {
         RenderObject& renderer = *walker.current();
         if (!renderer.isOutOfFlowPositioned() && (renderer.isReplacedOrInlineBlock() || renderer.isFloating())) {
             RenderBox& box = downcast<RenderBox>(renderer);
             box.layoutIfNeeded();
             shouldUpdateOverflow = true;
-            if (box.inlineBoxWrapper())
-                lineBoxes.add(&box.inlineBoxWrapper()->root());
         } else if (is<RenderText>(renderer) || is<RenderInline>(renderer))
             renderer.clearNeedsLayout();
     }
@@ -1023,12 +1014,6 @@ void RenderBlockFlow::simplifiedNormalFlowLayout()
     if (auto* lineLayout = modernLineLayout()) {
         lineLayout->updateOverflow();
         return;
-    }
-
-    GlyphOverflowAndFallbackFontsMap textBoxDataMap;
-    for (auto& lineBox : lineBoxes) {
-        auto* box = lineBox.get();
-        box->computeOverflow(box->lineTop(), box->lineBottom(), textBoxDataMap);
     }
 }
 
@@ -1995,16 +1980,6 @@ static void clearShouldBreakAtLineToAvoidWidowIfNeeded(RenderBlockFlow& blockFlo
     blockFlow.setDidBreakAtLineToAvoidWidow();
 }
 
-void RenderBlockFlow::adjustLinePositionForPagination(LegacyRootInlineBox* rootInlineBox, LayoutUnit& delta)
-{
-    auto adjustment = computeLineAdjustmentForPagination(rootInlineBox, delta);
-
-    rootInlineBox->setPaginationStrut(adjustment.strut);
-    rootInlineBox->setIsFirstAfterPageBreak(adjustment.isFirstAfterPageBreak);
-
-    delta += adjustment.strut;
-}
-
 RenderBlockFlow::LinePaginationAdjustment RenderBlockFlow::computeLineAdjustmentForPagination(const InlineIterator::LineBoxIterator& lineBox, LayoutUnit delta, LayoutUnit floatMinimumBottom)
 {
     // FIXME: For now we paginate using line overflow. This ensures that lines don't overlap at all when we
@@ -2698,16 +2673,6 @@ void RenderBlockFlow::removeFloatingObject(RenderBox& floatBox)
                     // the line that they're on, but it still needs to be dirtied. This is
                     // accomplished by pretending they have a height of 1.
                     logicalBottom = std::max(logicalBottom, logicalTop + 1);
-                }
-                if (floatingObject.originatingLine()) {
-                    floatingObject.originatingLine()->removeFloat(floatBox);
-                    if (!selfNeedsLayout()) {
-                        ASSERT(&floatingObject.originatingLine()->renderer() == this);
-                        floatingObject.originatingLine()->markDirty();
-                    }
-#if ASSERT_ENABLED
-                    floatingObject.clearOriginatingLine();
-#endif
                 }
                 markLinesDirtyInBlockRange(0, logicalBottom);
             }
@@ -3977,8 +3942,10 @@ void RenderBlockFlow::invalidateLineLayoutPath()
             // Since we eagerly remove the display content here, repaints issued between this invalidation (triggered by style change/content mutation) and the subsequent layout would produce empty rects.
             repaint();
             for (auto walker = InlineWalker(*this); !walker.atEnd(); walker.advance()) {
-                auto& renderer = *walker.current(); 
-                if (!renderer.isInFlow())
+                auto& renderer = *walker.current();
+                if (!renderer.everHadLayout())
+                    continue;
+                if (!renderer.isInFlow() && modernLineLayout()->contains(downcast<RenderElement>(renderer)))
                     renderer.repaint();
                 renderer.setPreferredLogicalWidthsDirty(true);
             }
@@ -4051,6 +4018,8 @@ void RenderBlockFlow::layoutModernLines(bool relayoutChildren, LayoutUnit& repai
 
     if (hasSimpleOutOfFlowContentOnly) {
         // Shortcut the layout.
+        m_lineLayout = std::monostate();
+
         setStaticPositionsForSimpleOutOfFlowContent();
         setLogicalHeight(borderAndPaddingBefore() + borderAndPaddingAfter() + scrollbarLogicalHeight());
         return;
@@ -4997,8 +4966,6 @@ bool RenderBlockFlow::tryComputePreferredWidthsUsingModernPath(LayoutUnit& minLo
 
     if (!modernLineLayout())
         m_lineLayout = makeUnique<LayoutIntegration::LineLayout>(*this);
-
-    modernLineLayout()->updateInlineContentDimensions();
 
     std::tie(minLogicalWidth, maxLogicalWidth) = modernLineLayout()->computeIntrinsicWidthConstraints();
     for (auto walker = InlineWalker(*this); !walker.atEnd(); walker.advance()) {

@@ -3224,6 +3224,15 @@ ExceptionOr<Vector<uint64_t>> Internals::scrollingNodeIDForNode(Node* node)
     return returnNodeID;
 }
 
+ExceptionOr<unsigned> Internals::scrollableAreaWidth(Node& node)
+{
+    auto areaOrException = scrollableAreaForNode(&node);
+    if (areaOrException.hasException())
+        return areaOrException.releaseException();
+    auto* scrollableArea = areaOrException.releaseReturnValue();
+    return scrollableArea->contentsSize().width();
+}
+
 static OptionSet<PlatformLayerTreeAsTextFlags> toPlatformLayerTreeFlags(unsigned short flags)
 {
     OptionSet<PlatformLayerTreeAsTextFlags> platformLayerTreeFlags = { };
@@ -4184,8 +4193,7 @@ Ref<ArrayBuffer> Internals::serializeObject(const RefPtr<SerializedScriptValue>&
 
 Ref<SerializedScriptValue> Internals::deserializeBuffer(ArrayBuffer& buffer) const
 {
-    Vector<uint8_t> bytes { static_cast<const uint8_t*>(buffer.data()), buffer.byteLength() };
-    return SerializedScriptValue::createFromWireBytes(WTFMove(bytes));
+    return SerializedScriptValue::createFromWireBytes(buffer.toVector());
 }
 
 bool Internals::isFromCurrentWorld(JSC::JSValue value) const
@@ -4402,6 +4410,15 @@ ExceptionOr<void> Internals::setOverridePreferredDynamicRangeMode(HTMLMediaEleme
 
     element.setOverridePreferredDynamicRangeMode(mode);
     return { };
+}
+
+void Internals::enableGStreamerHolePunching(HTMLVideoElement& element)
+{
+#if USE(GSTREAMER)
+    element.enableGStreamerHolePunching();
+#else
+    UNUSED_PARAM(element);
+#endif
 }
 
 #endif
@@ -7226,12 +7243,7 @@ void Internals::retainTextIteratorForDocumentContent()
 
 RefPtr<PushSubscription> Internals::createPushSubscription(const String& endpoint, std::optional<EpochTimeStamp> expirationTime, const ArrayBuffer& serverVAPIDPublicKey, const ArrayBuffer& clientECDHPublicKey, const ArrayBuffer& auth)
 {
-    auto myEndpoint = endpoint;
-    Vector<uint8_t> myServerVAPIDPublicKey { static_cast<const uint8_t*>(serverVAPIDPublicKey.data()), serverVAPIDPublicKey.byteLength() };
-    Vector<uint8_t> myClientECDHPublicKey { static_cast<const uint8_t*>(clientECDHPublicKey.data()), clientECDHPublicKey.byteLength() };
-    Vector<uint8_t> myAuth { static_cast<const uint8_t*>(auth.data()), auth.byteLength() };
-
-    return PushSubscription::create(PushSubscriptionData { { }, WTFMove(myEndpoint), expirationTime, WTFMove(myServerVAPIDPublicKey), WTFMove(myClientECDHPublicKey), WTFMove(myAuth) });
+    return PushSubscription::create(PushSubscriptionData { { }, { endpoint }, expirationTime, serverVAPIDPublicKey.toVector(), clientECDHPublicKey.toVector(), auth.toVector() });
 }
 
 #if ENABLE(ARKIT_INLINE_PREVIEW_MAC)
@@ -7360,6 +7372,28 @@ void Internals::setHistoryTotalStateObjectPayloadLimitOverride(uint32_t limit)
     if (!window)
         return;
     window->history().setTotalStateObjectPayloadLimitOverride(limit);
+}
+
+Vector<Internals::PDFAnnotationRect> Internals::pdfAnnotationRectsForTesting(Element& element) const
+{
+    Vector<PDFAnnotationRect> annotationRects;
+    if (RefPtr pluginElement = dynamicDowncast<HTMLPlugInElement>(element)) {
+        if (RefPtr pluginViewBase = pluginElement ? pluginElement->pluginWidget() : nullptr) {
+            for (auto& annotationRect : pluginViewBase->pdfAnnotationRectsForTesting())
+                annotationRects.append({ annotationRect.x(), annotationRect.y(), annotationRect.width(), annotationRect.height() });
+        }
+    }
+    return annotationRects;
+}
+
+void Internals::registerPDFTest(Ref<VoidCallback>&& callback, Element& element)
+{
+    RefPtr pluginElement = dynamicDowncast<HTMLPlugInElement>(element);
+    if (!pluginElement)
+        return;
+
+    if (RefPtr pluginViewBase = pluginElement->pluginWidget())
+        pluginViewBase->registerPDFTestCallback(WTFMove(callback));
 }
 
 } // namespace WebCore

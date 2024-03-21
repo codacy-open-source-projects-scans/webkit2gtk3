@@ -39,10 +39,6 @@
 /* Please keep the following in alphabetical order so we can notice duplicates. */
 /* Items should only be here if they are different from the defaults in PlatformEnable.h. */
 
-#if !defined(ENABLE_3D_TRANSFORMS)
-#define ENABLE_3D_TRANSFORMS 1
-#endif
-
 #if !defined(ENABLE_ACCESSIBILITY_ANIMATION_CONTROL) \
     && (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 140000) \
     || ((PLATFORM(IOS) || PLATFORM(MACCATALYST)) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 170000) \
@@ -718,6 +714,10 @@
 #define ENABLE_PDF_HUD 1
 #endif
 
+#if !defined(ENABLE_UNIFIED_PDF_DATA_DETECTION) && ENABLE(UNIFIED_PDF) && ENABLE(DATA_DETECTION) && PLATFORM(MAC)
+#define ENABLE_UNIFIED_PDF_DATA_DETECTION 1
+#endif
+
 #if !defined(ENABLE_PERIODIC_MEMORY_MONITOR) && PLATFORM(MAC)
 #define ENABLE_PERIODIC_MEMORY_MONITOR 1
 #endif
@@ -752,10 +752,6 @@
 
 #if !defined(ENABLE_PREWARM_WEBPROCESS_ON_PROVISIONAL_LOAD)
 #define ENABLE_PREWARM_WEBPROCESS_ON_PROVISIONAL_LOAD 1
-#endif
-
-#if !defined(ENABLE_PUBLIC_SUFFIX_LIST)
-#define ENABLE_PUBLIC_SUFFIX_LIST 1
 #endif
 
 #if !defined(ENABLE_REMOTE_INSPECTOR)

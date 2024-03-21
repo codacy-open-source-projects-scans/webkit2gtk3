@@ -347,9 +347,6 @@ public:
 
     int lineCount() const;
 
-    void setHasMarkupTruncation(bool b) { setRenderBlockFlowHasMarkupTruncation(b); }
-    bool hasMarkupTruncation() const { return renderBlockFlowHasMarkupTruncation(); }
-
     bool containsNonZeroBidiLevel() const;
 
     const LegacyLineLayout* legacyLineLayout() const;
@@ -511,10 +508,6 @@ private:
     VisiblePosition positionForPointWithInlineChildren(const LayoutPoint& pointInLogicalContents, const RenderFragmentContainer*) override;
     void addFocusRingRectsForInlineChildren(Vector<LayoutRect>& rects, const LayoutPoint& additionalOffset, const RenderLayerModelObject*) const override;
 
-public:
-    virtual std::optional<TextAlignMode> overrideTextAlignmentForLine(bool /* endsWithSoftBreak */) const { return { }; }
-    virtual void adjustInlineDirectionLineBounds(int /* expansionOpportunityCount */, float& /* logicalLeft */, float& /* logicalWidth */) const { }
-
 private:
     bool hasLineLayout() const;
     bool hasLegacyLineLayout() const;
@@ -541,9 +534,6 @@ private:
     std::optional<LayoutUnit> selfCollapsingMarginBeforeWithClear(RenderObject* candidate);
 
 public:
-    // Computes a deltaOffset value that put a line at the top of the next page if it doesn't fit on the current page.
-    void adjustLinePositionForPagination(LegacyRootInlineBox*, LayoutUnit& deltaOffset);
-
     struct LinePaginationAdjustment {
         LayoutUnit strut { 0_lu };
         bool isFirstAfterPageBreak { false };

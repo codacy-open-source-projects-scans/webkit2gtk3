@@ -89,7 +89,9 @@
 #include <WebCore/RealtimeMediaSourceCenter.h>
 #include <WebCore/ResourceResponse.h>
 #include <WebCore/SecurityOriginData.h>
+#include <WebCore/SerializedCryptoKeyWrap.h>
 #include <WebCore/SuddenTermination.h>
+#include <optional>
 #include <pal/system/Sound.h>
 #include <stdio.h>
 #include <wtf/Algorithms.h>
@@ -1194,7 +1196,6 @@ void WebProcessProxy::processDidTerminateOrFailedToLaunch(ProcessTerminationReas
 
     shutDown();
 
-#if ENABLE(PUBLIC_SUFFIX_LIST)
     // FIXME: Perhaps this should consider ProcessTerminationReasons ExceededMemoryLimit, ExceededCPULimit, Unresponsive as well.
     if (pages.size() == 1 && reason == ProcessTerminationReason::Crash) {
         auto& page = pages[0];
@@ -1202,7 +1203,6 @@ void WebProcessProxy::processDidTerminateOrFailedToLaunch(ProcessTerminationReas
         if (!domain.isEmpty())
             page->logDiagnosticMessageWithEnhancedPrivacy(WebCore::DiagnosticLoggingKeys::domainCausingCrashKey(), domain, WebCore::ShouldSample::No);
     }
-#endif
 
 #if ENABLE(ROUTING_ARBITRATION)
     m_routingArbitrator->processDidTerminate();
@@ -1455,15 +1455,6 @@ void WebProcessProxy::didDestroyUserGestureToken(PageIdentifier pageID, uint64_t
 
 bool WebProcessProxy::canBeAddedToWebProcessCache() const
 {
-#if PLATFORM(IOS_FAMILY)
-    // Don't add the Web process to the cache if there are still assertions being held, preventing it from suspending.
-    // This is a fix for a regression in page load speed we see on http://www.youtube.com when adding it to the cache.
-    if (throttler().shouldBeRunnable()) {
-        WEBPROCESSPROXY_RELEASE_LOG(Process, "canBeAddedToWebProcessCache: Not adding to process cache because the process is runnable");
-        return false;
-    }
-#endif
-
     if (isRunningServiceWorkers()) {
         WEBPROCESSPROXY_RELEASE_LOG(Process, "canBeAddedToWebProcessCache: Not adding to process cache because the process is running workers");
         return false;
@@ -2005,9 +1996,9 @@ void WebProcessProxy::didExceedMemoryFootprintThreshold(size_t footprint)
 
     String domain;
     bool wasPrivateRelayed = false;
+    bool hasAllowedToRunInTheBackgroundActivity = false;
 
     for (auto& page : this->pages()) {
-#if ENABLE(PUBLIC_SUFFIX_LIST)
         String pageDomain = topPrivatelyControlledDomain(URL({ }, page->currentURL()).host().toString());
         if (domain.isEmpty())
             domain = WTFMove(pageDomain);
@@ -2015,14 +2006,14 @@ void WebProcessProxy::didExceedMemoryFootprintThreshold(size_t footprint)
             domain = "multiple"_s;
 
         wasPrivateRelayed = wasPrivateRelayed || page->pageLoadState().wasPrivateRelayed();
-#endif
+        hasAllowedToRunInTheBackgroundActivity = hasAllowedToRunInTheBackgroundActivity || page->hasAllowedToRunInTheBackgroundActivity();
     }
 
     if (domain.isEmpty())
         domain = "unknown"_s;
 
     auto activeTime = totalForegroundTime() + totalBackgroundTime() + totalSuspendedTime();
-    dataStore->client().didExceedMemoryFootprintThreshold(footprint, domain, pageCount(), activeTime, throttler().currentState() == ProcessThrottleState::Foreground, wasPrivateRelayed ? WebCore::WasPrivateRelayed::Yes : WebCore::WasPrivateRelayed::No);
+    dataStore->client().didExceedMemoryFootprintThreshold(footprint, domain, pageCount(), activeTime, throttler().currentState() == ProcessThrottleState::Foreground, wasPrivateRelayed ? WebCore::WasPrivateRelayed::Yes : WebCore::WasPrivateRelayed::No, hasAllowedToRunInTheBackgroundActivity ? WebsiteDataStoreClient::CanSuspend::No : WebsiteDataStoreClient::CanSuspend::Yes);
 }
 
 void WebProcessProxy::didExceedCPULimit()
@@ -2550,6 +2541,40 @@ void WebProcessProxy::getNotifications(const URL& registrationURL, const String&
     WebNotificationManagerProxy::sharedServiceWorkerManager().getNotifications(registrationURL, tag, sessionID(), WTFMove(callback));
 }
 
+std::optional<Vector<uint8_t>> WebProcessProxy::getWebCryptoMasterKey()
+{
+    if (auto isKey = m_websiteDataStore->client().webCryptoMasterKey())
+        return isKey;
+    if (auto isKey = defaultWebCryptoMasterKey())
+        return isKey;
+    return std::nullopt;
+}
+
+void WebProcessProxy::wrapCryptoKey(const Vector<uint8_t>& key, CompletionHandler<void(std::optional<Vector<uint8_t>>&&)>&& completionHandler)
+{
+    std::optional<Vector<uint8_t>> masterKey(getWebCryptoMasterKey());
+    if (masterKey) {
+        Vector<uint8_t> wrappedKey;
+        if (wrapSerializedCryptoKey(*masterKey, key, wrappedKey)) {
+            completionHandler(WTFMove(wrappedKey));
+            return;
+        }
+    }
+    completionHandler(std::nullopt);
+}
+
+void WebProcessProxy::unwrapCryptoKey(const Vector<uint8_t>& wrappedKey, CompletionHandler<void(std::optional<Vector<uint8_t>>&&)>&& completionHandler)
+{
+    std::optional<Vector<uint8_t>> masterKey(getWebCryptoMasterKey());
+    if (masterKey) {
+        Vector<uint8_t> key;
+        if (unwrapSerializedCryptoKey(*masterKey, wrappedKey, key)) {
+            completionHandler(WTFMove(key));
+            return;
+        }
+    }
+    completionHandler(std::nullopt);
+}
 void WebProcessProxy::setAppBadge(std::optional<WebPageProxyIdentifier> pageIdentifier, const SecurityOriginData& origin, std::optional<uint64_t> badge)
 {
     if (!pageIdentifier) {

@@ -41,6 +41,7 @@
 #include "WebCompiledContentRuleListData.h"
 #include "WebCookieJar.h"
 #include "WebCoreArgumentCoders.h"
+#include "WebCryptoClient.h"
 #include "WebDatabaseProvider.h"
 #include "WebLocalFrameLoaderClient.h"
 #include "WebMessagePortChannelProvider.h"
@@ -161,6 +162,7 @@ void WebSWContextManagerConnection::installServiceWorker(ServiceWorkerContextDat
         pageConfiguration.broadcastChannelRegistry = WebProcess::singleton().broadcastChannelRegistry();
         pageConfiguration.userContentProvider = m_userContentController;
         pageConfiguration.cookieJar = WebCookieJar::create();
+        pageConfiguration.cryptoClient = makeUniqueRef<WebCryptoClient>();
 #if ENABLE(WEB_RTC)
         pageConfiguration.webRTCProvider = makeUniqueRef<RemoteWorkerLibWebRTCProvider>();
 #endif
@@ -294,7 +296,7 @@ void WebSWContextManagerConnection::firePushEvent(ServiceWorkerIdentifier identi
 
     std::optional<Vector<uint8_t>> data;
     if (ipcData)
-        data = Vector<uint8_t> { ipcData->data(), ipcData->size() };
+        data = Vector<uint8_t> { *ipcData };
 
     auto inQueueCallback = [queue = m_queue, callback = WTFMove(callback)](bool result, std::optional<NotificationPayload>&& resultPayload) mutable {
         queue->dispatch([result, resultPayload = crossThreadCopy(WTFMove(resultPayload)), callback = WTFMove(callback)]() mutable {

@@ -471,7 +471,7 @@ struct WebCore::CacheQueryOptions {
 
 struct WebCore::CharacterRange {
     uint64_t location
-    uint64_t length
+    [Validator='!(CheckedUint64 { *location } + *length).hasOverflowed()'] uint64_t length
 }
 
 [AdditionalEncoder=StreamConnectionEncoder] class WebCore::AffineTransform {
@@ -1518,6 +1518,8 @@ enum class WebCore::WebLockMode : bool;
 
 using WebCore::AuthenticatorResponseDataSerializableForm = std::variant<std::nullptr_t, WebCore::AuthenticatorResponseBaseData, WebCore::AuthenticatorAttestationResponseData, WebCore::AuthenticatorAssertionResponseData>;
 
+using WebCore::PointerID = uint32_t;
+
 struct WebCore::AuthenticatorResponseData {
     WebCore::AuthenticatorResponseDataSerializableForm getSerializableForm();
 };
@@ -2259,7 +2261,8 @@ header: <WebCore/NetworkLoadInformation.h>
 [Nested] enum class WebCore::NetworkTransactionInformation::Type : bool
 
 class WebCore::ContentType {
-    String raw()
+    String raw();
+    bool typeWasInferredFromExtension();
 }
 
 #if ENABLE(DATE_AND_TIME_INPUT_TYPES)
@@ -3954,7 +3957,7 @@ struct WebCore::CookieRequestHeaderFieldProxy {
     Vector<WebCore::FormDataElement> m_elements;
     int64_t m_identifier;
     bool m_alwaysStream;
-    Vector<char> m_boundary;
+    Vector<uint8_t> m_boundary;
     [NotSerialized] std::optional<uint64_t> m_lengthInBytes;
 };
 
@@ -3986,6 +3989,7 @@ header: <WebCore/ScrollingStateNode.h>
     MouseActivityState
     ScrollbarHoverState
     ScrollbarEnabledState
+    ScrollbarLayoutDirection
     FrameScaleFactor
     EventTrackingRegion
     RootContentsLayer
@@ -4104,7 +4108,7 @@ enum class WebCore::MediaDecodingType : uint8_t {
 enum class WebCore::MediaEncodingType : bool;
 
 class WebCore::BufferSource {
-    std::span<const uint8_t> span()
+    std::span<const uint8_t> bytes()
 }
 
 struct WebCore::FontShadow {
@@ -5963,8 +5967,13 @@ header: <WebCore/MockMediaDevice.h>
 [CustomHeader] struct WebCore::MockMediaDevice {
     String persistentId;
     String label;
-    WebCore::MockMediaDevice::Flags flags;
+    OptionSet<WebCore::MockMediaDevice::Flag> flags;
     std::variant<WebCore::MockMicrophoneProperties, WebCore::MockSpeakerProperties, WebCore::MockCameraProperties, WebCore::MockDisplayProperties> properties;
+};
+
+[Nested] enum class WebCore::MockMediaDevice::Flag : uint8_t {
+    Ephemeral
+    Invalid
 };
 
 #endif // ENABLE(MEDIA_STREAM)
@@ -6059,11 +6068,11 @@ struct WebCore::AnimationEffectTiming {
     WebCore::PlaybackDirection direction;
     double iterationStart;
     double iterations;
-    WTF::Seconds delay;
-    WTF::Seconds endDelay;
-    WTF::Seconds iterationDuration;
-    WTF::Seconds activeDuration;
-    WTF::Seconds endTime;
+    Seconds delay;
+    Seconds endDelay;
+    Seconds iterationDuration;
+    Seconds activeDuration;
+    Seconds endTime;
 };
 
 header: <WebCore/AcceleratedEffect.h>
@@ -6084,8 +6093,8 @@ header: <WebCore/AcceleratedEffect.h>
     OptionSet<WebCore::AcceleratedEffectProperty> animatedProperties();
     bool paused();
     double playbackRate();
-    std::optional<WTF::Seconds> startTime();
-    std::optional<WTF::Seconds> holdTime();
+    std::optional<Seconds> startTime();
+    std::optional<Seconds> holdTime();
 };
 #endif // ENABLE(THREADED_ANIMATION_RESOLUTION)
 
@@ -7113,7 +7122,7 @@ enum class WebCore::RepaintRectCalculation : bool;
 };
 
 [RefCounted, AdditionalEncoder=StreamConnectionEncoder] class WebCore::ByteArrayPixelBuffer {
-    WebCore:: PixelBufferFormat format();
+    WebCore::PixelBufferFormat format();
     WebCore::IntSize size();
     std::span<const uint8_t> dataSpan();
 }
@@ -7509,7 +7518,8 @@ struct WebCore::Length {
 
 struct WebCore::OrganizationStorageAccessPromptQuirk {
     String organizationName;
-    HashMap<WebCore::RegistrableDomain, Vector<WebCore::RegistrableDomain>> domainPairings;
+    HashMap<WebCore::RegistrableDomain, Vector<WebCore::RegistrableDomain>> quirkDomains;
+    Vector<URL> triggerPages;
 };
 
 #if ENABLE(SHAREABLE_RESOURCE)
@@ -7887,3 +7897,20 @@ enum class WebCore::ResolvedEmojiPolicy : uint8_t {
     RequireText,
     RequireEmoji
 };
+
+using WebCore::MediaProducerMutedStateFlags = OptionSet<WebCore::MediaProducerMutedState>
+using WebCore::FramesPerSecond = unsigned
+using WebCore::PlatformGPUID = uint64_t
+using WebCore::GraphicsStyle = std::variant<WebCore::GraphicsDropShadow, WebCore::GraphicsGaussianBlur, WebCore::GraphicsColorMatrix>
+enum class WebCore::ScrollBehaviorForFixedElements : bool
+#if USE(CG)
+using WebCore::GlyphBufferGlyph = CGGlyph
+using WebCore::GlyphBufferAdvance = CGSize
+#else
+using WebCore::GlyphBufferGlyph = WebCore::Glyph
+using WebCore::GlyphBufferAdvance = WebCore::FloatSize
+#endif
+using WebCore::Glyph = unsigned short
+
+enum class WebCore::ContentExtensionDefaultEnablement : bool
+using WebCore::ContentExtensionEnablement = std::pair<WebCore::ContentExtensionDefaultEnablement, HashSet<String>>;

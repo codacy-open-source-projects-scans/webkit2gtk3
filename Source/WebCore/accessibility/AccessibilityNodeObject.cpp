@@ -37,6 +37,7 @@
 #include "AccessibilityListBox.h"
 #include "AccessibilitySpinButton.h"
 #include "AccessibilityTable.h"
+#include "DateComponents.h"
 #include "Editing.h"
 #include "ElementAncestorIteratorInlines.h"
 #include "ElementChildIteratorInlines.h"
@@ -373,7 +374,7 @@ AccessibilityRole AccessibilityNodeObject::determineAccessibilityRoleFromNode(Tr
 
     if (element->hasTagName(codeTag))
         return AccessibilityRole::Code;
-    if (element->hasTagName(delTag))
+    if (element->hasTagName(delTag) || element->hasTagName(sTag))
         return AccessibilityRole::Deletion;
     if (element->hasTagName(insTag))
         return AccessibilityRole::Insertion;
@@ -381,6 +382,8 @@ AccessibilityRole AccessibilityNodeObject::determineAccessibilityRoleFromNode(Tr
         return AccessibilityRole::Subscript;
     if (element->hasTagName(supTag))
         return AccessibilityRole::Superscript;
+    if (element->hasTagName(strongTag))
+        return AccessibilityRole::Strong;
 
     if (element->hasTagName(kbdTag)
         || element->hasTagName(preTag)
@@ -508,6 +511,10 @@ AccessibilityRole AccessibilityNodeObject::determineAccessibilityRoleFromNode(Tr
         return AccessibilityRole::Time;
     if (element->hasTagName(hrTag))
         return AccessibilityRole::HorizontalRule;
+    if (element->hasTagName(emTag))
+        return AccessibilityRole::Emphasis;
+    if (element->hasTagName(hgroupTag))
+        return AccessibilityRole::ApplicationGroup;
 
     // If the element does not have role, but it has ARIA attributes, or accepts tab focus, accessibility should fallback to exposing it as a group.
     if (supportsARIAAttributes() || canSetFocusAttribute() || element->isFocusable())
@@ -2456,6 +2463,15 @@ WallTime AccessibilityNodeObject::dateTimeValue() const
 
     auto* input = dynamicDowncast<HTMLInputElement>(node());
     return input ? input->accessibilityValueAsDate() : WallTime();
+}
+
+DateComponentsType AccessibilityObject::dateTimeComponentsType() const
+{
+    if (!isDateTime())
+        return DateComponentsType::Invalid;
+
+    auto* input = dynamicDowncast<HTMLInputElement>(node());
+    return input ? input->dateType() : DateComponentsType::Invalid;
 }
 
 SRGBA<uint8_t> AccessibilityNodeObject::colorValue() const

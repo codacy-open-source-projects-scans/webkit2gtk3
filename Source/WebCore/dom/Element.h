@@ -104,6 +104,7 @@ struct FullscreenOptions;
 struct GetAnimationsOptions;
 struct IntersectionObserverData;
 struct KeyframeAnimationOptions;
+struct PointerLockOptions;
 struct ResizeObserverData;
 struct ScrollIntoViewOptions;
 struct ScrollToOptions;
@@ -157,7 +158,7 @@ public:
     WEBCORE_EXPORT std::optional<Vector<RefPtr<Element>>> getElementsArrayAttribute(const QualifiedName& attributeName) const;
     WEBCORE_EXPORT void setElementsArrayAttribute(const QualifiedName& attributeName, std::optional<Vector<RefPtr<Element>>>&& value);
     static bool isElementReflectionAttribute(const Settings&, const QualifiedName&);
-    static bool isElementsArrayReflectionAttribute(const Settings&, const QualifiedName&);
+    static bool isElementsArrayReflectionAttribute(const QualifiedName&);
 
     // Call this to get the value of an attribute that is known not to be the style
     // attribute or one of the SVG animatable attributes.
@@ -626,6 +627,7 @@ public:
     bool hasPointerCapture(int32_t);
 
 #if ENABLE(POINTER_LOCK)
+    JSC::JSValue requestPointerLock(JSC::JSGlobalObject& lexicalGlobalObject, PointerLockOptions&&);
     WEBCORE_EXPORT void requestPointerLock();
 #endif
 
@@ -772,6 +774,9 @@ public:
 
     bool hasCustomState(const AtomString& state) const;
     CustomStateSet& ensureCustomStateSet();
+
+    bool capturedInViewTransition() const { return hasEventTargetFlag(EventTargetFlag::CapturedInViewTransition); }
+    void setCapturedInViewTransition(bool captured) { setEventTargetFlag(EventTargetFlag::CapturedInViewTransition, captured); }
 
 protected:
     Element(const QualifiedName&, Document&, OptionSet<TypeFlag>);

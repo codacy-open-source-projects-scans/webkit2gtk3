@@ -709,7 +709,7 @@ public:
     inline BoxSizing boxSizingForAspectRatio() const;
     inline bool hasAspectRatio() const;
     inline OptionSet<Containment> contain() const;
-    inline OptionSet<Containment> effectiveContainment() const;
+    inline OptionSet<Containment> usedContain() const;
     inline bool containsLayout() const;
     inline bool containsSize() const;
     inline bool containsInlineSize() const;
@@ -722,10 +722,10 @@ public:
 
     inline ContentVisibility contentVisibility() const;
 
-    // effectiveContentVisibility will return ContentVisibility::Hidden in a content-visibility: hidden subtree (overriding
+    // usedContentVisibility will return ContentVisibility::Hidden in a content-visibility: hidden subtree (overriding
     // content-visibility: auto at all times), ContentVisibility::Auto in a content-visibility: auto subtree (when the
     // content is not user relevant and thus skipped), and ContentVisibility::Visible otherwise.
-    inline ContentVisibility effectiveContentVisibility() const;
+    inline ContentVisibility usedContentVisibility() const;
     // Returns true for skipped content roots and skipped content itself.
     inline bool hasSkippedContent() const;
 
@@ -1321,7 +1321,7 @@ public:
 
     inline void setContentVisibility(ContentVisibility);
 
-    inline void setEffectiveContentVisibility(ContentVisibility);
+    inline void setUsedContentVisibility(ContentVisibility);
 
     inline void setListStyleType(ListStyleType);
     void setListStyleImage(RefPtr<StyleImage>&&);
@@ -1631,7 +1631,7 @@ public:
     inline bool hasExplicitlySetStrokeColor() const;
     static inline StyleColor initialStrokeColor();
     Color computedStrokeColor() const;
-    inline CSSPropertyID effectiveStrokeColorProperty() const;
+    inline CSSPropertyID usedStrokeColorProperty() const;
 
     inline float strokeMiterLimit() const;
     inline void setStrokeMiterLimit(float);
@@ -1705,7 +1705,7 @@ public:
     inline PathOperation* clipPath() const;
     static PathOperation* initialClipPath() { return nullptr; }
 
-    inline bool hasEffectiveContentNone() const;
+    inline bool hasUsedContentNone() const;
     inline bool hasContent() const;
     inline const ContentData* contentData() const;
     void setContent(std::unique_ptr<ContentData>, bool add);

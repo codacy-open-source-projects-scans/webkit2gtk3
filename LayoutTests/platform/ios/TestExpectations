@@ -223,7 +223,7 @@ http/tests/security/contentSecurityPolicy/same-origin-plugin-document-blocked-in
 http/tests/security/contentSecurityPolicy/same-origin-plugin-document-blocked-in-child-window-report.py
 http/tests/security/contentSecurityPolicy/same-origin-plugin-document-with-csp-blocked-in-child-window.html
 
-# Pointer-lock not supported on iOS
+# Pointer-lock not supported on iOS: https://bugs.webkit.org/show_bug.cgi?id=216621
 pointer-lock
 http/tests/pointer-lock
 fast/shadow-dom/pointerlockelement-in-shadow-tree.html
@@ -2837,6 +2837,12 @@ webkit.org/b/179773 imported/w3c/web-platform-tests/fetch/api/abort/serviceworke
 
 webkit.org/b/179784 svg/in-html/by-reference.html [ Failure Timeout ]
 
+imported/w3c/web-platform-tests/selection/contenteditable/modifying-selection-with-non-primary-mouse-button.tentative.html?middle [ Pass Failure ]
+imported/w3c/web-platform-tests/selection/contenteditable/modifying-selection-with-non-primary-mouse-button.tentative.html?secondary [ Pass Failure ]
+imported/w3c/web-platform-tests/selection/contenteditable/modifying-selection-with-primary-mouse-button.tentative.html [ Pass Failure ]
+imported/w3c/web-platform-tests/selection/textcontrols/focus.html [ Pass Failure ]
+imported/w3c/web-platform-tests/selection/user-select-on-input-and-contenteditable.html [ Pass Failure ]
+
 # accessibilityController.role cannot be tested on iOS
 media/modern-media-controls/time-label/time-label.html [ Skip ]
 media/modern-media-controls/tracks-button [ Pass ]
@@ -3207,9 +3213,6 @@ webkit.org/b/207858 webgl/webgl-box-shadow.html [ Pass Failure ImageOnlyFailure 
 webkit.org/b/207858 fast/canvas/webgl/uninitialized-test.html [ Pass Failure ]
 webkit.org/b/207858 fast/canvas/webgl/oes-texture-float-linear.html [ Pass Failure ]
 webkit.org/b/207858 fast/canvas/webgl/tex-image-and-sub-image-2d-with-video.html [ Pass Failure ]
-
-# <rdar://problem/59635486> REGRESSION: http/wpt/webauthn/public-key-credential-get-success-local.https.html is crashing
-http/wpt/webauthn/public-key-credential-get-success-local.https.html [ Skip ]
 
 webkit.org/b/208023 fast/text/international/system-language/declarative-language.html [ Failure ]
 
@@ -4673,6 +4676,7 @@ imported/w3c/web-platform-tests/css/css-ruby/ruby-text-combine-upright-002a.html
 imported/w3c/web-platform-tests/css/css-ruby/ruby-text-combine-upright-002b.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-ruby/line-break-around-ruby-001.html [ Failure ]
 fast/ruby/annotation-with-line-gap.html [ ImageOnlyFailure ]
+fast/ruby/tight-line-spacing-with-line-height.html [ ImageOnlyFailure ]
 
 webkit.org/b/264001 [ Debug ] imported/w3c/web-platform-tests/requestidlecallback/callback-multiple-calls.html [ Pass Failure ]
 
@@ -4715,3 +4719,9 @@ imported/w3c/web-platform-tests/svg/painting/reftests/marker-path-023.svg [ Imag
 webkit.org/b/269852 imported/w3c/web-platform-tests/css/filter-effects/backdrop-filter-edge-behavior.html [ ImageOnlyFailure ]
 
 webkit.org/b/269873 imported/w3c/web-platform-tests/webrtc-extensions/transfer-datachannel-service-worker.https.html [ Pass Failure ]
+
+webkit.org/b/271207 http/wpt/webauthn/public-key-credential-create-failure-local-silent.https.html [ Failure ]
+webkit.org/b/271207 http/wpt/webauthn/public-key-credential-create-failure-local.https.html [ Failure ]
+webkit.org/b/271207 http/wpt/webauthn/public-key-credential-create-success-local.https.html [ Failure ]
+webkit.org/b/271207 http/wpt/webauthn/public-key-credential-get-success-local.https.html [ Failure ]
+webkit.org/b/271207 http/wpt/webauthn/public-key-credential-get-failure-local.https.html [ Failure ]
