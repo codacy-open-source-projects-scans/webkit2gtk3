@@ -314,14 +314,21 @@ std::optional<LayoutRect> LineLayout::layout()
 {
     preparePlacedFloats();
 
-    // FIXME: Partial layout should not rely on inline display content, but instead InlineContentCache
-    // should retain all the pieces of data required -and then we can destroy damaged content here instead of after
-    // layout in constructContent.
-    auto isPartialLayout = m_lineDamage && m_lineDamage->start();
-    if (!isPartialLayout) {
-        m_lineDamage = { };
+    auto isPartialLayout = m_lineDamage && m_lineDamage->layoutStartPosition();
+
+    auto clearInlineContentAndCacheBeforeFullLayoutIfNeeded = [&] {
+        if (isPartialLayout)
+            return;
+        // FIXME: Partial layout should not rely on inline display content, but instead InlineContentCache
+        // should retain all the pieces of data required -and then we can destroy damaged content here instead of after
+        // layout in constructContent.
         clearInlineContent();
-    }
+        if (m_lineDamage && m_lineDamage->reasons().contains(Layout::InlineDamage::Reason::StyleChange))
+            releaseCaches();
+        m_lineDamage = { };
+    };
+    clearInlineContentAndCacheBeforeFullLayoutIfNeeded();
+
     ASSERT(m_inlineContentConstraints);
     auto intrusiveInitialLetterBottom = [&]() -> std::optional<LayoutUnit> {
         if (auto lowestInitialLetterLogicalBottom = flow().lowestInitialLetterLogicalBottom())
@@ -331,14 +338,14 @@ std::optional<LayoutRect> LineLayout::layout()
     auto inlineContentConstraints = [&]() -> Layout::ConstraintsForInlineContent {
         if (!isPartialLayout || !m_inlineContent)
             return *m_inlineContentConstraints;
-        auto damagedLineIndex = m_lineDamage->start()->lineIndex;
+        auto damagedLineIndex = m_lineDamage->layoutStartPosition()->lineIndex;
         if (!damagedLineIndex)
             return *m_inlineContentConstraints;
         if (damagedLineIndex >= m_inlineContent->displayContent().lines.size()) {
             ASSERT_NOT_REACHED();
             return *m_inlineContentConstraints;
         }
-        auto constraintsForInFlowContent = Layout::ConstraintsForInFlowContent { m_inlineContentConstraints->horizontal(), m_lineDamage->start()->partialContentTop };
+        auto constraintsForInFlowContent = Layout::ConstraintsForInFlowContent { m_inlineContentConstraints->horizontal(), m_lineDamage->layoutStartPosition()->partialContentTop };
         return { constraintsForInFlowContent, m_inlineContentConstraints->visualLeft() };
     };
 
@@ -977,7 +984,8 @@ bool LineLayout::hitTest(const HitTestRequest& request, HitTestResult& result, c
     LayerPaintScope layerPaintScope(m_boxTree, layerRenderer);
 
     for (auto& box : makeReversedRange(boxRange)) {
-        if (!box.isVisible())
+        bool visibleForHitTesting = request.userTriggered() ? box.isVisible() : box.isVisibleIgnoringUsedVisibility();
+        if (!visibleForHitTesting)
             continue;
 
         auto& renderer = m_boxTree.rendererForLayoutBox(box.layoutBox());

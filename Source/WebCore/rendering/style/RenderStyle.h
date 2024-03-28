@@ -55,6 +55,7 @@ class FontSelectionValue;
 class GapLength;
 class GridPosition;
 class GridTrackSize;
+class HitTestRequest;
 class IntPoint;
 class IntSize;
 class LayoutRect;
@@ -147,6 +148,7 @@ enum class FlexDirection : uint8_t;
 enum class FlexWrap : uint8_t;
 enum class Float : uint8_t;
 enum class FontOrientation : bool;
+enum class GridTrackSizingDirection : uint8_t;
 enum class HangingPunctuation : uint8_t;
 enum class Hyphens : uint8_t;
 enum class ImageRendering : uint8_t;
@@ -408,6 +410,9 @@ public:
     inline void setHasPseudoStyles(PseudoIdSet);
     bool hasUniquePseudoStyle() const;
 
+    inline bool hasDisplayAffectedByAnimations() const;
+    inline void setHasDisplayAffectedByAnimations();
+
     // attribute getter methods
 
     constexpr DisplayType display() const { return static_cast<DisplayType>(m_nonInheritedFlags.effectiveDisplay); }
@@ -515,6 +520,8 @@ public:
     inline OverscrollBehavior overscrollBehaviorY() const;
     
     Visibility visibility() const { return static_cast<Visibility>(m_inheritedFlags.visibility); }
+    inline Visibility usedVisibility() const;
+
     VerticalAlign verticalAlign() const;
     const Length& verticalAlignLength() const;
 
@@ -770,6 +777,7 @@ public:
 
     inline const Vector<GridTrackSize>& gridColumnTrackSizes() const;
     inline const Vector<GridTrackSize>& gridRowTrackSizes() const;
+    inline const Vector<GridTrackSize>& gridTrackSizes(GridTrackSizingDirection) const;
     inline const GridTrackList& gridColumnList() const;
     inline const GridTrackList& gridRowList() const;
     inline const Vector<GridTrackSize>& gridAutoRepeatColumns() const;
@@ -1076,6 +1084,9 @@ public:
 
     inline void setBlendMode(BlendMode);
     inline bool isInSubtreeWithBlendMode() const;
+
+    inline void setIsInVisibilityAdjustmentSubtree();
+    inline bool isInVisibilityAdjustmentSubtree() const;
 
     inline void setIsolation(Isolation);
 
@@ -2318,5 +2329,7 @@ inline bool generatesBox(const RenderStyle&);
 inline bool isNonVisibleOverflow(Overflow);
 
 inline bool isSkippedContentRoot(const RenderStyle&, const Element*);
+
+inline bool isVisibleToHitTesting(const RenderStyle&, const HitTestRequest&);
 
 } // namespace WebCore

@@ -199,7 +199,7 @@
 #include "Position.h"
 #include "ProcessingInstruction.h"
 #include "PseudoClassChangeInvalidation.h"
-#include "PublicSuffix.h"
+#include "PublicSuffixStore.h"
 #include "Quirks.h"
 #include "RTCNetworkManager.h"
 #include "Range.h"
@@ -2050,21 +2050,21 @@ AtomString Document::encoding() const
     return encoding.isNull() ? nullAtom() : AtomString { encoding };
 }
 
-RefPtr<Range> Document::caretRangeFromPoint(int x, int y)
+RefPtr<Range> Document::caretRangeFromPoint(int x, int y, HitTestSource source)
 {
-    auto boundary = caretPositionFromPoint(LayoutPoint(x, y));
+    auto boundary = caretPositionFromPoint(LayoutPoint(x, y), source);
     if (!boundary)
         return nullptr;
     return createLiveRange({ *boundary, *boundary });
 }
 
-std::optional<BoundaryPoint> Document::caretPositionFromPoint(const LayoutPoint& clientPoint)
+std::optional<BoundaryPoint> Document::caretPositionFromPoint(const LayoutPoint& clientPoint, HitTestSource source)
 {
     if (!hasLivingRenderTree())
         return std::nullopt;
 
     LayoutPoint localPoint;
-    RefPtr node = nodeFromPoint(clientPoint, &localPoint);
+    RefPtr node = nodeFromPoint(clientPoint, &localPoint, source);
     if (!node)
         return std::nullopt;
 
@@ -2077,7 +2077,7 @@ std::optional<BoundaryPoint> Document::caretPositionFromPoint(const LayoutPoint&
     if (renderer->isSkippedContentRoot())
         return { { *node, 0 } };
 
-    auto rangeCompliantPosition = renderer->positionForPoint(localPoint).parentAnchoredEquivalent();
+    auto rangeCompliantPosition = renderer->positionForPoint(localPoint, source).parentAnchoredEquivalent();
     if (rangeCompliantPosition.isNull())
         return std::nullopt;
 
@@ -2920,7 +2920,7 @@ bool Document::isPageBoxVisible(int pageIndex)
 {
     updateStyleIfNeeded();
     std::unique_ptr<RenderStyle> pageStyle(styleScope().resolver().styleForPage(pageIndex));
-    return pageStyle->visibility() != Visibility::Hidden; // display property doesn't apply to @page.
+    return pageStyle->usedVisibility() != Visibility::Hidden; // display property doesn't apply to @page.
 }
 
 void Document::pageSizeAndMarginsInPixels(int pageIndex, IntSize& pageSize, int& marginTop, int& marginRight, int& marginBottom, int& marginLeft)
@@ -4065,8 +4065,9 @@ const URL& Document::urlForBindings() const
             return false;
 
         auto areSameSiteIgnoringPublicSuffix = [](StringView domain, StringView otherDomain) {
-            auto domainString = topPrivatelyControlledDomain(domain.toStringWithoutCopying());
-            auto otherDomainString = topPrivatelyControlledDomain(otherDomain.toStringWithoutCopying());
+            auto& publicSuffixStore = PublicSuffixStore::singleton();
+            auto domainString = publicSuffixStore.topPrivatelyControlledDomain(domain.toStringWithoutCopying());
+            auto otherDomainString = publicSuffixStore.topPrivatelyControlledDomain(otherDomain.toStringWithoutCopying());
             auto substringToSeparator = [](const String& string) -> String {
                 auto indexOfFirstSeparator = string.find('.');
                 if (indexOfFirstSeparator == notFound)
@@ -9755,7 +9756,9 @@ void Document::handlePopoverLightDismiss(const PointerEvent& event, Node& target
 
                     if (!invokerPopover) {
                         if (RefPtr button = dynamicDowncast<HTMLFormControlElement>(*htmlElement)) {
-                            if (RefPtr popover = button->popoverTargetElement(); popover && isShowingAutoPopover(*popover))
+                            if (RefPtr popover = dynamicDowncast<HTMLElement>(button->invokeTargetElement()); popover && isShowingAutoPopover(*popover))
+                                invokerPopover = WTFMove(popover);
+                            else if (RefPtr popover = button->popoverTargetElement(); popover && isShowingAutoPopover(*popover))
                                 invokerPopover = WTFMove(popover);
                         }
                     }

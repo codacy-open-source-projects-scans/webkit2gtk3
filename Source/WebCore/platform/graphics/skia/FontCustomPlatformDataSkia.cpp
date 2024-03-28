@@ -101,7 +101,10 @@ FontPlatformData FontCustomPlatformData::fontPlatformData(const FontDescription&
 
 RefPtr<FontCustomPlatformData> FontCustomPlatformData::create(SharedBuffer& buffer, const String& itemInCollection)
 {
-    sk_sp<SkTypeface> typeface = FontCache::forCurrentThread().fontManager()->makeFromData(buffer.createSkData());
+    sk_sp<SkTypeface> typeface = FontCache::forCurrentThread().fontManager().makeFromData(buffer.createSkData());
+    if (!typeface)
+        return nullptr;
+
     FontPlatformData::CreationData creationData = { buffer, itemInCollection };
     return adoptRef(new FontCustomPlatformData(WTFMove(typeface), WTFMove(creationData)));
 }

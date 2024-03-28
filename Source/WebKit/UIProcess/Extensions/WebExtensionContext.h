@@ -290,6 +290,9 @@ public:
     bool isInspectable() const { return m_inspectable; }
     void setInspectable(bool);
 
+    HashSet<String> unsupportedAPIs() const { return m_unsupportedAPIs; }
+    void setUnsupportedAPIs(HashSet<String>&&);
+
     const InjectedContentVector& injectedContents();
     bool hasInjectedContentForURL(const URL&);
     bool hasInjectedContent();
@@ -456,7 +459,7 @@ public:
     bool safeToLoadBackgroundContent() const { return m_safeToLoadBackgroundContent; }
 
     bool decidePolicyForNavigationAction(WKWebView *, WKNavigationAction *);
-    void didFinishNavigation(WKWebView *, WKNavigation *);
+    void didFinishDocumentLoad(WKWebView *, WKNavigation *);
     void didFailNavigation(WKWebView *, WKNavigation *, NSError *);
     void webViewWebContentProcessDidTerminate(WKWebView *);
 
@@ -847,6 +850,8 @@ private:
     bool m_customUniqueIdentifier { false };
 
     bool m_inspectable { false };
+
+    HashSet<String> m_unsupportedAPIs;
 
     RefPtr<API::ContentWorld> m_contentScriptWorld;
 

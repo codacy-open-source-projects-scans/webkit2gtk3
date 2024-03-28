@@ -1069,6 +1069,8 @@ media/media-source/media-source-webm-configuration-vp9-header-color.html [ Failu
 # Managed MediaSource isn't enabled on WK1
 media/media-source/media-managedmse-multipletracks-bufferedchange.html [ Skip ]
 media/media-source/media-managedmse-poster.html [ Skip ]
+media/media-source/media-managedmse-stall-endofstream.html [ Skip ]
+media/media-source/media-managedmse-resume-after-remove.html [ Skip ]
 
 # CRABS WebM isn't supported in WK1
 media/media-webm-opus-buffered.html [ Failure ]
@@ -2823,8 +2825,21 @@ webkit.org/b/270385 [ Sonoma+ ] fast/images/jpegxl-with-color-profile.html [ Ima
 
 webkit.org/b/259485 [ Ventura ] http/tests/media/hls/track-in-band-multiple-cues.html [ Skip ]
 
-webkit.org/b/271323 [ Debug ] media/media-source/worker/media-managedmse-worker.html [ Skip ]
-
 # webkit.org/b/270199 [ MacOS WK1 Debug ] fast/frames/lots-of-iframes.html and fast/frames/lots-of-objects.html are consistent/flaky timeouts
 [ Debug ] fast/frames/lots-of-iframes.html [ Pass Timeout ]
 [ Debug ] fast/frames/lots-of-objects.html [ Pass Timeout ]
+
+webkit.org/b/271423 [ Sonoma+ arm64 ] imported/w3c/web-platform-tests/html/canvas/element/manual/imagebitmap/createImageBitmap-exif-orientation.html [ Failure ]
+webkit.org/b/271423 [ Sonoma+ arm64 ] imported/w3c/web-platform-tests/html/canvas/element/manual/imagebitmap/createImageBitmap-exif-orientation_none.html [ Failure ]
+webkit.org/b/271423 [ Sonoma+ arm64 ] imported/w3c/web-platform-tests/html/canvas/element/manual/imagebitmap/imagebitmap-replication-exif-orientation.html [ Failure ]
+
+webkit.org/b/271770 imported/w3c/web-platform-tests/xhr/setrequestheader-case-insensitive.htm [ Pass Failure ]
+
+# Unprefixed backdrop filter disabled on WK1
+imported/w3c/web-platform-tests/css/filter-effects [ Skip ]
+compositing/filters/backdrop-filter-root-element-no-backdrop-root.html [ Skip ]
+imported/w3c/web-platform-tests/css/css-typed-om/the-stylepropertymap/properties/backdrop-filter.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-will-change/will-change-abspos-cb-003.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-will-change/will-change-fixedpos-cb-004.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-will-change/will-change-stacking-context-backdrop-filter-1.html [ ImageOnlyFailure ]
+

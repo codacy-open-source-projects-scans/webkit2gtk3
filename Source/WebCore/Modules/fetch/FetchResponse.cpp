@@ -366,7 +366,7 @@ void FetchResponse::Loader::didReceiveData(const SharedBuffer& buffer)
     ASSERT(m_response.m_readableStreamSource || m_consumeDataCallback);
 
     if (m_consumeDataCallback) {
-        auto chunk = buffer.bytes();
+        auto chunk = buffer.span();
         m_consumeDataCallback(&chunk);
         return;
     }
@@ -422,7 +422,7 @@ void FetchResponse::Loader::consumeDataByChunk(ConsumeDataByChunkCallback&& cons
         return;
 
     auto contiguousBuffer = data->makeContiguous();
-    auto chunk = contiguousBuffer->bytes();
+    auto chunk = contiguousBuffer->span();
     m_consumeDataCallback(&chunk);
 }
 
@@ -482,7 +482,7 @@ void FetchResponse::setBodyData(ResponseData&& data, uint64_t bodySizeWithPaddin
 
 void FetchResponse::consumeChunk(Ref<JSC::Uint8Array>&& chunk)
 {
-    body().consumer().append(SharedBuffer::create(chunk->data(), chunk->byteLength()));
+    body().consumer().append(SharedBuffer::create(chunk->span()));
 }
 
 void FetchResponse::consumeBodyAsStream()

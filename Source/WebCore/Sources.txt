@@ -1758,6 +1758,7 @@ layout/formattingContexts/inline/InlineLineBoxVerticalAligner.cpp
 layout/formattingContexts/inline/InlineTextItem.cpp
 layout/formattingContexts/inline/InlineQuirks.cpp
 layout/formattingContexts/inline/IntrinsicWidthHandler.cpp
+layout/formattingContexts/inline/RangeBasedLineBuilder.cpp
 layout/formattingContexts/inline/TextOnlySimpleLineBuilder.cpp
 layout/formattingContexts/inline/display/InlineDisplayContent.cpp
 layout/formattingContexts/inline/display/InlineDisplayContentBuilder.cpp
@@ -1928,6 +1929,7 @@ page/DeviceController.cpp
 page/DiagnosticLoggingKeys.cpp
 page/DisabledAdaptations.cpp
 page/DragController.cpp
+page/ElementTargetingController.cpp
 page/EventHandler.cpp
 page/EventSource.cpp
 page/FocusController.cpp
@@ -2126,6 +2128,7 @@ platform/PreviewConverter.cpp
 platform/ProcessCapabilities.cpp
 platform/ProcessIdentifier.cpp
 platform/ProcessIdentity.cpp
+platform/PublicSuffixStore.cpp
 platform/ReferrerPolicy.cpp
 platform/RemoteCommandListener.cpp
 platform/RunLoopObserver.cpp
@@ -2930,7 +2933,6 @@ svg/SVGAltGlyphDefElement.cpp
 svg/SVGAltGlyphElement.cpp
 svg/SVGAltGlyphItemElement.cpp
 svg/SVGAngleValue.cpp
-svg/SVGAnimateColorElement.cpp
 svg/SVGAnimateElement.cpp
 svg/SVGAnimateElementBase.cpp
 svg/SVGAnimateMotionElement.cpp
@@ -4191,7 +4193,6 @@ JSSQLTransactionCallback.cpp
 JSSQLTransactionErrorCallback.cpp
 JSSVGAElement.cpp
 JSSVGAngle.cpp
-JSSVGAnimateColorElement.cpp
 JSSVGAnimateElement.cpp
 JSSVGAnimateMotionElement.cpp
 JSSVGAnimateTransformElement.cpp

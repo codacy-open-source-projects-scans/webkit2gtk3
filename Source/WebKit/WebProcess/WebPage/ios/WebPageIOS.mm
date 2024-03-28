@@ -111,6 +111,7 @@
 #import <WebCore/HandleUserInputEventResult.h>
 #import <WebCore/HistoryItem.h>
 #import <WebCore/HitTestResult.h>
+#import <WebCore/HitTestSource.h>
 #import <WebCore/Image.h>
 #import <WebCore/ImageOverlay.h>
 #import <WebCore/InputMode.h>
@@ -162,6 +163,7 @@
 #import <wtf/Scope.h>
 #import <wtf/SetForScope.h>
 #import <wtf/cocoa/Entitlements.h>
+#import <wtf/cocoa/SpanCocoa.h>
 #import <wtf/text/StringToIntegerConversion.h>
 #import <wtf/text/TextBreakIterator.h>
 #import <wtf/text/TextStream.h>
@@ -264,10 +266,7 @@ RetainPtr<NSData> WebPage::accessibilityRemoteTokenData() const
 
 void WebPage::relayAccessibilityNotification(const String& notificationName, const RetainPtr<NSData>& notificationData)
 {
-    std::span<const uint8_t> dataToken;
-    if ([notificationData length])
-        dataToken = { reinterpret_cast<const uint8_t*>([notificationData bytes]), [notificationData length] };
-    send(Messages::WebPageProxy::RelayAccessibilityNotification(notificationName, dataToken));
+    send(Messages::WebPageProxy::RelayAccessibilityNotification(notificationName, span(notificationData.get())));
 }
 
 static void computeEditableRootHasContentAndPlainText(const VisibleSelection& selection, EditorState::PostLayoutData& data)
@@ -3281,7 +3280,7 @@ static void selectionPositionInformation(WebPage& page, const InteractionInforma
     }
 #if PLATFORM(MACCATALYST)
     bool isInsideFixedPosition;
-    VisiblePosition caretPosition(renderer->positionForPoint(request.point, nullptr));
+    VisiblePosition caretPosition(renderer->positionForPoint(request.point, HitTestSource::User, nullptr));
     info.caretRect = caretPosition.absoluteCaretBounds(&isInsideFixedPosition);
 #endif
 }

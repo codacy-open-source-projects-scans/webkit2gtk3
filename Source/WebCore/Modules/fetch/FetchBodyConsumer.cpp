@@ -140,16 +140,15 @@ FetchBodyConsumer& FetchBodyConsumer::operator=(FetchBodyConsumer&&) = default;
 // https://fetch.spec.whatwg.org/#concept-body-package-data
 RefPtr<DOMFormData> FetchBodyConsumer::packageFormData(ScriptExecutionContext* context, const String& contentType, std::span<const uint8_t> data)
 {
-    auto parseMultipartPart = [context] (const uint8_t* part, size_t partLength, DOMFormData& form) -> bool {
-        const uint8_t* headerEnd = static_cast<const uint8_t*>(memmem(part, partLength, "\r\n\r\n", 4));
+    auto parseMultipartPart = [context] (std::span<const uint8_t> part, DOMFormData& form) -> bool {
+        auto* headerEnd = static_cast<const uint8_t*>(memmem(part.data(), part.size(), "\r\n\r\n", 4));
         if (!headerEnd)
             return false;
-        std::span headerBytes { part, static_cast<size_t>(headerEnd - part) };
+        auto headerBytes = part.first(static_cast<size_t>(headerEnd - part.data()));
 
-        auto* bodyBegin = headerEnd + strlen("\r\n\r\n");
-        std::span body { bodyBegin, partLength - (bodyBegin - headerBytes.data()) };
+        auto body = part.subspan(headerBytes.size() + strlen("\r\n\r\n"));
 
-        String header = String::fromUTF8(headerBytes);
+        auto header = String::fromUTF8(headerBytes);
 
         constexpr auto contentDispositionCharacters = "content-disposition:"_s;
         size_t contentDispositionBegin = header.findIgnoringASCIICase(contentDispositionCharacters);
@@ -201,12 +200,12 @@ RefPtr<DOMFormData> FetchBodyConsumer::packageFormData(ScriptExecutionContext* c
         CString boundary = boundaryWithDashes.utf8();
         size_t boundaryLength = boundary.length();
 
-        const uint8_t* currentBoundary = static_cast<const uint8_t*>(memmem(data.data(), data.size(), boundary.data(), boundaryLength));
+        auto* currentBoundary = static_cast<const uint8_t*>(memmem(data.data(), data.size(), boundary.data(), boundaryLength));
         if (!currentBoundary)
             return nullptr;
-        const uint8_t* nextBoundary = static_cast<const uint8_t*>(memmem(currentBoundary + boundaryLength, data.size() - (currentBoundary + boundaryLength - data.data()), boundary.data(), boundaryLength));
+        auto* nextBoundary = static_cast<const uint8_t*>(memmem(currentBoundary + boundaryLength, data.size() - (currentBoundary + boundaryLength - data.data()), boundary.data(), boundaryLength));
         while (nextBoundary) {
-            parseMultipartPart(currentBoundary + boundaryLength, nextBoundary - currentBoundary - boundaryLength - strlen("\r\n"), form.get());
+            parseMultipartPart(std::span { currentBoundary + boundaryLength, nextBoundary - currentBoundary - boundaryLength - strlen("\r\n") }, form.get());
             currentBoundary = nextBoundary;
             nextBoundary = static_cast<const uint8_t*>(memmem(nextBoundary + boundaryLength, data.size() - (nextBoundary + boundaryLength - data.data()), boundary.data(), boundaryLength));
         }
@@ -271,7 +270,7 @@ void FetchBodyConsumer::resolveWithData(Ref<DeferredPromise>&& promise, const St
 void FetchBodyConsumer::resolveWithFormData(Ref<DeferredPromise>&& promise, const String& contentType, const FormData& formData, ScriptExecutionContext* context)
 {
     if (auto sharedBuffer = formData.asSharedBuffer()) {
-        resolveWithData(WTFMove(promise), contentType, sharedBuffer->makeContiguous()->bytes());
+        resolveWithData(WTFMove(promise), contentType, sharedBuffer->makeContiguous()->span());
         return;
     }
 
@@ -289,7 +288,7 @@ void FetchBodyConsumer::resolveWithFormData(Ref<DeferredPromise>&& promise, cons
         if (value.empty()) {
             auto protectedPromise = WTFMove(promise);
             auto buffer = builder.takeAsContiguous();
-            resolveWithData(WTFMove(protectedPromise), contentType, buffer->bytes());
+            resolveWithData(WTFMove(protectedPromise), contentType, buffer->span());
             return;
         }
 
@@ -348,11 +347,11 @@ void FetchBodyConsumer::resolve(Ref<DeferredPromise>&& promise, const String& co
             if (!chunk) {
                 auto protectedPromise = WTFMove(promise);
                 auto buffer = data.takeAsContiguous();
-                resolveWithTypeAndData(WTFMove(protectedPromise), type, contentType, buffer->bytes());
+                resolveWithTypeAndData(WTFMove(protectedPromise), type, contentType, buffer->span());
                 return;
             }
 
-            data.append(chunk->data(), chunk->size());
+            data.append(*chunk);
         });
         m_sink->pipeFrom(*stream);
         return;
@@ -383,7 +382,7 @@ void FetchBodyConsumer::resolve(Ref<DeferredPromise>&& promise, const String& co
         return;
     case FetchBodyConsumer::Type::FormData: {
         auto buffer = takeData();
-        if (auto formData = packageFormData(promise->scriptExecutionContext(), contentType, buffer ? buffer->makeContiguous()->bytes() : std::span<const uint8_t> { }))
+        if (auto formData = packageFormData(promise->scriptExecutionContext(), contentType, buffer ? buffer->makeContiguous()->span() : std::span<const uint8_t> { }))
             promise->resolve<IDLInterface<DOMFormData>>(*formData);
         else
             promise->reject(ExceptionCode::TypeError);
@@ -438,7 +437,7 @@ String FetchBodyConsumer::takeAsText()
         return String();
 
     auto buffer = m_buffer.takeAsContiguous();
-    auto text = TextResourceDecoder::textFromUTF8(buffer->bytes());
+    auto text = TextResourceDecoder::textFromUTF8(buffer->span());
     return text;
 }
 

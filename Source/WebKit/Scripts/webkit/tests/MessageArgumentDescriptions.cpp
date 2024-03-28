@@ -102,6 +102,9 @@
 #include "WebPageProxyIdentifier.h"
 #include "WebTransportSession.h"
 #include "WebURLSchemeHandlerIdentifier.h"
+#if PLATFORM(COCOA)
+#include <WebCore/AttributedString.h>
+#endif
 #include <WebCore/BackgroundFetchRecordIdentifier.h>
 #include <WebCore/BroadcastChannelIdentifier.h>
 #include <WebCore/DictationContext.h>
@@ -109,13 +112,16 @@
 #include <WebCore/FetchIdentifier.h>
 #include <WebCore/FileSystemHandleIdentifier.h>
 #include <WebCore/FileSystemSyncAccessHandleIdentifier.h>
+#include <WebCore/GlobalWindowIdentifier.h>
 #include <WebCore/IDBDatabaseConnectionIdentifier.h>
 #include <WebCore/ImageDecoderIdentifier.h>
+#include <WebCore/InbandGenericCueIdentifier.h>
 #include <WebCore/LayerHostingContextIdentifier.h>
 #include <WebCore/LibWebRTCSocketIdentifier.h>
 #include <WebCore/MediaKeySystemRequestIdentifier.h>
 #include <WebCore/MediaPlayerIdentifier.h>
 #include <WebCore/MediaSessionIdentifier.h>
+#include <WebCore/MediaUniqueIdentifier.h>
 #include <WebCore/ModelPlayerIdentifier.h>
 #include <WebCore/PageIdentifier.h>
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
@@ -452,6 +458,15 @@ std::optional<JSC::JSValue> jsValueForReplyArguments(JSC::JSGlobalObject* global
 Vector<ASCIILiteral> serializedIdentifiers()
 {
     static_assert(sizeof(uint64_t) == sizeof(IPC::AsyncReplyID));
+#if PLATFORM(COCOA)
+    static_assert(sizeof(uint64_t) == sizeof(WebCore::AttributedStringTextListID));
+#endif
+#if PLATFORM(COCOA)
+    static_assert(sizeof(uint64_t) == sizeof(WebCore::AttributedStringTextTableBlockID));
+#endif
+#if PLATFORM(COCOA)
+    static_assert(sizeof(uint64_t) == sizeof(WebCore::AttributedStringTextTableID));
+#endif
     static_assert(sizeof(uint64_t) == sizeof(WebCore::BackgroundFetchRecordIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::BroadcastChannelIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::DictationContext));
@@ -460,12 +475,14 @@ Vector<ASCIILiteral> serializedIdentifiers()
     static_assert(sizeof(uint64_t) == sizeof(WebCore::FileSystemHandleIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::FileSystemSyncAccessHandleIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::ImageDecoderIdentifier));
+    static_assert(sizeof(uint64_t) == sizeof(WebCore::InbandGenericCueIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::LayerHostingContextIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::LibWebRTCSocketIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::MediaKeySystemRequestIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::MediaPlayerIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::MediaSessionIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::ModelPlayerIdentifier));
+    static_assert(sizeof(uint64_t) == sizeof(WebCore::MediaUniqueIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::OpaqueOriginIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::PageIdentifier));
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
@@ -491,6 +508,7 @@ Vector<ASCIILiteral> serializedIdentifiers()
     static_assert(sizeof(uint64_t) == sizeof(WebCore::IDBDatabaseConnectionIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::UserMediaRequestIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::WebSocketIdentifier));
+    static_assert(sizeof(uint64_t) == sizeof(WebCore::WindowIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebKit::AudioMediaStreamTrackRendererInternalUnitIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebKit::AuthenticationChallengeIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebKit::ContentWorldIdentifier));
@@ -570,6 +588,15 @@ Vector<ASCIILiteral> serializedIdentifiers()
     static_assert(sizeof(uint64_t) == sizeof(WebKit::WebURLSchemeHandlerIdentifier));
     return {
         "IPC::AsyncReplyID"_s,
+#if PLATFORM(COCOA)
+        "WebCore::AttributedStringTextListID"_s,
+#endif
+#if PLATFORM(COCOA)
+        "WebCore::AttributedStringTextTableBlockID"_s,
+#endif
+#if PLATFORM(COCOA)
+        "WebCore::AttributedStringTextTableID"_s,
+#endif
         "WebCore::BackgroundFetchRecordIdentifier"_s,
         "WebCore::BroadcastChannelIdentifier"_s,
         "WebCore::DictationContext"_s,
@@ -578,12 +605,14 @@ Vector<ASCIILiteral> serializedIdentifiers()
         "WebCore::FileSystemHandleIdentifier"_s,
         "WebCore::FileSystemSyncAccessHandleIdentifier"_s,
         "WebCore::ImageDecoderIdentifier"_s,
+        "WebCore::InbandGenericCueIdentifier"_s,
         "WebCore::LayerHostingContextIdentifier"_s,
         "WebCore::LibWebRTCSocketIdentifier"_s,
         "WebCore::MediaKeySystemRequestIdentifier"_s,
         "WebCore::MediaPlayerIdentifier"_s,
         "WebCore::MediaSessionIdentifier"_s,
         "WebCore::ModelPlayerIdentifier"_s,
+        "WebCore::MediaUniqueIdentifier"_s,
         "WebCore::OpaqueOriginIdentifier"_s,
         "WebCore::PageIdentifier"_s,
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
@@ -609,6 +638,7 @@ Vector<ASCIILiteral> serializedIdentifiers()
         "WebCore::IDBDatabaseConnectionIdentifier"_s,
         "WebCore::UserMediaRequestIdentifier"_s,
         "WebCore::WebSocketIdentifier"_s,
+        "WebCore::WindowIdentifier"_s,
         "WebKit::AudioMediaStreamTrackRendererInternalUnitIdentifier"_s,
         "WebKit::AuthenticationChallengeIdentifier"_s,
         "WebKit::ContentWorldIdentifier"_s,

@@ -637,6 +637,7 @@ void WebProcessPool::establishRemoteWorkerContextConnectionToNetworkProcess(Remo
         static NeverDestroyed<Ref<WebProcessPool>> remoteWorkerProcessPool(WebProcessPool::create(API::ProcessPoolConfiguration::create().get()));
 
     RefPtr requestingProcess = requestingProcessIdentifier ? WebProcessProxy::processForIdentifier(*requestingProcessIdentifier) : nullptr;
+    auto lockdownMode = requestingProcess ? requestingProcess->lockdownMode() : (lockdownModeEnabledBySystem() ? WebProcessProxy::LockdownMode::Enabled : WebProcessProxy::LockdownMode::Disabled);
     Ref processPool = requestingProcess ? requestingProcess->processPool() : processPools()[0].get();
 
     RefPtr<WebProcessProxy> remoteWorkerProcessProxy;
@@ -671,6 +672,8 @@ void WebProcessPool::establishRemoteWorkerContextConnectionToNetworkProcess(Remo
                 continue;
             if (!process->isMatchingRegistrableDomain(registrableDomain))
                 continue;
+            if (process->lockdownMode() != lockdownMode)
+                continue;
 
             useProcessForRemoteWorkers(process);
 
@@ -694,7 +697,7 @@ void WebProcessPool::establishRemoteWorkerContextConnectionToNetworkProcess(Remo
     ASSERT(preferencesStore);
 
     if (!remoteWorkerProcessProxy) {
-        Ref newProcessProxy = WebProcessProxy::createForRemoteWorkers(workerType, processPool, RegistrableDomain  { registrableDomain }, *websiteDataStore);
+        Ref newProcessProxy = WebProcessProxy::createForRemoteWorkers(workerType, processPool, RegistrableDomain  { registrableDomain }, *websiteDataStore, lockdownMode);
         remoteWorkerProcessProxy = newProcessProxy.copyRef();
 
         WEBPROCESSPOOL_RELEASE_LOG_STATIC(ServiceWorker, "establishRemoteWorkerContextConnectionToNetworkProcess creating a new service worker process (process=%p, workerType=%" PUBLIC_LOG_STRING ", PID=%d)", remoteWorkerProcessProxy.get(), workerType == RemoteWorkerType::ServiceWorker ? "service" : "shared", remoteWorkerProcessProxy->processID());
@@ -1219,44 +1222,35 @@ Ref<WebPageProxy> WebProcessPool::createWebPage(PageClient& pageClient, Ref<API:
 {
     if (!pageConfiguration->pageGroup())
         pageConfiguration->setPageGroup(m_defaultPageGroup.copyRef());
-    if (!pageConfiguration->preferences())
-        pageConfiguration->setPreferences(pageConfiguration->pageGroup()->protectedPreferences());
-    if (!pageConfiguration->userContentController())
-        pageConfiguration->setUserContentController(pageConfiguration->pageGroup()->protectedUserContentController());
-    if (!pageConfiguration->visitedLinkStore())
-        pageConfiguration->setVisitedLinkStore(m_visitedLinkStore.copyRef());
-
-    if (!pageConfiguration->websiteDataStore()) {
-        // We try to avoid creating the default data store as long as possible.
-        // But if there is an attempt to create a web page without any specified data store, then we have to create it.
-        pageConfiguration->setWebsiteDataStore(WebKit::WebsiteDataStore::defaultDataStore());
-    }
 
     RefPtr<WebProcessProxy> process;
     auto lockdownMode = pageConfiguration->lockdownModeEnabled() ? WebProcessProxy::LockdownMode::Enabled : WebProcessProxy::LockdownMode::Disabled;
     RefPtr relatedPage = pageConfiguration->relatedPage();
-    // FIXME: If site isolation is enabled, this needs to get the correct process instead of assuming we always want the process of the related page.
-    if (relatedPage && !relatedPage->isClosed() && relatedPage->hasSameGPUAndNetworkProcessPreferencesAs(pageConfiguration)) {
+
+    if (pageConfiguration->openerProcess()) {
+        ASSERT(pageConfiguration->preferences().siteIsolationEnabled());
+        process = pageConfiguration->openerProcess();
+    } else if (relatedPage && !relatedPage->isClosed() && relatedPage->hasSameGPUAndNetworkProcessPreferencesAs(pageConfiguration)) {
         // Sharing processes, e.g. when creating the page via window.open().
         process = &relatedPage->ensureRunningProcess();
         // We do not support several WebsiteDataStores sharing a single process.
-        ASSERT(process->isDummyProcessProxy() || pageConfiguration->websiteDataStore() == process->websiteDataStore());
-        ASSERT(&pageConfiguration->relatedPage()->websiteDataStore() == pageConfiguration->websiteDataStore());
+        ASSERT(process->isDummyProcessProxy() || &pageConfiguration->websiteDataStore() == process->websiteDataStore());
+        ASSERT(&pageConfiguration->relatedPage()->websiteDataStore() == &pageConfiguration->websiteDataStore());
     } else if (pageConfiguration->delaysWebProcessLaunchUntilFirstLoad()) {
         WEBPROCESSPOOL_RELEASE_LOG(Process, "createWebPage: delaying WebProcess launch until first load");
         // In the common case, we delay process launch until something is actually loaded in the page.
-        process = dummyProcessProxy(pageConfiguration->websiteDataStore()->sessionID());
+        process = dummyProcessProxy(pageConfiguration->websiteDataStore().sessionID());
         if (!process) {
-            process = WebProcessProxy::create(*this, pageConfiguration->protectedWebsiteDataStore().get(), lockdownMode, WebProcessProxy::IsPrewarmed::No, CrossOriginMode::Shared, WebProcessProxy::ShouldLaunchProcess::No);
-            m_dummyProcessProxies.add(pageConfiguration->websiteDataStore()->sessionID(), *process);
+            process = WebProcessProxy::create(*this, pageConfiguration->protectedWebsiteDataStore().ptr(), lockdownMode, WebProcessProxy::IsPrewarmed::No, CrossOriginMode::Shared, WebProcessProxy::ShouldLaunchProcess::No);
+            m_dummyProcessProxies.add(pageConfiguration->websiteDataStore().sessionID(), *process);
             m_processes.append(*process);
         }
     } else {
         WEBPROCESSPOOL_RELEASE_LOG(Process, "createWebPage: Not delaying WebProcess launch");
-        process = processForRegistrableDomain(*pageConfiguration->protectedWebsiteDataStore(), { }, lockdownMode, pageConfiguration);
+        process = processForRegistrableDomain(pageConfiguration->protectedWebsiteDataStore(), { }, lockdownMode, pageConfiguration);
     }
 
-    RefPtr userContentController = pageConfiguration->userContentController();
+    Ref userContentController = pageConfiguration->userContentController();
     
     ASSERT(process);
     
@@ -1269,8 +1263,7 @@ Ref<WebPageProxy> WebProcessPool::createWebPage(PageClient& pageClient, Ref<API:
         for (Ref workerProcess : remoteWorkerProcesses())
             workerProcess->updateRemoteWorkerPreferencesStore(*m_remoteWorkerPreferences);
     }
-    if (userContentController)
-        m_userContentControllerForRemoteWorkers = userContentController;
+    m_userContentControllerForRemoteWorkers = userContentController.ptr();
 
     bool enableProcessSwapOnCrossSiteNavigation = page->preferences().processSwapOnCrossSiteNavigationEnabled();
 #if PLATFORM(IOS_FAMILY)
@@ -2413,6 +2406,37 @@ size_t WebProcessPool::serviceWorkerProxiesCount() const
             ++count;
     });
     return count;
+}
+
+void WebProcessPool::isJITDisabledInAllRemoteWorkerProcesses(CompletionHandler<void(bool)>&& completionHandler) const
+{
+    class JITDisabledCallbackAggregator : public RefCounted<JITDisabledCallbackAggregator> {
+    public:
+        static auto create(CompletionHandler<void(bool)>&& callback) { return adoptRef(*new JITDisabledCallbackAggregator(WTFMove(callback))); }
+
+        ~JITDisabledCallbackAggregator()
+        {
+            if (m_callback)
+                m_callback(m_isJITDisabled);
+        }
+
+        void setJITEnabled(bool isJITEnabled) { m_isJITDisabled &= !isJITEnabled; }
+
+    private:
+        explicit JITDisabledCallbackAggregator(CompletionHandler<void(bool)>&& callback)
+            : m_callback(WTFMove(callback))
+        { }
+
+        CompletionHandler<void(bool)> m_callback;
+        bool m_isJITDisabled { true };
+    };
+
+    Ref callbackAggregator = JITDisabledCallbackAggregator::create(WTFMove(completionHandler));
+    remoteWorkerProcesses().forEach([&](auto& process) {
+        process.sendWithAsyncReply(Messages::WebProcess::IsJITEnabled(), [callbackAggregator](bool isJITEnabled) {
+            callbackAggregator->setJITEnabled(isJITEnabled);
+        }, 0);
+    });
 }
 
 bool WebProcessPool::hasServiceWorkerForegroundActivityForTesting() const

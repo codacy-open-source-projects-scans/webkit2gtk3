@@ -1266,6 +1266,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     html/PermissionsPolicy.h
     html/PluginDocument.h
     html/StepRange.h
+    html/SwitchTrigger.h
     html/TimeRanges.h
     html/TypeAhead.h
     html/URLDecomposition.h
@@ -1504,6 +1505,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/DragController.h
     page/DummySpeechRecognitionProvider.h
     page/EditorClient.h
+    page/ElementTargetingController.h
+    page/ElementTargetingTypes.h
     page/EventHandler.h
     page/FocusController.h
     page/FocusDirection.h
@@ -1744,7 +1747,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/ProcessIdentity.h
     platform/ProcessQualified.h
     platform/PromisedAttachmentInfo.h
-    platform/PublicSuffix.h
+    platform/PublicSuffixStore.h
     platform/RectEdges.h
     platform/ReferrerPolicy.h
     platform/RegistrableDomain.h
@@ -2105,6 +2108,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     platform/graphics/egl/GLContext.h
     platform/graphics/egl/GLContextWrapper.h
+    platform/graphics/egl/GLFence.h
 
     platform/graphics/filters/DistantLightSource.h
     platform/graphics/filters/FEBlend.h
@@ -2299,7 +2303,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/sql/SQLiteStatementAutoResetScope.h
     platform/sql/SQLiteTransaction.h
 
-    platform/text/CharacterProperties.h
     platform/text/BidiContext.h
     platform/text/StringWithDirection.h
     platform/text/TextBoundaries.h
@@ -2331,6 +2334,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/HitTestLocation.h
     rendering/HitTestRequest.h
     rendering/HitTestResult.h
+    rendering/HitTestSource.h
     rendering/LayerAncestorClippingStack.h
     rendering/LayerFragment.h
     rendering/LegacyInlineBox.h
@@ -2407,6 +2411,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/style/GridArea.h
     rendering/style/GridLength.h
     rendering/style/GridPosition.h
+    rendering/style/GridPositionsResolver.h
     rendering/style/GridTrackSize.h
     rendering/style/LineClampValue.h
     rendering/style/ListStyleType.h

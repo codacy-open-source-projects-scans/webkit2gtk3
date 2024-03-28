@@ -114,6 +114,7 @@ public:
 
     void imageFrameAvailableAtIndex(size_t);
     void decode(Function<void()>&&);
+    WEBCORE_EXPORT DecodingOptions lastDecodingOptions() const;
 
 private:
     WEBCORE_EXPORT BitmapImage(Ref<NativeImage>&&);
@@ -195,6 +196,7 @@ private:
 #endif
 
     unsigned m_decodeCountForTesting { 0 };
+    DecodingOptions m_lastDecodingOptions { DecodingMode::Auto };
 
     RefPtr<NativeImage> m_cachedImage;
 };

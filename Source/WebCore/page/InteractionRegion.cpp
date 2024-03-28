@@ -64,7 +64,7 @@ namespace WebCore {
 
 InteractionRegion::~InteractionRegion() = default;
 
-static CursorType cursorTypeForElement(Element& element)
+static bool hasInteractiveCursorType(Element& element)
 {
     auto* renderer = element.renderer();
     auto* style = renderer ? &renderer->style() : nullptr;
@@ -73,7 +73,11 @@ static CursorType cursorTypeForElement(Element& element)
     if (cursorType == CursorType::Auto && element.enclosingLinkEventParentOrSelf())
         cursorType = CursorType::Pointer;
 
-    return cursorType;
+    return cursorType == CursorType::Grab
+        || cursorType == CursorType::Move
+        || cursorType == CursorType::Pointer
+        || cursorType == CursorType::Text
+        || cursorType == CursorType::VerticalText;
 }
 
 static bool shouldAllowElement(const Element& element)
@@ -150,7 +154,7 @@ bool elementMatchesHoverRules(Element& element)
     return foundHoverRules;
 }
 
-static bool shouldAllowNonPointerCursorForElement(const Element& element)
+static bool shouldAllowNonInteractiveCursorForElement(const Element& element)
 {
 #if ENABLE(ATTACHMENT_ELEMENT)
     if (is<HTMLAttachmentElement>(element))
@@ -196,6 +200,7 @@ static bool hasTransparentContainerStyle(const RenderStyle& style)
     return !style.hasBackground()
         && !style.hasOutline()
         && !style.boxShadow()
+        && !style.clipPath()
         && !style.hasExplicitlySetBorderRadius()
         // No visible borders or borders that do not create a complete box.
         && (!style.hasVisibleBorder()
@@ -322,7 +327,7 @@ std::optional<InteractionRegion> interactionRegionForRenderedRegion(RenderObject
 
     // FIXME: Consider also allowing elements that only receive touch events.
     bool hasListener = renderer.style().eventListenerRegionTypes().contains(EventListenerRegionType::MouseClick);
-    bool hasPointer = cursorTypeForElement(*matchedElement) == CursorType::Pointer || shouldAllowNonPointerCursorForElement(*matchedElement);
+    bool hasPointer = hasInteractiveCursorType(*matchedElement) || shouldAllowNonInteractiveCursorForElement(*matchedElement);
     bool isTooBigForInteraction = bounds.area() > frameViewArea / 3;
     bool isTooBigForOcclusion = bounds.area() > frameViewArea * 3;
 
@@ -416,8 +421,12 @@ std::optional<InteractionRegion> interactionRegionForRenderedRegion(RenderObject
     float cornerRadius = 0;
     OptionSet<InteractionRegion::CornerMask> maskedCorners { };
     std::optional<Path> clipPath = std::nullopt;
+    RefPtr styleClipPath = regionRenderer.style().clipPath();
 
-    if (iconImage && originalElement) {
+    if (styleClipPath && styleClipPath->type() == PathOperation::OperationType::Shape) {
+        auto boundingRect = originalElement->boundingClientRect();
+        clipPath = styleClipPath->getPath(TransformOperationData(FloatRect(FloatPoint(), boundingRect.size())));
+    } else if (iconImage && originalElement) {
         LayoutRect imageRect(rect);
         Ref shape = Shape::createRasterShape(iconImage.get(), 0, imageRect, imageRect, WritingMode::HorizontalTb, 0);
         Shape::DisplayPaths paths;

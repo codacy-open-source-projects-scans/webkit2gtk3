@@ -64,6 +64,7 @@ class PageConfiguration;
 class PolicyClient;
 class ResourceLoadClient;
 class SerializedScriptValue;
+class TargetedElementInfo;
 class UIClient;
 class URL;
 class URLRequest;
@@ -274,6 +275,7 @@ struct ShareDataWithParsedURL;
 struct SleepDisablerIdentifierType;
 struct SpeechRecognitionError;
 struct SystemPreviewInfo;
+struct TargetedElementRequest;
 struct TextAlternativeWithRange;
 struct TextCheckingResult;
 struct TextIndicatorData;
@@ -529,6 +531,7 @@ enum class WebEventModifier : uint8_t;
 enum class WebEventType : uint8_t;
 enum class WebTextReplacementDataEditAction : uint8_t;
 enum class WebTextReplacementDataState : uint8_t;
+enum class WebUnifiedTextReplacementType : uint8_t;
 enum class WindowKind : uint8_t;
 
 template<typename> class MonotonicObjectIdentifier;
@@ -891,8 +894,6 @@ public:
     bool isViewWindowActive() const;
 
     WindowKind windowKind() const;
-
-    void addMIMETypeWithCustomContentProvider(const String& mimeType);
 
     void selectAll();
     void executeEditCommand(const String& commandName, const String& argument = String());
@@ -1576,7 +1577,7 @@ public:
     void didChooseFilesForOpenPanel(const Vector<String>& fileURLs, const Vector<String>& allowedMIMETypes);
     void didCancelForOpenPanel();
 
-    WebPageCreationParameters creationParameters(WebProcessProxy&, DrawingAreaProxy&, bool isProcessSwap = false, RefPtr<API::WebsitePolicies>&& = nullptr, std::optional<WebCore::FrameIdentifier>&& mainFrameIdentifier = std::nullopt, SubframeProcessPageParameters* = nullptr, std::optional<float> topContentInset = std::nullopt);
+    WebPageCreationParameters creationParameters(WebProcessProxy&, DrawingAreaProxy&, std::optional<SubframeProcessPageParameters>&&, bool isProcessSwap = false, RefPtr<API::WebsitePolicies>&& = nullptr, std::optional<WebCore::FrameIdentifier>&& mainFrameIdentifier = std::nullopt, std::optional<float> topContentInset = std::nullopt);
     WebPageCreationParameters creationParametersForProvisionalPage(WebProcessProxy&, DrawingAreaProxy&, RefPtr<API::WebsitePolicies>&&, std::optional<WebCore::FrameIdentifier> mainFrameIdentifier);
     WebPageCreationParameters creationParametersForRemotePage(WebProcessProxy&, DrawingAreaProxy&, SubframeProcessPageParameters&&);
 
@@ -2228,6 +2229,10 @@ public:
 
 #if ENABLE(UNIFIED_TEXT_REPLACEMENT)
     void handleContextMenuSwapCharacters(WebCore::IntRect selectionBoundsInRootView);
+
+    void textReplacementSessionShowInformationForReplacementWithUUIDRelativeToRect(const WTF::UUID& sessionUUID, const WTF::UUID& replacementUUID, WebCore::IntRect selectionBoundsInRootView);
+
+    void textReplacementSessionUpdateStateForReplacementWithUUID(const WTF::UUID& sessionUUID, WebTextReplacementDataState, const WTF::UUID& replacementUUID);
 #endif
 
 #if ENABLE(MEDIA_SESSION_COORDINATOR)
@@ -2257,7 +2262,6 @@ public:
     WebProcessProxy* processForRegistrableDomain(const WebCore::RegistrableDomain&);
 
     void createRemoteSubframesInOtherProcesses(WebFrameProxy&, const String& frameName);
-    void broadcastFrameRemovalToOtherProcesses(IPC::Connection&, WebCore::FrameIdentifier);
     void broadcastMainFrameURLChangeToOtherProcesses(IPC::Connection&, const URL&);
 
     void addOpenedPage(WebPageProxy&);
@@ -2315,7 +2319,7 @@ public:
     void generateTestReport(const String& message, const String& group);
 
     void frameCreated(WebCore::FrameIdentifier, WebFrameProxy&);
-    void didDestroyFrame(WebCore::FrameIdentifier);
+    void didDestroyFrame(IPC::Connection&, WebCore::FrameIdentifier);
     void disconnectFramesFromPage();
 
     void didCommitLoadForFrame(WebCore::FrameIdentifier, FrameInfoData&&, WebCore::ResourceRequest&&, uint64_t navigationID, const String& mimeType, bool frameHasCustomContentProvider, WebCore::FrameLoadType, const WebCore::CertificateInfo&, bool usedLegacyTLS, bool wasPrivateRelayed, bool containsPluginDocument, WebCore::HasInsecureContent, WebCore::MouseEventPolicy, const UserData&);
@@ -2369,11 +2373,13 @@ public:
 #endif
     void setCrossSiteLoadWithLinkDecorationForTesting(const URL& fromURL, const URL& toURL, bool wasFiltered, CompletionHandler<void()>&&);
 
+    void requestTargetedElement(WebCore::TargetedElementRequest&&, CompletionHandler<void(const Vector<Ref<API::TargetedElementInfo>>&)>&&);
+
     void requestTextExtraction(std::optional<WebCore::FloatRect>&& collectionRectInRootView, CompletionHandler<void(WebCore::TextExtraction::Item&&)>&&);
     void requestRenderedTextForElementSelector(String&& selector, CompletionHandler<void(Expected<String, WebCore::ExceptionCode>&&)>&&);
 
 #if ENABLE(UNIFIED_TEXT_REPLACEMENT)
-    void willBeginTextReplacementSession(const WTF::UUID&, CompletionHandler<void(const Vector<WebUnifiedTextReplacementContextData>&)>&&);
+    void willBeginTextReplacementSession(const WTF::UUID&, WebUnifiedTextReplacementType, CompletionHandler<void(const Vector<WebUnifiedTextReplacementContextData>&)>&&);
 
     void didBeginTextReplacementSession(const WTF::UUID&, const Vector<WebKit::WebUnifiedTextReplacementContextData>&);
 
@@ -2387,6 +2393,8 @@ public:
 
     void textReplacementSessionDidReceiveEditAction(const WTF::UUID&, WebKit::WebTextReplacementDataEditAction);
 #endif
+
+    void adjustVisibilityForTargetedElements(const Vector<Ref<API::TargetedElementInfo>>&, CompletionHandler<void(bool)>&&);
 
     void addConsoleMessage(WebCore::FrameIdentifier, JSC::MessageSource, JSC::MessageLevel, const String&, std::optional<WebCore::ResourceLoaderIdentifier> = std::nullopt);
 
@@ -2402,6 +2410,8 @@ public:
 
     bool hasValidAudibleActivity() const;
     bool hasAllowedToRunInTheBackgroundActivity() const;
+
+    template<typename M> void sendToProcessContainingFrame(std::optional<WebCore::FrameIdentifier>, M&&);
 
 private:
     std::optional<Vector<uint8_t>> getWebCryptoMasterKey();
@@ -2982,7 +2992,6 @@ private:
 
     template<typename F> decltype(auto) sendToWebPage(std::optional<WebCore::FrameIdentifier>, F&&);
     template<typename M, typename C> void sendToProcessContainingFrame(std::optional<WebCore::FrameIdentifier>, M&&, C&&);
-    template<typename M> void sendToProcessContainingFrame(std::optional<WebCore::FrameIdentifier>, M&&);
     template<typename M> IPC::ConnectionSendSyncResult<M> sendSyncToProcessContainingFrame(std::optional<WebCore::FrameIdentifier>, M&&);
 
     void sendPreventableTouchEvent(WebCore::FrameIdentifier, const NativeWebTouchEvent&);
@@ -2992,7 +3001,8 @@ private:
 
     void focusRemoteFrame(IPC::Connection&, WebCore::FrameIdentifier);
     void postMessageToRemote(WebCore::FrameIdentifier source, const String& sourceOrigin, WebCore::FrameIdentifier target, std::optional<WebCore::SecurityOriginData> targetOrigin, const WebCore::MessageWithMessagePorts&);
-    void renderTreeAsText(WebCore::FrameIdentifier, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag>, CompletionHandler<void(String&&)>&&);
+    void renderTreeAsTextForTesting(WebCore::FrameIdentifier, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag>, CompletionHandler<void(String&&)>&&);
+    void frameTextForTesting(WebCore::FrameIdentifier, CompletionHandler<void(String&&)>&&);
     void bindRemoteAccessibilityFrames(int processIdentifier, WebCore::FrameIdentifier, std::span<const uint8_t> dataToken, CompletionHandler<void(std::span<const uint8_t>, int)>&&);
     void updateRemoteFrameAccessibilityOffset(WebCore::FrameIdentifier, WebCore::IntPoint);
 

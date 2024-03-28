@@ -1462,13 +1462,14 @@
    },
    {
       "emails" : [
+         "cadubentzen@igalia.com",
          "cadubentzen@gmail.com",
          "cramalho@igalia.com"
       ],
-      "name" : "Carlos Eduardo Ramalho",
+      "github" : "cadubentzen",
+      "name" : "Carlos Bentzen",
       "nicks" : [
-         "cadubentzen",
-         "cramalho"
+         "cadubentzen"
       ]
    },
    {
@@ -2744,7 +2745,8 @@
          "lerica@apple.com"
       ],
       "github" : "lericaa",
-      "name" : "Erica Li"
+      "name" : "Erica Li",
+      "status" : "committer"
    },
    {
       "emails" : [
@@ -6777,7 +6779,7 @@
       "nicks" : [
          "rreno"
       ],
-      "status" : "committer"
+      "status" : "reviewer"
    },
    {
       "emails" : [

@@ -145,12 +145,12 @@ static constexpr NSInteger currentDeclarativeNetRequestRuleTranslatorVersion = 1
     decisionHandler(WKNavigationActionPolicyCancel);
 }
 
-- (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation
+- (void)_webView:(WKWebView *)webView navigationDidFinishDocumentLoad:(WKNavigation *)navigation
 {
     if (!_webExtensionContext)
         return;
 
-    _webExtensionContext->didFinishNavigation(webView, navigation);
+    _webExtensionContext->didFinishDocumentLoad(webView, navigation);
 }
 
 - (void)webView:(WKWebView *)webView didFailNavigation:(WKNavigation *)navigation withError:(NSError *)error
@@ -516,6 +516,15 @@ void WebExtensionContext::setInspectable(bool inspectable)
         entry.key.cocoaView().get().inspectable = inspectable;
 }
 
+void WebExtensionContext::setUnsupportedAPIs(HashSet<String>&& unsupported)
+{
+    ASSERT(!isLoaded());
+    if (isLoaded())
+        return;
+
+    m_unsupportedAPIs = WTFMove(unsupported);
+}
+
 const WebExtensionContext::InjectedContentVector& WebExtensionContext::injectedContents()
 {
     return m_extension->staticInjectedContents();
@@ -877,11 +886,6 @@ bool WebExtensionContext::removeGrantedPermissions(PermissionsSet& permissionsTo
 
 bool WebExtensionContext::removeGrantedPermissionMatchPatterns(MatchPatternSet& matchPatternsToRemove, EqualityOnly equalityOnly)
 {
-    if (!removePermissionMatchPatterns(m_grantedPermissionMatchPatterns, matchPatternsToRemove, equalityOnly, m_nextGrantedPermissionMatchPatternsExpirationDate, _WKWebExtensionContextGrantedPermissionMatchPatternsWereRemovedNotification))
-        return false;
-
-    removeInjectedContent(matchPatternsToRemove);
-
     // Clear activeTab permissions if the patterns match.
     for (Ref tab : openTabs()) {
         auto temporaryPattern = tab->temporaryPermissionMatchPattern();
@@ -893,6 +897,11 @@ bool WebExtensionContext::removeGrantedPermissionMatchPatterns(MatchPatternSet& 
                 tab->setTemporaryPermissionMatchPattern(nullptr);
         }
     }
+
+    if (!removePermissionMatchPatterns(m_grantedPermissionMatchPatterns, matchPatternsToRemove, equalityOnly, m_nextGrantedPermissionMatchPatternsExpirationDate, _WKWebExtensionContextGrantedPermissionMatchPatternsWereRemovedNotification))
+        return false;
+
+    removeInjectedContent(matchPatternsToRemove);
 
     return true;
 }
@@ -1638,7 +1647,7 @@ void WebExtensionContext::setPermissionState(PermissionState state, const URL& u
     ASSERT(!url.isEmpty());
     ASSERT(!expirationDate.isNaN());
 
-    auto pattern = WebExtensionMatchPattern::getOrCreate(url.protocol().toString(), url.host().toString(), url.path().toString());
+    RefPtr pattern = WebExtensionMatchPattern::getOrCreate(url);
     if (!pattern)
         return;
 
@@ -2813,18 +2822,27 @@ void WebExtensionContext::userGesturePerformed(WebExtensionTab& tab)
     if (currentURL.isEmpty())
         return;
 
-    auto pattern = tab.temporaryPermissionMatchPattern();
-
-    // Nothing to do if the tab already has a pattern matching the current URL.
-    if (pattern && pattern->matchesURL(currentURL))
+    switch (permissionState(currentURL, &tab)) {
+    case PermissionState::DeniedImplicitly:
+    case PermissionState::DeniedExplicitly:
+    case PermissionState::GrantedImplicitly:
+    case PermissionState::GrantedExplicitly:
+        // The extension already has permission, or permission was denied, so there is nothing to do.
         return;
+
+    case PermissionState::Unknown:
+    case PermissionState::RequestedImplicitly:
+    case PermissionState::RequestedExplicitly:
+        // The temporary permission should be granted.
+        break;
+    }
 
     // A pattern should not exist, since it should be cleared in clearUserGesture
     // on any navigation between different hosts.
-    ASSERT(!pattern);
+    ASSERT(!tab.temporaryPermissionMatchPattern());
 
-    // Grant the tab a temporary permission to access to a pattern matching the current URL's scheme and host for all paths.
-    pattern = WebExtensionMatchPattern::getOrCreate(currentURL.protocol().toStringWithoutCopying(), currentURL.host().toStringWithoutCopying(), "/*"_s);
+    // Grant the tab a temporary permission to access to a pattern matching the current URL.
+    RefPtr pattern = WebExtensionMatchPattern::getOrCreate(currentURL);
     tab.setTemporaryPermissionMatchPattern(pattern.copyRef());
 
     // Fire the updated event now that the extension has permission to see the URL and title.
@@ -3326,38 +3344,33 @@ void WebExtensionContext::saveBackgroundPageListenersToStorage()
 
 void WebExtensionContext::performTasksAfterBackgroundContentLoads()
 {
-    RELEASE_LOG_DEBUG(Extensions, "Performing tasks soon after background content loads");
+    if (!isLoaded())
+        return;
 
-    constexpr auto performDelay = 100_ms;
+    RELEASE_LOG_DEBUG(Extensions, "Background content loaded");
 
-    // Delay to give time for addListener messages to register the events, this is needed because modules execute after page load fires.
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, performDelay.nanosecondsAs<int64_t>()), dispatch_get_main_queue(), makeBlockPtr([this, protectedThis = Ref { *this }] {
-        if (!isLoaded())
-            return;
+    if (m_shouldFireStartupEvent) {
+        fireRuntimeStartupEventIfNeeded();
+        m_shouldFireStartupEvent = false;
+    }
 
-        if (m_shouldFireStartupEvent) {
-            fireRuntimeStartupEventIfNeeded();
-            m_shouldFireStartupEvent = false;
-        }
+    if (m_installReason != InstallReason::None) {
+        fireRuntimeInstalledEventIfNeeded();
 
-        if (m_installReason != InstallReason::None) {
-            fireRuntimeInstalledEventIfNeeded();
+        m_installReason = InstallReason::None;
+        m_previousVersion = nullString();
+    }
 
-            m_installReason = InstallReason::None;
-            m_previousVersion = nullString();
-        }
+    RELEASE_LOG_DEBUG(Extensions, "Performing %{public}zu task(s) after background content loaded", m_actionsToPerformAfterBackgroundContentLoads.size());
 
-        RELEASE_LOG_DEBUG(Extensions, "Performing %{public}zu task(s) after background content loaded", m_actionsToPerformAfterBackgroundContentLoads.size());
+    for (auto& action : m_actionsToPerformAfterBackgroundContentLoads)
+        action();
 
-        for (auto& action : m_actionsToPerformAfterBackgroundContentLoads)
-            action();
+    m_backgroundContentIsLoaded = true;
+    m_actionsToPerformAfterBackgroundContentLoads.clear();
 
-        m_backgroundContentIsLoaded = true;
-        m_actionsToPerformAfterBackgroundContentLoads.clear();
-
-        saveBackgroundPageListenersToStorage();
-        scheduleBackgroundContentToUnload();
-    }).get());
+    saveBackgroundPageListenersToStorage();
+    scheduleBackgroundContentToUnload();
 }
 
 void WebExtensionContext::wakeUpBackgroundContentIfNecessary(CompletionHandler<void()>&& completionHandler)
@@ -3422,12 +3435,11 @@ bool WebExtensionContext::decidePolicyForNavigationAction(WKWebView *webView, WK
     return false;
 }
 
-void WebExtensionContext::didFinishNavigation(WKWebView *webView, WKNavigation *)
+void WebExtensionContext::didFinishDocumentLoad(WKWebView *webView, WKNavigation *)
 {
     if (webView != m_backgroundWebView)
         return;
 
-    // When didFinishNavigation fires for a service worker, the service worker has not executed yet.
     // The service worker will notify the load via a completion handler instead.
     if (extension().backgroundContentIsServiceWorker())
         return;
@@ -4120,6 +4132,10 @@ void WebExtensionContext::addDeclarativeNetRequestRulesToPrivateUserContentContr
         if (!ruleList)
             return;
 
+        // The extension could have been unloaded before this was called.
+        if (!isLoaded())
+            return;
+
         for (auto& controller : extensionController()->allPrivateUserContentControllers())
             controller.addContentRuleList(*ruleList, m_baseURL);
     });
@@ -4165,6 +4181,12 @@ void WebExtensionContext::compileDeclarativeNetRequestRules(NSArray *rulesData, 
 
         dispatch_async(dispatch_get_main_queue(), makeBlockPtr([this, protectedThis = Ref { *this }, completionHandler = WTFMove(completionHandler), previouslyLoadedHash = String { previouslyLoadedHash }, hashOfWebKitRules = String { hashOfWebKitRules }, webKitRules = String { webKitRules }]() mutable {
             API::ContentRuleListStore::defaultStore().lookupContentRuleListFile(declarativeNetRequestContentRuleListFilePath(), uniqueIdentifier().isolatedCopy(), [this, protectedThis = Ref { *this }, completionHandler = WTFMove(completionHandler), previouslyLoadedHash, hashOfWebKitRules, webKitRules](RefPtr<API::ContentRuleList> foundRuleList, std::error_code) mutable {
+                // The extension could have been unloaded before this was called.
+                if (!isLoaded()) {
+                    completionHandler(false);
+                    return;
+                }
+
                 if (foundRuleList) {
                     if ([previouslyLoadedHash isEqualToString:hashOfWebKitRules]) {
                         for (auto& userContentController : userContentControllers())
@@ -4178,6 +4200,12 @@ void WebExtensionContext::compileDeclarativeNetRequestRules(NSArray *rulesData, 
                 API::ContentRuleListStore::defaultStore().compileContentRuleListFile(declarativeNetRequestContentRuleListFilePath(), uniqueIdentifier().isolatedCopy(), String(webKitRules), [this, protectedThis = Ref { *this }, completionHandler = WTFMove(completionHandler), hashOfWebKitRules](RefPtr<API::ContentRuleList> ruleList, std::error_code error) mutable {
                     if (error) {
                         RELEASE_LOG_ERROR(Extensions, "Error compiling declarativeNetRequest rules: %{public}s", error.message().c_str());
+                        completionHandler(false);
+                        return;
+                    }
+
+                    // The extension could have been unloaded before this was called.
+                    if (!isLoaded()) {
                         completionHandler(false);
                         return;
                     }

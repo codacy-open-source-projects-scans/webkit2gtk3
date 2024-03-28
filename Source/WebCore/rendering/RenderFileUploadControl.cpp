@@ -125,7 +125,7 @@ int RenderFileUploadControl::maxFilenameLogicalWidth() const
 
 void RenderFileUploadControl::paintObject(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
-    if (style().visibility() != Visibility::Visible)
+    if (style().usedVisibility() != Visibility::Visible)
         return;
     
     if (!paintInfo.context().paintingDisabled())
@@ -300,7 +300,7 @@ void RenderFileUploadControl::computePreferredLogicalWidths()
     setPreferredLogicalWidthsDirty(false);
 }
 
-VisiblePosition RenderFileUploadControl::positionForPoint(const LayoutPoint&, const RenderFragmentContainer*)
+VisiblePosition RenderFileUploadControl::positionForPoint(const LayoutPoint&, HitTestSource, const RenderFragmentContainer*)
 {
     return VisiblePosition();
 }

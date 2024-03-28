@@ -1070,7 +1070,7 @@ bool RenderStyle::changeRequiresLayout(const RenderStyle& other, OptionSet<Style
         || m_nonInheritedFlags.overflowY != other.m_nonInheritedFlags.overflowY)
         return true;
 
-    if ((visibility() == Visibility::Collapse) != (other.visibility() == Visibility::Collapse))
+    if ((usedVisibility() == Visibility::Collapse) != (other.usedVisibility() == Visibility::Collapse))
         return true;
 
     bool hasFirstLineStyle = hasPseudoStyle(PseudoId::FirstLine);
@@ -1175,7 +1175,7 @@ bool RenderStyle::changeRequiresLayerRepaint(const RenderStyle& other, OptionSet
 
 static bool requiresPainting(const RenderStyle& style)
 {
-    if (style.visibility() == Visibility::Hidden)
+    if (style.usedVisibility() == Visibility::Hidden)
         return false;
     if (!style.opacity())
         return false;
@@ -1542,6 +1542,8 @@ void RenderStyle::conservativelyCollectChangedAnimatableProperties(const RenderS
             changingProperties.m_properties.set(CSSPropertyClear);
         if (first.position != second.position)
             changingProperties.m_properties.set(CSSPropertyPosition);
+        if (first.effectiveDisplay != second.effectiveDisplay)
+            changingProperties.m_properties.set(CSSPropertyDisplay);
         if (first.floating != second.floating)
             changingProperties.m_properties.set(CSSPropertyFloat);
         if (first.tableLayout != second.tableLayout)
@@ -1550,7 +1552,6 @@ void RenderStyle::conservativelyCollectChangedAnimatableProperties(const RenderS
             changingProperties.m_properties.set(CSSPropertyTextDecorationLine);
 
         // Non animated styles are followings.
-        // effectiveDisplay
         // originalDisplay
         // unicodeBidi
         // usesViewportUnits

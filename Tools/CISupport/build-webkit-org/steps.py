@@ -52,6 +52,7 @@ RESULTS_WEBKIT_URL = 'https://results.webkit.org'
 RESULTS_SERVER_API_KEY = 'RESULTS_SERVER_API_KEY'
 S3URL = 'https://s3-us-west-2.amazonaws.com/'
 S3_BUCKET = f'archives.webkit{custom_suffix}.org'
+S3_BUCKET_MINIFIED = f'minified-archives.webkit{custom_suffix}.org'
 WithProperties = properties.WithProperties
 Interpolate = properties.Interpolate
 THRESHOLD_FOR_EXCESSIVE_LOGS = 1000000
@@ -160,7 +161,7 @@ class ConfigureBuild(buildstep.BuildStep):
     description = ["configuring build"]
     descriptionDone = ["configured build"]
 
-    def __init__(self, platform, configuration, architecture, buildOnly, additionalArguments, device_model, *args, **kwargs):
+    def __init__(self, platform, configuration, architecture, buildOnly, additionalArguments, device_model, triggers, *args, **kwargs):
         buildstep.BuildStep.__init__(self, *args, **kwargs)
         self.platform = platform
         if platform != 'jsc-only':
@@ -171,6 +172,7 @@ class ConfigureBuild(buildstep.BuildStep):
         self.buildOnly = buildOnly
         self.additionalArguments = additionalArguments
         self.device_model = device_model
+        self.triggers = triggers
 
     def start(self):
         self.setProperty("platform", self.platform)
@@ -180,6 +182,7 @@ class ConfigureBuild(buildstep.BuildStep):
         self.setProperty("buildOnly", self.buildOnly)
         self.setProperty("additionalArguments", self.additionalArguments)
         self.setProperty("device_model", self.device_model)
+        self.setProperty("triggers", self.triggers)
         self.finished(SUCCESS)
         return defer.succeed(None)
 
@@ -459,8 +462,34 @@ class CompileWebKit(shell.Compile, CustomFlagsMixin):
     def evaluateCommand(self, cmd):
         rc = super().evaluateCommand(cmd)
         steps_to_add = self.follow_up_steps()
-        if rc in (SUCCESS, WARNINGS) and self.getProperty('user_provided_git_hash'):
-            steps_to_add += [ArchiveMinifiedBuiltProduct(), UploadMinifiedBuiltProduct(), TransferToS3(terminate_build=True)]
+
+        triggers = self.getProperty('triggers', None)
+        full_platform = self.getProperty('fullPlatform')
+        architecture = self.getProperty('architecture')
+        configuration = self.getProperty('configuration')
+
+        if triggers:
+            # Build archive
+            steps_to_add += [ArchiveBuiltProduct()]
+            if CURRENT_HOSTNAME in BUILD_WEBKIT_HOSTNAMES + TESTING_ENVIRONMENT_HOSTNAMES:
+                steps_to_add.extend([
+                    GenerateS3URL(f"{full_platform}-{architecture}-{configuration}"),
+                    UploadFileToS3(f"WebKitBuild/{configuration}.zip", links={self.name: 'Archive'}),
+                ])
+            else:
+                # S3 might not be configured on local instances, achieve similar functionality without S3.
+                steps_to_add.extend([UploadBuiltProduct()])
+        # Minified build archive
+        if (triggers and full_platform.startswith(('mac', 'ios-simulator', 'tvos-simulator', 'watchos-simulator'))) or (rc in (SUCCESS, WARNINGS) and self.getProperty('user_provided_git_hash')):
+            steps_to_add += [ArchiveMinifiedBuiltProduct()]
+            if CURRENT_HOSTNAME in BUILD_WEBKIT_HOSTNAMES + TESTING_ENVIRONMENT_HOSTNAMES:
+                steps_to_add.extend([
+                    GenerateS3URL(f"{full_platform}-{architecture}-{configuration}", minified=True),
+                    UploadFileToS3(f"WebKitBuild/minified-{configuration}.zip", links={self.name: 'Minified Archive'}),
+                ])
+            else:
+                steps_to_add.extend([UploadMinifiedBuiltProduct()])
+
         # Using a single addStepsAfterCurrentStep because of https://github.com/buildbot/buildbot/issues/4874
         self.build.addStepsAfterCurrentStep(steps_to_add)
         return rc
@@ -629,7 +658,7 @@ class DownloadBuiltProduct(shell.ShellCommandNewStyle):
     @defer.inlineCallbacks
     def run(self):
         # Only try to download from S3 on the official deployment <https://webkit.org/b/230006>
-        if CURRENT_HOSTNAME not in BUILD_WEBKIT_HOSTNAMES:
+        if CURRENT_HOSTNAME not in BUILD_WEBKIT_HOSTNAMES + TESTING_ENVIRONMENT_HOSTNAMES:
             self.build.addStepsAfterCurrentStep([DownloadBuiltProductFromMaster()])
             defer.returnValue(SKIPPED)
 
@@ -1429,11 +1458,11 @@ class UploadFileToS3(shell.ShellCommandNewStyle):
 
     def getResultSummary(self):
         if self.results == FAILURE:
-            return {'step': 'Failed to upload archive to S3. Please inform an admin.'}
+            return {'step': f'Failed to upload {self.file} to S3. Please inform an admin.'}
         if self.results == SKIPPED:
             return {'step': 'Skipped upload to S3'}
         if self.results in [SUCCESS, WARNINGS]:
-            return {'step': 'Uploaded archive to S3'}
+            return {'step': f'Uploaded {self.file} to S3'}
         return super().getResultSummary()
 
 
@@ -1443,18 +1472,21 @@ class GenerateS3URL(master.MasterShellCommandNewStyle):
     haltOnFailure = False
     flunkOnFailure = False
 
-    def __init__(self, identifier, extension='zip', content_type=None, **kwargs):
+    def __init__(self, identifier, extension='zip', content_type=None, minified=False, **kwargs):
         self.identifier = identifier
         self.extension = extension
+        self.minified = minified
         kwargs['command'] = [
             'python3', '../Shared/generate-s3-url',
-            '--revision', WithProperties('%(revision)s'),
+            '--revision', WithProperties('%(archive_revision)s'),
             '--identifier', self.identifier,
         ]
         if extension:
             kwargs['command'] += ['--extension', extension]
         if content_type:
             kwargs['command'] += ['--content-type', content_type]
+        if minified:
+            kwargs['command'] += ['--minified']
         super().__init__(logEnviron=False, **kwargs)
 
     @defer.inlineCallbacks
@@ -1476,7 +1508,8 @@ class GenerateS3URL(master.MasterShellCommandNewStyle):
         if match:
             self.build.s3url = match.group('url')
             print(f'build: {build_url}, url for GenerateS3URL: {self.build.s3url}')
-            self.build.s3_archives.append(S3URL + f"{S3_BUCKET}/{self.identifier}/{self.getProperty('revision')}.{self.extension}")
+            bucket_url = S3_BUCKET_MINIFIED if self.minified else S3_BUCKET
+            self.build.s3_archives.append(S3URL + f"{bucket_url}/{self.identifier}/{self.getProperty('archive_revision')}.{self.extension}")
             defer.returnValue(rc)
         else:
             print(f'build: {build_url}, logs for GenerateS3URL:\n{log_text}')

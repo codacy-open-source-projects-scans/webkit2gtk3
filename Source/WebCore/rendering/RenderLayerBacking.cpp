@@ -804,9 +804,12 @@ void RenderLayerBacking::updateBackdropFiltersGeometry()
 
 bool RenderLayerBacking::updateBackdropRoot()
 {
-    if (m_graphicsLayer->isBackdropRoot() == m_owningLayer.isBackdropRoot())
+    // Don't try to make the RenderView's layer a backdrop root if it's going to
+    // paint into the window since it won't work (WebKitLegacy only).
+    bool willBeBackdropRoot = m_owningLayer.isBackdropRoot() && !paintsIntoWindow();
+    if (m_graphicsLayer->isBackdropRoot() == willBeBackdropRoot)
         return false;
-    m_graphicsLayer->setIsBackdropRoot(m_owningLayer.isBackdropRoot());
+    m_graphicsLayer->setIsBackdropRoot(willBeBackdropRoot);
     return true;
 }
 
@@ -1695,7 +1698,7 @@ void RenderLayerBacking::updateAfterDescendants()
 
     m_graphicsLayer->setContentsVisible(m_owningLayer.hasVisibleContent() || hasVisibleNonCompositedDescendants());
     if (m_scrollContainerLayer) {
-        m_scrollContainerLayer->setContentsVisible(renderer().style().visibility() == Visibility::Visible);
+        m_scrollContainerLayer->setContentsVisible(renderer().style().usedVisibility() == Visibility::Visible);
 
         bool userInteractive = renderer().visibleToHitTesting();
         m_scrollContainerLayer->setUserInteractionEnabled(userInteractive);

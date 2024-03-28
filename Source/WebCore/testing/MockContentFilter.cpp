@@ -114,7 +114,7 @@ void MockContentFilter::finishedAddingData()
 Ref<FragmentedSharedBuffer> MockContentFilter::replacementData() const
 {
     ASSERT(didBlockData());
-    return SharedBuffer::create(m_replacementData.data(), m_replacementData.size());
+    return SharedBuffer::create(m_replacementData.span());
 }
 
 ContentFilterUnblockHandler MockContentFilter::unblockHandler() const
@@ -149,7 +149,7 @@ void MockContentFilter::maybeDetermineStatus(DecisionPoint decisionPoint)
     if (m_state != State::Blocked)
         return;
 
-    m_replacementData = settings().blockedString().utf8().bytes();
+    m_replacementData = settings().blockedString().utf8().span();
 }
 
 } // namespace WebCore

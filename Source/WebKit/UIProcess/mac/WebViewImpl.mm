@@ -3535,7 +3535,7 @@ void WebViewImpl::accessibilityRegisterUIProcessTokens()
     // Initialize remote accessibility when the window connection has been established.
     NSData *remoteElementToken = [NSAccessibilityRemoteUIElement remoteTokenForLocalUIElement:m_view.getAutoreleased()];
     NSData *remoteWindowToken = [NSAccessibilityRemoteUIElement remoteTokenForLocalUIElement:[m_view window]];
-    m_page->registerUIProcessAccessibilityTokens(toSpan(remoteElementToken), toSpan(remoteWindowToken));
+    m_page->registerUIProcessAccessibilityTokens(span(remoteElementToken), span(remoteWindowToken));
 }
 
 id WebViewImpl::accessibilityFocusedUIElement()
@@ -6528,9 +6528,9 @@ void WebViewImpl::uninstallImageAnalysisOverlayView()
 #endif // ENABLE(IMAGE_ANALYSIS_ENHANCEMENTS)
 
 #if ENABLE(UNIFIED_TEXT_REPLACEMENT)
-void WebViewImpl::willBeginTextReplacementSession(const WTF::UUID& uuid, CompletionHandler<void(const Vector<WebUnifiedTextReplacementContextData>&)>&& completionHandler)
+void WebViewImpl::willBeginTextReplacementSession(const WTF::UUID& uuid, WebUnifiedTextReplacementType type, CompletionHandler<void(const Vector<WebUnifiedTextReplacementContextData>&)>&& completionHandler)
 {
-    protectedPage()->willBeginTextReplacementSession(uuid, WTFMove(completionHandler));
+    protectedPage()->willBeginTextReplacementSession(uuid, type, WTFMove(completionHandler));
 }
 
 void WebViewImpl::didBeginTextReplacementSession(const WTF::UUID& uuid, const Vector<WebUnifiedTextReplacementContextData>& contexts)

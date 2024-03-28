@@ -266,13 +266,13 @@ void FTPDirectoryDocumentParser::parseAndAppendOneLine(const String& inputLine)
 
     String filename;
     if (result.type == FTPDirectoryEntry) {
-        filename = makeString(StringView { result.filename, result.filenameLength }, '/');
+        filename = makeString(result.filenameSpan(), '/');
 
         // We have no interest in linking to "current directory"
         if (filename == "./"_s)
             return;
     } else
-        filename = String(result.filename, result.filenameLength);
+        filename = String(result.filenameSpan());
 
     LOG(FTP, "Appending entry - %s, %s", filename.ascii().data(), result.fileSize.ascii().data());
 
@@ -392,7 +392,7 @@ void FTPDirectoryDocumentParser::append(RefPtr<StringImpl>&& inputSource)
 
     while (cursor < m_dest) {
         if (*cursor == '\n') {
-            m_carryOver.append(StringView(start, cursor - start));
+            m_carryOver.append(StringView(std::span(start, cursor - start)));
             LOG(FTP, "%s", m_carryOver.toString().ascii().data());
             parseAndAppendOneLine(m_carryOver.toString());
             m_carryOver.clear();
@@ -404,7 +404,7 @@ void FTPDirectoryDocumentParser::append(RefPtr<StringImpl>&& inputSource)
 
     // Copy the partial line we have left to the carryover buffer
     if (cursor - start > 1)
-        m_carryOver.append(StringView(start, cursor - start - 1));
+        m_carryOver.append(StringView(std::span(start, cursor - start - 1)));
 }
 
 void FTPDirectoryDocumentParser::finish()

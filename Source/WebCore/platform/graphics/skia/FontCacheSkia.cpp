@@ -26,20 +26,27 @@
 #include "config.h"
 #include "FontCache.h"
 
-#include "CharacterProperties.h"
 #include "Font.h"
 #include "FontDescription.h"
 #include "StyleFontSizeFunctions.h"
 #include <skia/ports/SkFontMgr_fontconfig.h>
 #include <wtf/Assertions.h>
 #include <wtf/text/CString.h>
+#include <wtf/text/CharacterProperties.h>
 #include <wtf/unicode/CharacterNames.h>
 
 namespace WebCore {
 
 void FontCache::platformInit()
 {
-    m_fontManager = SkFontMgr_New_FontConfig(FcConfigReference(nullptr));
+}
+
+SkFontMgr& FontCache::fontManager() const
+{
+    if (!m_fontManager)
+        m_fontManager = SkFontMgr_New_FontConfig(FcConfigReference(nullptr));
+    RELEASE_ASSERT(m_fontManager);
+    return *m_fontManager.get();
 }
 
 RefPtr<Font> FontCache::systemFallbackForCharacterCluster(const FontDescription& description, const Font&, IsForPlatformFont, PreferColoredFont, StringView stringView)
@@ -61,19 +68,20 @@ RefPtr<Font> FontCache::systemFallbackForCharacterCluster(const FontDescription&
 
     // FIXME: handle synthetic properties.
     auto features = computeFeatures(description, { });
-    auto typeface = m_fontManager->matchFamilyStyleCharacter(nullptr, { }, bcp47.data(), bcp47.size(), baseCharacter);
+    auto typeface = fontManager().matchFamilyStyleCharacter(nullptr, { }, bcp47.data(), bcp47.size(), baseCharacter);
     FontPlatformData alternateFontData(WTFMove(typeface), description.computedSize(), false /* syntheticBold */, false /* syntheticOblique */, description.orientation(), description.widthVariant(), description.textRenderingMode(), WTFMove(features));
     return fontForPlatformData(alternateFontData);
 }
 
 Vector<String> FontCache::systemFontFamilies()
 {
-    int count = m_fontManager->countFamilies();
+    auto& manager = fontManager();
+    int count = manager.countFamilies();
     Vector<String> fontFamilies;
     fontFamilies.reserveInitialCapacity(count);
     for (int i = 0; i < count; ++i) {
         SkString familyName;
-        m_fontManager->getFamilyName(i, &familyName);
+        manager.getFamilyName(i, &familyName);
         fontFamilies.append(String::fromUTF8(familyName.data()));
     }
     return fontFamilies;
@@ -319,7 +327,7 @@ static SkFontStyle skiaFontStyle(const FontDescription& fontDescription)
 std::unique_ptr<FontPlatformData> FontCache::createFontPlatformData(const FontDescription& fontDescription, const AtomString& family, const FontCreationContext& fontCreationContext)
 {
     auto familyName = getFamilyNameStringFromFamily(family);
-    auto typeface = m_fontManager->matchFamilyStyle(familyName.utf8().data(), skiaFontStyle(fontDescription));
+    auto typeface = fontManager().matchFamilyStyle(familyName.utf8().data(), skiaFontStyle(fontDescription));
     if (!typeface)
         return nullptr;
 

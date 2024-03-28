@@ -92,6 +92,7 @@
 #include "HTMLTableRowElement.h"
 #include "HTMLTableSectionElement.h"
 #include "HTMLTextFormControlElement.h"
+#include "HitTestSource.h"
 #include "InlineRunAndOffset.h"
 #include "LocalFrame.h"
 #include "MathMLElement.h"
@@ -208,9 +209,15 @@ bool AXObjectCache::gAccessibilityEnabled = false;
 bool AXObjectCache::gAccessibilityEnhancedUserInterfaceEnabled = false;
 bool AXObjectCache::gForceDeferredSpellChecking = false;
 #if ENABLE(AX_THREAD_TEXT_APIS)
-bool AXObjectCache::gAccessibilityThreadTextApisEnabled = false;
+std::atomic<bool> AXObjectCache::gAccessibilityThreadTextApisEnabled = false;
 #endif
-bool AXObjectCache::gForceInitialFrameCaching = false;
+std::atomic<bool> AXObjectCache::gForceInitialFrameCaching = false;
+
+bool AXObjectCache::accessibilityEnabled()
+{
+    ASSERT(isMainThread());
+    return gAccessibilityEnabled;
+}
 
 void AXObjectCache::enableAccessibility()
 {
@@ -220,16 +227,31 @@ void AXObjectCache::enableAccessibility()
 
 void AXObjectCache::disableAccessibility()
 {
+    ASSERT(isMainThread());
     gAccessibilityEnabled = false;
+}
+
+bool AXObjectCache::forceDeferredSpellChecking()
+{
+    ASSERT(isMainThread());
+    return gForceDeferredSpellChecking;
 }
 
 void AXObjectCache::setForceDeferredSpellChecking(bool shouldForce)
 {
+    ASSERT(isMainThread());
     gForceDeferredSpellChecking = shouldForce;
+}
+
+bool AXObjectCache::accessibilityEnhancedUserInterfaceEnabled()
+{
+    ASSERT(isMainThread());
+    return gAccessibilityEnhancedUserInterfaceEnabled;
 }
 
 void AXObjectCache::setEnhancedUserInterfaceAccessibility(bool flag)
 {
+    ASSERT(isMainThread());
     gAccessibilityEnhancedUserInterfaceEnabled = flag;
 #if PLATFORM(MAC)
     if (flag)
@@ -245,7 +267,7 @@ void AXObjectCache::setForceInitialFrameCaching(bool shouldForce)
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
 bool AXObjectCache::shouldServeInitialCachedFrame()
 {
-    return !isTestClient() || forceInitialFrameCaching();
+    return !clientIsInTestMode() || forceInitialFrameCaching();
 }
 
 static const Seconds updateTreeSnapshotTimerInterval { 100_ms };
@@ -446,7 +468,7 @@ bool AXObjectCache::isNodeVisible(Node* node) const
         return false;
 
     auto* renderLayer = renderer->enclosingLayer();
-    if (style.visibility() != Visibility::Visible && renderLayer && !renderLayer->hasVisibleContent())
+    if (style.usedVisibility() != Visibility::Visible && renderLayer && !renderLayer->hasVisibleContent())
         return false;
 
     // Check whether this object or any of its ancestors has opacity 0.
@@ -988,7 +1010,7 @@ RefPtr<AXIsolatedTree> AXObjectCache::getOrCreateIsolatedTree()
     // especially for large documents, for real clients we build a temporary "empty" isolated tree consisting only of the ScrollView and the WebArea objects.
     // Then we schedule building the entire isolated tree on a Timer.
     // For test clients, LayoutTests or XCTests, build the whole isolated tree.
-    if (LIKELY(!isTestClient())) {
+    if (LIKELY(!clientIsInTestMode())) {
         tree = AXIsolatedTree::createEmpty(*this);
         if (!m_buildIsolatedTreeTimer.isActive())
             m_buildIsolatedTreeTimer.startOneShot(0_s);
@@ -3880,7 +3902,7 @@ CharacterOffset AXObjectCache::characterOffsetForPoint(const IntPoint& point, AX
 
 CharacterOffset AXObjectCache::characterOffsetForPoint(const IntPoint& point)
 {
-    auto range = makeSimpleRange(m_document->caretPositionFromPoint(point));
+    auto range = makeSimpleRange(m_document->caretPositionFromPoint(point, HitTestSource::User));
     if (!range)
         return { };
     return startOrEndCharacterOffsetForRange(*range, true);

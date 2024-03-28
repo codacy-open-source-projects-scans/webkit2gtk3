@@ -262,7 +262,11 @@ Element::~Element()
     ASSERT(!beforePseudoElement());
     ASSERT(!afterPseudoElement());
 
-    elementIdentifiersMap().remove(*this);
+    if (UNLIKELY(hasElementStateFlag(ElementStateFlag::HasElementIdentifier)))
+        elementIdentifiersMap().remove(*this);
+    else
+        ASSERT(!elementIdentifiersMap().contains(*this));
+
     ASSERT(!is<HTMLImageElement>(*this) || !intersectionObserverDataIfExists());
     disconnectFromIntersectionObservers();
 
@@ -905,8 +909,6 @@ void Element::setFocus(bool value, FocusVisibility visibility)
 void Element::setHasFocusVisible(bool value)
 {
     Ref document = this->document();
-    if (!document->settings().focusVisibleEnabled())
-        return;
 
 #if ASSERT_ENABLED
     ASSERT(!value || focused());
@@ -2456,7 +2458,7 @@ void Element::invalidateForQueryContainerSizeChange()
 {
     // FIXME: Ideally we would just recompute things that are actually affected by containers queries within the subtree.
     Node::invalidateStyle(Style::Validity::SubtreeInvalid);
-    setStateFlag(StateFlag::NeedsUpdateQueryContainerDependentStyle);
+    setElementStateFlag(ElementStateFlag::NeedsUpdateQueryContainerDependentStyle);
 }
 
 void Element::invalidateForResumingQueryContainerResolution()
@@ -2466,12 +2468,12 @@ void Element::invalidateForResumingQueryContainerResolution()
 
 bool Element::needsUpdateQueryContainerDependentStyle() const
 {
-    return hasStateFlag(StateFlag::NeedsUpdateQueryContainerDependentStyle);
+    return hasElementStateFlag(ElementStateFlag::NeedsUpdateQueryContainerDependentStyle);
 }
 
 void Element::clearNeedsUpdateQueryContainerDependentStyle()
 {
-    clearStateFlag(StateFlag::NeedsUpdateQueryContainerDependentStyle);
+    clearElementStateFlag(ElementStateFlag::NeedsUpdateQueryContainerDependentStyle);
 }
 
 void Element::invalidateEventListenerRegions()
@@ -4468,9 +4470,9 @@ void Element::setFullscreenFlag(bool flag)
 {
     Style::PseudoClassChangeInvalidation styleInvalidation(*this, { { CSSSelector::PseudoClass::Fullscreen, flag }, { CSSSelector::PseudoClass::Modal, flag } });
     if (flag)
-        setStateFlag(StateFlag::IsFullscreen);
+        setElementStateFlag(ElementStateFlag::IsFullscreen);
     else
-        clearStateFlag(StateFlag::IsFullscreen);
+        clearElementStateFlag(ElementStateFlag::IsFullscreen);
 }
 
 #endif
@@ -5467,7 +5469,10 @@ Vector<RefPtr<WebAnimation>> Element::getAnimations(std::optional<GetAnimationsO
 
 ElementIdentifier Element::identifier() const
 {
-    return elementIdentifiersMap().ensure(const_cast<Element&>(*this), [] { return ElementIdentifier::generate(); }).iterator->value;
+    return elementIdentifiersMap().ensure(const_cast<Element&>(*this), [&] {
+        setElementStateFlag(ElementStateFlag::HasElementIdentifier);
+        return ElementIdentifier::generate();
+    }).iterator->value;
 }
 
 Element* Element::fromIdentifier(ElementIdentifier identifier)
@@ -5628,6 +5633,16 @@ CustomStateSet& Element::ensureCustomStateSet()
     if (!rareData.customStateSet())
         rareData.setCustomStateSet(CustomStateSet::create(*this));
     return *rareData.customStateSet();
+}
+
+bool Element::isVisibilityAdjustmentRoot() const
+{
+    return hasRareData() && elementRareData()->isVisibilityAdjustmentRoot();
+}
+
+void Element::setIsVisibilityAdjustmentRoot()
+{
+    ensureElementRareData().setIsVisibilityAdjustmentRoot();
 }
 
 } // namespace WebCore

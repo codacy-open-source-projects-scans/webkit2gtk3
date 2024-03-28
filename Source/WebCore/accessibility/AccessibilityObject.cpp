@@ -1452,7 +1452,7 @@ VisiblePosition AccessibilityObject::visiblePositionForPoint(const IntPoint& poi
 #endif
     }
     
-    return innerNode->renderer()->positionForPoint(pointResult, nullptr);
+    return innerNode->renderer()->positionForPoint(pointResult, HitTestSource::User, nullptr);
 }
 
 VisiblePositionRange AccessibilityObject::visiblePositionRangeForUnorderedPositions(const VisiblePosition& visiblePos1, const VisiblePosition& visiblePos2) const
@@ -4006,7 +4006,7 @@ bool AccessibilityObject::isAXHidden() const
 bool AccessibilityObject::isDOMHidden() const
 {
     if (auto* style = this->style())
-        return style->display() == DisplayType::None || style->visibility() != Visibility::Visible;
+        return style->display() == DisplayType::None || style->usedVisibility() != Visibility::Visible;
     return true;
 }
 
@@ -4033,7 +4033,7 @@ AccessibilityObjectInclusion AccessibilityObject::defaultObjectInclusion() const
     if (auto* style = this->style()) {
         if (style->effectiveInert())
             return AccessibilityObjectInclusion::IgnoreObject;
-        if (style->visibility() != Visibility::Visible) {
+        if (style->usedVisibility() != Visibility::Visible) {
             // aria-hidden is meant to override visibility as the determinant in AX hierarchy inclusion.
             if (equalLettersIgnoringASCIICase(getAttribute(aria_hiddenAttr), "false"_s))
                 return AccessibilityObjectInclusion::DefaultBehavior;
@@ -4295,6 +4295,10 @@ AXCoreObject::AccessibilityChildrenVector AccessibilityObject::selectedChildren(
 
     AccessibilityChildrenVector result;
     switch (roleValue()) {
+    case AccessibilityRole::ComboBox:
+        if (auto* descendant = activeDescendant())
+            result = { descendant };
+        break;
     case AccessibilityRole::ListBox:
         // native list boxes would be AccessibilityListBoxes, so only check for aria list boxes
         result = ariaListboxSelectedChildren();

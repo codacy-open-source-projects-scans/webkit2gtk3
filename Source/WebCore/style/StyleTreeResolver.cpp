@@ -191,6 +191,8 @@ static bool affectsRenderedSubtree(Element& element, const RenderStyle& newStyle
 {
     if (newStyle.display() != DisplayType::None)
         return true;
+    if (element.hasDisplayNone())
+        return true;
     if (element.renderOrDisplayContentsStyle())
         return true;
     if (element.rendererIsNeeded(newStyle))
@@ -261,13 +263,13 @@ auto TreeResolver::resolveElement(Element& element, const RenderStyle* existingS
 
     Styleable styleable { element, { } };
     auto resolvedStyle = styleForStyleable(styleable, resolutionType, resolutionContext);
+    auto update = createAnimatedElementUpdate(WTFMove(resolvedStyle), styleable, parent().change, resolutionContext);
 
-    if (!affectsRenderedSubtree(element, *resolvedStyle.style)) {
+    if (!affectsRenderedSubtree(element, *update.style)) {
         styleable.setLastStyleChangeEventStyle(nullptr);
         return { };
     }
 
-    auto update = createAnimatedElementUpdate(WTFMove(resolvedStyle), styleable, parent().change, resolutionContext);
     auto descendantsToResolve = computeDescendantsToResolve(update, existingStyle, element.styleValidity());
     bool isDocumentElement = &element == m_document.documentElement();
     if (isDocumentElement) {
@@ -643,15 +645,24 @@ ElementUpdate TreeResolver::createAnimatedElementUpdate(ResolvedStyle&& resolved
 {
     auto& element = styleable.element;
     auto& document = element.document();
-    auto* oldStyle = element.renderOrDisplayContentsStyle(styleable.pseudoElementIdentifier);
+    auto* currentStyle = element.renderOrDisplayContentsStyle(styleable.pseudoElementIdentifier);
 
     std::unique_ptr<RenderStyle> startingStyle;
-    if (!oldStyle && resolvedStyle.style->hasTransitions()) {
-        // https://drafts.csswg.org/css-transitions-2/#at-ruledef-starting-style
-        // "If an element does not have a before-change style for a given style change event, the starting style is used instead."
-        startingStyle = resolveStartingStyle(resolvedStyle, styleable, resolutionContext);
-        oldStyle = startingStyle.get();
-    }
+
+    auto* oldStyle = [&]() -> const RenderStyle* {
+        if (currentStyle)
+            return currentStyle;
+
+        if (resolvedStyle.style->hasTransitions()) {
+            // https://drafts.csswg.org/css-transitions-2/#at-ruledef-starting-style
+            // "If an element does not have a before-change style for a given style change event, the starting style is used instead."
+            startingStyle = resolveStartingStyle(resolvedStyle, styleable, resolutionContext);
+            return startingStyle.get();
+        }
+        return nullptr;
+    }();
+
+    auto unanimatedDisplay = resolvedStyle.style->display();
 
     WeakStyleOriginatedAnimations newStyleOriginatedAnimations;
 
@@ -706,7 +717,7 @@ ElementUpdate TreeResolver::createAnimatedElementUpdate(ResolvedStyle&& resolved
     };
 
     // FIXME: Something like this is also needed for viewport units.
-    if (oldStyle && parent().needsUpdateQueryContainerDependentStyle)
+    if (currentStyle && parent().needsUpdateQueryContainerDependentStyle)
         styleable.queryContainerDidChange();
 
     // First, we need to make sure that any new CSS animation occuring on this element has a matching WebAnimation
@@ -719,23 +730,43 @@ ElementUpdate TreeResolver::createAnimatedElementUpdate(ResolvedStyle&& resolved
 
     // Deduplication speeds up equality comparisons as the properties inherit to descendants.
     // FIXME: There should be a more general mechanism for this.
-    if (oldStyle)
-        newStyle->deduplicateCustomProperties(*oldStyle);
+    if (currentStyle)
+        newStyle->deduplicateCustomProperties(*currentStyle);
 
-    auto change = oldStyle ? determineChange(*oldStyle, *newStyle) : Change::Renderer;
+    auto change = currentStyle ? determineChange(*currentStyle, *newStyle) : Change::Renderer;
 
     if (element.hasInvalidRenderer() || parentChange == Change::Renderer)
         change = Change::Renderer;
 
     bool shouldRecompositeLayer = animationImpact.contains(AnimationImpact::RequiresRecomposite) || element.styleResolutionShouldRecompositeLayer();
 
-    if (!newStyleOriginatedAnimations.isEmpty()) {
-        // Make sure that the creation of new style-originated animations during this update
-        // is known to the document's timeline as animation scheduling was paused for any
-        // animation created during this update.
+    auto animationsAffectedDisplay = [&, animatedDisplay = newStyle->display()]() {
+        auto* keyframeEffectStack = styleable.keyframeEffectStack();
+        if (!keyframeEffectStack)
+            return false;
+        if (unanimatedDisplay != animatedDisplay)
+            return true;
+        return keyframeEffectStack->containsProperty(CSSPropertyDisplay);
+    }();
+
+    if (!affectsRenderedSubtree(styleable.element, *newStyle)) {
+        // If after updating animations we end up not rendering this element or its subtree
+        // and the update did not change the "display" value then we should cancel all
+        // style-originated animations while ensuring that the new ones are canceled silently,
+        // as if they hadn't been created.
+        if (!animationsAffectedDisplay)
+            styleable.cancelStyleOriginatedAnimations(newStyleOriginatedAnimations);
+    } else if (!newStyleOriginatedAnimations.isEmpty()) {
+        // If style-originated animations were not canceled, then we should make sure that
+        // the creation of new style-originated animations during this update is known to the
+        // document's timeline as animation scheduling was paused for any animation created
+        // during this update.
         if (auto* timeline = m_document.existingTimeline())
             timeline->styleOriginatedAnimationsWereCreated();
     }
+
+    if (animationsAffectedDisplay)
+        newStyle->setHasDisplayAffectedByAnimations();
 
     return { WTFMove(newStyle), change, shouldRecompositeLayer };
 }

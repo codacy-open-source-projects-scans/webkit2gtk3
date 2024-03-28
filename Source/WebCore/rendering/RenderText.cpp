@@ -29,7 +29,6 @@
 #include "AXObjectCache.h"
 #include "BreakLines.h"
 #include "BreakingContext.h"
-#include "CharacterProperties.h"
 #include "DocumentInlines.h"
 #include "DocumentMarkerController.h"
 #include "FloatQuad.h"
@@ -61,10 +60,11 @@
 #include "TextUtil.h"
 #include "VisiblePosition.h"
 #include "WidthIterator.h"
-#include <bitset>
+#include <wtf/BitSet.h>
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/SortedArrayMap.h>
+#include <wtf/text/CharacterProperties.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/TextBreakIterator.h>
 #include <wtf/unicode/CharacterNames.h>
@@ -177,7 +177,7 @@ String capitalize(const String& string, UChar previousCharacter)
     for (unsigned i = 1; i < length + 1; i++)
         stringWithPrevious[i] = convertNoBreakSpaceToSpace(stringImpl[i - 1]);
 
-    auto* breakIterator = wordBreakIterator(StringView { stringWithPrevious.data(), length + 1 });
+    auto* breakIterator = WTF::wordBreakIterator(stringWithPrevious.span().first(length + 1));
     if (!breakIterator)
         return string;
 
@@ -328,15 +328,13 @@ void RenderText::initiateFontLoadingByAccessingGlyphDataAndComputeCanUseSimplifi
     m_hasStrongDirectionalityContent = false;
     auto mayHaveStrongDirectionalityContent = !textContent.is8Bit();
     // FIXME: Pre-warm glyph loading in FontCascade with the most common range.
-    std::bitset<256> hasSeen;
+    WTF::BitSet<256> hasSeen;
     for (char32_t character : StringView(textContent).codePoints()) {
         if (character < 256) {
-            if (hasSeen[character])
+            if (hasSeen.testAndSet(character))
                 continue;
-            hasSeen.set(character);
         }
-        auto glyphData = fontCascade.glyphDataForCharacter(character, false, fontVariant);
-        m_canUseSimplifiedTextMeasuring = *m_canUseSimplifiedTextMeasuring && WidthIterator::characterCanUseSimplifiedTextMeasuring(character, whitespaceIsCollapsed) && glyphData.isValid() && glyphData.font == &primaryFont;
+        m_canUseSimplifiedTextMeasuring = *m_canUseSimplifiedTextMeasuring && fontCascade.canUseSimplifiedTextMeasuring(character, fontVariant, whitespaceIsCollapsed, primaryFont);
         m_hasPositionDependentContentWidth = *m_hasPositionDependentContentWidth || character == tabCharacter;
         m_hasStrongDirectionalityContent = *m_hasStrongDirectionalityContent || (mayHaveStrongDirectionalityContent && Layout::TextUtil::isStrongDirectionalityCharacter(character));
     }
@@ -657,9 +655,9 @@ Vector<FloatQuad> RenderText::absoluteQuadsForRange(unsigned start, unsigned end
     return quads;
 }
 
-Position RenderText::positionForPoint(const LayoutPoint& point)
+Position RenderText::positionForPoint(const LayoutPoint& point, HitTestSource source)
 {
-    return positionForPoint(point, nullptr).deepEquivalent();
+    return positionForPoint(point, source, nullptr).deepEquivalent();
 }
 
 enum ShouldAffinityBeDownstream { AlwaysDownstream, AlwaysUpstream, UpstreamIfPositionIsNotAtStart };
@@ -793,7 +791,7 @@ static VisiblePosition createVisiblePositionAfterAdjustingOffsetForBiDi(const In
 }
 
 
-VisiblePosition RenderText::positionForPoint(const LayoutPoint& point, const RenderFragmentContainer*)
+VisiblePosition RenderText::positionForPoint(const LayoutPoint& point, HitTestSource, const RenderFragmentContainer*)
 {
     auto firstRun = InlineIterator::firstTextBoxFor(*this);
 
@@ -1726,15 +1724,14 @@ void RenderText::setText(const String& newContent, bool force)
     invalidateLineLayoutPathOnContentChangeIfNeeded(*this, 0, text().length());
 }
 
-void RenderText::setTextWithOffset(const String& newText, unsigned offset, unsigned length, bool force)
+void RenderText::setTextWithOffset(const String& newText, unsigned offset, unsigned, bool force)
 {
     if (!force && text() == newText)
         return;
 
     int delta = newText.length() - text().length();
-    unsigned end = offset + length;
 
-    m_linesDirty = m_lineBoxes.dirtyRange(*this, offset, end, delta);
+    m_linesDirty = m_lineBoxes.dirtyForTextChange(*this);
 
     setTextInternal(newText, force || m_linesDirty);
     invalidateLineLayoutPathOnContentChangeIfNeeded(*this, offset, delta);
@@ -2011,13 +2008,13 @@ int RenderText::previousOffset(int current) const
     if (m_containsOnlyASCII || text().is8Bit())
         return current - 1;
 
-    CachedTextBreakIterator iterator(text(), nullptr, 0, TextBreakIterator::CaretMode { }, nullAtom());
+    CachedTextBreakIterator iterator(text(), { }, TextBreakIterator::CaretMode { }, nullAtom());
     return iterator.preceding(current).value_or(current - 1);
 }
 
 int RenderText::previousOffsetForBackwardDeletion(int current) const
 {
-    CachedTextBreakIterator iterator(text(), nullptr, 0, TextBreakIterator::DeleteMode { }, nullAtom());
+    CachedTextBreakIterator iterator(text(), { }, TextBreakIterator::DeleteMode { }, nullAtom());
     return iterator.preceding(current).value_or(0);
 }
 
@@ -2026,7 +2023,7 @@ int RenderText::nextOffset(int current) const
     if (m_containsOnlyASCII || text().is8Bit())
         return current + 1;
 
-    CachedTextBreakIterator iterator(text(), nullptr, 0, TextBreakIterator::CaretMode { }, nullAtom());
+    CachedTextBreakIterator iterator(text(), { }, TextBreakIterator::CaretMode { }, nullAtom());
     return iterator.following(current).value_or(current + 1);
 }
 
@@ -2053,9 +2050,7 @@ StringView RenderText::stringView(unsigned start, std::optional<unsigned> stop) 
     ASSERT(start <= length());
     ASSERT(destination <= length());
     ASSERT(start <= destination);
-    if (text().is8Bit())
-        return { text().characters8() + start, destination - start };
-    return { text().characters16() + start, destination - start };
+    return StringView { text() }.substring(start, destination - start);
 }
 
 RenderInline* RenderText::inlineWrapperForDisplayContents()

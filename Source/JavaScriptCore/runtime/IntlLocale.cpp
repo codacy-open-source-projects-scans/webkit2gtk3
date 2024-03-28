@@ -112,7 +112,7 @@ void LocaleIDBuilder::overrideLanguageScriptRegion(StringView language, StringVi
 {
     unsigned length = strlen(m_buffer.data());
 
-    StringView localeIDView { m_buffer.data(), length };
+    StringView localeIDView { m_buffer.subspan(0, length) };
 
     auto endOfLanguageScriptRegionVariant = localeIDView.find(ULOC_KEYWORD_SEPARATOR);
     if (endOfLanguageScriptRegionVariant == notFound)
@@ -643,7 +643,7 @@ JSArray* IntlLocale::hourCycles(JSGlobalObject* globalObject)
         return nullptr;
     }
 
-    dataLogLnIf(IntlLocaleInternal::verbose, "pattern:(", StringView(pattern.data(), pattern.size()), ")");
+    dataLogLnIf(IntlLocaleInternal::verbose, "pattern:(", StringView { pattern.span() }, ")");
 
     switch (IntlDateTimeFormat::hourCycleFromPattern(pattern)) {
     case IntlDateTimeFormat::HourCycle::None:

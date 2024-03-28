@@ -84,6 +84,8 @@
 
 using namespace WebCore;
 
+static id attributeValueForTesting(const RefPtr<AXCoreObject>&, NSString *);
+
 // Cell Tables
 #ifndef NSAccessibilitySelectedCellsAttribute
 #define NSAccessibilitySelectedCellsAttribute @"AXSelectedCells"
@@ -1085,12 +1087,20 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
         NSAccessibilityTitleAttribute,
         NSAccessibilityChildrenAttribute,
     ];
+    static NeverDestroyed<RetainPtr<NSArray>> sharedControlAttrs = @[
+        NSAccessibilityTitleUIElementAttribute,
+        NSAccessibilityAccessKeyAttribute,
+        NSAccessibilityRequiredAttribute,
+        NSAccessibilityInvalidAttribute,
+    ];
+    static NeverDestroyed<RetainPtr<NSArray>> sharedComboBoxAttrs = @[
+        NSAccessibilitySelectedChildrenAttribute,
+        NSAccessibilityExpandedAttribute,
+        NSAccessibilityOrientationAttribute,
+    ];
     static NeverDestroyed controlAttrs = [] {
         auto tempArray = adoptNS([[NSMutableArray alloc] initWithArray:attributes.get().get()]);
-        [tempArray addObject:NSAccessibilityTitleUIElementAttribute];
-        [tempArray addObject:NSAccessibilityAccessKeyAttribute];
-        [tempArray addObject:NSAccessibilityRequiredAttribute];
-        [tempArray addObject:NSAccessibilityInvalidAttribute];
+        [tempArray addObjectsFromArray:sharedControlAttrs.get().get()];
         return tempArray;
     }();
     static NeverDestroyed buttonAttrs = [] {
@@ -1103,8 +1113,13 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
     }();
     static NeverDestroyed comboBoxAttrs = [] {
         auto tempArray = adoptNS([[NSMutableArray alloc] initWithArray:controlAttrs.get().get()]);
-        [tempArray addObject:NSAccessibilityExpandedAttribute];
-        [tempArray addObject:NSAccessibilityOrientationAttribute];
+        [tempArray addObjectsFromArray:sharedComboBoxAttrs.get().get()];
+        return tempArray;
+    }();
+    static NeverDestroyed textComboBoxAttrs = [] {
+        auto tempArray = adoptNS([[NSMutableArray alloc] initWithArray:textAttrs.get().get()]);
+        [tempArray addObjectsFromArray:sharedControlAttrs.get().get()];
+        [tempArray addObjectsFromArray:sharedComboBoxAttrs.get().get()];
         return tempArray;
     }();
     static NeverDestroyed tableAttrs = [] {
@@ -1223,6 +1238,10 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
         objectAttributes = webAreaAttrs.get().get();
     else if (backingObject->isStaticText())
         objectAttributes = staticTextAttrs.get().get();
+    else if (backingObject->isComboBox() && backingObject->isTextControl())
+        objectAttributes = textComboBoxAttrs.get().get();
+    else if (backingObject->isComboBox())
+        objectAttributes = comboBoxAttrs.get().get();
     else if (backingObject->isTextControl())
         objectAttributes = textAttrs.get().get();
     else if (backingObject->isLink())
@@ -1253,8 +1272,6 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
         objectAttributes = listBoxAttrs.get().get();
     else if (backingObject->isList())
         objectAttributes = listAttrs.get().get();
-    else if (backingObject->isComboBox())
-        objectAttributes = comboBoxAttrs.get().get();
     else if (backingObject->isProgressIndicator() || backingObject->isSlider())
         objectAttributes = rangeAttrs.get().get();
     // These are processed in order because an input image is a button, and a button is a control.
@@ -2218,7 +2235,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
 
     if ([attributeName isEqualToString:@"AXResolvedEditingStyles"])
         return [self baseAccessibilityResolvedEditingStyles];
-    
+
     // This allows us to connect to a plugin that creates a shadow node for editing (like PDFs).
     if ([attributeName isEqualToString:@"_AXAssociatedPluginParent"])
         return [self _associatedPluginParentWith:backingObject];
@@ -2318,47 +2335,55 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
     if ([attributeName isEqualToString:@"AXAutoInteractable"])
         return @(backingObject->isRemoteFrame());
 
-    // Used by LayoutTests only, not by AT clients.
-    if (UNLIKELY([attributeName isEqualToString:@"AXARIARole"]))
+    if (AXObjectCache::clientIsInTestMode())
+        return attributeValueForTesting(backingObject, attributeName);
+    return nil;
+}
+
+id attributeValueForTesting(const RefPtr<AXCoreObject>& backingObject, NSString *attributeName)
+{
+    ASSERT_WITH_MESSAGE(AXObjectCache::clientIsInTestMode(), "Should be used for testing only, not for AT clients.");
+
+    if ([attributeName isEqualToString:@"AXARIARole"])
         return backingObject->computedRoleString();
 
-    if (UNLIKELY([attributeName isEqualToString:@"AXStringValue"]))
+    if ([attributeName isEqualToString:@"AXStringValue"])
         return backingObject->stringValue();
 
-    if (UNLIKELY([attributeName isEqualToString:@"AXDateTimeComponentsType"]))
+    if ([attributeName isEqualToString:@"AXDateTimeComponentsType"])
         return [NSNumber numberWithUnsignedShort:(uint8_t)backingObject->dateTimeComponentsType()];
 
-    if (UNLIKELY([attributeName isEqualToString:@"AXControllers"]))
+    if ([attributeName isEqualToString:@"AXControllers"])
         return makeNSArray(backingObject->controllers());
 
-    if (UNLIKELY([attributeName isEqualToString:@"AXControllerFor"]))
+    if ([attributeName isEqualToString:@"AXControllerFor"])
         return makeNSArray(backingObject->controlledObjects());
 
-    if (UNLIKELY([attributeName isEqualToString:@"AXDescribedBy"]))
+    if ([attributeName isEqualToString:@"AXDescribedBy"])
         return makeNSArray(backingObject->describedByObjects());
 
-    if (UNLIKELY([attributeName isEqualToString:@"AXDescriptionFor"]))
+    if ([attributeName isEqualToString:@"AXDescriptionFor"])
         return makeNSArray(backingObject->descriptionForObjects());
 
-    if (UNLIKELY([attributeName isEqualToString:@"AXDetailsFor"]))
+    if ([attributeName isEqualToString:@"AXDetailsFor"])
         return makeNSArray(backingObject->detailsForObjects());
 
-    if (UNLIKELY([attributeName isEqualToString:@"AXErrorMessageFor"]))
+    if ([attributeName isEqualToString:@"AXErrorMessageFor"])
         return makeNSArray(backingObject->errorMessageForObjects());
 
-    if (UNLIKELY([attributeName isEqualToString:@"AXFlowFrom"]))
+    if ([attributeName isEqualToString:@"AXFlowFrom"])
         return makeNSArray(backingObject->flowFromObjects());
 
-    if (UNLIKELY([attributeName isEqualToString:@"AXFlowTo"]))
+    if ([attributeName isEqualToString:@"AXFlowTo"])
         return makeNSArray(backingObject->flowToObjects());
 
-    if (UNLIKELY([attributeName isEqualToString:@"AXLabelledBy"]))
+    if ([attributeName isEqualToString:@"AXLabelledBy"])
         return makeNSArray(backingObject->labeledByObjects());
 
-    if (UNLIKELY([attributeName isEqualToString:@"AXLabelFor"]))
+    if ([attributeName isEqualToString:@"AXLabelFor"])
         return makeNSArray(backingObject->labelForObjects());
 
-    if (UNLIKELY([attributeName isEqualToString:@"AXOwners"]))
+    if ([attributeName isEqualToString:@"AXOwners"])
         return makeNSArray(backingObject->owners());
 
     return nil;
@@ -3879,7 +3904,8 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 // until it finds something that responds to this method.
 - (pid_t)accessibilityPresenterProcessIdentifier
 {
-    return presentingApplicationPID();
+    RefPtr<AXCoreObject> backingObject = self.axBackingObject;
+    return backingObject ? backingObject->processID() : 0;
 }
 
 - (NSArray *)accessibilityArrayAttributeValues:(NSString *)attribute index:(NSUInteger)index maxCount:(NSUInteger)maxCount

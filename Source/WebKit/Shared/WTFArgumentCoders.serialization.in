@@ -28,7 +28,7 @@ webkit_platform_headers: "StreamConnectionEncoder.h"
 
 header: <wtf/text/CString.h>
 [CustomHeader] class WTF::CString {
-   std::span<const uint8_t> bytes()
+   std::span<const uint8_t> span()
 }
 
 [AdditionalEncoder=StreamConnectionEncoder] class WTF::MediaTime {
@@ -117,8 +117,10 @@ template: enum class WebKit::WCLayerTreeHostIdentifierType
 template: enum class WebKit::WebExtensionControllerIdentifierType
 template: enum class WebKit::XRDeviceIdentifierType
 template: struct WebCore::AttributedStringTextListIDType
+#if PLATFORM(COCOA)
 template: struct WebCore::AttributedStringTextTableBlockIDType
 template: struct WebCore::AttributedStringTextTableIDType
+#endif
 template: struct WebCore::BackForwardItemIdentifierType
 template: struct WebCore::DictationContextType
 template: struct WebCore::FrameIdentifierType

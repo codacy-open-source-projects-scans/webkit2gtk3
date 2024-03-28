@@ -89,6 +89,8 @@ enum class GraphicsContextGLSurfaceBuffer : bool {
     DisplayBuffer
 };
 
+enum class GraphicsContextGLFlipY : bool { No, Yes };
+
 // Base class for graphics context for implementing WebGL rendering model.
 class GraphicsContextGL : public RefCounted<GraphicsContextGL> {
 public:
@@ -1045,7 +1047,7 @@ public:
         DOMSourceNone,
     };
 
-    enum class FlipY : bool { No, Yes };
+    using FlipY = GraphicsContextGLFlipY;
 
     virtual RefPtr<GraphicsLayerContentsDisplayDelegate> layerContentsDisplayDelegate() = 0;
 
@@ -1495,7 +1497,7 @@ public:
     virtual String getActiveUniformBlockName(PlatformGLObject program, GCGLuint uniformBlockIndex) = 0;
     virtual void uniformBlockBinding(PlatformGLObject program, GCGLuint uniformBlockIndex, GCGLuint uniformBlockBinding) = 0;
 
-    virtual void getActiveUniformBlockiv(GCGLuint program, GCGLuint uniformBlockIndex, GCGLenum pname, std::span<GCGLint> params) = 0;
+    virtual void getActiveUniformBlockiv(PlatformGLObject program, GCGLuint uniformBlockIndex, GCGLenum pname, std::span<GCGLint> params) = 0;
 
     // ========== EGL related entry points.
 
@@ -1515,7 +1517,7 @@ public:
     using ExternalEGLSyncEvent = int;
 #endif
     virtual GCEGLSync createEGLSync(ExternalEGLSyncEvent) = 0;
-    virtual bool destroyEGLSync(GCEGLSync) = 0;
+    virtual void destroyEGLSync(GCEGLSync) = 0;
     virtual void clientWaitEGLSyncWithFlush(GCEGLSync, uint64_t) = 0;
 
     // ========== Extension related entry points.
@@ -1593,7 +1595,7 @@ public:
     GCGLboolean getBoolean(GCGLenum pname);
     GCGLint getInteger(GCGLenum pname);
     GCGLint getIntegeri(GCGLenum pname, GCGLuint index);
-    GCGLint getActiveUniformBlocki(GCGLuint program, GCGLuint uniformBlockIndex, GCGLenum pname);
+    GCGLint getActiveUniformBlocki(PlatformGLObject program, GCGLuint uniformBlockIndex, GCGLenum pname);
     GCGLint getInternalformati(GCGLenum target, GCGLenum internalformat, GCGLenum pname);
 
     GraphicsContextGLAttributes contextAttributes() const { return m_attrs; }

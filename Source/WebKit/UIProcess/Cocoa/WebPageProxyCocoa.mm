@@ -79,6 +79,7 @@
 #import <wtf/BlockPtr.h>
 #import <wtf/SoftLinking.h>
 #import <wtf/cf/TypeCastsCF.h>
+#import <wtf/cocoa/SpanCocoa.h>
 
 #if ENABLE(MEDIA_USAGE)
 #import "MediaUsageManagerCocoa.h"
@@ -442,6 +443,11 @@ IPC::Connection* WebPageProxy::Internals::paymentCoordinatorConnection(const Web
 const String& WebPageProxy::Internals::paymentCoordinatorBoundInterfaceIdentifier(const WebPaymentCoordinatorProxy&)
 {
     return page.websiteDataStore().configuration().boundInterfaceIdentifier();
+}
+
+void WebPageProxy::Internals::getPaymentCoordinatorEmbeddingUserAgent(WebPageProxyIdentifier, CompletionHandler<void(const String&)>&& completionHandler)
+{
+    completionHandler(page.userAgent());
 }
 
 const String& WebPageProxy::Internals::paymentCoordinatorSourceApplicationBundleIdentifier(const WebPaymentCoordinatorProxy&)
@@ -938,11 +944,6 @@ bool WebPageProxy::isQuarantinedAndNotUserApproved(const String& fileURLString)
 
 #if ENABLE(MULTI_REPRESENTATION_HEIC)
 
-static std::span<const uint8_t> span(NSData *data)
-{
-    return { static_cast<const uint8_t*>(data.bytes), data.length };
-}
-
 void WebPageProxy::insertMultiRepresentationHEIC(NSData *data)
 {
     send(Messages::WebPage::InsertMultiRepresentationHEIC(span(data)));
@@ -1129,9 +1130,9 @@ bool WebPageProxy::shouldDeactivateMediaCapability() const
 
 #if ENABLE(UNIFIED_TEXT_REPLACEMENT)
 
-void WebPageProxy::willBeginTextReplacementSession(const WTF::UUID& uuid, CompletionHandler<void(const Vector<WebUnifiedTextReplacementContextData>&)>&& completionHandler)
+void WebPageProxy::willBeginTextReplacementSession(const WTF::UUID& uuid, WebUnifiedTextReplacementType type, CompletionHandler<void(const Vector<WebUnifiedTextReplacementContextData>&)>&& completionHandler)
 {
-    sendWithAsyncReply(Messages::WebPage::WillBeginTextReplacementSession(uuid), WTFMove(completionHandler));
+    sendWithAsyncReply(Messages::WebPage::WillBeginTextReplacementSession(uuid, type), WTFMove(completionHandler));
 }
 
 void WebPageProxy::didBeginTextReplacementSession(const WTF::UUID& uuid, const Vector<WebKit::WebUnifiedTextReplacementContextData>& contexts)
@@ -1162,6 +1163,16 @@ void WebPageProxy::textReplacementSessionDidReceiveTextWithReplacementRange(cons
 void WebPageProxy::textReplacementSessionDidReceiveEditAction(const WTF::UUID& uuid, WebTextReplacementData::EditAction action)
 {
     send(Messages::WebPage::TextReplacementSessionDidReceiveEditAction(uuid, action));
+}
+
+void WebPageProxy::textReplacementSessionShowInformationForReplacementWithUUIDRelativeToRect(const WTF::UUID& sessionUUID, const WTF::UUID& replacementUUID, WebCore::IntRect selectionBoundsInRootView)
+{
+    protectedPageClient()->textReplacementSessionShowInformationForReplacementWithUUIDRelativeToRect(sessionUUID, replacementUUID, selectionBoundsInRootView);
+}
+
+void WebPageProxy::textReplacementSessionUpdateStateForReplacementWithUUID(const WTF::UUID& sessionUUID, WebTextReplacementData::State state, const WTF::UUID& replacementUUID)
+{
+    protectedPageClient()->textReplacementSessionUpdateStateForReplacementWithUUID(sessionUUID, state, replacementUUID);
 }
 
 #endif

@@ -568,12 +568,12 @@ ExceptionOr<void> XMLHttpRequest::send(ArrayBuffer& body)
 {
     ASCIILiteral consoleMessage { "ArrayBuffer is deprecated in XMLHttpRequest.send(). Use ArrayBufferView instead."_s };
     scriptExecutionContext()->addConsoleMessage(MessageSource::JS, MessageLevel::Warning, consoleMessage);
-    return sendBytesData(body.bytes());
+    return sendBytesData(body.span());
 }
 
 ExceptionOr<void> XMLHttpRequest::send(ArrayBufferView& body)
 {
-    return sendBytesData(body.bytes());
+    return sendBytesData(body.span());
 }
 
 ExceptionOr<void> XMLHttpRequest::sendBytesData(std::span<const uint8_t> data)
@@ -1074,7 +1074,7 @@ void XMLHttpRequest::didReceiveData(const SharedBuffer& buffer)
         return;
 
     if (useDecoder)
-        m_responseBuilder.append(m_decoder->decode(buffer.data(), buffer.size()));
+        m_responseBuilder.append(m_decoder->decode(buffer.span()));
     else {
         // Buffer binary data.
         m_binaryResponseBuilder.append(buffer);

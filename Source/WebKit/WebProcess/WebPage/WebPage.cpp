@@ -196,6 +196,7 @@
 #include <WebCore/Editing.h>
 #include <WebCore/Editor.h>
 #include <WebCore/ElementIterator.h>
+#include <WebCore/ElementTargetingController.h>
 #include <WebCore/EventHandler.h>
 #include <WebCore/EventNames.h>
 #include <WebCore/ExceptionCode.h>
@@ -1977,7 +1978,7 @@ void WebPage::loadDataInFrame(std::span<const uint8_t> data, String&& type, Stri
         return;
     ASSERT(&mainWebFrame() != frame);
 
-    auto sharedBuffer = SharedBuffer::create(data.data(), data.size());
+    Ref sharedBuffer = SharedBuffer::create(data);
     ResourceResponse response(baseURL, type, sharedBuffer->size(), encodingName);
     SubstituteData substituteData(WTFMove(sharedBuffer), baseURL, WTFMove(response), SubstituteData::SessionHistoryVisibility::Hidden);
     frame->coreLocalFrame()->loader().load(FrameLoadRequest(*frame->coreLocalFrame(), ResourceRequest(baseURL), WTFMove(substituteData)));
@@ -2100,7 +2101,7 @@ void WebPage::loadData(LoadParameters&& loadParameters)
 
     platformDidReceiveLoadParameters(loadParameters);
 
-    auto sharedBuffer = SharedBuffer::create(loadParameters.data.data(), loadParameters.data.size());
+    Ref sharedBuffer = SharedBuffer::create(loadParameters.data);
 
     URL baseURL;
     if (loadParameters.baseURLString.isEmpty())
@@ -2125,7 +2126,7 @@ void WebPage::loadAlternateHTML(LoadParameters&& loadParameters)
     URL baseURL = loadParameters.baseURLString.isEmpty() ? aboutBlankURL() : URL { loadParameters.baseURLString };
     URL unreachableURL = loadParameters.unreachableURLString.isEmpty() ? URL() : URL { loadParameters.unreachableURLString };
     URL provisionalLoadErrorURL = loadParameters.provisionalLoadErrorURLString.isEmpty() ? URL() : URL { loadParameters.provisionalLoadErrorURLString };
-    auto sharedBuffer = SharedBuffer::create(loadParameters.data.data(), loadParameters.data.size());
+    auto sharedBuffer = SharedBuffer::create(loadParameters.data);
     m_mainFrame->coreLocalFrame()->loader().setProvisionalLoadErrorBeingHandledURL(provisionalLoadErrorURL);
 
     WebProcess::singleton().addAllowedFirstPartyForCookies(WebCore::RegistrableDomain { baseURL });
@@ -2138,7 +2139,7 @@ void WebPage::loadAlternateHTML(LoadParameters&& loadParameters)
 void WebPage::loadSimulatedRequestAndResponse(LoadParameters&& loadParameters, ResourceResponse&& simulatedResponse)
 {
     setLastNavigationWasAppInitiated(loadParameters.request.isAppInitiated());
-    auto sharedBuffer = SharedBuffer::create(loadParameters.data.data(), loadParameters.data.size());
+    auto sharedBuffer = SharedBuffer::create(loadParameters.data);
     loadDataImpl(loadParameters.navigationID, loadParameters.shouldTreatAsContinuingLoad, WTFMove(loadParameters.websitePolicies), WTFMove(sharedBuffer), WTFMove(loadParameters.request), WTFMove(simulatedResponse), URL(), loadParameters.userData, loadParameters.isNavigatingToAppBoundDomain, SubstituteData::SessionHistoryVisibility::Visible);
 }
 
@@ -2234,8 +2235,9 @@ void WebPage::goToBackForwardItem(GoToBackForwardItemParameters&& parameters)
 
     LOG(Loading, "In WebProcess pid %i, WebPage %" PRIu64 " is navigating to back/forward URL %s", getCurrentProcessID(), m_identifier.toUInt64(), item->url().string().utf8().data());
 
-    if (parameters.topPrivatelyControlledDomain)
-        WebCore::setTopPrivatelyControlledDomain(URL(item->url().string()).host().toString(), *parameters.topPrivatelyControlledDomain);
+#if PLATFORM(COCOA)
+    WebCore::PublicSuffixStore::singleton().addPublicSuffix(parameters.publicSuffix);
+#endif
 
     ASSERT(!m_pendingNavigationID);
     m_pendingNavigationID = parameters.navigationID;
@@ -2490,6 +2492,11 @@ String WebPage::dumpHistoryForTesting(const String& directory)
     for (int i = begin; i <= static_cast<int>(list.forwardCount()); ++i)
         dumpHistoryItem(*list.itemAtIndex(i), 8, !i, builder, directory);
     return builder.toString();
+}
+
+String WebPage::frameTextForTestingIncludingSubframes(bool includeSubframes)
+{
+    return m_mainFrame->frameTextForTesting(includeSubframes);
 }
 
 void WebPage::clearHistory()
@@ -4555,7 +4562,7 @@ bool WebPage::isParentProcessAWebBrowser() const
     return false;
 }
 
-static void adjustSettingsForLockdownMode(Settings& settings, const WebPreferencesStore& store)
+void WebPage::adjustSettingsForLockdownMode(Settings& settings, const WebPreferencesStore* store)
 {
     // Disable unstable Experimental settings, even if the user enabled them for local use.
     settings.disableUnstableFeaturesForModernWebKit();
@@ -4624,16 +4631,18 @@ static void adjustSettingsForLockdownMode(Settings& settings, const WebPreferenc
     settings.setWebLocksAPIEnabled(false);
     settings.setCacheAPIEnabled(false);
 
-    settings.setAllowedMediaContainerTypes(store.getStringValueForKey(WebPreferencesKey::mediaContainerTypesAllowedInLockdownModeKey()));
-    settings.setAllowedMediaCodecTypes(store.getStringValueForKey(WebPreferencesKey::mediaCodecTypesAllowedInLockdownModeKey()));
-    settings.setAllowedMediaVideoCodecIDs(store.getStringValueForKey(WebPreferencesKey::mediaVideoCodecIDsAllowedInLockdownModeKey()));
-    settings.setAllowedMediaAudioCodecIDs(store.getStringValueForKey(WebPreferencesKey::mediaAudioCodecIDsAllowedInLockdownModeKey()));
-    settings.setAllowedMediaCaptionFormatTypes(store.getStringValueForKey(WebPreferencesKey::mediaCaptionFormatTypesAllowedInLockdownModeKey()));
-
     // FIXME: This seems like an odd place to put logic for setting global state in CoreGraphics.
 #if HAVE(LOCKDOWN_MODE_PDF_ADDITIONS)
     CGEnterLockdownModeForPDF();
 #endif
+
+    if (store) {
+        settings.setAllowedMediaContainerTypes(store->getStringValueForKey(WebPreferencesKey::mediaContainerTypesAllowedInLockdownModeKey()));
+        settings.setAllowedMediaCodecTypes(store->getStringValueForKey(WebPreferencesKey::mediaCodecTypesAllowedInLockdownModeKey()));
+        settings.setAllowedMediaVideoCodecIDs(store->getStringValueForKey(WebPreferencesKey::mediaVideoCodecIDsAllowedInLockdownModeKey()));
+        settings.setAllowedMediaAudioCodecIDs(store->getStringValueForKey(WebPreferencesKey::mediaAudioCodecIDsAllowedInLockdownModeKey()));
+        settings.setAllowedMediaCaptionFormatTypes(store->getStringValueForKey(WebPreferencesKey::mediaCaptionFormatTypesAllowedInLockdownModeKey()));
+    }
 }
 
 void WebPage::updatePreferences(const WebPreferencesStore& store)
@@ -4767,7 +4776,7 @@ void WebPage::updatePreferences(const WebPreferencesStore& store)
     // FIXME: This should be automated by adding a new field in WebPreferences*.yaml
     // that indicates override state for Lockdown mode. https://webkit.org/b/233100.
     if (WebProcess::singleton().isLockdownModeEnabled())
-        adjustSettingsForLockdownMode(settings, store);
+        adjustSettingsForLockdownMode(settings, &store);
 
 #if ENABLE(ARKIT_INLINE_PREVIEW)
     m_useARKitForModel = store.getBoolValueForKey(WebPreferencesKey::useARKitForModelKey());
@@ -5877,11 +5886,6 @@ bool WebPage::mainFrameHasCustomContentProvider() const
     return false;
 }
 
-void WebPage::addMIMETypeWithCustomContentProvider(const String& mimeType)
-{
-    m_mimeTypesWithCustomContentProviders.add(mimeType);
-}
-
 void WebPage::updateMainFrameScrollOffsetPinning()
 {
     RefPtr frameView = localMainFrameView();
@@ -6989,6 +6993,10 @@ void WebPage::didChangeSelection(LocalFrame& frame)
 #else
     UNUSED_PARAM(frame);
 #endif // PLATFORM(IOS_FAMILY)
+
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+    m_unifiedTextReplacementController->updateStateForSelectedReplacementIfNeeded();
+#endif
 }
 
 void WebPage::didChangeSelectionOrOverflowScrollPosition()
@@ -9338,7 +9346,7 @@ void WebPage::remotePostMessage(WebCore::FrameIdentifier source, const String& s
     targetWindow->postMessageFromRemoteFrame(*globalObject, WTFMove(sourceWindow), sourceOrigin, WTFMove(targetOrigin), message);
 }
 
-void WebPage::renderTreeAsText(WebCore::FrameIdentifier frameID, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag> behavior, CompletionHandler<void(String&&)>&& completionHandler)
+void WebPage::renderTreeAsTextForTesting(WebCore::FrameIdentifier frameID, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag> behavior, CompletionHandler<void(String&&)>&& completionHandler)
 {
     RefPtr webFrame = WebProcess::singleton().webFrame(frameID);
     if (!webFrame) {
@@ -9362,6 +9370,26 @@ void WebPage::renderTreeAsText(WebCore::FrameIdentifier frameID, size_t baseInde
     ts.setIndent(baseIndent);
     WebCore::externalRepresentationForLocalFrame(ts, *coreLocalFrame, behavior);
     completionHandler(ts.release());
+}
+
+void WebPage::frameTextForTesting(WebCore::FrameIdentifier frameID, CompletionHandler<void(String&&)>&& completionHandler)
+{
+    RefPtr webFrame = WebProcess::singleton().webFrame(frameID);
+    if (!webFrame) {
+        ASSERT_NOT_REACHED();
+        return completionHandler("Test Error - WebFrame missing in web process"_s);
+    }
+    constexpr bool includeSubframes { true };
+    completionHandler(webFrame->frameTextForTesting(includeSubframes));
+}
+
+void WebPage::requestTargetedElement(TargetedElementRequest&& request, CompletionHandler<void(Vector<WebCore::TargetedElementInfo>&&)>&& completion)
+{
+    RefPtr page = corePage();
+    if (!page)
+        return completion({ });
+
+    completion(page->checkedElementTargetingController()->findTargets(WTFMove(request)));
 }
 
 void WebPage::requestTextExtraction(std::optional<FloatRect>&& collectionRectInRootView, CompletionHandler<void(TextExtraction::Item&&)>&& completion)
@@ -9405,6 +9433,23 @@ void WebPage::remoteViewRectToRootView(FrameIdentifier frameID, FloatRect rect, 
 void WebPage::remoteViewPointToRootView(FrameIdentifier frameID, FloatPoint point, CompletionHandler<void(FloatPoint)>&& completionHandler)
 {
     remoteViewToRootView(frameID, point, WTFMove(completionHandler));
+}
+
+void WebPage::adjustVisibilityForTargetedElements(const Vector<std::pair<WebCore::ElementIdentifier, WebCore::ScriptExecutionContextIdentifier>>& identifiers, CompletionHandler<void(bool)>&& completion)
+{
+    RefPtr page = corePage();
+    if (!page)
+        return completion(false);
+
+    Vector<Ref<Element>> elements;
+    elements.reserveInitialCapacity(identifiers.size());
+    for (auto [elementID, documentID] : identifiers) {
+        RefPtr foundElement = Element::fromIdentifier(elementID);
+        if (!foundElement || foundElement->document().identifier() != documentID)
+            continue;
+        elements.append(foundElement.releaseNonNull());
+    }
+    completion(page->checkedElementTargetingController()->adjustVisibility(elements));
 }
 
 } // namespace WebKit

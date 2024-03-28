@@ -809,9 +809,14 @@
 #define ENABLE_YARR_JIT_REGEXP_TEST_INLINE 1
 #endif
 
-/* Enable JIT'ing Regular Expressions that have nested back references. */
+/* Enable JIT'ing Regular Expressions that have back references. */
 #if ENABLE(YARR_JIT) && (CPU(ARM64) || (CPU(X86_64) && !OS(WINDOWS)) || CPU(RISCV64))
 #define ENABLE_YARR_JIT_BACKREFERENCES 1
+#if CPU(ARM64) || (CPU(X86_64) && !OS(WINDOWS))
+#define ENABLE_YARR_JIT_BACKREFERENCES_FOR_16BIT_EXPRS 1
+#else
+#define ENABLE_YARR_JIT_BACKREFERENCES_FOR_16BIT_EXPRS 0
+#endif
 #endif
 
 #if ENABLE(YARR_JIT) && (CPU(ARM64) || CPU(X86_64) || CPU(RISCV64))
@@ -866,7 +871,7 @@
 #endif
 
 /* CSS Selector JIT Compiler */
-#if !defined(ENABLE_CSS_SELECTOR_JIT) && ((CPU(X86_64) || CPU(ARM64) || (CPU(ARM_THUMB2) && OS(DARWIN))) && ENABLE(JIT) && (OS(DARWIN) || OS(WINDOWS) || PLATFORM(GTK) || PLATFORM(WPE)))
+#if !defined(ENABLE_CSS_SELECTOR_JIT) && ((CPU(X86_64) || CPU(ARM64)) && ENABLE(JIT) && (OS(DARWIN) || OS(WINDOWS) || PLATFORM(GTK) || PLATFORM(WPE)))
 #define ENABLE_CSS_SELECTOR_JIT 1
 #endif
 

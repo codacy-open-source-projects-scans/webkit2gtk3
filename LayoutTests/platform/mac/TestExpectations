@@ -2063,7 +2063,7 @@ http/tests/preload/onload_event.html [ Pass Failure ]
 
 webkit.org/b/226520 media/video-played-collapse.html [ Pass Timeout Failure ]
 
-webkit.org/b/238824 http/tests/workers/service/openwindow-from-notification-click.html [ Pass Failure ]
+webkit.org/b/271732 [ Ventura+ ] http/tests/workers/service/openwindow-from-notification-click.html [ Pass Failure Crash ]
 
 webkit.org/b/215335 [ Release ] webanimations/css-transition-retargeting-during-ready-promise.html [ Pass Failure ]
 
@@ -2337,8 +2337,10 @@ webkit.org/b/237415 webgl/1.0.x/conformance/rendering/clipping-wide-points.html 
 [ Monterey ] imported/w3c/web-platform-tests/css/css-fonts/variations/variable-opsz-size-adjust.html [ Skip ]
 
 # webkit.org/b/255178 [ Ventura iOS arm64 ] 3X imported/w3c/web-platform-tests/css/css-color/parsing (layout-tests) are constant text failures
-[ Ventura x86_64 ] imported/w3c/web-platform-tests/css/css-color/parsing/color-computed-color-mix-function.html [ Failure ]
 [ Ventura x86_64 ] imported/w3c/web-platform-tests/css/css-color/parsing/color-valid-relative-color.html [ Failure ]
+
+# color float value is rounded differently on x86
+[ x86_64 ] imported/w3c/web-platform-tests/css/css-color/parsing/color-computed-color-mix-function.html [ Failure ]
 
 # webkit.org/b/255427 [ Ventura ] 4/13 batch mark expectations and branch bugs
 [ Ventura+ arm64 ] imported/w3c/web-platform-tests/webaudio/the-audio-api/the-audioparam-interface/k-rate-audiobuffersource-connections.html [ Failure ]
@@ -2446,7 +2448,6 @@ webkit.org/b/157589 fast/text-autosizing/ios/text-autosizing-after-back.html [ P
 
 # webkit.org/b/261304 Batch mark expectations for flaky media tests
 [ Monterey+ Debug ] media/modern-media-controls/airplay-support/airplay-support-disable-event-listeners-with-hidden-controls.html [ Pass Failure ]
-[ Monterey+ ] media/media-source/media-source-fudge-factor.html [ Pass Failure Timeout ]
 [ Monterey+ Debug ] media/remove-from-document.html [ Pass Failure ]
 [ Monterey+ Debug ] media/media-event-listeners.html [ Pass Failure ]
 [ Monterey+ x86_64 ] media/video-object-fit.html [ Pass ImageOnlyFailure ]
@@ -2520,8 +2521,6 @@ webkit.org/b/264001 [ Debug ] imported/w3c/web-platform-tests/requestidlecallbac
 
 # webkit.org/b/264419 ([ Sonoma 14.1+ ] Multiple tests are constantly failing following update from 14.0.)
 webkit.org/b/264544 [ Sonoma+ ] css3/filters/effect-opacity-hw.html [ ImageOnlyFailure ]
-
-webkit.org/b/264177 requestidlecallback/requestidlecallback-deadline-shortened-by-rendering-update.html [ Pass Failure ]
 
 webkit.org/b/264527 imported/w3c/web-platform-tests/css/css-cascade/idlharness.html [ Pass Failure ]
 

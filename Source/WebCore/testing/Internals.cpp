@@ -1175,6 +1175,27 @@ unsigned Internals::imageDecodeCount(HTMLImageElement& element)
     return bitmapImage ? bitmapImage->decodeCountForTesting() : 0;
 }
 
+AtomString Internals::imageLastDecodingOptions(HTMLImageElement& element)
+{
+    auto* bitmapImage = bitmapImageFromImageElement(element);
+    if (!bitmapImage)
+        return { };
+
+    auto options = bitmapImage->lastDecodingOptions();
+    StringBuilder builder;
+    builder.append("{ decodingMode : ");
+    builder.append(options.decodingMode() == DecodingMode::Asynchronous ? "Asynchronous" : "Synchronous");
+    if (auto sizeForDrawing = options.sizeForDrawing()) {
+        builder.append(", sizeForDrawing : { ");
+        builder.append(sizeForDrawing->width());
+        builder.append(", ");
+        builder.append(sizeForDrawing->height());
+        builder.append(" }");
+    }
+    builder.append(" }");
+    return builder.toAtomString();
+}
+
 unsigned Internals::imageCachedSubimageCreateCount(HTMLImageElement& element)
 {
 #if USE(CG)
@@ -7158,17 +7179,17 @@ String Internals::treeOrderBoundaryPoints(Node& containerA, unsigned offsetA, No
 
 bool Internals::rangeContainsNode(const AbstractRange& range, Node& node, TreeType type)
 {
-    return containsForTesting(convertType(type), makeSimpleRange(range), node);
+    return contains(convertType(type), makeSimpleRange(range), node);
 }
 
 bool Internals::rangeContainsBoundaryPoint(const AbstractRange& range, Node& container, unsigned offset, TreeType type)
 {
-    return containsForTesting(convertType(type), makeSimpleRange(range), { container, offset });
+    return contains(convertType(type), makeSimpleRange(range), { container, offset });
 }
 
 bool Internals::rangeContainsRange(const AbstractRange& outerRange, const AbstractRange& innerRange, TreeType type)
 {
-    return containsForTesting(convertType(type), makeSimpleRange(outerRange), makeSimpleRange(innerRange));
+    return contains(convertType(type), makeSimpleRange(outerRange), makeSimpleRange(innerRange));
 }
 
 bool Internals::rangeIntersectsNode(const AbstractRange& range, Node& node, TreeType type)
