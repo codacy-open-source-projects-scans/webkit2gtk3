@@ -100,52 +100,52 @@ bool CSSParserFastPaths::isSimpleLengthPropertyID(CSSPropertyID propertyId, bool
     }
 }
 
-template<typename CharacterType> static inline std::optional<double> parseCSSNumber(const CharacterType* characters, unsigned length)
+template<typename CharacterType> static inline std::optional<double> parseCSSNumber(std::span<const CharacterType> characters)
 {
     // The charactersToDouble() function allows a trailing '.' but that is not allowed in CSS number values.
-    if (length && characters[length - 1] == '.')
+    if (!characters.empty() && characters.back() == '.')
         return std::nullopt;
     // FIXME: If we don't want to skip over leading spaces, we should use parseDouble, not charactersToDouble.
     bool ok;
-    auto number = charactersToDouble(characters, length, &ok);
+    auto number = charactersToDouble(characters, &ok);
     if (!ok)
         return std::nullopt;
     return number;
 }
 
 template <typename CharacterType>
-static inline bool parseSimpleLength(const CharacterType* characters, unsigned length, CSSUnitType& unit, double& number)
+static inline bool parseSimpleLength(std::span<const CharacterType> characters, CSSUnitType& unit, double& number)
 {
-    if (length > 2 && isASCIIAlphaCaselessEqual(characters[length - 2], 'p') && isASCIIAlphaCaselessEqual(characters[length - 1], 'x')) {
-        length -= 2;
+    if (characters.size() > 2 && isASCIIAlphaCaselessEqual(characters[characters.size() - 2], 'p') && isASCIIAlphaCaselessEqual(characters[characters.size() - 1], 'x')) {
+        characters = characters.first(characters.size() - 2);
         unit = CSSUnitType::CSS_PX;
-    } else if (length > 1 && characters[length - 1] == '%') {
-        length -= 1;
+    } else if (!characters.empty() && characters.back() == '%') {
+        characters = characters.first(characters.size() - 1);
         unit = CSSUnitType::CSS_PERCENTAGE;
     }
 
-    auto parsedNumber = parseCSSNumber(characters, length);
+    auto parsedNumber = parseCSSNumber(characters);
     number = parsedNumber.value_or(0);
     return parsedNumber.has_value();
 }
 
 template <typename CharacterType>
-static inline bool parseSimpleAngle(const CharacterType* characters, unsigned length, CSSUnitType& unit, double& number)
+static inline bool parseSimpleAngle(std::span<const CharacterType> characters, CSSUnitType& unit, double& number)
 {
     // Just support deg and rad for now.
-    if (length < 4)
+    if (characters.size() < 4)
         return false;
 
-    if (isASCIIAlphaCaselessEqual(characters[length - 3], 'd') && isASCIIAlphaCaselessEqual(characters[length - 2], 'e') && isASCIIAlphaCaselessEqual(characters[length - 1], 'g')) {
-        length -= 3;
+    if (isASCIIAlphaCaselessEqual(characters[characters.size() - 3], 'd') && isASCIIAlphaCaselessEqual(characters[characters.size() - 2], 'e') && isASCIIAlphaCaselessEqual(characters[characters.size() - 1], 'g')) {
+        characters = characters.first(characters.size() - 3);
         unit = CSSUnitType::CSS_DEG;
-    } else if (isASCIIAlphaCaselessEqual(characters[length - 3], 'r') && isASCIIAlphaCaselessEqual(characters[length - 2], 'a') && isASCIIAlphaCaselessEqual(characters[length - 1], 'd')) {
-        length -= 3;
+    } else if (isASCIIAlphaCaselessEqual(characters[characters.size() - 3], 'r') && isASCIIAlphaCaselessEqual(characters[characters.size() - 2], 'a') && isASCIIAlphaCaselessEqual(characters[characters.size() - 1], 'd')) {
+        characters = characters.first(characters.size() - 3);
         unit = CSSUnitType::CSS_RAD;
     } else
         return false;
 
-    auto parsedNumber = parseCSSNumber(characters, length);
+    auto parsedNumber = parseCSSNumber(characters);
     number = parsedNumber.value_or(0);
     return parsedNumber.has_value();
 }
@@ -159,15 +159,14 @@ static RefPtr<CSSValue> parseSimpleLengthValue(CSSPropertyID propertyId, StringV
     if (isCSSViewportParsingEnabledForMode(cssParserMode) || !CSSParserFastPaths::isSimpleLengthPropertyID(propertyId, acceptsNegativeNumbers))
         return nullptr;
 
-    unsigned length = string.length();
     double number;
     CSSUnitType unit = CSSUnitType::CSS_NUMBER;
 
     if (string.is8Bit()) {
-        if (!parseSimpleLength(string.characters8(), length, unit, number))
+        if (!parseSimpleLength(string.span8(), unit, number))
             return nullptr;
     } else {
-        if (!parseSimpleLength(string.characters16(), length, unit, number))
+        if (!parseSimpleLength(string.span16(), unit, number))
             return nullptr;
     }
 
@@ -643,13 +642,13 @@ template <typename CharType>
 static bool parseTransformTranslateArguments(CharType*& pos, CharType* end, unsigned expectedCount, CSSValueID transformType, CSSValueListBuilder& arguments)
 {
     while (expectedCount) {
-        size_t delimiter = find(pos, end - pos, expectedCount == 1 ? ')' : ',');
+        size_t delimiter = find({ pos, end }, expectedCount == 1 ? ')' : ',');
         if (delimiter == notFound)
             return false;
         unsigned argumentLength = static_cast<unsigned>(delimiter);
         CSSUnitType unit = CSSUnitType::CSS_NUMBER;
         double number;
-        if (!parseSimpleLength(pos, argumentLength, unit, number))
+        if (!parseSimpleLength(std::span<const CharType> { pos, argumentLength }, unit, number))
             return false;
         if (!number && unit == CSSUnitType::CSS_NUMBER)
             unit = CSSUnitType::CSS_PX;
@@ -665,14 +664,14 @@ static bool parseTransformTranslateArguments(CharType*& pos, CharType* end, unsi
 template <typename CharType>
 static RefPtr<CSSValue> parseTransformAngleArgument(CharType*& pos, CharType* end)
 {
-    size_t delimiter = find(pos, end - pos, ')');
+    size_t delimiter = find({ pos, end }, ')');
     if (delimiter == notFound)
         return nullptr;
 
     unsigned argumentLength = static_cast<unsigned>(delimiter);
     CSSUnitType unit = CSSUnitType::CSS_NUMBER;
     double number;
-    if (!parseSimpleAngle(pos, argumentLength, unit, number))
+    if (!parseSimpleAngle(std::span<const CharType> { pos, argumentLength }, unit, number))
         return nullptr;
     if (!number && unit == CSSUnitType::CSS_NUMBER)
         unit = CSSUnitType::CSS_DEG;
@@ -686,11 +685,11 @@ template <typename CharType>
 static bool parseTransformNumberArguments(CharType*& pos, CharType* end, unsigned expectedCount, CSSValueListBuilder& arguments)
 {
     while (expectedCount) {
-        size_t delimiter = find(pos, end - pos, expectedCount == 1 ? ')' : ',');
+        size_t delimiter = find({ pos, end }, expectedCount == 1 ? ')' : ',');
         if (delimiter == notFound)
             return false;
         unsigned argumentLength = static_cast<unsigned>(delimiter);
-        auto number = parseCSSNumber(pos, argumentLength);
+        auto number = parseCSSNumber(std::span<const CharType> { pos, argumentLength });
         if (!number)
             return false;
         arguments.append(CSSPrimitiveValue::create(*number, CSSUnitType::CSS_NUMBER));
@@ -860,7 +859,7 @@ static bool transformCanLikelyUseFastPath(const CharType* chars, unsigned length
         default:
             return false;
         }
-        size_t argumentsEnd = find(chars, length, ')', i);
+        size_t argumentsEnd = find({ chars, length }, ')', i);
         if (argumentsEnd == notFound)
             return false;
         // Advance to the end of the arguments.

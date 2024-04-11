@@ -199,7 +199,7 @@ UniqueRef<Layout::Box> BoxTree::createLayoutBox(RenderObject& renderer)
         auto canUseSimpleFontCodePath = textRenderer->canUseSimpleFontCodePath();
         auto canUseSimplifiedTextMeasuring = textRenderer->canUseSimplifiedTextMeasuring();
         if (!canUseSimplifiedTextMeasuring) {
-            canUseSimplifiedTextMeasuring = canUseSimpleFontCodePath && Layout::TextUtil::canUseSimplifiedTextMeasuring(text, style, firstLineStyle.get());
+            canUseSimplifiedTextMeasuring = canUseSimpleFontCodePath && Layout::TextUtil::canUseSimplifiedTextMeasuring(text, style.fontCascade(), style.collapseWhiteSpace(), firstLineStyle.get());
             textRenderer->setCanUseSimplifiedTextMeasuring(*canUseSimplifiedTextMeasuring);
         }
 
@@ -302,7 +302,7 @@ void BoxTree::updateContent(const RenderText& textRenderer)
     auto contentCharacteristic = OptionSet<Layout::InlineTextBox::ContentCharacteristic> { };
     if (textRenderer.canUseSimpleFontCodePath())
         contentCharacteristic.add(Layout::InlineTextBox::ContentCharacteristic::CanUseSimpledFontCodepath);
-    if (textRenderer.canUseSimpleFontCodePath() && Layout::TextUtil::canUseSimplifiedTextMeasuring(text, style, &inlineTextBox.firstLineStyle()))
+    if (textRenderer.canUseSimpleFontCodePath() && Layout::TextUtil::canUseSimplifiedTextMeasuring(text, style.fontCascade(), style.collapseWhiteSpace(), &inlineTextBox.firstLineStyle()))
         contentCharacteristic.add(Layout::InlineTextBox::ContentCharacteristic::CanUseSimplifiedContentMeasuring);
     if (Layout::TextUtil::hasPositionDependentContentWidth(text))
         contentCharacteristic.add(Layout::InlineTextBox::ContentCharacteristic::HasPositionDependentContentWidth);
@@ -400,6 +400,21 @@ RenderObject& BoxTree::rendererForLayoutBox(const Layout::Box& box)
 const RenderObject& BoxTree::rendererForLayoutBox(const Layout::Box& box) const
 {
     return const_cast<BoxTree&>(*this).rendererForLayoutBox(box);
+}
+
+bool BoxTree::hasRendererForLayoutBox(const Layout::Box& box) const
+{
+    if (&box == &rootLayoutBox())
+        return true;
+
+    if (m_boxToRendererMap.isEmpty()) {
+        for (auto& renderer : m_renderers) {
+            if (renderer->layoutBox() == &box)
+                return true;
+        }
+        return false;
+    }
+    return m_boxToRendererMap.contains(&box);
 }
 
 Layout::InitialContainingBlock& BoxTree::initialContainingBlock()

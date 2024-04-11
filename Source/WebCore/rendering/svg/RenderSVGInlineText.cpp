@@ -206,28 +206,27 @@ VisiblePosition RenderSVGInlineText::positionForPoint(const LayoutPoint& point, 
 
 void RenderSVGInlineText::updateScaledFont()
 {
-    computeNewScaledFontForStyle(*this, style(), m_scalingFactor, m_scaledFont);
+    if (computeNewScaledFontForStyle(*this, style(), m_scalingFactor, m_scaledFont))
+        m_canUseSimplifiedTextMeasuring = { };
 }
 
 float RenderSVGInlineText::computeScalingFactorForRenderer(const RenderObject& renderer)
 {
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
     if (renderer.document().settings().layerBasedSVGEngineEnabled()) {
         if (const auto* layerRenderer = lineageOfType<RenderLayerModelObject>(renderer).first())
             return SVGLayerTransformComputation(*layerRenderer).calculateScreenFontSizeScalingFactor();
     }
-#endif
     return SVGRenderingContext::calculateScreenFontSizeScalingFactor(renderer);
 }
 
-void RenderSVGInlineText::computeNewScaledFontForStyle(const RenderObject& renderer, const RenderStyle& style, float& scalingFactor, FontCascade& scaledFont)
+bool RenderSVGInlineText::computeNewScaledFontForStyle(const RenderObject& renderer, const RenderStyle& style, float& scalingFactor, FontCascade& scaledFont)
 {
     // Alter font-size to the right on-screen value to avoid scaling the glyphs themselves, except when GeometricPrecision is specified
     scalingFactor = computeScalingFactorForRenderer(renderer);
     if (!scalingFactor || style.fontDescription().textRenderingMode() == TextRenderingMode::GeometricPrecision) {
         scalingFactor = 1;
         scaledFont = style.fontCascade();
-        return;
+        return false;
     }
 
     auto fontDescription = style.fontDescription();
@@ -242,6 +241,7 @@ void RenderSVGInlineText::computeNewScaledFontForStyle(const RenderObject& rende
 
     scaledFont = FontCascade(WTFMove(fontDescription));
     scaledFont.update(renderer.document().protectedFontSelector().ptr());
+    return true;
 }
 
 SVGInlineTextBox* RenderSVGInlineText::firstTextBox() const

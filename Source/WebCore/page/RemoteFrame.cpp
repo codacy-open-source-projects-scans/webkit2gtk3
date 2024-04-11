@@ -105,7 +105,7 @@ void RemoteFrame::unbindRemoteAccessibilityFrames(int processIdentifier)
     m_client->unbindRemoteAccessibilityFrames(processIdentifier);
 }
 
-void RemoteFrame::bindRemoteAccessibilityFrames(int processIdentifier, std::span<const uint8_t> dataToken, CompletionHandler<void(const std::span<const uint8_t>, int)>&& completionHandler)
+void RemoteFrame::bindRemoteAccessibilityFrames(int processIdentifier, std::span<const uint8_t> dataToken, CompletionHandler<void(std::span<const uint8_t>, int)>&& completionHandler)
 {
     return m_client->bindRemoteAccessibilityFrames(processIdentifier, frameID(), dataToken, WTFMove(completionHandler));
 }
@@ -144,6 +144,11 @@ String RemoteFrame::customUserAgent() const
 String RemoteFrame::customUserAgentAsSiteSpecificQuirks() const
 {
     return m_customUserAgentAsSiteSpecificQuirks;
+}
+
+void RemoteFrame::documentURLForConsoleLog(CompletionHandler<void(const URL&)>&& completionHandler)
+{
+    m_client->documentURLForConsoleLog(WTFMove(completionHandler));
 }
 
 } // namespace WebCore

@@ -57,7 +57,7 @@ static AccessibilityObject* accessibilityObjectForNode(Node& node)
         AXObjectCache::enableAccessibility();
 
     if (AXObjectCache* axObjectCache = node.document().axObjectCache())
-        return axObjectCache->getOrCreate(&node);
+        return axObjectCache->getOrCreate(node);
 
     return nullptr;
 }
@@ -321,10 +321,11 @@ ExceptionOr<std::optional<Vector<RefPtr<Node>>>> InspectorAuditAccessibilityObje
     if (auto* axObject = accessibilityObjectForNode(node)) {
         Vector<RefPtr<Node>> selectedChildNodes;
 
-        auto selectedChildren = axObject->selectedChildren();
-        for (auto& selectedChildObject : selectedChildren) {
-            if (Node* selectedChildNode = selectedChildObject->node())
-                selectedChildNodes.append(selectedChildNode);
+        if (auto selectedChildren = axObject->selectedChildren()) {
+            for (auto& selectedChildObject : *selectedChildren) {
+                if (Node* selectedChildNode = selectedChildObject->node())
+                    selectedChildNodes.append(selectedChildNode);
+            }
         }
 
         result = WTFMove(selectedChildNodes);

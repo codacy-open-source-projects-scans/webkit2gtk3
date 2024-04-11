@@ -379,7 +379,7 @@ void EventSource::parseEventStreamLine(unsigned position, std::optional<unsigned
         m_data.append(m_receiveBuffer.subspan(position, valueLength));
         m_data.append('\n');
     } else if (field == "event"_s)
-        m_eventName = { &m_receiveBuffer[position], valueLength };
+        m_eventName = m_receiveBuffer.subspan(position, valueLength);
     else if (field == "id"_s) {
         StringView parsedEventId = m_receiveBuffer.subspan(position, valueLength);
         constexpr UChar nullCharacter = '\0';
@@ -440,7 +440,7 @@ void EventSource::dispatchMessageEvent()
     ASSERT(!m_data.isEmpty());
 
     // Omit the trailing "\n" character.
-    String data(m_data.data(), m_data.size() - 1);
+    String data(m_data.subspan(0, m_data.size() - 1));
     m_data = { };
 
     dispatchEvent(MessageEvent::create(name, WTFMove(data), m_eventStreamOrigin, m_lastEventId));

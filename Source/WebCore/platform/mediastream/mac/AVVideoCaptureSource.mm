@@ -208,7 +208,7 @@ std::optional<double> AVVideoCaptureSource::computeMaxZoom(AVCaptureDeviceFormat
 {
 #if PLATFORM(IOS_FAMILY)
     // We restrict zoom for now as it might require elevated permissions.
-    return std::min([format videoMaxZoomFactor], 4.0) / m_zoomScaleFactor;
+    return std::min([format videoMaxZoomFactor] / m_zoomScaleFactor, 10.0);
 #else
     UNUSED_PARAM(format);
     return { };
@@ -444,6 +444,7 @@ const RealtimeMediaSourceSettings& AVVideoCaptureSource::settings()
     settings.setHeight(size.height());
     settings.setDeviceId(hashedId());
     settings.setGroupId(captureDevice().groupId());
+    settings.setBackgroundBlur(!!device().portraitEffectActive);
 
     RealtimeMediaSourceSupportedConstraints supportedConstraints;
     supportedConstraints.setSupportsDeviceId(true);
@@ -453,6 +454,7 @@ const RealtimeMediaSourceSettings& AVVideoCaptureSource::settings()
     supportedConstraints.setSupportsHeight(true);
     supportedConstraints.setSupportsAspectRatio(true);
     supportedConstraints.setSupportsFrameRate(true);
+    supportedConstraints.setSupportsBackgroundBlur(true);
 
     if (isZoomSupported(presets())) {
         supportedConstraints.setSupportsZoom(true);
@@ -511,6 +513,9 @@ const RealtimeMediaSourceCapabilities& AVVideoCaptureSource::capabilities()
         supportedConstraints.setSupportsTorch(true);
         capabilities.setTorch(true);
     }
+
+    capabilities.setBackgroundBlur(device().portraitEffectActive ? RealtimeMediaSourceCapabilities::BackgroundBlur::On : RealtimeMediaSourceCapabilities::BackgroundBlur::Off);
+    supportedConstraints.setSupportsBackgroundBlur(true);
 
     capabilities.setSupportedConstraints(supportedConstraints);
     updateCapabilities(capabilities);
@@ -821,6 +826,11 @@ void AVVideoCaptureSource::setSessionSizeFrameRateAndZoom()
 
     ASSERT(m_currentPreset->format());
 
+    if (!m_isRunning) {
+        m_needsResolutionReconfiguration = true;
+        return;
+    }
+
     if (!lockForConfiguration())
         return;
 
@@ -917,6 +927,11 @@ bool AVVideoCaptureSource::lockForConfiguration()
 
 void AVVideoCaptureSource::updateWhiteBalanceMode()
 {
+    if (!m_isRunning) {
+        m_needsWhiteBalanceReconfiguration = true;
+        return;
+    }
+
     beginConfigurationForConstraintsIfNeeded();
 
     if (!lockForConfiguration())
@@ -934,6 +949,11 @@ void AVVideoCaptureSource::updateWhiteBalanceMode()
 
 void AVVideoCaptureSource::updateTorch()
 {
+    if (!m_isRunning) {
+        m_needsTorchReconfiguration = true;
+        return;
+    }
+
     beginConfigurationForConstraintsIfNeeded();
 
     if (!lockForConfiguration())
@@ -1163,6 +1183,25 @@ void AVVideoCaptureSource::captureOutputDidFinishProcessingPhoto(RetainPtr<AVCap
     resolvePendingPhotoRequest(makeVector(data), "image/jpeg"_s);
 }
 
+void AVVideoCaptureSource::reconfigureIfNeeded()
+{
+    if (!m_isRunning || (!m_needsResolutionReconfiguration && !m_needsTorchReconfiguration && !m_needsWhiteBalanceReconfiguration))
+        return;
+
+    beginConfiguration();
+
+    if (std::exchange(m_needsResolutionReconfiguration, false))
+        setSessionSizeFrameRateAndZoom();
+
+    if (std::exchange(m_needsTorchReconfiguration, false))
+        updateTorch();
+
+    if (std::exchange(m_needsWhiteBalanceReconfiguration, false))
+        updateWhiteBalanceMode();
+
+    commitConfiguration();
+}
+
 void AVVideoCaptureSource::captureSessionIsRunningDidChange(bool state)
 {
     scheduleDeferredTask([this, logIdentifier = LOGIDENTIFIER, state] {
@@ -1171,6 +1210,8 @@ void AVVideoCaptureSource::captureSessionIsRunningDidChange(bool state)
             return;
 
         m_isRunning = state;
+
+        reconfigureIfNeeded();
 
         updateVerifyCapturingTimer();
         notifyMutedChange(!m_isRunning);

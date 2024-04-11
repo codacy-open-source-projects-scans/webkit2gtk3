@@ -551,6 +551,7 @@ PlatformWebView* TestController::createOtherPlatformWebView(PlatformWebView* par
         didReceivePageMessageFromInjectedBundle,
         nullptr,
         didReceiveSynchronousPageMessageFromInjectedBundleWithListener,
+        nullptr
     };
     WKPageSetPageInjectedBundleClient(newPage, &injectedBundleClient.base);
 
@@ -1014,6 +1015,7 @@ void TestController::createWebViewWithOptions(const TestOptions& options)
         didReceivePageMessageFromInjectedBundle,
         nullptr,
         didReceiveSynchronousPageMessageFromInjectedBundleWithListener,
+        nullptr
     };
     WKPageSetPageInjectedBundleClient(m_mainWebView->page(), &injectedBundleClient.base);
 
@@ -1072,6 +1074,7 @@ void TestController::resetPreferencesToConsistentValues(const TestOptions& optio
             WKPreferencesEnableAllExperimentalFeatures(preferences);
             WKPreferencesSetExperimentalFeatureForKey(preferences, false, toWK("SiteIsolationEnabled").get());
             WKPreferencesSetExperimentalFeatureForKey(preferences, false, toWK("CFNetworkNetworkLoaderEnabled").get());
+            WKPreferencesSetExperimentalFeatureForKey(preferences, true, toWK("WebGPUEnabled").get());
         }
 
         WKPreferencesResetAllInternalDebugFeatures(preferences);
@@ -1476,7 +1479,7 @@ WKURLRef TestController::createTestURL(const char* pathOrURL)
         return 0;
 
     if (length >= 7 && strstr(pathOrURL, "file://")) {
-        if (!m_usingServerMode && !WTF::FileSystemImpl::fileExists(String(pathOrURL + 7, length - 7))) {
+        if (!m_usingServerMode && !WTF::FileSystemImpl::fileExists(String({ pathOrURL + 7, length - 7 }))) {
             printf("Failed: File for URL ‘%s’ was not found or is inaccessible\n", pathOrURL);
             return 0;
         }
@@ -1511,7 +1514,7 @@ WKURLRef TestController::createTestURL(const char* pathOrURL)
     }
 
     auto cPath = buffer.get();
-    if (!m_usingServerMode && !WTF::FileSystemImpl::fileExists(String(cPath + 7, strlen(cPath) - 7))) {
+    if (!m_usingServerMode && !WTF::FileSystemImpl::fileExists(String({ cPath + 7, strlen(cPath) - 7 }))) {
         printf("Failed: File ‘%s’ was not found or is inaccessible\n", pathOrURL);
         return 0;
     }
@@ -3263,7 +3266,7 @@ void getAllStorageAccessEntriesCallback(void* userData, WKArrayRef domainList)
         auto buffer = std::vector<char>(WKStringGetMaximumUTF8CStringSize(domain));
         auto stringLength = WKStringGetUTF8CString(domain, buffer.data(), buffer.size());
 
-        resultDomains.append(String::fromUTF8(buffer.data(), stringLength - 1));
+        resultDomains.append(String::fromUTF8({ buffer.data(), stringLength - 1 }));
     }
 
     if (context->completionHandler)

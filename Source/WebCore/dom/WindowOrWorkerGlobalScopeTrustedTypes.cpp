@@ -71,7 +71,7 @@ DOMWindowTrustedTypes* DOMWindowTrustedTypes::from(LocalDOMWindow& window)
 TrustedTypePolicyFactory* DOMWindowTrustedTypes::trustedTypes() const
 {
     if (!m_trustedTypes)
-        m_trustedTypes = TrustedTypePolicyFactory::create();
+        m_trustedTypes = TrustedTypePolicyFactory::create(*window()->document());
     return m_trustedTypes.get();
 }
 
@@ -90,7 +90,7 @@ public:
     TrustedTypePolicyFactory* trustedTypes() const;
 
 private:
-    static ASCIILiteral supplementName() { return "WorkerGlobalScopeTrustedTypes"_s; }
+    static ASCIILiteral supplementName() { return WindowOrWorkerGlobalScopeTrustedTypes::workerGlobalSupplementName(); }
 
     WorkerGlobalScope& m_scope;
     mutable RefPtr<TrustedTypePolicyFactory> m_trustedTypes;
@@ -115,8 +115,13 @@ WorkerGlobalScopeTrustedTypes* WorkerGlobalScopeTrustedTypes::from(WorkerGlobalS
 TrustedTypePolicyFactory* WorkerGlobalScopeTrustedTypes::trustedTypes() const
 {
     if (!m_trustedTypes)
-        m_trustedTypes = TrustedTypePolicyFactory::create();
+        m_trustedTypes = TrustedTypePolicyFactory::create(m_scope);
     return m_trustedTypes.get();
+}
+
+ASCIILiteral WindowOrWorkerGlobalScopeTrustedTypes::workerGlobalSupplementName()
+{
+    return "WorkerGlobalScopeTrustedTypes"_s;
 }
 
 TrustedTypePolicyFactory* WindowOrWorkerGlobalScopeTrustedTypes::trustedTypes(WorkerGlobalScope& scope)

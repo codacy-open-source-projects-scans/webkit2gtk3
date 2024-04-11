@@ -250,7 +250,7 @@ ExceptionOr<std::optional<RenderingContext>> HTMLCanvasElement::getContext(JSC::
                 return std::optional<RenderingContext> { std::nullopt };
             if (auto* context = dynamicDowncast<WebGLRenderingContext>(*m_context))
                 return std::optional<RenderingContext> { RefPtr { context } };
-            return std::optional<RenderingContext> { RefPtr { &checkedDowncast<WebGL2RenderingContext>(*m_context) } };
+            return std::optional<RenderingContext> { RefPtr { &downcast<WebGL2RenderingContext>(*m_context) } };
         }
 #endif
 
@@ -595,9 +595,9 @@ void HTMLCanvasElement::reset()
 
     setSurfaceSize(newSize);
 
-    if (m_context && oldSize != size()) {
+    if (m_context) {
         if (auto* context = dynamicDowncast<GPUBasedCanvasRenderingContext>(*m_context))
-            context->reshape(width(), height());
+            context->reshape(width(), height(), oldSize.width(), oldSize.height());
     }
 
     if (CheckedPtr canvasRenderer = dynamicDowncast<RenderHTMLCanvas>(renderer())) {

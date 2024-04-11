@@ -361,10 +361,8 @@ Ref<GraphicsLayer> RenderLayerBacking::createGraphicsLayer(const String& name, G
     graphicsLayer->setAcceleratesDrawing(compositor().acceleratedDrawingEnabled());
 #endif
 
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
     if (renderer().isSVGLayerAwareRenderer() && renderer().document().settings().layerBasedSVGEngineEnabled())
         graphicsLayer->setShouldUpdateRootRelativeScaleFactor(true);
-#endif
     
     return graphicsLayer;
 }
@@ -633,10 +631,8 @@ static LayoutRect clippingLayerBox(const RenderLayerModelObject& renderer)
     if (renderer.hasNonVisibleOverflow()) {
         if (CheckedPtr box = dynamicDowncast<RenderBox>(renderer))
             result = box->overflowClipRect({ }, 0); // FIXME: Incorrect for CSS regions.
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
         else if (CheckedPtr modelObject = dynamicDowncast<RenderSVGModelObject>(renderer))
             result = modelObject->overflowClipRect({ }, 0); // FIXME: Incorrect for CSS regions.
-#endif
     }
 
     if (renderer.hasClip()) {
@@ -1424,6 +1420,9 @@ void RenderLayerBacking::updateGeometry(const RenderLayer* compositedAncestor)
     if (renderer().capturedInViewTransition()) {
         ComputedOffsets computedOffsets(m_owningLayer, compositedAncestor, compositedBounds(), { }, { });
         parentGraphicsLayerRect.move(computedOffsets.fromParentGraphicsLayer());
+
+        if (auto* renderer = renderBox())
+            parentGraphicsLayerRect.move(renderer->visualOverflowRect().location() - compositedBounds().location());
     }
 
     if (m_ancestorClippingStack)
@@ -2932,7 +2931,6 @@ bool RenderLayerBacking::paintsContent(RenderLayer::PaintedContentRequest& reque
     if (request.isSatisfied())
         return paintsContent;
 
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
     if (is<RenderSVGModelObject>(m_owningLayer.renderer())) {
         // FIXME: [LBSE] Eventually cache if we're part of a RenderSVGHiddenContainer subtree to avoid tree walks.
         // FIXME: [LBSE] Eventually refine the logic to end up with a narrower set of conditions (webkit.org/b/243417).
@@ -2942,7 +2940,6 @@ bool RenderLayerBacking::paintsContent(RenderLayer::PaintedContentRequest& reque
 
     if (request.isSatisfied())
         return paintsContent;
-#endif
 
     if (request.hasPaintedContent == RequestState::Unknown)
         request.hasPaintedContent = RequestState::False;
@@ -3127,7 +3124,7 @@ bool RenderLayerBacking::isDirectlyCompositedImage() const
         if (!image)
             return false;
 
-        if (image->orientationForCurrentFrame() != ImageOrientation::Orientation::None)
+        if (image->currentFrameOrientation() != ImageOrientation::Orientation::None)
             return false;
 
 #if (PLATFORM(GTK) || PLATFORM(WPE))
@@ -3174,7 +3171,7 @@ bool RenderLayerBacking::isUnscaledBitmapOnly() const
             if (!image)
                 return false;
 
-            if (image->orientationForCurrentFrame() != ImageOrientation::Orientation::None)
+            if (image->currentFrameOrientation() != ImageOrientation::Orientation::None)
                 return false;
 
             return contents.size() == image->size();

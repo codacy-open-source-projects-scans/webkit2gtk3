@@ -42,14 +42,14 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-AccessibilityListBox::AccessibilityListBox(RenderObject* renderer)
+AccessibilityListBox::AccessibilityListBox(RenderObject& renderer)
     : AccessibilityRenderObject(renderer)
 {
 }
 
 AccessibilityListBox::~AccessibilityListBox() = default;
 
-Ref<AccessibilityListBox> AccessibilityListBox::create(RenderObject* renderer)
+Ref<AccessibilityListBox> AccessibilityListBox::create(RenderObject& renderer)
 {
     return adoptRef(*new AccessibilityListBox(renderer));
 }
@@ -97,8 +97,8 @@ void AccessibilityListBox::setSelectedChildren(const AccessibilityChildrenVector
         dynamicDowncast<AccessibilityListBoxOption>(object)->setSelected(true);
     }
 }
-    
-AXCoreObject::AccessibilityChildrenVector AccessibilityListBox::selectedChildren()
+
+std::optional<AXCoreObject::AccessibilityChildrenVector> AccessibilityListBox::selectedChildren()
 {
     if (!childrenInitialized())
         addChildren();

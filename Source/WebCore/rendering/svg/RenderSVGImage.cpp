@@ -27,7 +27,6 @@
 #include "config.h"
 #include "RenderSVGImage.h"
 
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
 #include "AXObjectCache.h"
 #include "BitmapImage.h"
 #include "DocumentInlines.h"
@@ -346,7 +345,7 @@ void RenderSVGImage::notifyFinished(CachedResource& newImage, const NetworkLoadM
 
 void RenderSVGImage::imageChanged(WrappedImagePtr newImage, const IntRect* rect)
 {
-    if (renderTreeBeingDestroyed())
+    if (renderTreeBeingDestroyed() || !parent())
         return;
 
     repaintClientsOfReferencedSVGResources();
@@ -416,5 +415,3 @@ void RenderSVGImage::applyTransform(TransformationMatrix& transform, const Rende
 }
 
 } // namespace WebCore
-
-#endif // ENABLE(LAYER_BASED_SVG_ENGINE)

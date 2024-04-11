@@ -1495,7 +1495,7 @@ EditorState WebPage::editorState(ShouldPerformLayout shouldPerformLayout) const
             result.postLayoutData = std::optional<EditorState::PostLayoutData> { EditorState::PostLayoutData { } };
         result.postLayoutData->canCut = editor.canCut();
         result.postLayoutData->canCopy = editor.canCopy();
-        result.postLayoutData->canPaste = editor.canPaste();
+        result.postLayoutData->canPaste = editor.canEdit();
 
         if (!result.visualData)
             result.visualData = std::optional<EditorState::VisualData> { EditorState::VisualData { } };
@@ -1908,6 +1908,8 @@ void WebPage::close()
     m_viewGestureGeometryCollector = nullptr;
 #endif
 
+    stopObservingNowPlayingMetadata();
+
     // The WebPage can be destroyed by this call.
     WebProcess::singleton().removeWebPage(m_identifier);
 
@@ -2128,8 +2130,6 @@ void WebPage::loadAlternateHTML(LoadParameters&& loadParameters)
     URL provisionalLoadErrorURL = loadParameters.provisionalLoadErrorURLString.isEmpty() ? URL() : URL { loadParameters.provisionalLoadErrorURLString };
     auto sharedBuffer = SharedBuffer::create(loadParameters.data);
     m_mainFrame->coreLocalFrame()->loader().setProvisionalLoadErrorBeingHandledURL(provisionalLoadErrorURL);
-
-    WebProcess::singleton().addAllowedFirstPartyForCookies(WebCore::RegistrableDomain { baseURL });
 
     ResourceResponse response(URL(), loadParameters.MIMEType, sharedBuffer->size(), loadParameters.encodingName);
     loadDataImpl(loadParameters.navigationID, loadParameters.shouldTreatAsContinuingLoad, WTFMove(loadParameters.websitePolicies), WTFMove(sharedBuffer), ResourceRequest(baseURL), WTFMove(response), unreachableURL, loadParameters.userData, loadParameters.isNavigatingToAppBoundDomain, WebCore::SubstituteData::SessionHistoryVisibility::Hidden);
@@ -2416,8 +2416,10 @@ void WebPage::setTextZoomFactor(double zoomFactor)
 double WebPage::pageZoomFactor() const
 {
 #if ENABLE(PDF_PLUGIN)
-    if (auto* pluginView = mainFramePlugIn())
+    if (auto* pluginView = mainFramePlugIn()) {
+        // Note that this maps page *scale* factor to page *zoom* factor.
         return pluginView->pageScaleFactor();
+    }
 #endif
 
     RefPtr frame = m_mainFrame->coreLocalFrame();
@@ -2430,6 +2432,7 @@ void WebPage::setPageZoomFactor(double zoomFactor)
 {
 #if ENABLE(PDF_PLUGIN)
     if (auto* pluginView = mainFramePlugIn()) {
+        // Note that this maps page *zoom* factor to page *scale* factor.
         pluginView->setPageScaleFactor(zoomFactor, std::nullopt);
         return;
     }
@@ -6604,7 +6607,7 @@ void WebPage::handleAlternativeTextUIResult(const String& result)
 }
 #endif
 
-void WebPage::setCompositionForTesting(const String& compositionString, uint64_t from, uint64_t length, bool suppressUnderline, const Vector<CompositionHighlight>& highlights, const HashMap<String, Vector<WebCore::CharacterRange>>& annotations)
+void WebPage::setCompositionForTesting(const String& compositionString, uint64_t from, uint64_t length, bool suppressUnderline, const Vector<CompositionHighlight>& highlights)
 {
     RefPtr frame = m_page->checkedFocusController()->focusedOrMainFrame();
     if (!frame)
@@ -6617,7 +6620,7 @@ void WebPage::setCompositionForTesting(const String& compositionString, uint64_t
     if (!suppressUnderline)
         underlines.append(CompositionUnderline(0, compositionString.length(), CompositionUnderlineColor::TextColor, Color(Color::black), false));
 
-    frame->editor().setComposition(compositionString, underlines, highlights, annotations, from, from + length);
+    frame->editor().setComposition(compositionString, underlines, highlights, from, from + length);
 }
 
 bool WebPage::hasCompositionForTesting()
@@ -6872,7 +6875,7 @@ void WebPage::firstRectForCharacterRangeAsync(const EditingRange& editingRange, 
     completionHandler(rect, editingRange);
 }
 
-void WebPage::setCompositionAsync(const String& text, const Vector<CompositionUnderline>& underlines, const Vector<CompositionHighlight>& highlights, const HashMap<String, Vector<CharacterRange>>& annotations, const EditingRange& selection, const EditingRange& replacementEditingRange)
+void WebPage::setCompositionAsync(const String& text, const Vector<CompositionUnderline>& underlines, const Vector<CompositionHighlight>& highlights, const EditingRange& selection, const EditingRange& replacementEditingRange)
 {
     platformWillPerformEditingCommand();
 
@@ -6885,8 +6888,19 @@ void WebPage::setCompositionAsync(const String& text, const Vector<CompositionUn
             if (auto replacementRange = EditingRange::toRange(*frame, replacementEditingRange))
                 frame->selection().setSelection(VisibleSelection(*replacementRange));
         }
-        frame->editor().setComposition(text, underlines, highlights, annotations, selection.location, selection.location + selection.length);
+        frame->editor().setComposition(text, underlines, highlights, selection.location, selection.location + selection.length);
     }
+}
+
+void WebPage::setWritingSuggestion(const String& fullTextWithPrediction, const EditingRange& selection)
+{
+    platformWillPerformEditingCommand();
+
+    RefPtr frame = m_page->checkedFocusController()->focusedOrMainFrame();
+    if (!frame)
+        return;
+
+    frame->editor().setWritingSuggestion(fullTextWithPrediction, { selection.location, selection.length });
 }
 
 void WebPage::confirmCompositionAsync()
@@ -7861,6 +7875,13 @@ void WebPage::didChangeScrollOffsetForFrame(LocalFrame* frame)
 void WebPage::postMessage(const String& messageName, API::Object* messageBody)
 {
     send(Messages::WebPageProxy::HandleMessage(messageName, UserData(WebProcess::singleton().transformObjectsToHandles(messageBody))));
+}
+
+void WebPage::postMessageWithAsyncReply(const String& messageName, API::Object* messageBody, CompletionHandler<void(API::Object*)>&& completionHandler)
+{
+    sendWithAsyncReply(Messages::WebPageProxy::HandleMessageWithAsyncReply(messageName, UserData(messageBody)), [completionHandler = WTFMove(completionHandler)] (UserData reply) mutable {
+        completionHandler(reply.object());
+    });
 }
 
 void WebPage::postMessageIgnoringFullySynchronousMode(const String& messageName, API::Object* messageBody)
@@ -9027,6 +9048,15 @@ void WebPage::lastNavigationWasAppInitiated(CompletionHandler<void(bool)>&& comp
     return completionHandler(mainFrame->document()->loader()->lastNavigationWasAppInitiated());
 }
 
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+
+void WebPage::removeTextIndicatorStyleForID(const WTF::UUID& uuid)
+{
+    send(Messages::WebPageProxy::RemoveTextIndicatorStyleForID(uuid));
+}
+
+#endif
+
 #if HAVE(TRANSLATION_UI_SERVICES) && ENABLE(CONTEXT_MENUS)
 
 void WebPage::handleContextMenuTranslation(const TranslationContextMenuInfo& info)
@@ -9397,15 +9427,6 @@ void WebPage::requestTextExtraction(std::optional<FloatRect>&& collectionRectInR
     completion(TextExtraction::extractItem(WTFMove(collectionRectInRootView), Ref { *corePage() }));
 }
 
-void WebPage::requestRenderedTextForElementSelector(String&& selector, CompletionHandler<void(Expected<String, WebCore::ExceptionCode>&&)>&& completion)
-{
-    RefPtr mainFrame = dynamicDowncast<LocalFrame>(corePage()->protectedMainFrame());
-    if (!mainFrame)
-        return completion(makeUnexpected(ExceptionCode::NotAllowedError));
-
-    completion(TextExtraction::extractRenderedText(mainFrame.releaseNonNull(), WTFMove(selector)));
-}
-
 template<typename T> void WebPage::remoteViewToRootView(WebCore::FrameIdentifier frameID, T geometry, CompletionHandler<void(T)>&& completionHandler)
 {
     RefPtr webFrame = WebProcess::singleton().webFrame(frameID);
@@ -9435,21 +9456,57 @@ void WebPage::remoteViewPointToRootView(FrameIdentifier frameID, FloatPoint poin
     remoteViewToRootView(frameID, point, WTFMove(completionHandler));
 }
 
-void WebPage::adjustVisibilityForTargetedElements(const Vector<std::pair<WebCore::ElementIdentifier, WebCore::ScriptExecutionContextIdentifier>>& identifiers, CompletionHandler<void(bool)>&& completion)
+void WebPage::adjustVisibilityForTargetedElements(const Vector<std::pair<ElementIdentifier, ScriptExecutionContextIdentifier>>& identifiers, CompletionHandler<void(bool)>&& completion)
 {
     RefPtr page = corePage();
-    if (!page)
-        return completion(false);
+    completion(page && page->checkedElementTargetingController()->adjustVisibility(identifiers));
+}
 
-    Vector<Ref<Element>> elements;
-    elements.reserveInitialCapacity(identifiers.size());
-    for (auto [elementID, documentID] : identifiers) {
-        RefPtr foundElement = Element::fromIdentifier(elementID);
-        if (!foundElement || foundElement->document().identifier() != documentID)
-            continue;
-        elements.append(foundElement.releaseNonNull());
-    }
-    completion(page->checkedElementTargetingController()->adjustVisibility(elements));
+void WebPage::resetVisibilityAdjustmentsForTargetedElements(const Vector<std::pair<ElementIdentifier, ScriptExecutionContextIdentifier>>& identifiers, CompletionHandler<void(bool)>&& completion)
+{
+    RefPtr page = corePage();
+    completion(page && page->checkedElementTargetingController()->resetVisibilityAdjustments(identifiers));
+}
+
+void WebPage::numberOfVisibilityAdjustmentRects(CompletionHandler<void(uint64_t)>&& completion)
+{
+    RefPtr page = corePage();
+    completion(page ? page->checkedElementTargetingController()->numberOfVisibilityAdjustmentRects() : 0);
+}
+
+#if HAVE(SPATIAL_TRACKING_LABEL)
+void WebPage::setDefaultSpatialTrackingLabel(const String& label)
+{
+    if (RefPtr page = corePage())
+        page->setDefaultSpatialTrackingLabel(label);
+}
+#endif
+
+void WebPage::startObservingNowPlayingMetadata()
+{
+    if (m_nowPlayingMetadataObserver)
+        return;
+
+    m_nowPlayingMetadataObserver = makeUnique<NowPlayingMetadataObserver>([weakThis = WeakPtr { *this }](auto& metadata) {
+        if (RefPtr protectedThis = weakThis.get())
+            protectedThis->send(Messages::WebPageProxy::NowPlayingMetadataChanged { metadata });
+    });
+
+    WebCore::PlatformMediaSessionManager::sharedManager().addNowPlayingMetadataObserver(*m_nowPlayingMetadataObserver);
+}
+
+void WebPage::stopObservingNowPlayingMetadata()
+{
+    auto nowPlayingMetadataObserver = std::exchange(m_nowPlayingMetadataObserver, nullptr);
+    if (!nowPlayingMetadataObserver)
+        return;
+
+    WebCore::PlatformMediaSessionManager::sharedManager().removeNowPlayingMetadataObserver(*nowPlayingMetadataObserver);
+}
+
+void WebPage::didAdjustVisibilityWithSelectors(Vector<String>&& selectors)
+{
+    send(Messages::WebPageProxy::DidAdjustVisibilityWithSelectors(WTFMove(selectors)));
 }
 
 } // namespace WebKit

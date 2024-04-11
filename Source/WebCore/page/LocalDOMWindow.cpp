@@ -1251,13 +1251,13 @@ bool LocalDOMWindow::find(const String& string, bool caseSensitive, bool backwar
         return false;
 
     // FIXME (13016): Support wholeWord, searchInFrames and showDialog.    
-    FindOptions options { DoNotTraverseFlatTree };
+    FindOptions options { FindOption::DoNotTraverseFlatTree };
     if (backwards)
-        options.add(Backwards);
+        options.add(FindOption::Backwards);
     if (!caseSensitive)
-        options.add(CaseInsensitive);
+        options.add(FindOption::CaseInsensitive);
     if (wrap)
-        options.add(WrapAround);
+        options.add(FindOption::WrapAround);
     return frame()->editor().findString(string, options);
 }
 
@@ -2677,12 +2677,12 @@ ExceptionOr<RefPtr<WindowProxy>> LocalDOMWindow::open(LocalDOMWindow& activeWind
 
     // Get the target frame for the special cases of _top and _parent.
     // In those cases, we schedule a location change right now and return early.
-    RefPtr<LocalFrame> targetFrame;
+    RefPtr<Frame> targetFrame;
     if (isTopTargetFrameName(frameName))
-        targetFrame = dynamicDowncast<LocalFrame>(&frame->tree().top());
+        targetFrame = &frame->tree().top();
     else if (isParentTargetFrameName(frameName)) {
         if (RefPtr parent = frame->tree().parent())
-            targetFrame = dynamicDowncast<LocalFrame>(parent.get());
+            targetFrame = parent.get();
         else
             targetFrame = frame;
     }
@@ -2692,7 +2692,8 @@ ExceptionOr<RefPtr<WindowProxy>> LocalDOMWindow::open(LocalDOMWindow& activeWind
 
         URL completedURL = firstFrame->protectedDocument()->completeURL(urlString);
 
-        if (targetFrame->document()->protectedWindow()->isInsecureScriptAccess(activeWindow, completedURL.string()))
+        RefPtr localTargetFrame = dynamicDowncast<LocalFrame>(targetFrame.get());
+        if (localTargetFrame && localTargetFrame->document()->protectedWindow()->isInsecureScriptAccess(activeWindow, completedURL.string()))
             return &targetFrame->windowProxy();
 
         if (urlString.isEmpty())

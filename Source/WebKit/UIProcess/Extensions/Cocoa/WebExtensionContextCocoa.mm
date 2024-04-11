@@ -100,6 +100,7 @@ static constexpr auto permissionRequestTimeout = 2_min;
 static NSString * const backgroundContentEventListenersKey = @"BackgroundContentEventListeners";
 static NSString * const backgroundContentEventListenersVersionKey = @"BackgroundContentEventListenersVersion";
 static NSString * const lastSeenBaseURLStateKey = @"LastSeenBaseURL";
+static NSString * const lastSeenBundleHashStateKey = @"LastSeenBundleHash";
 static NSString * const lastSeenVersionStateKey = @"LastSeenVersion";
 static NSString * const lastSeenDisplayNameStateKey = @"LastSeenDisplayName";
 static NSString * const lastLoadedDeclarativeNetRequestHashStateKey = @"LastLoadedDeclarativeNetRequestHash";
@@ -257,11 +258,11 @@ bool WebExtensionContext::load(WebExtensionController& controller, String storag
 
     m_isSessionStorageAllowedInContentScripts = boolForKey(m_state.get(), sessionStorageAllowedInContentScriptsKey, false);
 
+    determineInstallReasonDuringLoad();
+
     writeStateToStorage();
 
     populateWindowsAndTabs();
-
-    // FIXME: <https://webkit.org/b/249266> Remove registered scripts from storage if an extension has updated.
 
     moveLocalStorageIfNeeded(lastSeenBaseURL, [this, protectedThis = Ref { *this }] {
         // The extension could have been unloaded before this was called.
@@ -300,7 +301,10 @@ bool WebExtensionContext::unload(NSError **outError)
     writeStateToStorage();
 
     unloadBackgroundWebView();
+    m_safeToLoadBackgroundContent = false;
+
     removeInjectedContent();
+    m_registeredScriptsMap.clear();
 
     invalidateStorage();
     unloadDeclarativeNetRequestState();
@@ -525,9 +529,14 @@ void WebExtensionContext::setUnsupportedAPIs(HashSet<String>&& unsupported)
     m_unsupportedAPIs = WTFMove(unsupported);
 }
 
-const WebExtensionContext::InjectedContentVector& WebExtensionContext::injectedContents()
+WebExtensionContext::InjectedContentVector WebExtensionContext::injectedContents() const
 {
-    return m_extension->staticInjectedContents();
+    InjectedContentVector result = m_extension->staticInjectedContents();
+
+    for (auto& entry : m_registeredScriptsMap)
+        result.append(entry.value->injectedContent());
+
+    return result;
 }
 
 bool WebExtensionContext::hasInjectedContentForURL(const URL& url)
@@ -1513,6 +1522,9 @@ WebExtensionContext::PermissionState WebExtensionContext::permissionState(const 
         if (urlMatchesWildcardHostPatterns(requestedMatchPattern))
             return cacheResultAndReturn(PermissionState::RequestedImplicitly);
     }
+
+    if (hasPermission(_WKWebExtensionPermissionWebNavigation, tab, options))
+        return cacheResultAndReturn(PermissionState::RequestedImplicitly);
 
     if (options.contains(PermissionStateOptions::RequestedWithTabsPermission) && hasPermission(_WKWebExtensionPermissionTabs, tab, options))
         return PermissionState::RequestedImplicitly;
@@ -3106,9 +3118,6 @@ void WebExtensionContext::loadBackgroundWebViewDuringLoad()
         return;
 
     m_safeToLoadBackgroundContent = true;
-    m_shouldFireStartupEvent = extensionController()->isFreshlyCreated();
-
-    queueStartupAndInstallEventsForExtensionIfNecessary();
 
     if (!extension().backgroundContentIsPersistent()) {
         loadBackgroundPageListenersFromStorage();
@@ -3264,29 +3273,36 @@ void WebExtensionContext::unloadBackgroundContentIfPossible()
     unloadBackgroundWebView();
 }
 
-void WebExtensionContext::queueStartupAndInstallEventsForExtensionIfNecessary()
+void WebExtensionContext::determineInstallReasonDuringLoad()
 {
+    ASSERT(isLoaded());
+
     String currentVersion = extension().version();
     m_previousVersion = objectForKey<NSString>(m_state, lastSeenVersionStateKey);
+    m_state.get()[lastSeenVersionStateKey] = currentVersion;
 
-    // FIXME: <https://webkit.org/b/249266> The version number changing isn't the most accurate way to determine if an extension was updated.
     bool extensionVersionDidChange = !m_previousVersion.isEmpty() && m_previousVersion != currentVersion;
 
-    if (extensionVersionDidChange) {
-        [m_state setObject:(NSString *)currentVersion forKey:lastSeenVersionStateKey];
+    auto *lastSeenBundleHash = objectForKey<NSData>(m_state, lastSeenBundleHashStateKey);
+    auto *currentBundleHash = extension().bundleHash();
+    m_state.get()[lastSeenBundleHashStateKey] = currentBundleHash;
+
+    bool extensionDidChange = lastSeenBundleHash && currentBundleHash && ![lastSeenBundleHash isEqualToData:currentBundleHash];
+
+    m_shouldFireStartupEvent = extensionController()->isFreshlyCreated();
+
+    if (extensionDidChange || extensionVersionDidChange) {
+        // Clear background event listeners on extension update.
         [m_state removeObjectForKey:backgroundContentEventListenersKey];
         [m_state removeObjectForKey:backgroundContentEventListenersVersionKey];
-        clearDeclarativeNetRequestRulesetState();
 
-        writeStateToStorage();
+        // Clear other state that is not persistent between extension updates.
+        clearDeclarativeNetRequestRulesetState();
+        clearRegisteredContentScripts();
 
         RELEASE_LOG_DEBUG(Extensions, "Queued installed event with extension update reason");
         m_installReason = InstallReason::ExtensionUpdate;
     } else if (!m_shouldFireStartupEvent) {
-        [m_state setObject:(NSString *)currentVersion forKey:lastSeenVersionStateKey];
-
-        writeStateToStorage();
-
         RELEASE_LOG_DEBUG(Extensions, "Queued installed event with extension install reason");
         m_installReason = InstallReason::ExtensionInstall;
     } else
@@ -4155,7 +4171,7 @@ static NSString *computeStringHashForContentBlockerRules(NSString *rules)
     sha1.computeHash(digest);
 
     auto hashAsCString = SHA1::hexDigest(digest);
-    auto hashAsString = String::fromUTF8(hashAsCString);
+    auto hashAsString = String::fromUTF8(hashAsCString.span());
     return [hashAsString stringByAppendingString:[NSString stringWithFormat:@"-%zu", currentDeclarativeNetRequestRuleTranslatorVersion]];
 }
 

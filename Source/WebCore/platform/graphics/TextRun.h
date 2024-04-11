@@ -40,7 +40,7 @@ class Font;
 
 struct GlyphData;
 
-class TextRun : public CanMakeCheckedPtr {
+class TextRun : public CanMakeCheckedPtr<TextRun> {
     WTF_MAKE_FAST_ALLOCATED;
     friend void add(Hasher&, const TextRun&);
 public:
@@ -189,10 +189,12 @@ inline void TextRun::setTabSize(bool allow, const TabSize& size)
 inline TextRun TextRun::isolatedCopy() const
 {
     TextRun clone = *this;
+    // We need to ensure a deep copy here, calling `clone.m_text.isolatedCopy()`
+    // is insufficient (rdar://125823370).
     if (clone.m_text.is8Bit())
-        clone.m_text = String(clone.m_text.characters8(), clone.m_text.length());
+        clone.m_text = clone.m_text.span8();
     else
-        clone.m_text = String(clone.m_text.characters16(), clone.m_text.length());
+        clone.m_text = clone.m_text.span16();
     return clone;
 }
 

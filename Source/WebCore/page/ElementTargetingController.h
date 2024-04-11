@@ -25,35 +25,53 @@
 
 #pragma once
 
+#include "ElementIdentifier.h"
 #include "ElementTargetingTypes.h"
+#include "EventTarget.h"
+#include "IntRect.h"
 #include "Region.h"
+#include "ScriptExecutionContextIdentifier.h"
+#include "Timer.h"
+#include <wtf/ApproximateTime.h>
 #include <wtf/CheckedPtr.h>
+#include <wtf/HashMap.h>
 #include <wtf/Ref.h>
 #include <wtf/Vector.h>
+#include <wtf/WeakHashSet.h>
 #include <wtf/WeakPtr.h>
 
 namespace WebCore {
 
 class Document;
-class Element;
 class Page;
 
-class ElementTargetingController : public CanMakeCheckedPtr {
+class ElementTargetingController : public CanMakeCheckedPtr<ElementTargetingController> {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     ElementTargetingController(Page&);
 
     WEBCORE_EXPORT Vector<TargetedElementInfo> findTargets(TargetedElementRequest&&);
 
-    WEBCORE_EXPORT bool adjustVisibility(const Vector<Ref<Element>>&);
+    WEBCORE_EXPORT bool adjustVisibility(const Vector<std::pair<ElementIdentifier, ScriptExecutionContextIdentifier>>&);
     void adjustVisibilityInRepeatedlyTargetedRegions(Document&);
 
-    void resetAdjustmentRegions();
+    void reset();
+
+    WEBCORE_EXPORT uint64_t numberOfVisibilityAdjustmentRects() const;
+    WEBCORE_EXPORT bool resetVisibilityAdjustments(const Vector<std::pair<ElementIdentifier, ScriptExecutionContextIdentifier>>&);
 
 private:
+    void cleanUpAdjustmentClientRects();
+    void applyVisibilityAdjustmentFromSelectors(Document&);
+
     SingleThreadWeakPtr<Page> m_page;
+    DeferrableOneShotTimer m_recentAdjustmentClientRectsCleanUpTimer;
+    HashMap<ElementIdentifier, IntRect> m_recentAdjustmentClientRects;
+    std::optional<HashSet<String>> m_remainingVisibilityAdjustmentSelectors;
+    ApproximateTime m_startTimeForSelectorBasedVisibilityAdjustment;
     Region m_adjustmentClientRegion;
     Region m_repeatedAdjustmentClientRegion;
+    WeakHashSet<Element, WeakPtrImplWithEventTargetData> m_adjustedElements;
     FloatSize m_viewportSizeForVisibilityAdjustment;
 };
 

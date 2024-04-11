@@ -908,8 +908,8 @@ window.UIHelper = class UIHelper {
         if (!this.isWebKit2() || this.isIOSFamily())
             return Promise.resolve();
 
-        if (internals.isUsingUISideCompositing() && (!scroller || scroller.nodeName != "SELECT")) {
-            var scrollingNodeID = internalFunctions.scrollingNodeIDForNode(scroller);
+        var scrollingNodeID = internalFunctions.scrollingNodeIDForNode(scroller);
+        if (internals.isUsingUISideCompositing() && (!scroller || (scroller.nodeName != "SELECT" && scrollingNodeID[0] != 0))) {
             return new Promise(resolve => {
                 testRunner.runUIScript(`(function() {
                     uiController.doAfterNextStablePresentationUpdate(function() {
@@ -2156,14 +2156,14 @@ window.UIHelper = class UIHelper {
         });
     }
 
-    static requestRenderedTextForSelector(selector)
+    static requestRenderedTextForFrontmostTarget(x, y)
     {
         if (!this.isWebKit2())
             return Promise.resolve();
 
         return new Promise(resolve => {
             testRunner.runUIScript(`(() => {
-                uiController.requestRenderedTextForSelector("${selector}", result => uiController.uiScriptComplete(result));
+                uiController.requestRenderedTextForFrontmostTarget(${x}, ${y}, result => uiController.uiScriptComplete(result));
             })()`, resolve);
         });
     }

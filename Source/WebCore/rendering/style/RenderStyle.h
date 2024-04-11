@@ -26,6 +26,7 @@
 #pragma once
 
 #include <unicode/utypes.h>
+#include <wtf/CheckedRef.h>
 #include <wtf/DataRef.h>
 #include <wtf/OptionSet.h>
 #include <wtf/Vector.h>
@@ -34,6 +35,7 @@ namespace WebCore {
 
 class AnimationList;
 class AutosizeStatus;
+class BasicShapePath;
 class BorderData;
 class BorderValue;
 class CSSCustomPropertyValue;
@@ -293,7 +295,7 @@ struct PseudoStyleCache {
 };
 
 DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(RenderStyle);
-class RenderStyle {
+class RenderStyle : public CanMakeCheckedPtr<RenderStyle> {
     WTF_MAKE_FAST_ALLOCATED_WITH_HEAP_IDENTIFIER(RenderStyle);
 private:
     enum CloneTag { Clone };
@@ -1683,6 +1685,10 @@ public:
     inline void setX(Length&&);
     inline const Length& y() const;
     inline void setY(Length&&);
+
+    inline void setD(RefPtr<BasicShapePath>&&);
+    inline BasicShapePath* d() const;
+    static BasicShapePath* initialD() { return nullptr; }
 
     inline float floodOpacity() const;
     inline void setFloodOpacity(float);

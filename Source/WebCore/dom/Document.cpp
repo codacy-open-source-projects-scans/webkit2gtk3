@@ -508,15 +508,11 @@ static bool canAccessAncestor(const SecurityOrigin& activeSecurityOrigin, Frame*
     return false;
 }
 
-static void printNavigationErrorMessage(Frame& frame, const URL& activeURL, const char* reason)
+static void printNavigationErrorMessage(Document& document, Frame& frame, const URL& activeURL, ASCIILiteral reason)
 {
-    auto* localFrame = dynamicDowncast<LocalFrame>(frame);
-    if (!localFrame)
-        return;
-    String message = "Unsafe JavaScript attempt to initiate navigation for frame with URL '" + localFrame->document()->url().string() + "' from frame with URL '" + activeURL.string() + "'. " + reason + "\n";
-
-    // FIXME: should we print to the console of the document performing the navigation instead?
-    localFrame->document()->protectedWindow()->printErrorMessage(message);
+    frame.documentURLForConsoleLog([window = document.protectedWindow(), activeURL, reason] (const URL& documentURL) {
+        window->printErrorMessage(makeString("Unsafe JavaScript attempt to initiate navigation for frame with URL '", documentURL.string(), "' from frame with URL '", activeURL.string(), "'. ", reason, '\n'));
+    });
 }
 
 uint64_t Document::s_globalTreeVersion = 0;
@@ -979,6 +975,22 @@ FullscreenManager& Document::ensureFullscreenManager()
 Ref<SecurityOrigin> Document::protectedTopOrigin() const
 {
     return topOrigin();
+}
+
+SecurityOrigin& Document::topOrigin() const
+{
+    // Keep exact pre-site-isolation behavior to avoid risking changing behavior when site isolation is not enabled.
+    if (!settings().siteIsolationEnabled())
+        return topDocument().securityOrigin();
+
+    RefPtr frame = this->frame();
+    if (RefPtr localMainFrame = frame ? dynamicDowncast<LocalFrame>(frame->mainFrame()) : nullptr) {
+        if (RefPtr mainFrameDocument = localMainFrame->document())
+            return mainFrameDocument->securityOrigin();
+    }
+    if (RefPtr page = this->page())
+        return page->mainFrameOrigin();
+    return SecurityOrigin::opaqueOrigin();
 }
 
 inline DocumentFontLoader& Document::fontLoader()
@@ -2816,12 +2828,12 @@ bool Document::updateLayoutIfDimensionsOutOfDate(Element& element, OptionSet<Dim
 
     RenderView::RepaintRegionAccumulator repaintRegionAccumulator(renderView());
 
-    // Mimic the structure of updateLayout(), but at each step, see if we have been forced into doing a full
-    // layout.
-    bool requireFullLayout = false;
+    // Mimic the structure of updateLayout(), but at each step, see if we have been forced into doing a full layout.
     if (RefPtr owner = ownerElement()) {
-        if (owner->protectedDocument()->updateLayoutIfDimensionsOutOfDate(*owner))
-            requireFullLayout = true;
+        if (owner->protectedDocument()->updateLayoutIfDimensionsOutOfDate(*owner)) {
+            updateLayout({ }, &element);
+            return true;
+        }
     }
 
     updateRelevancyOfContentVisibilityElements();
@@ -2833,32 +2845,21 @@ bool Document::updateLayoutIfDimensionsOutOfDate(Element& element, OptionSet<Dim
         return false;
     }
 
-    bool isVertical = false;
-    bool hasSpecifiedLogicalHeight = false;
-    if (CheckedPtr renderer = element.renderer()) {
-        if (renderer->needsLayout()) {
-            // If the renderer needs layout for any reason, give up.
-            requireFullLayout = true;
-        }
-
-        isVertical = !renderer->isHorizontalWritingMode();
-        hasSpecifiedLogicalHeight = renderer->style().logicalMinHeight() == Length(0, LengthType::Fixed) && renderer->style().logicalHeight().isFixed() && renderer->style().logicalMaxHeight().isAuto();
-    } else // If we don't have a renderer, give up
-        requireFullLayout = true;
-
-    // Turn off this optimization for input elements with shadow content.
-    if (is<HTMLInputElement>(element))
-        requireFullLayout = true;
-
-    bool checkingLogicalWidth = (dimensionsCheck.contains(DimensionsCheck::Width) && !isVertical) || (dimensionsCheck.contains(DimensionsCheck::Height) && isVertical);
-    bool checkingLogicalHeight = (dimensionsCheck.contains(DimensionsCheck::Height) && !isVertical) || (dimensionsCheck.contains(DimensionsCheck::Width) && isVertical);
-
+    // If the renderer needs layout for any reason, give up.
+    // Also, turn off this optimization for input elements with shadow content.
+    bool requireFullLayout = element.renderer()->needsLayout() || is<HTMLInputElement>(element);
     if (!requireFullLayout) {
         CheckedPtr<RenderBox> previousBox;
         CheckedPtr<RenderBox> currentBox;
 
+        CheckedPtr renderer = element.renderer();
+        bool hasSpecifiedLogicalHeight = renderer->style().logicalMinHeight() == Length(0, LengthType::Fixed) && renderer->style().logicalHeight().isFixed() && renderer->style().logicalMaxHeight().isAuto();
+        bool isVertical = !renderer->isHorizontalWritingMode();
+        bool checkingLogicalWidth = (dimensionsCheck.contains(DimensionsCheck::Width) && !isVertical) || (dimensionsCheck.contains(DimensionsCheck::Height) && isVertical);
+        bool checkingLogicalHeight = (dimensionsCheck.contains(DimensionsCheck::Height) && !isVertical) || (dimensionsCheck.contains(DimensionsCheck::Width) && isVertical);
+
         // Check our containing block chain. If anything in the chain needs a layout, then require a full layout.
-        for (CheckedPtr currentRenderer = element.renderer(); currentRenderer && !currentRenderer->isRenderView(); currentRenderer = currentRenderer->container()) {
+        for (CheckedPtr currentRenderer = renderer; currentRenderer && !currentRenderer->isRenderView(); currentRenderer = currentRenderer->container()) {
 
             // Require the entire container chain to be boxes.
             CheckedPtr currentRendererBox = dynamicDowncast<RenderBox>(*currentRenderer);
@@ -4300,7 +4301,7 @@ bool Document::canNavigate(Frame* targetFrame, const URL& destinationURL)
         return false;
 
     if (isNavigationBlockedByThirdPartyIFrameRedirectBlocking(*targetFrame, destinationURL)) {
-        printNavigationErrorMessage(*targetFrame, url(), "The frame attempting navigation of the top-level window is cross-origin or untrusted and the user has never interacted with the frame."_s);
+        printNavigationErrorMessage(*this, *targetFrame, url(), "The frame attempting navigation of the top-level window is cross-origin or untrusted and the user has never interacted with the frame."_s);
         DOCUMENT_RELEASE_LOG_ERROR(Loading, "Navigation was prevented because it was triggered by a cross-origin or untrusted iframe");
         return false;
     }
@@ -4333,7 +4334,7 @@ bool Document::canNavigateInternal(Frame& targetFrame)
     // 1. If A is not the same browsing context as B, and A is not one of the ancestor browsing contexts of B, and B is not a top-level browsing context, and A's active document's active sandboxing
     // flag set has its sandboxed navigation browsing context flag set, then abort these steps negatively.
     if (m_frame != &targetFrame && isSandboxed(SandboxNavigation) && targetFrame.tree().parent() && !targetFrame.tree().isDescendantOf(m_frame.get())) {
-        printNavigationErrorMessage(targetFrame, url(), "The frame attempting navigation is sandboxed, and is therefore disallowed from navigating its ancestors."_s);
+        printNavigationErrorMessage(*this, targetFrame, url(), "The frame attempting navigation is sandboxed, and is therefore disallowed from navigating its ancestors."_s);
         return false;
     }
 
@@ -4341,12 +4342,12 @@ bool Document::canNavigateInternal(Frame& targetFrame)
     if (m_frame != &targetFrame && &targetFrame == &m_frame->tree().top()) {
         // 1. If this algorithm is triggered by user activation and A's active document's active sandboxing flag set has its sandboxed top-level navigation with user activation browsing context flag set, then abort these steps negatively.
         if (isProcessingUserGestureForDocument && isSandboxed(SandboxTopNavigationByUserActivation)) {
-            printNavigationErrorMessage(targetFrame, url(), "The frame attempting navigation of the top-level window is sandboxed, but the 'allow-top-navigation-by-user-activation' flag is not set and navigation is not triggered by user activation."_s);
+            printNavigationErrorMessage(*this, targetFrame, url(), "The frame attempting navigation of the top-level window is sandboxed, but the 'allow-top-navigation-by-user-activation' flag is not set and navigation is not triggered by user activation."_s);
             return false;
         }
         // 2. Otherwise, If this algorithm is not triggered by user activation and A's active document's active sandboxing flag set has its sandboxed top-level navigation without user activation browsing context flag set, then abort these steps negatively.
         if (!isProcessingUserGestureForDocument && isSandboxed(SandboxTopNavigation)) {
-            printNavigationErrorMessage(targetFrame, url(), "The frame attempting navigation of the top-level window is sandboxed, but the 'allow-top-navigation' flag is not set."_s);
+            printNavigationErrorMessage(*this, targetFrame, url(), "The frame attempting navigation of the top-level window is sandboxed, but the 'allow-top-navigation' flag is not set."_s);
             return false;
         }
     }
@@ -4354,7 +4355,7 @@ bool Document::canNavigateInternal(Frame& targetFrame)
     // 3. Otherwise, if B is a top-level browsing context, and is neither A nor one of the ancestor browsing contexts of A, and A's Document's active sandboxing flag set has its
     // sandboxed navigation browsing context flag set, and A is not the one permitted sandboxed navigator of B, then abort these steps negatively.
     if (!targetFrame.tree().parent() && m_frame != &targetFrame && &targetFrame != &m_frame->tree().top() && isSandboxed(SandboxNavigation) && targetFrame.opener() != m_frame) {
-        printNavigationErrorMessage(targetFrame, url(), "The frame attempting navigation is sandboxed, and is not allowed to navigate this popup."_s);
+        printNavigationErrorMessage(*this, targetFrame, url(), "The frame attempting navigation is sandboxed, and is not allowed to navigate this popup."_s);
         return false;
     }
 
@@ -4391,7 +4392,7 @@ bool Document::canNavigateInternal(Frame& targetFrame)
         }
     }
 
-    printNavigationErrorMessage(targetFrame, url(), "The frame attempting navigation is neither same-origin with the target, nor is it the target's parent or opener.");
+    printNavigationErrorMessage(*this, targetFrame, url(), "The frame attempting navigation is neither same-origin with the target, nor is it the target's parent or opener."_s);
     return false;
 }
 
@@ -4623,20 +4624,30 @@ ViewportArguments Document::viewportArguments() const
     return page->overrideViewportArguments().value_or(m_viewportArguments);
 }
 
+bool Document::isViewportDocument() const
+{
+    RefPtr page = this->page();
+    if (!page)
+        return false;
+
+#if ENABLE(FULLSCREEN_API)
+    if (RefPtr outermostFullscreenDocument = page->outermostFullscreenDocument())
+        return outermostFullscreenDocument == this;
+#endif
+
+    if (RefPtr frame = this->frame())
+        return frame->isMainFrame();
+
+    return false;
+}
+
 void Document::updateViewportArguments()
 {
     RefPtr page = this->page();
     if (!page)
         return;
 
-    bool isViewportDocument = [&] {
-#if ENABLE(FULLSCREEN_API)
-        if (auto* outermostFullscreenDocument = page->outermostFullscreenDocument())
-            return outermostFullscreenDocument == this;
-#endif
-        return frame()->isMainFrame();
-    }();
-    if (!isViewportDocument)
+    if (!isViewportDocument())
         return;
 
 #if ASSERT_ENABLED
@@ -6070,7 +6081,7 @@ void Document::enqueueOverflowEvent(Ref<Event>&& event)
     // FIXME: This event is totally unspecified.
     RefPtr target = event->target();
     RELEASE_ASSERT(target);
-    eventLoop().queueTask(TaskSource::DOMManipulation, [protectedTarget = GCReachableRef<Node>(checkedDowncast<Node>(*target)), event = WTFMove(event)] {
+    eventLoop().queueTask(TaskSource::DOMManipulation, [protectedTarget = GCReachableRef<Node>(downcast<Node>(*target)), event = WTFMove(event)] {
         protectedTarget->dispatchEvent(event);
     });
 }
@@ -7765,6 +7776,11 @@ WindowEventLoop& Document::windowEventLoop()
     return *m_eventLoop;
 }
 
+Ref<WindowEventLoop> Document::protectedWindowEventLoop()
+{
+    return windowEventLoop();
+}
+
 void Document::suspendScheduledTasks(ReasonForSuspension reason)
 {
     if (m_scheduledTasksAreSuspended) {
@@ -7953,6 +7969,30 @@ void Document::addDisplayChangedObserver(const DisplayChangedObserver& observer)
     m_displayChangedObservers.add(observer);
 }
 
+#if HAVE(SPATIAL_TRACKING_LABEL)
+const String& Document::defaultSpatialTrackingLabel() const
+{
+    if (RefPtr page = protectedPage())
+        return page->defaultSpatialTrackingLabel();
+    return emptyString();
+}
+
+void Document::defaultSpatialTrackingLabelChanged(const String& defaultSpatialTrackingLabel)
+{
+    for (auto& observer : copyToVector(m_defaultSpatialTrackingLabelChangedObservers)) {
+        if (observer)
+            (*observer)(defaultSpatialTrackingLabel);
+    }
+}
+
+void Document::addDefaultSpatialTrackingLabelChangedObserver(const DefaultSpatialTrackingLabelChangedObserver& observer)
+{
+    ASSERT(!m_defaultSpatialTrackingLabelChangedObservers.contains(observer));
+    m_defaultSpatialTrackingLabelChangedObservers.add(observer);
+}
+#endif
+
+
 #if ENABLE(DEVICE_ORIENTATION) && PLATFORM(IOS_FAMILY)
 
 DeviceMotionController& Document::deviceMotionController() const
@@ -8070,8 +8110,6 @@ int Document::requestIdleCallback(Ref<IdleRequestCallback>&& callback, Seconds t
 {
     if (!m_idleCallbackController)
         m_idleCallbackController = makeUnique<IdleCallbackController>(*this);
-    if (RefPtr page = this->page())
-        page->opportunisticTaskScheduler().willQueueIdleCallback();
     return m_idleCallbackController->queueIdleCallback(WTFMove(callback), timeout);
 }
 
@@ -8838,7 +8876,7 @@ void Document::ensurePlugInsInjectedScript(DOMWrapperWorld& world)
     // Use the JS file provided by the Chrome client, or fallback to the default one.
     String jsString = page()->chrome().client().plugInExtraScript();
     if (!jsString)
-        jsString = StringImpl::createWithoutCopying(plugInsJavaScript, sizeof(plugInsJavaScript));
+        jsString = StringImpl::createWithoutCopying(plugInsJavaScript);
 
     scriptController.evaluateInWorldIgnoringException(ScriptSourceCode(jsString, JSC::SourceTaintedOrigin::Untainted), world);
 

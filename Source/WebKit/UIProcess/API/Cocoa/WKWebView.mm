@@ -108,6 +108,7 @@
 #import "_WKActivatedElementInfoInternal.h"
 #import "_WKAppHighlightDelegate.h"
 #import "_WKAppHighlightInternal.h"
+#import "_WKApplicationManifestInternal.h"
 #import "_WKArchiveConfiguration.h"
 #import "_WKArchiveExclusionRule.h"
 #import "_WKDataTaskInternal.h"
@@ -172,10 +173,6 @@
 #import <wtf/spi/darwin/dyldSPI.h>
 #import <wtf/text/StringToIntegerConversion.h>
 #import <wtf/text/TextStream.h>
-
-#if ENABLE(APPLICATION_MANIFEST)
-#import "_WKApplicationManifestInternal.h"
-#endif
 
 #if ENABLE(WK_WEB_EXTENSIONS)
 #import "_WKWebExtensionControllerInternal.h"
@@ -691,6 +688,7 @@ static void hardwareKeyboardAvailabilityChangedCallback(CFNotificationCenterRef,
 
 - (WKBackForwardList *)backForwardList
 {
+    [self _didAccessBackForwardList];
     return wrapper(_page->backForwardList());
 }
 
@@ -858,19 +856,35 @@ static void hardwareKeyboardAvailabilityChangedCallback(CFNotificationCenterRef,
     return _page->pageLoadState().certificateInfo().trust().get();
 }
 
+- (void)_didAccessBackForwardList
+{
+    BOOL oldValue = _didAccessBackForwardList;
+    _didAccessBackForwardList = YES;
+
+#if ENABLE(PAGE_LOAD_OBSERVER)
+    if (!oldValue)
+        [self _updatePageLoadObserverState];
+#else
+    UNUSED_PARAM(oldValue);
+#endif
+}
+
 - (BOOL)canGoBack
 {
+    [self _didAccessBackForwardList];
     return _page->pageLoadState().canGoBack();
 }
 
 - (BOOL)canGoForward
 {
+    [self _didAccessBackForwardList];
     return _page->pageLoadState().canGoForward();
 }
 
 - (WKNavigation *)goBack
 {
     THROW_IF_SUSPENDED;
+    [self _didAccessBackForwardList];
     if (self._safeBrowsingWarning)
         return [self reload];
     return wrapper(_page->goBack()).autorelease();
@@ -879,6 +893,7 @@ static void hardwareKeyboardAvailabilityChangedCallback(CFNotificationCenterRef,
 - (WKNavigation *)goForward
 {
     THROW_IF_SUSPENDED;
+    [self _didAccessBackForwardList];
     return wrapper(_page->goForward()).autorelease();
 }
 
@@ -1762,6 +1777,20 @@ inline OptionSet<WebKit::FindOptions> toFindOptions(WKFindConfiguration *configu
 
     if ([delegate respondsToSelector:@selector(_webView:storeAppHighlight:inNewGroup:requestOriginatedInApp:)])
         [delegate _webView:self storeAppHighlight:wkHighlight.get() inNewGroup:highlight.isNewGroup == WebCore::CreateNewGroupForHighlight::Yes requestOriginatedInApp:highlight.requestOriginatedInApp == WebCore::HighlightRequestOriginatedInApp::Yes];
+}
+#endif
+
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+- (void)_removeTextIndicatorStyleForID:(NSUUID *)nsuuid
+{
+#if PLATFORM(IOS_FAMILY)
+    [_contentView removeTextIndicatorStyleForID:nsuuid];
+#elif PLATFORM(MAC)
+    auto uuid = WTF::UUID::fromNSUUID(nsuuid);
+    if (!uuid)
+        return;
+    _impl->removeTextIndicatorStyleForID(*uuid);
+#endif
 }
 #endif
 
@@ -2742,18 +2771,42 @@ static void convertAndAddHighlight(Vector<Ref<WebCore::SharedMemory>>& buffers, 
 #endif
 }
 
-- (void)_requestRenderedTextForElementSelector:(NSString *)selector completionHandler:(void(^)(NSString *, NSError *))completion
+- (NSUUID *)_enableTextIndicatorStylingAfterElementWithID:(NSString *)elementID
 {
-    _page->requestRenderedTextForElementSelector(selector, [completion = makeBlockPtr(completion)](Expected<String, WebCore::ExceptionCode>&& result) {
-        if (result)
-            return completion(result.value(), nil);
+    RetainPtr nsUUID = [NSUUID UUID];
 
-        RetainPtr exceptionName = WebCore::DOMException::name(result.error()).createNSString();
-        return completion(nil, [NSError errorWithDomain:WKErrorDomain code:WKErrorUnknown userInfo:@{
-            NSLocalizedDescriptionKey: exceptionName.get() ?: @""
-        }]);
-    });
+    auto uuid = WTF::UUID::fromNSUUID(nsUUID.get());
+    if (!uuid)
+        return nil;
+
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+    _page->enableTextIndicatorStyleAfterElementWithID(elementID, *uuid);
+
+#if PLATFORM(IOS_FAMILY)
+    [_contentView addTextIndicatorStyleForID:nsUUID.get()];
+#elif PLATFORM(MAC) && ENABLE(UNIFIED_TEXT_REPLACEMENT_UI)
+    _impl->addTextIndicatorStyleForID(*uuid);
+#endif
+    return nsUUID.get();
+#else
+    return nil;
+#endif
 }
+
+- (void)_disableTextIndicatorStylingWithUUID:(NSUUID *)nsuuid
+{
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+#if PLATFORM(IOS_FAMILY)
+    [_contentView removeTextIndicatorStyleForID:nsuuid];
+#elif PLATFORM(MAC) && ENABLE(UNIFIED_TEXT_REPLACEMENT_UI)
+    auto uuid = WTF::UUID::fromNSUUID(nsuuid);
+    if (!uuid)
+        return;
+    _impl->removeTextIndicatorStyleForID(*uuid);
+#endif
+#endif
+}
+
 
 - (void)_requestTargetedElementInfo:(_WKTargetedElementRequest *)request completionHandler:(void(^)(NSArray<_WKTargetedElementInfo *> *))completion
 {
@@ -3296,6 +3349,12 @@ static void convertAndAddHighlight(Vector<Ref<WebCore::SharedMemory>>& buffers, 
     [self _evaluateJavaScript:javaScriptString asAsyncFunction:NO withSourceURL:url withArguments:nil forceUserGesture:YES inFrame:frame inWorld:contentWorld completionHandler:completionHandler];
 }
 
+- (void)_evaluateJavaScript:(NSString *)javaScriptString withSourceURL:(NSURL *)url inFrame:(WKFrameInfo *)frame inContentWorld:(WKContentWorld *)contentWorld withUserGesture:(BOOL)withUserGesture completionHandler:(void (^)(id, NSError *error))completionHandler
+{
+    THROW_IF_SUSPENDED;
+    [self _evaluateJavaScript:javaScriptString asAsyncFunction:NO withSourceURL:url withArguments:nil forceUserGesture:withUserGesture inFrame:frame inWorld:contentWorld completionHandler:completionHandler];
+}
+
 - (void)_updateWebpagePreferences:(WKWebpagePreferences *)webpagePreferences
 {
     THROW_IF_SUSPENDED;
@@ -3491,7 +3550,6 @@ static inline OptionSet<WebCore::LayoutMilestone> layoutMilestones(_WKRenderingP
 - (void)_getApplicationManifestWithCompletionHandler:(void (^)(_WKApplicationManifest *))completionHandler
 {
     THROW_IF_SUSPENDED;
-#if ENABLE(APPLICATION_MANIFEST)
     _page->getApplicationManifest([completionHandler = makeBlockPtr(completionHandler)](const std::optional<WebCore::ApplicationManifest>& manifest) {
         if (completionHandler) {
             if (manifest) {
@@ -3501,10 +3559,6 @@ static inline OptionSet<WebCore::LayoutMilestone> layoutMilestones(_WKRenderingP
                 completionHandler(nil);
         }
     });
-#else
-    if (completionHandler)
-        completionHandler(nil);
-#endif
 }
 
 - (void)_getTextFragmentMatchWithCompletionHandler:(void (^)(NSString *))completionHandler
@@ -4238,14 +4292,33 @@ static inline OptionSet<WebKit::FindOptions> toFindOptions(_WKFindOptions wkFind
     return [_configuration _requiredWebExtensionBaseURL];
 }
 
-- (void)_adjustVisibilityForTargetedElements:(NSArray<_WKTargetedElementInfo *> *)wkElements completionHandler:(void(^)(BOOL success))completion
+static Vector<Ref<API::TargetedElementInfo>> elementsFromWKElements(NSArray<_WKTargetedElementInfo *> *wkElements)
 {
     Vector<Ref<API::TargetedElementInfo>> elements;
     elements.reserveInitialCapacity(wkElements.count);
     for (_WKTargetedElementInfo *element in wkElements)
         elements.append(*element->_info);
-    _page->adjustVisibilityForTargetedElements(elements, [completion = makeBlockPtr(completion)](bool success) {
+    return elements;
+}
+
+- (void)_resetVisibilityAdjustmentsForTargetedElements:(NSArray<_WKTargetedElementInfo *> *)elements completionHandler:(void(^)(BOOL success))completion
+{
+    _page->resetVisibilityAdjustmentsForTargetedElements(elementsFromWKElements(elements), [completion = makeBlockPtr(completion)](bool success) {
         completion(static_cast<BOOL>(success));
+    });
+}
+
+- (void)_adjustVisibilityForTargetedElements:(NSArray<_WKTargetedElementInfo *> *)elements completionHandler:(void(^)(BOOL success))completion
+{
+    _page->adjustVisibilityForTargetedElements(elementsFromWKElements(elements), [completion = makeBlockPtr(completion)](bool success) {
+        completion(static_cast<BOOL>(success));
+    });
+}
+
+- (void)_numberOfVisibilityAdjustmentRectsWithCompletionHandler:(void(^)(NSUInteger))completion
+{
+    _page->numberOfVisibilityAdjustmentRects([completion = makeBlockPtr(completion)](uint64_t count) {
+        completion(static_cast<NSUInteger>(count));
     });
 }
 

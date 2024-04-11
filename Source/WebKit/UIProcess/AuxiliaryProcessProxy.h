@@ -66,7 +66,7 @@ class AuxiliaryProcessProxy
     , public ResponsivenessTimer::Client
     , private ProcessLauncher::Client
     , public IPC::Connection::Client
-    , public CanMakeThreadSafeCheckedPtr {
+    , public CanMakeThreadSafeCheckedPtr<AuxiliaryProcessProxy> {
     WTF_MAKE_NONCOPYABLE(AuxiliaryProcessProxy);
 
 protected:
@@ -214,6 +214,10 @@ public:
     };
 
     std::optional<TaskInfo> taskInfo() const;
+#endif
+
+#if ENABLE(CFPREFS_DIRECT_MODE)
+    void notifyPreferencesChanged(const String& domain, const String& key, const std::optional<String>& encodedValue);
 #endif
 
     enum ResumeReason : bool { ForegroundActivity, BackgroundActivity };

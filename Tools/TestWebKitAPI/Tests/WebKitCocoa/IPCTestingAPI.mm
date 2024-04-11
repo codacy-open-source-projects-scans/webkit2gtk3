@@ -593,14 +593,20 @@ TEST(IPCTestingAPI, SerializedTypeInfo)
         @"type": @"bool"
     }];
     EXPECT_TRUE([typeInfo[@"WebCore::CacheQueryOptions"] isEqualToArray:expectedArray]);
+
     NSDictionary *expectedDictionary = @{
         @"isOptionSet" : @1,
         @"size" : @1,
         @"validValues" : @[@1, @2]
     };
-
     NSDictionary *enumInfo = [webView objectByEvaluatingJavaScript:@"IPC.serializedEnumInfo"];
     EXPECT_TRUE([enumInfo[@"WebKit::WebsiteDataFetchOption"] isEqualToDictionary:expectedDictionary]);
+    NSDictionary *expectedMouseEventButtonDictionary = @{
+        @"isOptionSet" : @NO,
+        @"size" : @1,
+        @"validValues" : @[@0, @1, @2, @254]
+    };
+    EXPECT_TRUE([enumInfo[@"WebKit::WebMouseEventButton"] isEqualToDictionary:expectedMouseEventButtonDictionary]);
 
     NSArray *objectIdentifiers = [webView objectByEvaluatingJavaScript:@"IPC.objectIdentifiers"];
     EXPECT_TRUE([objectIdentifiers containsObject:@"WebCore::PageIdentifier"]);
@@ -638,6 +644,7 @@ TEST(IPCTestingAPI, SerializedTypeInfo)
 
     NSSet *fundamentalTypes = [NSSet setWithArray:@[
         @"char",
+        @"char32_t",
         @"short",
         @"float",
         @"bool",
@@ -669,17 +676,36 @@ TEST(IPCTestingAPI, SerializedTypeInfo)
         @"long long",
         @"GCGLint",
         @"GCGLenum",
+        @"OSStatus",
     ]];
 
     [typesNeedingDescriptions minusSet:typesHavingDescriptions];
     [typesNeedingDescriptions minusSet:fundamentalTypes];
-    EXPECT_LT(typesNeedingDescriptions.count, 80u); // FIXME: This should eventually be 0.
 
-    for (NSString *type in typesNeedingDescriptions) {
-        // These are the last two types in the WebKit namespace with non-generated serializers.
-        if ([type isEqualToString:@"WebKit::RemoteObjectInvocation"] || [type isEqualToString:@"WebKit::ObjCObjectGraph"])
-            continue;
-        EXPECT_FALSE([type containsString:@"WebKit"]);
+    NSSet<NSString *> *expectedTypesNeedingDescriptions = [NSSet setWithArray:@[
+        @"CTFontDescriptorOptions",
+        @"NSObject<NSSecureCoding>",
+        @"PKSecureElementPass",
+        @"WebKit::ObjCObjectGraph",
+        @"GCGLErrorCodeSet",
+        @"NSURLRequest",
+        @"MachSendRight",
+        @"CGBitmapInfo",
+        @"NSParagraphStyle",
+#if PLATFORM(MAC)
+        @"WKDDActionContext",
+        @"CGDisplayChangeSummaryFlags",
+        @"WebCore::ContextMenuAction"
+#else
+        @"WebCore::InspectorOverlay::Highlight",
+        @"WebCore::MediaControlsContextMenuItem::ID",
+        @"UIColor",
+        @"WebCore::RenderThemeIOS::CSSValueToSystemColorMap"
+#endif
+    ]];
+    if (![expectedTypesNeedingDescriptions isEqual:typesNeedingDescriptions]) {
+        EXPECT_TRUE(false);
+        WTFLogAlways("%@", typesNeedingDescriptions);
     }
 }
 

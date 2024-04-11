@@ -20,8 +20,7 @@
 #include "config.h"
 #include "SVGBoundingBoxComputation.h"
 
-#if ENABLE(LAYER_BASED_SVG_ENGINE)
-
+#include "NestingLevelIncrementer.h"
 #include "ReferencedSVGResources.h"
 #include "RenderChildIterator.h"
 #include "RenderObjectInlines.h"
@@ -269,8 +268,13 @@ void SVGBoundingBoxComputation::adjustBoxForClippingAndEffects(const SVGBounding
 
     if (options.contains(DecorationOption::IncludeMaskers)) {
         if (auto* referencedMaskerRenderer = m_renderer.svgMaskerResourceFromStyle()) {
-            auto repaintRectCalculation = options.contains(DecorationOption::CalculateFastRepaintRect) ? RepaintRectCalculation::Fast : RepaintRectCalculation::Accurate;
-            box.intersect(referencedMaskerRenderer->resourceBoundingBox(m_renderer, repaintRectCalculation));
+            // When masks are nested, the inner masks do not affect the outer mask dimension, so skip the computation for inner masks.
+            static unsigned s_maskBoundingBoxNestingLevel = 0;
+            NestingLevelIncrementer incrementer { s_maskBoundingBoxNestingLevel };
+            if (s_maskBoundingBoxNestingLevel < 2) {
+                auto repaintRectCalculation = options.contains(DecorationOption::CalculateFastRepaintRect) ? RepaintRectCalculation::Fast : RepaintRectCalculation::Accurate;
+                box.intersect(referencedMaskerRenderer->resourceBoundingBox(m_renderer, repaintRectCalculation));
+            }
         }
     }
 
@@ -279,5 +283,3 @@ void SVGBoundingBoxComputation::adjustBoxForClippingAndEffects(const SVGBounding
 }
 
 }
-
-#endif

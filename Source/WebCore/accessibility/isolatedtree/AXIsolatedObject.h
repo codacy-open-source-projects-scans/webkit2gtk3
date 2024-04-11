@@ -335,7 +335,7 @@ private:
     AccessibilityOrientation orientation() const final { return static_cast<AccessibilityOrientation>(intAttributeValue(AXPropertyName::Orientation)); }
     unsigned hierarchicalLevel() const final { return unsignedAttributeValue(AXPropertyName::HierarchicalLevel); }
     String language() const final { return stringAttributeValue(AXPropertyName::Language); }
-    AccessibilityChildrenVector selectedChildren() final { return tree()->objectsForIDs(vectorAttributeValue<AXID>(AXPropertyName::SelectedChildren)); }
+    std::optional<AccessibilityChildrenVector> selectedChildren() final;
     void setSelectedChildren(const AccessibilityChildrenVector&) final;
     AccessibilityChildrenVector visibleChildren() final { return tree()->objectsForIDs(vectorAttributeValue<AXID>(AXPropertyName::VisibleChildren)); }
     AtomString tagName() const final;
@@ -440,7 +440,7 @@ private:
     void setPreventKeyboardDOMEventDispatch(bool) final;
 #endif
 
-    String textUnderElement(AccessibilityTextUnderElementMode = AccessibilityTextUnderElementMode()) const final;
+    String textUnderElement(TextUnderElementMode = TextUnderElementMode()) const final;
     std::optional<SimpleRange> misspellingRange(const SimpleRange&, AccessibilitySearchDirection) const final;
     FloatRect convertFrameToSpace(const FloatRect&, AccessibilityConversionSpace) const final;
     void increment() final;
@@ -459,7 +459,6 @@ private:
     // Functions that should never be called on an isolated tree object. ASSERT that these are not reached;
     bool isAccessibilityRenderObject() const final;
     bool isAccessibilityTableInstance() const final;
-    bool isAccessibilityARIAGridInstance() const final { return false; }
     bool isAccessibilityARIAGridRowInstance() const final { return false; }
     bool isAccessibilityARIAGridCellInstance() const final { return false; }
     bool isAXRemoteFrame() const final { return false; }

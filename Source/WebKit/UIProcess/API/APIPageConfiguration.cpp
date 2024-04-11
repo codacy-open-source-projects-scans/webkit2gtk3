@@ -95,6 +95,11 @@ Ref<PageConfiguration> PageConfiguration::copy() const
     return copy;
 }
 
+void PageConfiguration::copyDataFrom(const PageConfiguration& other)
+{
+    m_data = other.m_data;
+}
+
 BrowsingContextGroup& PageConfiguration::browsingContextGroup() const
 {
     return m_data.browsingContextGroup.get();
@@ -329,11 +334,13 @@ GPUProcessPreferencesForWebProcess PageConfiguration::preferencesForGPUProcess()
     return {
         preferences->webGLEnabled(),
         preferences->webGPUEnabled(),
+        preferences->webXREnabled(),
         preferences->useGPUProcessForDOMRenderingEnabled(),
 #if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
         preferences->useCGDisplayListsForDOMRendering(),
 #endif
-        allowTestOnlyIPC()
+        allowTestOnlyIPC(),
+        preferences->lockdownFontParserEnabled()
     };
 }
 #endif

@@ -95,7 +95,6 @@ void ViewTransition::skipViewTransition(ExceptionOr<JSC::JSValue>&& reason)
     if (!m_document)
         return;
 
-    ASSERT(m_document->activeViewTransition() == this);
     ASSERT(m_phase != ViewTransitionPhase::Done);
 
     if (m_phase < ViewTransitionPhase::UpdateCallbackCalled) {
@@ -224,6 +223,7 @@ void ViewTransition::setupViewTransition()
             RefPtr protectedThis = weakThis.get();
             if (!protectedThis)
                 return;
+            m_updateCallbackTimeout = nullptr;
             switch (m_updateCallbackDone.first->status()) {
             case DOMPromise::Status::Fulfilled:
                 activateViewTransition();
@@ -239,7 +239,14 @@ void ViewTransition::setupViewTransition()
             }
         });
 
-        // FIXME: Handle timeout.
+        m_updateCallbackTimeout = protectedDocument()->checkedEventLoop()->scheduleTask(4_s, TaskSource::DOMManipulation, [this, weakThis = WeakPtr { *this }] {
+            RefPtr protectedThis = weakThis.get();
+            if (!protectedThis)
+                return;
+            if (m_phase == ViewTransitionPhase::Done)
+                return;
+            skipViewTransition(Exception { ExceptionCode::TimeoutError, "View transition update callback timed out."_s });
+        });
     });
 }
 
@@ -271,7 +278,8 @@ static RefPtr<ImageBuffer> snapshotNodeVisualOverflowClippedToViewport(LocalFram
     ASSERT(node.renderer()->hasLayer());
     CheckedPtr layerRenderer = downcast<RenderLayerModelObject>(node.renderer());
 
-    oldOverflowRect = layerRenderer->layer()->localBoundingBox();
+    oldOverflowRect = layerRenderer->layer()->localBoundingBox(RenderLayer::IncludeRootBackgroundPaintingArea);
+
     IntRect paintRect = snappedIntRect(oldOverflowRect);
 
     ASSERT(frame.page());
@@ -336,8 +344,8 @@ ExceptionOr<void> ViewTransition::captureOldState()
     ListHashSet<AtomString> usedTransitionNames;
     Vector<Ref<Element>> captureElements;
     Ref document = *m_document;
-    // FIXME: Set transition’s initial snapshot containing block size to the snapshot containing block size.
     if (CheckedPtr view = document->renderView()) {
+        m_initialLargeViewportSize = view->sizeForCSSLargeViewportUnits();
         auto result = forEachElementInPaintOrder([&](Element& element) -> ExceptionOr<void> {
             if (auto name = effectiveViewTransitionName(element); !name.isNull()) {
                 if (auto check = checkDuplicateViewTransitionName(name, usedTransitionNames); check.hasException())
@@ -491,8 +499,10 @@ void ViewTransition::activateViewTransition()
         return;
 
     // FIXME: Set rendering suppression for view transitions to false.
-
-    // FIXME: If transition’s initial snapshot containing block size is not equal to the snapshot containing block size, then skip the view transition for transition, and return.
+    if (!protectedDocument()->renderView() || protectedDocument()->renderView()->sizeForCSSLargeViewportUnits() != m_initialLargeViewportSize) {
+        skipViewTransition(Exception { ExceptionCode::InvalidStateError, "Skipping view transition because viewport size changed."_s });
+        return;
+    }
 
     auto checkFailure = captureNewState();
     if (checkFailure.hasException()) {
@@ -555,9 +565,14 @@ void ViewTransition::handleTransitionFrame()
         m_phase = ViewTransitionPhase::Done;
         clearViewTransition();
         m_finished.second->resolve();
+        return;
     }
 
-    // FIXME: If transition’s initial snapshot containing block size is not equal to the snapshot containing block size, then skip the view transition for transition, and return.
+    if (!protectedDocument()->renderView() || protectedDocument()->renderView()->sizeForCSSLargeViewportUnits() != m_initialLargeViewportSize) {
+        skipViewTransition(Exception { ExceptionCode::InvalidStateError, "Skipping view transition because viewport size changed."_s });
+        return;
+    }
+
     updatePseudoElementStyles();
 }
 
@@ -611,15 +626,27 @@ Ref<MutableStyleProperties> ViewTransition::copyElementBaseProperties(Element& e
     };
 
     Ref<MutableStyleProperties> props = styleExtractor.copyProperties(transitionProperties);
+    CheckedPtr renderer = element.renderer();
+
+    if (renderer && renderer->isDocumentElementRenderer()) {
+        auto& frameView = renderer->view().frameView();
+        props->setProperty(CSSPropertyWidth, CSSPrimitiveValue::create(frameView.contentsWidth(), CSSUnitType::CSS_PX));
+        props->setProperty(CSSPropertyHeight, CSSPrimitiveValue::create(frameView.contentsHeight(), CSSUnitType::CSS_PX));
+
+    }
 
     TransformationMatrix transform;
-    auto* renderer = element.renderer();
+
     RenderElement* container = nullptr;
     while (renderer && !renderer->isRenderView()) {
         container = renderer->container();
         if (!container)
             break;
         LayoutSize containerOffset = renderer->offsetFromContainer(*container, LayoutPoint());
+        if (container->isRenderView()) {
+            auto frameView = renderer->view().protectedFrameView();
+            containerOffset -= toLayoutSize(frameView->scrollPositionRespectingCustomFixedPosition());
+        }
         TransformationMatrix localTransform;
         renderer->getTransformFromContainer(containerOffset, localTransform);
         transform = localTransform * transform;

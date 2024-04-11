@@ -186,12 +186,13 @@ function webcontent_sandbox_entitlements()
     plistbuddy Add :com.apple.private.security.mutable-state-flags:0 string EnableExperimentalSandbox
     plistbuddy Add :com.apple.private.security.mutable-state-flags:1 string BlockIOKitInWebContentSandbox
     plistbuddy Add :com.apple.private.security.mutable-state-flags:2 string local:WebContentProcessLaunched
-    plistbuddy Add :com.apple.private.security.mutable-state-flags:3 string BlockQuickLookSandboxResources
+    plistbuddy Add :com.apple.private.security.mutable-state-flags:3 string EnableQuickLookSandboxResources
+    plistbuddy Add :com.apple.private.security.mutable-state-flags:4 string ParentProcessCanEnableQuickLookStateFlag
     plistbuddy Add :com.apple.private.security.enable-state-flags array
     plistbuddy Add :com.apple.private.security.enable-state-flags:0 string EnableExperimentalSandbox
     plistbuddy Add :com.apple.private.security.enable-state-flags:1 string BlockIOKitInWebContentSandbox
     plistbuddy Add :com.apple.private.security.enable-state-flags:2 string local:WebContentProcessLaunched
-    plistbuddy Add :com.apple.private.security.enable-state-flags:3 string BlockQuickLookSandboxResources
+    plistbuddy Add :com.apple.private.security.enable-state-flags:3 string ParentProcessCanEnableQuickLookStateFlag
 }
 
 function mac_process_webcontent_shared_entitlements()
@@ -400,10 +401,17 @@ fi
 
 function ios_family_process_webcontent_entitlements()
 {
-    if [[ "${WK_PLATFORM_NAME}" != watchos ]]
-    then
+    if [[ "${PLATFORM_NAME}" != watchos ]]; then
         plistbuddy Add :com.apple.private.verified-jit bool YES
-        plistbuddy Add :dynamic-codesigning bool YES
+        if [[ "${PLATFORM_NAME}" == iphoneos ]]; then
+            if (( $(( ${SDK_VERSION_ACTUAL} )) >= 170400 )); then
+                plistbuddy Add :com.apple.developer.cs.allow-jit bool YES
+            else
+                plistbuddy Add :dynamic-codesigning bool YES
+            fi
+        else
+            plistbuddy Add :dynamic-codesigning bool YES
+        fi
     fi
     plistbuddy Add :com.apple.developer.kernel.extended-virtual-addressing bool YES
 

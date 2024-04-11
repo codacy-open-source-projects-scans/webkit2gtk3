@@ -1093,6 +1093,7 @@ set(WebCore_NON_SVG_IDL_FILES
     dom/FocusOptions.idl
     dom/FormDataEvent.idl
     dom/FullscreenOptions.idl
+    dom/GetHTMLOptions.idl
     dom/GlobalEventHandlers+PointerEvents.idl
     dom/GlobalEventHandlers+Selection.idl
     dom/GlobalEventHandlers.idl
@@ -2842,8 +2843,6 @@ list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/mediastream/MDNSRegisterError.serialization.in
 
     platform/network/ProtectionSpaceBase.serialization.in
-
-    platform/network/soup/SoupNetworkProxySettings.serialization.in
 )
 
 WEBKIT_COPY_FILES(WebCore_CopyPrivateHeaders

@@ -3515,9 +3515,9 @@ private:
             if ((end - ptr) < static_cast<int>(length))
                 return false;
             if (shouldAtomize == ShouldAtomize::Yes)
-                str = AtomString { ptr, length };
+                str = AtomString({ ptr, length });
             else
-                str = String { ptr, length };
+                str = String({ ptr, length });
             ptr += length;
             return true;
         }
@@ -3528,9 +3528,9 @@ private:
 
 #if ASSUME_LITTLE_ENDIAN
         if (shouldAtomize == ShouldAtomize::Yes)
-            str = AtomString(reinterpret_cast<const UChar*>(ptr), length);
+            str = AtomString({ reinterpret_cast<const UChar*>(ptr), length });
         else
-            str = String(reinterpret_cast<const UChar*>(ptr), length);
+            str = String({ reinterpret_cast<const UChar*>(ptr), length });
         ptr += length * sizeof(UChar);
 #else
         UChar* characters;
