@@ -110,8 +110,9 @@ RenderObject::SetLayoutNeededForbiddenScope::~SetLayoutNeededForbiddenScope()
 
 #endif
 
-struct SameSizeAsRenderObject : public CachedImageClient, public CanMakeCheckedPtr<SameSizeAsRenderObject> {
+struct SameSizeAsRenderObject final : public CachedImageClient, public CanMakeCheckedPtr<SameSizeAsRenderObject> {
     WTF_MAKE_STRUCT_FAST_ALLOCATED;
+    WTF_STRUCT_OVERRIDE_DELETE_FOR_CHECKED_PTR(SameSizeAsRenderObject);
 
     virtual ~SameSizeAsRenderObject() = default; // Allocate vtable pointer.
 #if ASSERT_ENABLED
@@ -1381,24 +1382,25 @@ void RenderObject::outputRenderObject(TextStream& stream, bool mark, int depth) 
 
     stream << " renderer (" << this << ")";
     stream << " layout box (" << layoutBox() << ")";
-    if (node()) {
-        stream << " node (" << node() << ")";
-        if (node()->isTextNode()) {
-            ASSERT(is<RenderText>(*this));
-            auto value = downcast<RenderText>(*this).text();
-            stream << " length->(" << value.length() << ")";
 
-            value = makeStringByReplacingAll(value, '\\', "\\\\"_s);
-            value = makeStringByReplacingAll(value, '\n', "\\n"_s);
-            
-            const int maxPrintedLength = 80;
-            if (value.length() > maxPrintedLength) {
-                auto substring = StringView(value).left(maxPrintedLength);
-                stream << " \"" << substring.utf8().data() << "\"...";
-            } else
-                stream << " \"" << value.utf8().data() << "\"";
-        }
+    if (node())
+        stream << " node (" << node() << ")";
+
+    if (auto* renderText = dynamicDowncast<RenderText>(*this)) {
+        auto value = renderText->text();
+        stream << " length->(" << value.length() << ")";
+
+        value = makeStringByReplacingAll(value, '\\', "\\\\"_s);
+        value = makeStringByReplacingAll(value, '\n', "\\n"_s);
+
+        const int maxPrintedLength = 80;
+        if (value.length() > maxPrintedLength) {
+            auto substring = StringView(value).left(maxPrintedLength);
+            stream << " \"" << substring.utf8().data() << "\"...";
+        } else
+            stream << " \"" << value.utf8().data() << "\"";
     }
+
     if (auto* renderer = dynamicDowncast<RenderBoxModelObject>(*this)) {
         if (renderer->continuation())
             stream << " continuation->(" << renderer->continuation() << ")";
@@ -1788,7 +1790,7 @@ static void invalidateLineLayoutAfterTreeMutationIfNeeded(RenderObject& renderer
         return !modernLineLayout->insertedIntoTree(*renderer.parent(), renderer);
     };
     if (shouldInvalidateLineLayoutPath())
-        container->invalidateLineLayoutPath();
+        container->invalidateLineLayoutPath(RenderBlockFlow::InvalidationReason::InsertionOrRemoval);
 }
 
 void RenderObject::insertedIntoTree()

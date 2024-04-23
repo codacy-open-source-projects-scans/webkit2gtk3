@@ -1633,11 +1633,6 @@
         assertIsCurrent(workQueue());
         m_context->renderbufferStorageMultisampleANGLE(target, samples, internalformat, width, height);
     }
-    void blitFramebufferANGLE(int32_t srcX0, int32_t srcY0, int32_t srcX1, int32_t srcY1, int32_t dstX0, int32_t dstY0, int32_t dstX1, int32_t dstY1, uint32_t mask, uint32_t filter)
-    {
-        assertIsCurrent(workQueue());
-        m_context->blitFramebufferANGLE(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter);
-    }
     void getInternalformativ(uint32_t target, uint32_t internalformat, uint32_t pname, size_t paramsSize, CompletionHandler<void(std::span<const int32_t>)>&& completionHandler)
     {
         assertIsCurrent(workQueue());
@@ -1657,6 +1652,7 @@
         returnValue = m_context->drawingBufferToPixelBuffer(arg0);
         completionHandler(WTFMove(returnValue));
     }
+#if ENABLE(WEBXR)
     void createExternalImage(uint32_t name, WebCore::GraphicsContextGL::ExternalImageSource&& arg0, uint32_t internalFormat, int32_t layer)
     {
         assertIsCurrent(workQueue());
@@ -1686,6 +1682,7 @@
         if (result)
             m_objectNames.add(name, result);
     }
+#endif
     void deleteExternalSync(uint32_t arg0)
     {
         assertIsCurrent(workQueue());
@@ -1694,15 +1691,7 @@
         arg0 = m_objectNames.take(arg0);
         m_context->deleteExternalSync(arg0);
     }
-    void clientWaitExternalSyncWithFlush(uint32_t arg0, uint64_t timeout, CompletionHandler<void(bool)>&& completionHandler)
-    {
-        assertIsCurrent(workQueue());
-        bool returnValue = { };
-        if (arg0)
-            arg0 = m_objectNames.get(arg0);
-        returnValue = m_context->clientWaitExternalSyncWithFlush(arg0, timeout);
-        completionHandler(returnValue);
-    }
+#if ENABLE(WEBXR)
     void enableRequiredWebXRExtensions(CompletionHandler<void(bool)>&& completionHandler)
     {
         assertIsCurrent(workQueue());
@@ -1727,4 +1716,5 @@
         assertIsCurrent(workQueue());
         m_context->disableFoveation();
     }
+#endif
 

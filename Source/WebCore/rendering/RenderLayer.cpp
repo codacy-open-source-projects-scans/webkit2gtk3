@@ -568,8 +568,8 @@ static bool canCreateStackingContext(const RenderLayer& layer)
         || renderer.hasBackdropFilter()
         || renderer.hasBlendMode()
         || renderer.isTransparent()
-        || renderer.hasViewTransitionName()
-        || renderer.isViewTransitionPseudo()
+        || renderer.requiresRenderingConsolidationForViewTransition()
+        || renderer.isRenderViewTransitionCapture()
         || renderer.isPositioned() // Note that this only creates stacking context in conjunction with explicit z-index.
         || renderer.hasReflection()
         || renderer.style().hasIsolation()
@@ -595,7 +595,7 @@ bool RenderLayer::shouldBeNormalFlowOnly() const
 
 bool RenderLayer::shouldBeCSSStackingContext() const
 {
-    return !renderer().style().hasAutoUsedZIndex() || renderer().shouldApplyLayoutOrPaintContainment() || renderer().hasViewTransitionName() || renderer().isViewTransitionPseudo() || isRenderViewLayer();
+    return !renderer().style().hasAutoUsedZIndex() || renderer().shouldApplyLayoutOrPaintContainment() || renderer().requiresRenderingConsolidationForViewTransition() || renderer().isRenderViewTransitionCapture() || isRenderViewLayer();
 }
 
 bool RenderLayer::computeCanBeBackdropRoot() const
@@ -614,7 +614,7 @@ bool RenderLayer::computeCanBeBackdropRoot() const
         || renderer().hasFilter()
         || renderer().hasBlendMode()
         || renderer().hasMask()
-        || (renderer().hasViewTransitionName() && !renderer().isDocumentElementRenderer())
+        || (renderer().requiresRenderingConsolidationForViewTransition() && !renderer().isDocumentElementRenderer())
         || (renderer().style().willChange() && renderer().style().willChange()->canBeBackdropRoot());
 }
 
@@ -4084,18 +4084,20 @@ Ref<HitTestingTransformState> RenderLayer::createLocalTransformState(RenderLayer
     return transformState.releaseNonNull();
 }
 
-static bool parentLayerIsDOMParent(const RenderLayer& layer)
+bool RenderLayer::ancestorLayerIsDOMParent(const RenderLayer* ancestor) const
 {
-    if (!layer.parent())
+    if (!ancestor)
         return false;
-    if (!layer.renderer().element() || !layer.renderer().element()->parentElementInComposedTree())
-        return false;
-    return layer.parent()->renderer().element() == layer.renderer().element()->parentElementInComposedTree();
+    if (renderer().element() && ancestor->renderer().element() == renderer().element()->parentElementInComposedTree())
+        return true;
+
+    std::optional<PseudoId> parentPseudoId = parentPseudoElement(renderer().style().pseudoElementType());
+    return parentPseudoId && *parentPseudoId == ancestor->renderer().style().pseudoElementType();
 }
 
 bool RenderLayer::participatesInPreserve3D() const
 {
-    return parentLayerIsDOMParent(*this) && parent()->preserves3D() && (transform() || renderer().style().backfaceVisibility() == BackfaceVisibility::Hidden || preserves3D());
+    return ancestorLayerIsDOMParent(parent()) && parent()->preserves3D() && (transform() || renderer().style().backfaceVisibility() == BackfaceVisibility::Hidden || preserves3D());
 }
 
 // hitTestLocation and hitTestRect are relative to rootLayer.
@@ -5009,7 +5011,7 @@ LayoutRect RenderLayer::calculateLayerBounds(const RenderLayer* ancestorLayer, c
     }
 
     // FIXME: should probably just pass 'flags' down to descendants.
-    auto descendantFlags = defaultCalculateLayerBoundsFlags() | (flags & ExcludeHiddenDescendants) | (flags & IncludeCompositedDescendants);
+    auto descendantFlags = (flags & PreserveAncestorFlags) ? flags : defaultCalculateLayerBoundsFlags() | (flags & ExcludeHiddenDescendants) | (flags & IncludeCompositedDescendants);
 
     const_cast<RenderLayer*>(this)->updateLayerListsIfNeeded();
 

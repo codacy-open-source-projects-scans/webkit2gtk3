@@ -10544,8 +10544,8 @@ static WebKit::DocumentEditingContextRequest toWebRequest(id request)
 - (void)removeTextPlaceholder:(UITextPlaceholder *)placeholder willInsertText:(BOOL)willInsertText completionHandler:(void (^)(void))completionHandler
 {
     // FIXME: Implement support for willInsertText. See <https://bugs.webkit.org/show_bug.cgi?id=208747>.
-    if (auto* wkTextPlaceholder = dynamic_objc_cast<WKTextPlaceholder>(placeholder))
-        _page->removeTextPlaceholder(wkTextPlaceholder.elementContext, makeBlockPtr(completionHandler));
+    if (RetainPtr wkTextPlaceholder = dynamic_objc_cast<WKTextPlaceholder>(placeholder))
+        _page->removeTextPlaceholder([wkTextPlaceholder elementContext], makeBlockPtr(completionHandler));
     else
         completionHandler();
 }
@@ -11551,20 +11551,6 @@ static BOOL applicationIsKnownToIgnoreMouseEvents(const char* &warningVersion)
 
 #endif // HAVE(PENCILKIT_TEXT_INPUT)
 
-#if ENABLE(VIDEO_PRESENTATION_MODE)
-
-- (void)_didEnterFullscreen
-{
-    [self _startSuppressingSelectionAssistantForReason:WebKit::SuppressSelectionAssistantReason::ShowingFullscreenVideo];
-}
-
-- (void)_didExitFullscreen
-{
-    [self _stopSuppressingSelectionAssistantForReason:WebKit::SuppressSelectionAssistantReason::ShowingFullscreenVideo];
-}
-
-#endif // ENABLE(VIDEO_PRESENTATION_MODE)
-
 #if ENABLE(ATTACHMENT_ELEMENT)
 
 #if !PLATFORM(WATCHOS) && !PLATFORM(APPLETV)
@@ -11721,7 +11707,7 @@ static RetainPtr<NSItemProvider> createItemProvider(const WebKit::WebPageProxy& 
 }
 
 #if ENABLE(UNIFIED_TEXT_REPLACEMENT)
-- (void)addTextIndicatorStyleForID:(NSUUID *)uuid
+- (void)addTextIndicatorStyleForID:(NSUUID *)uuid withStyleType:(WKTextIndicatorStyleType)styleType
 {
     if (!_page->preferences().textIndicatorStylingEnabled())
         return;
@@ -11729,7 +11715,7 @@ static RetainPtr<NSItemProvider> createItemProvider(const WebKit::WebPageProxy& 
     if (!_textStyleManager)
         _textStyleManager = adoptNS([WebKit::allocWKSTextStyleManagerInstance() initWithDelegate:self]);
 
-    [_textStyleManager addTextIndicatorStyleForID:uuid];
+    [_textStyleManager addTextIndicatorStyleForID:uuid withStyleType:styleType];
 }
 
 - (void)removeTextIndicatorStyleForID:(NSUUID *)uuid

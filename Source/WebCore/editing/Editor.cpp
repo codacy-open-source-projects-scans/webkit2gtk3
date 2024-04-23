@@ -2095,21 +2095,30 @@ void Editor::selectComposition()
     document().selection().setSelection(selection, { });
 }
 
-Element* Editor::writingSuggestionsContainerElement()
+Node* Editor::nodeBeforeWritingSuggestions() const
 {
     Ref document = protectedDocument();
-
     if (!document->selection().isCaret())
         return nullptr;
 
-    RefPtr node = document->selection().selection().end().protectedContainerNode();
+    auto position = document->selection().selection().end();
+    RefPtr container = position.containerNode();
+    if (!container)
+        return nullptr;
+
+    if (RefPtr text = dynamicDowncast<Text>(container))
+        return text.get();
+
+    return position.computeNodeBeforePosition();
+}
+
+Element* Editor::writingSuggestionsContainerElement() const
+{
+    RefPtr node = nodeBeforeWritingSuggestions();
     if (!node)
         return nullptr;
 
-    if (RefPtr element = dynamicDowncast<Element>(node.get()))
-        return element.get();
-
-    return node->protectedParentElement().get();
+    return node->parentElement();
 }
 
 void Editor::removeWritingSuggestionIfNeeded()
@@ -2120,7 +2129,7 @@ void Editor::removeWritingSuggestionIfNeeded()
     m_customCompositionAnnotations = { };
     m_isHandlingAcceptedCandidate = false;
 
-    RefPtr selectedElement = this->writingSuggestionsContainerElement();
+    RefPtr selectedElement = writingSuggestionsContainerElement();
     if (!selectedElement)
         return;
 
@@ -2264,7 +2273,7 @@ void Editor::setWritingSuggestion(const String& fullTextWithPrediction, const Ch
     Ref document = protectedDocument();
     document->updateStyleIfNeeded();
 
-    RefPtr selectedElement = this->writingSuggestionsContainerElement();
+    RefPtr selectedElement = writingSuggestionsContainerElement();
     if (!selectedElement)
         return;
 
@@ -3648,7 +3657,7 @@ static inline void collapseCaretWidth(IntRect& rect)
 
 IntRect Editor::firstRectForRange(const SimpleRange& range) const
 {
-    range.start.document().updateLayout();
+    range.start.protectedDocument()->updateLayout();
 
     VisiblePosition start(makeDeprecatedLegacyPosition(range.start));
 
@@ -3985,15 +3994,15 @@ static Vector<SimpleRange> scanForTelephoneNumbers(const SimpleRange& range)
 
     auto text = plainText(range);
     Vector<SimpleRange> result;
-    unsigned length = text.length();
-    unsigned scannerPosition = 0;
     int relativeStartPosition = 0;
     int relativeEndPosition = 0;
     auto characters = StringView { text }.upconvertedCharacters();
-    while (scannerPosition < length && TelephoneNumberDetector::find(&characters[scannerPosition], length - scannerPosition, &relativeStartPosition, &relativeEndPosition)) {
-        ASSERT(scannerPosition + relativeEndPosition <= length);
+    auto span = characters.span();
+    while (!span.empty() && TelephoneNumberDetector::find(span, &relativeStartPosition, &relativeEndPosition)) {
+        auto scannerPosition = span.data() - characters.span().data();
+        ASSERT(scannerPosition + relativeEndPosition <= text.length());
         result.append(resolveCharacterRange(range, CharacterRange(scannerPosition + relativeStartPosition, relativeEndPosition - relativeStartPosition)));
-        scannerPosition += relativeEndPosition;
+        span = span.subspan(relativeEndPosition);
     }
     return result;
 }

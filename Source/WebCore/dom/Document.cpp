@@ -145,8 +145,8 @@
 #include "InspectorInstrumentation.h"
 #include "IntersectionObserver.h"
 #include "JSCustomElementInterface.h"
+#include "JSDOMWindowCustom.h"
 #include "JSLazyEventListener.h"
-#include "JSLocalDOMWindowCustom.h"
 #include "KeyboardEvent.h"
 #include "KeyframeEffect.h"
 #include "LayoutDisallowedScope.h"
@@ -3238,11 +3238,9 @@ void Document::willBeRemovedFromFrame()
         editor->clear();
     detachFromFrame();
 
-#if ENABLE(CSS_PAINTING_API)
     for (auto& scope : m_paintWorkletGlobalScopes.values())
         scope->prepareForDestruction();
     m_paintWorkletGlobalScopes.clear();
-#endif
 
     m_hasPreparedForDestruction = true;
 
@@ -4036,7 +4034,7 @@ void Document::setURL(const URL& url)
     m_fragmentDirective = newURL.consumeFragmentDirective();
 
     if (SecurityOrigin::shouldIgnoreHost(newURL))
-        newURL.setHostAndPort({ });
+        newURL.removeHostAndPort();
     // SecurityContext::securityOrigin may not be initialized at this time if setURL() is called in the constructor, therefore calling topOrigin() is not always safe.
     auto topOrigin = isTopDocument() && !SecurityContext::securityOrigin() ? SecurityOrigin::create(url)->data() : this->topOrigin().data();
     m_url = { WTFMove(newURL), topOrigin };
@@ -6441,12 +6439,12 @@ void Document::updateCachedCookiesEnabled()
     });
 }
 
-static bool isValidNameNonASCII(const LChar* characters, unsigned length)
+static bool isValidNameNonASCII(std::span<const LChar> characters)
 {
     if (!isValidNameStart(characters[0]))
         return false;
 
-    for (unsigned i = 1; i < length; ++i) {
+    for (size_t i = 1; i < characters.size(); ++i) {
         if (!isValidNamePart(characters[i]))
             return false;
     }
@@ -6454,12 +6452,12 @@ static bool isValidNameNonASCII(const LChar* characters, unsigned length)
     return true;
 }
 
-static bool isValidNameNonASCII(const UChar* characters, unsigned length)
+static bool isValidNameNonASCII(std::span<const UChar> characters)
 {
-    for (unsigned i = 0; i < length;) {
+    for (size_t i = 0; i < characters.size();) {
         bool first = !i;
         char32_t c;
-        U16_NEXT(characters, i, length, c); // Increments i.
+        U16_NEXT(characters, i, characters.size(), c); // Increments i.
         if (first ? !isValidNameStart(c) : !isValidNamePart(c))
             return false;
     }
@@ -6468,13 +6466,13 @@ static bool isValidNameNonASCII(const UChar* characters, unsigned length)
 }
 
 template<typename CharType>
-static inline bool isValidNameASCII(const CharType* characters, unsigned length)
+static inline bool isValidNameASCII(std::span<const CharType> characters)
 {
     CharType c = characters[0];
     if (!(isASCIIAlpha(c) || c == ':' || c == '_'))
         return false;
 
-    for (unsigned i = 1; i < length; ++i) {
+    for (size_t i = 1; i < characters.size(); ++i) {
         c = characters[i];
         if (!(isASCIIAlphanumeric(c) || c == ':' || c == '_' || c == '-' || c == '.'))
             return false;
@@ -6483,13 +6481,13 @@ static inline bool isValidNameASCII(const CharType* characters, unsigned length)
     return true;
 }
 
-static bool isValidNameASCIIWithoutColon(const LChar* characters, unsigned length)
+static bool isValidNameASCIIWithoutColon(std::span<const LChar> characters)
 {
-    auto c = characters[0];
+    auto c = characters.front();
     if (!(isASCIIAlpha(c) || c == '_'))
         return false;
 
-    for (unsigned i = 1; i < length; ++i) {
+    for (size_t i = 1; i < characters.size(); ++i) {
         c = characters[i];
         if (!(isASCIIAlphanumeric(c) || c == '_' || c == '-' || c == '.'))
             return false;
@@ -6505,20 +6503,20 @@ bool Document::isValidName(const String& name)
         return false;
 
     if (name.is8Bit()) {
-        const LChar* characters = name.characters8();
+        auto characters = name.span8();
 
-        if (isValidNameASCII(characters, length))
+        if (isValidNameASCII(characters))
             return true;
 
-        return isValidNameNonASCII(characters, length);
+        return isValidNameNonASCII(characters);
     }
 
-    const UChar* characters = name.characters16();
+    auto characters = name.span16();
 
-    if (isValidNameASCII(characters, length))
+    if (isValidNameASCII(characters))
         return true;
 
-    return isValidNameNonASCII(characters, length);
+    return isValidNameNonASCII(characters);
 }
 
 ExceptionOr<std::pair<AtomString, AtomString>> Document::parseQualifiedName(const AtomString& qualifiedName)
@@ -6532,7 +6530,7 @@ ExceptionOr<std::pair<AtomString, AtomString>> Document::parseQualifiedName(cons
     bool sawColon = false;
     unsigned colonPosition = 0;
 
-    bool isValidLocalName = qualifiedName.is8Bit() && isValidNameASCIIWithoutColon(qualifiedName.characters8(), qualifiedName.length());
+    bool isValidLocalName = qualifiedName.is8Bit() && isValidNameASCIIWithoutColon(qualifiedName.span8());
     if (LIKELY(isValidLocalName))
         return std::pair<AtomString, AtomString> { { }, { qualifiedName } };
 
@@ -10097,7 +10095,6 @@ DeviceOrientationAndMotionAccessController& Document::deviceOrientationAndMotion
 
 #endif
 
-#if ENABLE(CSS_PAINTING_API)
 PaintWorklet& Document::ensurePaintWorklet()
 {
     if (!m_paintWorklet)
@@ -10115,7 +10112,6 @@ void Document::setPaintWorkletGlobalScopeForName(const String& name, Ref<PaintWo
     auto addResult = m_paintWorkletGlobalScopes.add(name, WTFMove(scope));
     ASSERT_UNUSED(addResult, addResult);
 }
-#endif
 
 #if ENABLE(CONTENT_CHANGE_OBSERVER)
 

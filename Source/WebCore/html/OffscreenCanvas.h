@@ -135,6 +135,8 @@ public:
 
     CanvasRenderingContext* renderingContext() const final { return m_context.get(); }
 
+    const CSSParserContext& cssParserContext() const final;
+
     ExceptionOr<std::optional<OffscreenRenderingContext>> getContext(JSC::JSGlobalObject&, RenderingContextType, FixedVector<JSC::Strong<JSC::Unknown>>&& arguments);
     ExceptionOr<RefPtr<ImageBitmap>> transferToImageBitmap();
     void convertToBlob(ImageEncodeOptions&&, Ref<DeferredPromise>&&);
@@ -152,8 +154,6 @@ public:
     std::unique_ptr<DetachedOffscreenCanvas> detach();
 
     void commitToPlaceholderCanvas();
-
-    const char* activeDOMObjectName() const final { return "OffscreenCanvas"_s; }
 
     void queueTaskKeepingObjectAlive(TaskSource, Function<void()>&&) final;
     void dispatchEvent(Event&) final;
@@ -191,6 +191,8 @@ private:
     mutable bool m_hasCreatedImageBuffer { false };
     bool m_detached { false };
     bool m_hasScheduledCommit { false };
+
+    mutable std::unique_ptr<CSSParserContext> m_cssParserContext;
 };
 
 }

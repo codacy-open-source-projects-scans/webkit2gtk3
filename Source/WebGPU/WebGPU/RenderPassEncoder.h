@@ -153,6 +153,7 @@ private:
     float m_minDepth { 0.f };
     float m_maxDepth { 1.f };
     HashSet<uint64_t, DefaultHash<uint64_t>, WTF::UnsignedWithZeroKeyHashTraits<uint64_t>> m_queryBufferIndicesToClear;
+    HashSet<uint64_t, DefaultHash<uint64_t>, WTF::UnsignedWithZeroKeyHashTraits<uint64_t>> m_queryBufferUtilizedIndices;
     id<MTLBuffer> m_visibilityResultBuffer { nil };
     uint32_t m_renderTargetWidth { 0 };
     uint32_t m_renderTargetHeight { 0 };
@@ -163,6 +164,8 @@ private:
     Vector<WGPURenderPassColorAttachment> m_descriptorColorAttachments;
     WGPURenderPassDepthStencilAttachment m_descriptorDepthStencilAttachment;
     WGPURenderPassTimestampWrites m_descriptorTimestampWrites;
+    Vector<WeakPtr<TextureView>> m_colorAttachmentViews;
+    WeakPtr<TextureView> m_depthStencilView;
     struct BufferAndOffset {
         id<MTLBuffer> buffer { nil };
         uint64_t offset { 0 };

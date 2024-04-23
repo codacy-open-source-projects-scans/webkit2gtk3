@@ -65,8 +65,8 @@ public:
     void entangle();
 
     // Returns nullptr if the passed-in vector is empty.
-    static ExceptionOr<Vector<TransferredMessagePort>> disentanglePorts(Vector<RefPtr<MessagePort>>&&);
-    static Vector<RefPtr<MessagePort>> entanglePorts(ScriptExecutionContext&, Vector<TransferredMessagePort>&&);
+    static ExceptionOr<Vector<TransferredMessagePort>> disentanglePorts(Vector<Ref<MessagePort>>&&);
+    static Vector<Ref<MessagePort>> entanglePorts(ScriptExecutionContext&, Vector<TransferredMessagePort>&&);
 
     WEBCORE_EXPORT static bool isMessagePortAliveForTesting(const MessagePortIdentifier&);
     WEBCORE_EXPORT static void notifyMessageAvailable(const MessagePortIdentifier&);
@@ -103,7 +103,6 @@ private:
     bool removeEventListener(const AtomString& eventType, EventListener&, const EventListenerOptions&) final;
 
     // ActiveDOMObject
-    const char* activeDOMObjectName() const final;
     void contextDestroyed() final;
     void stop() final { close(); }
     bool virtualHasPendingActivity() const final;

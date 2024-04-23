@@ -88,7 +88,7 @@ public:
 
 #if ENABLE(MEDIA_SESSION_PLAYLIST)
     const Vector<Ref<MediaMetadata>>& playlist() const { return m_playlist; }
-    ExceptionOr<void> setPlaylist(ScriptExecutionContext&, Vector<RefPtr<MediaMetadata>>&&);
+    ExceptionOr<void> setPlaylist(ScriptExecutionContext&, Vector<Ref<MediaMetadata>>&&);
 #endif
 
     bool hasActiveActionHandlers() const;
@@ -138,7 +138,6 @@ private:
     void notifyReadyStateObservers();
 
     // ActiveDOMObject
-    const char* activeDOMObjectName() const final { return "MediaSession"; }
     void suspend(ReasonForSuspension) final;
     void stop() final;
     bool virtualHasPendingActivity() const final;

@@ -46,8 +46,10 @@ if (!m_parentEncoder->isLocked() || m_parentEncoder->isFinished()) { \
     m_device->generateAValidationError([NSString stringWithFormat:@"%s: failed as encoding has finished", __PRETTY_FUNCTION__]); \
     return; \
 } \
-if (!m_renderCommandEncoder || !m_parentEncoder->isValid()) \
-    return;
+if (!m_renderCommandEncoder || !m_parentEncoder->isValid() || !m_parentEncoder->encoderIsCurrent(m_renderCommandEncoder)) { \
+    m_renderCommandEncoder = nil; \
+    return; \
+}
 
 
 RenderPassEncoder::RenderPassEncoder(id<MTLRenderCommandEncoder> renderCommandEncoder, const WGPURenderPassDescriptor& descriptor, NSUInteger visibilityResultBufferSize, bool depthReadOnly, bool stencilReadOnly, CommandEncoder& parentEncoder, id<MTLBuffer> visibilityResultBuffer, uint64_t maxDrawCount, Device& device)
@@ -70,6 +72,10 @@ RenderPassEncoder::RenderPassEncoder(id<MTLRenderCommandEncoder> renderCommandEn
         m_descriptor.depthStencilAttachment = &m_descriptorDepthStencilAttachment;
     if (descriptor.timestampWrites)
         m_descriptor.timestampWrites = &m_descriptorTimestampWrites;
+    for (size_t i = 0; i < descriptor.colorAttachmentCount; ++i)
+        m_colorAttachmentViews.append(WeakPtr { static_cast<TextureView*>(descriptor.colorAttachments[i].view) });
+    if (descriptor.depthStencilAttachment)
+        m_depthStencilView = WeakPtr { static_cast<TextureView*>(descriptor.depthStencilAttachment->view) };
 
     m_parentEncoder->lock(true);
 
@@ -96,10 +102,12 @@ RenderPassEncoder::RenderPassEncoder(id<MTLRenderCommandEncoder> renderCommandEn
 
         if (attachment.resolveTarget) {
             auto& texture = fromAPI(attachment.resolveTarget);
+            texture.setCommandEncoder(parentEncoder);
             texture.setPreviouslyCleared();
             addResourceToActiveResources(texture, BindGroupEntryUsage::Attachment);
         }
 
+        texture.setCommandEncoder(parentEncoder);
         id<MTLTexture> textureToClear = texture.texture();
         if (!textureToClear)
             continue;
@@ -107,15 +115,19 @@ RenderPassEncoder::RenderPassEncoder(id<MTLRenderCommandEncoder> renderCommandEn
         if (attachment.storeOp != WGPUStoreOp_Discard) {
             auto& c = attachment.clearValue;
             textureWithClearColor.clearColor = MTLClearColorMake(c.r, c.g, c.b, c.a);
-        } else if (attachment.loadOp == WGPULoadOp_Load)
+        } else if (attachment.loadOp == WGPULoadOp_Load) {
+            textureWithClearColor.clearColor = MTLClearColorMake(0, 0, 0, 0);
             [m_attachmentsToClear setObject:textureWithClearColor forKey:@(i)];
+        }
 
+        textureWithClearColor.depthPlane = attachment.depthSlice.value_or(0);
         [m_allColorAttachments setObject:textureWithClearColor forKey:@(i)];
     }
 
     if (const auto* attachment = descriptor.depthStencilAttachment) {
         auto& textureView = fromAPI(attachment->view);
         textureView.setPreviouslyCleared();
+        textureView.setCommandEncoder(parentEncoder);
         if (textureView.width() && !m_renderTargetWidth) {
             m_renderTargetWidth = textureView.width();
             m_renderTargetHeight = textureView.height();
@@ -194,7 +206,10 @@ void RenderPassEncoder::beginOcclusionQuery(uint32_t queryIndex)
         return;
     }
 
+    if (m_queryBufferUtilizedIndices.contains(queryIndex))
+        return;
     [m_renderCommandEncoder setVisibilityResultMode:MTLVisibilityResultModeCounting offset:queryIndex];
+    m_queryBufferUtilizedIndices.add(queryIndex);
 }
 
 void RenderPassEncoder::endOcclusionQuery()
@@ -253,7 +268,7 @@ void RenderPassEncoder::addResourceToActiveResources(const void* resourceAddress
     }
 
     if (!BindGroup::allowedUsage(resourceUsage)) {
-        makeInvalid([NSString stringWithFormat:@"Bind group has incompatible usage list: %@ for %p", BindGroup::usageName(resourceUsage), resourceAddress]);
+        makeInvalid([NSString stringWithFormat:@"Bind group has incompatible usage list: %@", BindGroup::usageName(resourceUsage)]);
         return;
     }
     if (!entryMap) {
@@ -629,19 +644,21 @@ void RenderPassEncoder::endPass()
     auto endEncoder = ^{
         m_parentEncoder->endEncoding(m_renderCommandEncoder);
     };
-
     auto issuedDraw = issuedDrawCall();
-    if (issuedDraw)
-        endEncoder();
+    bool useDiscardTextures = m_attachmentsToClear.count || m_clearDepthAttachment || m_clearStencilAttachment;
+    bool hasTexturesToClear = m_allColorAttachments.count || m_attachmentsToClear.count || (m_depthStencilAttachmentToClear && (m_clearDepthAttachment || m_clearStencilAttachment));
 
-    if (m_attachmentsToClear.count || !issuedDraw || (m_depthStencilAttachmentToClear && (m_clearDepthAttachment || m_clearStencilAttachment))) {
-        if (m_depthStencilAttachmentToClear && !issuedDraw) {
+    if ((!issuedDraw || useDiscardTextures) && hasTexturesToClear) {
+        if (m_depthStencilAttachmentToClear && !issuedDraw && !useDiscardTextures) {
             auto pixelFormat = m_depthStencilAttachmentToClear.pixelFormat;
             m_clearDepthAttachment = !Device::isStencilOnlyFormat(pixelFormat);
             m_clearStencilAttachment = pixelFormat == MTLPixelFormatDepth32Float_Stencil8 || pixelFormat == MTLPixelFormatStencil8 || pixelFormat == MTLPixelFormatX32_Stencil8;
         }
-        m_parentEncoder->runClearEncoder(issuedDraw ? m_attachmentsToClear : m_allColorAttachments, m_depthStencilAttachmentToClear, m_clearDepthAttachment, m_clearStencilAttachment, m_depthClearValue, m_stencilClearValue, issuedDraw ? nil : m_renderCommandEncoder);
-    }
+        if (useDiscardTextures)
+            endEncoder();
+        m_parentEncoder->runClearEncoder(useDiscardTextures ? m_attachmentsToClear : m_allColorAttachments, m_depthStencilAttachmentToClear, m_clearDepthAttachment, m_clearStencilAttachment, m_depthClearValue, m_stencilClearValue, useDiscardTextures ? nil : m_renderCommandEncoder);
+    } else
+        endEncoder();
 
     m_renderCommandEncoder = nil;
     m_parentEncoder->lock(false);
@@ -729,7 +746,7 @@ CommandEncoder& RenderPassEncoder::parentEncoder()
 
 bool RenderPassEncoder::colorDepthStencilTargetsMatch(const RenderPipeline& pipeline) const
 {
-    return pipeline.colorDepthStencilTargetsMatch(m_descriptor);
+    return pipeline.colorDepthStencilTargetsMatch(m_descriptor, m_colorAttachmentViews, m_depthStencilView);
 }
 
 id<MTLRenderCommandEncoder> RenderPassEncoder::renderCommandEncoder() const

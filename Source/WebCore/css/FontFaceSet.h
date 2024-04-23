@@ -41,7 +41,7 @@ class DOMException;
 class FontFaceSet final : public RefCounted<FontFaceSet>, private CSSFontFaceSet::FontEventClient, public EventTarget, public ActiveDOMObject {
     WTF_MAKE_ISO_ALLOCATED(FontFaceSet);
 public:
-    static Ref<FontFaceSet> create(ScriptExecutionContext&, const Vector<RefPtr<FontFace>>& initialFaces);
+    static Ref<FontFaceSet> create(ScriptExecutionContext&, const Vector<Ref<FontFace>>& initialFaces);
     static Ref<FontFaceSet> create(ScriptExecutionContext&, CSSFontFaceSet& backing);
     virtual ~FontFaceSet();
 
@@ -95,16 +95,13 @@ private:
         bool hasReachedTerminalState { false };
     };
 
-    FontFaceSet(ScriptExecutionContext&, const Vector<RefPtr<FontFace>>&);
+    FontFaceSet(ScriptExecutionContext&, const Vector<Ref<FontFace>>&);
     FontFaceSet(ScriptExecutionContext&, CSSFontFaceSet&);
 
     // CSSFontFaceSet::FontEventClient
     void faceFinished(CSSFontFace&, CSSFontFace::Status) final;
     void startedLoading() final;
     void completedLoading() final;
-
-    // ActiveDOMObject
-    const char* activeDOMObjectName() const final { return "FontFaceSet"; }
 
     // EventTarget
     enum EventTargetInterfaceType eventTargetInterface() const final { return EventTargetInterfaceType::FontFaceSet; }

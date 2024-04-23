@@ -32,6 +32,7 @@
 #include <sqlite3.h>
 #include <variant>
 #include <wtf/Assertions.h>
+#include <wtf/StdLibExtras.h>
 #include <wtf/text/StringView.h>
 
 // SQLite 3.6.16 makes sqlite3_prepare_v2 automatically retry preparing the statement
@@ -107,13 +108,13 @@ int SQLiteStatement::bindBlob(int index, const String& text)
     // treats as a null, so we supply a non-null pointer for that case.
     auto upconvertedCharacters = StringView(text).upconvertedCharacters();
     UChar anyCharacter = 0;
-    const UChar* characters;
+    std::span<const UChar> characters;
     if (text.isEmpty() && !text.isNull())
-        characters = &anyCharacter;
+        characters = span(anyCharacter);
     else
-        characters = upconvertedCharacters;
+        characters = upconvertedCharacters.span();
 
-    return bindBlob(index, std::span(reinterpret_cast<const uint8_t*>(characters), text.length() * sizeof(UChar)));
+    return bindBlob(index, asBytes(characters));
 }
 
 int SQLiteStatement::bindText(int index, StringView text)
@@ -122,9 +123,10 @@ int SQLiteStatement::bindText(int index, StringView text)
     ASSERT(static_cast<unsigned>(index) <= bindParameterCount());
 
     // Fast path when the input text is all ASCII.
-    if (text.is8Bit() && text.containsOnlyASCII())
-        return sqlite3_bind_text(m_statement, index, text.length() ? reinterpret_cast<const char*>(text.characters8()) : "", text.length(), SQLITE_TRANSIENT);
-
+    if (text.is8Bit() && text.containsOnlyASCII()) {
+        auto characters = spanReinterpretCast<const char>(text.span8());
+        return sqlite3_bind_text(m_statement, index, characters.empty() ? "" : characters.data(), characters.size(), SQLITE_TRANSIENT);
+    }
     auto utf8Text = text.utf8();
     return sqlite3_bind_text(m_statement, index, utf8Text.data(), utf8Text.length(), SQLITE_TRANSIENT);
 }

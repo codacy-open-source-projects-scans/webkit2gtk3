@@ -32,6 +32,7 @@
 #include "ImageAnalysisUtilities.h"
 #include "PDFPluginIdentifier.h"
 #include "WKLayoutMode.h"
+#include "WKTextIndicatorStyleType.h"
 #include <WebCore/DOMPasteAccess.h>
 #include <WebCore/FocusDirection.h>
 #include <WebCore/ScrollTypes.h>
@@ -57,6 +58,8 @@ OBJC_CLASS NSImmediateActionGestureRecognizer;
 OBJC_CLASS NSMenu;
 OBJC_CLASS NSPopover;
 OBJC_CLASS NSTextInputContext;
+OBJC_CLASS NSTextPlaceholder;
+OBJC_CLASS NSTextSelectionRect;
 OBJC_CLASS NSView;
 OBJC_CLASS QLPreviewPanel;
 OBJC_CLASS WKAccessibilitySettingsObserver;
@@ -183,9 +186,10 @@ typedef id <NSValidatedUserInterfaceItem> ValidationItem;
 typedef Vector<RetainPtr<ValidationItem>> ValidationVector;
 typedef HashMap<String, ValidationVector> ValidationMap;
 
-class WebViewImpl : public CanMakeWeakPtr<WebViewImpl>, public CanMakeCheckedPtr<WebViewImpl> {
-    WTF_MAKE_FAST_ALLOCATED;
+class WebViewImpl final : public CanMakeWeakPtr<WebViewImpl>, public CanMakeCheckedPtr<WebViewImpl> {
     WTF_MAKE_NONCOPYABLE(WebViewImpl);
+    WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(WebViewImpl);
 public:
     WebViewImpl(NSView <WebViewImplDelegate> *, WKWebView *outerWebView, WebProcessPool&, Ref<API::PageConfiguration>&&);
 
@@ -526,6 +530,9 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     void saveBackForwardSnapshotForCurrentItem();
     void saveBackForwardSnapshotForItem(WebBackForwardListItem&);
 
+    void insertTextPlaceholderWithSize(CGSize, void(^completionHandler)(NSTextPlaceholder *));
+    void removeTextPlaceholder(NSTextPlaceholder *, bool willInsertText, void(^completionHandler)());
+
     WKSafeBrowsingWarning *safeBrowsingWarning() { return m_safeBrowsingWarning.get(); }
 
     ViewGestureController* gestureController() { return m_gestureController.get(); }
@@ -736,7 +743,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 #endif
 
 #if ENABLE(UNIFIED_TEXT_REPLACEMENT_UI)
-    void addTextIndicatorStyleForID(WTF::UUID);
+    void addTextIndicatorStyleForID(WTF::UUID, WKTextIndicatorStyleType);
     void removeTextIndicatorStyleForID(WTF::UUID);
 #endif
 

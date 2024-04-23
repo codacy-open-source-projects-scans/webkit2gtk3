@@ -854,15 +854,17 @@ public:
 
     bool handlesPageScaleGesture();
 
+#if PLATFORM(COCOA)
+    void insertTextPlaceholder(const WebCore::IntSize&, CompletionHandler<void(const std::optional<WebCore::ElementContext>&)>&&);
+    void removeTextPlaceholder(const WebCore::ElementContext&, CompletionHandler<void()>&&);
+#endif
+
 #if PLATFORM(IOS_FAMILY)
     void textInputContextsInRect(WebCore::FloatRect, CompletionHandler<void(const Vector<WebCore::ElementContext>&)>&&);
     void focusTextInputContextAndPlaceCaret(const WebCore::ElementContext&, const WebCore::IntPoint&, CompletionHandler<void(bool)>&&);
 
     bool shouldRevealCurrentSelectionAfterInsertion() const { return m_shouldRevealCurrentSelectionAfterInsertion; }
     void setShouldRevealCurrentSelectionAfterInsertion(bool);
-
-    void insertTextPlaceholder(const WebCore::IntSize&, CompletionHandler<void(const std::optional<WebCore::ElementContext>&)>&&);
-    void removeTextPlaceholder(const WebCore::ElementContext&, CompletionHandler<void()>&&);
 
     WebCore::FloatSize screenSize() const;
     WebCore::FloatSize availableScreenSize() const;
@@ -1433,6 +1435,8 @@ public:
 
     void flushPendingEditorStateUpdate();
 
+    void loadAndDecodeImage(WebCore::ResourceRequest&&, std::optional<WebCore::FloatSize> sizeConstraint, CompletionHandler<void(std::variant<WebCore::ResourceError, Ref<WebCore::ShareableBitmap>>&&)>&&);
+
     void hasStorageAccess(WebCore::RegistrableDomain&& subFrameDomain, WebCore::RegistrableDomain&& topFrameDomain, WebFrame&, CompletionHandler<void(bool)>&&);
     void requestStorageAccess(WebCore::RegistrableDomain&& subFrameDomain, WebCore::RegistrableDomain&& topFrameDomain, WebFrame&, WebCore::StorageAccessScope, CompletionHandler<void(WebCore::RequestStorageAccessResult)>&&);
     bool hasPageLevelStorageAccess(const WebCore::RegistrableDomain& topLevelDomain, const WebCore::RegistrableDomain& resourceDomain) const;
@@ -1736,9 +1740,9 @@ public:
 
     void textReplacementSessionUpdateStateForReplacementWithUUID(const WTF::UUID& sessionUUID, WebTextReplacementDataState, const WTF::UUID& replacementUUID);
 
-    void removeTextIndicatorStyleForID(const WTF::UUID&);
-
     void enableTextIndicatorStyleAfterElementWithID(const String&, const WTF::UUID&);
+    void enableTextIndicatorStyleForElementWithID(const String&, const WTF::UUID&);
+    void removeTextIndicatorStyleForID(const WTF::UUID&);
 #endif
 
     void startObservingNowPlayingMetadata();

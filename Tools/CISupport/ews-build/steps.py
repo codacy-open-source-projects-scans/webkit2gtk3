@@ -1023,6 +1023,18 @@ class CleanWorkingDirectory(shell.ShellCommandNewStyle):
         return super().run()
 
 
+class CleanDerivedSources(shell.ShellCommandNewStyle):
+    name = 'clean-derived-sources'
+    description = ['clean-derived-sources running']
+    descriptionDone = ['Cleaned derived sources directories']
+    command = ['python3', 'Tools/Scripts/clean-webkit', '--derived-sources-only']
+
+    def __init__(self, **kwargs):
+        super().__init__(logEnviron=False, **kwargs)
+
+    def run(self):
+        return super().run()
+
 class UpdateWorkingDirectory(steps.ShellSequence, ShellMixin):
     name = 'update-working-directory'
     description = ['update-working-directory running']
@@ -1103,9 +1115,13 @@ for l in lines[1:]:
         if not patch:
             commands += [['curl', '-L', 'https://bugs.webkit.org/attachment.cgi?id={}'.format(self.getProperty('patch_id', '')), '-o', '.buildbot-diff']]
         commands += [
+            ['git', 'config', 'user.name', 'EWS'],
+            ['git', 'config', 'user.email', FROM_EMAIL],
             ['git', 'am', '--keep-non-patch', '.buildbot-diff'],
-            ['git', 'filter-branch', '-f', '--msg-filter', 'python3 -c "{}"'.format(self.FILTER_BRANCH_PROGRAM), 'HEAD...HEAD~1'],
         ]
+        if not self.has_windows_shell():
+            commands.append(['git', 'filter-branch', '-f', '--msg-filter', 'python3 -c "{}"'.format(self.FILTER_BRANCH_PROGRAM), 'HEAD...HEAD~1'])
+
         for command in commands:
             self.commands.append(util.ShellArg(command=command, logname='stdio', haltOnFailure=True))
 
@@ -1314,15 +1330,135 @@ class CheckChangeRelevance(AnalyzeChange):
         return None
 
 
-class FindModifiedLayoutTests(AnalyzeChange):
+class GetTestExpectationsBaseline(shell.ShellCommand, ShellMixin):
+    name = 'get-test-expectations-baseline'
+    description = 'get-test-expectations-baseline running'
+    descriptionDone = 'Found baseline expectations for layout tests'
+    command = ['python3', 'Tools/Scripts/run-webkit-tests', '--print-expectations', WithProperties('--%(configuration)s')]
+
+    @defer.inlineCallbacks
+    def run(self):
+        self.log_observer = logobserver.BufferLogObserver(wantStderr=True)
+        self.addLogObserver('stdio', self.log_observer)
+
+        platform = self.getProperty('platform')
+        self.setCommand(self.command + customBuildFlag(platform, self.getProperty('fullPlatform')))
+
+        patch_author = self.getProperty('patch_author')
+        if patch_author in ['webkit-wpt-import-bot@igalia.com']:
+            self.setCommand(self.command + ['imported/w3c/web-platform-tests'])
+
+        additionalArguments = self.getProperty('additionalArguments', '')
+        if additionalArguments:
+            self.setCommand(self.command + additionalArguments)
+
+        self.setCommand(self.shell_command(' '.join(self.command) + ' > base-expectations.txt'))
+        rc = yield super().run()
+
+        log_text = log_text = self.log_observer.getStdout() + self.log_observer.getStderr()
+        match = re.search(r'Found.*', log_text)
+        if match:
+            defer.returnValue(SUCCESS)
+        defer.returnValue(rc)
+
+
+class GetUpdatedTestExpectations(steps.ShellSequence, ShellMixin):
+    name = 'get-updated-test-expectations'
+    description = 'get-updated-test-expectations running'
+    descriptionDone = 'Found updated expectations for layout tests'
+
+    @defer.inlineCallbacks
+    def run(self):
+        self.log_observer = logobserver.BufferLogObserver(wantStderr=True)
+        self.addLogObserver('stdio', self.log_observer)
+
+        configuration_flag = [f"--{self.getProperty('configuration')}"] if self.getProperty('configuration') else []
+        platform_flag = customBuildFlag(self.getProperty('platform'), self.getProperty('fullPlatform'))
+        run_webkit_command = ['python3', 'Tools/Scripts/run-webkit-tests', '--print-expectations'] + configuration_flag + platform_flag
+
+        patch_author = self.getProperty('patch_author')
+        if patch_author in ['webkit-wpt-import-bot@igalia.com']:
+            run_webkit_command += ['imported/w3c/web-platform-tests']
+
+        additionalArguments = self.getProperty('additionalArguments', '')
+        if additionalArguments:
+            run_webkit_command += additionalArguments
+
+        run_webkit_command = ' '.join(run_webkit_command) + ' > new-expectations.txt'
+
+        self.commands = []
+        for command in [
+            self.shell_command(run_webkit_command),
+            self.shell_command("perl -p -i -e 's/\\].*/\\]/' base-expectations.txt"),
+            self.shell_command("perl -p -i -e 's/\\].*/\\]/' new-expectations.txt"),
+        ]:
+            self.commands.append(util.ShellArg(command=command, logname='stdio'))
+
+        rc = yield super().run()
+
+        log_text = log_text = self.log_observer.getStdout() + self.log_observer.getStderr()
+        match = re.search(r'Found.*', log_text)
+        if match:
+            defer.returnValue(SUCCESS)
+        defer.returnValue(rc)
+
+
+class FindModifiedLayoutTests(shell.ShellCommandNewStyle, AnalyzeChange):
     name = 'find-modified-layout-tests'
+    description = 'find-modified-layout tests running'
+    descriptionDone = 'Found modified layout tests'
     RE_LAYOUT_TEST = br'^(\+\+\+).*(LayoutTests.*\.html)'
     DIRECTORIES_TO_IGNORE = ['reference', 'reftest', 'resources', 'support', 'script-tests', 'tools']
     SUFFIXES_TO_IGNORE = ['-expected', '-expected-mismatch', '-ref', '-notref']
+    command = ['diff', '-u', 'base-expectations.txt', 'new-expectations.txt']
 
     def __init__(self, skipBuildIfNoResult=True):
         self.skipBuildIfNoResult = skipBuildIfNoResult
         super().__init__()
+
+    @defer.inlineCallbacks
+    def run(self):
+        self.log_observer = logobserver.BufferLogObserver()
+        self.addLogObserver('stdio', self.log_observer)
+        rc = yield super().run()
+        modified_tests = set()
+        log_text = self.log_observer.getStdout()
+        match = re.findall(r'\+(.*\.html)', log_text)
+        yield self._addToLog('stdio', '\nLooking for test expectation changes...\n')
+        for test in match:
+            yield self._addToLog('stdio', f'    LayoutTests/{test}\n')
+            modified_tests.add(f'LayoutTests/{test}')
+        modified_tests = list(modified_tests)
+
+        patch = self._get_patch()
+        if not patch:
+            yield self._addToLog('stdio', 'Unable to access the patch/PR content.\n')
+            self.results = WARNINGS
+            if self.skipBuildIfNoResult:
+                self.build.buildFinished(['{} {} could not be accessed'.format(
+                    self.change_type,
+                    self.getProperty('patch_id', '') or self.getProperty('github.number', ''),
+                )], WARNINGS)
+            return defer.returnValue(self.results)
+
+        yield self._addToLog('stdio', '\nLooking for layout test changes...\n')
+        tests_from_patch = self.find_test_names_from_patch(patch)
+        modified_tests += tests_from_patch
+
+        if modified_tests:
+            yield self._addToLog('stdio', '\nThis change modifies following tests: {}\n'.format(modified_tests))
+            self.setProperty('modified_tests', modified_tests)
+            self.results = SUCCESS
+        else:
+            yield self._addToLog('stdio', 'This change does not modify any layout tests\n')
+            self.results = SKIPPED
+            if self.skipBuildIfNoResult:
+                self.build.results = SKIPPED
+                self.build.buildFinished(['{} {} doesn\'t have relevant changes'.format(
+                    self.change_type,
+                    self.getProperty('patch_id', '') or self.getProperty('github.number', ''),
+                )], SKIPPED)
+        return defer.returnValue(self.results)
 
     def find_test_names_from_patch(self, patch):
         tests = []
@@ -1337,30 +1473,10 @@ class FindModifiedLayoutTests(AnalyzeChange):
                 tests.append(test_name)
         return list(set(tests))
 
-    def start(self):
-        patch = self._get_patch()
-        if not patch:
-            self._addToLog('stdio', 'Unable to access the patch/PR content.')
-            self.finished(WARNINGS)
-            return None
-
-        tests = self.find_test_names_from_patch(patch)
-
-        if tests:
-            self._addToLog('stdio', 'This change modifies following tests: {}'.format(tests))
-            self.setProperty('modified_tests', tests)
-            self.finished(SUCCESS)
-            return None
-
-        self._addToLog('stdio', 'This change does not modify any layout tests')
-        self.finished(SKIPPED)
-        if self.skipBuildIfNoResult:
-            self.build.results = SKIPPED
-            self.build.buildFinished(['{} {} doesn\'t have relevant changes'.format(
-                self.change_type,
-                self.getProperty('patch_id', '') or self.getProperty('github.number', ''),
-            )], SKIPPED)
-        return None
+    def getResultSummary(self):
+        if self.results == WARNINGS:
+            return {'step': '{} could not be accessed'.format(self.change_type)}
+        return super().getResultSummary()
 
 
 class Bugzilla(object):
@@ -2479,7 +2595,10 @@ class CheckStatusOfPR(buildstep.BuildStep, GitHubMixin, AddToLogMixin):
 
         for queue in queues_for_safe_merge:
             queue_data = response.json().get(queue, None)
-            if queue_data:
+            # jsc-arm7-tests will not set its status if skipped, so we condition on jsc-armv7
+            if queue == 'jsc-armv7-tests' and response.json().get('jsc-armv7', None).get('state', None) == 3:
+                yield self._addToLog('stdio', f'{queue}: Skipped\n')
+            elif queue_data:
                 status = queue_data.get('state', None)
                 if status == 0:  # success
                     yield self._addToLog('stdio', f'{queue}: Success\n')
@@ -2631,21 +2750,10 @@ class LeaveComment(buildstep.BuildStep, BugzillaMixin, GitHubMixin):
         return CURRENT_HOSTNAME in EWS_BUILD_HOSTNAMES
 
 
-class UnApplyPatch(CleanWorkingDirectory):
-    name = 'unapply-patch'
-    descriptionDone = ['Unapplied patch']
-
-    def doStepIf(self, step):
-        return self.getProperty('patch_id')
-
-    def hideStepIf(self, results, step):
-        return not self.doStepIf(step)
-
-
-class RevertPullRequestChanges(steps.ShellSequence):
-    name = 'revert-pull-request-changes'
-    description = ['revert-pull-request-changes running']
-    descriptionDone = ['Reverted pull request changes']
+class RevertAppliedChanges(steps.ShellSequence):
+    name = 'revert-applied-changes'
+    description = ['revert-applied-changes running']
+    descriptionDone = ['Reverted applied changes']
     flunkOnFailure = True
     haltOnFailure = True
 
@@ -2668,12 +2776,6 @@ class RevertPullRequestChanges(steps.ShellSequence):
             target = os.path.join("WebKitBuild", platform, config, "build-webkit-options.txt")
             self.commands.append(util.ShellArg(command=['rm', '-f', target], logname='stdio'))
         return super().run()
-
-    def doStepIf(self, step):
-        return self.getProperty('github.number')
-
-    def hideStepIf(self, results, step):
-        return not self.doStepIf(step)
 
 
 class Trigger(trigger.Trigger):
@@ -3011,6 +3113,17 @@ class InstallWpeDependencies(shell.ShellCommandNewStyle):
         super().__init__(logEnviron=False, **kwargs)
 
 
+class InstallWinDependencies(shell.ShellCommandNewStyle):
+    name = 'win-deps'
+    description = ['Updating Win dependencies']
+    descriptionDone = ['Updated Win dependencies']
+    command = ['python3', 'Tools/Scripts/update-webkit-wincairo-libs.py']
+    haltOnFailure = True
+
+    def __init__(self, **kwargs):
+        super().__init__(logEnviron=False, **kwargs)
+
+
 def customBuildFlag(platform, fullPlatform):
     # FIXME: Make a common 'supported platforms' list.
     if platform not in ('gtk', 'wincairo', 'ios', 'jsc-only', 'wpe', 'playstation', 'tvos', 'watchos'):
@@ -3156,7 +3269,7 @@ class CompileWebKit(shell.Compile, AddToLogMixin, ShellMixin):
         steps_to_add = self.follow_up_steps()
 
         if cmd.didFail():
-            steps_to_add += [UnApplyPatch(), RevertPullRequestChanges(), ValidateChange(verifyBugClosed=False, addURLs=False)]
+            steps_to_add += [RevertAppliedChanges(), ValidateChange(verifyBugClosed=False, addURLs=False)]
             platform = self.getProperty('platform')
             if platform == 'wpe':
                 steps_to_add.append(InstallWpeDependencies())
@@ -3507,8 +3620,8 @@ class RunJavaScriptCoreTests(shell.Test, AddToLogMixin):
             self.build.results = SUCCESS
             self.build.buildFinished([message], SUCCESS)
         else:
-            self.build.addStepsAfterCurrentStep([UnApplyPatch(),
-                                                RevertPullRequestChanges(),
+            self.build.addStepsAfterCurrentStep([
+                                                RevertAppliedChanges(),
                                                 ValidateChange(verifyBugClosed=False, addURLs=False),
                                                 CompileJSCWithoutChange(),
                                                 ValidateChange(verifyBugClosed=False, addURLs=False),
@@ -3776,6 +3889,7 @@ class RunWebKitTests(shell.Test, AddToLogMixin):
     ENABLE_GUARD_MALLOC = False
     ENABLE_ADDITIONAL_ARGUMENTS = True
     EXIT_AFTER_FAILURES = '60'
+    STRESS_MODE = False
     command = ['python3', 'Tools/Scripts/run-webkit-tests',
                '--no-build',
                '--no-show-results',
@@ -3813,7 +3927,8 @@ class RunWebKitTests(shell.Test, AddToLogMixin):
         else:
             if self.EXIT_AFTER_FAILURES is not None:
                 self.setCommand(self.command + ['--exit-after-n-failures', '{}'.format(self.EXIT_AFTER_FAILURES)])
-            self.setCommand(self.command + ['--skip-failing-tests'])
+            if not self.STRESS_MODE:
+                self.setCommand(self.command + ['--skip-failing-tests'])
 
         if platform in ['gtk', 'wpe']:
             self.setCommand(self.command + ['--enable-core-dumps-nolimit'])
@@ -3994,8 +4109,7 @@ class RunWebKitTests(shell.Test, AddToLogMixin):
                 ]
             else:
                 steps_to_add += [
-                    UnApplyPatch(),
-                    RevertPullRequestChanges(),
+                    RevertAppliedChanges(),
                     ValidateChange(verifyBugClosed=False, addURLs=False),
                     CompileWebKitWithoutChange(retry_build_on_failure=True),
                     ValidateChange(verifyBugClosed=False, addURLs=False),
@@ -4029,6 +4143,7 @@ class RunWebKitTestsInStressMode(RunWebKitTests):
     suffix = 'stress-mode'
     EXIT_AFTER_FAILURES = '10'
     ENABLE_ADDITIONAL_ARGUMENTS = False
+    STRESS_MODE = True
     FAILURE_MSG_IN_STRESS_MODE = 'Found test failures in stress mode'
 
     def __init__(self, num_iterations=100, layout_test_class=RunWebKitTests):
@@ -4134,8 +4249,7 @@ class ReRunWebKitTests(RunWebKitTests):
             self.build.addStepsAfterCurrentStep([ArchiveTestResults(),
                                                 UploadTestResults(identifier='rerun'),
                                                 ExtractTestResults(identifier='rerun'),
-                                                UnApplyPatch(),
-                                                RevertPullRequestChanges(),
+                                                RevertAppliedChanges(),
                                                 ValidateChange(verifyBugClosed=False, addURLs=False),
                                                 CompileWebKitWithoutChange(retry_build_on_failure=True),
                                                 ValidateChange(verifyBugClosed=False, addURLs=False),
@@ -4565,7 +4679,7 @@ class RunWebKitTestsRedTree(RunWebKitTests):
             if retry_count < AnalyzeLayoutTestsResultsRedTree.MAX_RETRY:
                 next_steps.append(AnalyzeLayoutTestsResultsRedTree())
             else:
-                next_steps.extend([UnApplyPatch(), RevertPullRequestChanges()])
+                next_steps.extend([RevertAppliedChanges()])
                 if platform == 'wpe':
                     next_steps.append(InstallWpeDependencies())
                 elif platform == 'gtk':
@@ -4609,8 +4723,7 @@ class RunWebKitTestsRepeatFailuresRedTree(RunWebKitTestsRedTree):
             next_steps.extend([
                 ValidateChange(verifyBugClosed=False, addURLs=False),
                 KillOldProcesses(),
-                UnApplyPatch(),
-                RevertPullRequestChanges()])
+                RevertAppliedChanges()])
             if platform == 'wpe':
                 next_steps.append(InstallWpeDependencies())
             elif platform == 'gtk':
@@ -5315,7 +5428,7 @@ class ReRunAPITests(RunAPITests):
     suffix = 'second_run'
 
     def doOnFailure(self):
-        steps_to_add = [UnApplyPatch(), RevertPullRequestChanges(), ValidateChange(verifyBugClosed=False, addURLs=False)]
+        steps_to_add = [RevertAppliedChanges(), ValidateChange(verifyBugClosed=False, addURLs=False)]
         platform = self.getProperty('platform')
         if platform == 'wpe':
             steps_to_add.append(InstallWpeDependencies())

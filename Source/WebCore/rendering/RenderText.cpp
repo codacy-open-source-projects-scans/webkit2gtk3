@@ -370,6 +370,11 @@ void RenderText::styleDidChange(StyleDifference diff, const RenderStyle* oldStyl
     TextSecurity oldSecurity = oldStyle ? oldStyle->textSecurity() : TextSecurity::None;
     if (needsResetText || oldTransform != newStyle.textTransform() || oldSecurity != newStyle.textSecurity())
         RenderText::setText(originalText(), true);
+
+    // FIXME: First line change on the block comes in as equal on text with inline box parent.
+    auto needsLayoutBoxStyleUpdate = (diff >= StyleDifference::Repaint || (is<RenderInline>(parent()) && &style() != &firstLineStyle())) && layoutBox();
+    if (needsLayoutBoxStyleUpdate)
+        LayoutIntegration::LineLayout::updateStyle(*this);
 }
 
 void RenderText::removeAndDestroyTextBoxes()
@@ -975,7 +980,7 @@ RenderText::Widths RenderText::trimmedPreferredWidths(float leadWidth, bool& str
     if (text()[0] == ' ' || (text()[0] == '\n' && !style.preserveNewline()) || text()[0] == '\t') {
         auto& font = style.fontCascade(); // FIXME: This ignores first-line.
         if (stripFrontSpaces)
-            widths.max -= font.width(RenderBlock::constructTextRun(&space, 1, style));
+            widths.max -= font.width(RenderBlock::constructTextRun(span(space), style));
         else
             widths.max += font.wordSpacing();
     }
@@ -1689,11 +1694,11 @@ static void invalidateLineLayoutPathOnContentChangeIfNeeded(const RenderText& re
         return;
 
     if (LayoutIntegration::LineLayout::shouldInvalidateLineLayoutPathAfterContentChange(*container, renderer, *modernLineLayout)) {
-        container->invalidateLineLayoutPath();
+        container->invalidateLineLayoutPath(RenderBlockFlow::InvalidationReason::ContentChange);
         return;
     }
     if (!modernLineLayout->updateTextContent(renderer, offset, delta))
-        container->invalidateLineLayoutPath();
+        container->invalidateLineLayoutPath(RenderBlockFlow::InvalidationReason::ContentChange);
 }
 
 void RenderText::setTextInternal(const String& text, bool force)
@@ -1720,8 +1725,10 @@ void RenderText::setTextInternal(const String& text, bool force)
 
 void RenderText::setText(const String& newContent, bool force)
 {
+    auto isDifferent = newContent != text();
     setTextInternal(newContent, force);
-    invalidateLineLayoutPathOnContentChangeIfNeeded(*this, 0, text().length());
+    if (isDifferent || force)
+        invalidateLineLayoutPathOnContentChangeIfNeeded(*this, 0, text().length());
 }
 
 void RenderText::setTextWithOffset(const String& newText, unsigned offset, unsigned, bool force)
@@ -2031,7 +2038,7 @@ bool RenderText::computeCanUseSimpleFontCodePath() const
 {
     if (m_containsOnlyASCII || text().is8Bit())
         return true;
-    return FontCascade::characterRangeCodePath(text().characters16(), length()) == FontCascade::CodePath::Simple;
+    return FontCascade::characterRangeCodePath(text().span16()) == FontCascade::CodePath::Simple;
 }
 
 void RenderText::momentarilyRevealLastTypedCharacter(unsigned offsetAfterLastTypedCharacter)

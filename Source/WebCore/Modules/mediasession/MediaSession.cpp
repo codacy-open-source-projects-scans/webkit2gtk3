@@ -60,9 +60,9 @@ static WTFLogChannel& logChannel()
     return LogMedia;
 }
 
-static const char* logClassName()
+static ASCIILiteral logClassName()
 {
-    return "MediaSession";
+    return "MediaSession"_s;
 }
 #endif
 
@@ -207,7 +207,7 @@ void MediaSession::setReadyState(MediaSessionReadyState state)
 #endif
 
 #if ENABLE(MEDIA_SESSION_PLAYLIST)
-ExceptionOr<void> MediaSession::setPlaylist(ScriptExecutionContext& context, Vector<RefPtr<MediaMetadata>>&& playlist)
+ExceptionOr<void> MediaSession::setPlaylist(ScriptExecutionContext& context, Vector<Ref<MediaMetadata>>&& playlist)
 {
     ALWAYS_LOG(LOGIDENTIFIER);
 

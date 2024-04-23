@@ -43,7 +43,7 @@ namespace JSC { namespace DFG {
 class FixupPhase : public Phase {
 public:
     FixupPhase(Graph& graph)
-        : Phase(graph, "fixup")
+        : Phase(graph, "fixup"_s)
         , m_insertionSet(graph)
     {
     }
@@ -444,9 +444,7 @@ private:
             
         case UInt32ToNumber: {
             fixIntConvertingEdge(node->child1());
-            if (bytecodeCanTruncateInteger(node->arithNodeFlags()))
-                node->convertToIdentity();
-            else if (node->canSpeculateInt32(FixupPass))
+            if (bytecodeCanTruncateInteger(node->arithNodeFlags()) || node->canSpeculateInt32(FixupPass))
                 node->setArithMode(Arith::CheckOverflow);
             else {
                 node->setArithMode(Arith::DoOverflow);
@@ -2492,6 +2490,7 @@ private:
         case RecordRegExpCachedResult:
         case RegExpExecNonGlobalOrSticky:
         case RegExpMatchFastGlobal:
+        case GetUndetachedTypeArrayLength:
             // These are just nodes that we don't currently expect to see during fixup.
             // If we ever wanted to insert them prior to fixup, then we just have to create
             // fixup rules for them.
@@ -4770,6 +4769,34 @@ private:
             m_graph.convertToConstant(node, jsBoolean(true));
             return;
         }
+
+        auto tryFoldWithConstant = [&](Edge&, Edge& constantEdge) {
+            JSValue constant = constantEdge->asJSValue();
+            if (constant.isBoolean()) {
+                fixEdge<BooleanUse>(constantEdge);
+                node->setOpAndDefaultFlags(CompareStrictEq);
+                return true;
+            }
+
+            if (constant.isUndefinedOrNull()) {
+                fixEdge<OtherUse>(constantEdge);
+                node->setOpAndDefaultFlags(CompareStrictEq);
+                return true;
+            }
+
+            return false;
+        };
+
+        if (node->child1()->isConstant()) {
+            if (tryFoldWithConstant(node->child2(), node->child1()))
+                return;
+        }
+        if (node->child2()->isConstant()) {
+            if (tryFoldWithConstant(node->child1(), node->child2()))
+                return;
+        }
+
+
         if (Node::shouldSpeculateBoolean(node->child1().node(), node->child2().node())) {
             fixEdge<BooleanUse>(node->child1());
             fixEdge<BooleanUse>(node->child2());

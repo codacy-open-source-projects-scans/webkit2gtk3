@@ -1196,13 +1196,7 @@ imported/w3c/web-platform-tests/webcodecs/videoDecoder-codec-specific.https.any.
 
 imported/w3c/web-platform-tests/webcodecs/videoFrame-createImageBitmap.any.worker.html [ Pass ]
 
-# Likely bugs related with dav1ddec.
-imported/w3c/web-platform-tests/webcodecs/videoDecoder-codec-specific.https.any.html?av1 [ Failure ]
-imported/w3c/web-platform-tests/webcodecs/videoDecoder-codec-specific.https.any.worker.html?av1 [ Failure ]
-imported/w3c/web-platform-tests/webcodecs/full-cycle-test.https.any.html?av1 [ Pass Failure ]
-imported/w3c/web-platform-tests/webcodecs/full-cycle-test.https.any.worker.html?av1 [ Pass Failure ]
-
-# Our MP3 decoder is not yet spec-compliant.
+# Our MP3 decoder is not yet spec-compliant (reverse decoding, mostly).
 imported/w3c/web-platform-tests/webcodecs/audioDecoder-codec-specific.https.any.html?mp3 [ Failure ]
 imported/w3c/web-platform-tests/webcodecs/audioDecoder-codec-specific.https.any.worker.html?mp3 [ Failure ]
 
@@ -1907,6 +1901,7 @@ webkit.org/b/264803 fast/mediastream/mediastreamtrack-video-resize-event.html [ 
 webkit.org/b/265865 imported/w3c/web-platform-tests/webrtc-stats/rtp-stats-creation.html [ Skip ]
 
 # Requires video scaling adaptation.
+webrtc/captureCanvas-webrtc-with-video-scaling-adaptation.html [ Failure ]
 webrtc/video-maxBitrate.html [ Failure ]
 webrtc/video-maxBitrate-vp8.html [ Failure ]
 
@@ -2377,6 +2372,8 @@ imported/w3c/web-platform-tests/fetch/metadata/fetch.https.sub.any.html [ Pass ]
 imported/w3c/web-platform-tests/fetch/metadata/fetch.https.sub.any.worker.html [ Pass ]
 imported/w3c/web-platform-tests/fetch/metadata/report.https.sub.html [ Pass ]
 imported/w3c/web-platform-tests/fetch/metadata/style.https.sub.html [ Pass ]
+imported/w3c/web-platform-tests/navigation-api/navigate-event/cross-window/click-samedocument-crossorigin-sameorigindomain.sub.html [ Pass ]
+
 # These tests work totally fine but have unreliable ordering for test output making them flakey.
 imported/w3c/web-platform-tests/fetch/metadata/preload.https.sub.html [ Skip ]
 imported/w3c/web-platform-tests/fetch/metadata/window-open.https.sub.html [ Skip ]
@@ -3910,8 +3907,14 @@ imported/w3c/web-platform-tests/css/css-view-transitions/pseudo-with-classes-old
 imported/w3c/web-platform-tests/css/css-view-transitions/window-resize-aborts-transition.html [ Failure ]
 imported/w3c/web-platform-tests/css/css-view-transitions/window-resize-aborts-transition-before-ready.html [ Failure ]
 imported/w3c/web-platform-tests/css/css-view-transitions/massive-element-on-top-of-viewport-partially-onscreen-old.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-view-transitions/new-content-changes-overflow-left.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-view-transitions/element-is-grouping-during-animation.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-view-transitions/view-transition-name-removed-mid-transition.html [ ImageOnlyFailure ]
 
 imported/w3c/web-platform-tests/svg/text/reftests/transform-dynamic-change.html [ ImageOnlyFailure ]
+
+# Cairo doesn't support hardware acceleration, this test will pass once we switch to Skia.
+fast/canvas/canvas-will-read-frequently.html [ Failure ]
 
 # End: Common failures between GTK and WPE.
 

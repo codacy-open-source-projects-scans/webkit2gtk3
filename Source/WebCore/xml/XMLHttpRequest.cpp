@@ -39,7 +39,6 @@
 #include "HTTPParsers.h"
 #include "InspectorInstrumentation.h"
 #include "JSDOMBinding.h"
-#include "JSLocalDOMWindow.h"
 #include "LocalDOMWindow.h"
 #include "MIMETypeRegistry.h"
 #include "MemoryCache.h"
@@ -1162,11 +1161,6 @@ void XMLHttpRequest::didReachTimeout()
     changeState(DONE);
 
     dispatchErrorEvents(eventNames().timeoutEvent);
-}
-
-const char* XMLHttpRequest::activeDOMObjectName() const
-{
-    return "XMLHttpRequest";
 }
 
 void XMLHttpRequest::suspend(ReasonForSuspension)

@@ -3797,16 +3797,23 @@ static double clampDoubleToByte(double d)
     return std::nearbyint(d);
 }
 
-static void compileClampIntegerToByte(JITCompiler& jit, GPRReg result)
+static void compileClampIntegerToByte(JITCompiler& jit, GPRReg resultGPR, GPRReg scratch1GPR)
 {
-    MacroAssembler::Jump inBounds = jit.branch32(MacroAssembler::BelowOrEqual, result, JITCompiler::TrustedImm32(0xff));
-    MacroAssembler::Jump tooBig = jit.branch32(MacroAssembler::GreaterThan, result, JITCompiler::TrustedImm32(0xff));
-    jit.xorPtr(result, result);
+#if CPU(ARM64)
+    jit.clearBitsWithMaskRightShift32(resultGPR, resultGPR, CCallHelpers::TrustedImm32(31), resultGPR);
+    jit.move(CCallHelpers::TrustedImm32(0xff), scratch1GPR);
+    jit.moveConditionally32(CCallHelpers::Below, resultGPR, scratch1GPR, resultGPR, scratch1GPR, resultGPR);
+#else
+    UNUSED_PARAM(scratch1GPR);
+    MacroAssembler::Jump inBounds = jit.branch32(MacroAssembler::BelowOrEqual, resultGPR, JITCompiler::TrustedImm32(0xff));
+    MacroAssembler::Jump tooBig = jit.branch32(MacroAssembler::GreaterThan, resultGPR, JITCompiler::TrustedImm32(0xff));
+    jit.xorPtr(resultGPR, resultGPR);
     MacroAssembler::Jump clamped = jit.jump();
     tooBig.link(&jit);
-    jit.move(JITCompiler::TrustedImm32(255), result);
+    jit.move(JITCompiler::TrustedImm32(255), resultGPR);
     clamped.link(&jit);
     inBounds.link(&jit);
+#endif
 }
 
 static void compileClampDoubleToByte(JITCompiler& jit, GPRReg result, FPRReg source, FPRReg scratch)
@@ -4073,12 +4080,17 @@ bool SpeculativeJIT::getIntTypedArrayStoreOperand(
         switch (valueUse.useKind()) {
         case Int32Use: {
             SpeculateInt32Operand valueOp(this, valueUse);
-            GPRTemporary scratch(this);
-            GPRReg scratchReg = scratch.gpr();
-            move(valueOp.gpr(), scratchReg);
-            if (isClamped)
-                compileClampIntegerToByte(*this, scratchReg);
-            value.adopt(scratch);
+            GPRTemporary scratch1(this);
+            GPRReg scratch1GPR = scratch1.gpr();
+            if (isClamped) {
+                GPRTemporary scratch2(this);
+                GPRReg valueGPR = valueOp.gpr();
+                GPRReg scratch2GPR = scratch2.gpr();
+                move(valueGPR, scratch1GPR);
+                compileClampIntegerToByte(*this, scratch1GPR, scratch2GPR);
+            } else
+                move(valueOp.gpr(), scratch1GPR);
+            value.adopt(scratch1);
             break;
         }
             
@@ -4190,9 +4202,14 @@ void SpeculativeJIT::compilePutByValForIntTypedArray(Node* node, TypedArrayType 
 {
     ASSERT(isInt(type));
 
-    SpeculateCellOperand base(this, m_graph.varArgChild(node, 0));
-    SpeculateStrictInt32Operand property(this, m_graph.varArgChild(node, 1));
-    StorageOperand storage(this, m_graph.varArgChild(node, 3));
+    Edge child1 = m_graph.varArgChild(node, 0);
+    Edge child2 = m_graph.varArgChild(node, 1);
+    Edge child3 = m_graph.varArgChild(node, 2);
+    Edge child4 = m_graph.varArgChild(node, 3);
+
+    SpeculateCellOperand base(this, child1);
+    SpeculateStrictInt32Operand property(this, child2);
+    StorageOperand storage(this, child4);
 
     GPRTemporary scratch(this);
     std::optional<GPRTemporary> scratch2;
@@ -4208,12 +4225,28 @@ void SpeculativeJIT::compilePutByValForIntTypedArray(Node* node, TypedArrayType 
 
     JumpList slowPathCases;
 
+    bool isClamped = JSC::isClamped(type);
+    if (isClamped) {
+        if (child3->op() == GetByVal) {
+            switch (child3->arrayMode().type()) {
+            case Array::Uint8Array:
+            case Array::Uint8ClampedArray: {
+                // If the value is coming from Uint8Array / Uint8ClampedArray, the value is always within uint8_t.
+                isClamped = false;
+                break;
+            }
+            default:
+                break;
+            }
+        }
+    }
+
     bool result = getIntTypedArrayStoreOperand(
         value, propertyReg,
 #if USE(JSVALUE32_64)
         propertyTag, valueTag,
 #endif
-        m_graph.varArgChild(node, 2), slowPathCases, isClamped(type));
+        child3, slowPathCases, isClamped);
     if (!result) {
         noResult(node);
         return;
@@ -8136,21 +8169,15 @@ bool SpeculativeJIT::compileStrictEq(Node* node)
         return false;
     }
 
-    if (node->isBinaryUseKind(OtherUse)
-        || node->isBinaryUseKind(OtherUse, UntypedUse)
-        || node->isBinaryUseKind(UntypedUse, OtherUse)) {
-        compileOtherStrictEq(node);
+    if (node->isReflexiveBinaryUseKind(BooleanUse, UntypedUse)
+        || node->isBinaryUseKind(OtherUse)
+        || node->isReflexiveBinaryUseKind(OtherUse, UntypedUse)
+        || node->isBinaryUseKind(MiscUse)
+        || node->isReflexiveBinaryUseKind(MiscUse, UntypedUse)) {
+        compileBitwiseStrictEq(node);
         return false;
     }
 
-
-    if (node->isBinaryUseKind(MiscUse)
-        || node->isBinaryUseKind(MiscUse, UntypedUse)
-        || node->isBinaryUseKind(UntypedUse, MiscUse)) {
-        compileMiscStrictEq(node);
-        return false;
-    }
-    
     if (node->isBinaryUseKind(StringIdentUse, NotStringVarUse)) {
         compileStringIdentToNotStringVarEquality(node, node->child1(), node->child2());
         return false;
@@ -16459,45 +16486,24 @@ void SpeculativeJIT::compileExtractFromTuple(Node* node)
     info.initFromTupleResult(node);
 }
 
-void SpeculativeJIT::compileMiscStrictEq(Node* node)
+void SpeculativeJIT::compileBitwiseStrictEq(Node* node)
 {
     JSValueOperand op1(this, node->child1(), ManualOperandSpeculation);
     JSValueOperand op2(this, node->child2(), ManualOperandSpeculation);
     GPRTemporary result(this);
 
-    if (node->child1().useKind() == MiscUse)
-        speculateMisc(node->child1(), op1.jsValueRegs());
-    if (node->child2().useKind() == MiscUse)
-        speculateMisc(node->child2(), op2.jsValueRegs());
+    JSValueRegs op1Regs = op1.jsValueRegs();
+    JSValueRegs op2Regs = op2.jsValueRegs();
+
+    speculate(node, node->child1());
+    speculate(node, node->child2());
 
 #if USE(JSVALUE64)
-    compare64(Equal, op1.gpr(), op2.gpr(), result.gpr());
+    compare64(Equal, op1Regs.payloadGPR(), op2Regs.payloadGPR(), result.gpr());
 #else
     move(TrustedImm32(0), result.gpr());
-    Jump notEqual = branch32(NotEqual, op1.tagGPR(), op2.tagGPR());
-    compare32(Equal, op1.payloadGPR(), op2.payloadGPR(), result.gpr());
-    notEqual.link(this);
-#endif
-    unblessedBooleanResult(result.gpr(), node);
-}
-
-void SpeculativeJIT::compileOtherStrictEq(Node* node)
-{
-    JSValueOperand op1(this, node->child1(), ManualOperandSpeculation);
-    JSValueOperand op2(this, node->child2(), ManualOperandSpeculation);
-    GPRTemporary result(this);
-
-    if (node->child1().useKind() == OtherUse)
-        speculateOther(node->child1(), op1.jsValueRegs());
-    if (node->child2().useKind() == OtherUse)
-        speculateOther(node->child2(), op2.jsValueRegs());
-
-#if USE(JSVALUE64)
-    compare64(Equal, op1.gpr(), op2.gpr(), result.gpr());
-#else
-    move(TrustedImm32(0), result.gpr());
-    Jump notEqual = branch32(NotEqual, op1.tagGPR(), op2.tagGPR());
-    compare32(Equal, op1.payloadGPR(), op2.payloadGPR(), result.gpr());
+    Jump notEqual = branch32(NotEqual, op1Regs.tagGPR(), op2Regs.tagGPR());
+    compare32(Equal, op1Regs.payloadGPR(), op2Regs.payloadGPR(), result.gpr());
     notEqual.link(this);
 #endif
     unblessedBooleanResult(result.gpr(), node);
@@ -17113,22 +17119,28 @@ void SpeculativeJIT::compileMakeRope(Node* node)
     orPtr(TrustedImmPtr(JSString::isRopeInPointer), scratchGPR);
     storePtr(scratchGPR, Address(resultGPR, JSRopeString::offsetOfFiber0()));
 
-    move(opGPRs[1], scratchGPR);
-    lshiftPtr(TrustedImm32(32), scratchGPR);
+#if CPU(ARM64)
+    orLeftShift64(allocatorGPR, opGPRs[1], TrustedImm32(32), scratchGPR);
+#else
+    lshiftPtr(opGPRs[1], TrustedImm32(32), scratchGPR);
     orPtr(allocatorGPR, scratchGPR);
-    storePtr(scratchGPR, Address(resultGPR, JSRopeString::offsetOfFiber1()));
+#endif
 
     if (numOpGPRs == 2) {
-        move(opGPRs[1], scratchGPR);
-        rshiftPtr(TrustedImm32(32), scratchGPR);
-        storePtr(scratchGPR, Address(resultGPR, JSRopeString::offsetOfFiber2()));
+        rshiftPtr(opGPRs[1], TrustedImm32(32), scratch2GPR);
+        storePairPtr(scratchGPR, scratch2GPR, Address(resultGPR, JSRopeString::offsetOfFiber1()));
     } else {
-        move(opGPRs[1], scratchGPR);
-        rshiftPtr(TrustedImm32(32), scratchGPR);
-        move(opGPRs[2], scratch2GPR);
-        lshiftPtr(TrustedImm32(16), scratch2GPR);
+#if CPU(ARM64)
+        rshiftPtr(opGPRs[1], TrustedImm32(32), scratch2GPR);
+        orLeftShift64(scratch2GPR, opGPRs[2], TrustedImm32(16), scratch2GPR);
+        storePairPtr(scratchGPR, scratch2GPR, Address(resultGPR, JSRopeString::offsetOfFiber1()));
+#else
+        storePtr(scratchGPR, Address(resultGPR, JSRopeString::offsetOfFiber1()));
+        rshiftPtr(opGPRs[1], TrustedImm32(32), scratchGPR);
+        lshiftPtr(opGPRs[2], TrustedImm32(16), scratch2GPR);
         orPtr(scratch2GPR, scratchGPR);
         storePtr(scratchGPR, Address(resultGPR, JSRopeString::offsetOfFiber2()));
+#endif
     }
 
     auto isNonEmptyString = branchTest32(NonZero, allocatorGPR);

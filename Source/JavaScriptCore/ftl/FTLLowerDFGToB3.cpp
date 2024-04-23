@@ -1058,6 +1058,7 @@ private:
             compileCheckDetached();
             break;
         case GetArrayLength:
+        case GetUndetachedTypeArrayLength:
             compileGetArrayLength();
             break;
         case GetTypedArrayLengthAsInt52:
@@ -6752,8 +6753,23 @@ IGNORE_CLANG_WARNINGS_END
                 LValue valueToStore;
                 
                 if (isInt(type)) {
-                    LValue intValue = getIntTypedArrayStoreOperand(child3, isClamped(type));
+                    bool isClamped = JSC::isClamped(type);
+                    if (isClamped) {
+                        if (child3->op() == GetByVal) {
+                            switch (child3->arrayMode().type()) {
+                            case Array::Uint8Array:
+                            case Array::Uint8ClampedArray: {
+                                // If the value is coming from Uint8Array / Uint8ClampedArray, the value is always within uint8_t.
+                                isClamped = false;
+                                break;
+                            }
+                            default:
+                                break;
+                            }
+                        }
+                    }
 
+                    LValue intValue = getIntTypedArrayStoreOperand(child3, isClamped);
                     valueToStore = intValue;
                 } else /* !isInt(type) */ {
                     LValue value = lowDouble(child3);
@@ -10981,8 +10997,7 @@ IGNORE_CLANG_WARNINGS_END
             return;
         }
 
-        if (m_node->isBinaryUseKind(SymbolUse, UntypedUse)
-            || m_node->isBinaryUseKind(UntypedUse, SymbolUse)) {
+        if (m_node->isReflexiveBinaryUseKind(SymbolUse, UntypedUse)) {
             Edge symbolEdge = m_node->child1();
             Edge untypedEdge = m_node->child2();
             if (symbolEdge.useKind() != SymbolUse)
@@ -10996,14 +11011,13 @@ IGNORE_CLANG_WARNINGS_END
         }
 
         if (m_node->isBinaryUseKind(MiscUse)
-            || m_node->isBinaryUseKind(MiscUse, UntypedUse)
-            || m_node->isBinaryUseKind(UntypedUse, MiscUse)
+            || m_node->isReflexiveBinaryUseKind(MiscUse, UntypedUse)
             || m_node->isBinaryUseKind(OtherUse)
-            || m_node->isBinaryUseKind(OtherUse, UntypedUse)
-            || m_node->isBinaryUseKind(UntypedUse, OtherUse)
+            || m_node->isReflexiveBinaryUseKind(OtherUse, UntypedUse)
+            || m_node->isBinaryUseKind(BooleanUse)
+            || m_node->isReflexiveBinaryUseKind(BooleanUse, UntypedUse)
 #if !USE(BIGINT32)
-            || m_node->isBinaryUseKind(NotDoubleUse, NeitherDoubleNorHeapBigIntNorStringUse)
-            || m_node->isBinaryUseKind(NeitherDoubleNorHeapBigIntNorStringUse, NotDoubleUse)) {
+            || m_node->isReflexiveBinaryUseKind(NotDoubleUse, NeitherDoubleNorHeapBigIntNorStringUse)) {
 #else
             ) {
 #endif
@@ -20331,6 +20345,25 @@ IGNORE_CLANG_WARNINGS_END
             }
             
             if (isClamped) {
+#if CPU(ARM64)
+                if (edge.useKind() == Int32Use) {
+                    PatchpointValue* patchpoint = m_out.patchpoint(Int32);
+                    patchpoint->appendSomeRegister(value);
+                    patchpoint->numGPScratchRegisters = 1;
+                    patchpoint->setGenerator([=] (CCallHelpers& jit, const StackmapGenerationParams& params) {
+                        GPRReg resultGPR = params[0].gpr();
+                        GPRReg inputGPR = params[1].gpr();
+                        GPRReg scratch1GPR = params.gpScratch(0);
+                        jit.clearBitsWithMaskRightShift32(inputGPR, inputGPR, CCallHelpers::TrustedImm32(31), resultGPR);
+                        jit.move(CCallHelpers::TrustedImm32(0xff), scratch1GPR);
+                        jit.moveConditionally32(CCallHelpers::Below, resultGPR, scratch1GPR, resultGPR, scratch1GPR, resultGPR);
+                    });
+                    patchpoint->effects = Effects::none();
+                    valueAsInt32 = patchpoint;
+                    return valueAsInt32;
+                }
+#endif
+
                 LBasicBlock atLeastZero = m_out.newBlock();
                 LBasicBlock continuation = m_out.newBlock();
                             

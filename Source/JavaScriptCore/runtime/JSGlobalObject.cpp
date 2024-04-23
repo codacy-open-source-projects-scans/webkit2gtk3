@@ -692,6 +692,7 @@ JSGlobalObject::JSGlobalObject(VM& vm, Structure* structure, const GlobalObjectM
     , m_varInjectionWatchpointSet(WatchpointSet::create(IsWatched))
     , m_varReadOnlyWatchpointSet(WatchpointSet::create(IsWatched))
     , m_regExpRecompiledWatchpointSet(WatchpointSet::create(IsWatched))
+    , m_arrayBufferDetachWatchpointSet(WatchpointSet::create(IsWatched))
     , m_weakRandom(Options::forceWeakRandomSeed() ? Options::forcedWeakRandomSeed() : cryptographicallyRandomNumber<uint32_t>())
     , m_runtimeFlags()
     , m_stackTraceLimit(Options::defaultErrorStackTraceLimit())
@@ -1478,7 +1479,7 @@ capitalName ## Constructor* lowerName ## Constructor = featureFlag ? capitalName
         m_linkTimeConstants[static_cast<unsigned>(LinkTimeConstant::hasOwnPropertyFunction)].set(vm, this, jsCast<JSFunction*>(hasOwnPropertyFunction));
     }
     {
-        JSFunction* arraySort = jsCast<JSFunction*>(arrayPrototype()->getDirect(vm, vm.propertyNames->builtinNames().sortPublicName()));
+        JSFunction* arraySort = jsCast<JSFunction*>(arrayPrototype()->getDirect(vm, vm.propertyNames->sort));
         m_linkTimeConstants[static_cast<unsigned>(LinkTimeConstant::arraySort)].set(vm, this, jsCast<JSFunction*>(arraySort));
     }
 
@@ -2003,6 +2004,11 @@ void JSGlobalObject::setGlobalScopeExtension(JSScope* scope)
 void JSGlobalObject::clearGlobalScopeExtension()
 {
     m_globalScopeExtension.clear();
+}
+
+void JSGlobalObject::notifyArrayBufferDetachingSlow()
+{
+    m_arrayBufferDetachWatchpointSet->fireAll(vm(), "ArrayBuffer detached");
 }
 
 static inline JSObject* lastInPrototypeChain(JSObject* object)

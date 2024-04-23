@@ -332,7 +332,7 @@ void SamplingProfiler::createThreadIfNecessary()
         return;
 
     RefPtr<SamplingProfiler> profiler = this;
-    m_thread = Thread::create("jsc.sampling-profiler.thread", [profiler] {
+    m_thread = Thread::create("jsc.sampling-profiler.thread"_s, [profiler] {
         profiler->timerLoop();
     });
 }
@@ -1050,7 +1050,8 @@ static String tierName(SamplingProfiler::StackFrame& frame)
                 return Tiers::wasmllint;
             case Wasm::CompilationMode::IPIntMode:
                 return Tiers::ipint;
-            case Wasm::CompilationMode::JSEntrypointMode:
+            case Wasm::CompilationMode::JSEntrypointJITMode:
+            case Wasm::CompilationMode::JSEntrypointInterpreterMode:
             case Wasm::CompilationMode::JSToWasmICMode:
             case Wasm::CompilationMode::WasmToJSMode:
                 // Just say "Wasm" for now.
@@ -1092,6 +1093,13 @@ Ref<JSON::Value> SamplingProfiler::stackTracesAsJSON()
         result->setString("name"_s, stackFrame.displayName(m_vm));
         result->setString("location"_s, descriptionForLocation(stackFrame.semanticLocation, stackFrame.wasmCompilationMode, stackFrame.wasmOffset));
         result->setString("category"_s, tierName(stackFrame));
+        uint32_t flags = 0;
+        if (stackFrame.frameType == SamplingProfiler::FrameType::Executable && stackFrame.executable) {
+            if (auto* executable = jsDynamicCast<FunctionExecutable*>(stackFrame.executable); executable && executable->isBuiltinFunction())
+                flags = 1;
+        }
+        result->setDouble("flags"_s, flags);
+
         if (std::optional<std::pair<StackFrame::CodeLocation, CodeBlock*>> machineLocation = stackFrame.machineLocation) {
             auto inliner = JSON::Object::create();
             inliner->setString("name"_s, String::fromUTF8(machineLocation->second->inferredName().span()));

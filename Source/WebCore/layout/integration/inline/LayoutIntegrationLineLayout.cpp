@@ -229,13 +229,33 @@ void LineLayout::updateInlineContentDimensions()
     m_boxGeometryUpdater.setGeometriesForLayout();
 }
 
-void LineLayout::updateStyle(const RenderBoxModelObject& renderer, const RenderStyle& oldStyle)
+void LineLayout::updateStyle(const RenderObject& renderer)
 {
-    if (m_inlineContent) {
-        auto invalidation = Layout::InlineInvalidation { ensureLineDamage(), m_inlineContentCache.inlineItems().content(), m_inlineContent->displayContent() };
-        invalidation.styleChanged(m_boxTree.layoutBoxForRenderer(renderer), oldStyle);
+    BoxTree::updateStyle(renderer);
+}
+
+bool LineLayout::rootStyleWillChange(const RenderBlockFlow& root, const RenderStyle& newStyle)
+{
+    if (!root.layoutBox() || !root.layoutBox()->isElementBox()) {
+        ASSERT_NOT_REACHED();
+        return false;
     }
-    m_boxTree.updateStyle(renderer);
+    if (!m_inlineContent)
+        return false;
+
+    return Layout::InlineInvalidation { ensureLineDamage(), m_inlineContentCache.inlineItems().content(), m_inlineContent->displayContent() }.rootStyleWillChange(downcast<Layout::ElementBox>(*root.layoutBox()), newStyle);
+}
+
+bool LineLayout::styleWillChange(const RenderElement& renderer, const RenderStyle& newStyle)
+{
+    if (!renderer.layoutBox()) {
+        ASSERT_NOT_REACHED();
+        return false;
+    }
+    if (!m_inlineContent)
+        return false;
+
+    return Layout::InlineInvalidation { ensureLineDamage(), m_inlineContentCache.inlineItems().content(), m_inlineContent->displayContent() }.styleWillChange(*renderer.layoutBox(), newStyle);
 }
 
 void LineLayout::updateOverflow()
@@ -314,20 +334,11 @@ std::optional<LayoutRect> LineLayout::layout()
 {
     preparePlacedFloats();
 
-    auto isPartialLayout = m_lineDamage && m_lineDamage->layoutStartPosition();
-
-    auto clearInlineContentAndCacheBeforeFullLayoutIfNeeded = [&] {
-        if (isPartialLayout)
-            return;
-        // FIXME: Partial layout should not rely on inline display content, but instead InlineContentCache
-        // should retain all the pieces of data required -and then we can destroy damaged content here instead of after
-        // layout in constructContent.
+    auto isPartialLayout = Layout::InlineInvalidation::mayOnlyNeedPartialLayout(m_lineDamage.get());
+    if (!isPartialLayout) {
+        // FIXME: Partial layout should not rely on previous inline display content.
         clearInlineContent();
-        if (m_lineDamage && m_lineDamage->reasons().contains(Layout::InlineDamage::Reason::StyleChange))
-            releaseCaches();
-        m_lineDamage = { };
-    };
-    clearInlineContentAndCacheBeforeFullLayoutIfNeeded();
+    }
 
     ASSERT(m_inlineContentConstraints);
     auto intrusiveInitialLetterBottom = [&]() -> std::optional<LayoutUnit> {
@@ -1109,8 +1120,9 @@ bool LineLayout::removedFromTree(const RenderElement& parent, RenderObject& chil
 bool LineLayout::updateTextContent(const RenderText& textRenderer, size_t offset, int delta)
 {
     if (!m_inlineContent) {
-        // This should only be called on partial layout.
-        ASSERT_NOT_REACHED();
+        // This is supposed to be only called on partial layout, but
+        // RenderText::setText may be (force) called after min/max size computation and before layout.
+        // We may need to invalidate anyway to clean up inline item list.
         return false;
     }
 
@@ -1157,7 +1169,8 @@ bool LineLayout::contentNeedsVisualReordering() const
 #if ENABLE(TREE_DEBUGGING)
 void LineLayout::outputLineTree(WTF::TextStream& stream, size_t depth) const
 {
-    showInlineContent(stream, *m_inlineContent, depth, isDamaged());
+    if (m_inlineContent)
+        showInlineContent(stream, *m_inlineContent, depth, isDamaged());
 }
 #endif
 

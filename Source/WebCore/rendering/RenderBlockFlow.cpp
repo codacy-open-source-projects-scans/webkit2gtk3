@@ -976,14 +976,7 @@ void RenderBlockFlow::computeAndSetLineLayoutPath()
 {
     if (lineLayoutPath() != UndeterminedPath)
         return;
-
-    auto compute = [&] {
-        if (LayoutIntegration::LineLayout::canUseFor(*this))
-            return ModernPath;
-        return LegacyPath;
-    };
-
-    setLineLayoutPath(compute());
+    setLineLayoutPath(LayoutIntegration::LineLayout::canUseFor(*this) ? ModernPath : LegacyPath);
 }
 
 void RenderBlockFlow::layoutInlineChildren(bool relayoutChildren, LayoutUnit& repaintLogicalTop, LayoutUnit& repaintLogicalBottom)
@@ -2351,18 +2344,10 @@ void RenderBlockFlow::styleDidChange(StyleDifference diff, const RenderStyle* ol
         parentBlock->markSiblingsWithFloatsForLayout();
     }
 
-    if (diff >= StyleDifference::Repaint) {
-        auto shouldInvalidateLineLayoutPath = [&] {
-            if (selfNeedsLayout() || legacyLineLayout())
-                return true;
-            return false;
-        };
-        if (shouldInvalidateLineLayoutPath())
-            invalidateLineLayoutPath();
+    if (diff == StyleDifference::Layout && selfNeedsLayout() && childrenInline()) {
+        for (auto walker = InlineWalker(*this); !walker.atEnd(); walker.advance())
+            walker.current()->setPreferredLogicalWidthsDirty(true);
     }
-
-    if (auto* lineLayout = modernLineLayout())
-        lineLayout->updateStyle(*this, *oldStyle);
 
     if (multiColumnFlow())
         updateStylesForColumnChildren(oldStyle);
@@ -3843,11 +3828,10 @@ bool RenderBlockFlow::hasLines() const
     return childrenInline() ? lineCount() : false;
 }
 
-void RenderBlockFlow::invalidateLineLayoutPath()
+void RenderBlockFlow::invalidateLineLayoutPath(InvalidationReason invalidationReason)
 {
     switch (lineLayoutPath()) {
     case UndeterminedPath:
-    case ForcedLegacyPath:
         return;
     case LegacyPath:
         setLineLayoutPath(UndeterminedPath);
@@ -3856,20 +3840,25 @@ void RenderBlockFlow::invalidateLineLayoutPath()
         // FIXME: Implement partial invalidation.
         if (modernLineLayout()) {
             m_previousModernLineLayoutContentBoxLogicalHeight = modernLineLayout()->contentBoxLogicalHeight();
-            // Since we eagerly remove the display content here, repaints issued between this invalidation (triggered by style change/content mutation) and the subsequent layout would produce empty rects.
-            repaint();
-            for (auto walker = InlineWalker(*this); !walker.atEnd(); walker.advance()) {
-                auto& renderer = *walker.current();
-                if (!renderer.everHadLayout())
-                    continue;
-                if (!renderer.isInFlow() && modernLineLayout()->contains(downcast<RenderElement>(renderer)))
-                    renderer.repaint();
-                renderer.setPreferredLogicalWidthsDirty(true);
+            if (invalidationReason != InvalidationReason::InsertionOrRemoval) {
+                auto repaintAndSetNeedsLayoutIncludingOutOfFlowBoxes = [&] {
+                    // Since we eagerly remove the display content here, repaints issued between this invalidation (triggered by style change/content mutation) and the subsequent layout would produce empty rects.
+                    repaint();
+                    for (auto walker = InlineWalker(*this); !walker.atEnd(); walker.advance()) {
+                        auto& renderer = *walker.current();
+                        if (!renderer.everHadLayout())
+                            continue;
+                        if (!renderer.isInFlow() && modernLineLayout()->contains(downcast<RenderElement>(renderer)))
+                            renderer.repaint();
+                        renderer.setPreferredLogicalWidthsDirty(true);
+                    }
+                };
+                repaintAndSetNeedsLayoutIncludingOutOfFlowBoxes();
             }
         }
-        auto path = UndeterminedPath;
         m_lineLayout = std::monostate();
-        setLineLayoutPath(path);
+        if (invalidationReason == InvalidationReason::InsertionOrRemoval)
+            setLineLayoutPath(UndeterminedPath);
         if (selfNeedsLayout() || normalChildNeedsLayout())
             return;
         // FIXME: We should just kick off a subtree layout here (if needed at all) see webkit.org/b/172947.
@@ -3908,9 +3897,20 @@ void RenderBlockFlow::layoutModernLines(bool relayoutChildren, LayoutUnit& repai
         if (childNeedsPreferredWidthComputation)
             renderer.setPreferredLogicalWidthsDirty(true, MarkOnlyThis);
 
-        if (renderer.isOutOfFlowPositioned())
+        if (renderer.isOutOfFlowPositioned()) {
             renderer.containingBlock()->insertPositionedObject(*box);
-        else
+            // FIXME: This is only needed because of the synchronous layout call in setStaticPositionsForSimpleOutOfFlowContent
+            // which itself appears to be a workaround for a bad subtree layout shown by
+            // fast/block/positioning/static_out_of_flow_inside_layout_boundary.html
+            auto hasParentRelativeHeightOrTop = [&] {
+                auto& style = renderer.style();
+                if (style.logicalHeight().isPercentOrCalculated() || style.logicalTop().isPercentOrCalculated())
+                    return true;
+                return !renderer.style().logicalBottom().isAuto();
+            }();
+            if (hasParentRelativeHeightOrTop)
+                hasSimpleOutOfFlowContentOnly = false;
+        } else
             hasSimpleOutOfFlowContentOnly = false;
 
         if (!renderer.needsLayout() && !renderer.preferredLogicalWidthsDirty())
@@ -4477,7 +4477,7 @@ static inline void stripTrailingSpace(float& inlineMax, float& inlineMin, Render
         // Collapse away the trailing space at the end of a block.
         const UChar space = ' ';
         const FontCascade& font = renderText->style().fontCascade(); // FIXME: This ignores first-line.
-        float spaceWidth = font.width(RenderBlock::constructTextRun(&space, 1, renderText->style()));
+        float spaceWidth = font.width(RenderBlock::constructTextRun(span(space), renderText->style()));
         inlineMax -= spaceWidth + font.wordSpacing();
         if (inlineMin > inlineMax)
             inlineMin = inlineMax;

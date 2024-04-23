@@ -28,7 +28,6 @@
 #pragma once
 
 #include "ActiveDOMObject.h"
-#include "CSSParserContext.h"
 #include "CanvasBase.h"
 #include "Document.h"
 #include "FloatRect.h"
@@ -118,6 +117,8 @@ public:
     ExceptionOr<Ref<MediaStream>> captureStream(std::optional<double>&& frameRequestRate);
 #endif
 
+    const CSSParserContext& cssParserContext() const final;
+
     Image* copiedImage() const final;
     void clearCopiedImage() const final;
     RefPtr<ImageData> getImageData();
@@ -139,8 +140,6 @@ public:
     void queueTaskKeepingObjectAlive(TaskSource, Function<void()>&&) final;
     void dispatchEvent(Event&) final;
 
-    CSSParserContext& cssParserContext();
-
     using HTMLElement::ref;
     using HTMLElement::deref;
 
@@ -150,7 +149,6 @@ private:
     bool isHTMLCanvasElement() const final { return true; }
 
     // ActiveDOMObject.
-    const char* activeDOMObjectName() const final;
     bool virtualHasPendingActivity() const final;
 
     // EventTarget.
@@ -186,7 +184,7 @@ private:
 
     std::unique_ptr<CanvasRenderingContext> m_context;
     mutable RefPtr<Image> m_copiedImage; // FIXME: This is temporary for platforms that have to copy the image buffer to render (and for CSSCanvasValue).
-    std::unique_ptr<CSSParserContext> m_cssParserContext;
+    mutable std::unique_ptr<CSSParserContext> m_cssParserContext;
     bool m_ignoreReset { false };
     // m_hasCreatedImageBuffer means we tried to malloc the buffer. We didn't necessarily get it.
     mutable bool m_hasCreatedImageBuffer { false };
@@ -196,13 +194,6 @@ private:
 #endif
     bool m_isSnapshotting { false };
 };
-
-inline CSSParserContext& HTMLCanvasElement::cssParserContext()
-{
-    if (!m_cssParserContext)
-        m_cssParserContext = WTF::makeUnique<CSSParserContext>(document());
-    return *m_cssParserContext;
-}
 
 WebCoreOpaqueRoot root(HTMLCanvasElement*);
 

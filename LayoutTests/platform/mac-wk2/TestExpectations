@@ -7,6 +7,7 @@ compositing/shared-backing/overflow-scroll [ Pass ]
 compositing/scrolling/async-overflow-scrolling [ Pass ]
 compositing/layer-creation/clipping-scope [ Pass ]
 editing/find/cocoa [ Pass ]
+editing/input/mac [ Pass ]
 editing/undo-manager [ Pass ]
 editing/pasteboard/dom-paste [ Pass ]
 fast/attachment/cocoa [ Pass ]
@@ -514,8 +515,6 @@ webkit.org/b/104954 http/tests/canvas/canvas-slow-font-loading.html [ ImageOnlyF
 webkit.org/b/114302 platform/mac-wk2/plugins/mouse-events-scaled-iframe.html [ Pass Failure Crash ]
 
 webkit.org/b/114572 platform/mac-wk2/plugins/mouse-events-scaled.html [ Pass Failure ]
-
-webkit.org/b/117962 media/video-played-collapse.html [ Pass Failure ]
 
 webkit.org/b/136109 fast/multicol/mixed-opacity-fixed-test.html  [ ImageOnlyFailure ]
 
@@ -1699,10 +1698,6 @@ webkit.org/b/260113 [ arm64 ] http/wpt/webauthn/ctap-hid-failure.https.html [ Pa
 [ Sonoma+ ] fast/scrolling/scroll-animator-overlay-scrollbars-hovered.html [ Failure ]
 [ Sonoma+ ] fast/scrolling/scroll-animator-select-list-events.html [ Failure ]
 
-# rdar://106116843 ([UI-side compositing] two fast/scrolling/mac/scrollbars overlay-scrollbar-reveal tests time out)
-[ Sonoma+ ] fast/scrolling/mac/scrollbars/overflow-in-iframe-overlay-scrollbar-reveal.html [ Failure ]
-[ Sonoma+ ] fast/scrolling/mac/scrollbars/overflow-overlay-scrollbar-reveal.html [ Failure Timeout ]
-
 # rdar://107437068 ([UI side compositing] fast/mediastream/video-rotation.html fails)
 [ Sonoma+ ] fast/mediastream/video-rotation.html [ Failure ]
 
@@ -1884,21 +1879,18 @@ webkit.org/b/264001 [ Debug ] imported/w3c/web-platform-tests/requestidlecallbac
 [ Monterey+ Release ] media/audio-session-category.html [ Pass Failure ]
 [ Monterey+ Release ] imported/w3c/web-platform-tests/preload/preload-in-data-doc.html [ Pass ImageOnlyFailure ]
 
-webkit.org/b/269639 http/tests/site-isolation/window-properties.html [ Skip ]
-
 #webkit.org/b/269301  (2X imported/w3c/web-platform-tests/webcodecs/videoFrame (layout-tests) are constant failures)
 [ Monterey+ x86_64 ] imported/w3c/web-platform-tests/webcodecs/videoFrame-createImageBitmap.https.any.html [ Failure ]
 [ Monterey+ x86_64 ] imported/w3c/web-platform-tests/webcodecs/videoFrame-createImageBitmap.https.any.worker.html [ Failure ]
 
 webkit.org/b/268398 [ Sonoma+ ] compositing/plugins/pdf/pdf-in-iframe-scrolling-tree-after-back.html [ Pass Failure ]
 
-webkit.org/b/269581 http/tests/site-isolation/mouse-events/context-menu-event-twice.html [ Skip ]
-
 # webkit.org/b/269798 REGRESSION (274409@main): [ macOS wk2 ] 2 tests in http/tests/navigation/ping-attribute are flaky
 [ Monterey+ ] http/tests/navigation/ping-attribute/area-cross-origin-from-https.html [ Pass Failure ]
 [ Monterey+ ] http/tests/navigation/ping-attribute/area-cross-origin-from-https-UpgradeMixedContent.html [ Pass Failure ]
 
 webkit.org/b/269996 [ Monterey+ Debug ] imported/w3c/web-platform-tests/css/css-view-transitions/offscreen-element-modified-before-coming-onscreen.html [ Skip ]
+imported/w3c/web-platform-tests/css/css-view-transitions/inline-element-size.html [ ImageOnlyFailure ]
 
 # webkit.org/b/270092  (REGRESSION (275274@main): [ Sonoma+ wk2 ] Multiple compositing/plugins/pdf/pdf are constant failures)
 [ Sonoma+ ] compositing/plugins/pdf/pdf-in-embed.html [ Failure ]
@@ -1915,3 +1907,10 @@ webkit.org/b/270235 [ Ventura+ Debug x86_64 ] webgl/pending/conformance/glsl/mis
 webkit.org/b/271063 http/tests/navigation/page-cache-getUserMedia-pending-promise.html [ Pass Failure Timeout ]
 
 webkit.org/b/271318 [ Debug ] http/wpt/webauthn/public-key-credential-get-failure-local-silent.https.html [ Skip ]
+
+webkit.org/b/272685 [ Ventura+ x86_64 ] imported/w3c/web-platform-tests/svg/painting/reftests/percentage-attribute.svg [ ImageOnlyFailure ]
+
+# Inline predictions are only supported on Sonoma and later.
+[ Monterey Ventura ] editing/input/mac/show-inline-prediction-with-adjacent-text.html [ Skip ]
+
+webkit.org/b/273012 [ Ventura+ x86_64 ] imported/w3c/web-platform-tests/svg/painting/reftests/percentage.svg [ ImageOnlyFailure ]

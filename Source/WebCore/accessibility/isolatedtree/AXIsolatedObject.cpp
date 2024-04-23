@@ -32,7 +32,10 @@
 #include "AXIsolatedTree.h"
 #include "AXLogger.h"
 #include "AXTextRun.h"
+#include "AccessibilityNodeObject.h"
 #include "DateComponents.h"
+#include "HTMLNames.h"
+#include "RenderObject.h"
 
 #if PLATFORM(MAC)
 #import <pal/spi/mac/HIServicesSPI.h>
@@ -43,6 +46,8 @@
 #endif
 
 namespace WebCore {
+
+using namespace HTMLNames;
 
 AXIsolatedObject::AXIsolatedObject(const Ref<AccessibilityObject>& axObject, AXIsolatedTree* tree)
     : AXCoreObject(axObject->objectID())
@@ -80,6 +85,7 @@ String AXIsolatedObject::dbg() const
 
 void AXIsolatedObject::initializeProperties(const Ref<AccessibilityObject>& axObject)
 {
+    AXTRACE("AXIsolatedObject::initializeProperties"_s);
     auto& object = axObject.get();
 
     if (object.ancestorFlagsAreInitialized())
@@ -1377,12 +1383,6 @@ void AXIsolatedObject::decrement()
     });
 }
 
-AtomString AXIsolatedObject::tagName() const
-{
-    ASSERT_NOT_REACHED();
-    return AtomString();
-}
-
 bool AXIsolatedObject::isAccessibilityRenderObject() const
 {
     ASSERT_NOT_REACHED();
@@ -1648,12 +1648,6 @@ int AXIsolatedObject::lineForPosition(const VisiblePosition& position) const
     ASSERT(isMainThread());
     auto* axObject = associatedAXObject();
     return axObject ? axObject->lineForPosition(position) : -1;
-}
-
-bool AXIsolatedObject::isListBoxOption() const
-{
-    ASSERT_NOT_REACHED();
-    return false;
 }
 
 bool AXIsolatedObject::isMockObject() const

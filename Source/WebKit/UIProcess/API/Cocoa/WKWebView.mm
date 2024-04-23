@@ -85,6 +85,7 @@
 #import "WKSnapshotConfigurationPrivate.h"
 #import "WKTextExtractionItem.h"
 #import "WKTextExtractionUtilities.h"
+#import "WKTextIndicatorStyleType.h"
 #import "WKUIDelegate.h"
 #import "WKUIDelegatePrivate.h"
 #import "WKUserContentControllerInternal.h"
@@ -254,6 +255,8 @@ RetainPtr<NSError> nsErrorFromExceptionDetails(const WebCore::ExceptionDetails& 
 }
 
 @implementation WKWebView
+
+WK_OBJECT_DISABLE_DISABLE_KVC_IVAR_ACCESS;
 
 - (instancetype)initWithFrame:(CGRect)frame
 {
@@ -441,6 +444,7 @@ static void hardwareKeyboardAvailabilityChangedCallback(CFNotificationCenterRef,
 
 #if ENABLE(UNIFIED_TEXT_REPLACEMENT)
     _unifiedTextReplacementSessions = [NSMapTable strongToWeakObjectsMapTable];
+    _unifiedTextReplacementSessionReplacements = [NSMapTable strongToWeakObjectsMapTable];
 #endif
 }
 
@@ -519,6 +523,8 @@ static void hardwareKeyboardAvailabilityChangedCallback(CFNotificationCenterRef,
     pageConfiguration->preferences().setSystemPreviewEnabled(!![_configuration _systemPreviewEnabled]);
 #endif
 #endif // PLATFORM(IOS_FAMILY)
+    pageConfiguration->preferences().setScrollToTextFragmentIndicatorEnabled(!![_configuration _scrollToTextFragmentIndicatorEnabled]);
+    pageConfiguration->preferences().setScrollToTextFragmentMarkingEnabled(!![_configuration _scrollToTextFragmentMarkingEnabled]);
 
     WKAudiovisualMediaTypes mediaTypesRequiringUserGesture = [_configuration mediaTypesRequiringUserActionForPlayback];
     pageConfiguration->preferences().setRequiresUserGestureForVideoPlayback((mediaTypesRequiringUserGesture & WKAudiovisualMediaTypeVideo) == WKAudiovisualMediaTypeVideo);
@@ -2555,6 +2561,11 @@ static RetainPtr<NSArray> wkTextManipulationErrors(NSArray<_WKTextManipulationIt
 #endif
 }
 
+- (BOOL)_isSuspended
+{
+    return _page->process().throttler().isSuspended();
+}
+
 - (BOOL)_canTogglePictureInPicture
 {
 #if HAVE(TOUCH_BAR)
@@ -2783,12 +2794,34 @@ static void convertAndAddHighlight(Vector<Ref<WebCore::SharedMemory>>& buffers, 
     _page->enableTextIndicatorStyleAfterElementWithID(elementID, *uuid);
 
 #if PLATFORM(IOS_FAMILY)
-    [_contentView addTextIndicatorStyleForID:nsUUID.get()];
+    [_contentView addTextIndicatorStyleForID:nsUUID.get() withStyleType:WKTextIndicatorStyleTypeInitial];
 #elif PLATFORM(MAC) && ENABLE(UNIFIED_TEXT_REPLACEMENT_UI)
-    _impl->addTextIndicatorStyleForID(*uuid);
+    _impl->addTextIndicatorStyleForID(*uuid, WKTextIndicatorStyleTypeInitial);
 #endif
     return nsUUID.get();
-#else
+#else // ENABLE(UNIFIED_TEXT_REPLACEMENT)
+    return nil;
+#endif
+}
+
+- (NSUUID *)_enableTextIndicatorStylingForElementWithID:(NSString *)elementID
+{
+    RetainPtr nsUUID = [NSUUID UUID];
+
+    auto uuid = WTF::UUID::fromNSUUID(nsUUID.get());
+    if (!uuid)
+        return nil;
+
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+    _page->enableTextIndicatorStyleForElementWithID(elementID, *uuid);
+
+#if PLATFORM(IOS_FAMILY)
+    [_contentView addTextIndicatorStyleForID:nsUUID.get() withStyleType:WKTextIndicatorStyleTypeFinal];
+#elif PLATFORM(MAC) && ENABLE(UNIFIED_TEXT_REPLACEMENT_UI)
+    _impl->addTextIndicatorStyleForID(*uuid, WKTextIndicatorStyleTypeFinal);
+#endif
+    return nsUUID.get();
+#else // ENABLE(UNIFIED_TEXT_REPLACEMENT)
     return nil;
 #endif
 }
@@ -2873,6 +2906,26 @@ static void convertAndAddHighlight(Vector<Ref<WebCore::SharedMemory>>& buffers, 
         break;
     }
     return wrapper(_page->loadRequest(request, policy)).autorelease();
+}
+
+- (void)_loadAndDecodeImage:(NSURLRequest *)request constrainedToSize:(CGSize)maxSize completionHandler:(void (^)(CocoaImage *, NSError *))completionHandler
+{
+    auto sizeConstraint = (maxSize.height || maxSize.width) ? std::optional(WebCore::FloatSize(maxSize)) : std::nullopt;
+    WebCore::ResourceRequest resourceRequest(request);
+    auto url = resourceRequest.url();
+    _page->loadAndDecodeImage(request, sizeConstraint, [completionHandler = makeBlockPtr(completionHandler), url](std::variant<WebCore::ResourceError, Ref<WebCore::ShareableBitmap>>&& result) mutable {
+        WTF::switchOn(result, [&] (const WebCore::ResourceError& error) {
+            if (error.isNull())
+                return completionHandler(nil, WebCore::internalError(url)); // This can happen if IPC fails.
+            completionHandler(nil, error.nsError());
+        }, [&] (const Ref<WebCore::ShareableBitmap>& bitmap) {
+#if PLATFORM(MAC)
+            completionHandler(adoptNS([[NSImage alloc] initWithCGImage:bitmap->makeCGImageCopy().get() size:bitmap->size()]).get(), nil);
+#else
+            completionHandler(adoptNS([[UIImage alloc] initWithCGImage:bitmap->makeCGImageCopy().get()]).get(), nil);
+#endif
+        });
+    });
 }
 
 - (void)_loadServiceWorker:(NSURL *)url usingModules:(BOOL)usingModules completionHandler:(void (^)(BOOL success))completionHandler

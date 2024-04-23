@@ -244,7 +244,7 @@ public:
 
     RefPtr<WebGLActiveInfo> getActiveAttrib(WebGLProgram&, GCGLuint index);
     RefPtr<WebGLActiveInfo> getActiveUniform(WebGLProgram&, GCGLuint index);
-    std::optional<Vector<RefPtr<WebGLShader>>> getAttachedShaders(WebGLProgram&);
+    std::optional<Vector<Ref<WebGLShader>>> getAttachedShaders(WebGLProgram&);
     GCGLint getAttribLocation(WebGLProgram&, const String& name);
     WebGLAny getBufferParameter(GCGLenum target, GCGLenum pname);
     WEBCORE_EXPORT std::optional<WebGLContextAttributes> getContextAttributes();
@@ -525,7 +525,6 @@ protected:
 
     // ActiveDOMObject
     void stop() override;
-    const char* activeDOMObjectName() const override;
     void suspend(ReasonForSuspension) override;
     void resume() override;
 

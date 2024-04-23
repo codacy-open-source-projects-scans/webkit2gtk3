@@ -66,7 +66,7 @@ namespace WebKit {
 
 RemoteGPU::RemoteGPU(WebGPUIdentifier identifier, GPUConnectionToWebProcess& gpuConnectionToWebProcess, RemoteRenderingBackend& renderingBackend, Ref<IPC::StreamServerConnection>&& streamConnection)
     : m_gpuConnectionToWebProcess(gpuConnectionToWebProcess)
-    , m_workQueue(IPC::StreamConnectionWorkQueue::create("WebGPU work queue"))
+    , m_workQueue(IPC::StreamConnectionWorkQueue::create("WebGPU work queue"_s))
     , m_streamConnection(WTFMove(streamConnection))
     , m_objectHeap(WebGPU::ObjectHeap::create())
     , m_identifier(identifier)
@@ -203,6 +203,11 @@ void RemoteGPU::createPresentationContext(const WebGPU::PresentationContextDescr
     MESSAGE_CHECK(presentationContext);
     auto remotePresentationContext = RemotePresentationContext::create(*m_gpuConnectionToWebProcess.get(), *presentationContext, m_objectHeap, *m_streamConnection, identifier);
     m_objectHeap->addObject(identifier, remotePresentationContext);
+}
+
+RefPtr<GPUConnectionToWebProcess> RemoteGPU::gpuConnectionToWebProcess() const
+{
+    return m_gpuConnectionToWebProcess.get();
 }
 
 void RemoteGPU::createCompositorIntegration(WebGPUIdentifier identifier)

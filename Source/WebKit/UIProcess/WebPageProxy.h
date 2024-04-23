@@ -803,6 +803,8 @@ public:
     void loadAlternateHTML(Ref<WebCore::DataSegment>&&, const String& encoding, const URL& baseURL, const URL& unreachableURL, API::Object* userData = nullptr);
     void navigateToPDFLinkWithSimulatedClick(const String& url, WebCore::IntPoint documentPoint, WebCore::IntPoint screenPoint);
 
+    void loadAndDecodeImage(WebCore::ResourceRequest&&, std::optional<WebCore::FloatSize>, CompletionHandler<void(std::variant<WebCore::ResourceError, Ref<WebCore::ShareableBitmap>>&&)>&&);
+
     void simulateDeviceOrientationChange(double alpha, double beta, double gamma);
 
     void stopLoading();
@@ -943,9 +945,6 @@ public:
         
     void setScreenIsBeingCaptured(bool);
 
-    void insertTextPlaceholder(const WebCore::IntSize&, CompletionHandler<void(const std::optional<WebCore::ElementContext>&)>&&);
-    void removeTextPlaceholder(const WebCore::ElementContext&, CompletionHandler<void()>&&);
-
     double displayedContentScale() const;
     const WebCore::FloatRect& exposedContentRect() const;
     const WebCore::FloatRect& unobscuredContentRect() const;
@@ -1065,6 +1064,11 @@ public:
     void didConcludeDrop();
 #endif
 #endif // PLATFORM(IOS_FAMILY)
+
+#if PLATFORM(COCOA)
+    void insertTextPlaceholder(const WebCore::IntSize&, CompletionHandler<void(const std::optional<WebCore::ElementContext>&)>&&);
+    void removeTextPlaceholder(const WebCore::ElementContext&, CompletionHandler<void()>&&);
+#endif
 
 #if ENABLE(UNIFIED_TEXT_REPLACEMENT)
     void getTextIndicatorForID(WTF::UUID&, CompletionHandler<void(std::optional<WebCore::TextIndicatorData>&&)>&&);
@@ -2196,6 +2200,7 @@ public:
 #if ENABLE(UNIFIED_TEXT_REPLACEMENT)
     void removeTextIndicatorStyleForID(const WTF::UUID&);
     void enableTextIndicatorStyleAfterElementWithID(const String& elementID, const WTF::UUID&);
+    void enableTextIndicatorStyleForElementWithID(const String& elementID, const WTF::UUID&);
 #endif
 
 #if ENABLE(MEDIA_STREAM)
@@ -2273,7 +2278,7 @@ public:
     WKQuickLookPreviewController *quickLookPreviewController() const { return m_quickLookPreviewController.get(); }
 #endif
 
-    WebProcessProxy* processForRegistrableDomain(const WebCore::RegistrableDomain&);
+    WebProcessProxy* processForRegistrableDomain(const WebCore::RegistrableDomain&, const WebsiteDataStore&);
 
     void createRemoteSubframesInOtherProcesses(WebFrameProxy&, const String& frameName);
     void broadcastMainFrameURLChangeToOtherProcesses(IPC::Connection&, const URL&);
@@ -2703,6 +2708,7 @@ private:
 #endif
 
     // Popup Menu.
+    void showPopupMenuFromFrame(WebCore::FrameIdentifier, const WebCore::IntRect&, uint64_t textDirection, Vector<WebPopupItem>&& items, int32_t selectedIndex, const PlatformPopupMenuData&);
     void showPopupMenu(const WebCore::IntRect& rect, uint64_t textDirection, const Vector<WebPopupItem>& items, int32_t selectedIndex, const PlatformPopupMenuData&);
     void hidePopupMenu();
 

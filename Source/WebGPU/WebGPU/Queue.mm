@@ -255,7 +255,7 @@ void Queue::submit(Vector<std::reference_wrapper<CommandBuffer>>&& commands)
             device->generateAValidationError(command.lastError() ?: @"Command buffer appears twice.");
             return;
         }
-        command.makeInvalid(@"command buffer was submitted");
+        command.makeInvalidDueToCommit(@"command buffer was submitted");
     }
 
     for (id<MTLCommandBuffer> commandBuffer in commandBuffersToSubmit)
@@ -752,6 +752,9 @@ void Queue::writeTexture(const WGPUImageCopyTexture& destination, void* data, si
         for (uint32_t layer = 0; layer < size.depthOrArrayLayers; ++layer) {
             NSUInteger sourceOffset = layer * bytesPerImage;
             NSUInteger destinationSlice = destination.origin.z + layer;
+            if (sourceOffset + widthForMetal * blockSize > temporaryBuffer.length)
+                continue;
+
             [m_blitCommandEncoder
                 copyFromBuffer:temporaryBuffer
                 sourceOffset:sourceOffset

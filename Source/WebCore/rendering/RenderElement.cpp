@@ -44,6 +44,7 @@
 #include "InlineIteratorLineBox.h"
 #include "InlineIteratorTextBox.h"
 #include "LayoutElementBox.h"
+#include "LayoutIntegrationLineLayout.h"
 #include "LengthFunctions.h"
 #include "LocalFrame.h"
 #include "Logging.h"
@@ -847,6 +848,14 @@ void RenderElement::styleWillChange(StyleDifference diff, const RenderStyle& new
     };
 
     if (oldStyle) {
+        if (diff >= StyleDifference::Repaint && layoutBox()) {
+            // FIXME: It is highly unlikely that a style mutation has effect on both the formatting context the box lives in
+            // and the one it establishes but calling only one would require to come up with a list of properties that only affects one or the other.
+            if (auto* inlineFormattingContextRoot = dynamicDowncast<RenderBlockFlow>(*this); inlineFormattingContextRoot && inlineFormattingContextRoot->modernLineLayout())
+                inlineFormattingContextRoot->modernLineLayout()->rootStyleWillChange(*inlineFormattingContextRoot, newStyle);
+            if (auto* lineLayout = LayoutIntegration::LineLayout::containing(*this))
+                lineLayout->styleWillChange(*this, newStyle);
+        }
         // If our z-index changes value or our visibility changes,
         // we need to dirty our stacking context's z-order list.
         bool visibilityChanged = m_style.usedVisibility() != newStyle.usedVisibility()
@@ -1045,6 +1054,11 @@ void RenderElement::styleDidChange(StyleDifference diff, const RenderStyle* oldS
         if (controller && (!shouldCheckIfInAncestorChain || (shouldCheckIfInAncestorChain && controller->isInScrollAnchoringAncestorChain(*this))))
             controller->notifyChildHadSuppressingStyleChange();
     }
+
+    // FIXME: First line change on the block comes in as equal on inline boxes.
+    auto needsLayoutBoxStyleUpdate = (diff >= StyleDifference::Repaint || (is<RenderInline>(*this) && &style() != &firstLineStyle())) && layoutBox();
+    if (needsLayoutBoxStyleUpdate)
+        LayoutIntegration::LineLayout::updateStyle(*this);
 }
 
 void RenderElement::insertedIntoTree()
@@ -2059,9 +2073,6 @@ bool RenderElement::hasSelfPaintingLayer() const
 
 bool RenderElement::capturedInViewTransition() const
 {
-    if (!hasViewTransitionName())
-        return false;
-
     return element() && element()->capturedInViewTransition();
 }
 
@@ -2070,9 +2081,9 @@ bool RenderElement::hasViewTransitionName() const
     return !!style().viewTransitionName();
 }
 
-bool RenderElement::isViewTransitionPseudo() const
+bool RenderElement::requiresRenderingConsolidationForViewTransition() const
 {
-    return style().pseudoElementType() == PseudoId::ViewTransitionNew || style().pseudoElementType() == PseudoId::ViewTransitionOld;
+    return hasViewTransitionName() || capturedInViewTransition();
 }
 
 bool RenderElement::checkForRepaintDuringLayout() const

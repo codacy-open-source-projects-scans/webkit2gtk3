@@ -38,6 +38,8 @@ namespace WebKit {
 using namespace WebCore;
 
 class PlaybackSessionInterfaceLMK final : public PlaybackSessionInterfaceIOS {
+    WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(PlaybackSessionInterfaceLMK);
 public:
     static Ref<PlaybackSessionInterfaceLMK> create(PlaybackSessionModel&);
     ~PlaybackSessionInterfaceLMK();
@@ -61,7 +63,7 @@ public:
     void startObservingNowPlayingMetadata() final;
     void stopObservingNowPlayingMetadata() final;
 #if !RELEASE_LOG_DISABLED
-    const char* logClassName() const final;
+    ASCIILiteral logClassName() const final;
 #endif
 
     void nowPlayingMetadataChanged(const WebCore::NowPlayingMetadata&);

@@ -39,6 +39,7 @@ using namespace WebCore;
 
 class WCTiledBacking final : public TiledBacking {
     WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(WCTiledBacking);
 public:
     WCTiledBacking(GraphicsLayerWC& owner)
         : m_owner(owner) { }
@@ -112,6 +113,7 @@ public:
     void willStartLiveResize() final { };
     void didEndLiveResize() final { };
     IntSize tileSize() const final { return m_tileGrid.tilePixelSize(); }
+    FloatRect rectForTile(TileIndex) const { return { }; }
     void revalidateTiles() final { }
     IntRect tileGridExtent() const final { return { }; }
     void setScrollingPerformanceTestingEnabled(bool flag) final { }

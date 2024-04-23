@@ -730,8 +730,8 @@ void LibWebRTCMediaEndpoint::setLocalSessionDescriptionSucceeded()
             return;
 
         auto transceiverStates = WTF::map(rtcTransceiverStates, [this](auto& state) -> PeerConnectionBackend::TransceiverState {
-            auto streams = WTF::map(state.receiverStreamIds, [this](auto& id) -> RefPtr<MediaStream> {
-                return &mediaStreamFromRTCStreamId(id);
+            auto streams = WTF::map(state.receiverStreamIds, [this](auto& id) -> Ref<MediaStream> {
+                return mediaStreamFromRTCStreamId(id);
             });
             return { WTFMove(state.mid), WTFMove(streams), state.firedDirection };
         });
@@ -757,8 +757,8 @@ void LibWebRTCMediaEndpoint::setRemoteSessionDescriptionSucceeded()
             return;
 
         auto transceiverStates = WTF::map(rtcTransceiverStates, [this](auto& state) -> PeerConnectionBackend::TransceiverState {
-            auto streams = WTF::map(state.receiverStreamIds, [this](auto& id) -> RefPtr<MediaStream> {
-                return &mediaStreamFromRTCStreamId(id);
+            auto streams = WTF::map(state.receiverStreamIds, [this](auto& id) -> Ref<MediaStream> {
+                return mediaStreamFromRTCStreamId(id);
             });
             return { WTFMove(state.mid), WTFMove(streams), state.firedDirection };
         });
@@ -819,9 +819,9 @@ void LibWebRTCMediaEndpoint::OnStatsDelivered(const rtc::scoped_refptr<const web
 
             if (logger().willLog(logChannel(), WTFLogLevel::Debug)) {
                 // Stats are very verbose, let's only display them in inspector console in verbose mode.
-                logger().debug(LogWebRTC, Logger::LogSiteIdentifier("LibWebRTCMediaEndpoint", "OnStatsDelivered", logIdentifier()), statsLogger);
+                logger().debug(LogWebRTC, Logger::LogSiteIdentifier("LibWebRTCMediaEndpoint"_s, "OnStatsDelivered"_s, logIdentifier()), statsLogger);
             } else
-                logger().logAlways(LogWebRTCStats, Logger::LogSiteIdentifier("LibWebRTCMediaEndpoint", "OnStatsDelivered", logIdentifier()), statsLogger);
+                logger().logAlways(LogWebRTCStats, Logger::LogSiteIdentifier("LibWebRTCMediaEndpoint"_s, "OnStatsDelivered"_s, logIdentifier()), statsLogger);
         }
     });
 #else

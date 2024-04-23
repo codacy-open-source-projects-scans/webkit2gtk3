@@ -414,11 +414,6 @@ ExceptionOr<void> WebXRSession::end(EndPromise&& promise)
     return { };
 }
 
-const char* WebXRSession::activeDOMObjectName() const
-{
-    return "XRSession";
-}
-
 void WebXRSession::stop()
 {
 }
@@ -624,6 +619,8 @@ void WebXRSession::onFrame(PlatformXR::FrameData&& frameData)
             // If the session is ended, m_animationFrame->setActive false is set in shutdown().
             frame->setActive(false);
 
+            if (m_ended)
+                return;
 
             // Submit current frame layers to the device.
             Vector<PlatformXR::Device::Layer> frameLayers;

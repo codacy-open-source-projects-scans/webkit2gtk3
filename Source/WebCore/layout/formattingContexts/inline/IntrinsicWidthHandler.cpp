@@ -114,7 +114,7 @@ IntrinsicWidthHandler::IntrinsicWidthHandler(InlineFormattingContext& inlineForm
         for (size_t index = 0; index < inlineBoxCount; ++index) {
             auto& inlineItem = inlineItemList[index];
             auto isNestingInlineBox = inlineItem.isInlineBoxStart() && inlineItemList[inlineItems.size() - 1 - index].isInlineBoxEnd();
-            m_mayUseSimplifiedTextOnlyInlineLayoutInRange = isNestingInlineBox && !formattingContext().geometryForBox(inlineItem.layoutBox()).horizontalMarginBorderAndPadding();
+            m_mayUseSimplifiedTextOnlyInlineLayoutInRange = isNestingInlineBox && !formattingContext().geometryForBox(inlineItem.layoutBox()).horizontalMarginBorderAndPadding() && TextOnlySimpleLineBuilder::isEligibleForSimplifiedInlineLayoutByStyle(inlineItem.style());
             if (!m_mayUseSimplifiedTextOnlyInlineLayoutInRange)
                 return;
         }
@@ -275,7 +275,11 @@ InlineLayoutUnit IntrinsicWidthHandler::simplifiedMaximumWidth(MayCacheLayoutRes
     auto& inlineTextItem = downcast<InlineTextItem>(inlineItemList()[0]);
     auto& style = inlineTextItem.firstLineStyle();
 
-    auto contentLogicalWidth = TextUtil::width(inlineTextItem, style.fontCascade(), { });
+    auto contentLogicalWidth = [&] {
+        if (auto width = inlineTextItem.width())
+            return *width;
+        return TextUtil::width(inlineTextItem, style.fontCascade(), { });
+    }();
     if (mayCacheLayoutResult == MayCacheLayoutResult::No)
         return contentLogicalWidth;
 

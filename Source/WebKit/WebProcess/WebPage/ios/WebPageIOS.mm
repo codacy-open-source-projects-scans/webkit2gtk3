@@ -153,7 +153,6 @@
 #import <WebCore/StyleProperties.h>
 #import <WebCore/TextIndicator.h>
 #import <WebCore/TextIterator.h>
-#import <WebCore/TextPlaceholderElement.h>
 #import <WebCore/UserAgent.h>
 #import <WebCore/UserGestureIndicator.h>
 #import <WebCore/ViewportArguments.h>
@@ -826,12 +825,11 @@ void WebPage::handleSyntheticClick(Node& nodeRespondingToClick, const WebCore::F
     {
         LOG_WITH_STREAM(ContentObservation, stream << "handleSyntheticClick: node(" << &nodeRespondingToClick << ") " << location);
         ContentChangeObserver::MouseMovedScope observingScope(respondingDocument);
-        auto* localMainFrame = dynamicDowncast<LocalFrame>(m_page->mainFrame());
+        RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_page->mainFrame());
         if (!localMainFrame)
             return;
-        auto& mainFrame = *localMainFrame;
-        dispatchSyntheticMouseMove(mainFrame, location, modifiers, pointerId);
-        mainFrame.document()->updateStyleIfNeeded();
+        dispatchSyntheticMouseMove(*localMainFrame, location, modifiers, pointerId);
+        localMainFrame->protectedDocument()->updateStyleIfNeeded();
         if (m_isClosed)
             return;
     }
@@ -4880,26 +4878,6 @@ bool WebPage::platformPrefersTextLegibilityBasedZoomScaling() const
 #endif
 }
 
-void WebPage::insertTextPlaceholder(const IntSize& size, CompletionHandler<void(const std::optional<WebCore::ElementContext>&)>&& completionHandler)
-{
-    // Inserting the placeholder may run JavaScript, which can do anything, including frame destruction.
-    RefPtr frame = m_page->checkedFocusController()->focusedOrMainFrame();
-    if (!frame)
-        return completionHandler({ });
-
-    auto placeholder = frame->editor().insertTextPlaceholder(size);
-    completionHandler(placeholder ? contextForElement(*placeholder) : std::nullopt);
-}
-
-void WebPage::removeTextPlaceholder(const ElementContext& placeholder, CompletionHandler<void()>&& completionHandler)
-{
-    if (auto element = elementForContext(placeholder)) {
-        if (RefPtr frame = element->document().frame())
-            frame->editor().removeTextPlaceholder(downcast<TextPlaceholderElement>(*element));
-    }
-    completionHandler();
-}
-
 void WebPage::updateSelectionWithDelta(int64_t locationDelta, int64_t lengthDelta, CompletionHandler<void()>&& completionHandler)
 {
     RefPtr frame = m_page->checkedFocusController()->focusedOrMainFrame();
@@ -4989,7 +4967,7 @@ void WebPage::requestDocumentEditingContext(DocumentEditingContextRequest&& requ
     if (!frame)
         return completionHandler({ });
 
-    RefPtr { frame->document() }->updateLayout(LayoutOptions::IgnorePendingStylesheets);
+    frame->protectedDocument()->updateLayout(LayoutOptions::IgnorePendingStylesheets);
 
     VisibleSelection selection = frame->selection().selection();
 
@@ -5247,7 +5225,7 @@ void WebPage::focusTextInputContextAndPlaceCaret(const ElementContext& elementCo
     ASSERT(target->document().frame());
     Ref targetFrame = *target->document().frame();
 
-    targetFrame->document()->updateLayout(LayoutOptions::IgnorePendingStylesheets);
+    targetFrame->protectedDocument()->updateLayout(LayoutOptions::IgnorePendingStylesheets);
 
     // Performing layout could have could torn down the element's renderer. Check that we still
     // have one. Otherwise, bail out as this function only focuses elements that have a visual

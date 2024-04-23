@@ -43,10 +43,14 @@ Ref<FrameProcess> BrowsingContextGroup::ensureProcessForDomain(const WebCore::Re
 {
     if (!domain.isEmpty() && (preferences.siteIsolationEnabled() || preferences.processSwapOnCrossSiteWindowOpenEnabled())) {
         if (auto* existingProcess = processForDomain(domain)) {
-            ASSERT(existingProcess->process().coreProcessIdentifier() == process.coreProcessIdentifier());
-            return *existingProcess;
+            if (existingProcess->process().coreProcessIdentifier() == process.coreProcessIdentifier())
+                return *existingProcess;
+
+            // In the case of WebsiteDataStore swap during navigation, the process may be different from existing process.
+            ASSERT(existingProcess->process().websiteDataStore() != process.websiteDataStore());
         }
     }
+
     return FrameProcess::create(process, *this, domain, preferences);
 }
 
@@ -56,7 +60,7 @@ Ref<FrameProcess> BrowsingContextGroup::ensureProcessForConnection(IPC::Connecti
         for (auto& process : m_processMap.values()) {
             if (!process)
                 continue;
-            if (process->process().connection() == &connection)
+            if (process->process().hasConnection(connection))
                 return *process;
         }
     }
@@ -202,6 +206,12 @@ void BrowsingContextGroup::transitionPageToRemotePage(WebPageProxy& page, const 
     }
 #endif
     set.add(WTFMove(newRemotePage));
+}
+
+bool BrowsingContextGroup::hasRemotePages(const WebPageProxy& page)
+{
+    auto it = m_remotePages.find(page);
+    return it != m_remotePages.end() && !it->value.isEmpty();
 }
 
 } // namespace WebKit

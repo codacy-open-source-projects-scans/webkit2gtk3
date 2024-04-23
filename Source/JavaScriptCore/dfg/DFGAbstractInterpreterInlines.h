@@ -2177,8 +2177,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
                 node->isBinaryUseKind(SymbolUse) ||
                 node->isBinaryUseKind(StringIdentUse) ||
                 node->isBinaryUseKind(ObjectUse) ||
-                node->isBinaryUseKind(ObjectUse, ObjectOrOtherUse) ||
-                node->isBinaryUseKind(ObjectOrOtherUse, ObjectUse)) {
+                node->isReflexiveBinaryUseKind(ObjectUse, ObjectOrOtherUse)) {
                 switch (node->op()) {
                 case CompareLess:
                 case CompareGreater:
@@ -2253,6 +2252,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
             // FIXME: Is there any case not involving NaN where x === x is not guaranteed to return true?
             // If not I might slightly simplify that check.
             if (node->isBinaryUseKind(BooleanUse)
+                || node->isReflexiveBinaryUseKind(BooleanUse, UntypedUse)
                 || node->isBinaryUseKind(Int32Use)
                 || node->isBinaryUseKind(Int52RepUse)
                 || node->isBinaryUseKind(StringUse)
@@ -2260,15 +2260,11 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
                 || node->isBinaryUseKind(SymbolUse)
                 || node->isBinaryUseKind(ObjectUse)
                 || node->isBinaryUseKind(OtherUse)
-                || node->isBinaryUseKind(OtherUse, UntypedUse)
-                || node->isBinaryUseKind(UntypedUse, OtherUse)
+                || node->isReflexiveBinaryUseKind(OtherUse, UntypedUse)
                 || node->isBinaryUseKind(MiscUse)
-                || node->isBinaryUseKind(MiscUse, UntypedUse)
-                || node->isBinaryUseKind(UntypedUse, MiscUse)
-                || node->isBinaryUseKind(StringIdentUse, NotStringVarUse)
-                || node->isBinaryUseKind(NotStringVarUse, StringIdentUse)
-                || node->isBinaryUseKind(StringUse, UntypedUse)
-                || node->isBinaryUseKind(UntypedUse, StringUse)
+                || node->isReflexiveBinaryUseKind(MiscUse, UntypedUse)
+                || node->isReflexiveBinaryUseKind(StringIdentUse, NotStringVarUse)
+                || node->isReflexiveBinaryUseKind(StringUse, UntypedUse)
                 || node->isBinaryUseKind(BigInt32Use)
                 || node->isBinaryUseKind(HeapBigIntUse)
                 || node->isBinaryUseKind(AnyBigIntUse)) {
@@ -3628,7 +3624,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
     case GetCallee:
         if (FunctionExecutable* executable = jsDynamicCast<FunctionExecutable*>(m_codeBlock->ownerExecutable())) {
             if (JSFunction* function = executable->singleton().inferredValue()) {
-                m_graph.watchpoints().addLazily(executable);
+                m_graph.watchpoints().addLazily(m_graph, executable);
                 setConstant(node, *m_graph.freeze(function));
                 break;
             }
@@ -3880,9 +3876,12 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         makeHeapTopForNode(node);
         break;
             
-    case GetArrayLength: {
-        if (JSValue constant = forNode(node->child1()).m_value) {
-            JSArrayBufferView* view = m_graph.tryGetFoldableView(constant, node->arrayMode());
+    case GetArrayLength:
+    case GetUndetachedTypeArrayLength: {
+        ArrayMode arrayMode = node->arrayMode();
+        AbstractValue& abstractValue = forNode(node->child1());
+        if (JSValue constant = abstractValue.m_value) {
+            JSArrayBufferView* view = m_graph.tryGetFoldableView(constant, arrayMode);
             if (view && !view->isResizableOrGrowableShared() && isInBounds<int32_t>(view->length())) {
                 setConstant(node, jsNumber(view->length()));
                 break;
@@ -3893,6 +3892,32 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
                 break;
             }
         }
+
+        if (node->op() == GetArrayLength) {
+            if (arrayMode.type() != Array::AnyTypedArray && arrayMode.isSomeTypedArrayView() && !arrayMode.mayBeResizableOrGrowableSharedTypedArray()) {
+                if ((abstractValue.m_type && !(abstractValue.m_type & ~SpecObject)) && abstractValue.m_structure.isFinite()) {
+                    bool canFold = !abstractValue.m_structure.isClear();
+                    JSGlobalObject* globalObject = m_graph.globalObjectFor(node->origin.semantic);
+                    abstractValue.m_structure.forEach([&](RegisteredStructure structure) {
+                        if (!arrayMode.structureWouldPassArrayModeFiltering(structure.get())) {
+                            canFold = false;
+                            return;
+                        }
+
+                        if (structure->globalObject() != globalObject) {
+                            canFold = false;
+                            return;
+                        }
+                    });
+
+                    if (canFold) {
+                        if (m_graph.isWatchingArrayBufferDetachWatchpoint(node))
+                            m_state.setShouldTryConstantFolding(true);
+                    }
+                }
+            }
+        }
+
         setNonCellTypeForNode(node, SpecInt32Only);
         break;
     }
@@ -5392,7 +5417,7 @@ void AbstractInterpreter<AbstractStateType>::dump(PrintStream& out) const
 template<typename AbstractStateType>
 void AbstractInterpreter<AbstractStateType>::dump(PrintStream& out)
 {
-    CommaPrinter comma(" ");
+    CommaPrinter comma(" "_s);
     HashSet<NodeFlowProjection> seen;
     if (m_graph.m_form == SSA) {
         for (NodeFlowProjection node : m_state.block()->ssa->liveAtHead) {
@@ -5400,7 +5425,7 @@ void AbstractInterpreter<AbstractStateType>::dump(PrintStream& out)
             AbstractValue& value = forNode(node);
             if (value.isClear())
                 continue;
-            out.print(comma, node, ":", value);
+            out.print(comma, node, ":"_s, value);
         }
     }
     for (size_t i = 0; i < m_state.block()->size(); ++i) {
@@ -5410,7 +5435,7 @@ void AbstractInterpreter<AbstractStateType>::dump(PrintStream& out)
                 AbstractValue& value = forNode(nodeProjection);
                 if (value.isClear())
                     return;
-                out.print(comma, nodeProjection, ":", value);
+                out.print(comma, nodeProjection, ":"_s, value);
             });
     }
     if (m_graph.m_form == SSA) {
@@ -5420,7 +5445,7 @@ void AbstractInterpreter<AbstractStateType>::dump(PrintStream& out)
             AbstractValue& value = forNode(node);
             if (value.isClear())
                 continue;
-            out.print(comma, node, ":", value);
+            out.print(comma, node, ":"_s, value);
         }
     }
 }

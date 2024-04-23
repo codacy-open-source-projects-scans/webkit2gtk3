@@ -135,6 +135,7 @@ bool hasCapacityToUseLargeGigacage();
     v(Bool, dumpDisassembly, false, Normal, "dumps disassembly of all JIT compiled code upon compilation") \
     v(Bool, asyncDisassembly, false, Normal, nullptr) \
     v(Bool, logJIT, false, Normal, nullptr) \
+    v(Bool, dumpBaselineDisassembly, false, Normal, "dumps disassembly of Baseline function upon compilation") \
     v(Bool, dumpDFGDisassembly, false, Normal, "dumps disassembly of DFG function upon compilation") \
     v(Bool, dumpFTLDisassembly, false, Normal, "dumps disassembly of FTL function upon compilation") \
     v(Bool, dumpRegExpDisassembly, false, Normal, "dumps disassembly of RegExp upon compilation") \
@@ -591,13 +592,14 @@ bool hasCapacityToUseLargeGigacage();
     v(Bool, useIntlDurationFormat, true, Normal, "Expose the Intl DurationFormat.") \
     v(Bool, usePromiseWithResolversMethod, true, Normal, "Expose the Promise.withResolvers() method.") \
     v(Bool, usePromiseTryMethod, false, Normal, "Expose the Promise.try() method.") \
+    v(Bool, useRegExpEscape, false, Normal, "Expose RegExp.escape feature.") \
     v(Bool, useResizableArrayBuffer, true, Normal, "Expose ResizableArrayBuffer feature.") \
     v(Bool, useSharedArrayBuffer, false, Normal, nullptr) \
     v(Bool, useShadowRealm, false, Normal, "Expose the ShadowRealm object.") \
     v(Bool, useStringWellFormed, true, Normal, "Expose the String well-formed methods.") \
     v(Bool, useTemporal, false, Normal, "Expose the Temporal object.") \
     v(Bool, useWebAssemblyThreading, true, Normal, "Allow instructions from the wasm threading spec.") \
-    v(Bool, useWebAssemblyTypedFunctionReferences, false, Normal, "Allow function types from the wasm typed function references spec.") \
+    v(Bool, useWebAssemblyTypedFunctionReferences, true, Normal, "Allow function types from the wasm typed function references spec.") \
     v(Bool, useWebAssemblyGC, false, Normal, "Allow gc types from the wasm gc proposal.") \
     v(Bool, useWebAssemblySIMD, true, Normal, "Allow the new simd instructions and types from the wasm simd spec.") \
     v(Bool, useWebAssemblyRelaxedSIMD, false, Normal, "Allow the relaxed simd instructions and types from the wasm relaxed simd spec.") \

@@ -29,22 +29,37 @@
 
 namespace WebCore {
 
-class RenderViewTransitionCapture : public RenderReplaced {
+class RenderViewTransitionCapture final : public RenderReplaced {
     WTF_MAKE_ISO_ALLOCATED(RenderViewTransitionCapture);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderViewTransitionCapture);
 public:
     RenderViewTransitionCapture(Type, Document&, RenderStyle&&);
+    virtual ~RenderViewTransitionCapture();
 
-    void setImage(RefPtr<ImageBuffer>, const LayoutSize&, const LayoutRect& overflowRect);
+    void setImage(RefPtr<ImageBuffer>);
+    void setSize(const LayoutSize&, const LayoutRect& overflowRect);
 
     void paintReplaced(PaintInfo&, const LayoutPoint& paintOffset) override;
 
     void layout() override;
 
+    FloatSize scale() const { return m_scale; }
+
+    // Rect covered by the captured contents, relative to the
+    // intrinsic size.
+    LayoutRect captureOverflowRect() const { return m_overflowRect; }
+
+    // Inset of the scaled capture from the visualOverflowRect()
+    LayoutPoint captureContentInset() const;
+
 private:
-    ASCIILiteral renderName() const override { return style().pseudoElementType() == PseudoId::ViewTransitionNew ? "RenderViewTransitionNew"_s : "RenderViewTransitionOld"_s; }
+    ASCIILiteral renderName() const override { return "RenderViewTransitionCapture"_s; }
+    String debugDescription() const override;
 
     RefPtr<ImageBuffer> m_oldImage;
     LayoutRect m_overflowRect;
+    FloatSize m_scale;
+    LayoutRect m_localOverflowRect;
 };
 
 } // namespace WebCore

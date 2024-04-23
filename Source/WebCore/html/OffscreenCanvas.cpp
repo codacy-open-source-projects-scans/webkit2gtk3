@@ -29,6 +29,7 @@
 #if ENABLE(OFFSCREEN_CANVAS)
 
 #include "BitmapImage.h"
+#include "CSSParserContext.h"
 #include "CSSValuePool.h"
 #include "CanvasRenderingContext.h"
 #include "Chrome.h"
@@ -366,7 +367,7 @@ ExceptionOr<RefPtr<ImageBitmap>> OffscreenCanvas::transferToImageBitmap()
     if (auto* context = dynamicDowncast<GPUCanvasContext>(*m_context)) {
         auto buffer = allocateImageBuffer();
         if (!buffer)
-            return { RefPtr<ImageBitmap> { nullptr } };
+            return Exception { ExceptionCode::OutOfMemoryError };
 
         Ref<ImageBuffer> bufferRef = buffer.releaseNonNull();
         return context->getCurrentTextureAsImageBitmap(bufferRef, originClean());
@@ -574,6 +575,14 @@ void OffscreenCanvas::queueTaskKeepingObjectAlive(TaskSource source, Function<vo
 void OffscreenCanvas::dispatchEvent(Event& event)
 {
     EventDispatcher::dispatchEvent({ this }, event);
+}
+
+const CSSParserContext& OffscreenCanvas::cssParserContext() const
+{
+    // FIXME: Rather than using a default CSSParserContext, there should be one exposed via ScriptExecutionContext.
+    if (!m_cssParserContext)
+        m_cssParserContext = WTF::makeUnique<CSSParserContext>(HTMLStandardMode);
+    return *m_cssParserContext;
 }
 
 }

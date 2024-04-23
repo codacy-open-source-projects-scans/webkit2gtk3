@@ -142,7 +142,7 @@ public:
     };
     struct TransceiverState {
         String mid;
-        Vector<RefPtr<MediaStream>> receiverStreams;
+        Vector<Ref<MediaStream>> receiverStreams;
         std::optional<RTCRtpTransceiverDirection> firedDirection;
     };
     using TransceiverStates = Vector<TransceiverState>;
@@ -160,7 +160,7 @@ public:
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const final { return m_logger.get(); }
     const void* logIdentifier() const final { return m_logIdentifier; }
-    const char* logClassName() const override { return "PeerConnectionBackend"; }
+    ASCIILiteral logClassName() const override { return "PeerConnectionBackend"_s; }
     WTFLogChannel& logChannel() const final;
 #endif
 
@@ -234,7 +234,7 @@ protected:
     struct PendingTrackEvent {
         Ref<RTCRtpReceiver> receiver;
         Ref<MediaStreamTrack> track;
-        Vector<RefPtr<MediaStream>> streams;
+        Vector<Ref<MediaStream>> streams;
         RefPtr<RTCRtpTransceiver> transceiver;
     };
     void addPendingTrackEvent(PendingTrackEvent&&);

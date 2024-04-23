@@ -48,6 +48,7 @@ class ElementBox;
 
 class RenderElement : public RenderObject {
     WTF_MAKE_ISO_ALLOCATED(RenderElement);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderElement);
 public:
     virtual ~RenderElement();
 
@@ -192,7 +193,7 @@ public:
     inline bool hasHiddenBackface() const;
     bool capturedInViewTransition() const;
     bool hasViewTransitionName() const;
-    bool isViewTransitionPseudo() const;
+    bool requiresRenderingConsolidationForViewTransition() const;
     bool hasOutlineAnnotation() const;
     inline bool hasOutline() const;
     bool hasSelfPaintingLayer() const;

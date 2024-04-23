@@ -40,8 +40,9 @@ class Font;
 
 struct GlyphData;
 
-class TextRun : public CanMakeCheckedPtr<TextRun> {
+class TextRun final : public CanMakeCheckedPtr<TextRun> {
     WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(TextRun);
     friend void add(Hasher&, const TextRun&);
 public:
     explicit TextRun(const String& text, float xpos = 0, float expansion = 0, ExpansionBehavior expansionBehavior = ExpansionBehavior::defaultBehavior(), TextDirection direction = TextDirection::LTR, bool directionalOverride = false, bool characterScanForCodePath = true)
@@ -118,8 +119,10 @@ public:
     UChar operator[](unsigned i) const { RELEASE_ASSERT(i < m_text.length()); return m_text[i]; }
     const LChar* data8(unsigned i) const { ASSERT_WITH_SECURITY_IMPLICATION(i < m_text.length()); ASSERT(is8Bit()); return &m_text.characters8()[i]; }
     const UChar* data16(unsigned i) const { ASSERT_WITH_SECURITY_IMPLICATION(i < m_text.length()); ASSERT(!is8Bit()); return &m_text.characters16()[i]; }
-    std::span<const LChar> span8(unsigned i) { ASSERT(is8Bit()); return m_text.span8().subspan(i); }
-    std::span<const UChar> span16(unsigned i) { ASSERT(!is8Bit()); return m_text.span16().subspan(i); }
+    std::span<const LChar> span8() const { ASSERT(is8Bit()); return m_text.span8(); }
+    std::span<const UChar> span16() const { ASSERT(!is8Bit()); return m_text.span16(); }
+    std::span<const LChar> subspan8(unsigned i) const { return span8().subspan(i); }
+    std::span<const UChar> subspan16(unsigned i) const { return span16().subspan(i); }
 
     const LChar* characters8() const { ASSERT(is8Bit()); return m_text.characters8(); }
     const UChar* characters16() const { ASSERT(!is8Bit()); return m_text.characters16(); }

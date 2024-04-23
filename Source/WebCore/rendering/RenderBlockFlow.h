@@ -52,6 +52,7 @@ enum LineCount {
 
 class RenderBlockFlow : public RenderBlock {
     WTF_MAKE_ISO_ALLOCATED(RenderBlockFlow);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderBlockFlow);
 public:
     RenderBlockFlow(Type, Element&, RenderStyle&&, OptionSet<BlockFlowFlag> = { });
     RenderBlockFlow(Type, Document&, RenderStyle&&, OptionSet<BlockFlowFlag> = { });
@@ -338,10 +339,16 @@ public:
     void setChildrenInline(bool) final;
 
     bool hasLines() const;
-    void invalidateLineLayoutPath();
+
+    enum InvalidationReason : uint8_t {
+        StyleChange,
+        InsertionOrRemoval, // renderer gets constructed/goes away
+        ContentChange       // existing renderer gets changed (text content only atm)
+    };
+    void invalidateLineLayoutPath(InvalidationReason);
     void computeAndSetLineLayoutPath();
 
-    enum LineLayoutPath { UndeterminedPath = 0, ModernPath, LegacyPath, ForcedLegacyPath };
+    enum LineLayoutPath { UndeterminedPath = 0, ModernPath, LegacyPath };
     LineLayoutPath lineLayoutPath() const { return static_cast<LineLayoutPath>(renderBlockFlowLineLayoutPath()); }
     void setLineLayoutPath(LineLayoutPath path) { setRenderBlockFlowLineLayoutPath(path); }
 

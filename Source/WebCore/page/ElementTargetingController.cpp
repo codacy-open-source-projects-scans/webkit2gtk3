@@ -26,6 +26,8 @@
 #include "config.h"
 #include "ElementTargetingController.h"
 
+#include "AccessibilityObject.h"
+#include "Attr.h"
 #include "Chrome.h"
 #include "ChromeClient.h"
 #include "DOMTokenList.h"
@@ -43,6 +45,7 @@
 #include "HitTestResult.h"
 #include "LocalFrame.h"
 #include "LocalFrameView.h"
+#include "NamedNodeMap.h"
 #include "NodeList.h"
 #include "Page.h"
 #include "PseudoElement.h"
@@ -56,15 +59,44 @@
 namespace WebCore {
 
 static constexpr auto maximumNumberOfClasses = 5;
-static constexpr auto maximumAreaRatioForAbsolutelyPositionedContent = 0.75;
-static constexpr auto maximumAreaRatioForInFlowContent = 0.5;
-static constexpr auto maximumAreaRatioForNearbyTargets = 0.25;
-static constexpr auto minimumAreaRatioForInFlowContent = 0.01;
-static constexpr auto maximumAreaRatioForTrackingAdjustmentAreas = 0.25;
 static constexpr auto marginForTrackingAdjustmentRects = 5;
 static constexpr auto minimumDistanceToConsiderEdgesEquidistant = 2;
 static constexpr auto selectorBasedVisibilityAdjustmentTimeLimit = 30_s;
 static constexpr auto adjustmentClientRectCleanUpDelay = 15_s;
+static constexpr auto minimumAreaRatioForElementToCoverViewport = 0.95;
+static constexpr auto minimumAreaForInterpolation = 200000;
+static constexpr auto maximumAreaForInterpolation = 800000;
+
+static float linearlyInterpolatedViewportRatio(float viewportArea, float minimumValue, float maximumValue)
+{
+    auto areaRatio = (viewportArea - minimumAreaForInterpolation) / (maximumAreaForInterpolation - minimumAreaForInterpolation);
+    return clampTo(maximumValue - areaRatio * (maximumValue - minimumValue), minimumValue, maximumValue);
+}
+
+static float maximumAreaRatioForAbsolutelyPositionedContent(float viewportArea)
+{
+    return linearlyInterpolatedViewportRatio(viewportArea, 0.75, 1);
+}
+
+static float maximumAreaRatioForInFlowContent(float viewportArea)
+{
+    return linearlyInterpolatedViewportRatio(viewportArea, 0.5, 1);
+}
+
+static float maximumAreaRatioForNearbyTargets(float viewportArea)
+{
+    return linearlyInterpolatedViewportRatio(viewportArea, 0.25, 0.5);
+}
+
+static float minimumAreaRatioForInFlowContent(float viewportArea)
+{
+    return linearlyInterpolatedViewportRatio(viewportArea, 0.005, 0.01);
+}
+
+static float maximumAreaRatioForTrackingAdjustmentAreas(float viewportArea)
+{
+    return linearlyInterpolatedViewportRatio(viewportArea, 0.25, 0.3);
+}
 
 using ElementSelectorCache = HashMap<Ref<Element>, std::optional<String>>;
 
@@ -93,32 +125,39 @@ static inline bool elementAndAncestorsAreOnlyRenderedChildren(const Element& ele
     return true;
 }
 
-static inline bool querySelectorMatchesOneElement(Document& document, const String& selector)
+static inline bool querySelectorMatchesOneElement(Element& element, const String& selector)
 {
-    auto result = document.querySelectorAll(selector);
-    return !result.hasException() && result.returnValue()->length() == 1;
+    auto result = element.document().querySelectorAll(selector);
+    if (result.hasException())
+        return false;
+    return result.returnValue()->length() == 1 && result.returnValue()->item(0) == &element;
 }
 
 struct ChildElementPosition {
     size_t index { notFound };
-    size_t childCountOfType { 0 };
+    bool firstOfType { false };
+    bool lastOfType { false };
 };
 
-static inline ChildElementPosition childIndexByType(Element& element, Element& parent)
+static inline ChildElementPosition findChild(Element& element, Element& parent)
 {
-    ChildElementPosition result;
     auto elementTagName = element.tagName();
+    RefPtr<Element> firstOfType;
+    RefPtr<Element> lastOfType;
+    size_t index = notFound;
+    size_t currentChildIndex = 0;
     for (auto& child : childrenOfType<Element>(parent)) {
-        if (child.tagName() != elementTagName)
-            continue;
-
         if (&child == &element)
-            result.index = result.childCountOfType;
+            index = currentChildIndex;
 
-        result.childCountOfType++;
+        if (child.tagName() == elementTagName) {
+            if (!firstOfType)
+                firstOfType = &child;
+            lastOfType = &child;
+        }
+        currentChildIndex++;
     }
-
-    return result;
+    return { index, &element == firstOfType, &element == lastOfType };
 }
 
 static inline String computeIDSelector(Element& element)
@@ -131,18 +170,88 @@ static inline String computeIDSelector(Element& element)
     return emptyString();
 }
 
-static inline String computeClassSelector(Element& element)
+static inline String computeTagAndAttributeSelector(Element& element)
 {
-    if (element.hasClass()) {
-        auto& classList = element.classList();
-        Vector<String> classes;
-        classes.reserveInitialCapacity(classList.length());
-        for (unsigned i = 0; i < std::min<unsigned>(maximumNumberOfClasses, classList.length()); ++i)
-            classes.append(classList.item(i));
-        auto selector = makeString('.', makeStringByJoining(classes, "."_s));
-        if (querySelectorMatchesOneElement(element.document(), selector))
+    if (!element.hasAttributes())
+        return emptyString();
+
+    static NeverDestroyed attributesToExclude = [] {
+        MemoryCompactLookupOnlyRobinHoodHashSet<QualifiedName> names;
+        names.add(HTMLNames::classAttr);
+        names.add(HTMLNames::idAttr);
+        names.add(HTMLNames::styleAttr);
+        names.add(HTMLNames::widthAttr);
+        names.add(HTMLNames::heightAttr);
+        names.add(HTMLNames::forAttr);
+        names.add(HTMLNames::aria_labeledbyAttr);
+        names.add(HTMLNames::aria_labelledbyAttr);
+        names.add(HTMLNames::aria_describedbyAttr);
+        return names;
+    }();
+
+    static constexpr auto maximumNameLength = 16;
+    static constexpr auto maximumValueLength = 100;
+    static constexpr auto maximumValueLengthForExactMatch = 40;
+
+    Vector<std::pair<String, String>> attributesToCheck;
+    auto& attributes = element.attributes();
+    attributesToCheck.reserveInitialCapacity(attributes.length());
+    for (unsigned i = 0; i < attributes.length(); ++i) {
+        RefPtr attribute = attributes.item(i);
+        auto qualifiedName = attribute->qualifiedName();
+        if (attributesToExclude->contains(qualifiedName))
+            continue;
+
+        auto name = qualifiedName.toString();
+        if (name.length() > maximumNameLength)
+            continue;
+
+        if (name.startsWith("on"_s))
+            continue;
+
+        auto value = attribute->value();
+        if (value.length() > maximumValueLength)
+            continue;
+
+        attributesToCheck.append({ WTFMove(name), value.string() });
+    }
+
+    if (attributesToCheck.isEmpty())
+        return emptyString();
+
+    auto tagName = element.tagName();
+    for (auto [name, value] : attributesToCheck) {
+        String selector;
+        if (value.length() > maximumValueLengthForExactMatch) {
+            value = value.left(maximumValueLengthForExactMatch);
+            selector = makeString(tagName, '[', name, "^='"_s, value, "']"_s);
+        } else if (value.isEmpty())
+            selector = makeString(tagName, '[', name, ']');
+        else
+            selector = makeString(tagName, '[', name, "='"_s, value, "']"_s);
+
+        if (querySelectorMatchesOneElement(element, selector))
             return selector;
     }
+
+    return emptyString();
+}
+
+static inline String computeTagAndClassSelector(Element& element)
+{
+    if (!element.hasClass())
+        return emptyString();
+
+    auto& classList = element.classList();
+    Vector<String> classes;
+    classes.reserveInitialCapacity(classList.length());
+    for (unsigned i = 0; i < std::min<unsigned>(maximumNumberOfClasses, classList.length()); ++i)
+        classes.append(classList.item(i));
+
+    auto selector = makeString(element.tagName(), '.', makeStringByJoining(classes, "."_s));
+    if (querySelectorMatchesOneElement(element, selector))
+        return selector;
+
     return emptyString();
 }
 
@@ -173,11 +282,13 @@ static String selectorForElementRecursive(Element& element, ElementSelectorCache
     if (auto selector = computeIDSelector(element); !selector.isEmpty())
         selectors.append(WTFMove(selector));
 
-    if (auto selector = computeClassSelector(element); !selector.isEmpty())
+    if (querySelectorMatchesOneElement(element, element.tagName()))
+        selectors.append(element.tagName());
+    else if (auto selector = computeTagAndClassSelector(element); !selector.isEmpty())
         selectors.append(WTFMove(selector));
 
-    if (querySelectorMatchesOneElement(element.document(), element.tagName()))
-        selectors.append(element.tagName());
+    if (auto selector = computeTagAndAttributeSelector(element); !selector.isEmpty())
+        selectors.append(WTFMove(selector));
 
     if (auto selector = shortestSelector(selectors); !selector.isEmpty()) {
         cache.add(element, selector);
@@ -221,17 +332,17 @@ static String parentRelativeSelectorRecursive(Element& element, ElementSelectorC
 
     if (auto selector = selectorForElementRecursive(*parent, cache); !selector.isEmpty()) {
         auto selectorPrefix = makeString(WTFMove(selector), " > "_s, element.tagName());
-        auto [childIndex, childCountOfType] = childIndexByType(element, *parent);
+        auto [childIndex, firstOfType, lastOfType] = findChild(element, *parent);
         if (childIndex == notFound)
             return emptyString();
 
-        if (childCountOfType == 1)
+        if (firstOfType && lastOfType)
             return selectorPrefix;
 
-        if (!childIndex)
+        if (firstOfType)
             return makeString(WTFMove(selectorPrefix), ":first-of-type"_s);
 
-        if (childIndex == childCountOfType - 1)
+        if (lastOfType)
             return makeString(WTFMove(selectorPrefix), ":last-of-type"_s);
 
         return makeString(WTFMove(selectorPrefix), ":nth-child("_s, childIndex + 1, ')');
@@ -270,33 +381,31 @@ static Vector<String> selectorsForTarget(Element& element, ElementSelectorCache&
     }
 
     Vector<String> selectors;
-    selectors.reserveInitialCapacity(5);
+    selectors.reserveInitialCapacity(3);
     if (auto selector = computeIDSelector(element); !selector.isEmpty())
         selectors.append(WTFMove(selector));
 
-    if (auto selector = computeClassSelector(element); !selector.isEmpty())
-        selectors.append(WTFMove(selector));
-
-    if (querySelectorMatchesOneElement(element.document(), element.tagName()))
+    if (querySelectorMatchesOneElement(element, element.tagName()))
         selectors.append(element.tagName());
+    else {
+        if (auto selector = computeTagAndClassSelector(element); !selector.isEmpty())
+            selectors.append(WTFMove(selector));
+
+        if (auto selector = computeTagAndAttributeSelector(element); !selector.isEmpty())
+            selectors.append(WTFMove(selector));
+    }
+
+    if (selectors.isEmpty()) {
+        if (auto selector = parentRelativeSelectorRecursive(element, cache); !selector.isEmpty())
+            selectors.append(WTFMove(selector));
+
+        if (auto selector = siblingRelativeSelectorRecursive(element, cache); !selector.isEmpty())
+            selectors.append(WTFMove(selector));
+    }
 
     std::sort(selectors.begin(), selectors.end(), [](auto& first, auto& second) {
         return first.length() < second.length();
     });
-
-    Vector<String> relativeSelectors;
-    relativeSelectors.reserveInitialCapacity(2);
-    if (auto selector = parentRelativeSelectorRecursive(element, cache); !selector.isEmpty())
-        relativeSelectors.append(WTFMove(selector));
-
-    if (auto selector = siblingRelativeSelectorRecursive(element, cache); !selector.isEmpty())
-        relativeSelectors.append(WTFMove(selector));
-
-    std::sort(relativeSelectors.begin(), relativeSelectors.end(), [](auto& first, auto& second) {
-        return first.length() < second.length();
-    });
-
-    selectors.appendVector(WTFMove(relativeSelectors));
 
     if (!selectors.isEmpty())
         cache.add(element, selectors.first());
@@ -367,7 +476,29 @@ static inline HTMLElement* findOnlyMainElement(HTMLBodyElement& bodyElement)
     return onlyMainElement.get();
 }
 
-static bool isTargetCandidate(Element& element, const HTMLElement* onlyMainElement)
+static bool isNavigationalElement(Element& element)
+{
+    if (element.hasTagName(HTMLNames::navTag))
+        return true;
+
+    auto roleValue = element.attributeWithoutSynchronization(HTMLNames::roleAttr);
+    return AccessibilityObject::ariaRoleToWebCoreRole(roleValue) == AccessibilityRole::LandmarkNavigation;
+}
+
+static bool containsNavigationalElement(Element& element)
+{
+    if (isNavigationalElement(element))
+        return true;
+
+    for (auto& descendant : descendantsOfType<HTMLElement>(element)) {
+        if (isNavigationalElement(descendant))
+            return true;
+    }
+
+    return false;
+}
+
+static bool isTargetCandidate(Element& element, const HTMLElement* onlyMainElement, const Element* hitTestedElement = nullptr)
 {
     if (!element.renderer())
         return false;
@@ -389,6 +520,9 @@ static bool isTargetCandidate(Element& element, const HTMLElement* onlyMainEleme
     if (elementAndAncestorsAreOnlyRenderedChildren(element))
         return false;
 
+    if (is<HTMLFrameOwnerElement>(hitTestedElement) && containsNavigationalElement(element))
+        return false;
+
     return true;
 }
 
@@ -405,7 +539,7 @@ static inline std::optional<IntRect> inflatedClientRectForAdjustmentRegionTracki
     if (clientRect.isEmpty())
         return { };
 
-    if (clientRect.area() / viewportArea >= maximumAreaRatioForTrackingAdjustmentAreas)
+    if (clientRect.area() / viewportArea >= maximumAreaRatioForTrackingAdjustmentAreas(viewportArea))
         return { };
 
     // Keep track of the client rects of elements we're targeting, until the client
@@ -446,6 +580,7 @@ Vector<TargetedElementInfo> ElementTargetingController::findTargets(TargetedElem
     if (!viewportArea)
         return { };
 
+    auto nearbyTargetAreaRatio = maximumAreaRatioForNearbyTargets(viewportArea);
     static constexpr OptionSet hitTestOptions {
         HitTestRequest::Type::ReadOnly,
         HitTestRequest::Type::DisallowUserAgentShadowContent,
@@ -457,13 +592,14 @@ Vector<TargetedElementInfo> ElementTargetingController::findTargets(TargetedElem
     HitTestResult result { LayoutPoint { view->rootViewToContents(request.pointInRootView) } };
     document->hitTest(hitTestOptions, result);
 
+    RefPtr hitTestedElement = result.innerNonSharedElement();
     RefPtr onlyMainElement = findOnlyMainElement(*bodyElement);
     auto candidates = [&] {
         auto& results = result.listBasedTestResult();
         Vector<Ref<Element>> elements;
         elements.reserveInitialCapacity(results.size());
         for (auto& node : results) {
-            if (RefPtr element = dynamicDowncast<Element>(node); element && isTargetCandidate(*element, onlyMainElement.get()))
+            if (RefPtr element = dynamicDowncast<Element>(node); element && isTargetCandidate(*element, onlyMainElement.get(), hitTestedElement.get()))
                 elements.append(element.releaseNonNull());
         }
         return elements;
@@ -491,28 +627,58 @@ Vector<TargetedElementInfo> ElementTargetingController::findTargets(TargetedElem
         CheckedPtr targetRenderer = target->renderer();
         auto targetBoundingBox = target->boundingBoxInRootViewCoordinates();
         auto targetAreaRatio = computeViewportAreaRatio(targetBoundingBox);
+
+        bool shouldSkipTargetThatCoversViewport = [&] {
+            if (targetAreaRatio < minimumAreaRatioForElementToCoverViewport)
+                return false;
+
+            auto& style = targetRenderer->style();
+            if (style.specifiedZIndex() < 0)
+                return true;
+
+            return targetRenderer->isOutOfFlowPositioned()
+                && (!style.hasBackground() || !style.opacity())
+                && style.usedPointerEvents() == PointerEvents::None;
+        }();
+
+        if (shouldSkipTargetThatCoversViewport)
+            continue;
+
         bool shouldAddTarget = targetRenderer->isFixedPositioned()
             || targetRenderer->isStickilyPositioned()
-            || (targetRenderer->isAbsolutelyPositioned() && targetAreaRatio < maximumAreaRatioForAbsolutelyPositionedContent)
-            || (minimumAreaRatioForInFlowContent < targetAreaRatio && targetAreaRatio < maximumAreaRatioForInFlowContent);
+            || (targetRenderer->isAbsolutelyPositioned() && targetAreaRatio < maximumAreaRatioForAbsolutelyPositionedContent(viewportArea))
+            || (minimumAreaRatioForInFlowContent(viewportArea) < targetAreaRatio && targetAreaRatio < maximumAreaRatioForInFlowContent(viewportArea))
+            || !target->firstElementChild();
 
         if (!shouldAddTarget)
             continue;
 
         bool checkForNearbyTargets = request.canIncludeNearbyElements
             && targetRenderer->isOutOfFlowPositioned()
-            && targetAreaRatio < maximumAreaRatioForNearbyTargets;
+            && targetAreaRatio < nearbyTargetAreaRatio;
 
-        if (checkForNearbyTargets && computeViewportAreaRatio(targetBoundingBox) < maximumAreaRatioForNearbyTargets)
+        if (checkForNearbyTargets && computeViewportAreaRatio(targetBoundingBox) < nearbyTargetAreaRatio)
             additionalRegionForNearbyElements.unite(targetBoundingBox);
 
+        auto targetEncompassesOtherCandidate = [](Element& target, Element& candidate) {
+            if (&target == &candidate)
+                return true;
+
+            RefPtr<Element> candidateOrHost;
+            if (RefPtr pseudo = dynamicDowncast<PseudoElement>(candidate))
+                candidateOrHost = pseudo->hostElement();
+            else
+                candidateOrHost = &candidate;
+            return candidateOrHost && target.containsIncludingShadowDOM(candidateOrHost.get());
+        };
+
         candidates.removeAllMatching([&](auto& candidate) {
-            if (target.ptr() != candidate.ptr() && !target->containsIncludingShadowDOM(candidate.ptr()))
+            if (!targetEncompassesOtherCandidate(target, candidate))
                 return false;
 
             if (checkForNearbyTargets) {
                 auto boundingBox = candidate->boundingBoxInRootViewCoordinates();
-                if (computeViewportAreaRatio(boundingBox) < maximumAreaRatioForNearbyTargets)
+                if (computeViewportAreaRatio(boundingBox) < nearbyTargetAreaRatio)
                     additionalRegionForNearbyElements.unite(boundingBox);
             }
 
@@ -558,14 +724,14 @@ Vector<TargetedElementInfo> ElementTargetingController::findTargets(TargetedElem
             if (result.listBasedTestResult().contains(*element))
                 continue;
 
-            if (!isTargetCandidate(*element, onlyMainElement.get()))
+            if (!isTargetCandidate(*element, onlyMainElement.get(), hitTestedElement.get()))
                 continue;
 
             auto boundingBox = element->boundingBoxInRootViewCoordinates();
             if (!additionalRegionForNearbyElements.contains(boundingBox))
                 continue;
 
-            if (computeViewportAreaRatio(boundingBox) > maximumAreaRatioForNearbyTargets)
+            if (computeViewportAreaRatio(boundingBox) > nearbyTargetAreaRatio)
                 continue;
 
             targets.add(element.releaseNonNull());

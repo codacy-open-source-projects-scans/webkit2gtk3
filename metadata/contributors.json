@@ -3783,6 +3783,16 @@
    },
    {
       "emails" : [
+         "jani@igalia.com"
+      ],
+      "github" : "zhani",
+      "name" : "Jani Hautakangas",
+      "nicks" : [
+         "zhani"
+      ]
+   },
+   {
+      "emails" : [
          "jbadics@inf.u-szeged.hu"
       ],
       "name" : "Janos Badics",
@@ -4485,7 +4495,6 @@
    },
    {
       "emails" : [
-         "justin_michaud@apple.com",
          "justin@justinmichaud.com"
       ],
       "expertise" : "JavaScriptCore",
@@ -6420,7 +6429,8 @@
       "name" : "Przemyslaw Gorszkowski",
       "nicks" : [
          "pgorszkowski"
-      ]
+      ],
+      "status" : "committer"
    },
    {
       "emails" : [
@@ -6873,7 +6883,7 @@
       "nicks" : [
          "gsnedders"
       ],
-      "status" : "committer"
+      "status" : "reviewer"
    },
    {
       "emails" : [

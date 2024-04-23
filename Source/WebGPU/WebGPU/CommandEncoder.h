@@ -37,6 +37,7 @@
 - (instancetype)init NS_UNAVAILABLE;
 @property (nonatomic) id<MTLTexture> texture;
 @property (nonatomic) MTLClearColor clearColor;
+@property (nonatomic) NSUInteger depthPlane;
 @end
 
 struct WGPUCommandEncoderImpl {
@@ -92,7 +93,7 @@ public:
     id<MTLBlitCommandEncoder> ensureBlitCommandEncoder();
     void finalizeBlitCommandEncoder();
 
-    void runClearEncoder(NSMutableDictionary<NSNumber*, TextureAndClearColor*> *attachmentsToClear, id<MTLTexture> depthStencilAttachmentToClear, bool depthAttachmentToClear, bool stencilAttachmentToClear, float depthClearValue = 0, uint32_t stencilClearValue = 0, id<MTLRenderCommandEncoder> = nil);
+    void runClearEncoder(NSMutableDictionary<NSNumber*, TextureAndClearColor*> *attachmentsToClear, id<MTLTexture> depthStencilAttachmentToClear, bool depthAttachmentToClear, bool stencilAttachmentToClear, float depthClearValue = 0, uint32_t stencilClearValue = 0, id<MTLRenderCommandEncoder> existingEncoder = nil);
     static void clearTextureIfNeeded(const WGPUImageCopyTexture&, NSUInteger, id<MTLDevice>, id<MTLBlitCommandEncoder>);
     static void clearTextureIfNeeded(Texture&, NSUInteger, NSUInteger, id<MTLDevice>, id<MTLBlitCommandEncoder>);
     void makeInvalid(NSString* = nil);
@@ -101,6 +102,8 @@ public:
     void decrementBufferMapCount();
     void endEncoding(id<MTLCommandEncoder>);
     void setLastError(NSString*);
+    void waitForCommandBufferCompletion();
+    bool encoderIsCurrent(id<MTLCommandEncoder>) const;
 
 private:
     CommandEncoder(id<MTLCommandBuffer>, Device&);

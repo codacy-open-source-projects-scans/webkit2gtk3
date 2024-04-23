@@ -490,10 +490,10 @@ Ref<StringImpl> StringImpl::convertToUppercaseWithoutLocale()
 
 upconvert:
     auto upconvertedCharacters = StringView(*this).upconvertedCharacters();
-    const UChar* source16 = upconvertedCharacters;
+    auto source16 = upconvertedCharacters.span();
 
     UChar* data16;
-    auto newImpl = createUninitialized(m_length, data16);
+    auto newImpl = createUninitialized(source16.size(), data16);
     
     // Do a faster loop for the case where all the characters are ASCII.
     unsigned ored = 0;
@@ -507,12 +507,12 @@ upconvert:
 
     // Do a slower implementation for cases that include non-ASCII characters.
     UErrorCode status = U_ZERO_ERROR;
-    int32_t realLength = u_strToUpper(data16, length, source16, m_length, "", &status);
+    int32_t realLength = u_strToUpper(data16, length, source16.data(), source16.size(), "", &status);
     if (U_SUCCESS(status) && realLength == length)
         return newImpl;
     newImpl = createUninitialized(realLength, data16);
     status = U_ZERO_ERROR;
-    u_strToUpper(data16, realLength, source16, m_length, "", &status);
+    u_strToUpper(data16, realLength, source16.data(), source16.size(), "", &status);
     if (U_FAILURE(status))
         return *this;
     return newImpl;
@@ -561,19 +561,18 @@ Ref<StringImpl> StringImpl::convertToLowercaseWithLocale(const AtomString& local
 
     if (m_length > MaxLength)
         CRASH();
-    int length = m_length;
 
     auto upconvertedCharacters = StringView(*this).upconvertedCharacters();
-    const UChar* source16 = upconvertedCharacters;
+    auto source16 = upconvertedCharacters.span();
     UChar* data16;
-    auto newString = createUninitialized(length, data16);
+    auto newString = createUninitialized(source16.size(), data16);
     UErrorCode status = U_ZERO_ERROR;
-    int realLength = u_strToLower(data16, length, source16, length, locale, &status);
-    if (U_SUCCESS(status) && realLength == length)
+    size_t realLength = u_strToLower(data16, source16.size(), source16.data(), source16.size(), locale, &status);
+    if (U_SUCCESS(status) && realLength == source16.size())
         return newString;
     newString = createUninitialized(realLength, data16);
     status = U_ZERO_ERROR;
-    u_strToLower(data16, realLength, source16, length, locale, &status);
+    u_strToLower(data16, realLength, source16.data(), source16.size(), locale, &status);
     if (U_FAILURE(status))
         return *this;
     return newString;
@@ -597,19 +596,18 @@ Ref<StringImpl> StringImpl::convertToUppercaseWithLocale(const AtomString& local
 
     if (m_length > MaxLength)
         CRASH();
-    int length = m_length;
 
     auto upconvertedCharacters = StringView(*this).upconvertedCharacters();
-    const UChar* source16 = upconvertedCharacters;
+    auto source16 = upconvertedCharacters.span();
     UChar* data16;
-    auto newString = createUninitialized(length, data16);
+    auto newString = createUninitialized(source16.size(), data16);
     UErrorCode status = U_ZERO_ERROR;
-    int realLength = u_strToUpper(data16, length, source16, length, locale, &status);
-    if (U_SUCCESS(status) && realLength == length)
+    size_t realLength = u_strToUpper(data16, source16.size(), source16.data(), source16.size(), locale, &status);
+    if (U_SUCCESS(status) && realLength == source16.size())
         return newString;
     newString = createUninitialized(realLength, data16);
     status = U_ZERO_ERROR;
-    u_strToUpper(data16, realLength, source16, length, locale, &status);
+    u_strToUpper(data16, realLength, source16.data(), source16.size(), locale, &status);
     if (U_FAILURE(status))
         return *this;
     return newString;
@@ -681,18 +679,18 @@ SlowPath:
         CRASH();
 
     auto upconvertedCharacters = StringView(*this).upconvertedCharacters();
+    auto source16 = upconvertedCharacters.span();
 
     UChar* data;
-    auto folded = createUninitializedInternalNonEmpty(m_length, data);
-    int32_t length = m_length;
+    auto folded = createUninitializedInternalNonEmpty(source16.size(), data);
     UErrorCode status = U_ZERO_ERROR;
-    int32_t realLength = u_strFoldCase(data, length, upconvertedCharacters, length, U_FOLD_CASE_DEFAULT, &status);
-    if (U_SUCCESS(status) && realLength == length)
+    size_t realLength = u_strFoldCase(data, source16.size(), source16.data(), source16.size(), U_FOLD_CASE_DEFAULT, &status);
+    if (U_SUCCESS(status) && realLength == source16.size())
         return folded;
-    ASSERT(realLength > length);
+    ASSERT(realLength > source16.size());
     folded = createUninitializedInternalNonEmpty(realLength, data);
     status = U_ZERO_ERROR;
-    u_strFoldCase(data, realLength, upconvertedCharacters, length, U_FOLD_CASE_DEFAULT, &status);
+    u_strFoldCase(data, realLength, source16.data(), source16.size(), U_FOLD_CASE_DEFAULT, &status);
     if (U_FAILURE(status))
         return *this;
     return folded;
@@ -904,12 +902,12 @@ size_t StringImpl::find(StringView matchString)
     if (matchLength == 1) {
         if (is8Bit()) {
             if (matchString.is8Bit())
-                return WTF::find(span8(), matchString.characters8()[0]);
-            return WTF::find(span8(), matchString.characters16()[0]);
+                return WTF::find(span8(), matchString.span8().front());
+            return WTF::find(span8(), matchString.span16().front());
         }
         if (matchString.is8Bit())
-            return WTF::find(span16(), matchString.characters8()[0]);
-        return WTF::find(span16(), matchString.characters16()[0]);
+            return WTF::find(span16(), matchString.span8().front());
+        return WTF::find(span16(), matchString.span16().front());
     }
 
     // Check matchLength is in range.
@@ -1571,24 +1569,22 @@ Expected<size_t, UTF8ConversionError> StringImpl::utf8ForCharactersIntoBuffer(st
     ASSERT(bufferVector.size() == span.size() * 3);
 
     char* buffer = bufferVector.data();
-    const UChar* characters = span.data();
-    const UChar* const charactersEnd = characters + span.size();
     char* const bufferEnd = buffer + bufferVector.size();
 
     switch (mode) {
     case StrictConversionReplacingUnpairedSurrogatesWithFFFD: {
-        while (characters < charactersEnd) {
+        while (!span.empty()) {
             // Use strict conversion to detect unpaired surrogates.
-            auto result = convertUTF16ToUTF8(&characters, charactersEnd, &buffer, bufferEnd);
+            auto result = convertUTF16ToUTF8(span, &buffer, bufferEnd);
             ASSERT(result != ConversionResult::TargetExhausted);
             // Conversion fails when there is an unpaired surrogate.
             // Put replacement character (U+FFFD) instead of the unpaired surrogate.
             if (result != ConversionResult::Success) {
-                ASSERT(U16_IS_SURROGATE(*characters));
+                ASSERT(U16_IS_SURROGATE(span.front()));
                 // There should be room left, since one UChar hasn't been converted.
                 ASSERT((buffer + 3) <= bufferEnd);
                 putUTF8Triple(buffer, replacementCharacter);
-                ++characters;
+                span = span.subspan(1);
             }
         }
         break;
@@ -1596,16 +1592,16 @@ Expected<size_t, UTF8ConversionError> StringImpl::utf8ForCharactersIntoBuffer(st
     case StrictConversion:
     case LenientConversion: {
         bool strict = mode == StrictConversion;
-        auto conversionResult = convertUTF16ToUTF8(&characters, charactersEnd, &buffer, bufferEnd, strict);
+        auto conversionResult = convertUTF16ToUTF8(span, &buffer, bufferEnd, strict);
         switch (conversionResult) {
         case ConversionResult::Success:
             break;
         case ConversionResult::SourceExhausted:
             if (strict)
                 return makeUnexpected(UTF8ConversionError::SourceExhausted);
-            ASSERT(characters + 1 == charactersEnd);
-            ASSERT(U16_IS_SURROGATE(*characters));
-            putUTF8Triple(buffer, *characters);
+            ASSERT(span.size() == 1);
+            ASSERT(U16_IS_SURROGATE(span.front()));
+            putUTF8Triple(buffer, span.front());
                 break;
         case ConversionResult::TargetExhausted:
             // (length * 3) should be sufficient for any conversion.

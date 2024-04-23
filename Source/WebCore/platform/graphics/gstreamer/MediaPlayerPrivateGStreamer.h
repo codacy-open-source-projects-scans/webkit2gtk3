@@ -234,7 +234,7 @@ public:
 
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const final { return m_logger; }
-    const char* logClassName() const override { return "MediaPlayerPrivateGStreamer"; }
+    ASCIILiteral logClassName() const override { return "MediaPlayerPrivateGStreamer"_s; }
     const void* logIdentifier() const final { return reinterpret_cast<const void*>(m_logIdentifier); }
     WTFLogChannel& logChannel() const override;
 
@@ -346,8 +346,8 @@ protected:
 
     void setCachedPosition(const MediaTime&) const;
 
-    bool isPipelineSeeking(GstState current, GstState pending, GstStateChangeReturn) const;
-    bool isPipelineSeeking() const;
+    bool isPipelineWaitingPreroll(GstState current, GstState pending, GstStateChangeReturn) const;
+    bool isPipelineWaitingPreroll() const;
 
     Ref<MainThreadNotifier<MainThreadNotification>> m_notifier;
     ThreadSafeWeakPtr<MediaPlayer> m_player;

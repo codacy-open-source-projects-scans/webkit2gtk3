@@ -338,7 +338,6 @@ private:
     std::optional<AccessibilityChildrenVector> selectedChildren() final;
     void setSelectedChildren(const AccessibilityChildrenVector&) final;
     AccessibilityChildrenVector visibleChildren() final { return tree()->objectsForIDs(vectorAttributeValue<AXID>(AXPropertyName::VisibleChildren)); }
-    AtomString tagName() const final;
     void setChildrenIDs(Vector<AXID>&&);
     void updateChildrenIfNecessary() final;
     bool isDetachedFromParent() final;
@@ -463,7 +462,6 @@ private:
     bool isAccessibilityARIAGridCellInstance() const final { return false; }
     bool isAXRemoteFrame() const final { return false; }
     bool isNativeTextControl() const final;
-    bool isListBoxOption() const final;
     bool isMockObject() const final;
     bool isNonNativeTextControl() const final { return boolAttributeValue(AXPropertyName::IsNonNativeTextControl); }
     bool isIndeterminate() const final { return boolAttributeValue(AXPropertyName::IsIndeterminate); }

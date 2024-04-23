@@ -43,6 +43,7 @@
 #include "InspectorInstrumentation.h"
 #include "JSDOMExceptionHandling.h"
 #include "NotImplemented.h"
+#include "PageConsoleClient.h"
 #include "Performance.h"
 #include "RTCDataChannelRemoteHandlerConnection.h"
 #include "ReportingScope.h"
@@ -92,7 +93,7 @@ static HashSet<ScriptExecutionContextIdentifier>& allWorkerGlobalScopeIdentifier
 
 static WorkQueue& sharedFileSystemStorageQueue()
 {
-    static NeverDestroyed<Ref<WorkQueue>> queue(WorkQueue::create("Shared File System Storage Queue",  WorkQueue::QOS::Default));
+    static NeverDestroyed<Ref<WorkQueue>> queue(WorkQueue::create("Shared File System Storage Queue"_s,  WorkQueue::QOS::Default));
     return queue.get();
 }
 
@@ -449,6 +450,10 @@ void WorkerGlobalScope::addConsoleMessage(std::unique_ptr<Inspector::ConsoleMess
         postTask(AddConsoleMessageTask(message->source(), message->level(), message->message()));
         return;
     }
+
+    auto sessionID = this->sessionID();
+    if (UNLIKELY(settingsValues().logsPageMessagesToSystemConsoleEnabled && sessionID && !sessionID->isEphemeral()))
+        PageConsoleClient::logMessageToSystemConsole(*message);
 
     InspectorInstrumentation::addMessageToConsole(*this, WTFMove(message));
 }

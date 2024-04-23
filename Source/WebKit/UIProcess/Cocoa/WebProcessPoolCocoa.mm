@@ -222,10 +222,9 @@ static std::optional<bool>& cachedLockdownModeEnabledGlobally()
 
 void WebProcessPool::updateProcessSuppressionState()
 {
-    WebsiteDataStore::forEachWebsiteDataStore([enabled = processSuppressionEnabled()] (WebsiteDataStore& dataStore) {
-        if (auto* networkProcess = dataStore.networkProcessIfExists())
-            networkProcess->setProcessSuppressionEnabled(enabled);
-    });
+    bool enabled = processSuppressionEnabled();
+    for (Ref networkProcess : NetworkProcessProxy::allNetworkProcesses())
+        networkProcess->setProcessSuppressionEnabled(enabled);
 }
 
 NSMutableDictionary *WebProcessPool::ensureBundleParameters()
@@ -720,6 +719,7 @@ void WebProcessPool::registerNotificationObservers()
         "com.apple.language.changed"_s,
         "com.apple.mediaaccessibility.captionAppearanceSettingsChanged"_s,
         "com.apple.powerlog.state_changed"_s,
+        "com.apple.system.logging.prefschanged"_s,
         "com.apple.system.lowpowermode"_s,
         "com.apple.system.timezone"_s,
         "com.apple.zoomwindow"_s,

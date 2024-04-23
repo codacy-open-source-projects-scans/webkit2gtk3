@@ -61,6 +61,8 @@
 #include "RemoteSampleBufferDisplayLayerManagerMessages.h"
 #include "RemoteSampleBufferDisplayLayerMessages.h"
 #include "RemoteScrollingCoordinatorTransaction.h"
+#include "RemoteSharedResourceCache.h"
+#include "RemoteSharedResourceCacheMessages.h"
 #include "ScopedRenderingResourcesRequest.h"
 #include "WebCoreArgumentCoders.h"
 #include "WebErrors.h"
@@ -349,6 +351,13 @@ GPUConnectionToWebProcess::~GPUConnectionToWebProcess()
     --gObjectCountForTesting;
 }
 
+Ref<RemoteSharedResourceCache> GPUConnectionToWebProcess::sharedResourceCache()
+{
+    if (!m_sharedResourceCache)
+        m_sharedResourceCache = RemoteSharedResourceCache::create();
+    return *m_sharedResourceCache;
+}
+
 uint64_t GPUConnectionToWebProcess::gObjectCountForTesting = 0;
 
 void GPUConnectionToWebProcess::didClose(IPC::Connection& connection)
@@ -519,7 +528,7 @@ void GPUConnectionToWebProcess::didReceiveInvalidMessage(IPC::Connection& connec
     if (connection.ignoreInvalidMessageForTesting())
         return;
 #endif
-    RELEASE_LOG_FAULT(IPC, "Received an invalid message '%" PUBLIC_LOG_STRING "' from WebContent process %" PRIu64 ", requesting for it to be terminated.", description(messageName), m_webProcessIdentifier.toUInt64());
+    RELEASE_LOG_FAULT(IPC, "Received an invalid message '%" PUBLIC_LOG_STRING "' from WebContent process %" PRIu64 ", requesting for it to be terminated.", description(messageName).characters(), m_webProcessIdentifier.toUInt64());
     terminateWebProcess();
 }
 
@@ -642,11 +651,6 @@ void GPUConnectionToWebProcess::releaseRenderingBackend(RenderingBackendIdentifi
     bool found = m_remoteRenderingBackendMap.remove(renderingBackendIdentifier);
     ASSERT_UNUSED(found, found);
     gpuProcess().tryExitIfUnusedAndUnderMemoryPressure();
-}
-
-void GPUConnectionToWebProcess::releaseSerializedImageBuffer(WebCore::RenderingResourceIdentifier identifier)
-{
-    m_remoteSerializedImageBufferObjectHeap.remove({ { identifier, 0 }, 0 });
 }
 
 #if ENABLE(WEBGL)
@@ -967,10 +971,13 @@ bool GPUConnectionToWebProcess::dispatchMessage(IPC::Connection& connection, IPC
         return true;
     }
 #endif
-
     if (decoder.messageReceiverName() == Messages::RemoteRemoteCommandListenerProxy::messageReceiverName()) {
         if (m_remoteRemoteCommandListener)
             m_remoteRemoteCommandListener->didReceiveMessage(connection, decoder);
+        return true;
+    }
+    if (decoder.messageReceiverName() == Messages::RemoteSharedResourceCache::messageReceiverName()) {
+        sharedResourceCache()->didReceiveMessage(connection, decoder);
         return true;
     }
 #if ENABLE(IPC_TESTING_API)

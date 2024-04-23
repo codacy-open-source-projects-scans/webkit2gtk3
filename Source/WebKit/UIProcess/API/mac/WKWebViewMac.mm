@@ -31,6 +31,7 @@
 #import "AppKitSPI.h"
 #import "WKSafeBrowsingWarning.h"
 #import "WKTextFinderClient.h"
+#import "WKTextIndicatorStyleType.h"
 #import <WebKit/WKUIDelegatePrivate.h>
 #import "WebBackForwardList.h"
 #import "WebFrameProxy.h"
@@ -42,6 +43,7 @@
 #import "_WKFrameHandleInternal.h"
 #import "_WKHitTestResultInternal.h"
 #import <pal/spi/mac/NSTextFinderSPI.h>
+#import <pal/spi/mac/NSTextInputContextSPI.h>
 #import <pal/spi/mac/NSViewSPI.h>
 #import <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
 
@@ -686,6 +688,16 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_BEGIN
 - (NSArray *)validAttributesForMarkedText
 {
     return _impl->validAttributesForMarkedText();
+}
+
+- (void)insertTextPlaceholderWithSize:(CGSize)size completionHandler:(void (^)(NSTextPlaceholder *))completionHandler
+{
+    _impl->insertTextPlaceholderWithSize(size, completionHandler);
+}
+
+- (void)removeTextPlaceholder:(NSTextPlaceholder *)placeholder willInsertText:(BOOL)willInsertText completionHandler:(void (^)(void))completionHandler
+{
+    _impl->removeTextPlaceholder(placeholder, willInsertText, completionHandler);
 }
 
 #if ENABLE(DRAG_SUPPORT)

@@ -161,8 +161,8 @@ public:
     WEBCORE_EXPORT void setUnsignedIntegralAttribute(const QualifiedName& attributeName, unsigned value);
     WEBCORE_EXPORT RefPtr<Element> getElementAttribute(const QualifiedName& attributeName) const;
     WEBCORE_EXPORT void setElementAttribute(const QualifiedName& attributeName, Element* value);
-    WEBCORE_EXPORT std::optional<Vector<RefPtr<Element>>> getElementsArrayAttribute(const QualifiedName& attributeName) const;
-    WEBCORE_EXPORT void setElementsArrayAttribute(const QualifiedName& attributeName, std::optional<Vector<RefPtr<Element>>>&& value);
+    WEBCORE_EXPORT std::optional<Vector<Ref<Element>>> getElementsArrayAttribute(const QualifiedName& attributeName) const;
+    WEBCORE_EXPORT void setElementsArrayAttribute(const QualifiedName& attributeName, std::optional<Vector<Ref<Element>>>&& value);
     static bool isElementReflectionAttribute(const Settings&, const QualifiedName&);
     static bool isElementsArrayReflectionAttribute(const QualifiedName&);
 
@@ -171,6 +171,7 @@ public:
     inline bool hasAttributeWithoutSynchronization(const QualifiedName&) const;
     inline const AtomString& attributeWithoutSynchronization(const QualifiedName&) const;
     inline const AtomString& attributeWithDefaultARIA(const QualifiedName&) const;
+    inline String attributeTrimmedWithDefaultARIA(const QualifiedName&) const;
 
 #if DUMP_NODE_STATISTICS
     bool hasNamedNodeMap() const;

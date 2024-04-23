@@ -40,6 +40,7 @@
 #import "VideoPresentationManagerMessages.h"
 #import "VideoPresentationManagerProxyMessages.h"
 #import "WKVideoView.h"
+#import "WebFullScreenManagerProxy.h"
 #import "WebPageProxy.h"
 #import "WebProcessPool.h"
 #import "WebProcessProxy.h"
@@ -1355,7 +1356,7 @@ const void* VideoPresentationManagerProxy::logIdentifier() const
     return m_playbackSessionManagerProxy->logIdentifier();
 }
 
-const char* VideoPresentationManagerProxy::logClassName() const
+ASCIILiteral VideoPresentationManagerProxy::logClassName() const
 {
     return m_playbackSessionManagerProxy->logClassName();
 }

@@ -122,7 +122,24 @@ extension WKSLinearMediaContentType {
     }
 }
 
-extension WKSLinearMediaViewingMode {
+extension WKSLinearMediaPresentationState: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .inline:
+            return "inline"
+        case .enteringFullscreen:
+            return "enteringFullscreen"
+        case .fullscreen:
+            return "fullscreen"
+        case .exitingFullscreen:
+            return "exitingFullscreen"
+        @unknown default:
+            fatalError()
+        }
+    }
+}
+
+extension WKSLinearMediaViewingMode: CustomStringConvertible {
     init(_ viewingMode: ViewingMode?) {
         switch viewingMode {
         case .mono?:
@@ -152,6 +169,23 @@ extension WKSLinearMediaViewingMode {
             .immersive
         case .spatial:
             .spatial
+        @unknown default:
+            fatalError()
+        }
+    }
+
+    public var description: String {
+        switch self {
+        case .none:
+            return "none"
+        case .mono:
+            return "mono"
+        case .stereo:
+            return "stereo"
+        case .immersive:
+            return "immersive"
+        case .spatial:
+            return "spatial"
         @unknown default:
             fatalError()
         }

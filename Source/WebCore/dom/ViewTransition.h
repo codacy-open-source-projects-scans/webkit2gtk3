@@ -40,6 +40,7 @@ namespace WebCore {
 
 class DOMPromise;
 class DeferredPromise;
+class RenderViewTransitionCapture;
 
 enum class ViewTransitionPhase : uint8_t {
     PendingCapture,
@@ -152,10 +153,12 @@ public:
 
     RefPtr<Document> protectedDocument() const { return m_document.get(); }
 
+    RenderViewTransitionCapture* viewTransitionNewPseudoForCapturedElement(Element&);
+
 private:
     ViewTransition(Document&, RefPtr<ViewTransitionUpdateCallback>&&);
 
-    Ref<MutableStyleProperties> copyElementBaseProperties(Element&, const LayoutSize&);
+    Ref<MutableStyleProperties> copyElementBaseProperties(Element&, LayoutSize&);
 
     ExceptionOr<void> updatePseudoElementStyles();
     void setupDynamicStyleSheet(const AtomString&, const CapturedElement&);

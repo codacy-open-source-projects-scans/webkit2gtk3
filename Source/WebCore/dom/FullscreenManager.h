@@ -44,6 +44,7 @@ class RenderStyle;
 
 class FullscreenManager final : public CanMakeWeakPtr<FullscreenManager>, public CanMakeCheckedPtr<FullscreenManager> {
     WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(FullscreenManager);
 public:
     FullscreenManager(Document&);
     ~FullscreenManager();
@@ -109,7 +110,7 @@ private:
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const { return document().logger(); }
     const void* logIdentifier() const { return m_logIdentifier; }
-    const char* logClassName() const { return "FullscreenManager"; }
+    ASCIILiteral logClassName() const { return "FullscreenManager"_s; }
     WTFLogChannel& logChannel() const;
 #endif
 

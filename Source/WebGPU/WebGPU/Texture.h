@@ -118,8 +118,9 @@ public:
     void recreateIfNeeded();
     void makeCanvasBacking();
     void setCommandEncoder(CommandEncoder&) const;
-    static const char* formatToString(WGPUTextureFormat);
+    static ASCIILiteral formatToString(WGPUTextureFormat);
     bool isCanvasBacking() const;
+    void waitForCommandBufferCompletion();
 
 private:
     Texture(id<MTLTexture>, const WGPUTextureDescriptor&, Vector<WGPUTextureFormat>&& viewFormats, Device&);

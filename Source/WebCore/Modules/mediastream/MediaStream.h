@@ -59,7 +59,7 @@ class MediaStream final
 public:
     static Ref<MediaStream> create(Document&);
     static Ref<MediaStream> create(Document&, MediaStream&);
-    static Ref<MediaStream> create(Document&, const Vector<RefPtr<MediaStreamTrack>>&);
+    static Ref<MediaStream> create(Document&, const Vector<Ref<MediaStreamTrack>>&);
     static Ref<MediaStream> create(Document&, Ref<MediaStreamPrivate>&&);
     WEBCORE_EXPORT virtual ~MediaStream();
 
@@ -113,7 +113,7 @@ protected:
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const final { return m_private->logger(); }
     WTFLogChannel& logChannel() const final;
-    const char* logClassName() const final { return "MediaStream"; }
+    ASCIILiteral logClassName() const final { return "MediaStream"_s; }
 #endif
 
 private:
@@ -137,7 +137,6 @@ private:
 
     // ActiveDOMObject API.
     void stop() final;
-    const char* activeDOMObjectName() const final;
     bool virtualHasPendingActivity() const final;
 
     void updateActiveState();

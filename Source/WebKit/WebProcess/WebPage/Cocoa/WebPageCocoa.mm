@@ -312,16 +312,13 @@ DictionaryPopupInfo WebPage::dictionaryPopupInfoForRange(LocalFrame& frame, cons
 #if ENABLE(UNIFIED_TEXT_REPLACEMENT)
 void WebPage::getTextIndicatorForID(const WTF::UUID& uuid, CompletionHandler<void(std::optional<WebCore::TextIndicatorData>&&)>&& completionHandler)
 {
-    RefPtr range = m_unifiedTextReplacementController->rangeForUUID(uuid);
-    if (!range)
-        range = m_textIndicatorStyleEnablementRanges.get(uuid);
-    if (!range) {
-        completionHandler(std::nullopt);
-        return;
+    auto sessionRange = m_unifiedTextReplacementController->contextRangeForSessionWithUUID(uuid);
+    if (!sessionRange) {
+        if (RefPtr liveRange = m_textIndicatorStyleEnablementRanges.get(uuid))
+            sessionRange = WebCore::makeSimpleRange(liveRange);
     }
 
-    auto simpleRange = makeSimpleRange(range);
-    if (!simpleRange) {
+    if (!sessionRange) {
         completionHandler(std::nullopt);
         return;
     }
@@ -333,7 +330,7 @@ void WebPage::getTextIndicatorForID(const WTF::UUID& uuid, CompletionHandler<voi
             TextIndicatorOption::ExpandClipBeyondVisibleRect,
             TextIndicatorOption::UseSelectionRectForSizing
         };
-        if (auto textIndicator = TextIndicator::createWithRange(*simpleRange, textIndicatorOptions, TextIndicatorPresentationTransition::None, { }))
+        if (auto textIndicator = TextIndicator::createWithRange(*sessionRange, textIndicatorOptions, TextIndicatorPresentationTransition::None, { }))
             textIndicatorData = textIndicator->data();
         completionHandler(WTFMove(textIndicatorData));
         return;
@@ -378,6 +375,41 @@ void WebPage::enableTextIndicatorStyleAfterElementWithID(const String& elementID
     }
 
     m_textIndicatorStyleEnablementRanges.add(uuid, createLiveRange(*simpleRange));
+}
+
+void WebPage::enableTextIndicatorStyleForElementWithID(const String& elementID, const WTF::UUID& uuid)
+{
+    RefPtr frame = m_page->checkedFocusController()->focusedOrMainFrame();
+    if (!frame) {
+        ASSERT_NOT_REACHED();
+        return;
+    }
+
+    RefPtr document = frame->document();
+    if (!document) {
+        ASSERT_NOT_REACHED();
+        return;
+    }
+
+    RefPtr root = document->documentElement();
+    if (!root) {
+        ASSERT_NOT_REACHED();
+        return;
+    }
+
+    RefPtr element = document->getElementById(elementID);
+    if (!element) {
+        ASSERT_NOT_REACHED();
+        return;
+    }
+
+    auto elementRange = makeRangeSelectingNodeContents(*element);
+    if (elementRange.collapsed()) {
+        ASSERT_NOT_REACHED();
+        return;
+    }
+
+    m_textIndicatorStyleEnablementRanges.add(uuid, createLiveRange(elementRange));
 }
 
 #endif // ENABLE(UNIFIED_TEXT_REPLACEMENT)

@@ -40,11 +40,13 @@ namespace WebKit {
 
 using namespace WebCore;
 
-class VideoPresentationInterfaceLMK : public VideoPresentationInterfaceIOS {
+class VideoPresentationInterfaceLMK final : public VideoPresentationInterfaceIOS {
+    WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(VideoPresentationInterfaceLMK);
 public:
     static Ref<VideoPresentationInterfaceLMK> create(PlaybackSessionInterfaceIOS&);
 #if !RELEASE_LOG_DISABLED
-    const char* logClassName() const { return "VideoPresentationInterfaceLMK"; };
+    ASCIILiteral logClassName() const { return "VideoPresentationInterfaceLMK"_s; };
 #endif
     ~VideoPresentationInterfaceLMK();
 
