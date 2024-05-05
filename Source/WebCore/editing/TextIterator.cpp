@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2004-2023 Apple Inc. All rights reserved.
- * Copyright (C) 2015 Google Inc. All rights reserved.
+ * Copyright (C) 2015-2018 Google Inc. All rights reserved.
  * Copyright (C) 2005 Alexey Proskuryakov.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -853,6 +853,8 @@ bool shouldEmitNewlinesBeforeAndAfterNode(Node& node)
     // a newline both before and after the element.
     CheckedPtr renderer = node.renderer();
     if (!renderer) {
+        if (hasDisplayContents(node))
+            return false;
         RefPtr element = dynamicDowncast<HTMLElement>(node);
         return element && (hasHeaderTag(*element)
             || element->hasTagName(blockquoteTag)
@@ -1941,10 +1943,8 @@ static inline bool containsKanaLetters(const String& pattern)
 {
     if (pattern.is8Bit())
         return false;
-    const UChar* characters = pattern.characters16();
-    unsigned length = pattern.length();
-    for (unsigned i = 0; i < length; ++i) {
-        if (isKanaLetter(characters[i]))
+    for (auto character : pattern.span16()) {
+        if (isKanaLetter(character))
             return true;
     }
     return false;

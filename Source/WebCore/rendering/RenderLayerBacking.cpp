@@ -81,6 +81,7 @@
 #include "StyleResolver.h"
 #include "Styleable.h"
 #include "TiledBacking.h"
+#include "ViewTransition.h"
 #include <wtf/SystemTracing.h>
 #include <wtf/text/TextStream.h>
 
@@ -659,7 +660,7 @@ void RenderLayerBacking::updateTransform(const RenderStyle& style)
     TransformationMatrix t;
     if (renderer().capturedInViewTransition() && renderer().element()) {
         if (RefPtr activeViewTransition = renderer().document().activeViewTransition()) {
-            if (CheckedPtr viewTransitionCapture = activeViewTransition->viewTransitionNewPseudoForCapturedElement(*renderer().element())) {
+            if (CheckedPtr viewTransitionCapture = activeViewTransition->viewTransitionNewPseudoForCapturedElement(renderer())) {
                 t.scaleNonUniform(viewTransitionCapture->scale().width(), viewTransitionCapture->scale().height());
                 t.translate(viewTransitionCapture->captureContentInset().x(), viewTransitionCapture->captureContentInset().y());
             }
@@ -1416,15 +1417,13 @@ void RenderLayerBacking::updateGeometry(const RenderLayer* compositedAncestor)
     ASSERT(compositedAncestor == m_owningLayer.ancestorCompositingLayer());
     LayoutRect parentGraphicsLayerRect = computeParentGraphicsLayerRect(compositedAncestor);
 
-    // If our content is being used in a view-transition, then all positioning
-    // is handled using a synthesized 'transform' property on the wrapping
-    // ::view-transition-new element. Move the parent graphics layer rect to our
-    // position so that layer positions are computed relative to our origin.
+    // If our content is being used in a view-transition, then all positioning is handled using a synthesized 'transform' property on the wrapping
+    // ::view-transition-new element. Set the parent graphics layer rect to that of the pseudo, adjusted into coordinates of the parent layer.
     if (renderer().capturedInViewTransition() && renderer().element()) {
         if (RefPtr activeViewTransition = renderer().document().activeViewTransition()) {
-            if (CheckedPtr viewTransitionCapture = activeViewTransition->viewTransitionNewPseudoForCapturedElement(*renderer().element())) {
+            if (CheckedPtr viewTransitionCapture = activeViewTransition->viewTransitionNewPseudoForCapturedElement(renderer())) {
                 ComputedOffsets computedOffsets(m_owningLayer, compositedAncestor, viewTransitionCapture->captureOverflowRect(), { }, { });
-                parentGraphicsLayerRect.move(computedOffsets.fromParentGraphicsLayer());
+                parentGraphicsLayerRect = { { computedOffsets.fromParentGraphicsLayer().width(), computedOffsets.fromParentGraphicsLayer().height() }, viewTransitionCapture->captureOverflowRect().size() };
             }
         }
     }
@@ -3319,6 +3318,19 @@ GraphicsLayer* RenderLayerBacking::parentForSublayers() const
 
 GraphicsLayer* RenderLayerBacking::childForSuperlayers() const
 {
+    if (m_owningLayer.isRenderViewLayer()) {
+        // If the document element is captured, then the RenderView's layer will get attached
+        // into the view-transition tree, and we instead want to attach the root of the VT tree to our ancestor.
+        if (m_owningLayer.renderer().protectedDocument()->activeViewTransitionCapturedDocumentElement()) {
+            if (CheckedPtr viewTransitionRoot = m_owningLayer.lastChild(); viewTransitionRoot && viewTransitionRoot->renderer().isViewTransitionRoot() && viewTransitionRoot->backing())
+                return viewTransitionRoot->backing()->childForSuperlayers();
+        }
+    }
+    return childForSuperlayersExcludingViewTransitions();
+}
+
+GraphicsLayer* RenderLayerBacking::childForSuperlayersExcludingViewTransitions() const
+{
     if (m_transformFlatteningLayer)
         return m_transformFlatteningLayer.get();
 
@@ -3902,32 +3914,32 @@ bool RenderLayerBacking::shouldSkipLayerInDump(const GraphicsLayer* layer, Optio
     return m_isMainFrameRenderViewLayer && layer && layer == m_childContainmentLayer.get();
 }
 
-bool RenderLayerBacking::shouldDumpPropertyForLayer(const GraphicsLayer* layer, const char* propertyName, OptionSet<LayerTreeAsTextOptions> options) const
+bool RenderLayerBacking::shouldDumpPropertyForLayer(const GraphicsLayer* layer, ASCIILiteral propertyName, OptionSet<LayerTreeAsTextOptions> options) const
 {
     // For backwards compatibility with WebKit1 and other platforms,
     // skip some properties on the root tile cache.
     if (m_isMainFrameRenderViewLayer && layer == m_graphicsLayer.get() && !(options & LayerTreeAsTextOptions::IncludeRootLayerProperties)) {
-        if (!strcmp(propertyName, "drawsContent"))
+        if (propertyName == "drawsContent"_s)
             return false;
 
         // Background color could be of interest to tests or other dumpers if it's non-white.
-        if (!strcmp(propertyName, "backgroundColor") && Color::isWhiteColor(layer->backgroundColor()))
+        if (propertyName == "backgroundColor"_s && Color::isWhiteColor(layer->backgroundColor()))
             return false;
 
         // The root tile cache's repaints will show up at the top with FrameView's,
         // so don't dump them twice.
-        if (!strcmp(propertyName, "repaintRects"))
+        if (propertyName == "repaintRects"_s)
             return false;
     }
 
     if (m_owningLayer.isRenderViewLayer() && (layer == m_graphicsLayer.get() || layer == m_contentsContainmentLayer.get())) {
-        if (!strcmp(propertyName, "anchorPoint"))
+        if (propertyName == "anchorPoint"_s)
             return layer->anchorPoint() != FloatPoint3D { };
 
         return true;
     }
 
-    if (!strcmp(propertyName, "anchorPoint"))
+    if (propertyName == "anchorPoint"_s)
         return layer->anchorPoint() != FloatPoint3D(0.5f, 0.5f, 0);
 
     return true;

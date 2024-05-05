@@ -1511,6 +1511,7 @@ html/ValidatedFormListedElement.cpp
 html/ValidationMessage.cpp
 html/WeekInputType.cpp
 html/canvas/ANGLEInstancedArrays.cpp
+html/canvas/CanvasFilterTargetSwitcher.cpp
 html/canvas/CanvasGradient.cpp
 html/canvas/CanvasPath.cpp
 html/canvas/CanvasPattern.cpp
@@ -2368,6 +2369,7 @@ platform/graphics/PixelBuffer.cpp
 platform/graphics/PixelBufferConversion.cpp
 platform/graphics/PixelBufferFormat.cpp
 platform/graphics/PixelFormat.cpp
+platform/graphics/PixelFormatValidated.cpp
 platform/graphics/PlatformTimeRanges.cpp
 platform/graphics/PositionedGlyphs.cpp
 platform/graphics/Region.cpp
@@ -3083,6 +3085,7 @@ svg/graphics/SVGImageForContainer.cpp
 svg/graphics/SVGResourceImage.cpp
 svg/graphics/filters/SVGFilter.cpp
 svg/properties/SVGAnimatedProperty.cpp
+svg/properties/SVGAnimatedString.cpp
 svg/properties/SVGAnimationAdditiveValueFunctionImpl.cpp
 svg/properties/SVGAttributeAnimator.cpp
 svg/properties/SVGPropertyTraits.cpp
@@ -3685,6 +3688,7 @@ JSGPUQuerySet.cpp
 JSGPUQuerySetDescriptor.cpp
 JSGPUQueryType.cpp
 JSGPUQueue.cpp
+JSGPUQueueDescriptor.cpp
 JSGPURenderBundle.cpp
 JSGPURenderBundleDescriptor.cpp
 JSGPURenderBundleEncoder.cpp

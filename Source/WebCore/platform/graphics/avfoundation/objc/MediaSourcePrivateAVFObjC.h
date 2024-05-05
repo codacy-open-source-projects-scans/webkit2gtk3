@@ -78,11 +78,13 @@ public:
     bool hasSelectedVideo() const;
 
     void willSeek();
+    void seeked(const MediaTime&);
 
     FloatSize naturalSize() const;
 
     void hasSelectedVideoChanged(SourceBufferPrivateAVFObjC&);
     void setVideoRenderer(WebSampleBufferVideoRendering *);
+    void stageVideoRenderer(WebSampleBufferVideoRendering *);
     void setDecompressionSession(WebCoreDecompressionSession*);
 
     void flushActiveSourceBuffersIfNeeded();

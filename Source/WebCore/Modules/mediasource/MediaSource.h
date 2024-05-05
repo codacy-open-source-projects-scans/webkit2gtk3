@@ -87,8 +87,10 @@ public:
     using CanMakeWeakPtr<MediaSource>::weakPtrFactory;
     using CanMakeWeakPtr<MediaSource>::WeakValueType;
     using CanMakeWeakPtr<MediaSource>::WeakPtrImplType;
-    using RefCounted::ref;
-    using RefCounted::deref;
+
+    // ActiveDOMObject.
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
 
     static bool enabledForContext(ScriptExecutionContext&);
 
@@ -191,6 +193,7 @@ private:
     // ActiveDOMObject.
     void stop() final;
     bool virtualHasPendingActivity() const final;
+
     static bool isTypeSupported(ScriptExecutionContext&, const String& type, Vector<ContentType>&& contentTypesRequiringHardwareSupport);
 
     void setPrivateAndOpen(Ref<MediaSourcePrivate>&&);
@@ -198,6 +201,7 @@ private:
     Ref<MediaPromise> seekToTime(const MediaTime&);
     using RendererType = MediaSourcePrivateClient::RendererType;
     void failedToCreateRenderer(RendererType);
+    void seeked(const MediaTime&);
 
     void refEventTarget() final { ref(); }
     void derefEventTarget() final { deref(); }

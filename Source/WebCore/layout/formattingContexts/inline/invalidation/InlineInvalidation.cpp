@@ -28,6 +28,7 @@
 
 #include "InlineDamage.h"
 #include "InlineSoftLineBreakItem.h"
+#include "LayoutElementBox.h"
 #include "LayoutUnit.h"
 #include "TextBreakingPositionContext.h"
 #include "TextDirection.h"
@@ -576,6 +577,12 @@ bool InlineInvalidation::restartForPagination(size_t lineIndex, LayoutUnit pageT
         return false;
 
     return updateInlineDamage({ lineIndex, *inlineItemPositionForLeadingDisplayBox }, InlineDamage::Reason::Pagination, ShouldApplyRangeLayout::Yes, pageTopAdjustment);
+}
+
+void InlineInvalidation::resetInlineDamage(InlineDamage& inlineDamage)
+{
+    inlineDamage.setInlineItemListDirty();
+    inlineDamage.resetLayoutPosition();
 }
 
 }

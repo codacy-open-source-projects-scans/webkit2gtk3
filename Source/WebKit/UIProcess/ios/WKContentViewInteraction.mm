@@ -1415,7 +1415,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     _autocorrectionContextNeedsUpdate = YES;
 
     _page->process().updateTextCheckerState();
-    _page->setScreenIsBeingCaptured([[[self window] screen] isCaptured]);
+    _page->setScreenIsBeingCaptured([self screenIsBeingCaptured]);
 
 #if ENABLE(IMAGE_ANALYSIS)
     [self _setUpImageAnalysis];
@@ -6024,11 +6024,17 @@ static void logTextInteraction(const char* methodName, UIGestureRecognizer *loup
 #endif
 
 #if ENABLE(DATALIST_ELEMENT)
-    if ([textSuggestion isKindOfClass:[WKDataListTextSuggestion class]]) {
-        _page->setFocusedElementValue(_focusedElementInformation.elementContext, [textSuggestion inputText]);
-        return;
+    if ([_dataListTextSuggestions count] && ![[_formInputSession suggestions] count]) {
+        RetainPtr inputText = [textSuggestion inputText];
+        for (WKBETextSuggestion *dataListTextSuggestion in _dataListTextSuggestions.get()) {
+            if ([inputText isEqualToString:dataListTextSuggestion.inputText]) {
+                _page->setFocusedElementValue(_focusedElementInformation.elementContext, inputText.get());
+                return;
+            }
+        }
     }
 #endif
+
     id <_WKInputDelegate> inputDelegate = [_webView _inputDelegate];
     if ([inputDelegate respondsToSelector:@selector(_webView:insertTextSuggestion:inInputSession:)]) {
         auto uiTextSuggestion = [&]() -> RetainPtr<UITextSuggestion> {
@@ -6320,7 +6326,7 @@ static Vector<WebCore::CompositionHighlight> compositionHighlights(NSAttributedS
     _autocorrectionContextNeedsUpdate = YES;
     _candidateViewNeedsUpdate = !self.hasMarkedText && _isDeferringKeyEventsToInputMethod;
     _markedText = markedText;
-    _page->setCompositionAsync(markedText, underlines, highlights, selectedRange, { });
+    _page->setCompositionAsync(markedText, underlines, highlights, { }, selectedRange, { });
 }
 
 - (void)unmarkText

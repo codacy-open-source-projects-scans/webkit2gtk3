@@ -891,15 +891,14 @@ add_library(Skia STATIC
 if (USE_SYSTEM_MALLOC)
     target_sources(Skia PRIVATE src/ports/SkMemory_malloc.cpp)
 else ()
-    # Using WTF headers needs including Source/WTF/config.h first, and
-    # in turn that needs cmakeconfig.h from the top build directory, so
-    # arrange the include directories accordingly.
-    target_sources(Skia PRIVATE ${WEBCORE_DIR}/platform/skia/SkiaAllocatorFastMalloc.cpp)
-    set_property(
-        SOURCE ${WEBCORE_DIR}/platform/skia/SkiaAllocatorFastMalloc.cpp
-        APPEND PROPERTY INCLUDE_DIRECTORIES ${WTF_DIR} ${CMAKE_BINARY_DIR}
-    )
-    target_link_libraries(Skia PRIVATE WebKit::WTF)
+    target_sources(Skia PRIVATE src/ports/SkMemory_bmalloc.cpp)
+    target_link_libraries(Skia PRIVATE WebKit::bmalloc)
+
+    get_target_property(bmalloc_target_type bmalloc TYPE)
+    if (bmalloc_target_type STREQUAL OBJECT_LIBRARY)
+        target_link_libraries(Skia PRIVATE $<TARGET_OBJECTS:bmalloc>)
+    endif ()
+    unset(bmalloc_target_type)
 endif ()
 
 target_link_libraries(Skia PRIVATE
@@ -926,24 +925,16 @@ WEBKIT_ADD_TARGET_CXX_FLAGS(Skia
     -Wno-unused-parameter
 )
 
-add_custom_command(
-    TARGET Skia
-    POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E create_symlink
-        "${CMAKE_CURRENT_SOURCE_DIR}/include"
-        "${Skia_FRAMEWORK_HEADERS_DIR}/skia"
-    BYPRODUCTS
-        "${Skia_FRAMEWORK_HEADERS_DIR}/skia"
-    COMMENT "Link Skia headers"
-    VERBATIM
+target_include_directories(Skia
+    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}"
+    INTERFACE "${Skia_FRAMEWORK_HEADERS_DIR}"
 )
 
-target_include_directories(Skia PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}"
-)
-target_include_directories(Skia INTERFACE
-    "${CMAKE_CURRENT_SOURCE_DIR}"
-    "${Skia_FRAMEWORK_HEADERS_DIR}"
+file(MAKE_DIRECTORY "${Skia_FRAMEWORK_HEADERS_DIR}")
+file(CREATE_LINK
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${Skia_FRAMEWORK_HEADERS_DIR}/skia"
+    SYMBOLIC
 )
 
 target_compile_definitions(Skia PRIVATE
