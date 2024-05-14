@@ -1,4 +1,6 @@
 
 
-FAIL navigation.currentEntry/entries()/canGoBack/canGoForward after iframe removal assert_not_equals: got disallowed value null
+Harness Error (TIMEOUT), message = null
+
+TIMEOUT navigation.currentEntry/entries()/canGoBack/canGoForward after iframe removal Test timed out
 

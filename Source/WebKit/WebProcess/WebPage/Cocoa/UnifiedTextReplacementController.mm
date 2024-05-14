@@ -287,9 +287,24 @@ void UnifiedTextReplacementController::didEndTextReplacementSession(const WTF::U
     m_originalDocumentNodes.remove(uuid);
     m_replacedDocumentNodes.remove(uuid);
     m_replacementLocationOffsets.remove(uuid);
+
+    removeTransparentMarkersForSession(uuid, *sessionRange);
 }
 
-void UnifiedTextReplacementController::textReplacementSessionDidReceiveTextWithReplacementRange(const WTF::UUID& uuid, const WebCore::AttributedString& attributedText, const WebCore::CharacterRange& range, const WebUnifiedTextReplacementContextData& context)
+void UnifiedTextReplacementController::removeTransparentMarkersForSession(const WTF::UUID& uuid, WebCore::SimpleRange& range)
+{
+    RefPtr document = this->document();
+    if (!document) {
+        ASSERT_NOT_REACHED();
+        return;
+    }
+
+    document->markers().filterMarkers(range, [&] (const WebCore::DocumentMarker& marker) {
+        return std::get<WebCore::DocumentMarker::TransparentContentData>(marker.data()).uuid == uuid ? WebCore::FilterMarkerResult::Remove : WebCore::FilterMarkerResult::Keep;
+    }, { WebCore::DocumentMarker::Type::TransparentContent });
+}
+
+void UnifiedTextReplacementController::textReplacementSessionDidReceiveTextWithReplacementRange(const WTF::UUID& uuid, const WebCore::AttributedString& attributedText, const WebCore::CharacterRange& range, const WebUnifiedTextReplacementContextData& context, bool finished)
 {
     RELEASE_LOG(UnifiedTextReplacement, "UnifiedTextReplacementController::textReplacementSessionDidReceiveTextWithReplacementRange (%s) [range: %llu, %llu]", uuid.toString().utf8().data(), range.location, range.length);
 
@@ -343,7 +358,7 @@ void UnifiedTextReplacementController::textReplacementSessionDidReceiveTextWithR
         m_originalDocumentNodes.set(uuid, contents.returnValue()); // Deep clone.
     }
 
-    RefPtr fragment = WebCore::createFragment(*document->frame(), attributedText.nsAttributedString().get(), { WebCore::FragmentCreationOptions::NoInterchangeNewlines });
+    RefPtr fragment = WebCore::createFragment(*document->frame(), attributedText.nsAttributedString().get(), { WebCore::FragmentCreationOptions::NoInterchangeNewlines, WebCore::FragmentCreationOptions::SanitizeMarkup });
     if (!fragment) {
         ASSERT_NOT_REACHED();
         return;

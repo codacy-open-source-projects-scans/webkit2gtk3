@@ -179,6 +179,11 @@ public:
     void setApplePayLaterAvailability(const std::optional<ApplePayLaterAvailability>& applePayLaterAvailability) { m_applePayLaterAvailability = applePayLaterAvailability; }
 #endif
 
+#if ENABLE(APPLE_PAY_MERCHANT_CATEGORY_CODE)
+    const String& merchantCategoryCode() const { return m_merchantCategoryCode; }
+    void setMerchantCategoryCode(const String& merchantCategoryCode) { m_merchantCategoryCode = merchantCategoryCode; }
+#endif
+
     ApplePaySessionPaymentRequest(String&& countryCode
         , String&& currencyCode
         , ContactFields&& requiredBillingContactFields
@@ -216,8 +221,14 @@ public:
 #if ENABLE(APPLE_PAY_DEFERRED_PAYMENTS)
         , std::optional<ApplePayDeferredPaymentRequest>&& deferredPaymentRequest
 #endif
+#if ENABLE(APPLE_PAY_DISBURSEMENTS)
+        , std::optional<ApplePayDisbursementPaymentRequest>&& disbursementPaymentRequest
+#endif
 #if ENABLE(APPLE_PAY_LATER_AVAILABILITY)
         , std::optional<ApplePayLaterAvailability>&& applePayLaterAvailability
+#endif
+#if ENABLE(APPLE_PAY_MERCHANT_CATEGORY_CODE)
+        , String&& merchantCategoryCode
 #endif
         )
             : m_countryCode(WTFMove(countryCode))
@@ -257,8 +268,14 @@ public:
 #if ENABLE(APPLE_PAY_DEFERRED_PAYMENTS)
             , m_deferredPaymentRequest(WTFMove(deferredPaymentRequest))
 #endif
+#if ENABLE(APPLE_PAY_DISBURSEMENTS)
+            , m_disbursementPaymentRequest(WTFMove(disbursementPaymentRequest))
+#endif
 #if ENABLE(APPLE_PAY_LATER_AVAILABILITY)
             , m_applePayLaterAvailability(WTFMove(applePayLaterAvailability))
+#endif
+#if ENABLE(APPLE_PAY_MERCHANT_CATEGORY_CODE)
+            , m_merchantCategoryCode(WTFMove(merchantCategoryCode))
 #endif
             { }
 
@@ -323,6 +340,10 @@ private:
 
 #if ENABLE(APPLE_PAY_LATER_AVAILABILITY)
     std::optional<ApplePayLaterAvailability> m_applePayLaterAvailability;
+#endif
+
+#if ENABLE(APPLE_PAY_MERCHANT_CATEGORY_CODE)
+    String m_merchantCategoryCode;
 #endif
 };
 

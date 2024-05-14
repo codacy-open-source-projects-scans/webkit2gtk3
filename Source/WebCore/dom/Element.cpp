@@ -682,7 +682,10 @@ NamedNodeMap& Element::attributes() const
 
 bool Element::hasAttribute(const QualifiedName& name) const
 {
-    return hasAttributeNS(name.namespaceURI(), name.localName());
+    if (!elementData())
+        return false;
+    synchronizeAttribute(name);
+    return elementData()->findAttributeByName(name);
 }
 
 void Element::synchronizeAllAttributes() const
@@ -1954,7 +1957,7 @@ const AtomString& Element::getAttributeNS(const AtomString& namespaceURI, const 
 ExceptionOr<bool> Element::toggleAttribute(const AtomString& qualifiedName, std::optional<bool> force)
 {
     if (!Document::isValidName(qualifiedName))
-        return Exception { ExceptionCode::InvalidCharacterError, makeString("Invalid qualified name: '", qualifiedName, "'") };
+        return Exception { ExceptionCode::InvalidCharacterError, makeString("Invalid qualified name: '"_s, qualifiedName, '\'') };
 
     synchronizeAttribute(qualifiedName);
 
@@ -1978,7 +1981,7 @@ ExceptionOr<bool> Element::toggleAttribute(const AtomString& qualifiedName, std:
 ExceptionOr<void> Element::setAttribute(const AtomString& qualifiedName, const AtomString& value)
 {
     if (!Document::isValidName(qualifiedName))
-        return Exception { ExceptionCode::InvalidCharacterError, makeString("Invalid qualified name: '", qualifiedName, "'") };
+        return Exception { ExceptionCode::InvalidCharacterError, makeString("Invalid qualified name: '"_s, qualifiedName, '\'') };
 
     synchronizeAttribute(qualifiedName);
     auto caseAdjustedQualifiedName = shouldIgnoreAttributeCase(*this) ? qualifiedName.convertToASCIILowercase() : qualifiedName;
@@ -2097,14 +2100,14 @@ void Element::notifyAttributeChanged(const QualifiedName& name, const AtomString
     }
 }
 
-void Element::attributeChanged(const QualifiedName& name, const AtomString& oldValue, const AtomString& newValue, AttributeModificationReason)
+void Element::attributeChanged(const QualifiedName& name, const AtomString& oldValue, const AtomString& newValue, AttributeModificationReason reason)
 {
     if (oldValue == newValue)
         return;
 
     switch (name.nodeName()) {
     case AttributeNames::classAttr:
-        classAttributeChanged(newValue);
+        classAttributeChanged(newValue, reason);
         break;
     case AttributeNames::idAttr: {
         AtomString oldId = elementData()->idForStyleResolution();
@@ -2266,12 +2269,9 @@ std::optional<Vector<Ref<Element>>> Element::getElementsArrayAttribute(const Qua
         return std::nullopt;
 
     SpaceSplitString ids(getAttribute(attr), SpaceSplitString::ShouldFoldCase::No);
-    Vector<Ref<Element>> elements;
-    for (unsigned i = 0; i < ids.size(); ++i) {
-        if (RefPtr element = treeScope().getElementById(ids[i]))
-            elements.append(element.releaseNonNull());
-    }
-    return elements;
+    return WTF::compactMap(ids, [&](auto& id) {
+        return treeScope().getElementById(id);
+    });
 }
 
 void Element::setElementsArrayAttribute(const QualifiedName& attributeName, std::optional<Vector<Ref<Element>>>&& elements)
@@ -2298,24 +2298,34 @@ void Element::setElementsArrayAttribute(const QualifiedName& attributeName, std:
     }
 }
 
-void Element::classAttributeChanged(const AtomString& newClassString)
+void Element::classAttributeChanged(const AtomString& newClassString, AttributeModificationReason reason)
 {
     // Note: We'll need ElementData, but it doesn't have to be UniqueElementData.
     if (!elementData())
         ensureUniqueElementData();
 
-    {
-        auto shouldFoldCase = document().inQuirksMode() ? SpaceSplitString::ShouldFoldCase::Yes : SpaceSplitString::ShouldFoldCase::No;
-        SpaceSplitString newClassNames(newClassString, shouldFoldCase);
-        Style::ClassChangeInvalidation styleInvalidation(*this, elementData()->classNames(), newClassNames);
-        document().invalidateQuerySelectorAllResultsForClassAttributeChange(*this, elementData()->classNames(), newClassNames);
-        elementData()->setClassNames(WTFMove(newClassNames));
-    }
-
     if (hasRareData()) {
         if (auto* classList = elementRareData()->classList())
-            classList->associatedAttributeValueChanged(newClassString);
+            classList->associatedAttributeValueChanged();
     }
+
+    if (reason == AttributeModificationReason::Parser) {
+        // If ElementData is ShareableElementData created in parserSetAttributes,
+        // it is possible that SpaceSplitString is already created and set.
+        // We also do not need to invalidate caches / styles since it is not inserted to the tree yet.
+        if (elementData()->classNames().keyString() == newClassString)
+            return;
+        auto shouldFoldCase = document().inQuirksMode() ? SpaceSplitString::ShouldFoldCase::Yes : SpaceSplitString::ShouldFoldCase::No;
+        SpaceSplitString newClassNames(newClassString, shouldFoldCase);
+        elementData()->setClassNames(WTFMove(newClassNames));
+        return;
+    }
+
+    auto shouldFoldCase = document().inQuirksMode() ? SpaceSplitString::ShouldFoldCase::Yes : SpaceSplitString::ShouldFoldCase::No;
+    SpaceSplitString newClassNames(newClassString, shouldFoldCase);
+    Style::ClassChangeInvalidation styleInvalidation(*this, elementData()->classNames(), newClassNames);
+    document().invalidateQuerySelectorAllResultsForClassAttributeChange(*this, elementData()->classNames(), newClassNames);
+    elementData()->setClassNames(WTFMove(newClassNames));
 }
 
 void Element::partAttributeChanged(const AtomString& newValue)
@@ -2326,7 +2336,7 @@ void Element::partAttributeChanged(const AtomString& newValue)
 
     if (hasRareData()) {
         if (auto* partList = elementRareData()->partList())
-            partList->associatedAttributeValueChanged(newValue);
+            partList->associatedAttributeValueChanged();
     }
 
     if (needsStyleInvalidation() && isInShadowTree())

@@ -336,13 +336,6 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     return [_contentView isBackground];
 }
 
-ALLOW_DEPRECATED_DECLARATIONS_BEGIN
-- (WKBrowsingContextController *)browsingContextController
-{
-    return [_contentView browsingContextController];
-}
-ALLOW_DEPRECATED_DECLARATIONS_END
-
 - (BOOL)becomeFirstResponder
 {
 #if PLATFORM(VISION)
@@ -4686,10 +4679,6 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_END
 
     return nil;
 }
-
-#if USE(APPLE_INTERNAL_SDK)
-#import <WebKitAdditions/WKWebViewIOSAdditionsAfter.mm>
-#endif
 
 @end // WKWebView (WKPrivateIOS)
 

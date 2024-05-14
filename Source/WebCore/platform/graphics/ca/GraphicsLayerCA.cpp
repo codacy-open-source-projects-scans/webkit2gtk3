@@ -479,8 +479,8 @@ String GraphicsLayerCA::debugName() const
 #if ENABLE(TREE_DEBUGGING)
     String caLayerDescription;
     if (m_layer->type() == PlatformCALayer::Type::Cocoa)
-        caLayerDescription = makeString("CALayer(0x", hex(reinterpret_cast<uintptr_t>(m_layer->platformLayer()), Lowercase), ") ");
-    return makeString(caLayerDescription, "GraphicsLayer(0x", hex(reinterpret_cast<uintptr_t>(this), Lowercase), ", ", primaryLayerID().object(), ") ", name());
+        caLayerDescription = makeString("CALayer(0x"_s, hex(reinterpret_cast<uintptr_t>(m_layer->platformLayer()), Lowercase), ") "_s);
+    return makeString(caLayerDescription, "GraphicsLayer(0x"_s, hex(reinterpret_cast<uintptr_t>(this), Lowercase), ", "_s, primaryLayerID().object(), ") "_s, name());
 #else
     return name();
 #endif
@@ -1199,7 +1199,7 @@ void GraphicsLayerCA::setContentsToSolidColor(const Color& color)
             m_contentsLayerPurpose = ContentsLayerPurpose::BackgroundColor;
             m_contentsLayer = createPlatformCALayer(PlatformCALayer::LayerType::LayerTypeLayer, this);
 #if ENABLE(TREE_DEBUGGING)
-            m_contentsLayer->setName(makeString("contents color ", m_contentsLayer->layerID().object()));
+            m_contentsLayer->setName(makeString("contents color "_s, m_contentsLayer->layerID().object()));
 #else
             m_contentsLayer->setName(MAKE_STATIC_STRING_IMPL("contents color"));
 #endif
@@ -1260,7 +1260,7 @@ void GraphicsLayerCA::setContentsToModel(RefPtr<Model>&& model, ModelInteraction
     if (model) {
         m_contentsLayer = createPlatformCALayer(*model, this);
 #if ENABLE(TREE_DEBUGGING)
-        m_contentsLayer->setName(makeString("contents model ", m_contentsLayer->layerID().object()));
+        m_contentsLayer->setName(makeString("contents model "_s, m_contentsLayer->layerID().object()));
 #else
         m_contentsLayer->setName(MAKE_STATIC_STRING_IMPL("contents model"));
 #endif
@@ -1460,6 +1460,11 @@ void GraphicsLayerCA::flushCompositingState(const FloatRect& visibleRect)
 
     CommitState commitState;
     commitState.ancestorHadChanges = visibleRect != m_previousCommittedVisibleRect;
+
+    // There is no backdrop root above the root layer, and we can just assume the backing
+    // will be opaque. RenderLayerBacking will force an explicit backdrop root outside
+    // of any filters if needed.
+    commitState.backdropRootIsOpaque = true;
     m_previousCommittedVisibleRect = visibleRect;
 
 #if PLATFORM(IOS_FAMILY)
@@ -1812,7 +1817,7 @@ void GraphicsLayerCA::recursiveCommitChanges(CommitState& commitState, const Tra
         constexpr auto washBorderColor = Color::red.colorWithAlphaByte(100);
         
         m_visibleTileWashLayer = createPlatformCALayer(PlatformCALayer::LayerTypeLayer, this);
-        m_visibleTileWashLayer->setName(makeString("Visible Tile Wash Layer 0x", hex(reinterpret_cast<uintptr_t>(m_visibleTileWashLayer->platformLayer()), Lowercase)));
+        m_visibleTileWashLayer->setName(makeString("Visible Tile Wash Layer 0x"_s, hex(reinterpret_cast<uintptr_t>(m_visibleTileWashLayer->platformLayer()), Lowercase)));
         m_visibleTileWashLayer->setAnchorPoint(FloatPoint3D(0, 0, 0));
         m_visibleTileWashLayer->setBorderColor(washBorderColor);
         m_visibleTileWashLayer->setBorderWidth(8);
@@ -2893,7 +2898,7 @@ void GraphicsLayerCA::updateContentsImage()
         if (!m_contentsLayer.get()) {
             m_contentsLayer = createPlatformCALayer(PlatformCALayer::LayerType::LayerTypeLayer, this);
 #if ENABLE(TREE_DEBUGGING)
-            m_contentsLayer->setName(makeString("contents image ", m_contentsLayer->layerID().object()));
+            m_contentsLayer->setName(makeString("contents image "_s, m_contentsLayer->layerID().object()));
 #else
             m_contentsLayer->setName(MAKE_STATIC_STRING_IMPL("contents image"));
 #endif
@@ -3005,7 +3010,7 @@ void GraphicsLayerCA::updateContentsRects()
             m_contentsClippingLayer = createPlatformCALayer(PlatformCALayer::LayerType::LayerTypeLayer, this);
             m_contentsClippingLayer->setAnchorPoint({ });
 #if ENABLE(TREE_DEBUGGING)
-            m_contentsClippingLayer->setName(makeString("contents clipping ", m_contentsClippingLayer->layerID().object()));
+            m_contentsClippingLayer->setName(makeString("contents clipping "_s, m_contentsClippingLayer->layerID().object()));
 #else
             m_contentsClippingLayer->setName(MAKE_STATIC_STRING_IMPL("contents clipping"));
 #endif
@@ -4647,7 +4652,7 @@ RefPtr<PlatformCALayer> GraphicsLayerCA::findOrMakeClone(const CloneID& cloneID,
     } else {
         resultLayer = cloneLayer(sourceLayer, cloneLevel);
 #if ENABLE(TREE_DEBUGGING)
-        resultLayer->setName(makeString("clone ", hex(cloneID[0U]), " of ", sourceLayer->layerID().object()));
+        resultLayer->setName(makeString("clone "_s, hex(cloneID[0U]), " of "_s, sourceLayer->layerID().object()));
 #else
         resultLayer->setName("clone of " + m_name);
 #endif

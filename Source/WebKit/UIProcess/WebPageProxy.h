@@ -26,6 +26,7 @@
 #pragma once
 
 #include "APIObject.h"
+#include "IdentifierTypes.h"
 #include "MessageReceiver.h"
 #include "MessageSender.h"
 #include <WebCore/FrameIdentifier.h>
@@ -244,7 +245,6 @@ struct ExceptionDetails;
 struct FileChooserSettings;
 struct FontAttributes;
 struct GrammarDetail;
-struct HTMLMediaElementIdentifierType;
 struct HTMLModelElementCamera;
 struct ImageBufferParameters;
 struct InspectorOverlayHighlight;
@@ -254,6 +254,7 @@ struct MarkupExclusionRule;
 struct MediaControlsContextMenuItem;
 struct MediaDeviceHashSalts;
 struct MediaKeySystemRequestIdentifierType;
+struct MediaPlayerClientIdentifierType;
 struct MediaPlayerIdentifierType;
 struct MediaSessionIdentifierType;
 struct MediaStreamRequest;
@@ -304,7 +305,7 @@ using DictationContext = ObjectIdentifier<DictationContextType>;
 using FloatBoxExtent = RectEdges<float>;
 using FramesPerSecond = unsigned;
 using IntDegrees = int32_t;
-using HTMLMediaElementIdentifier = ObjectIdentifier<HTMLMediaElementIdentifierType>;
+using HTMLMediaElementIdentifier = ObjectIdentifier<MediaPlayerClientIdentifierType>;
 using MediaControlsContextMenuItemID = uint64_t;
 using MediaKeySystemRequestIdentifier = ObjectIdentifier<MediaKeySystemRequestIdentifierType>;
 using MediaPlayerIdentifier = ObjectIdentifier<MediaPlayerIdentifierType>;
@@ -572,7 +573,7 @@ public:
 
     Identifier identifier() const;
     WebCore::PageIdentifier webPageID() const;
-    WebCore::PageIdentifier webPageIDInProcessForDomain(const WebCore::RegistrableDomain&) const;
+    WebCore::PageIdentifier webPageIDInProcess(const WebProcessProxy&) const;
 
     PAL::SessionID sessionID() const;
 
@@ -1070,11 +1071,6 @@ public:
 #if PLATFORM(COCOA)
     void insertTextPlaceholder(const WebCore::IntSize&, CompletionHandler<void(const std::optional<WebCore::ElementContext>&)>&&);
     void removeTextPlaceholder(const WebCore::ElementContext&, CompletionHandler<void()>&&);
-#endif
-
-#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
-    void getTextIndicatorForID(WTF::UUID&, CompletionHandler<void(std::optional<WebCore::TextIndicatorData>&&)>&&);
-    void updateTextIndicatorStyleVisibilityForID(WTF::UUID&, bool, CompletionHandler<void()>&&);
 #endif
 
 #if ENABLE(DATA_DETECTION)
@@ -1921,6 +1917,7 @@ public:
     bool updateEditorState(const EditorState& newEditorState, ShouldMergeVisualEditorState = ShouldMergeVisualEditorState::Default);
     void scheduleFullEditorStateUpdate();
     void dispatchDidUpdateEditorState();
+    void clearEditorStateAfterPageTransition(EditorStateIdentifier);
 
     void requestStorageAccessConfirm(const WebCore::RegistrableDomain& subFrameDomain, const WebCore::RegistrableDomain& topFrameDomain, WebCore::FrameIdentifier, std::optional<WebCore::OrganizationStorageAccessPromptQuirk>&&, CompletionHandler<void(bool)>&&);
     void didCommitCrossSiteLoadWithDataTransferFromPrevalentResource();
@@ -2125,7 +2122,7 @@ public:
     void clearServiceWorkerEntitlementOverride(CompletionHandler<void()>&&);
         
 #if PLATFORM(COCOA)
-    void grantAccessToCurrentPasteboardData(const String& pasteboardName);
+    void grantAccessToCurrentPasteboardData(const String& pasteboardName, std::optional<WebCore::FrameIdentifier> = std::nullopt);
 #endif
 
 #if PLATFORM(MAC)
@@ -2201,12 +2198,6 @@ public:
     CGRect appHighlightsOverlayRect();
 #endif
 
-#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
-    void removeTextIndicatorStyleForID(const WTF::UUID&);
-    void enableTextIndicatorStyleAfterElementWithID(const String& elementID, const WTF::UUID&);
-    void enableTextIndicatorStyleForElementWithID(const String& elementID, const WTF::UUID&);
-#endif
-
 #if ENABLE(MEDIA_STREAM)
     WebCore::CaptureSourceOrError createRealtimeMediaSourceForSpeechRecognition();
     void clearUserMediaPermissionRequestHistory(WebCore::PermissionName);
@@ -2253,9 +2244,6 @@ public:
     bool canHandleSwapCharacters() const;
     void handleContextMenuSwapCharacters(WebCore::IntRect selectionBoundsInRootView);
 #endif
-
-    void textReplacementSessionShowInformationForReplacementWithUUIDRelativeToRect(const WTF::UUID& sessionUUID, const WTF::UUID& replacementUUID, WebCore::IntRect selectionBoundsInRootView);
-    void textReplacementSessionUpdateStateForReplacementWithUUID(const WTF::UUID& sessionUUID, WebTextReplacementDataState, const WTF::UUID& replacementUUID);
 #endif
 
 #if ENABLE(MEDIA_SESSION_COORDINATOR)
@@ -2341,7 +2329,6 @@ public:
 
     void generateTestReport(const String& message, const String& group);
 
-    void frameCreated(WebCore::FrameIdentifier, WebFrameProxy&);
     void didDestroyFrame(IPC::Connection&, WebCore::FrameIdentifier);
     void disconnectFramesFromPage();
 
@@ -2401,6 +2388,8 @@ public:
     void requestTextExtraction(std::optional<WebCore::FloatRect>&& collectionRectInRootView, CompletionHandler<void(WebCore::TextExtraction::Item&&)>&&);
 
 #if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+    void setUnifiedTextReplacementActive(bool);
+
     void willBeginTextReplacementSession(const WTF::UUID&, WebUnifiedTextReplacementType, CompletionHandler<void(const Vector<WebUnifiedTextReplacementContextData>&)>&&);
 
     void didBeginTextReplacementSession(const WTF::UUID&, const Vector<WebKit::WebUnifiedTextReplacementContextData>&);
@@ -2411,9 +2400,21 @@ public:
 
     void didEndTextReplacementSession(const WTF::UUID&, bool accepted);
 
-    void textReplacementSessionDidReceiveTextWithReplacementRange(const WTF::UUID&, const WebCore::AttributedString&, const WebCore::CharacterRange&, const WebKit::WebUnifiedTextReplacementContextData&);
+    void textReplacementSessionDidReceiveTextWithReplacementRange(const WTF::UUID&, const WebCore::AttributedString&, const WebCore::CharacterRange&, const WebKit::WebUnifiedTextReplacementContextData&, bool finished);
 
     void textReplacementSessionDidReceiveEditAction(const WTF::UUID&, WebKit::WebTextReplacementDataEditAction);
+
+    bool isUnifiedTextReplacementActive() const { return m_isUnifiedTextReplacementActive; }
+
+    void textReplacementSessionShowInformationForReplacementWithUUIDRelativeToRect(const WTF::UUID& sessionUUID, const WTF::UUID& replacementUUID, WebCore::IntRect selectionBoundsInRootView);
+    void textReplacementSessionUpdateStateForReplacementWithUUID(const WTF::UUID& sessionUUID, WebTextReplacementDataState, const WTF::UUID& replacementUUID);
+
+    void removeTextIndicatorStyleForID(const WTF::UUID&);
+    void enableTextIndicatorStyleAfterElementWithID(const String& elementID, const WTF::UUID&);
+    void enableTextIndicatorStyleForElementWithID(const String& elementID, const WTF::UUID&);
+
+    void getTextIndicatorForID(const WTF::UUID&, CompletionHandler<void(std::optional<WebCore::TextIndicatorData>&&)>&&);
+    void updateTextIndicatorStyleVisibilityForID(const WTF::UUID&, bool, CompletionHandler<void()>&&);
 #endif
 
     void resetVisibilityAdjustmentsForTargetedElements(const Vector<Ref<API::TargetedElementInfo>>&, CompletionHandler<void(bool)>&&);
@@ -2673,7 +2674,7 @@ private:
 #endif
 
     void requestDOMPasteAccess(WebCore::DOMPasteAccessCategory, const WebCore::IntRect&, const String&, CompletionHandler<void(WebCore::DOMPasteAccessResponse)>&&);
-    void willPerformPasteCommand(WebCore::DOMPasteAccessCategory);
+    void willPerformPasteCommand(WebCore::DOMPasteAccessCategory, std::optional<WebCore::FrameIdentifier> = std::nullopt);
 
     // Back/Forward list management
     void backForwardAddItem(BackForwardListItemState&&);
@@ -3040,7 +3041,7 @@ private:
     void postMessageToRemote(WebCore::FrameIdentifier source, const String& sourceOrigin, WebCore::FrameIdentifier target, std::optional<WebCore::SecurityOriginData> targetOrigin, const WebCore::MessageWithMessagePorts&);
     void renderTreeAsTextForTesting(WebCore::FrameIdentifier, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag>, CompletionHandler<void(String&&)>&&);
     void frameTextForTesting(WebCore::FrameIdentifier, CompletionHandler<void(String&&)>&&);
-    void bindRemoteAccessibilityFrames(int processIdentifier, WebCore::FrameIdentifier, std::span<const uint8_t> dataToken, CompletionHandler<void(std::span<const uint8_t>, int)>&&);
+    void bindRemoteAccessibilityFrames(int processIdentifier, WebCore::FrameIdentifier, Vector<uint8_t>&& dataToken, CompletionHandler<void(Vector<uint8_t>, int)>&&);
     void updateRemoteFrameAccessibilityOffset(WebCore::FrameIdentifier, WebCore::IntPoint);
     void documentURLForConsoleLog(WebCore::FrameIdentifier, CompletionHandler<void(const URL&)>&&);
 
@@ -3534,6 +3535,8 @@ private:
 
     size_t m_suspendMediaPlaybackCounter { 0 };
 
+    size_t m_deferredMouseEvents { 0 };
+
     bool m_lastNavigationWasAppInitiated { true };
     bool m_isRunningModalJavaScriptDialog { false };
     bool m_isSuspended { false };
@@ -3575,6 +3578,10 @@ private:
 
     WeakHashSet<WebCore::NowPlayingMetadataObserver> m_nowPlayingMetadataObservers;
     std::unique_ptr<WebCore::NowPlayingMetadataObserver> m_nowPlayingMetadataObserverForTesting;
+
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+    bool m_isUnifiedTextReplacementActive { false };
+#endif
 };
 
 } // namespace WebKit

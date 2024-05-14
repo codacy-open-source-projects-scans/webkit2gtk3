@@ -740,6 +740,7 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     heap/GCIncomingRefCountedSet.h
     heap/GCLogging.h
     heap/GCMemoryOperations.h
+    heap/GCOwnedDataScope.h
     heap/GCRequest.h
     heap/GCSegmentedArray.h
     heap/Handle.h
@@ -878,6 +879,7 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     jit/JITOperations.h
     jit/JITStubRoutine.h
     jit/JITThunks.h
+    jit/OperationResult.h
     jit/PCToCodeOriginMap.h
     jit/PolymorphicCallStubRoutine.h
     jit/Reg.h

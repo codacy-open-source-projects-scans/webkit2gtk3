@@ -715,6 +715,7 @@ void HistoryController::initializeItem(HistoryItem& item)
     
     item.setURL(url);
     item.setTarget(frame->tree().uniqueName());
+    item.setFrameID(frame->frameID());
     item.setOriginalURLString(originalURL.string());
 
     if (!unreachableURL.isEmpty() || documentLoader->response().httpStatusCode() >= 400)
@@ -757,20 +758,8 @@ Ref<HistoryItem> HistoryController::createItemTree(HistoryItemClient& client, Lo
             item->setDocumentSequenceNumber(previousItem->documentSequenceNumber());
         }
 
-        for (auto* child = m_frame->tree().firstChild(); child; child = child->tree().nextSibling()) {
-            RefPtr localChild = dynamicDowncast<LocalFrame>(child);
-            if (!localChild)
-                continue;
-            CheckedRef childLoader = localChild->loader();
-            bool hasChildLoaded = childLoader->frameHasLoaded();
-
-            // If the child is a frame corresponding to an <object> element that never loaded,
-            // we don't want to create a history item, because that causes fallback content
-            // to be ignored on reload.
-            
-            if (!(!hasChildLoaded && localChild->ownerElement() && is<HTMLObjectElement>(localChild->ownerElement())))
-                item->addChildItem(localChild->checkedHistory()->createItemTree(client, targetFrame, clipAtTarget));
-        }
+        for (RefPtr child = m_frame->tree().firstChild(); child; child = child->tree().nextSibling())
+            item->addChildItem(child->checkedHistory()->createItemTree(client, targetFrame, clipAtTarget));
     }
     // FIXME: Eliminate the isTargetItem flag in favor of itemSequenceNumber.
     if (m_frame.ptr() == &targetFrame)
@@ -791,13 +780,15 @@ void HistoryController::recursiveSetProvisionalItem(HistoryItem& item, HistoryIt
     m_provisionalItem = &item;
 
     for (Ref childItem : item.children()) {
-        auto& childFrameName = childItem->target();
+        auto frameID = childItem->frameID();
+        if (!frameID)
+            continue;
 
-        RefPtr fromChildItem = fromItem->childItemWithTarget(childFrameName);
+        RefPtr fromChildItem = fromItem->childItemWithFrameID(*frameID);
         if (!fromChildItem)
             continue;
 
-        if (RefPtr childFrame = dynamicDowncast<LocalFrame>(m_frame->tree().childByUniqueName(childFrameName)))
+        if (RefPtr childFrame = m_frame->tree().childByFrameID(*frameID))
             childFrame->checkedHistory()->recursiveSetProvisionalItem(childItem, fromChildItem.get());
     }
 }
@@ -814,13 +805,15 @@ void HistoryController::recursiveGoToItem(HistoryItem& item, HistoryItem* fromIt
 
     // Just iterate over the rest, looking for frames to navigate.
     for (Ref childItem : item.children()) {
-        auto& childFrameName = childItem->target();
+        auto frameID = childItem->frameID();
+        if (!frameID)
+            continue;
 
-        RefPtr fromChildItem = fromItem->childItemWithTarget(childFrameName);
+        RefPtr fromChildItem = fromItem->childItemWithFrameID(*frameID);
         if (!fromChildItem)
             continue;
 
-        if (RefPtr childFrame = dynamicDowncast<LocalFrame>(m_frame->tree().childByUniqueName(childFrameName)))
+        if (RefPtr childFrame = m_frame->tree().childByFrameID(*frameID))
             childFrame->checkedHistory()->recursiveGoToItem(childItem, fromChildItem.get(), type, shouldTreatAsContinuingLoad);
     }
 }

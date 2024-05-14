@@ -51,8 +51,7 @@ void SessionHost::sendWebInspectorEvent(const String& event)
     if (!m_clientID)
         return;
 
-    const CString message = event.utf8();
-    send(m_clientID.value(), message.dataAsUInt8Ptr(), message.length());
+    send(m_clientID.value(), event.utf8().span());
 }
 
 void SessionHost::connectToBrowser(Function<void (std::optional<String> error)>&& completionHandler)
@@ -69,7 +68,7 @@ void SessionHost::connectToBrowser(Function<void (std::optional<String> error)>&
     }
 
     if (targetIp.isEmpty() || !targetPort) {
-        completionHandler(makeString("Target IP/port is invalid, or not specified."));
+        completionHandler(makeString("Target IP/port is invalid, or not specified."_s));
         return;
     }
 

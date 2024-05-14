@@ -484,6 +484,11 @@ bool WebExtensionContext::isURLForThisExtension(const URL& url) const
     return url.isValid() && protocolHostAndPortAreEqual(baseURL(), url);
 }
 
+bool WebExtensionContext::isURLForAnyExtension(const URL& url)
+{
+    return url.isValid() && WebExtensionMatchPattern::extensionSchemes().contains(url.protocol().toString());
+}
+
 void WebExtensionContext::setUniqueIdentifier(String&& uniqueIdentifier)
 {
     ASSERT(!isLoaded());
@@ -2619,6 +2624,33 @@ void WebExtensionContext::performCommand(WebExtensionCommand& command, UserTrigg
     fireCommandEventIfNeeded(command, activeTab.get());
 }
 
+#if TARGET_OS_IPHONE
+WebExtensionCommand* WebExtensionContext::commandMatchingKeyCommand(UIKeyCommand *keyCommand)
+{
+    ASSERT(keyCommand);
+    for (auto& command : commands()) {
+        if (command->matchesKeyCommand(keyCommand))
+            return command.ptr();
+    }
+
+    return nullptr;
+}
+
+bool WebExtensionContext::performCommand(UIKeyCommand *keyCommand)
+{
+    ASSERT(isLoaded());
+    if (!isLoaded())
+        return false;
+
+    if (RefPtr result = commandMatchingKeyCommand(keyCommand)) {
+        performCommand(*result, UserTriggered::Yes);
+        return true;
+    }
+
+    return false;
+}
+#endif
+
 #if USE(APPKIT)
 WebExtensionCommand* WebExtensionContext::command(NSEvent *event)
 {
@@ -4015,6 +4047,7 @@ void WebExtensionContext::addInjectedContent(const InjectedContentVector& inject
         auto injectionTime = toImpl(injectedContentData.injectionTime);
         auto waitForNotification = WebCore::WaitForNotificationBeforeInjecting::No;
         Ref executionWorld = toContentWorld(injectedContentData.contentWorldType);
+        auto styleLevel = injectedContentData.styleLevel;
 
         auto scriptID = injectedContentData.identifier;
         bool isRegisteredScript = !scriptID.isEmpty();
@@ -4045,7 +4078,7 @@ void WebExtensionContext::addInjectedContent(const InjectedContentVector& inject
             if (!styleSheetString)
                 continue;
 
-            auto userStyleSheet = API::UserStyleSheet::create(WebCore::UserStyleSheet { styleSheetString, URL { m_baseURL, styleSheetPath }, makeVector<String>(includeMatchPatterns), makeVector<String>(excludeMatchPatterns), injectedFrames, WebCore::UserStyleLevel::User, std::nullopt }, executionWorld);
+            auto userStyleSheet = API::UserStyleSheet::create(WebCore::UserStyleSheet { styleSheetString, URL { m_baseURL, styleSheetPath }, makeVector<String>(includeMatchPatterns), makeVector<String>(excludeMatchPatterns), injectedFrames, styleLevel, std::nullopt }, executionWorld);
             originInjectedStyleSheets.append(userStyleSheet);
 
             for (auto& userContentController : userContentControllers)

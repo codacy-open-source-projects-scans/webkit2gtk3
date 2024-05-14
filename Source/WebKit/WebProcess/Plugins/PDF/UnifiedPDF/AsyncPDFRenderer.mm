@@ -29,7 +29,6 @@
 #if ENABLE(UNIFIED_PDF)
 
 #include "Logging.h"
-#include "PDFPageCoverage.h"
 #include "UnifiedPDFPlugin.h"
 #include <CoreGraphics/CoreGraphics.h>
 #include <PDFKit/PDFKit.h>
@@ -149,7 +148,7 @@ RefPtr<WebCore::ImageBuffer> AsyncPDFRenderer::previewImageForPage(PDFDocumentLa
     return m_pagePreviews.get(pageIndex);
 }
 
-bool AsyncPDFRenderer::renderInfoIsValidForTile(const TileForGrid& tileInfo, const TileRenderInfo& renderInfo) const
+bool AsyncPDFRenderer::renderInfoIsValidForTile(const TileForGrid& tileInfo, const TileRenderInfo& renderInfo, CheckContentVersion checkContentVersion) const
 {
     ASSERT(isMainRunLoop());
     if (!m_pdfContentsLayer)
@@ -161,7 +160,11 @@ bool AsyncPDFRenderer::renderInfoIsValidForTile(const TileForGrid& tileInfo, con
 
     auto currentTileRect = tiledBacking->rectForTile(tileInfo.tileIndex);
     auto currentRenderInfo = renderInfoForTile(tileInfo, currentTileRect);
-    return renderInfo.equivalentForPainting(currentRenderInfo);
+
+    if (checkContentVersion == CheckContentVersion::Yes)
+        return renderInfo.equivalentForPainting(currentRenderInfo);
+
+    return renderInfo.equivalentForPaintingIgnoringContentVersion(currentRenderInfo);
 }
 
 void AsyncPDFRenderer::willRepaintTile(TileGridIndex gridIndex, TileIndex tileIndex, const FloatRect& tileRect, const FloatRect& tileDirtyRect)
@@ -177,7 +180,8 @@ void AsyncPDFRenderer::willRepaintTile(TileGridIndex gridIndex, TileIndex tileIn
         if (renderInfo.tileRect != tileRect)
             return false;
 
-        return renderInfoIsValidForTile(tileInfo, renderInfo);
+        // It's OK to paint tiles with a stale content version (e.g. old state of a checkbox). We'll paint the new tile whne we get it.
+        return renderInfoIsValidForTile(tileInfo, renderInfo, CheckContentVersion::No);
     };
 
     LOG_WITH_STREAM(PDFAsyncRendering, stream << "AsyncPDFRenderer::willRepaintTile " << tileInfo << " rect " << tileRect << " (dirty rect " << tileDirtyRect << ") - already queued "
@@ -219,13 +223,11 @@ void AsyncPDFRenderer::coverageRectDidChange(const FloatRect& coverageRect)
     auto pageCoverage = plugin->pageCoverageForRect(coverageRect);
     auto pagePreviewScale = plugin->scaleForPagePreviews();
 
-    LOG_WITH_STREAM(PDFAsyncRendering, stream << "AsyncPDFRenderer::coverageRectDidChange " << coverageRect << " " << pageCoverage << " - preview scale " << pagePreviewScale);
-
     PDFPageIndexSet unwantedPageIndices;
     for (auto pageIndex : m_pagePreviews.keys())
         unwantedPageIndices.add(pageIndex);
 
-    for (auto& pageInfo : pageCoverage.pages) {
+    for (auto& pageInfo : pageCoverage) {
         auto it = unwantedPageIndices.find(pageInfo.pageIndex);
         if (it != unwantedPageIndices.end()) {
             unwantedPageIndices.remove(it);
@@ -237,6 +239,8 @@ void AsyncPDFRenderer::coverageRectDidChange(const FloatRect& coverageRect)
 
     for (auto pageIndex : unwantedPageIndices)
         removePreviewForPage(pageIndex);
+
+    LOG_WITH_STREAM(PDFAsyncRendering, stream << "AsyncPDFRenderer::coverageRectDidChange " << coverageRect << " " << pageCoverage << " - preview scale " << pagePreviewScale << " - have " << m_pagePreviews.size() << " page previews and " << m_enqueuedPagePreviews.size() << " enqueued");
 }
 
 void AsyncPDFRenderer::tilingScaleFactorDidChange(float)
@@ -316,7 +320,7 @@ auto AsyncPDFRenderer::renderInfoForTile(const TileForGrid& tileInfo, const Floa
         tilingScaleFactor = tiledBacking->tilingScaleFactor();
 
     auto paintingClipRect = convertTileRectToPaintingCoords(tileRect, tilingScaleFactor);
-    auto pageCoverage = plugin->pageCoverageForRect(paintingClipRect);
+    auto pageCoverage = plugin->pageCoverageAndScalesForRect(paintingClipRect);
 
     return TileRenderInfo { tileRect, clipRect, pageCoverage, m_contentsVersion };
 }
@@ -520,7 +524,7 @@ void AsyncPDFRenderer::didCompleteTileRender(RefPtr<WebCore::ImageBuffer>&& imag
     if (!imageBuffer)
         return;
 
-    // Tiling may have changed since we started the tile paint; check that it's still valid.
+    // State may have changed since we started the tile paint; check that it's still valid.
     if (!renderInfoIsValidForTile(tileInfo, renderInfo))
         return;
 
@@ -621,7 +625,7 @@ void AsyncPDFRenderer::pdfContentChangedInRect(float pageScaleFactor, const Floa
         return;
 
     auto pageCoverage = plugin->pageCoverageForRect(paintingRect);
-    if (pageCoverage.pages.isEmpty())
+    if (pageCoverage.isEmpty())
         return;
 
     RetainPtr pdfDocument = plugin->pdfDocument();
@@ -647,7 +651,7 @@ void AsyncPDFRenderer::pdfContentChangedInRect(float pageScaleFactor, const Floa
     }
 
     auto pagePreviewScale = plugin->scaleForPagePreviews();
-    for (auto& pageInfo : pageCoverage.pages)
+    for (auto& pageInfo : pageCoverage)
         generatePreviewImageForPage(pageInfo.pageIndex, pagePreviewScale);
 }
 

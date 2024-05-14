@@ -149,6 +149,7 @@ http/tests/ssl/applepay [ Pass ]
 webkit.org/b/212975 http/tests/ssl/applepay/PaymentRequest.https.html [ Pass Timeout ]
 
 http/tests/paymentrequest/ApplePayModifier-disbursementPaymentRequest.https.html [ Skip ]
+http/tests/paymentrequest/paymentrequest-merchantCategoryCode.https.html [ Skip ]
 http/tests/paymentrequest [ Pass ]
 imported/w3c/web-platform-tests/payment-request [ Pass ]
 imported/w3c/web-platform-tests/payment-request/payment-request-hasenrolledinstrument-method.tentative.https.html [ DumpJSConsoleLogInStdErr ]
@@ -2575,8 +2576,6 @@ webkit.org/b/157592 fast/images/composited-animated-gif-outside-viewport.html [ 
 
 webkit.org/b/156561 perf/rel-list-remove.html [ Pass Timeout Failure ]
 
-webkit.org/b/172403 imported/blink/storage/indexeddb/blob-valid-after-deletion.html [ Pass Timeout ]
-
 webkit.org/b/142969 editing/spelling/copy-paste-crash.html
 
 # This test is iPad only
@@ -4648,7 +4647,7 @@ webkit.org/b/257904 http/tests/site-isolation/page-zoom.html [ Skip ]
 webkit.org/b/257904 http/tests/site-isolation/selection-focus.html [ Skip ]
 webkit.org/b/257904 http/tests/site-isolation/basic-iframe-render-output.html [ Failure Timeout Pass ]
 
-webkit.org/b/269550 http/tests/site-isolation/scrolling/basic-scrolling-tree.html [ Skip ]
+webkit.org/b/269550 http/tests/site-isolation/scrolling/ [ Skip ]
 
 # This test can't be enabled on iOS until EventSenderProxyIOS::keyDown() is implemented.
 http/tests/site-isolation/key-events.html [ Skip ]
@@ -5675,6 +5674,8 @@ imported/w3c/web-platform-tests/uievents/order-of-events/mouse-events/mouseover-
 imported/w3c/web-platform-tests/html/webappapis/scripting/processing-model-2/unhandled-promise-rejections/promise-rejection-events-onerror.html [ Pass Failure ]
 imported/w3c/web-platform-tests/uievents/click/click_events_on_input.html [ Pass Failure ]
 imported/w3c/web-platform-tests/mediacapture-streams/MediaStreamTrack-MediaElement-disabled-audio-is-silence.https.html [ Pass Failure ]
+# Test is failing since its import.
+webkit.org/b/274091 imported/w3c/web-platform-tests/mediacapture-streams/BrowserCaptureMediaStreamTrack-restrictTo.https.html [ Failure ]
 
 webkit.org/b/162032 js/date-constructor.html [ Pass Timeout ]
 
@@ -7295,12 +7296,8 @@ fast/forms/switch/click-animation.html [ ImageOnlyFailure ]
 
 webkit.org/b/272910 fast/scrolling/ios/video-atop-overflow-scroll.html [ Skip ]
 
-# webkit.org/273595 [macOS iOS] Multiple tests in imported/w3c/web-platform-tests/css* are constant failing
-imported/w3c/web-platform-tests/css/css-break/relpos-inline-hit-testing.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-flexbox/intrinsic-size/col-wrap-004.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-flexbox/intrinsic-size/col-wrap-005.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-tables/colspan-001.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-tables/colspan-002.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-tables/colspan-003.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-tables/percent-height-overflow-auto-in-restricted-block-size-cell.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/mathml/relations/css-styling/width-height-004.html [ ImageOnlyFailure ]
+webkit.org/b/273848 [ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/the-iframe-element/iframe-loading-lazy-multiple-times.html [ Pass Failure ]
+
+webkit.org/b/273905 svg/filters/filter-on-root-tile-boundary.html [ Pass ImageOnlyFailure ]
+
+webkit.org/b/273984 http/tests/site-isolation/window-open-with-name-cross-site.html [ Timeout ]

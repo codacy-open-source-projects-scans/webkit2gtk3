@@ -329,7 +329,7 @@ void ServiceWorkerThreadProxy::fireMessageEvent(MessageWithMessagePorts&& messag
         protectedThis->thread().willPostTaskToFireMessageEvent();
     });
 
-    thread().runLoop().postTask([this, protectedThis = Ref { *this }, message = WTFMove(message), sourceData = WTFMove(sourceData)](auto&) mutable {
+    thread().runLoop().postTask([this, protectedThis = Ref { *this }, message = WTFMove(message), sourceData = crossThreadCopy(WTFMove(sourceData))](auto&) mutable {
         thread().queueTaskToPostMessage(WTFMove(message), WTFMove(sourceData));
     });
 }
@@ -364,7 +364,7 @@ void ServiceWorkerThreadProxy::didSaveScriptsToDisk(ScriptBuffer&& script, HashM
 {
     ASSERT(!isMainThread());
 
-    thread().runLoop().postTask([script = WTFMove(script), importedScripts = WTFMove(importedScripts)](auto& context) mutable {
+    thread().runLoop().postTask([script = crossThreadCopy(WTFMove(script)), importedScripts = crossThreadCopy(WTFMove(importedScripts))](auto& context) mutable {
         downcast<ServiceWorkerGlobalScope>(context).didSaveScriptsToDisk(WTFMove(script), WTFMove(importedScripts));
     });
 }

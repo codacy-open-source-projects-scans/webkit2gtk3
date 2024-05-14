@@ -58,6 +58,9 @@ enum class WebCore::ApplePayFeature : uint8_t {
 #if ENABLE(APPLE_PAY_COUPON_CODE)
     PaymentRequestCouponCode,
 #endif
+#if ENABLE(APPLE_PAY_MERCHANT_CATEGORY_CODE)
+    PaymentRequestMerchantCategoryCode,
+#endif
 #if ENABLE(APPLE_PAY_MULTI_MERCHANT_PAYMENTS)
     PaymentRequestMultiTokenContexts,
 #endif
@@ -884,6 +887,15 @@ struct WebCore::ShareData {
 
 enum class WebCore::ShareDataOriginator : bool
 
+using WebCore::TargetedElementIdentifiers = std::pair<WebCore::ElementIdentifier, WebCore::ScriptExecutionContextIdentifier>;
+using WebCore::TargetedElementSelectors = Vector<HashSet<String>>;
+
+header: <WebCore/ElementTargetingTypes.h>
+[CustomHeader] struct WebCore::TargetedElementAdjustment {
+    WebCore::TargetedElementIdentifiers identifiers
+    WebCore::TargetedElementSelectors selectors
+};
+
 header: <WebCore/ElementTargetingTypes.h>
 [CustomHeader] struct WebCore::TargetedElementRequest {
     std::variant<WebCore::FloatPoint, String> data
@@ -1140,10 +1152,15 @@ struct WebCore::ApplePayShippingMethod {
 #endif
 }
 
+[Nested] enum class WebCore::ApplePayError::Domain : uint8_t {
+    Disbursement
+};
+
 [RefCounted] class WebCore::ApplePayError {
     WebCore::ApplePayErrorCode code()
     std::optional<WebCore::ApplePayErrorContactField> contactField()
     String message()
+    std::optional<WebCore::ApplePayError::Domain> domain();
 }
 
 enum class WebCore::ApplePayLogoStyle : bool
@@ -1232,6 +1249,10 @@ enum class WebCore::ApplePayErrorCode : uint8_t {
 #if ENABLE(APPLE_PAY_COUPON_CODE)
     CouponCodeInvalid,
     CouponCodeExpired,
+#endif
+#if ENABLE(APPLE_PAY_DISBURSEMENTS)
+    UnsupportedCard,
+    RecipientContactInvalid,
 #endif
 };
 #endif // ENABLE(APPLE_PAY)
@@ -2465,15 +2486,6 @@ enum class WebCore::PixelFormat : uint8_t {
     BGRA8,
     RGB10,
     RGB10A8,
-};
-
-enum class WebCore::PixelFormatValidated : uint8_t {
-    BGRX8,
-    BGRA8,
-#if HAVE(IOSURFACE_RGB10)
-    RGB10,
-    RGB10A8,
-#endif
 };
 
 [AdditionalEncoder=StreamConnectionEncoder] struct WebCore::PixelBufferFormat {
@@ -4565,7 +4577,7 @@ header: <WebCore/ImageBuffer.h>
     WebCore::FloatSize logicalSize;
     float resolutionScale;
     WebCore::DestinationColorSpace colorSpace
-    WebCore::PixelFormatValidated pixelFormatValidated;
+    WebCore::PixelFormat pixelFormat;
     WebCore::RenderingPurpose purpose;
 };
 
@@ -5892,6 +5904,7 @@ enum class WebCore::TextIndicatorPresentationTransition : uint8_t {
     UseSelectionRectForSizing,
     ComputeEstimatedBackgroundColor,
     UseUserSelectAllCommonAncestor,
+    SkipReplacedContent,
 };
 
 using WebCore::IDBConnectionIdentifier = WebCore::ProcessIdentifier;

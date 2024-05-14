@@ -2659,13 +2659,13 @@ String RenderLayer::debugDescription() const
         compositedDescription = stream.release();
     }
 
-    return makeString("RenderLayer 0x", hex(reinterpret_cast<uintptr_t>(this), Lowercase),
+    return makeString("RenderLayer 0x"_s, hex(reinterpret_cast<uintptr_t>(this), Lowercase),
         ' ', size().width(), 'x', size().height(),
-        transform() ? " has transform" : "",
-        hasFilter() ? " has filter" : "",
-        hasBackdropFilter() ? " has backdrop filter" : "",
-        hasBlendMode() ? " has blend mode" : "",
-        isolatesBlending() ? " isolates blending" : "",
+        transform() ? " has transform"_s : ""_s,
+        hasFilter() ? " has filter"_s : ""_s,
+        hasBackdropFilter() ? " has backdrop filter"_s : ""_s,
+        hasBlendMode() ? " has blend mode"_s : ""_s,
+        isolatesBlending() ? " isolates blending"_s : ""_s,
         compositedDescription);
 }
 
@@ -2902,7 +2902,7 @@ void RenderLayer::paintLayer(GraphicsContext& context, const LayerPaintingInfo& 
         paintFlags.add(PaintLayerFlag::TemporaryClipRects);
     }
 
-    if (viewportConstrainedNotCompositedReason() == NotCompositedForBoundsOutOfView) {
+    if (viewportConstrainedNotCompositedReason() == NotCompositedForBoundsOutOfView && !(paintingInfo.paintBehavior & PaintBehavior::Snapshotting)) {
         // Don't paint out-of-view viewport constrained layers (when doing prepainting) because they will never be visible
         // unless their position or viewport size is changed.
         ASSERT(renderer().isFixedPositioned());
@@ -3296,7 +3296,7 @@ void RenderLayer::paintLayerContents(GraphicsContext& context, const LayerPainti
     RenderObject* subtreePaintRootForRenderer = nullptr;
 
     auto paintBehavior = [&]() {
-        constexpr OptionSet<PaintBehavior> flagsToCopy = { PaintBehavior::FlattenCompositingLayers, PaintBehavior::Snapshotting, PaintBehavior::ExcludeSelection };
+        constexpr OptionSet<PaintBehavior> flagsToCopy = { PaintBehavior::FlattenCompositingLayers, PaintBehavior::Snapshotting, PaintBehavior::ExcludeSelection, PaintBehavior::ExcludeReplacedContent };
         OptionSet<PaintBehavior> paintBehavior = paintingInfo.paintBehavior & flagsToCopy;
 
         if (localPaintFlags.contains(PaintLayerFlag::PaintingSkipRootBackground))
@@ -3778,7 +3778,7 @@ void RenderLayer::paintForegroundForFragments(const LayerFragments& layerFragmen
         localPaintBehavior = paintBehavior;
 
     // FIXME: It's unclear if this flag copying is necessary.
-    constexpr OptionSet<PaintBehavior> flagsToCopy { PaintBehavior::ExcludeSelection, PaintBehavior::Snapshotting, PaintBehavior::DefaultAsynchronousImageDecode, PaintBehavior::CompositedOverflowScrollContent, PaintBehavior::ForceSynchronousImageDecode };
+    constexpr OptionSet<PaintBehavior> flagsToCopy { PaintBehavior::ExcludeSelection, PaintBehavior::Snapshotting, PaintBehavior::DefaultAsynchronousImageDecode, PaintBehavior::CompositedOverflowScrollContent, PaintBehavior::ForceSynchronousImageDecode, PaintBehavior::ExcludeReplacedContent };
     localPaintBehavior.add(localPaintingInfo.paintBehavior & flagsToCopy);
 
     if (localPaintingInfo.paintBehavior & PaintBehavior::DontShowVisitedLinks)
@@ -4096,11 +4096,25 @@ Ref<HitTestingTransformState> RenderLayer::createLocalTransformState(RenderLayer
     return transformState.releaseNonNull();
 }
 
+static RefPtr<Element> flattenedParent(Element* element)
+{
+    if (!element)
+        return nullptr;
+    RefPtr parent = element->parentElementInComposedTree();
+    while (parent) {
+        if (parent->computedStyle()->display() != DisplayType::Contents)
+            break;
+        parent = parent->parentElementInComposedTree();
+    }
+    return parent;
+}
+
 bool RenderLayer::ancestorLayerIsDOMParent(const RenderLayer* ancestor) const
 {
     if (!ancestor)
         return false;
-    if (renderer().element() && ancestor->renderer().element() == renderer().element()->parentElementInComposedTree())
+    auto parent = flattenedParent(renderer().element());
+    if (parent && ancestor->renderer().element() == parent)
         return true;
 
     std::optional<PseudoId> parentPseudoId = parentPseudoElement(renderer().style().pseudoElementType());
@@ -5874,6 +5888,7 @@ TextStream& operator<<(TextStream& ts, PaintBehavior behavior)
     case PaintBehavior::EventRegionIncludeBackground: ts << "EventRegionIncludeBackground"; break;
     case PaintBehavior::Snapshotting: ts << "Snapshotting"; break;
     case PaintBehavior::DontShowVisitedLinks: ts << "DontShowVisitedLinks"; break;
+    case PaintBehavior::ExcludeReplacedContent: ts << "ExcludeReplacedContent"; break;
     }
 
     return ts;

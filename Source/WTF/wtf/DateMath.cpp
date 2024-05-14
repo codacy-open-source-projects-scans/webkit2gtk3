@@ -960,7 +960,7 @@ double parseDate(std::span<const LChar> dateString, bool& isLocalTime)
                 // Since the passed-in length is used for both strings, the following checks that
                 // dateString has the time zone name as a prefix, not that it is equal.
                 auto tzName = span8(knownZone.tzName);
-                if (dateString.size() >= tzName.size() && equalLettersIgnoringASCIICase(dateString.data(), tzName)) {
+                if (dateString.size() >= tzName.size() && equalLettersIgnoringASCIICaseWithLength(dateString, tzName, tzName.size())) {
                     offset = knownZone.tzOffset;
                     dateString = dateString.subspan(tzName.size());
                     isLocalTime = false;
@@ -1024,7 +1024,7 @@ double parseDate(std::span<const LChar> dateString)
 String makeRFC2822DateString(unsigned dayOfWeek, unsigned day, unsigned month, unsigned year, unsigned hours, unsigned minutes, unsigned seconds, int utcOffset)
 {
     StringBuilder stringBuilder;
-    stringBuilder.append(weekdayName[dayOfWeek], ", ", day, ' ', monthName[month], ' ', year, ' ');
+    stringBuilder.append(weekdayName[dayOfWeek], ", "_s, day, ' ', monthName[month], ' ', year, ' ');
 
     appendTwoDigitNumber(stringBuilder, hours);
     stringBuilder.append(':');

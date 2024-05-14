@@ -84,8 +84,8 @@ static LazyNeverDestroyed<std::unique_ptr<Metadata>> g_metadata;
 static LazyNeverDestroyed<WTF::BitSet<NumberOfOptions>> g_optionWasOverridden;
 
 struct ConstMetaData {
-    const char* name;
-    const char* description;
+    ASCIILiteral name;
+    ASCIILiteral description;
     Options::Type type;
     Options::Availability availability;
     uint16_t offsetOfOption;
@@ -94,7 +94,7 @@ struct ConstMetaData {
 // Realize the names for each of the options:
 static const ConstMetaData g_constMetaData[NumberOfOptions] = {
 #define FILL_OPTION_INFO(type_, name_, defaultValue_, availability_, description_) \
-    { #name_, description_, Options::Type::type_, Options::Availability::availability_, offsetof(OptionsStorage, name_) },
+    { #name_ ## _s, description_, Options::Type::type_, Options::Availability::availability_, offsetof(OptionsStorage, name_) },
     FOR_EACH_JSC_OPTION(FILL_OPTION_INFO)
 #undef FILL_OPTION_INFO
 };
@@ -105,8 +105,8 @@ public:
 
     bool operator==(const Option&) const;
 
-    const char* name() const { return g_constMetaData[m_id].name; }
-    const char* description() const { return g_constMetaData[m_id].description; }
+    ASCIILiteral name() const { return g_constMetaData[m_id].name; }
+    ASCIILiteral description() const { return g_constMetaData[m_id].description; }
     Options::Type type() const { return g_constMetaData[m_id].type; }
     Options::Availability availability() const { return g_constMetaData[m_id].availability; }
 
@@ -193,9 +193,10 @@ std::optional<T> parse(const char* string);
 template<>
 std::optional<OptionsStorage::Bool> parse(const char* string)
 {
-    if (equalLettersIgnoringASCIICase(string, "true"_s) || equalLettersIgnoringASCIICase(string, "yes"_s) || !strcmp(string, "1"))
+    auto span = WTF::span(string);
+    if (equalLettersIgnoringASCIICase(span, "true"_s) || equalLettersIgnoringASCIICase(span, "yes"_s) || !strcmp(string, "1"))
         return true;
-    if (equalLettersIgnoringASCIICase(string, "false"_s) || equalLettersIgnoringASCIICase(string, "no"_s) || !strcmp(string, "0"))
+    if (equalLettersIgnoringASCIICase(span, "false"_s) || equalLettersIgnoringASCIICase(span, "no"_s) || !strcmp(string, "0"))
         return false;
     return std::nullopt;
 }
@@ -263,13 +264,14 @@ std::optional<OptionsStorage::OptionString> parse(const char* string)
 template<>
 std::optional<OptionsStorage::GCLogLevel> parse(const char* string)
 {
-    if (equalLettersIgnoringASCIICase(string, "none"_s) || equalLettersIgnoringASCIICase(string, "no"_s) || equalLettersIgnoringASCIICase(string, "false"_s) || !strcmp(string, "0"))
+    auto span = WTF::span(string);
+    if (equalLettersIgnoringASCIICase(span, "none"_s) || equalLettersIgnoringASCIICase(span, "no"_s) || equalLettersIgnoringASCIICase(span, "false"_s) || !strcmp(string, "0"))
         return GCLogging::None;
 
-    if (equalLettersIgnoringASCIICase(string, "basic"_s) || equalLettersIgnoringASCIICase(string, "yes"_s) || equalLettersIgnoringASCIICase(string, "true"_s) || !strcmp(string, "1"))
+    if (equalLettersIgnoringASCIICase(span, "basic"_s) || equalLettersIgnoringASCIICase(span, "yes"_s) || equalLettersIgnoringASCIICase(span, "true"_s) || !strcmp(string, "1"))
         return GCLogging::Basic;
 
-    if (equalLettersIgnoringASCIICase(string, "verbose"_s) || !strcmp(string, "2"))
+    if (equalLettersIgnoringASCIICase(span, "verbose"_s) || !strcmp(string, "2"))
         return GCLogging::Verbose;
 
     return std::nullopt;
@@ -280,19 +282,20 @@ std::optional<OptionsStorage::OSLogType> parse(const char* string)
 {
     std::optional<OptionsStorage::OSLogType> result;
 
-    if (equalLettersIgnoringASCIICase(string, "none"_s) || equalLettersIgnoringASCIICase(string, "false"_s) || !strcmp(string, "0"))
+    auto span = WTF::span(string);
+    if (equalLettersIgnoringASCIICase(span, "none"_s) || equalLettersIgnoringASCIICase(span, "false"_s) || !strcmp(string, "0"))
         result = OSLogType::None;
-    else if (equalLettersIgnoringASCIICase(string, "true"_s) || !strcmp(string, "1"))
+    else if (equalLettersIgnoringASCIICase(span, "true"_s) || !strcmp(string, "1"))
         result = OSLogType::Error;
-    else if (equalLettersIgnoringASCIICase(string, "default"_s))
+    else if (equalLettersIgnoringASCIICase(span, "default"_s))
         result = OSLogType::Default;
-    else if (equalLettersIgnoringASCIICase(string, "info"_s))
+    else if (equalLettersIgnoringASCIICase(span, "info"_s))
         result = OSLogType::Info;
-    else if (equalLettersIgnoringASCIICase(string, "debug"_s))
+    else if (equalLettersIgnoringASCIICase(span, "debug"_s))
         result = OSLogType::Debug;
-    else if (equalLettersIgnoringASCIICase(string, "error"_s))
+    else if (equalLettersIgnoringASCIICase(span, "error"_s))
         result = OSLogType::Error;
-    else if (equalLettersIgnoringASCIICase(string, "fault"_s))
+    else if (equalLettersIgnoringASCIICase(span, "fault"_s))
         result = OSLogType::Fault;
 
     if (result && result.value() != Options::useOSLog())
@@ -807,6 +810,10 @@ void Options::notifyOptionsChanged()
         ASSERT((static_cast<int64_t>(Options::thresholdForOptimizeAfterLongWarmUp()) << Options::reoptimizationRetryCounterMax()) > 0);
         ASSERT((static_cast<int64_t>(Options::thresholdForOptimizeAfterLongWarmUp()) << Options::reoptimizationRetryCounterMax()) <= static_cast<int64_t>(std::numeric_limits<int32_t>::max()));
 
+#if CPU(ARM)
+        Options::useOMGJIT() = false;
+#endif
+
         if (!Options::useBBQJIT() && Options::useOMGJIT())
             Options::wasmLLIntTiersUpToBBQ() = false;
 
@@ -1142,12 +1149,12 @@ bool Options::setOptionWithoutAlias(const char* arg, bool verify)
     return false; // No option matched.
 }
 
-static const char* invertBoolOptionValue(const char* valueStr)
+static ASCIILiteral invertBoolOptionValue(const char* valueStr)
 {
     std::optional<OptionsStorage::Bool> value = parse<OptionsStorage::Bool>(valueStr);
     if (!value)
-        return nullptr;
-    return value.value() ? "false" : "true";
+        return { };
+    return value.value() ? "false"_s : "true"_s;
 }
 
 
@@ -1168,11 +1175,11 @@ bool Options::setAliasedOption(const char* arg, bool verify)
         && !strncasecmp(arg, #aliasedName_, equalStr - arg)) {          \
         auto unaliasedOption = String::fromLatin1(#unaliasedName_);     \
         if (equivalence == SameOption)                                  \
-            unaliasedOption = unaliasedOption + equalStr;               \
+            unaliasedOption = unaliasedOption + span(equalStr);         \
         else {                                                          \
             ASSERT(equivalence == InvertedOption);                      \
-            auto* invertedValueStr = invertBoolOptionValue(equalStr + 1); \
-            if (!invertedValueStr)                                      \
+            auto invertedValueStr = invertBoolOptionValue(equalStr + 1); \
+            if (invertedValueStr.isNull())                                      \
                 return false;                                           \
             unaliasedOption = makeString(unaliasedOption, '=', invertedValueStr); \
         }                                                               \

@@ -183,19 +183,34 @@ void ViewTransition::callUpdateCallback()
         RefPtr protectedThis = weakThis.get();
         if (!protectedThis)
             return;
+        m_updateCallbackTimeout = nullptr;
         switch (callbackPromise->status()) {
         case DOMPromise::Status::Fulfilled:
             m_updateCallbackDone.second->resolve();
+            activateViewTransition();
             break;
         case DOMPromise::Status::Rejected:
             m_updateCallbackDone.second->rejectWithCallback([&] (auto&) {
                 return callbackPromise->result();
             }, RejectAsHandled::No);
+            if (m_phase == ViewTransitionPhase::Done)
+                return;
+            m_ready.second->markAsHandled();
+            skipViewTransition(callbackPromise->result());
             break;
-        default:
+        case DOMPromise::Status::Pending:
             ASSERT_NOT_REACHED();
             break;
         }
+    });
+
+    m_updateCallbackTimeout = protectedDocument()->checkedEventLoop()->scheduleTask(4_s, TaskSource::DOMManipulation, [this, weakThis = WeakPtr { *this }] {
+        RefPtr protectedThis = weakThis.get();
+        if (!protectedThis)
+            return;
+        if (m_phase == ViewTransitionPhase::Done)
+            return;
+        skipViewTransition(Exception { ExceptionCode::TimeoutError, "View transition update callback timed out."_s });
     });
 }
 
@@ -224,34 +239,6 @@ void ViewTransition::setupViewTransition()
             return;
 
         callUpdateCallback();
-        m_updateCallbackDone.first->whenSettled([this, weakThis = WeakPtr { *this }] {
-            RefPtr protectedThis = weakThis.get();
-            if (!protectedThis)
-                return;
-            m_updateCallbackTimeout = nullptr;
-            switch (m_updateCallbackDone.first->status()) {
-            case DOMPromise::Status::Fulfilled:
-                activateViewTransition();
-                break;
-            case DOMPromise::Status::Rejected:
-                if (m_phase == ViewTransitionPhase::Done)
-                    return;
-                skipViewTransition(m_updateCallbackDone.first->result());
-                break;
-            case DOMPromise::Status::Pending:
-                ASSERT_NOT_REACHED();
-                break;
-            }
-        });
-
-        m_updateCallbackTimeout = protectedDocument()->checkedEventLoop()->scheduleTask(4_s, TaskSource::DOMManipulation, [this, weakThis = WeakPtr { *this }] {
-            RefPtr protectedThis = weakThis.get();
-            if (!protectedThis)
-                return;
-            if (m_phase == ViewTransitionPhase::Done)
-                return;
-            skipViewTransition(Exception { ExceptionCode::TimeoutError, "View transition update callback timed out."_s });
-        });
     });
 }
 
@@ -362,7 +349,8 @@ ExceptionOr<void> ViewTransition::captureOldState()
         m_initialLargeViewportSize = view->sizeForCSSLargeViewportUnits();
 
         auto result = forEachRendererInPaintOrder([&](RenderLayerModelObject& renderer) -> ExceptionOr<void> {
-            if (!Styleable::fromRenderer(renderer))
+            auto styleable = Styleable::fromRenderer(renderer);
+            if (!styleable || &styleable->element.treeScope() != document())
                 return { };
 
             if (auto name = effectiveViewTransitionName(renderer); !name.isNull()) {
@@ -407,8 +395,8 @@ ExceptionOr<void> ViewTransition::captureNewState()
     ListHashSet<AtomString> usedTransitionNames;
     if (CheckedPtr view = document()->renderView()) {
         auto result = forEachRendererInPaintOrder([&](RenderLayerModelObject& renderer) -> ExceptionOr<void> {
-            std::optional<const Styleable> styleable = Styleable::fromRenderer(renderer);
-            if (!styleable)
+            auto styleable = Styleable::fromRenderer(renderer);
+            if (!styleable || &styleable->element.treeScope() != document())
                 return { };
 
             if (auto name = effectiveViewTransitionName(renderer); !name.isNull()) {
@@ -508,6 +496,9 @@ void ViewTransition::setupTransitionPseudoElements()
 
     if (RefPtr documentElement = document()->documentElement())
         documentElement->invalidateStyleInternal();
+
+    // Ensure style & render tree are up-to-date.
+    protectedDocument()->updateStyleIfNeeded();
 }
 
 // https://drafts.csswg.org/css-view-transitions/#activate-view-transition

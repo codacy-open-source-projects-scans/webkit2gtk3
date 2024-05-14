@@ -706,7 +706,7 @@ FloatRect GraphicsLayer::adjustCoverageRectForMovement(const FloatRect& coverage
 String GraphicsLayer::animationNameForTransition(AnimatedProperty property)
 {
     // | is not a valid identifier character in CSS, so this can never conflict with a keyframe identifier.
-    return makeString("-|transition", static_cast<int>(property), '-');
+    return makeString("-|transition"_s, static_cast<int>(property), '-');
 }
 
 void GraphicsLayer::suspendAnimations(MonotonicTime)
@@ -954,6 +954,9 @@ void GraphicsLayer::dumpProperties(TextStream& ts, OptionSet<LayerTreeAsTextOpti
 
     if (!m_backfaceVisibility)
         ts << indent << "(backfaceVisibility "_s << (m_backfaceVisibility ? "visible"_s : "hidden"_s) << ")\n"_s;
+
+    if (m_isBackdropRoot)
+        ts << indent << "(backdropRoot "_s << m_isBackdropRoot << ")\n"_s;
 
     if (options & LayerTreeAsTextOptions::Debug)
         ts << indent << "(primary-layer-id "_s << primaryLayerID() << ")\n"_s;

@@ -805,8 +805,15 @@ bool RenderLayerBacking::updateBackdropRoot()
     // Don't try to make the RenderView's layer a backdrop root if it's going to
     // paint into the window since it won't work (WebKitLegacy only).
     bool willBeBackdropRoot = m_owningLayer.isBackdropRoot() && !paintsIntoWindow();
+
+    // If the RenderView is opaque, then that will occlude any pixels behind it and we don't need
+    // to isolate it as a backdrop root.
+    if (m_owningLayer.isRenderViewLayer() && !compositor().viewHasTransparentBackground())
+        willBeBackdropRoot = false;
+
     if (m_graphicsLayer->isBackdropRoot() == willBeBackdropRoot)
         return false;
+
     m_graphicsLayer->setIsBackdropRoot(willBeBackdropRoot);
     return true;
 }
@@ -884,6 +891,11 @@ bool RenderLayerBacking::shouldClipCompositedBounds() const
     if (layerForHorizontalScrollbar() || layerForVerticalScrollbar())
         return false;
 #endif
+
+    if (renderer().capturedInViewTransition())
+        return false;
+    if (renderer().style().pseudoElementType() == PseudoId::ViewTransitionNew)
+        return false;
 
     if (m_isFrameLayerWithTiledBacking)
         return false;
@@ -1925,7 +1937,7 @@ bool RenderLayerBacking::maintainsEventRegion() const
     if (!settings.asyncFrameScrollingEnabled() && !settings.asyncOverflowScrollingEnabled())
         return false;
 
-    if (!m_owningLayer.page().scrollingCoordinator()->hasSubscrollers())
+    if (!m_owningLayer.page().scrollingCoordinator()->hasSubscrollers(renderer().view().frame().rootFrame().frameID()))
         return false;
 
     return true;

@@ -114,7 +114,7 @@ IntSize ImageBuffer::calculateBackendSize(FloatSize logicalSize, float resolutio
 
 ImageBufferBackendParameters ImageBuffer::backendParameters(const ImageBufferParameters& parameters)
 {
-    return { calculateBackendSize(parameters.logicalSize, parameters.resolutionScale), parameters.resolutionScale, parameters.colorSpace, convertPixelFormatValidatedToPixelFormat(parameters.pixelFormatValidated), parameters.purpose };
+    return { calculateBackendSize(parameters.logicalSize, parameters.resolutionScale), parameters.resolutionScale, parameters.colorSpace, parameters.pixelFormat, parameters.purpose };
 }
 
 bool ImageBuffer::sizeNeedsClamping(const FloatSize& size)
@@ -431,7 +431,7 @@ String ImageBuffer::toDataURL(Ref<ImageBuffer> source, const String& mimeType, s
     auto encodedData = toData(WTFMove(source), mimeType, quality, preserveResolution);
     if (encodedData.isEmpty())
         return "data:,"_s;
-    return makeString("data:", mimeType, ";base64,", base64Encoded(encodedData));
+    return makeString("data:"_s, mimeType, ";base64,"_s, base64Encoded(encodedData));
 }
 
 Vector<uint8_t> ImageBuffer::toData(Ref<ImageBuffer> source, const String& mimeType, std::optional<double> quality, PreserveResolution preserveResolution)

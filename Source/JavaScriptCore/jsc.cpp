@@ -1078,7 +1078,7 @@ JSInternalPromise* GlobalObject::moduleLoaderImportModule(JSGlobalObject* global
     RETURN_IF_EXCEPTION(scope, promise->rejectWithCaughtException(globalObject, scope));
 
     if (!referrer.protocolIsFile())
-        RELEASE_AND_RETURN(scope, rejectWithError(createError(globalObject, makeString("Could not resolve the referrer's path '"_s, referrer.string(), "', while trying to resolve module '"_s, specifier, "'."_s))));
+        RELEASE_AND_RETURN(scope, rejectWithError(createError(globalObject, makeString("Could not resolve the referrer's path '"_s, referrer.string(), "', while trying to resolve module '"_s, specifier.data, "'."_s))));
 
     auto attributes = JSC::retrieveImportAttributesFromDynamicImportOptions(globalObject, parameters, { vm.propertyNames->type.impl() });
     RETURN_IF_EXCEPTION(scope, promise->rejectWithCaughtException(globalObject, scope));
@@ -1537,7 +1537,7 @@ static EncodedJSValue printInternal(JSGlobalObject* globalObject, CallFrame* cal
 
     if (asyncTestExpectedPasses) {
         JSValue value = callFrame->argument(0);
-        if (value.isString() && WTF::equal(asString(value)->value(globalObject).impl(), "Test262:AsyncTestComplete"_s)) {
+        if (value.isString() && WTF::equal(asString(value)->value(globalObject).data.impl(), "Test262:AsyncTestComplete"_s)) {
             asyncTestPasses++;
             return JSValue::encode(jsUndefined());
         }
@@ -1661,9 +1661,9 @@ JSC_DEFINE_HOST_FUNCTION(functionDebug, (JSGlobalObject* globalObject, CallFrame
     auto scope = DECLARE_THROW_SCOPE(vm);
     auto* jsString = callFrame->argument(0).toString(globalObject);
     RETURN_IF_EXCEPTION(scope, { });
-    auto viewWithString = jsString->viewWithUnderlyingString(globalObject);
+    auto view = jsString->view(globalObject);
     RETURN_IF_EXCEPTION(scope, { });
-    auto string = toCString(globalObject, scope, viewWithString.view);
+    auto string = toCString(globalObject, scope, view.data);
     RETURN_IF_EXCEPTION(scope, { });
     fputs("--> ", stderr);
     fwrite(string.data(), sizeof(char), string.length(), stderr);
@@ -2211,7 +2211,7 @@ JSC_DEFINE_HOST_FUNCTION(functionOpenFile, (JSGlobalObject* globalObject, CallFr
 
     FILE* descriptor = fopen(filePath.fileSystemPath().ascii().data(), "r");
     if (!descriptor)
-        return throwVMException(globalObject, scope, createURIError(globalObject, makeString("Could not open file at "_s, filePath.string(), " fopen had error: "_s, safeStrerror(errno).data())));
+        return throwVMException(globalObject, scope, createURIError(globalObject, makeString("Could not open file at "_s, filePath.string(), " fopen had error: "_s, safeStrerror(errno).span())));
 
     RELEASE_AND_RETURN(scope, JSValue::encode(JSFileDescriptor::create(vm, globalObject, WTFMove(descriptor))));
 }

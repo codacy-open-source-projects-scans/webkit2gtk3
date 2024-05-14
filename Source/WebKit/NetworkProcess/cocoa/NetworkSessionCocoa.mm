@@ -55,6 +55,7 @@
 #import <WebCore/ResourceRequest.h>
 #import <WebCore/ResourceResponse.h>
 #import <WebCore/SharedBuffer.h>
+#import <WebCore/ThreadableWebSocketChannel.h>
 #import <WebCore/WebCoreURLResponse.h>
 #import <pal/spi/cf/CFNetworkSPI.h>
 #import <wtf/BlockPtr.h>
@@ -630,7 +631,6 @@ static void updateIgnoreStrictTransportSecuritySetting(RetainPtr<NSURLRequest>& 
             ASSERT_NOT_REACHED();
 
         WebCore::ResourceResponse resourceResponse(response);
-        networkDataTask->checkTAO(resourceResponse);
 
         networkDataTask->willPerformHTTPRedirection(WTFMove(resourceResponse), request, [session = networkDataTask->networkSession(), completionHandler = makeBlockPtr(completionHandler), taskIdentifier, shouldIgnoreHSTS](auto&& request) {
 #if !LOG_DISABLED
@@ -900,7 +900,11 @@ static NSDictionary<NSString *, id> *extractResolutionReport(NSError *error)
 
     if (auto networkDataTask = [self existingTask:task])
         networkDataTask->didCompleteWithError(error, networkDataTask->networkLoadMetrics());
-    else if (error) {
+    else if (auto* webSocketTask = [self existingWebSocketTask:task]) {
+        // Even if error is null here, it's an error to close a WebSocket without a close frame which should be received
+        // in URLSession:webSocketTask:didCloseWithCode:reason: but this can be hit in some TCP error cases like rdar://110487778
+        webSocketTask->didClose(WebCore::ThreadableWebSocketChannel::CloseEventCodeAbnormalClosure, emptyString());
+    } else if (error) {
         if (!_sessionWrapper)
             return;
         auto downloadID = _sessionWrapper->downloadMap.take(task.taskIdentifier);
@@ -1095,8 +1099,6 @@ ALLOW_DEPRECATED_DECLARATIONS_END
         // Lazy initialization is not helpful in the WebKit2 case because we always end up initializing
         // all the fields when sending the response to the WebContent process over IPC.
         resourceResponse.disableLazyInitialization();
-
-        networkDataTask->checkTAO(resourceResponse);
 
         resourceResponse.setDeprecatedNetworkLoadMetrics(WebCore::copyTimingData(taskMetrics, networkDataTask->networkLoadMetrics()));
 

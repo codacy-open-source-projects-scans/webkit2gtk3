@@ -63,14 +63,6 @@
 #ifdef __cplusplus
 #include <cstdlib>
 #include <type_traits>
-
-#if OS(WINDOWS)
-#if !COMPILER(GCC_COMPATIBLE)
-extern "C" void _ReadWriteBarrier(void);
-#pragma intrinsic(_ReadWriteBarrier)
-#endif
-#include <intrin.h>
-#endif
 #endif
 
 /* ASSERT_ENABLED is defined in PlatformEnable.h. */
@@ -148,11 +140,7 @@ extern "C" {
 
    Signals are ignored by the crash reporter on OS X so we must do better.
 */
-#if COMPILER(GCC_COMPATIBLE) || COMPILER(MSVC)
 #define NO_RETURN_DUE_TO_CRASH NO_RETURN
-#else
-#define NO_RETURN_DUE_TO_CRASH
-#endif
 
 #ifdef __cplusplus
 enum class WTFLogChannelState : uint8_t { Off, On, OnWithAccumulation };
@@ -316,11 +304,7 @@ WTF_EXPORT_PRIVATE bool WTFIsDebuggerAttached(void);
 #define WTFBreakpointTrap() WTFCrash() // Not implemented.
 #endif
 
-#if COMPILER(MSVC)
-#define WTFBreakpointTrapUnderConstexprContext() ((void) 0)
-#else
 #define WTFBreakpointTrapUnderConstexprContext() __builtin_trap()
-#endif
 
 #ifndef CRASH
 
@@ -882,11 +866,7 @@ WTF_EXPORT_PRIVATE void disableForwardingVPrintfStdErrToOSLog();
 
 inline void compilerFenceForCrash()
 {
-#if OS(WINDOWS) && !COMPILER(GCC_COMPATIBLE)
-    _ReadWriteBarrier();
-#else
     asm volatile("" ::: "memory");
-#endif
 }
 
 #ifndef CRASH_WITH_INFO

@@ -48,7 +48,7 @@ struct TemplateTypes {
 
     static void appendNameTo(StringBuilder& builder)
     {
-        builder.append(toString(TT), ", ");
+        builder.append(toString(TT), ", "_s);
         TemplateTypes<TTs...>::appendNameTo(builder);
     }
 };
@@ -628,6 +628,14 @@ Result<AST::Attribute::Ref> Parser<Lexer>::parseAttribute()
     START_PARSE();
 
     CONSUME_TYPE(Attribute);
+
+    if (current().type == TokenType::KeywordDiagnostic) {
+        consume();
+        PARSE(diagnostic, Diagnostic);
+        RETURN_ARENA_NODE(DiagnosticAttribute, WTFMove(diagnostic));
+    }
+
+
     CONSUME_TYPE_NAMED(ident, Identifier);
 
     if (ident.ident == "group"_s) {
@@ -770,11 +778,6 @@ Result<AST::Attribute::Ref> Parser<Lexer>::parseAttribute()
     if (ident.ident == "const"_s)
         RETURN_ARENA_NODE(ConstAttribute);
 
-    if (ident.ident == "diagnostic"_s) {
-        PARSE(diagnostic, Diagnostic);
-        RETURN_ARENA_NODE(DiagnosticAttribute, WTFMove(diagnostic));
-    }
-
     // https://gpuweb.github.io/gpuweb/wgsl/#pipeline-stage-attributes
     if (ident.ident == "vertex"_s)
         RETURN_ARENA_NODE(StageAttribute, ShaderStage::Vertex);
@@ -825,7 +828,7 @@ Result<AST::Structure::Ref> Parser<Lexer>::parseStructure(AST::Attribute::List&&
         PARSE(member, StructureMember);
         auto result = seenMembers.add(member.get().name());
         if (!result.isNewEntry)
-            FAIL(makeString("duplicate member '", member.get().name(), "' in struct '", name, "'"));
+            FAIL(makeString("duplicate member '"_s, member.get().name(), "' in struct '"_s, name, '\''));
         members.append(member);
         if (current().type == TokenType::Comma)
             consume();
@@ -834,7 +837,7 @@ Result<AST::Structure::Ref> Parser<Lexer>::parseStructure(AST::Attribute::List&&
     }
 
     if (members.isEmpty())
-        FAIL(makeString("structures must have at least one member"));
+        FAIL("structures must have at least one member"_str);
 
     CONSUME_TYPE(BraceRight);
 
@@ -1209,6 +1212,8 @@ Result<AST::CompoundStatement::Ref> Parser<Lexer>::parseCompoundStatement()
 {
     START_PARSE();
 
+    PARSE(attributes, Attributes);
+
     CONSUME_TYPE(BraceLeft);
 
     AST::Statement::List statements;
@@ -1224,7 +1229,7 @@ Result<AST::CompoundStatement::Ref> Parser<Lexer>::parseCompoundStatement()
 
     CONSUME_TYPE(BraceRight);
 
-    RETURN_ARENA_NODE(CompoundStatement, WTFMove(statements));
+    RETURN_ARENA_NODE(CompoundStatement, WTFMove(attributes), WTFMove(statements));
 }
 
 template<typename Lexer>

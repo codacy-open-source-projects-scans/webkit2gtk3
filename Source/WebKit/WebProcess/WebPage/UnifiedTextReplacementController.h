@@ -69,13 +69,15 @@ public:
 
     void didEndTextReplacementSession(const WTF::UUID&, bool accepted);
 
-    void textReplacementSessionDidReceiveTextWithReplacementRange(const WTF::UUID&, const WebCore::AttributedString&, const WebCore::CharacterRange&, const WebUnifiedTextReplacementContextData&);
+    void textReplacementSessionDidReceiveTextWithReplacementRange(const WTF::UUID&, const WebCore::AttributedString&, const WebCore::CharacterRange&, const WebUnifiedTextReplacementContextData&, bool finished);
 
     void textReplacementSessionDidReceiveEditAction(const WTF::UUID&, WebTextReplacementData::EditAction);
 
     void updateStateForSelectedReplacementIfNeeded();
 
     std::optional<WebCore::SimpleRange> contextRangeForSessionWithUUID(const WTF::UUID&) const;
+
+    void removeTransparentMarkersForSession(const WTF::UUID&, WebCore::SimpleRange&);
 
 private:
     std::optional<std::tuple<WebCore::Node&, WebCore::DocumentMarker&>> findReplacementMarkerContainingRange(const WebCore::SimpleRange&) const;

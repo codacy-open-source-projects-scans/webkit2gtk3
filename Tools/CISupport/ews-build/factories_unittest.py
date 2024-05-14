@@ -405,7 +405,7 @@ class TestExpectedBuildSteps(unittest.TestCase):
             'clean-derived-sources',
             'compile-webkit'
         ],
-        'WPE-Skia-Build-EWS': [
+        'WPE-Cairo-Build-EWS': [
             'configure-build',
             'validate-change',
             'configuration',
@@ -539,8 +539,7 @@ class TestExpectedBuildSteps(unittest.TestCase):
             'apply-patch',
             'checkout-pull-request',
             'validate-change',
-            'webkitpy-tests-python2',
-            'webkitpy-tests-python3',
+            'webkitpy-tests',
             'set-build-summary'
         ],
         'WebKitPerl-Tests-EWS': [
