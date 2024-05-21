@@ -1540,7 +1540,6 @@ svg/animations/animateMotion-additive-2a.svg [ ImageOnlyFailure ]
 svg/animations/animateMotion-additive-2c.svg [ ImageOnlyFailure ]
 svg/as-image/svg-image-with-data-uri-from-canvas.html [ ImageOnlyFailure ]
 svg/filters/feDiffuseLighting-feSpotLight-dynamic-update.svg [ ImageOnlyFailure ]
-svg/filters/feGaussianBlur-clipped.svg [ ImageOnlyFailure ]
 svg/filters/feSpecularLighting-fePointLight-dynamic-update.svg [ ImageOnlyFailure ]
 svg/masking/mask-transformed-text-missing.svg [ ImageOnlyFailure ]
 svg/text/tspan-outline.html [ ImageOnlyFailure ]
@@ -1551,10 +1550,6 @@ svg/zoom/page/text-with-non-scaling-stroke.html [ ImageOnlyFailure ]
 webkit.org/b/273396 css3/background/background-repeat-space-content.html [ ImageOnlyFailure ]
 webkit.org/b/273396 css3/color-filters/color-filter-color-text-decorations.html [ ImageOnlyFailure ]
 webkit.org/b/273396 css3/color-filters/color-filter-text-decoration-shadow.html [ ImageOnlyFailure ]
-webkit.org/b/273396 css3/filters/effect-blur-hw.html [ ImageOnlyFailure ]
-webkit.org/b/273396 css3/filters/effect-blur.html [ ImageOnlyFailure ]
-webkit.org/b/273396 css3/filters/effect-combined.html [ ImageOnlyFailure ]
-webkit.org/b/273396 css3/filters/svg-blur-filter-clipped.html [ ImageOnlyFailure ]
 webkit.org/b/273396 css3/masking/clip-path-border-radius-border-box-000.html [ ImageOnlyFailure ]
 webkit.org/b/273396 css3/masking/clip-path-border-radius-content-box-001.html [ ImageOnlyFailure ]
 webkit.org/b/273396 css3/masking/clip-path-border-radius-fill-box-001.html [ ImageOnlyFailure ]
@@ -1656,8 +1651,6 @@ webkit.org/b/273396 mathml/presentation/mo-stacked-glyphs.html [ ImageOnlyFailur
 webkit.org/b/273396 svg/animations/animateMotion-accumulate-1a.svg [ ImageOnlyFailure ]
 webkit.org/b/273396 svg/animations/animateMotion-accumulate-1b.svg [ ImageOnlyFailure ]
 
-webkit.org/b/273471 fast/canvas/canvas-composite-stroke-alpha.html [ Failure ]
-
 webkit.org/b/273472 fast/css3-text/font-synthesis.html [ ImageOnlyFailure ]
 
 webkit.org/b/273474 fast/text/emoji-variation-selector.html [ ImageOnlyFailure ]
@@ -1669,8 +1662,6 @@ webkit.org/b/273475 fast/text/system-font-japanese-synthetic-italic.html [ Image
 webkit.org/b/273476 fast/text/thai-joiner.html [ Failure ]
 
 webkit.org/b/273477 fast/writing-mode/vertical-subst-font-vert-no-dflt.html [ ImageOnlyFailure ]
-
-webkit.org/b/273479 imported/blink/svg/filters/feColorMatrix-subregion.html [ ImageOnlyFailure ]
 
 webkit.org/b/273480 imported/w3c/web-platform-tests/css/geometry/DOMMatrix2DInit-validate-fixup.html [ Failure ]
 
@@ -1699,8 +1690,6 @@ imported/w3c/web-platform-tests/css/css-sizing/aspect-ratio/replaced-element-019
 imported/w3c/web-platform-tests/html/semantics/embedded-content/the-canvas-element/toDataURL.jpg.html [ Failure ]
 
 imported/w3c/web-platform-tests/svg/import/filters-displace-01-f-manual.svg [ Failure ]
-
-imported/w3c/web-platform-tests/svg/path/distance/pathlength-path.svg [ Failure ]
 
 fast/mediastream/MediaStream-video-element-displays-buffer.html [ Failure ]
 
@@ -2526,6 +2515,7 @@ webkit.org/b/158923 media/modern-media-controls/placard-support/placard-support-
 webkit.org/b/158923 media/modern-media-controls/placard-support/placard-support-airplay-fullscreen.html [ Skip ]
 webkit.org/b/206528 imported/w3c/web-platform-tests/remote-playback [ Skip ]
 media/media-source/media-managedmse-airplay.html [ Skip ]
+media/media-source/media-managedmse-airplay-withsrc.html [ Skip ]
 
 # LEGACY_ENCRYPTED_MEDIA is deprecated
 fast/events/webkit-media-key-events-constructor.html [ Skip ]
@@ -2992,9 +2982,6 @@ media/track/in-band/track-in-band-kate-ogg-cues-added-once.html [ Skip ]
 media/track/in-band/track-in-band-kate-ogg-kind.html [ Skip ]
 media/track/in-band/track-in-band-kate-ogg-language.html [ Skip ]
 media/track/in-band/track-in-band-kate-ogg-track-order.html [ Skip ]
-
-# This only works with GPU process.
-fast/canvas/image-buffer-backend-count-limit.html [ Skip ]
 
 #////////////////////////////////////////////////////////////////////////////////////////
 # End of UNSUPPORTED tests.
@@ -4148,6 +4135,9 @@ imported/w3c/web-platform-tests/css/css-view-transitions/massive-element-left-of
 imported/w3c/web-platform-tests/css/css-view-transitions/names-are-tree-scoped.html [ ImageOnlyFailure ]
 
 imported/w3c/web-platform-tests/svg/text/reftests/transform-dynamic-change.html [ ImageOnlyFailure ]
+
+# This test hits some infinite-loop condition inside Cairo
+fast/css/repeating-conic-gradient-small-range.html [ Skip ]
 
 # End: Common failures between GTK and WPE.
 

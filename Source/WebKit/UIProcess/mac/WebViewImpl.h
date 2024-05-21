@@ -104,6 +104,11 @@ class Object;
 class PageConfiguration;
 }
 
+namespace PAL {
+class HysteresisActivity;
+enum class HysteresisState : bool;
+}
+
 namespace WebCore {
 class DestinationColorSpace;
 class IntPoint;
@@ -153,6 +158,10 @@ struct TranslationContextMenuInfo;
 - (void)_web_didRemoveMediaControlsManager;
 - (void)_didHandleAcceptedCandidate;
 - (void)_didUpdateCandidateListVisibility:(BOOL)visible;
+
+#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+- (BOOL)_web_wantsCompleteUnifiedTextReplacementBehavior;
+#endif
 
 @end
 
@@ -386,6 +395,9 @@ public:
     void changeFontColorFromSender(id);
     bool validateUserInterfaceItem(id <NSValidatedUserInterfaceItem>);
     void setEditableElementIsFocused(bool);
+
+    enum class ContentRelativeChildViewsSuppressionType : uint8_t { Remove, Restore, TemporarilyRemove };
+    void suppressContentRelativeChildViews(ContentRelativeChildViewsSuppressionType);
 
 #if HAVE(REDESIGNED_TEXT_CURSOR)
     void updateCursorAccessoryPlacement();
@@ -754,6 +766,11 @@ private:
     void uninstallImageAnalysisOverlayView();
 #endif
 
+    bool hasContentRelativeChildViews() const;
+
+    void suppressContentRelativeChildViews();
+    void restoreContentRelativeChildViews();
+
     bool m_clientWantsMediaPlaybackControlsView { false };
     bool m_canCreateTouchBars { false };
     bool m_startedListeningToCustomizationEvents { false };
@@ -817,6 +834,8 @@ private:
 #endif
 
     NSTextCheckingTypes getTextCheckingTypes() const;
+
+    void contentRelativeViewsHysteresisTimerFired(PAL::HysteresisState);
 
     void flushPendingMouseEventCallbacks();
 
@@ -891,6 +910,8 @@ private:
     id m_flagsChangedEventMonitor { nullptr };
 
     std::unique_ptr<WebCore::TextIndicatorWindow> m_textIndicatorWindow;
+
+    std::unique_ptr<PAL::HysteresisActivity> m_contentRelativeViewsHysteresis;
 
     RetainPtr<NSColorSpace> m_colorSpace;
 

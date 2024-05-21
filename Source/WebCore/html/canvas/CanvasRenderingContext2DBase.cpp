@@ -328,16 +328,16 @@ String CanvasRenderingContext2DBase::State::fontString() const
     StringBuilder serializedFont;
     const auto& font = this->font.fontDescription();
 
-    auto italic = font.italic() ? "italic " : "";
-    auto smallCaps = font.variantCaps() == FontVariantCaps::Small ? "small-caps " : "";
-    serializedFont.append(italic, smallCaps, font.computedSize(), "px");
+    auto italic = font.italic() ? "italic "_s : ""_s;
+    auto smallCaps = font.variantCaps() == FontVariantCaps::Small ? "small-caps "_s : ""_s;
+    serializedFont.append(italic, smallCaps, font.computedSize(), "px"_s);
 
     for (unsigned i = 0; i < font.familyCount(); ++i) {
         StringView family = font.familyAt(i);
         if (family.startsWith("-webkit-"_s))
             family = family.substring(8);
 
-        auto separator = i ? ", " : " ";
+        auto separator = i ? ", "_s : " "_s;
         serializedFont.append(separator, serializeFontFamily(family.toString()));
     }
 
@@ -498,20 +498,14 @@ void CanvasRenderingContext2DBase::restore()
 
 void CanvasRenderingContext2DBase::setStrokeStyle(CanvasStyle style)
 {
-    if (!style.isValid())
-        return;
-
     if (state().strokeStyle.isEquivalentColor(style))
         return;
 
-    if (style.isCurrentColor())
-        style = CanvasStyle(currentColor(canvasBase()).colorWithAlpha(style.overrideAlpha()));
-    else
-        checkOrigin(style.canvasPattern().get());
+    checkOrigin(style.canvasPattern().get());
 
     realizeSaves();
     State& state = modifiableState();
-    state.strokeStyle = style;
+    state.strokeStyle = WTFMove(style);
     GraphicsContext* c = drawingContext();
     if (!c)
         return;
@@ -519,28 +513,36 @@ void CanvasRenderingContext2DBase::setStrokeStyle(CanvasStyle style)
     state.unparsedStrokeColor = String();
 }
 
+void CanvasRenderingContext2DBase::setStrokeStyle(std::optional<CanvasStyle> style)
+{
+    if (!style)
+        return;
+    return setStrokeStyle(WTFMove(*style));
+}
+
 void CanvasRenderingContext2DBase::setFillStyle(CanvasStyle style)
 {
-    if (!style.isValid())
-        return;
-
     if (state().fillStyle.isEquivalentColor(style))
         return;
 
-    if (style.isCurrentColor())
-        style = CanvasStyle(currentColor(canvasBase()).colorWithAlpha(style.overrideAlpha()));
-    else
-        checkOrigin(style.canvasPattern().get());
+    checkOrigin(style.canvasPattern().get());
 
     realizeSaves();
     State& state = modifiableState();
-    state.fillStyle = style;
+    state.fillStyle = WTFMove(style);
     GraphicsContext* c = drawingContext();
     if (!c)
         return;
 
     state.fillStyle.applyFillColor(*c);
     state.unparsedFillColor = String();
+}
+
+void CanvasRenderingContext2DBase::setFillStyle(std::optional<CanvasStyle> style)
+{
+    if (!style)
+        return;
+    return setFillStyle(WTFMove(*style));
 }
 
 void CanvasRenderingContext2DBase::setLineWidth(double width)
@@ -662,7 +664,7 @@ void CanvasRenderingContext2DBase::setShadowBlur(float blur)
 
 void CanvasRenderingContext2DBase::setShadowColor(const String& colorString)
 {
-    Color color = parseColorOrCurrentColor(colorString, canvasBase());
+    Color color = parseColor(colorString, canvasBase());
     if (!color.isValid())
         return;
     if (state().shadowColor == color)
@@ -1416,7 +1418,7 @@ void CanvasRenderingContext2DBase::setShadow(float width, float height, float bl
 
     Color color = Color::transparentBlack;
     if (!colorString.isNull()) {
-        color = parseColorOrCurrentColor(colorString, canvasBase());
+        color = parseColor(colorString, canvasBase());
         if (!color.isValid())
             return;
     }
@@ -1631,25 +1633,6 @@ ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(CSSStyleImageValue& im
     return result;
 }
 
-static std::pair<FloatRect, FloatRect> normalizeSourceAndDestination(const FloatRect& imageRect, const FloatRect& srcRect, const FloatRect& dstRect)
-{
-    std::pair<FloatRect, FloatRect> srcDstRect { normalizeRect(srcRect), normalizeRect(dstRect) };
-
-    // When the source rectangle is outside the source image, the source rectangle must be clipped
-    // to the source image and the destination rectangle must be clipped in the same proportion.
-    FloatRect originalNormalizedSrcRect = srcDstRect.first;
-    srcDstRect.first.intersect(imageRect);
-    if (srcDstRect.first.isEmpty())
-        return srcDstRect;
-
-    if (srcDstRect.first != originalNormalizedSrcRect) {
-        srcDstRect.second.setWidth(srcDstRect.second.width() * srcDstRect.first.width() / originalNormalizedSrcRect.width());
-        srcDstRect.second.setHeight(srcDstRect.second.height() * srcDstRect.first.height() / originalNormalizedSrcRect.height());
-    }
-
-    return srcDstRect;
-}
-
 #if ENABLE(WEB_CODECS)
 ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(WebCodecsVideoFrame& frame, const FloatRect&, const FloatRect& dstRect)
 {
@@ -1688,9 +1671,8 @@ ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(Document& document, Ca
     if (!dstRect.width() || !dstRect.height())
         return { };
 
-    auto normalizedSrcDstRect = normalizeSourceAndDestination(imageRect, srcRect, dstRect);
-    FloatRect normalizedSrcRect = normalizedSrcDstRect.first;
-    FloatRect normalizedDstRect = normalizedSrcDstRect.second;
+    auto normalizedSrcRect = normalizeRect(srcRect);
+    auto normalizedDstRect = normalizeRect(dstRect);
 
     if (normalizedSrcRect.isEmpty())
         return { };
@@ -1778,9 +1760,8 @@ ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(CanvasBase& sourceCanv
     if (!srcRect.width() || !srcRect.height())
         return { };
 
-    auto normalizedSrcDstRect = normalizeSourceAndDestination(srcCanvasRect, srcRect, dstRect);
-    FloatRect normalizedSrcRect = normalizedSrcDstRect.first;
-    FloatRect normalizedDstRect = normalizedSrcDstRect.second;
+    auto normalizedSrcRect = normalizeRect(srcRect);
+    auto normalizedDstRect = normalizeRect(dstRect);
 
     if (normalizedSrcRect.isEmpty())
         return { };
@@ -1846,13 +1827,11 @@ ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(HTMLVideoElement& vide
     if (video.readyState() == HTMLMediaElement::HAVE_NOTHING || video.readyState() == HTMLMediaElement::HAVE_METADATA)
         return { };
 
-    FloatRect videoRect = FloatRect(FloatPoint(), size(video));
     if (!srcRect.width() || !srcRect.height())
         return { };
 
-    auto normalizedSrcDstRect = normalizeSourceAndDestination(videoRect, srcRect, dstRect);
-    FloatRect normalizedSrcRect = normalizedSrcDstRect.first;
-    FloatRect normalizedDstRect = normalizedSrcDstRect.second;
+    auto normalizedSrcRect = normalizeRect(srcRect);
+    auto normalizedDstRect = normalizeRect(dstRect);
 
     if (normalizedSrcRect.isEmpty())
         return { };
@@ -2078,11 +2057,11 @@ template<class T> void CanvasRenderingContext2DBase::fullCanvasCompositedDrawIma
 
 static CanvasRenderingContext2DBase::StyleVariant toStyleVariant(const CanvasStyle& style)
 {
-    if (auto gradient = style.canvasGradient())
-        return gradient;
-    if (auto pattern = style.canvasPattern())
-        return pattern;
-    return style.color();
+    return style.visit(
+        [](const String& string) -> CanvasRenderingContext2DBase::StyleVariant { return string; },
+        [](const Ref<CanvasGradient>& gradient) -> CanvasRenderingContext2DBase::StyleVariant { return gradient.ptr(); },
+        [](const Ref<CanvasPattern>& pattern) -> CanvasRenderingContext2DBase::StyleVariant { return pattern.ptr(); }
+    );
 }
 
 CanvasRenderingContext2DBase::StyleVariant CanvasRenderingContext2DBase::strokeStyle() const
@@ -2092,10 +2071,10 @@ CanvasRenderingContext2DBase::StyleVariant CanvasRenderingContext2DBase::strokeS
 
 void CanvasRenderingContext2DBase::setStrokeStyle(CanvasRenderingContext2DBase::StyleVariant&& style)
 {
-    WTF::switchOn(style,
-        [this] (const String& string) { this->setStrokeColor(string); },
-        [this] (const RefPtr<CanvasGradient>& gradient) { this->setStrokeStyle(CanvasStyle(*gradient)); },
-        [this] (const RefPtr<CanvasPattern>& pattern) { this->setStrokeStyle(CanvasStyle(*pattern)); }
+    WTF::switchOn(WTFMove(style),
+        [this](String&& string) { this->setStrokeColor(WTFMove(string)); },
+        [this](RefPtr<CanvasGradient>&& gradient) { this->setStrokeStyle(CanvasStyle(gradient.releaseNonNull())); },
+        [this](RefPtr<CanvasPattern>&& pattern) { this->setStrokeStyle(CanvasStyle(pattern.releaseNonNull())); }
     );
 }
 
@@ -2106,10 +2085,10 @@ CanvasRenderingContext2DBase::StyleVariant CanvasRenderingContext2DBase::fillSty
 
 void CanvasRenderingContext2DBase::setFillStyle(CanvasRenderingContext2DBase::StyleVariant&& style)
 {
-    WTF::switchOn(style,
-        [this] (const String& string) { this->setFillColor(string); },
-        [this] (const RefPtr<CanvasGradient>& gradient) { this->setFillStyle(CanvasStyle(*gradient)); },
-        [this] (const RefPtr<CanvasPattern>& pattern) { this->setFillStyle(CanvasStyle(*pattern)); }
+    WTF::switchOn(WTFMove(style),
+        [this](String&& string) { this->setFillColor(WTFMove(string)); },
+        [this](RefPtr<CanvasGradient>&& gradient) { this->setFillStyle(CanvasStyle(gradient.releaseNonNull())); },
+        [this](RefPtr<CanvasPattern>&& pattern) { this->setFillStyle(CanvasStyle(pattern.releaseNonNull())); }
     );
 }
 

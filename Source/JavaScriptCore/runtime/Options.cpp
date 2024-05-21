@@ -407,7 +407,7 @@ bool Options::overrideAliasedOptionWithHeuristic(const char* name)
     if (!stringValue)
         return false;
 
-    auto aliasedOption = makeString(&name[4], '=', stringValue);
+    auto aliasedOption = makeString(span(&name[4]), '=', span(stringValue));
     if (Options::setOption(aliasedOption.utf8().data()))
         return true;
 
@@ -912,6 +912,11 @@ void Options::notifyOptionsChanged()
     }
 #endif
 
+    // We can't use our pacibsp system while using posix signals because the signal handler could trash our stack during reifyInlinedCallFrames.
+    // If we have JITCage we don't need to restrict ourselves to pacibsp.
+    if (!Options::useMachForExceptions() || Options::useJITCage())
+        Options::allowNonSPTagging() = true;
+
     if (!Options::useWasmFaultSignalHandler())
         Options::useWebAssemblyFastMemory() = false;
 
@@ -1282,6 +1287,11 @@ void Options::assertOptionsAreCoherent()
         coherent = false;
         dataLogLn("Bytecode profiler is not concurrent JIT safe.");
     }
+    if (!allowNonSPTagging() && !useMachForExceptions()) {
+        coherent = false;
+        dataLog("INCOHERENT OPTIONS: can't restrict pointer tagging to pacibsp and use posix signals");
+    }
+
     if (!coherent)
         CRASH();
 }

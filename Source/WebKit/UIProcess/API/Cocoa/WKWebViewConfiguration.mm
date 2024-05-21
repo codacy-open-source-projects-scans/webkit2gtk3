@@ -298,6 +298,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 #endif
     [coder encodeBool:self._scrollToTextFragmentIndicatorEnabled forKey:@"scrollToTextFragmentIndicatorEnabled"];
     [coder encodeBool:self._scrollToTextFragmentMarkingEnabled forKey:@"scrollToTextFragmentMarkingEnabled"];
+    [coder encodeBool:self._multiRepresentationHEICInsertionEnabled forKey:@"multiRepresentationHEICInsertionEnabled"];
 }
 
 - (instancetype)initWithCoder:(NSCoder *)coder
@@ -344,6 +345,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 #endif
     self._scrollToTextFragmentIndicatorEnabled = [coder decodeBoolForKey:@"scrollToTextFragmentIndicatorEnabled"];
     self._scrollToTextFragmentMarkingEnabled = [coder decodeBoolForKey:@"scrollToTextFragmentMarkingEnabled"];
+    self._multiRepresentationHEICInsertionEnabled = [coder decodeBoolForKey:@"multiRepresentationHEICInsertionEnabled"];
 
     return self;
 }
@@ -595,6 +597,10 @@ static NSString *defaultApplicationNameForUserAgent()
 {
     _pageConfiguration->setLimitsNavigationsToAppBoundDomains(limitsToAppBoundDomains);
 }
+#endif
+
+#if USE(APPLE_INTERNAL_SDK)
+#import <WebKitAdditions/WKWebViewConfigurationAdditions.mm>
 #endif
 
 #pragma mark WKObject protocol implementation
@@ -1482,6 +1488,22 @@ static WebKit::AttributionOverrideTesting toAttributionOverrideTesting(_WKAttrib
 - (BOOL)_markedTextInputEnabled
 {
     return _pageConfiguration->allowsInlinePredictions();
+}
+
+- (void)_setMultiRepresentationHEICInsertionEnabled:(BOOL)enabled
+{
+#if ENABLE(MULTI_REPRESENTATION_HEIC)
+    _pageConfiguration->setMultiRepresentationHEICInsertionEnabled(enabled);
+#endif
+}
+
+- (BOOL)_multiRepresentationHEICInsertionEnabled
+{
+#if ENABLE(MULTI_REPRESENTATION_HEIC)
+    return _pageConfiguration->multiRepresentationHEICInsertionEnabled();
+#else
+    return NO;
+#endif
 }
 
 @end

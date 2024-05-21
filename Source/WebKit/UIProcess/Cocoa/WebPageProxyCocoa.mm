@@ -279,6 +279,11 @@ void WebPageProxy::createSandboxExtensionsIfNeeded(const Vector<String>& files, 
     }
 }
 
+void WebPageProxy::scrollingNodeScrollViewDidScroll(ScrollingNodeID nodeID)
+{
+    protectedPageClient()->scrollingNodeScrollViewDidScroll(nodeID);
+}
+
 bool WebPageProxy::scrollingUpdatesDisabledForTesting()
 {
     return protectedPageClient()->scrollingUpdatesDisabledForTesting();
@@ -736,7 +741,11 @@ void WebPageProxy::createAppHighlightInSelectedRange(WebCore::CreateNewGroupForH
 
     setUpHighlightsObserver();
 
-    send(Messages::WebPage::CreateAppHighlightInSelectedRange(createNewGroup, requestOriginatedInApp));
+    auto completionHandler = [this, protectedThis = Ref { *this }] (WebCore::AppHighlight&& highlight) {
+        MESSAGE_CHECK(!highlight.highlight->isEmpty());
+        protectedPageClient()->storeAppHighlight(highlight);
+    };
+    sendWithAsyncReply(Messages::WebPage::CreateAppHighlightInSelectedRange(createNewGroup, requestOriginatedInApp), WTFMove(completionHandler));
 }
 
 void WebPageProxy::restoreAppHighlightsAndScrollToIndex(const Vector<Ref<SharedMemory>>& highlights, const std::optional<unsigned> index)
@@ -927,10 +936,10 @@ NSDictionary *WebPageProxy::contentsOfUserInterfaceItem(NSString *userInterfaceI
 #if PLATFORM(MAC)
 bool WebPageProxy::isQuarantinedAndNotUserApproved(const String& fileURLString)
 {
-    if (!fileURLString.endsWithIgnoringASCIICase(".webarchive"_s))
+    NSURL *fileURL = [NSURL URLWithString:fileURLString];
+    if ([fileURL.pathExtension caseInsensitiveCompare:@"webarchive"] != NSOrderedSame)
         return false;
 
-    NSURL *fileURL = [NSURL URLWithString:fileURLString];
     qtn_file_t qf = qtn_file_alloc();
 
     int quarantineError = qtn_file_init_with_path(qf, fileURL.path.fileSystemRepresentation);
@@ -1152,39 +1161,39 @@ void WebPageProxy::setUnifiedTextReplacementActive(bool active)
     protectedPageClient()->unifiedTextReplacementActiveDidChange();
 }
 
-void WebPageProxy::willBeginTextReplacementSession(const WTF::UUID& uuid, WebUnifiedTextReplacementType type, CompletionHandler<void(const Vector<WebUnifiedTextReplacementContextData>&)>&& completionHandler)
+void WebPageProxy::willBeginTextReplacementSession(const std::optional<WebUnifiedTextReplacementSessionData>& session, CompletionHandler<void(const Vector<WebUnifiedTextReplacementContextData>&)>&& completionHandler)
 {
-    sendWithAsyncReply(Messages::WebPage::WillBeginTextReplacementSession(uuid, type), WTFMove(completionHandler));
+    sendWithAsyncReply(Messages::WebPage::WillBeginTextReplacementSession(session), WTFMove(completionHandler));
 }
 
-void WebPageProxy::didBeginTextReplacementSession(const WTF::UUID& uuid, const Vector<WebKit::WebUnifiedTextReplacementContextData>& contexts)
+void WebPageProxy::didBeginTextReplacementSession(const WebUnifiedTextReplacementSessionData& session, const Vector<WebKit::WebUnifiedTextReplacementContextData>& contexts)
 {
-    send(Messages::WebPage::DidBeginTextReplacementSession(uuid, contexts));
+    send(Messages::WebPage::DidBeginTextReplacementSession(session, contexts));
 }
 
-void WebPageProxy::textReplacementSessionDidReceiveReplacements(const WTF::UUID& uuid, const Vector<WebTextReplacementData>& replacements, const WebUnifiedTextReplacementContextData& context, bool finished)
+void WebPageProxy::textReplacementSessionDidReceiveReplacements(const WebUnifiedTextReplacementSessionData& session, const Vector<WebTextReplacementData>& replacements, const WebUnifiedTextReplacementContextData& context, bool finished)
 {
-    send(Messages::WebPage::TextReplacementSessionDidReceiveReplacements(uuid, replacements, context, finished));
+    send(Messages::WebPage::TextReplacementSessionDidReceiveReplacements(session, replacements, context, finished));
 }
 
-void WebPageProxy::textReplacementSessionDidUpdateStateForReplacement(const WTF::UUID& uuid, WebTextReplacementData::State state, const WebTextReplacementData& replacement, const WebUnifiedTextReplacementContextData& context)
+void WebPageProxy::textReplacementSessionDidUpdateStateForReplacement(const WebUnifiedTextReplacementSessionData& session, WebTextReplacementData::State state, const WebTextReplacementData& replacement, const WebUnifiedTextReplacementContextData& context)
 {
-    send(Messages::WebPage::TextReplacementSessionDidUpdateStateForReplacement(uuid, state, replacement, context));
+    send(Messages::WebPage::TextReplacementSessionDidUpdateStateForReplacement(session, state, replacement, context));
 }
 
-void WebPageProxy::didEndTextReplacementSession(const WTF::UUID& uuid, bool accepted)
+void WebPageProxy::didEndTextReplacementSession(const WebUnifiedTextReplacementSessionData& session, bool accepted)
 {
-    send(Messages::WebPage::DidEndTextReplacementSession(uuid, accepted));
+    send(Messages::WebPage::DidEndTextReplacementSession(session, accepted));
 }
 
-void WebPageProxy::textReplacementSessionDidReceiveTextWithReplacementRange(const WTF::UUID& uuid, const WebCore::AttributedString& attributedText, const WebCore::CharacterRange& range, const WebUnifiedTextReplacementContextData& context, bool finished)
+void WebPageProxy::textReplacementSessionDidReceiveTextWithReplacementRange(const WebUnifiedTextReplacementSessionData& session, const WebCore::AttributedString& attributedText, const WebCore::CharacterRange& range, const WebUnifiedTextReplacementContextData& context, bool finished)
 {
-    send(Messages::WebPage::TextReplacementSessionDidReceiveTextWithReplacementRange(uuid, attributedText, range, context, finished));
+    send(Messages::WebPage::TextReplacementSessionDidReceiveTextWithReplacementRange(session, attributedText, range, context, finished));
 }
 
-void WebPageProxy::textReplacementSessionDidReceiveEditAction(const WTF::UUID& uuid, WebTextReplacementData::EditAction action)
+void WebPageProxy::textReplacementSessionDidReceiveEditAction(const WebUnifiedTextReplacementSessionData& session, WebTextReplacementData::EditAction action)
 {
-    send(Messages::WebPage::TextReplacementSessionDidReceiveEditAction(uuid, action));
+    send(Messages::WebPage::TextReplacementSessionDidReceiveEditAction(session, action));
 }
 
 void WebPageProxy::enableTextIndicatorStyleAfterElementWithID(const String& elementID, const WTF::UUID& uuid)
@@ -1203,18 +1212,38 @@ void WebPageProxy::enableTextIndicatorStyleForElementWithID(const String& elemen
     send(Messages::WebPage::EnableTextIndicatorStyleForElementWithID(elementID, uuid));
 }
 
+void WebPageProxy::addTextIndicatorStyleForID(const WTF::UUID& uuid, const TextIndicatorStyle styleType, const WebCore::TextIndicatorData& data)
+{
+    MESSAGE_CHECK(uuid.isValid());
+
+    internals().textIndicatorDataForChunk.add(uuid, data);
+
+    protectedPageClient()->addTextIndicatorStyleForID(uuid, styleType);
+}
+
 void WebPageProxy::getTextIndicatorForID(const WTF::UUID& uuid, CompletionHandler<void(std::optional<WebCore::TextIndicatorData>&&)>&& completionHandler)
 {
-    if (!hasRunningProcess())
+    if (!hasRunningProcess()) {
+        completionHandler(std::nullopt);
         return;
+    }
 
-    sendWithAsyncReply(Messages::WebPage::GetTextIndicatorForID(uuid), WTFMove(completionHandler));
+    auto textIndicatorData = internals().textIndicatorDataForChunk.getOptional(uuid);
+
+    if (textIndicatorData) {
+        completionHandler(*textIndicatorData);
+        return;
+    }
+
+    sendWithAsyncReply(Messages::WebPage::CreateTextIndicatorForID(uuid), WTFMove(completionHandler));
 }
 
 void WebPageProxy::updateTextIndicatorStyleVisibilityForID(const WTF::UUID& uuid, bool visible, CompletionHandler<void()>&& completionHandler)
 {
-    if (!hasRunningProcess())
+    if (!hasRunningProcess()) {
+        completionHandler();
         return;
+    }
 
     sendWithAsyncReply(Messages::WebPage::UpdateTextIndicatorStyleVisibilityForID(uuid, visible), WTFMove(completionHandler));
 }

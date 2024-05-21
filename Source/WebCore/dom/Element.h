@@ -82,6 +82,9 @@ class SpaceSplitString;
 class StylePropertyMap;
 class StylePropertyMapReadOnly;
 class Text;
+class TrustedHTML;
+class TrustedScript;
+class TrustedScriptURL;
 class UniqueElementData;
 class ValidatedFormListedElement;
 class WebAnimation;
@@ -114,6 +117,9 @@ enum class InvokeAction: uint8_t {
     TogglePopover,
     HidePopover,
     ShowPopover,
+
+    ShowModal,
+    Close,
 };
 
 struct CheckVisibilityOptions;
@@ -131,6 +137,7 @@ struct ShadowRootInit;
 
 using ElementName = NodeName;
 using ExplicitlySetAttrElementsMap = HashMap<QualifiedName, Vector<WeakPtr<Element, WeakPtrImplWithEventTargetData>>>;
+using TrustedTypeOrString = std::variant<RefPtr<TrustedHTML>, RefPtr<TrustedScript>, RefPtr<TrustedScriptURL>, AtomString>;
 
 // https://drafts.csswg.org/css-contain/#relevant-to-the-user
 enum class ContentRelevancy : uint8_t {
@@ -204,8 +211,11 @@ public:
     inline AtomString getAttributeNSForBindings(const AtomString& namespaceURI, const AtomString& localName, ResolveURLs = ResolveURLs::NoExcludingURLsForPrivacy) const;
 
     WEBCORE_EXPORT ExceptionOr<void> setAttribute(const AtomString& qualifiedName, const AtomString& value);
+    ExceptionOr<void> setAttribute(const AtomString& qualifiedName, const TrustedTypeOrString& value);
+    unsigned validateAttributeIndex(unsigned index, const QualifiedName& qname) const;
     static ExceptionOr<QualifiedName> parseAttributeName(const AtomString& namespaceURI, const AtomString& qualifiedName);
     WEBCORE_EXPORT ExceptionOr<void> setAttributeNS(const AtomString& namespaceURI, const AtomString& qualifiedName, const AtomString& value);
+    ExceptionOr<void> setAttributeNS(const AtomString& namespaceURI, const AtomString& qualifiedName, const TrustedTypeOrString& value);
 
     ExceptionOr<bool> toggleAttribute(const AtomString& qualifiedName, std::optional<bool> force);
 

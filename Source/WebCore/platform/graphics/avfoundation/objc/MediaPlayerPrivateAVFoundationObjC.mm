@@ -3144,9 +3144,11 @@ void MediaPlayerPrivateAVFoundationObjC::processMediaSelectionOptions()
     // We enabled automatic media selection because we want alternate audio tracks to be enabled/disabled automatically,
     // but set the selected legible track to nil so text tracks will not be automatically configured.
     if (!m_textTracks.size()) {
-BEGIN_BLOCK_OBJC_EXCEPTIONS
-        [m_avPlayerItem selectMediaOption:nil inMediaSelectionGroup:safeMediaSelectionGroupForLegibleMedia()];
-END_BLOCK_OBJC_EXCEPTIONS
+        @try {
+            [m_avPlayerItem selectMediaOption:nil inMediaSelectionGroup:safeMediaSelectionGroupForLegibleMedia()];
+        } @catch(NSException *exception) {
+            ERROR_LOG(LOGIDENTIFIER, "exception thrown from -selectMediaOption:inMediaSelectionGroup: ", exception.name, ", reason : ", exception.reason);
+        }
     }
 
     Vector<RefPtr<InbandTextTrackPrivateAVF>> removedTextTracks = m_textTracks;
@@ -3235,21 +3237,27 @@ ALLOW_DEPRECATED_DECLARATIONS_BEGIN
             [m_avPlayer setClosedCaptionDisplayEnabled:YES];
 ALLOW_DEPRECATED_DECLARATIONS_END
         else if (track->textTrackCategory() == InbandTextTrackPrivateAVF::OutOfBand) {
-BEGIN_BLOCK_OBJC_EXCEPTIONS
-            [m_avPlayerItem selectMediaOption:static_cast<OutOfBandTextTrackPrivateAVF*>(track)->mediaSelectionOption() inMediaSelectionGroup:safeMediaSelectionGroupForLegibleMedia()];
-END_BLOCK_OBJC_EXCEPTIONS
+            @try {
+                [m_avPlayerItem selectMediaOption:static_cast<OutOfBandTextTrackPrivateAVF*>(track)->mediaSelectionOption() inMediaSelectionGroup:safeMediaSelectionGroupForLegibleMedia()];
+            } @catch(NSException *exception) {
+                ERROR_LOG(LOGIDENTIFIER, "exception thrown from -selectMediaOption:inMediaSelectionGroup: ", exception.name, ", reason : ", exception.reason);
+            }
         } else {
-BEGIN_BLOCK_OBJC_EXCEPTIONS
-            [m_avPlayerItem selectMediaOption:static_cast<InbandTextTrackPrivateAVFObjC*>(track)->mediaSelectionOption() inMediaSelectionGroup:safeMediaSelectionGroupForLegibleMedia()];
-END_BLOCK_OBJC_EXCEPTIONS
+            @try {
+                [m_avPlayerItem selectMediaOption:static_cast<InbandTextTrackPrivateAVFObjC*>(track)->mediaSelectionOption() inMediaSelectionGroup:safeMediaSelectionGroupForLegibleMedia()];
+            } @catch(NSException *exception) {
+                ERROR_LOG(LOGIDENTIFIER, "exception thrown from -selectMediaOption:inMediaSelectionGroup: ", exception.name, ", reason : ", exception.reason);
+            }
         }
 
         return;
     }
 
-BEGIN_BLOCK_OBJC_EXCEPTIONS
-    [m_avPlayerItem selectMediaOption:0 inMediaSelectionGroup:safeMediaSelectionGroupForLegibleMedia()];
-END_BLOCK_OBJC_EXCEPTIONS
+    @try {
+        [m_avPlayerItem selectMediaOption:0 inMediaSelectionGroup:safeMediaSelectionGroupForLegibleMedia()];
+    } @catch(NSException *exception) {
+        ERROR_LOG(LOGIDENTIFIER, "exception thrown from -selectMediaOption:inMediaSelectionGroup: ", exception.name, ", reason : ", exception.reason);
+    }
 
 ALLOW_DEPRECATED_DECLARATIONS_BEGIN
     [m_avPlayer setClosedCaptionDisplayEnabled:NO];
@@ -3624,6 +3632,10 @@ void MediaPlayerPrivateAVFoundationObjC::setBufferingPolicy(MediaPlayer::Bufferi
     if (m_bufferingPolicy == policy)
         return;
 
+#if HAVE(AVPLAYER_RESOURCE_CONSERVATION_LEVEL)
+    bool isMovingFromResourcesPurgeableBufferPolicy = m_bufferingPolicy == MediaPlayer::BufferingPolicy::MakeResourcesPurgeable;
+#endif
+
     m_bufferingPolicy = policy;
 
     if (!m_avPlayer)
@@ -3637,6 +3649,11 @@ void MediaPlayerPrivateAVFoundationObjC::setBufferingPolicy(MediaPlayer::Bufferi
 
     if ([m_avPlayer respondsToSelector:@selector(setResourceConservationLevelWhilePaused:)]) {
         m_avPlayer.get().resourceConservationLevelWhilePaused = static_cast<AVPlayerResourceConservationLevel>(policy);
+
+        // FIXME: Remove this workaround once rdar://123901202 is fixed.
+        if (isMovingFromResourcesPurgeableBufferPolicy && m_provider)
+            m_provider->recreateAudioMixIfNeeded();
+
         updateStates();
         return;
     }

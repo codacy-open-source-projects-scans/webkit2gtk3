@@ -1312,11 +1312,11 @@ public:
         if (!FileSystem::truncateFile(fd, m_cachedBytecode->sizeForUpdate()))
             return;
 
-        m_cachedBytecode->commitUpdates([&] (off_t offset, const void* data, size_t size) {
+        m_cachedBytecode->commitUpdates([&] (off_t offset, std::span<const uint8_t> data) {
             long long result = FileSystem::seekFile(fd, offset, FileSystem::FileSeekOrigin::Beginning);
             ASSERT_UNUSED(result, result != -1);
-            size_t bytesWritten = static_cast<size_t>(FileSystem::writeToFile(fd, data, size));
-            ASSERT_UNUSED(bytesWritten, bytesWritten == size);
+            size_t bytesWritten = static_cast<size_t>(FileSystem::writeToFile(fd, data));
+            ASSERT_UNUSED(bytesWritten, bytesWritten == data.size());
         });
     }
 
@@ -1395,7 +1395,7 @@ static bool fetchModuleFromLocalFileSystem(const URL& fileURL, Vector& buffer)
     // These also appear to turn off handling forward slashes as
     // directory separators as it disables all string parsing on names.
     fileName = makeStringByReplacingAll(fileName, '/', '\\');
-    auto pathName = makeString("\\\\?\\", fileName).wideCharacters();
+    auto pathName = makeString("\\\\?\\"_s, fileName).wideCharacters();
     struct _stat status { };
     if (_wstat(pathName.data(), &status))
         return false;
@@ -2057,9 +2057,9 @@ JSC_DEFINE_HOST_FUNCTION(functionWriteFile, (JSGlobalObject* globalObject, CallF
 
     int size = std::visit(WTF::makeVisitor([&](const String& string) {
         CString utf8 = string.utf8();
-        return FileSystem::writeToFile(handle, utf8.data(), utf8.length());
+        return FileSystem::writeToFile(handle, utf8.span());
     }, [&] (const std::span<const uint8_t>& data) {
-        return FileSystem::writeToFile(handle, data.data(), data.size());
+        return FileSystem::writeToFile(handle, data);
     }), data);
 
     FileSystem::closeFile(handle);

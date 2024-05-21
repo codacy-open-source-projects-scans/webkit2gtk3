@@ -53,14 +53,14 @@ private:
     PublicSuffixStore() = default;
 
     bool platformIsPublicSuffix(StringView domain) const;
-    String platformTopPrivatelyControlledDomain(const String& host) const;
+    String platformTopPrivatelyControlledDomain(StringView host) const;
 
     mutable Lock m_HostTopPrivatelyControlledDomainCacheLock;
     mutable HashMap<String, String, ASCIICaseInsensitiveHash> m_hostTopPrivatelyControlledDomainCache WTF_GUARDED_BY_LOCK(m_HostTopPrivatelyControlledDomainCacheLock);
 #if PLATFORM(COCOA)
     mutable Lock m_publicSuffixCacheLock;
     std::optional<HashSet<String, ASCIICaseInsensitiveHash>> m_publicSuffixCache WTF_GUARDED_BY_LOCK(m_publicSuffixCacheLock);
-    bool m_canAcceptCustomPublicSuffix WTF_GUARDED_BY_LOCK(m_publicSuffixCacheLock) { false };
+    bool m_canAcceptCustomPublicSuffix { false }; // Only used on the main thread.
 #endif
 };
 

@@ -2117,6 +2117,24 @@ webkit.org/b/139639 [ Debug ] cssom/non-subpixel-scroll-top-left-values.html [ S
 [ Release ] fast/webgpu/fuzz-273578.html [ Pass Failure Timeout ]
 [ Debug ] fast/webgpu/fuzz-273585.html [ Skip ]
 [ Release ] fast/webgpu/fuzz-273585.html [ Pass Failure Timeout ]
+[ Debug ] fast/webgpu/fuzz-274270.html [ Skip ]
+[ Release ] fast/webgpu/fuzz-274270.html [ Pass Failure Timeout ]
+[ Debug ] fast/webgpu/fuzz-274161.html [ Skip ]
+[ Release ] fast/webgpu/fuzz-274161.html [ Pass Failure Timeout ]
+[ Debug ] fast/webgpu/fuzz-274271.html [ Skip ]
+[ Release ] fast/webgpu/fuzz-274271.html [ Pass Failure Timeout ]
+[ Debug ] fast/webgpu/fuzz-274275.html [ Skip ]
+[ Release ] fast/webgpu/fuzz-274275.html [ Pass Failure Timeout ]
+[ Debug ] fast/webgpu/fuzz-274317.html [ Skip ]
+[ Release ] fast/webgpu/fuzz-274317.html [ Pass Failure Timeout ]
+[ Debug ] fast/webgpu/fuzz-274334.html [ Skip ]
+[ Release ] fast/webgpu/fuzz-274334.html [ Pass Failure Timeout ]
+[ Debug ] fast/webgpu/fuzz-274289.html [ Skip ]
+[ Release ] fast/webgpu/fuzz-274289.html [ Pass Failure Timeout ]
+[ Debug ] fast/webgpu/fuzz-274171.html [ Skip ]
+[ Release ] fast/webgpu/fuzz-274171.html [ Pass Failure Timeout ]
+[ Debug ] fast/webgpu/fuzz-274290.html [ Skip ]
+[ Release ] fast/webgpu/fuzz-274290.html [ Pass Failure Timeout ]
 
 # Imported W3C HTML/DOM ref tests that are failing.
 imported/w3c/web-platform-tests/html/dom/elements/global-attributes/dir_auto-textarea-script-N-between-Rs.html [ ImageOnlyFailure ]
@@ -2920,6 +2938,8 @@ webkit.org/b/214290 imported/w3c/web-platform-tests/css/css-text/letter-spacing/
 webkit.org/b/214290 imported/w3c/web-platform-tests/css/css-text/line-break/line-break-loose-hyphens-001.html [ ImageOnlyFailure ]
 webkit.org/b/214290 imported/w3c/web-platform-tests/css/css-text/line-break/line-break-shaping-001.html [ ImageOnlyFailure ]
 webkit.org/b/214290 imported/w3c/web-platform-tests/css/css-text/line-breaking/line-breaking-017.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/line-breaking/line-breaking-013.html [ ImageOnlyFailure Pass ]
+imported/w3c/web-platform-tests/css/css-text/line-breaking/line-breaking-014.html [ ImageOnlyFailure Pass ]
 imported/w3c/web-platform-tests/css/css-text/line-breaking/line-breaking-022.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-text/line-breaking/line-breaking-023.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-text/line-breaking/line-breaking-atomic-003.html [ ImageOnlyFailure ]
@@ -5483,13 +5503,15 @@ webkit.org/b/261849 imported/w3c/web-platform-tests/css/css-scroll-anchoring/zer
 webkit.org/b/261849 imported/w3c/web-platform-tests/css/css-scroll-anchoring/start-edge-in-block-layout-direction.html [ Skip ]
 
 # Trusted Types aren't fully implemented yet
-webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/trusted-types-event-handlers.html [ Skip ]
+webkit.org/b/272196 imported/w3c/web-platform-tests/trusted-types/trusted-types-createHTMLDocument.html [ Pass Failure ]
 webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/WorkerGlobalScope-eval.html [ Skip ]
 webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/trusted-types-reporting.html [ Skip ]
 webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/trusted-types-svg-script.html [ Skip ]
 webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/trusted-types-eval-reporting-no-unsafe-eval.html [ Skip ]
 webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/trusted-types-eval-reporting-report-only.html [ Skip ]
 webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/WorkerGlobalScope-importScripts.html [ Pass Failure ]
+webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/trusted-types-navigation.html [ Pass Failure ]
+webkit.org/b/274088 imported/w3c/web-platform-tests/trusted-types/Element-setAttribute-respects-Elements-node-documents-globals-CSP.html [ Pass Failure ]
 
 # These tests are image failures
 imported/w3c/web-platform-tests/css/css-scroll-anchoring/vertical-rl-viewport-size-change-000.html [ Skip ]
@@ -6583,8 +6605,6 @@ webkit.org/b/257336 imported/w3c/web-platform-tests/css/css-tables/visibility-co
 # Only Sonoma+/iOS 17+ have support for auto word breaking. Skipped globally and re-enabled for each platform.
 imported/w3c/web-platform-tests/css/css-text/word-break/auto-phrase [ Skip ]
 
-webkit.org/b/255970 [ Debug ] fullscreen/exit-full-screen-video-crash.html [ Crash ]
-
 # These tests time out because WebTransport only has a stub implementation.
 imported/w3c/web-platform-tests/webtransport/bidirectional-cancel-crash.https.html [ Skip ]
 imported/w3c/web-platform-tests/webtransport/constructor.https.any.worker.html [ Skip ]
@@ -6877,7 +6897,6 @@ imported/w3c/web-platform-tests/navigation-api/navigate-event/cross-window/ [ Sk
 # These failures include UUIDs that change every run.
 imported/w3c/web-platform-tests/navigation-api/navigation-history-entry/key-id-back-same-document.html [ Failure ]
 imported/w3c/web-platform-tests/navigation-api/navigation-history-entry/key-id-location-reload.html [ Failure ]
-imported/w3c/web-platform-tests/navigation-api/navigation-history-entry/key-id-location-replace.html [ Failure ]
 imported/w3c/web-platform-tests/navigation-api/navigation-methods/navigate-replace-same-document.html [ Failure ]
 
 # Crash caused by detach.

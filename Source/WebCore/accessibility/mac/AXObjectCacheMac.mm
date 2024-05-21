@@ -32,6 +32,7 @@
 #import "AccessibilityObject.h"
 #import "AccessibilityTable.h"
 #import "DeprecatedGlobalSettings.h"
+#import "LocalFrameView.h"
 #import "RenderObject.h"
 #import "WebAccessibilityObjectWrapperMac.h"
 #import <pal/spi/cocoa/NSAccessibilitySPI.h>
@@ -328,10 +329,7 @@ void AXObjectCache::postPlatformNotification(AccessibilityObject& object, AXNoti
     NSString *macNotification;
     switch (notification) {
     case AXActiveDescendantChanged:
-        if (object.isComboBox() || object.canBeControlledBy(AccessibilityRole::ComboBox))
-            macNotification = @"AXActiveElementChanged";
-        else
-            macNotification = NSAccessibilityFocusedUIElementChangedNotification;
+        macNotification = @"AXActiveElementChanged";
         break;
     case AXAutocorrectionOccured:
         macNotification = @"AXAutocorrectionOccurred";

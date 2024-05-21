@@ -36,6 +36,7 @@
 #import "Logging.h"
 #import "ModelProcessProxy.h"
 #import "PageClientImplIOS.h"
+#import "PickerDismissalReason.h"
 #import "PrintInfo.h"
 #import "RemoteLayerTreeDrawingAreaProxyIOS.h"
 #import "SmartMagnificationController.h"
@@ -164,6 +165,9 @@ typedef NS_ENUM(NSInteger, _WKPrintRenderingCallbackType) {
 
 @implementation WKContentView {
     std::unique_ptr<WebKit::PageClientImpl> _pageClient;
+ALLOW_DEPRECATED_DECLARATIONS_BEGIN
+    RetainPtr<WKBrowsingContextController> _browsingContextController;
+ALLOW_DEPRECATED_DECLARATIONS_END
 
     RetainPtr<UIView> _rootContentView;
     RetainPtr<UIView> _fixedClippingView;
@@ -522,6 +526,9 @@ static NSArray *keyCommandsPlaceholderHackForEvernote(id self, SEL _cmd)
 
         [self _updateForScreen:newWindow.screen];
     }
+
+    if (window && !newWindow)
+        [self dismissPickersIfNeededWithReason:WebKit::PickerDismissalReason::ViewRemoved];
 }
 
 - (void)didMoveToWindow
@@ -537,6 +544,16 @@ static NSArray *keyCommandsPlaceholderHackForEvernote(id self, SEL _cmd)
     else
         [self cleanUpInteractionPreviewContainers];
 }
+
+ALLOW_DEPRECATED_DECLARATIONS_BEGIN
+- (WKBrowsingContextController *)browsingContextController
+{
+    if (!_browsingContextController)
+        _browsingContextController = adoptNS([[WKBrowsingContextController alloc] _initWithPageRef:toAPI(_page.get())]);
+
+    return _browsingContextController.get();
+}
+ALLOW_DEPRECATED_DECLARATIONS_END
 
 - (WKPageRef)_pageRef
 {
