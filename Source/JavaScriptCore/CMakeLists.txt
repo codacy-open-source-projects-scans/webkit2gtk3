@@ -591,7 +591,6 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     assembler/SecureARM64EHashPins.h
     assembler/SecureARM64EHashPinsInlines.h
     assembler/X86Assembler.h
-    assembler/X86Registers.h
     assembler/X86_64Registers.h
 
     b3/B3Common.h
@@ -933,6 +932,7 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     runtime/ArrayPrototype.h
     runtime/ArrayStorage.h
     runtime/ArrayStorageInlines.h
+    runtime/AssertInvariants.h
     runtime/AsyncIteratorPrototype.h
     runtime/AuxiliaryBarrier.h
     runtime/AuxiliaryBarrierInlines.h

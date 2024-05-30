@@ -302,7 +302,7 @@ MacroAssemblerCodeRef<JITThunkPtrTag> virtualThunkForConstruct(VM& vm)
 }
 
 enum class ClosureMode : uint8_t { No, Yes };
-static MacroAssemblerCodeRef<JITThunkPtrTag> polymorphicThunkFor(VM&, CallMode mode, ClosureMode closureMode)
+static MacroAssemblerCodeRef<JITThunkPtrTag> polymorphicThunkFor(VM&, ClosureMode closureMode)
 {
     // The callee is in regT0 (for JSVALUE32_64, the tag is in regT1).
     // The return address is on the stack, or in the link register. We will hence
@@ -315,17 +315,13 @@ static MacroAssemblerCodeRef<JITThunkPtrTag> polymorphicThunkFor(VM&, CallMode m
 
     CCallHelpers jit;
 
-    bool isTailCall = mode == CallMode::Tail;
     bool isClosureCall = closureMode == ClosureMode::Yes;
 
     CCallHelpers::JumpList slowCase;
 
 
 #if USE(JSVALUE32_64)
-    if (isTailCall)
-        slowCase.append(jit.branchIfNotCell(GPRInfo::regT0, DoNotHaveTagRegisters));
-    else
-        slowCase.append(jit.branchIfNotCell(GPRInfo::regT0));
+    slowCase.append(jit.branchIfNotCell(GPRInfo::regT0, DoNotHaveTagRegisters));
 #endif
 
     GPRReg comparisonValueGPR;
@@ -333,10 +329,7 @@ static MacroAssemblerCodeRef<JITThunkPtrTag> polymorphicThunkFor(VM&, CallMode m
         comparisonValueGPR = GPRInfo::regT4;
         // Verify that we have a function and stash the executable in scratchGPR.
 #if USE(JSVALUE64)
-        if (isTailCall)
-            slowCase.append(jit.branchIfNotCell(GPRInfo::regT0, DoNotHaveTagRegisters));
-        else
-            slowCase.append(jit.branchIfNotCell(GPRInfo::regT0));
+        slowCase.append(jit.branchIfNotCell(GPRInfo::regT0, DoNotHaveTagRegisters));
 #endif
         // FIXME: We could add a fast path for InternalFunction with closure call.
         slowCase.append(jit.branchIfNotFunction(GPRInfo::regT0));
@@ -365,7 +358,7 @@ static MacroAssemblerCodeRef<JITThunkPtrTag> polymorphicThunkFor(VM&, CallMode m
     jit.jump().linkTo(loop, &jit);
 
     found.link(&jit);
-    ASSERT((CallSlot::offsetOfTarget() + sizeof(void*)) == static_cast<size_t>(CallSlot::offsetOfCodeBlock()));
+    static_assert((CallSlot::offsetOfTarget() + sizeof(void*)) == static_cast<size_t>(CallSlot::offsetOfCodeBlock()));
     jit.add32(CCallHelpers::TrustedImm32(1), CCallHelpers::Address(GPRInfo::regT5, CallSlot::offsetOfCount()));
     jit.loadPairPtr(CCallHelpers::Address(GPRInfo::regT5, CallSlot::offsetOfTarget()), GPRInfo::regT4, GPRInfo::regT5);
 
@@ -401,58 +394,18 @@ static MacroAssemblerCodeRef<JITThunkPtrTag> polymorphicThunkFor(VM&, CallMode m
     return FINALIZE_THUNK(
         patchBuffer, JITThunkPtrTag,
         "PolymorphicCall"_s,
-        "Polymorphic %s slow path thunk",
-        mode == CallMode::Regular ? "call" : mode == CallMode::Tail ? "tail call" : "construct");
+        "Polymorphic %s thunk",
+        isClosureCall ? "closure" : "normal");
 }
 
-MacroAssemblerCodeRef<JITThunkPtrTag> polymorphicThunkForRegularCall(VM& vm)
+MacroAssemblerCodeRef<JITThunkPtrTag> polymorphicThunk(VM& vm)
 {
-    return polymorphicThunkFor(vm, CallMode::Regular, ClosureMode::No);
+    return polymorphicThunkFor(vm, ClosureMode::No);
 }
 
-MacroAssemblerCodeRef<JITThunkPtrTag> polymorphicThunkForTailCall(VM& vm)
+MacroAssemblerCodeRef<JITThunkPtrTag> polymorphicThunkForClosure(VM& vm)
 {
-    return polymorphicThunkFor(vm, CallMode::Tail, ClosureMode::No);
-}
-
-MacroAssemblerCodeRef<JITThunkPtrTag> polymorphicThunkForRegularCallForClosure(VM& vm)
-{
-    return polymorphicThunkFor(vm, CallMode::Regular, ClosureMode::Yes);
-}
-
-MacroAssemblerCodeRef<JITThunkPtrTag> polymorphicThunkForTailCallForClosure(VM& vm)
-{
-    return polymorphicThunkFor(vm, CallMode::Tail, ClosureMode::Yes);
-}
-
-MacroAssemblerCodeRef<JITThunkPtrTag> polymorphicRepatchThunk(VM&)
-{
-    // The callee is in regT0 (for JSVALUE32_64, the tag is in regT1).
-    // The return address is on the stack, or in the link register. We will hence
-    // jump to the callee, or save the return address to the call frame while we
-    // make a C++ function call to the appropriate JIT operation.
-
-    // regT0 => callee
-    // regT1 => tag (32bit)
-    // regT2 => CallLinkInfo*
-
-    CCallHelpers jit;
-
-    jit.emitFunctionPrologue();
-    if (maxFrameExtentForSlowPathCall)
-        jit.addPtr(CCallHelpers::TrustedImm32(-static_cast<int32_t>(maxFrameExtentForSlowPathCall)), CCallHelpers::stackPointerRegister);
-    jit.setupArguments<decltype(operationPolymorphicCall)>(GPRInfo::regT2);
-    jit.move(CCallHelpers::TrustedImmPtr(tagCFunction<OperationPtrTag>(operationPolymorphicCall)), GPRInfo::nonArgGPR0);
-    jit.call(GPRInfo::nonArgGPR0, OperationPtrTag);
-    if (maxFrameExtentForSlowPathCall)
-        jit.addPtr(CCallHelpers::TrustedImm32(maxFrameExtentForSlowPathCall), CCallHelpers::stackPointerRegister);
-
-    jit.emitFunctionEpilogue();
-    jit.untagReturnAddress();
-    jit.farJump(GPRInfo::returnValueGPR, JSEntryPtrTag);
-
-    LinkBuffer patchBuffer(jit, GLOBAL_THUNK_ID, LinkBuffer::Profile::InlineCache);
-    return FINALIZE_THUNK(patchBuffer, JITThunkPtrTag, "PolymorphicRepatch"_s, "Polymorphic repatch thunk");
+    return polymorphicThunkFor(vm, ClosureMode::Yes);
 }
 
 enum ThunkEntryType { EnterViaCall, EnterViaJumpWithSavedTags, EnterViaJumpWithoutSavedTags };
@@ -1036,54 +989,6 @@ typedef MathThunkCallingConvention(*MathThunk)(MathThunkCallingConvention);
     } \
     static MathThunk UnaryDoubleOpWrapper(function) = &function##Thunk;
 
-#elif CPU(X86) && COMPILER(GCC_COMPATIBLE) && OS(LINUX) && defined(__PIC__)
-#define defineUnaryDoubleOpWrapper(function) \
-    asm( \
-        ".text\n" \
-        ".globl " SYMBOL_STRING(function##Thunk) "\n" \
-        HIDE_SYMBOL(function##Thunk) "\n" \
-        SYMBOL_STRING(function##Thunk) ":" "\n" \
-        "pushl %ebx\n" \
-        "subl $20, %esp\n" \
-        "movsd %xmm0, (%esp) \n" \
-        "call __x86.get_pc_thunk.bx\n" \
-        "addl $_GLOBAL_OFFSET_TABLE_, %ebx\n" \
-        "call " GLOBAL_REFERENCE(function) "\n" \
-        "fstpl (%esp) \n" \
-        "movsd (%esp), %xmm0 \n" \
-        "addl $20, %esp\n" \
-        "popl %ebx\n" \
-        "ret\n" \
-        ".previous\n" \
-    );\
-    extern "C" { \
-        MathThunkCallingConvention function##Thunk(MathThunkCallingConvention); \
-        JSC_ANNOTATE_JIT_OPERATION(function##Thunk); \
-    } \
-    static MathThunk UnaryDoubleOpWrapper(function) = &function##Thunk;
-
-#elif CPU(X86) && COMPILER(GCC_COMPATIBLE) && (OS(DARWIN) || OS(LINUX))
-#define defineUnaryDoubleOpWrapper(function) \
-    asm( \
-        ".text\n" \
-        ".globl " SYMBOL_STRING(function##Thunk) "\n" \
-        HIDE_SYMBOL(function##Thunk) "\n" \
-        SYMBOL_STRING(function##Thunk) ":" "\n" \
-        "subl $20, %esp\n" \
-        "movsd %xmm0, (%esp) \n" \
-        "call " GLOBAL_REFERENCE(function) "\n" \
-        "fstpl (%esp) \n" \
-        "movsd (%esp), %xmm0 \n" \
-        "addl $20, %esp\n" \
-        "ret\n" \
-        ".previous\n" \
-    );\
-    extern "C" { \
-        MathThunkCallingConvention function##Thunk(MathThunkCallingConvention); \
-        JSC_ANNOTATE_JIT_OPERATION(function##Thunk); \
-    } \
-    static MathThunk UnaryDoubleOpWrapper(function) = &function##Thunk;
-
 #elif CPU(ARM_THUMB2) && COMPILER(GCC_COMPATIBLE) && OS(DARWIN)
 
 #define defineUnaryDoubleOpWrapper(function) \
@@ -1125,33 +1030,6 @@ typedef MathThunkCallingConvention(*MathThunk)(MathThunkCallingConvention);
         MathThunkCallingConvention function##Thunk(MathThunkCallingConvention); \
         JSC_ANNOTATE_JIT_OPERATION(function##Thunk); \
     } \
-    static MathThunk UnaryDoubleOpWrapper(function) = &function##Thunk;
-
-#elif CPU(X86) && COMPILER(MSVC) && OS(WINDOWS)
-
-// MSVC does not accept floor, etc, to be called directly from inline assembly, so we need to wrap these functions.
-static double (_cdecl *floorFunction)(double) = floor;
-static double (_cdecl *ceilFunction)(double) = ceil;
-static double (_cdecl *truncFunction)(double) = trunc;
-static double (_cdecl *expFunction)(double) = exp;
-static double (_cdecl *logFunction)(double) = log;
-static double (_cdecl *jsRoundFunction)(double) = jsRound;
-
-#define defineUnaryDoubleOpWrapper(function) \
-    extern "C" __declspec(naked) MathThunkCallingConvention function##Thunk(MathThunkCallingConvention) \
-    { \
-        __asm \
-        { \
-        __asm sub esp, 20 \
-        __asm movsd mmword ptr [esp], xmm0  \
-        __asm call function##Function \
-        __asm fstp qword ptr [esp] \
-        __asm movsd xmm0, mmword ptr [esp] \
-        __asm add esp, 20 \
-        __asm ret \
-        } \
-    } \
-    JSC_ANNOTATE_JIT_OPERATION(function##Thunk); \
     static MathThunk UnaryDoubleOpWrapper(function) = &function##Thunk;
 
 #else

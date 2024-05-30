@@ -1798,11 +1798,15 @@ Ref<WebExtensionTab> WebExtensionContext::getOrCreateTab(_WKWebExtensionTab *del
     ASSERT(delegate);
 
     if (NSNumber *tabIdentifier = [m_tabDelegateToIdentifierMap objectForKey:delegate]) {
-        if (RefPtr tab = getTab(WebExtensionTabIdentifier(tabIdentifier.unsignedLongLongValue)))
-            return tab.releaseNonNull();
+        if (RefPtr tab = getTab(WebExtensionTabIdentifier(tabIdentifier.unsignedLongLongValue))) {
+            Ref result = tab.releaseNonNull();
+            reportWebViewConfigurationErrorIfNeeded(result);
+            return result;
+        }
     }
 
     Ref tab = adoptRef(*new WebExtensionTab(*this, delegate));
+    reportWebViewConfigurationErrorIfNeeded(tab);
 
     auto tabIdentifier = tab->identifier();
     m_tabMap.set(tabIdentifier, tab);
@@ -2007,6 +2011,8 @@ WebExtensionContext::WindowVector WebExtensionContext::openWindows(IgnoreExtensi
 WebExtensionContext::TabVector WebExtensionContext::openTabs(IgnoreExtensionAccess ignoreExtensionAccess) const
 {
     return WTF::compactMap(m_tabMap, [&](auto& entry) -> std::optional<Ref<WebExtensionTab>> {
+        if (!entry.value->isOpen())
+            return std::nullopt;
         if (ignoreExtensionAccess == IgnoreExtensionAccess::No && !entry.value->extensionHasAccess())
             return std::nullopt;
         return entry.value;
@@ -2132,8 +2138,10 @@ void WebExtensionContext::didCloseTab(WebExtensionTab& tab, WindowIsClosing wind
     ASSERT(isValidTab(tab));
 
     // The tab might already be closed, don't log an error.
-    if (!tab.isOpen())
+    if (!tab.isOpen()) {
+        forgetTab(tab.identifier());
         return;
+    }
 
     RELEASE_LOG_DEBUG(Extensions, "Closed tab %{public}llu %{public}s", tab.identifier().toUInt64(), windowIsClosing == WindowIsClosing::Yes ? "(window closing)" : "");
 
@@ -2263,25 +2271,32 @@ void WebExtensionContext::didMoveTab(WebExtensionTab& tab, size_t oldIndex, cons
     }
 }
 
-void WebExtensionContext::didReplaceTab(WebExtensionTab& oldTab, WebExtensionTab& newTab)
+void WebExtensionContext::didReplaceTab(WebExtensionTab& oldTab, WebExtensionTab& newTab, SuppressEvents suppressEvents)
 {
     ASSERT(isValidTab(oldTab));
     ASSERT(isValidTab(newTab));
 
-    if (!oldTab.isOpen()) {
-        RELEASE_LOG_ERROR(Extensions, "Replaced tab %{public}llu with tab %{public}llu, but old tab is not open", oldTab.identifier().toUInt64(), newTab.identifier().toUInt64());
+    if (oldTab == newTab) {
+        RELEASE_LOG_ERROR(Extensions, "Replaced tab %{public}llu with the same tab", newTab.identifier().toUInt64());
         return;
     }
 
-    didCloseTab(oldTab, WindowIsClosing::No, SuppressEvents::Yes);
-    didOpenTab(newTab, SuppressEvents::Yes);
+    Ref protectedOldTab { oldTab };
+
+    didOpenTab(newTab, suppressEvents);
+
+    if (!oldTab.isOpen()) {
+        RELEASE_LOG_ERROR(Extensions, "Replaced tab %{public}llu with tab %{public}llu, but old tab is not open", oldTab.identifier().toUInt64(), newTab.identifier().toUInt64());
+        forgetTab(oldTab.identifier());
+        return;
+    }
 
     RELEASE_LOG_DEBUG(Extensions, "Replaced tab %{public}llu with tab %{public}llu", oldTab.identifier().toUInt64(), newTab.identifier().toUInt64());
 
-    if (!isLoaded() || !newTab.extensionHasAccess())
-        return;
+    if (isLoaded() && newTab.extensionHasAccess() && suppressEvents == SuppressEvents::No)
+        fireTabsReplacedEventIfNeeded(oldTab.identifier(), newTab.identifier());
 
-    fireTabsReplacedEventIfNeeded(oldTab.identifier(), newTab.identifier());
+    didCloseTab(oldTab, WindowIsClosing::No, suppressEvents);
 }
 
 void WebExtensionContext::didChangeTabProperties(WebExtensionTab& tab, OptionSet<WebExtensionTab::ChangedProperties> properties)
@@ -3488,6 +3503,20 @@ void WebExtensionContext::wakeUpBackgroundContentIfNecessaryToFireEvents(EventLi
     }
 
     wakeUpBackgroundContentIfNecessary(WTFMove(completionHandler));
+}
+
+void WebExtensionContext::reportWebViewConfigurationErrorIfNeeded(const WebExtensionTab& tab) const
+{
+    if (!extensionController())
+        return;
+
+    for (WKWebView *webView in tab.webViews()) {
+        if (webView.configuration._webExtensionController != extensionController()->wrapper()) {
+            RELEASE_LOG_ERROR(Extensions, "WKWebView is not configured with the same _WKWebExtensionController as the extension context; please file a bug.");
+            WTFReportBacktrace();
+            ASSERT_NOT_REACHED();
+        }
+    }
 }
 
 bool WebExtensionContext::decidePolicyForNavigationAction(WKWebView *webView, WKNavigationAction *navigationAction)

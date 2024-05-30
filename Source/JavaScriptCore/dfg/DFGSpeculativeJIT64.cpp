@@ -1137,12 +1137,10 @@ void SpeculativeJIT::emitCall(Node* node)
     
     emitStoreCallSiteIndex(callSite);
     
-    JumpList slowCases;
-    Label dispatchLabel;
     if (m_graph.m_plan.isUnlinked())
         loadLinkableConstant(callLinkInfoConstant, callLinkInfoGPR);
     if (isTail) {
-        std::tie(slowCases, dispatchLabel) = CallLinkInfo::emitTailCallFastPath(*this, callLinkInfo, scopedLambda<void()>([&] {
+        CallLinkInfo::emitTailCallFastPath(*this, callLinkInfo, scopedLambda<void()>([&] {
             if (node->op() == TailCall) {
                 CallFrameShuffler shuffler { *this, shuffleData };
                 shuffler.setCalleeJSValueRegs(BaselineJITRegisters::Call::calleeJSR);
@@ -1157,19 +1155,11 @@ void SpeculativeJIT::emitCall(Node* node)
                 prepareForTailCallSlow(WTFMove(preserved));
             }
         }));
-    } else
-        std::tie(slowCases, dispatchLabel) = CallLinkInfo::emitFastPath(*this, callLinkInfo);
-
-    ASSERT(slowCases.empty());
-    auto slowPathStart = label();
-    auto doneLocation = label();
-
-    if (isTail)
         abortWithReason(JITDidReturnFromTailCall);
-    else
+    } else {
+        CallLinkInfo::emitFastPath(*this, callLinkInfo);
         setResultAndResetStack();
-
-    addJSCall(slowPathStart, doneLocation, callLinkInfo);
+    }
 }
 
 // Clang should allow unreachable [[clang::fallthrough]] in template functions if any template expansion uses it
@@ -2578,7 +2568,6 @@ void SpeculativeJIT::compileGetByVal(Node* node, const ScopedLambda<std::tuple<J
                 stubInfo->propertyIsInt32 = true;
             else if (m_state.forNode(m_graph.varArgChild(node, 1)).isType(SpecSymbol))
                 stubInfo->propertyIsSymbol = true;
-            stubInfo->isEnumerator = node->op() == EnumeratorGetByVal;
         }, stubInfo);
 
         std::unique_ptr<SlowPathGenerator> slowPath;
@@ -5790,7 +5779,6 @@ void SpeculativeJIT::compile(Node* node)
 
             std::visit([&](auto* stubInfo) {
                 stubInfo->propertyIsInt32 = true;
-                stubInfo->isEnumerator = false;
             }, stubInfo);
 
             std::unique_ptr<SlowPathGenerator> slowPath;
@@ -7133,7 +7121,6 @@ void SpeculativeJIT::compileEnumeratorPutByVal(Node* node)
                     stubInfo->propertyIsInt32 = true;
                 else if (m_state.forNode(m_graph.varArgChild(node, 1)).isType(SpecSymbol))
                     stubInfo->propertyIsSymbol = true;
-                stubInfo->isEnumerator = true;
             }, stubInfo);
 
             JumpList slowCases;
@@ -7268,7 +7255,7 @@ void SpeculativeJIT::compileCreateClonedArguments(Node* node)
             add32(TrustedImm32(sizeof(IndexingHeader) + outOfLineCapacity * sizeof(JSValue)), scratchGPR, scratch2GPR);
             emitAllocateVariableSized(storageGPR, vm().auxiliarySpace(), scratch2GPR, scratchGPR, resultGPR, slowCases);
             addPtr(TrustedImm32(sizeof(IndexingHeader) + outOfLineCapacity * sizeof(JSValue)), storageGPR);
-            ASSERT(Butterfly::offsetOfPublicLength() + static_cast<ptrdiff_t>(sizeof(uint32_t)) == Butterfly::offsetOfVectorLength());
+            static_assert(Butterfly::offsetOfPublicLength() + static_cast<ptrdiff_t>(sizeof(uint32_t)) == Butterfly::offsetOfVectorLength());
             storePair32(sizeGPR, sizeGPR, storageGPR, TrustedImm32(Butterfly::offsetOfPublicLength()));
             emitInitializeOutOfLineStorage(storageGPR, outOfLineCapacity, scratchGPR);
         }

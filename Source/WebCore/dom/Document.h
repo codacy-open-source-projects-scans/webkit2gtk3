@@ -32,11 +32,13 @@
 #include "ContextDestructionObserverInlines.h"
 #include "DocumentEventTiming.h"
 #include "FontSelectorClient.h"
+#include "FragmentDirective.h"
 #include "FrameDestructionObserver.h"
 #include "FrameIdentifier.h"
 #include "HitTestSource.h"
 #include "IntDegrees.h"
 #include "PageIdentifier.h"
+#include "PermissionsPolicy.h"
 #include "PlaybackTargetClientContextIdentifier.h"
 #include "PseudoElementIdentifier.h"
 #include "RegistrableDomain.h"
@@ -467,7 +469,7 @@ public:
     void setShouldNotFireMutationEvents(bool fire) { m_shouldNotFireMutationEvents = fire; }
 
     void setMarkupUnsafe(const String&, OptionSet<ParserContentPolicy>);
-    static Ref<Document> parseHTMLUnsafe(Document&, const String&);
+    static ExceptionOr<Ref<Document>> parseHTMLUnsafe(Document&, std::variant<RefPtr<TrustedHTML>, String>&&);
 
     Element* elementForAccessKey(const String& key);
     void invalidateAccessKeyCache();
@@ -494,7 +496,7 @@ public:
     
     Element* documentElement() const { return m_documentElement.get(); }
     inline RefPtr<Element> protectedDocumentElement() const; // Defined in DocumentInlines.h.
-    static ptrdiff_t documentElementMemoryOffset() { return OBJECT_OFFSETOF(Document, m_documentElement); }
+    static constexpr ptrdiff_t documentElementMemoryOffset() { return OBJECT_OFFSETOF(Document, m_documentElement); }
 
     WEBCORE_EXPORT Element* activeElement();
     WEBCORE_EXPORT bool hasFocus() const;
@@ -633,7 +635,7 @@ public:
     bool hasSVGRootNode() const;
     virtual bool isFrameSet() const { return false; }
 
-    static ptrdiff_t documentClassesMemoryOffset() { return OBJECT_OFFSETOF(Document, m_documentClasses); }
+    static constexpr ptrdiff_t documentClassesMemoryOffset() { return OBJECT_OFFSETOF(Document, m_documentClasses); }
     static auto isHTMLDocumentClassFlag() { return enumToUnderlyingType(DocumentClass::HTML); }
 
     bool isSrcdocDocument() const { return m_isSrcdocDocument; }
@@ -807,8 +809,8 @@ public:
     void cancelParsing();
 
     ExceptionOr<void> write(Document* entryDocument, SegmentedString&&);
-    WEBCORE_EXPORT ExceptionOr<void> write(Document* entryDocument, FixedVector<std::variant<RefPtr<TrustedHTML>, String>>&&);
-    WEBCORE_EXPORT ExceptionOr<void> writeln(Document* entryDocument, FixedVector<std::variant<RefPtr<TrustedHTML>, String>>&&);
+    WEBCORE_EXPORT ExceptionOr<void> write(Document* entryDocument, FixedVector<String>&&);
+    WEBCORE_EXPORT ExceptionOr<void> writeln(Document* entryDocument, FixedVector<String>&&);
 
     bool wellFormed() const { return m_wellFormed; }
 
@@ -843,6 +845,7 @@ public:
 
     void disableEval(const String& errorMessage) final;
     void disableWebAssembly(const String& errorMessage) final;
+    void setRequiresTrustedTypes(bool required) final;
 
     IDBClient::IDBConnectionProxy* idbConnectionProxy() final;
     StorageConnection* storageConnection();
@@ -876,7 +879,7 @@ public:
 
     void setCompatibilityMode(DocumentCompatibilityMode);
     void lockCompatibilityMode() { m_compatibilityModeLocked = true; }
-    static ptrdiff_t compatibilityModeMemoryOffset() { return OBJECT_OFFSETOF(Document, m_compatibilityMode); }
+    static constexpr ptrdiff_t compatibilityModeMemoryOffset() { return OBJECT_OFFSETOF(Document, m_compatibilityMode); }
 
     WEBCORE_EXPORT String compatMode() const;
 
@@ -1400,6 +1403,8 @@ public:
     WEBCORE_EXPORT void exitPointerLock();
 #endif
 
+    OptionSet<AdvancedPrivacyProtections> advancedPrivacyProtections() const final;
+
     std::optional<uint64_t> noiseInjectionHashSalt() const final;
     NoiseInjectionPolicy noiseInjectionPolicy() const;
 
@@ -1874,6 +1879,8 @@ public:
     void setFragmentDirective(const String& fragmentDirective) { m_fragmentDirective = fragmentDirective; }
     const String& fragmentDirective() const { return m_fragmentDirective; }
 
+    Ref<FragmentDirective> fragmentDirectiveForBindings() { return m_fragmentDirectiveForBindings; }
+
     void prepareCanvasesForDisplayOrFlushIfNeeded();
     void addCanvasNeedingPreparationForDisplayOrFlush(CanvasRenderingContext&);
     void removeCanvasNeedingPreparationForDisplayOrFlush(CanvasRenderingContext&);
@@ -1923,6 +1930,8 @@ public:
     void invalidateDOMCookieCache();
 
     void detachFromFrame();
+
+    PermissionsPolicy permissionsPolicy() const;
 
 protected:
     enum class ConstructionFlag : uint8_t {
@@ -2070,6 +2079,7 @@ private:
     MediaProducerMediaStateFlags computeCaptureState() const;
 #endif
     bool isTopDocumentLegacy() const { return &topDocument() == this; }
+    void securityOriginDidChange() final;
 
     const Ref<const Settings> m_settings;
 
@@ -2380,6 +2390,8 @@ private:
 
     String m_fragmentDirective;
 
+    Ref<FragmentDirective> m_fragmentDirectiveForBindings;
+
     ListHashSet<Ref<Element>> m_topLayerElements;
     ListHashSet<Ref<HTMLElement>> m_autoPopoverList;
 
@@ -2598,6 +2610,7 @@ private:
     std::optional<bool> m_cachedCookiesEnabled;
 
     mutable std::unique_ptr<CSSParserContext> m_cachedCSSParserContext;
+    mutable std::unique_ptr<PermissionsPolicy> m_permissionsPolicy;
 };
 
 Element* eventTargetElementForDocument(Document*);

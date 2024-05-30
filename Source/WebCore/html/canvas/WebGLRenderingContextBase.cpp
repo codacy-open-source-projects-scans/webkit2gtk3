@@ -772,15 +772,16 @@ bool WebGLRenderingContextBase::clearIfComposited(WebGLRenderingContextBase::Cal
     return combinedClear;
 }
 
-void WebGLRenderingContextBase::drawBufferToCanvas(SurfaceBuffer sourceBuffer)
+
+RefPtr<ImageBuffer> WebGLRenderingContextBase::surfaceBufferToImageBuffer(SurfaceBuffer sourceBuffer)
 {
-    if (isContextLost())
-        return;
-    if (m_canvasBufferContents == sourceBuffer)
-        return;
     auto buffer = canvasBase().buffer();
+    if (isContextLost())
+        return buffer;
     if (!buffer)
-        return;
+        return buffer;
+    if (m_canvasBufferContents == sourceBuffer)
+        return buffer;
     if (sourceBuffer == SurfaceBuffer::DrawingBuffer)
         clearIfComposited(CallerTypeOther);
     m_canvasBufferContents = sourceBuffer;
@@ -789,6 +790,7 @@ void WebGLRenderingContextBase::drawBufferToCanvas(SurfaceBuffer sourceBuffer)
     // canvas element repeatedly.
     buffer->flushDrawingContext();
     m_context->drawSurfaceBufferToImageBuffer(toGCGLSurfaceBuffer(sourceBuffer), *buffer);
+    return buffer;
 }
 
 RefPtr<PixelBuffer> WebGLRenderingContextBase::drawingBufferToPixelBuffer(GraphicsContextGL::FlipY flipY)
@@ -809,6 +811,14 @@ RefPtr<VideoFrame> WebGLRenderingContextBase::surfaceBufferToVideoFrame(SurfaceB
     return m_context->surfaceBufferToVideoFrame(toGCGLSurfaceBuffer(buffer));
 }
 #endif
+
+void WebGLRenderingContextBase::markDrawingBuffersDirtyAfterTransfer()
+{
+    // Any draw or read sees cleared drawing buffer.
+    m_defaultFramebuffer->markAllBuffersDirty();
+    // Next transfer uses the cleared drawing buffer.
+    m_compositingResultsNeedUpdating = true;
+}
 
 WebGLTexture::TextureExtensionFlag WebGLRenderingContextBase::textureExtensionFlags() const
 {
@@ -2858,7 +2868,7 @@ void WebGLRenderingContextBase::makeXRCompatible(MakeXRCompatiblePromise&& promi
 
     // 1. If the requesting document’s origin is not allowed to use the "xr-spatial-tracking"
     // permissions policy, resolve promise and return it.
-    if (!isPermissionsPolicyAllowedByDocumentAndAllOwners(PermissionsPolicy::Feature::XRSpatialTracking, canvas->document(), LogPermissionsPolicyFailure::Yes)) {
+    if (!PermissionsPolicy::isFeatureEnabled(PermissionsPolicy::Feature::XRSpatialTracking, canvas->document())) {
         promise.resolve();
         return;
     }
@@ -5682,6 +5692,7 @@ void WebGLRenderingContextBase::prepareForDisplay()
         return;
     ASSERT(m_compositingResultsNeedUpdating);
 
+    clearIfComposited(CallerTypeOther);
     m_context->prepareForDisplay();
     m_defaultFramebuffer->markAllUnpreservedBuffersDirty();
 

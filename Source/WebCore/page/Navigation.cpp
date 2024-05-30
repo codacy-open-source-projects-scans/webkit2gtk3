@@ -412,11 +412,12 @@ void Navigation::rejectFinishedPromise(NavigationAPIMethodTracker* apiMethodTrac
 }
 
 // https://html.spec.whatwg.org/multipage/nav-history-apis.html#notify-about-the-committed-to-entry
-void Navigation::notifyCommittedToEntry(NavigationAPIMethodTracker* apiMethodTracker, NavigationHistoryEntry* entry)
+void Navigation::notifyCommittedToEntry(NavigationAPIMethodTracker* apiMethodTracker, NavigationHistoryEntry* entry, NavigationNavigationType navigationType)
 {
     ASSERT(entry);
     apiMethodTracker->committedToEntry = entry;
-    // FIXME: 2. If apiMethodTracker's serialized state is not null, then set nhe's session history entry's navigation API state to apiMethodTracker's serialized state.
+    if (navigationType != NavigationNavigationType::Traverse)
+        apiMethodTracker->committedToEntry->setState(WTFMove(apiMethodTracker->serializedState));
 
     if (apiMethodTracker->finishedBeforeCommit)
         resolveFinishedPromise(apiMethodTracker);
@@ -431,13 +432,15 @@ void Navigation::updateForNavigation(Ref<HistoryItem>&& item, NavigationNavigati
         return;
 
     RefPtr oldCurrentEntry = currentEntry();
-    ASSERT(oldCurrentEntry);
+    if (!oldCurrentEntry)
+        return;
 
     Vector<Ref<NavigationHistoryEntry>> disposedEntries;
 
     if (navigationType == NavigationNavigationType::Traverse) {
         m_currentEntryIndex = getEntryIndexOfHistoryItem(m_entries, item);
-        ASSERT(m_currentEntryIndex);
+        if (!m_currentEntryIndex)
+            return;
     } else if (navigationType == NavigationNavigationType::Push) {
         m_currentEntryIndex = *m_currentEntryIndex + 1;
         for (size_t i = *m_currentEntryIndex; i < m_entries.size(); i++)
@@ -450,7 +453,7 @@ void Navigation::updateForNavigation(Ref<HistoryItem>&& item, NavigationNavigati
         m_entries[*m_currentEntryIndex] = NavigationHistoryEntry::create(protectedScriptExecutionContext().get(), WTFMove(item));
 
     if (m_ongoingAPIMethodTracker)
-        notifyCommittedToEntry(m_ongoingAPIMethodTracker.get(), currentEntry());
+        notifyCommittedToEntry(m_ongoingAPIMethodTracker.get(), currentEntry(), navigationType);
 
     auto currentEntryChangeEvent = NavigationCurrentEntryChangeEvent::create(eventNames().currententrychangeEvent, {
         { false, false, false }, navigationType, oldCurrentEntry
@@ -592,7 +595,7 @@ bool Navigation::innerDispatchNavigateEvent(NavigationNavigationType navigationT
     bool isSameDocument = destination->sameDocument();
     bool isTraversal = navigationType == NavigationNavigationType::Traverse;
     bool canIntercept = documentCanHaveURLRewritten(*document, destination->url()) && (!isTraversal || isSameDocument);
-    bool canBeCanceled = document->isTopDocument() && isSameDocument; // FIXME: and user involvement is not browser-ui or navigation's relevant global object has transient activation.
+    bool canBeCanceled = !isTraversal || (document->isTopDocument() && isSameDocument); // FIXME: and user involvement is not browser-ui or navigation's relevant global object has transient activation.
     bool hashChange = equalIgnoringFragmentIdentifier(document->url(), destination->url()) && !equalRespectingNullity(document->url().fragmentIdentifier(),  destination->url().fragmentIdentifier());
     auto info = apiMethodTracker ? apiMethodTracker->info : JSC::jsUndefined();
 

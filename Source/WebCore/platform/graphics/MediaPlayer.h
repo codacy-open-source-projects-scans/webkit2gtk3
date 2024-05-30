@@ -400,7 +400,7 @@ public:
 #endif
     void cancelLoad();
 
-    void setPageIsVisible(bool, String&& sceneIdentifier = ""_s);
+    void setPageIsVisible(bool);
     void setVisibleForCanvas(bool);
     bool isVisibleForCanvas() const { return m_visibleForCanvas; }
 
@@ -634,7 +634,6 @@ public:
     void onNewVideoFrameMetadata(VideoFrameMetadata&&, RetainPtr<CVPixelBufferRef>&&);
 #endif
 
-    bool requiresTextTrackRepresentation() const;
     void setTextTrackRepresentation(TextTrackRepresentation*);
     void syncTextTrackBounds();
     void tracksChanged();

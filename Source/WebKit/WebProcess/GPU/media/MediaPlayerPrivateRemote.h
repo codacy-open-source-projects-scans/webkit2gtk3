@@ -298,7 +298,7 @@ private:
     bool hasVideo() const final;
     bool hasAudio() const final;
 
-    void setPageIsVisible(bool, String&& sceneIdentifier) final;
+    void setPageIsVisible(bool) final;
 
     MediaTime getStartDate() const final;
 
@@ -416,7 +416,6 @@ private:
     void setShouldContinueAfterKeyNeeded(bool) final;
 #endif
 
-    bool requiresTextTrackRepresentation() const final;
     void setTextTrackRepresentation(WebCore::TextTrackRepresentation*) final;
     void syncTextTrackBounds() final;
 

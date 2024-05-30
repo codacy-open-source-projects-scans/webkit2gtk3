@@ -36,15 +36,7 @@ IGNORE_CLANG_WARNINGS_BEGIN("cast-align")
 #include <skia/core/SkPixmap.h>
 IGNORE_CLANG_WARNINGS_END
 
-#include <wtf/StdLibExtras.h>
-#include <wtf/glib/WTFGType.h>
-
 namespace WebCore {
-
-struct BufferData {
-    std::span<const uint8_t> planeData;
-};
-WEBKIT_DEFINE_ASYNC_DATA_STRUCT(BufferData);
 
 ImageGStreamer::ImageGStreamer(GRefPtr<GstSample>&& sample)
     : m_sample(WTFMove(sample))
@@ -53,11 +45,11 @@ ImageGStreamer::ImageGStreamer(GRefPtr<GstSample>&& sample)
     if (UNLIKELY(!GST_IS_BUFFER(buffer)))
         return;
 
-    auto videoFrame = makeUnique<GstMappedFrame>(m_sample, GST_MAP_READ);
-    if (!*videoFrame)
+    GstMappedFrame videoFrame(m_sample, GST_MAP_READ);
+    if (!videoFrame)
         return;
 
-    auto videoInfo = videoFrame->info();
+    auto* videoInfo = videoFrame.info();
 
     // The frame has to be RGB so we can paint it.
     ASSERT(GST_VIDEO_INFO_IS_RGB(videoInfo));
@@ -68,7 +60,7 @@ ImageGStreamer::ImageGStreamer(GRefPtr<GstSample>&& sample)
     // { RGBx, RGBA }
     SkColorType colorType = kUnknown_SkColorType;
     SkAlphaType alphaType = kUnknown_SkAlphaType;
-    switch (videoFrame->format()) {
+    switch (videoFrame.format()) {
     case GST_VIDEO_FORMAT_BGRx:
         colorType = kBGRA_8888_SkColorType;
         alphaType = kOpaque_SkAlphaType;
@@ -95,24 +87,19 @@ ImageGStreamer::ImageGStreamer(GRefPtr<GstSample>&& sample)
         break;
     }
 
-    m_size = { static_cast<float>(videoFrame->width()), static_cast<float>(videoFrame->height()) };
+    m_size = { static_cast<float>(videoFrame.width()), static_cast<float>(videoFrame.height()) };
 
     auto toSkiaColorSpace = [](const PlatformVideoColorSpace&) {
         notImplemented();
         return SkColorSpace::MakeSRGB();
     };
-    auto imageInfo = SkImageInfo::Make(videoFrame->width(), videoFrame->height(), colorType, alphaType, toSkiaColorSpace(videoColorSpaceFromInfo(*videoInfo)));
+    auto imageInfo = SkImageInfo::Make(videoFrame.width(), videoFrame.height(), colorType, alphaType, toSkiaColorSpace(videoColorSpaceFromInfo(*videoInfo)));
 
     // Copy the buffer data. Keeping the whole mapped GstVideoFrame alive would increase memory
     // pressure and the file descriptor(s) associated with the buffer pool open. We only need the
     // data here.
-    auto bufferData = createBufferData();
-    bufferData->planeData = { reinterpret_cast<const uint8_t*>(videoFrame->planeData(0)), static_cast<unsigned>(videoFrame->planeStride(0)) };
-
-    SkPixmap pixmap(imageInfo, bufferData->planeData.data(), bufferData->planeData.size_bytes());
-    m_image = SkImages::RasterFromPixmap(pixmap, [](const void*, void* context) {
-        destroyBufferData(reinterpret_cast<BufferData*>(context));
-    }, bufferData);
+    SkPixmap pixmap(imageInfo, videoFrame.planeData(0), videoFrame.planeStride(0));
+    m_image = SkImages::RasterFromPixmapCopy(pixmap);
 
     if (auto* cropMeta = gst_buffer_get_video_crop_meta(buffer))
         m_cropRect = FloatRect(cropMeta->x, cropMeta->y, cropMeta->width, cropMeta->height);

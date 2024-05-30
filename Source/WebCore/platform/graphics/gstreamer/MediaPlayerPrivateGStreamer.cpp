@@ -2261,7 +2261,7 @@ void MediaPlayerPrivateGStreamer::processMpegTsSection(GstMpegtsSection* section
         gsize size;
         const void* bytes = g_bytes_get_data(data.get(), &size);
 
-        track->addDataCue(currentTime(), currentTime(), bytes, size);
+        track->addDataCue(currentTime(), currentTime(), { static_cast<const uint8_t*>(bytes), size });
     }
 }
 #endif
@@ -4428,7 +4428,7 @@ void MediaPlayerPrivateGStreamer::initializationDataEncountered(InitData&& initD
 
         GST_DEBUG("scheduling initializationDataEncountered %s event of size %zu", initData.payloadContainerType().utf8().data(),
             initData.payload()->size());
-        GST_MEMDUMP("init datas", reinterpret_cast<const uint8_t*>(initData.payload()->makeContiguous()->data()), initData.payload()->size());
+        GST_MEMDUMP("init datas", initData.payload()->makeContiguous()->span().data(), initData.payload()->size());
         if (player)
             player->initializationDataEncountered(initData.payloadContainerType(), initData.payload()->tryCreateArrayBuffer());
     });

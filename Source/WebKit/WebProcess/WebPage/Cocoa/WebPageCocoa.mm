@@ -377,7 +377,7 @@ void WebPage::updateTextIndicatorStyleVisibilityForID(const WTF::UUID& uuid, boo
     if (visible) {
         // FIXME: <https://webkit.org/b/274198> Text indicator style logic in WebPage and UnifiedTextReplacementController should be shared.
         if (m_textIndicatorStyleEnablementRanges.contains(uuid)) {
-            m_unifiedTextReplacementController->removeTransparentMarkersForUUID(*sessionRange, uuid);
+            m_unifiedTextReplacementController->removeTransparentMarkersForUUID(uuid);
         } else
             m_unifiedTextReplacementController->removeTransparentMarkersForSession(uuid, RemoveAllMarkersForSession::No);
     } else
@@ -1189,7 +1189,20 @@ std::optional<SimpleRange> WebPage::autocorrectionContextRange()
             endPosition = nextPosition;
     }
 
-    return makeSimpleRange(contextStartPosition, endPosition);
+    // Strip trailing newlines.
+
+    auto finalRange = makeSimpleRange(contextStartPosition, endPosition);
+    if (!finalRange)
+        return std::nullopt;
+
+    auto text = WebCore::plainText(*finalRange);
+    while (text.endsWith('\n')) {
+        endPosition = WebCore::positionOfNextBoundaryOfGranularity(endPosition, WebCore::TextGranularity::CharacterGranularity, WebCore::SelectionDirection::Backward);
+        finalRange = makeSimpleRange(contextStartPosition, endPosition);
+        text = WebCore::plainText(*finalRange);
+    }
+
+    return finalRange;
 }
 
 } // namespace WebKit

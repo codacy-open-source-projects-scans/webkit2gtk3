@@ -704,7 +704,7 @@ void MediaPlayerPrivateRemote::prepareForRendering()
     connection().send(Messages::RemoteMediaPlayerProxy::PrepareForRendering(), m_id);
 }
 
-void MediaPlayerPrivateRemote::setPageIsVisible(bool visible, String&& sceneIdentifier)
+void MediaPlayerPrivateRemote::setPageIsVisible(bool visible)
 {
     if (m_pageIsVisible == visible)
         return;
@@ -712,7 +712,7 @@ void MediaPlayerPrivateRemote::setPageIsVisible(bool visible, String&& sceneIden
     ALWAYS_LOG(LOGIDENTIFIER, visible);
 
     m_pageIsVisible = visible;
-    connection().send(Messages::RemoteMediaPlayerProxy::SetPageIsVisible(visible, WTFMove(sceneIdentifier)), m_id);
+    connection().send(Messages::RemoteMediaPlayerProxy::SetPageIsVisible(visible), m_id);
 }
 
 void MediaPlayerPrivateRemote::setShouldMaintainAspectRatio(bool maintainRatio)
@@ -1463,7 +1463,7 @@ void MediaPlayerPrivateRemote::waitingForKeyChanged(bool waitingForKey)
 
 void MediaPlayerPrivateRemote::initializationDataEncountered(const String& initDataType, std::span<const uint8_t> initData)
 {
-    auto initDataBuffer = ArrayBuffer::create(initData.data(), initData.size());
+    auto initDataBuffer = ArrayBuffer::create(initData);
     if (auto player = m_player.get())
         player->initializationDataEncountered(initDataType, WTFMove(initDataBuffer));
 }
@@ -1480,15 +1480,6 @@ void MediaPlayerPrivateRemote::setShouldContinueAfterKeyNeeded(bool should)
     connection().send(Messages::RemoteMediaPlayerProxy::SetShouldContinueAfterKeyNeeded(should), m_id);
 }
 #endif
-
-bool MediaPlayerPrivateRemote::requiresTextTrackRepresentation() const
-{
-#if PLATFORM(COCOA)
-    return m_videoLayerManager->requiresTextTrackRepresentation();
-#else
-    return false;
-#endif
-}
 
 void MediaPlayerPrivateRemote::setTextTrackRepresentation(WebCore::TextTrackRepresentation* representation)
 {

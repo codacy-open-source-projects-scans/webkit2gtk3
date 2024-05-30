@@ -122,10 +122,25 @@ JSValue eval(CallFrame* callFrame, JSValue thisValue, JSScope* callerScopeChain,
         return jsUndefined();
 
     JSValue program = callFrame->argument(0);
-    if (!program.isString())
+    JSString* programString = nullptr;
+    if (LIKELY(program.isString()))
+        programString = asString(program);
+    else if (Options::useTrustedTypes()) {
+        auto code = globalObject->globalObjectMethodTable()->codeForEval(globalObject, program);
+        if (!code.isNull())
+            programString = jsString(vm, code);
+    }
+
+    if (!programString)
         return program;
 
-    auto* programString = asString(program);
+    auto programSource = programString->value(globalObject);
+    RETURN_IF_EXCEPTION(scope, JSValue());
+
+    if (Options::useTrustedTypes() && globalObject->requiresTrustedTypes() && !globalObject->globalObjectMethodTable()->canCompileStrings(globalObject, CompilationType::DirectEval, programSource, program)) {
+        throwException(globalObject, scope, createEvalError(globalObject, "Refused to evaluate a string as JavaScript because this document requires a 'Trusted Type' assignment."_s));
+        return { };
+    }
 
     TopCallFrameSetter topCallFrame(vm, callFrame);
     if (!globalObject->evalEnabled()) {
@@ -133,9 +148,6 @@ JSValue eval(CallFrame* callFrame, JSValue thisValue, JSScope* callerScopeChain,
         throwException(globalObject, scope, createEvalError(globalObject, globalObject->evalDisabledErrorMessage()));
         return { };
     }
-    auto programSource = programString->value(globalObject);
-    RETURN_IF_EXCEPTION(scope, JSValue());
-    
 
     bool isArrowFunctionContext = callerUnlinkedCodeBlock->isArrowFunction() || callerUnlinkedCodeBlock->isArrowFunctionContext();
 

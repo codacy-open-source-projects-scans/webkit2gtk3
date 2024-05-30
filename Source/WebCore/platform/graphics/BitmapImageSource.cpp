@@ -76,6 +76,10 @@ ImageFrameAnimator* BitmapImageSource::frameAnimator() const
     if (m_frameAnimator)
         return m_frameAnimator.get();
 
+    // Number of frames can only be known for sure when loadimg the image is complete.
+    if (encodedDataStatus() != EncodedDataStatus::Complete)
+        return nullptr;
+
     if (!isAnimated())
         return nullptr;
 
@@ -443,20 +447,9 @@ void BitmapImageSource::cacheMetadataAtIndex(unsigned index, SubsamplingLevel su
     if (index >= m_frames.size())
         return;
 
-    ImageFrame& frame = m_frames[index];
+    auto& frame = m_frames[index];
 
-    if (frame.m_decodingOptions.hasSizeForDrawing()) {
-        ASSERT(frame.hasNativeImage());
-        frame.m_size = frame.nativeImage()->size();
-    } else
-        frame.m_size = m_decoder->frameSizeAtIndex(index, subsamplingLevel);
-
-    frame.m_densityCorrectedSize = m_decoder->densityCorrectedSizeAtIndex(index);
-    frame.m_subsamplingLevel = subsamplingLevel;
-    frame.m_decodingOptions = options;
-    frame.m_hasAlpha = m_decoder->frameHasAlphaAtIndex(index);
-    frame.m_orientation = m_decoder->frameOrientationAtIndex(index);
-    frame.m_decodingStatus = m_decoder->frameIsCompleteAtIndex(index) ? DecodingStatus::Complete : DecodingStatus::Partial;
+    m_decoder->fetchFrameMetaDataAtIndex(index, subsamplingLevel, options, frame);
 
     if (repetitionCount())
         frame.m_duration = m_decoder->frameDurationAtIndex(index);
@@ -533,8 +526,10 @@ DecodingStatus BitmapImageSource::requestNativeImageAtIndexIfNeeded(unsigned ind
     if (index >= m_frames.size())
         return DecodingStatus::Invalid;
 
+    // Never decode the same frame from two different threads.
     if (isPendingDecodingAtIndex(index, subsamplingLevel, options)) {
         LOG(Images, "BitmapImageSource::%s - %p - url: %s. Frame at index = %d is being decoded.", __FUNCTION__, this, sourceUTF8(), index);
+        ++m_blankDrawCountForTesting;
         return DecodingStatus::Decoding;
     }
 
@@ -550,9 +545,11 @@ Expected<Ref<NativeImage>, DecodingStatus> BitmapImageSource::nativeImageAtIndex
     if (index >= m_frames.size())
         return makeUnexpected(DecodingStatus::Invalid);
 
+    // FIXME: Remove this for CG; ImageIO should be thread safe when decoding the same frame from multiple threads.
     // Never decode the same frame from two different threads.
     if (isPendingDecodingAtIndex(index, subsamplingLevel, options)) {
         LOG(Images, "BitmapImageSource::%s - %p - url: %s. Frame at index = %d is being decoded.", __FUNCTION__, this, sourceUTF8(), index);
+        ++m_blankDrawCountForTesting;
         return makeUnexpected(DecodingStatus::Decoding);
     }
 
@@ -574,11 +571,9 @@ Expected<Ref<NativeImage>, DecodingStatus> BitmapImageSource::nativeImageAtIndex
 
 Expected<Ref<NativeImage>, DecodingStatus> BitmapImageSource::nativeImageAtIndexRequestIfNeeded(unsigned index, SubsamplingLevel subsamplingLevel, const DecodingOptions& options)
 {
-    if (index >= m_frames.size())
-        return makeUnexpected(DecodingStatus::Invalid);
+    ASSERT(!isAnimated());
 
-    auto animatingState = isAnimated() ? ImageAnimatingState::Yes : ImageAnimatingState::No;
-    auto status = requestNativeImageAtIndexIfNeeded(index, subsamplingLevel, animatingState, options);
+    auto status = requestNativeImageAtIndexIfNeeded(index, subsamplingLevel, ImageAnimatingState::No, options);
     if (status == DecodingStatus::Invalid || status == DecodingStatus::Decoding)
         return makeUnexpected(status);
 
@@ -590,7 +585,9 @@ Expected<Ref<NativeImage>, DecodingStatus> BitmapImageSource::nativeImageAtIndex
 
 Expected<Ref<NativeImage>, DecodingStatus> BitmapImageSource::nativeImageAtIndexForDrawing(unsigned index, SubsamplingLevel subsamplingLevel, const DecodingOptions& options)
 {
-    if (options.decodingMode() == DecodingMode::Asynchronous)
+    // If this is an animated image and the frame is not available, we have no
+    // choice but to decode it synchronously. Otherwise, a flicker will happen.
+    if (options.decodingMode() == DecodingMode::Asynchronous && !isAnimated())
         return nativeImageAtIndexRequestIfNeeded(index, subsamplingLevel, options);
     return nativeImageAtIndexCacheIfNeeded(index, subsamplingLevel, options);
 }

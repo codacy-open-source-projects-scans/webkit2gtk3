@@ -579,7 +579,7 @@ bool hasCapacityToUseLargeGigacage();
     v(Bool, useWasmIPIntEpilogueOSR, true, Normal, "Allow IPInt to tier up during function epilogues"_s) \
     v(Bool, wasmIPIntTiersUpToBBQ, true, Normal, "Allow IPInt to tier up to BBQ"_s) \
     v(Bool, wasmIPIntTiersUpToOMG, true, Normal, "Allow IPInt to tier up to OMG"_s) \
-    v(Bool, useIPIntWrappers, false, Normal, "Allow IPInt to replace JIT wasm wrappers"_s) \
+    v(Bool, useInterpretedJSEntryWrappers, false, Normal, "Allow some JS->Wasm wrappers to be replaced by jit-less versions."_s) \
     v(Bool, forceAllFunctionsToUseSIMD, false, Normal, "Force all functions to act conservatively w.r.t fp/vector registers for testing."_s) \
     \
     /* Feature Flags */\
@@ -599,6 +599,7 @@ bool hasCapacityToUseLargeGigacage();
     v(Bool, useShadowRealm, false, Normal, "Expose the ShadowRealm object."_s) \
     v(Bool, useStringWellFormed, true, Normal, "Expose the String well-formed methods."_s) \
     v(Bool, useTemporal, false, Normal, "Expose the Temporal object."_s) \
+    v(Bool, useTrustedTypes, false, Normal, "Enable trusted types eval protection feature."_s) \
     v(Bool, useWebAssemblyThreading, true, Normal, "Allow instructions from the wasm threading spec."_s) \
     v(Bool, useWebAssemblyTypedFunctionReferences, true, Normal, "Allow function types from the wasm typed function references spec."_s) \
     v(Bool, useWebAssemblyGC, false, Normal, "Allow gc types from the wasm gc proposal."_s) \

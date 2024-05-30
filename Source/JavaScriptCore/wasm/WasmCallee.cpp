@@ -185,6 +185,16 @@ WasmToJSCallee::WasmToJSCallee()
     NativeCalleeRegistry::singleton().registerCallee(this);
 }
 
+WasmToJSCallee& WasmToJSCallee::singleton()
+{
+    static LazyNeverDestroyed<Ref<WasmToJSCallee>> callee;
+    static std::once_flag onceKey;
+    std::call_once(onceKey, [&]() {
+        callee.construct(adoptRef(*new WasmToJSCallee));
+    });
+    return callee.get().get();
+}
+
 IPIntCallee::IPIntCallee(FunctionIPIntMetadataGenerator& generator, size_t index, std::pair<const Name*, RefPtr<NameSection>>&& name)
     : Callee(Wasm::CompilationMode::IPIntMode, index, WTFMove(name))
     , m_functionIndex(generator.m_functionIndex)
@@ -421,7 +431,7 @@ RegisterAtOffsetList* JSEntrypointInterpreterCallee::calleeSaveRegistersImpl()
         RegisterSet registers = RegisterSetBuilder::wasmPinnedRegisters();
 #if CPU(X86_64)
 #elif CPU(ARM64) || CPU(RISCV64)
-        ASSERT(registers.numberOfSetRegisters() == 4);
+        ASSERT(registers.numberOfSetRegisters() == 3);
 #elif CPU(ARM)
 #else
 #error Unsupported architecture.

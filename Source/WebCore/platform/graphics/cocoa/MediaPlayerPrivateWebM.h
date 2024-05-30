@@ -117,7 +117,7 @@ private:
     bool hasVideo() const final { return m_hasVideo; }
     bool hasAudio() const final { return m_hasAudio; }
 
-    void setPageIsVisible(bool, String&& sceneIdentifier) final;
+    void setPageIsVisible(bool) final;
 
     MediaTime timeFudgeFactor() const { return { 1, 10 }; }
     MediaTime currentTime() const final;
@@ -177,7 +177,6 @@ private:
     void setVideoFullscreenLayer(PlatformLayer*, Function<void()>&& completionHandler) final;
     void setVideoFullscreenFrame(FloatRect) final;
 
-    bool requiresTextTrackRepresentation() const final;
     void setTextTrackRepresentation(TextTrackRepresentation*) final;
     void syncTextTrackBounds() final;
         

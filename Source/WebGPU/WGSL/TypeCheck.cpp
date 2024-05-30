@@ -722,7 +722,7 @@ void TypeChecker::visit(AST::Function& function)
         ContextScope functionContext(this);
         for (unsigned i = 0; i < parameters.size(); ++i)
             introduceValue(function.parameters()[i].name(), parameters[i]);
-        Base::visit(function.body());
+        AST::Visitor::visit(function.body());
 
         auto behaviors = analyze(function.body());
         if (behaviors.contains(Behavior::Next) && function.maybeReturnType())
@@ -1247,6 +1247,7 @@ void TypeChecker::visit(AST::CallExpression& call)
     if (targetBinding) {
         target.m_inferredType = targetBinding->type;
         if (targetBinding->kind == Binding::Type) {
+            call.m_isConstructor = true;
             if (auto* structType = std::get_if<Types::Struct>(targetBinding->type)) {
                 if (!targetBinding->type->isConstructible()) {
                     typeError(call.span(), "struct is not constructible"_s);
@@ -1384,6 +1385,19 @@ void TypeChecker::visit(AST::CallExpression& call)
                 m_shaderModule.setUsesDot4U8Packed();
             else if (targetName == "extractBits"_s)
                 m_shaderModule.setUsesExtractBits();
+            else if (targetName == "textureGather"_s) {
+                auto& component = call.arguments()[0];
+                if (satisfies(component.inferredType(), Constraints::ConcreteInteger)) {
+                    auto& constant = component.constantValue();
+                    if (!constant)
+                        typeError(InferBottom::No, component.span(), "the component argument must be a const-expression"_s);
+                    else {
+                        auto componentValue = constant->integerValue();
+                        if (componentValue < 0 || componentValue > 3)
+                            typeError(InferBottom::No, component.span(), "the component argument must be at least 0 and at most 3. component is "_s, String::number(componentValue));
+                    }
+                }
+            }
             target.m_inferredType = result;
             return;
         }
@@ -1493,6 +1507,7 @@ void TypeChecker::visit(AST::CallExpression& call)
             argument.m_inferredType = elementType;
     }
 
+    call.m_isConstructor = true;
     auto* result = m_types.arrayType(elementType, { elementCount });
     inferred(result);
 

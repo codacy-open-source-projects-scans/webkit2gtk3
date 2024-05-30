@@ -50,7 +50,7 @@ void PolymorphicCallNode::unlinkOrUpgradeImpl(VM& vm, CodeBlock* oldCodeBlock, C
         if (!newCodeBlock || !owner()->upgradeIfPossible(vm, oldCodeBlock, newCodeBlock, m_index)) {
             m_cleared = true;
             CallLinkInfo* callLinkInfo = owner()->callLinkInfo();
-            dataLogLnIf(Options::dumpDisassembly(), "Unlinking polymorphic call at ", callLinkInfo->doneLocationIfExists(), ", bc#", callLinkInfo->codeOrigin().bytecodeIndex());
+            dataLogLnIf(Options::dumpDisassembly(), "Unlinking polymorphic call bc#", callLinkInfo->codeOrigin().bytecodeIndex());
             callLinkInfo->unlinkOrUpgrade(vm, oldCodeBlock, newCodeBlock);
         }
     }
@@ -171,9 +171,18 @@ void PolymorphicCallStubRoutine::clearCallNodesFor(CallLinkInfo*)
 bool PolymorphicCallStubRoutine::visitWeakImpl(VM& vm)
 {
     bool isStillLive = true;
-    forEachDependentCell([&](JSCell* cell) {
-        isStillLive &= vm.heap.isMarked(cell);
-    });
+    for (unsigned i = 0, size = std::size(trailingSpan()) - 1; i < size; ++i) {
+        auto& slot = trailingSpan()[i];
+        if (!slot.m_calleeOrExecutable) {
+            isStillLive = false;
+            continue;
+        }
+        if (!vm.heap.isMarked(slot.m_calleeOrExecutable)) {
+            slot = CallSlot();
+            isStillLive = false;
+            continue;
+        }
+    }
     return isStillLive;
 }
 

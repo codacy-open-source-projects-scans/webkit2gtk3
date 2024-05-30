@@ -1691,6 +1691,7 @@ imported/w3c/web-platform-tests/console [ Skip ]
 imported/w3c/web-platform-tests/content-security-policy [ Skip ]
 imported/w3c/web-platform-tests/cors [ Skip ]
 imported/w3c/web-platform-tests/credential-management [ Skip ]
+imported/w3c/web-platform-tests/digital-credentials [ Skip ]
 
 imported/w3c/web-platform-tests/css/compositing [ Skip ]
 imported/w3c/web-platform-tests/css/css-align [ Skip ]
@@ -1922,6 +1923,8 @@ webkit.org/b/274059 webgl/2.0.y/conformance/glsl/misc/shader-uniform-packing-res
 webkit.org/b/274059 webgl/2.0.y/conformance/misc/uninitialized-test.html [ Skip ] # Timeout
 webkit.org/b/274059 webgl/2.0.y/conformance/rendering/multisample-corruption.html [ Skip ] # Timeout
 webkit.org/b/274059 webgl/max-active-contexts-webglcontextlost-prevent-default.html [ Skip ] # Failure Timeout
+
+webkit.org/b/268988 fast/events/key-events-in-input-button.html [ Failure ]
 
 webgl/2.0.0/conformance/canvas/drawingbuffer-test.html [ Failure ]
 animations/shadow-host-child-change.html [ Skip ]
@@ -3268,6 +3271,7 @@ webkit.org/b/271223 fast/events/wheel/redispatched-wheel-event.html [ Skip ] # T
 webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/trusted-types-reporting.html [ Skip ]
 webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/trusted-types-eval-reporting-report-only.html [ Skip ]
 webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/trusted-types-eval-reporting-no-unsafe-eval.html [ Skip ]
+webkit.org/b/266630 imported/w3c/web-platform-tests/trusted-types/trusted-types-eval-reporting.html [ Skip ]
 
 # testRunner.dontForceRepaint
 compositing/repaint/copy-forward-dirty-region-purged-backbuffer.html [ Skip ]
@@ -3312,8 +3316,6 @@ fast/text/font-load-data-partitioned-alphabet.html [ Failure ]
 
 imported/w3c/web-platform-tests/navigation-api [ Skip ]
 
-webkit.org/b/271408 [ Debug ] fast/images/decode-render-animated-image.html [ Skip ] # Crash
-
 # Makes a subsequent test crash
 webkit.org/b/272127 fast/text/remove-renderer-and-select-crash.html [ Skip ]
 
@@ -3346,11 +3348,3 @@ http/tests/loading/reusing-cached-stylesheet-from-different-domain.html [ ImageO
 resize-observer/contain-instrinsic-size-should-not-leak-nodes.html [ Failure Pass ]
 
 fast/css/view-transitions-nested-transparency-layers.html [ ImageOnlyFailure Pass ]
-
-webkit.org/b/274226 fast/canvas/drawImage-source-rect-outside-image.html [ ImageOnlyFailure ]
-webkit.org/b/274226 fast/canvas/drawImage-srcRect-clipping.html [ ImageOnlyFailure ]
-webkit.org/b/274226 fast/canvas/canvas-drawImage-negative-coordinate.html [ ImageOnlyFailure ]
-webkit.org/b/274226 fast/canvas/canvas-drawImage-out-of-bounds-coordinate.html [ ImageOnlyFailure ]
-
-webkit.org/b/274368 http/tests/security/no-indexeddb-from-sandbox.html [ Crash Pass ]
-webkit.org/b/274368 http/tests/security/no-javascript-location-percent-escaped.html [ Crash Pass ]

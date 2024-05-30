@@ -405,6 +405,7 @@ struct LoadParameters;
 struct PlatformFontInfo;
 struct PrintInfo;
 struct ProvisionalFrameCreationParameters;
+struct TextIndicatorStyleData;
 struct TextInputContext;
 struct UserMessage;
 struct WebAutocorrectionData;
@@ -1498,7 +1499,7 @@ public:
         return sendSync(std::forward<T>(message), Seconds::infinity(), sendSyncOptions);
     }
 
-    WebCore::DOMPasteAccessResponse requestDOMPasteAccess(WebCore::DOMPasteAccessCategory, const String& originIdentifier);
+    WebCore::DOMPasteAccessResponse requestDOMPasteAccess(WebCore::DOMPasteAccessCategory, WebCore::FrameIdentifier, const String& originIdentifier);
     WebCore::IntRect rectForElementAtInteractionLocation() const;
 
     const std::optional<WebCore::Color>& backgroundColor() const { return m_backgroundColor; }
@@ -1747,7 +1748,7 @@ public:
 
     void enableTextIndicatorStyleAfterElementWithID(const String&, const WTF::UUID&);
     void enableTextIndicatorStyleForElementWithID(const String&, const WTF::UUID&);
-    void addTextIndicatorStyleForID(const WTF::UUID&, WebKit::TextIndicatorStyle, const WebCore::TextIndicatorData&);
+    void addTextIndicatorStyleForID(const WTF::UUID&, const WebKit::TextIndicatorStyleData&, const WebCore::TextIndicatorData&);
     void removeTextIndicatorStyleForID(const WTF::UUID&);
     void createTextIndicatorForRange(const WebCore::SimpleRange&, CompletionHandler<void(std::optional<WebCore::TextIndicatorData>&&)>&&);
     void createTextIndicatorForID(const WTF::UUID&, CompletionHandler<void(std::optional<WebCore::TextIndicatorData>&&)>&&);
@@ -1757,6 +1758,8 @@ public:
     void stopObservingNowPlayingMetadata();
 
     void didAdjustVisibilityWithSelectors(Vector<String>&&);
+
+    void takeSnapshotForTargetedElement(WebCore::ElementIdentifier, WebCore::ScriptExecutionContextIdentifier, CompletionHandler<void(std::optional<WebCore::ShareableBitmapHandle>&&)>&&);
 
 private:
     WebPage(WebCore::PageIdentifier, WebPageCreationParameters&&);

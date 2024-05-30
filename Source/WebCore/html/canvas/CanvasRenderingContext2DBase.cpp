@@ -262,6 +262,20 @@ bool CanvasRenderingContext2DBase::isAccelerated() const
 #endif
 }
 
+bool CanvasRenderingContext2DBase::isSurfaceBufferTransparentBlack(SurfaceBuffer) const
+{
+    // Before the first draw (or first access to the drawing buffer), the drawing buffer is transparent black.
+    // Currently the canvas does not support alpha == false.
+    return !canvasBase().hasCreatedImageBuffer();
+}
+
+RefPtr<GraphicsLayerContentsDisplayDelegate> CanvasRenderingContext2DBase::layerContentsDisplayDelegate()
+{
+    if (auto buffer = canvasBase().buffer())
+        return buffer->layerContentsDisplayDelegate();
+    return nullptr;
+}
+
 bool CanvasRenderingContext2DBase::hasDeferredOperations() const
 {
     // At the time of writing, any draw might linger in IPC buffer or queue of the underlying graphics system, like with Accelerated
@@ -1586,7 +1600,15 @@ ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(HTMLImageElement& imag
 {
     if (!imageElement.complete())
         return { };
-    FloatRect imageRect = FloatRect(FloatPoint(), size(imageElement, ImageSizeType::BeforeDevicePixelRatio));
+
+    auto* cachedImage = imageElement.cachedImage();
+    if (!cachedImage)
+        return { };
+
+    if (cachedImage->status() == CachedImage::Status::DecodeError)
+        return Exception { ExceptionCode::InvalidStateError, "The HTMLImageElement provided is in the 'broken' state."_s };
+
+    auto imageRect = FloatRect(FloatPoint(), size(imageElement, ImageSizeType::BeforeDevicePixelRatio));
 
     auto orientation = ImageOrientation::Orientation::FromImage;
     if (imageElement.allowsOrientationOverride()) {
@@ -1596,7 +1618,7 @@ ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(HTMLImageElement& imag
             orientation = computedStyle->imageOrientation().orientation();
     }
 
-    auto result = drawImage(imageElement.document(), imageElement.cachedImage(), imageElement.renderer(), imageRect, srcRect, dstRect, op, blendMode, orientation);
+    auto result = drawImage(imageElement.document(), *cachedImage, imageElement.renderer(), imageRect, srcRect, dstRect, op, blendMode, orientation);
 
     if (!result.hasException())
         checkOrigin(&imageElement);
@@ -1610,9 +1632,16 @@ ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(SVGImageElement& image
 
 ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(SVGImageElement& imageElement, const FloatRect& srcRect, const FloatRect& dstRect, const CompositeOperator& op, const BlendMode& blendMode)
 {
-    FloatRect imageRect = FloatRect(FloatPoint(), size(imageElement, ImageSizeType::BeforeDevicePixelRatio));
+    auto* cachedImage = imageElement.cachedImage();
+    if (!cachedImage)
+        return { };
 
-    auto result = drawImage(imageElement.document(), imageElement.cachedImage(), imageElement.renderer(), imageRect, srcRect, dstRect, op, blendMode);
+    if (cachedImage->status() == CachedImage::Status::DecodeError)
+        return Exception { ExceptionCode::InvalidStateError, "The SVGImageElement provided is in the 'broken' state."_s };
+
+    auto imageRect = FloatRect(FloatPoint(), size(imageElement, ImageSizeType::BeforeDevicePixelRatio));
+
+    auto result = drawImage(imageElement.document(), *cachedImage, imageElement.renderer(), imageRect, srcRect, dstRect, op, blendMode);
 
     if (!result.hasException())
         checkOrigin(&imageElement);
@@ -1626,7 +1655,7 @@ ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(CSSStyleImageValue& im
         return { };
     FloatRect imageRect = FloatRect(FloatPoint(), size(image));
 
-    auto result = drawImage(*image.document(), cachedImage, nullptr, imageRect, srcRect, dstRect, state().globalComposite, state().globalBlend);
+    auto result = drawImage(*image.document(), *cachedImage, nullptr, imageRect, srcRect, dstRect, state().globalComposite, state().globalBlend);
 
     if (!result.hasException())
         checkOrigin(image);
@@ -1659,7 +1688,7 @@ ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(WebCodecsVideoFrame& f
 }
 #endif
 
-ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(Document& document, CachedImage* cachedImage, const RenderObject* renderer, const FloatRect& imageRect, const FloatRect& srcRect, const FloatRect& dstRect, const CompositeOperator& op, const BlendMode& blendMode, ImageOrientation orientation)
+ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(Document& document, CachedImage& cachedImage, const RenderObject* renderer, const FloatRect& imageRect, const FloatRect& srcRect, const FloatRect& dstRect, const CompositeOperator& op, const BlendMode& blendMode, ImageOrientation orientation)
 {
     if (!std::isfinite(dstRect.x()) || !std::isfinite(dstRect.y()) || !std::isfinite(dstRect.width()) || !std::isfinite(dstRect.height())
         || !std::isfinite(srcRect.x()) || !std::isfinite(srcRect.y()) || !std::isfinite(srcRect.width()) || !std::isfinite(srcRect.height()))
@@ -1690,10 +1719,7 @@ ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(Document& document, Ca
     if (!state().hasInvertibleTransform)
         return { };
 
-    if (!cachedImage)
-        return { };
-
-    RefPtr<Image> image = cachedImage->imageForRenderer(renderer);
+    RefPtr<Image> image = cachedImage.imageForRenderer(renderer);
     if (!image)
         return { };
 
@@ -1780,14 +1806,11 @@ ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(CanvasBase& sourceCanv
         return { };
 
     Ref protectedCanvas { sourceCanvas };
-    // FIXME: Do this through platform-independent GraphicsContext API.
-    RefPtr buffer = sourceCanvas.buffer();
-    if (!buffer)
-        return { };
-
     checkOrigin(&sourceCanvas);
 
-    sourceCanvas.makeRenderingResultsAvailable(ShouldApplyPostProcessingToDirtyRect::No);
+    RefPtr buffer = sourceCanvas.makeRenderingResultsAvailable(ShouldApplyPostProcessingToDirtyRect::No);
+    if (!buffer)
+        return { };
 
     bool repaintEntireCanvas = false;
     if (rectContainsCanvas(normalizedDstRect)) {
@@ -2535,8 +2558,7 @@ ExceptionOr<Ref<ImageData>> CanvasRenderingContext2DBase::getImageData(int sx, i
     if (auto imageData = makeImageDataIfContentsCached(imageDataRect, computedColorSpace))
         return imageData.releaseNonNull();
 
-    canvasBase().makeRenderingResultsAvailable();
-    RefPtr buffer = canvasBase().buffer();
+    RefPtr<ImageBuffer> buffer = canvasBase().makeRenderingResultsAvailable();
     if (!buffer) {
         auto imageData = ImageData::createUninitialized(imageDataRect.width(), imageDataRect.height(), m_settings.colorSpace, settings);
         if (!imageData.hasException())

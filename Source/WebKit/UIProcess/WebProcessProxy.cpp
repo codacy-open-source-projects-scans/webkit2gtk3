@@ -32,6 +32,7 @@
 #include "APIUIClient.h"
 #include "AuthenticatorManager.h"
 #include "DownloadProxyMap.h"
+#include "GPUProcessConnectionParameters.h"
 #include "GoToBackForwardItemParameters.h"
 #include "LoadParameters.h"
 #include "Logging.h"
@@ -463,6 +464,14 @@ void WebProcessProxy::updateRegistrationWithDataStore()
     }
 }
 
+void WebProcessProxy::initializeWebProcess(WebProcessCreationParameters&& parameters)
+{
+    sendWithAsyncReply(Messages::WebProcess::InitializeWebProcess(WTFMove(parameters)), [weakThis = WeakPtr { *this }] (ProcessIdentity processIdentity) {
+        if (RefPtr protectedThis = weakThis.get())
+            protectedThis->m_processIdentity = WTFMove(processIdentity);
+    }, 0);
+}
+
 void WebProcessProxy::initializePreferencesForGPUAndNetworkProcesses(const WebPageProxy& page)
 {
 #if ENABLE(GPU_PROCESS)
@@ -587,9 +596,7 @@ void WebProcessProxy::platformGetLaunchOptions(ProcessLauncher::LaunchOptions& l
 bool WebProcessProxy::shouldSendPendingMessage(const PendingMessage& message)
 {
     if (message.encoder->messageName() == IPC::MessageName::WebPage_LoadRequestWaitingForProcessLaunch) {
-        auto buffer = message.encoder->buffer();
-        auto bufferSize = message.encoder->bufferSize();
-        auto decoder = IPC::Decoder::create({ buffer, bufferSize }, { });
+        auto decoder = IPC::Decoder::create(message.encoder->span(), { });
         ASSERT(decoder);
         if (!decoder)
             return false;
@@ -607,9 +614,7 @@ bool WebProcessProxy::shouldSendPendingMessage(const PendingMessage& message)
             ASSERT_NOT_REACHED();
         return false;
     } else if (message.encoder->messageName() == IPC::MessageName::WebPage_GoToBackForwardItemWaitingForProcessLaunch) {
-        auto buffer = message.encoder->buffer();
-        auto bufferSize = message.encoder->bufferSize();
-        auto decoder = IPC::Decoder::create({ buffer, bufferSize }, { });
+        auto decoder = IPC::Decoder::create(message.encoder->span(), { });
         ASSERT(decoder);
         if (!decoder)
             return false;
@@ -1067,13 +1072,21 @@ void WebProcessProxy::getNetworkProcessConnection(CompletionHandler<void(Network
 
 #if ENABLE(GPU_PROCESS)
 
-void WebProcessProxy::createGPUProcessConnection(IPC::Connection::Handle&& connectionIdentifier, WebKit::GPUProcessConnectionParameters&& parameters)
+void WebProcessProxy::createGPUProcessConnection(IPC::Connection::Handle&& connectionIdentifier)
 {
+    WebKit::GPUProcessConnectionParameters parameters;
+#if HAVE(TASK_IDENTITY_TOKEN)
+    ASSERT(m_processIdentity);
+#endif
+    parameters.webProcessIdentity = m_processIdentity;
     auto& gpuPreferences = preferencesForGPUProcess();
     ASSERT(gpuPreferences);
     if (gpuPreferences)
         parameters.preferences = *gpuPreferences;
-
+#if ENABLE(IPC_TESTING_API)
+    parameters.ignoreInvalidMessageForTesting = ignoreInvalidMessageForTesting();
+#endif
+    parameters.isLockdownModeEnabled = lockdownMode() == WebProcessProxy::LockdownMode::Enabled;
     protectedProcessPool()->createGPUProcessConnection(*this, WTFMove(connectionIdentifier), WTFMove(parameters));
 }
 
@@ -1212,7 +1225,7 @@ void WebProcessProxy::processDidTerminateOrFailedToLaunch(ProcessTerminationReas
     // FIXME: Perhaps this should consider ProcessTerminationReasons ExceededMemoryLimit, ExceededCPULimit, Unresponsive as well.
     if (pages.size() == 1 && reason == ProcessTerminationReason::Crash) {
         auto& page = pages[0];
-        auto domain = PublicSuffixStore::singleton().topPrivatelyControlledDomain(URL({ }, page->currentURL()).host().toString());
+        auto domain = PublicSuffixStore::singleton().topPrivatelyControlledDomain(URL({ }, page->currentURL()).host());
         if (!domain.isEmpty())
             page->logDiagnosticMessageWithEnhancedPrivacy(WebCore::DiagnosticLoggingKeys::domainCausingCrashKey(), domain, WebCore::ShouldSample::No);
     }
@@ -1841,7 +1854,7 @@ void WebProcessProxy::didDropLastAssertion()
 
 void WebProcessProxy::prepareToDropLastAssertion(CompletionHandler<void()>&& completionHandler)
 {
-#if ENABLE(WEBPROCESS_CACHE)
+#if !ENABLE(NON_VISIBLE_WEBPROCESS_MEMORY_CLEANUP_TIMER) && ENABLE(WEBPROCESS_CACHE)
     if (isInProcessCache() || !m_suspendedPages.isEmptyIgnoringNullReferences() || (canTerminateAuxiliaryProcess() && canBeAddedToWebProcessCache())) {
         // We avoid freeing caches if:
         //
@@ -2015,7 +2028,7 @@ void WebProcessProxy::didExceedMemoryFootprintThreshold(size_t footprint)
     bool hasAllowedToRunInTheBackgroundActivity = false;
 
     for (auto& page : this->pages()) {
-        auto pageDomain = PublicSuffixStore::singleton().topPrivatelyControlledDomain(URL({ }, page->currentURL()).host().toString());
+        auto pageDomain = PublicSuffixStore::singleton().topPrivatelyControlledDomain(URL({ }, page->currentURL()).host());
         if (domain.isEmpty())
             domain = WTFMove(pageDomain);
         else if (domain != pageDomain)

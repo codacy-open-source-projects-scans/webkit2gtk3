@@ -38,7 +38,7 @@ GST_DEBUG_CATEGORY(webkit_image_decoder_debug);
 #define GST_CAT_DEFAULT webkit_image_decoder_debug
 
 static Lock s_decoderLock;
-static Vector<WeakPtr<ImageDecoderGStreamer>> s_imageDecoders;
+static Vector<RefPtr<ImageDecoderGStreamer>> s_imageDecoders;
 
 static void ensureDebugCategoryIsInitialized()
 {
@@ -50,13 +50,9 @@ static void ensureDebugCategoryIsInitialized()
 
 void teardownGStreamerImageDecoders()
 {
-    ensureDebugCategoryIsInitialized();
     Locker lock { s_decoderLock };
-    GST_DEBUG("Tearing down %zu image decoders", s_imageDecoders.size());
-    for (auto& weakDecoder : s_imageDecoders) {
-        if (RefPtr decoder = weakDecoder.get())
-            decoder->tearDown();
-    }
+    for (auto& decoder : s_imageDecoders)
+        decoder->tearDown();
     s_imageDecoders.clear();
 }
 
@@ -76,6 +72,7 @@ public:
     void dropImage()
     {
         m_image = nullptr;
+        m_frame = nullptr;
     }
 
     SampleFlags flags() const override
@@ -111,7 +108,7 @@ RefPtr<ImageDecoderGStreamer> ImageDecoderGStreamer::create(FragmentedSharedBuff
     RefPtr decoder = adoptRef(*new ImageDecoderGStreamer(data, mimeType, alphaOption, gammaAndColorProfileOption));
     {
         Locker lock { s_decoderLock };
-        s_imageDecoders.append(WeakPtr { *decoder });
+        s_imageDecoders.append(decoder);
     }
     return decoder;
 }

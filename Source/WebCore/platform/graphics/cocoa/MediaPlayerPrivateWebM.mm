@@ -314,7 +314,7 @@ bool MediaPlayerPrivateWebM::timeIsProgressing() const
     return m_isPlaying && [m_synchronizer rate];
 }
 
-void MediaPlayerPrivateWebM::setPageIsVisible(bool visible, String&&)
+void MediaPlayerPrivateWebM::setPageIsVisible(bool visible)
 {
     if (m_visible == visible)
         return;
@@ -819,11 +819,6 @@ void MediaPlayerPrivateWebM::setVideoFullscreenLayer(PlatformLayer *videoFullscr
 void MediaPlayerPrivateWebM::setVideoFullscreenFrame(FloatRect frame)
 {
     m_videoLayerManager->setVideoFullscreenFrame(frame);
-}
-
-bool MediaPlayerPrivateWebM::requiresTextTrackRepresentation() const
-{
-    return m_videoLayerManager->videoFullscreenLayer();
 }
 
 void MediaPlayerPrivateWebM::syncTextTrackBounds()

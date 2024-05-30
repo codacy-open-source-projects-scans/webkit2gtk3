@@ -4718,10 +4718,10 @@ OffscreenCanvasEnabled:
       "PLATFORM(COCOA)": true
       default: false
     WebKit:
-      "PLATFORM(COCOA)": true
+      "PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
     WebCore:
-      "PLATFORM(COCOA)": true
+      "PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
 
 OffscreenCanvasInWorkersEnabled:
@@ -4736,10 +4736,10 @@ OffscreenCanvasInWorkersEnabled:
       "PLATFORM(COCOA)": true
       default: false
     WebKit:
-      "PLATFORM(COCOA)": true
+      "PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
     WebCore:
-      "PLATFORM(COCOA)": true
+      "PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
 
 # FIXME: Reenable this on iOS once we can mitigate impact on memory use.
@@ -5629,7 +5629,21 @@ ScrollToTextFragmentEnabled:
       default: true
     WebCore:
       default: true
-      
+
+ScrollToTextFragmentFeatureDetectionEnabled:
+  type: bool
+  status: preview
+  category: dom
+  humanReadableName: "Scroll To Text Fragment Feature Detection"
+  humanReadableDescription: "Enable Scroll To Text Fragment Feature Detection"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 ScrollToTextFragmentGenerationEnabled:
   type: bool
   status: unstable

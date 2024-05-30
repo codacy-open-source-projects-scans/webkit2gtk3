@@ -32,6 +32,7 @@
 #include <WebCore/FrameIdentifier.h>
 #include <WebCore/NowPlayingMetadataObserver.h>
 #include <pal/HysteresisActivity.h>
+#include <wtf/ApproximateTime.h>
 #include <wtf/CheckedRef.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/OptionSet.h>
@@ -481,6 +482,7 @@ struct SessionState;
 struct SubframeProcessPageParameters;
 struct TapIdentifierType;
 struct TextCheckerRequestType;
+struct TextIndicatorStyleData;
 struct TransactionIDType;
 struct URLSchemeTaskParameters;
 struct UserMessage;
@@ -2017,7 +2019,7 @@ public:
     void startURLSchemeTaskShared(Ref<WebProcessProxy>&&, WebCore::PageIdentifier, URLSchemeTaskParameters&&);
     void loadDataWithNavigationShared(Ref<WebProcessProxy>&&, WebCore::PageIdentifier, API::Navigation&, std::span<const uint8_t>, const String& MIMEType, const String& encoding, const String& baseURL, API::Object* userData, WebCore::ShouldTreatAsContinuingLoad, std::optional<NavigatingToAppBoundDomain>, std::optional<WebsitePoliciesData>&&, WebCore::ShouldOpenExternalURLsPolicy, WebCore::SessionHistoryVisibility);
     void loadRequestWithNavigationShared(Ref<WebProcessProxy>&&, WebCore::PageIdentifier, API::Navigation&, WebCore::ResourceRequest&&, WebCore::ShouldOpenExternalURLsPolicy, API::Object* userData, WebCore::ShouldTreatAsContinuingLoad, std::optional<NavigatingToAppBoundDomain>, std::optional<WebsitePoliciesData>&&, std::optional<NetworkResourceLoadIdentifier> existingNetworkResourceLoadIdentifierToResume);
-    void backForwardAddItemShared(Ref<WebProcessProxy>&&, BackForwardListItemState&&, LoadedWebArchive);
+    void backForwardAddItemShared(Ref<WebProcessProxy>&&, WebCore::FrameIdentifier, BackForwardListItemState&&, LoadedWebArchive);
     void backForwardGoToItemShared(const WebCore::BackForwardItemIdentifier&, CompletionHandler<void(const WebBackForwardListCounts&)>&&);
     void decidePolicyForNavigationActionSyncShared(Ref<WebProcessProxy>&&, NavigationActionData&&, CompletionHandler<void(PolicyDecision&&)>&&);
     void didDestroyNavigationShared(Ref<WebProcessProxy>&&, uint64_t navigationID);
@@ -2399,6 +2401,7 @@ public:
     void setCrossSiteLoadWithLinkDecorationForTesting(const URL& fromURL, const URL& toURL, bool wasFiltered, CompletionHandler<void()>&&);
 
     void requestTargetedElement(const API::TargetedElementRequest&, CompletionHandler<void(const Vector<Ref<API::TargetedElementInfo>>&)>&&);
+    void takeSnapshotForTargetedElement(const API::TargetedElementInfo&, CompletionHandler<void(std::optional<WebCore::ShareableBitmapHandle>&&)>&&);
 
     void requestTextExtraction(std::optional<WebCore::FloatRect>&& collectionRectInRootView, CompletionHandler<void(WebCore::TextExtraction::Item&&)>&&);
 
@@ -2424,13 +2427,13 @@ public:
     void textReplacementSessionShowInformationForReplacementWithUUIDRelativeToRect(const WTF::UUID& sessionUUID, const WTF::UUID& replacementUUID, WebCore::IntRect selectionBoundsInRootView);
     void textReplacementSessionUpdateStateForReplacementWithUUID(const WTF::UUID& sessionUUID, WebTextReplacementDataState, const WTF::UUID& replacementUUID);
 
-    void addTextIndicatorStyleForID(const WTF::UUID&, const WebKit::TextIndicatorStyle, const WebCore::TextIndicatorData&);
+    void addTextIndicatorStyleForID(const WTF::UUID&, const WebKit::TextIndicatorStyleData&, const WebCore::TextIndicatorData&);
     void removeTextIndicatorStyleForID(const WTF::UUID&);
     void enableTextIndicatorStyleAfterElementWithID(const String& elementID, const WTF::UUID&);
     void enableTextIndicatorStyleForElementWithID(const String& elementID, const WTF::UUID&);
 
     void getTextIndicatorForID(const WTF::UUID&, CompletionHandler<void(std::optional<WebCore::TextIndicatorData>&&)>&&);
-    void updateTextIndicatorStyleVisibilityForID(const WTF::UUID&, bool, CompletionHandler<void()>&&);
+    void updateTextIndicatorStyleVisibilityForID(const WTF::UUID&, bool, CompletionHandler<void()>&& = [] { });
 #endif
 
     void resetVisibilityAdjustmentsForTargetedElements(const Vector<Ref<API::TargetedElementInfo>>&, CompletionHandler<void(bool)>&&);
@@ -2453,6 +2456,7 @@ public:
     bool hasAllowedToRunInTheBackgroundActivity() const;
 
     template<typename M> void sendToProcessContainingFrame(std::optional<WebCore::FrameIdentifier>, M&&);
+    template<typename M> void sendToWebPageInProcess(WebProcessProxy&, M&&);
 
 #if HAVE(SPATIAL_TRACKING_LABEL)
     void setDefaultSpatialTrackingLabel(const String&);
@@ -2691,11 +2695,11 @@ private:
     void setIsNeverRichlyEditableForTouchBar(bool);
 #endif
 
-    void requestDOMPasteAccess(WebCore::DOMPasteAccessCategory, const WebCore::IntRect&, const String&, CompletionHandler<void(WebCore::DOMPasteAccessResponse)>&&);
+    void requestDOMPasteAccess(WebCore::DOMPasteAccessCategory, WebCore::FrameIdentifier, const WebCore::IntRect&, const String&, CompletionHandler<void(WebCore::DOMPasteAccessResponse)>&&);
     void willPerformPasteCommand(WebCore::DOMPasteAccessCategory, std::optional<WebCore::FrameIdentifier> = std::nullopt);
 
     // Back/Forward list management
-    void backForwardAddItem(BackForwardListItemState&&);
+    void backForwardAddItem(WebCore::FrameIdentifier, BackForwardListItemState&&);
     void backForwardGoToItem(const WebCore::BackForwardItemIdentifier&, CompletionHandler<void(const WebBackForwardListCounts&)>&&);
     void backForwardListContainsItem(const WebCore::BackForwardItemIdentifier&, CompletionHandler<void(bool)>&&);
     void backForwardItemAtIndex(int32_t index, CompletionHandler<void(std::optional<WebCore::BackForwardItemIdentifier>&&)>&&);
@@ -3046,7 +3050,6 @@ private:
 #endif
 
     template<typename F> decltype(auto) sendToWebPage(std::optional<WebCore::FrameIdentifier>, F&&);
-    template<typename M> void sendToWebPageInProcess(WebProcessProxy&, M&&);
     template<typename M, typename C> void sendToProcessContainingFrame(std::optional<WebCore::FrameIdentifier>, M&&, C&&);
     template<typename M> IPC::ConnectionSendSyncResult<M> sendSyncToProcessContainingFrame(std::optional<WebCore::FrameIdentifier>, M&&);
 
@@ -3234,6 +3237,8 @@ private:
 #if ENABLE(CONTEXT_MENUS)
     RefPtr<WebContextMenuProxy> m_activeContextMenu;
 #endif
+
+    Vector<std::pair<String, ApproximateTime>> m_recentlyRequestedDOMPasteOrigins;
 
 #if PLATFORM(MAC)
     RefPtr<API::HitTestResult> m_lastMouseMoveHitTestResult;

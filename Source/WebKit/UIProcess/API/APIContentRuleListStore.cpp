@@ -148,7 +148,7 @@ template<> void getData(const WebKit::NetworkCache::Data& data, const Function<b
 }
 template<> void getData(const WebCore::SharedBuffer& data, const Function<bool(std::span<const uint8_t>)>& function)
 {
-    function({ data.data(), data.size() });
+    function(data.span());
 }
 
 static std::optional<ContentRuleListMetaData> decodeContentRuleListMetaData(const WebKit::NetworkCache::Data& fileData)
@@ -453,7 +453,7 @@ static WTF::String getContentRuleListSourceFromMappedFile(const MappedData& mapp
         return { };
 
     auto headerSizeBytes = headerSize(mappedData.metaData.version);
-    bool is8Bit = mappedData.data.data()[headerSizeBytes];
+    bool is8Bit = mappedData.data.span()[headerSizeBytes];
     size_t start = headerSizeBytes + sizeof(bool);
     size_t length = mappedData.metaData.sourceSize - sizeof(bool);
     if (is8Bit)
@@ -464,7 +464,7 @@ static WTF::String getContentRuleListSourceFromMappedFile(const MappedData& mapp
         return { };
     }
 
-    return WTF::String({ reinterpret_cast<const UChar*>(mappedData.data.data() + start), length / sizeof(UChar) });
+    return spanReinterpretCast<const UChar>(mappedData.data.span().subspan(start, length));
 }
 
 void ContentRuleListStore::lookupContentRuleList(WTF::String&& identifier, CompletionHandler<void(RefPtr<API::ContentRuleList>, std::error_code)> completionHandler)

@@ -1179,6 +1179,12 @@ unsigned Internals::imageDecodeCount(HTMLImageElement& element)
     return bitmapImage ? bitmapImage->decodeCountForTesting() : 0;
 }
 
+unsigned Internals::imageBlankDrawCount(HTMLImageElement& element)
+{
+    auto* bitmapImage = bitmapImageFromImageElement(element);
+    return bitmapImage ? bitmapImage->blankDrawCountForTesting() : 0;
+}
+
 AtomString Internals::imageLastDecodingOptions(HTMLImageElement& element)
 {
     auto* bitmapImage = bitmapImageFromImageElement(element);
@@ -4230,8 +4236,7 @@ ExceptionOr<String> Internals::getCurrentCursorInfo()
 
 Ref<ArrayBuffer> Internals::serializeObject(const RefPtr<SerializedScriptValue>& value) const
 {
-    auto& bytes = value->wireBytes();
-    return ArrayBuffer::create(bytes.data(), bytes.size());
+    return ArrayBuffer::create(value->wireBytes());
 }
 
 Ref<SerializedScriptValue> Internals::deserializeBuffer(ArrayBuffer& buffer) const

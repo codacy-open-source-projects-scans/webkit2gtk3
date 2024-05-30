@@ -111,7 +111,7 @@ void GPUQueue::writeTexture(
     const GPUImageDataLayout& imageDataLayout,
     const GPUExtent3D& size)
 {
-    m_backing->writeTexture(destination.convertToBacking(), data.data(), data.length(), imageDataLayout.convertToBacking(), convertToBacking(size));
+    m_backing->writeTexture(destination.convertToBacking(), data.span(), imageDataLayout.convertToBacking(), convertToBacking(size));
 }
 
 static PixelFormat toPixelFormat(GPUTextureFormat textureFormat)
@@ -223,7 +223,7 @@ static PixelFormat toPixelFormat(GPUTextureFormat textureFormat)
 }
 
 using ImageDataCallback = Function<void(std::span<const uint8_t>, size_t)>;
-static void getImageBytesFromImageBuffer(ImageBuffer* imageBuffer, const auto& destination, ImageDataCallback&& callback)
+static void getImageBytesFromImageBuffer(const RefPtr<ImageBuffer>& imageBuffer, const auto& destination, ImageDataCallback&& callback)
 {
     if (!imageBuffer)
         return callback({ }, 0);
@@ -253,7 +253,7 @@ static void getImageBytesFromVideoFrame(const RefPtr<VideoFrame>& videoFrame, Im
     auto sizeInBytes = rows * CVPixelBufferGetBytesPerRow(pixelBuffer);
 
     CVPixelBufferLockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
-    callback({ reinterpret_cast<uint8_t*>(CVPixelBufferGetBaseAddress(pixelBuffer)), sizeInBytes }, rows);
+    callback({ static_cast<uint8_t*>(CVPixelBufferGetBaseAddress(pixelBuffer)), sizeInBytes }, rows);
     CVPixelBufferUnlockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
 }
 #endif
@@ -331,11 +331,11 @@ static void imageBytesForSource(const auto& source, const auto& destination, Ima
 #endif
 #endif
     }, [&](const RefPtr<HTMLCanvasElement>& canvasElement) -> ResultType {
-        return getImageBytesFromImageBuffer(canvasElement->buffer(), destination, WTFMove(callback));
+        return getImageBytesFromImageBuffer(canvasElement->makeRenderingResultsAvailable(ShouldApplyPostProcessingToDirtyRect::No), destination, WTFMove(callback));
     }
 #if ENABLE(OFFSCREEN_CANVAS)
     , [&](const RefPtr<OffscreenCanvas>& offscreenCanvasElement) -> ResultType {
-        return getImageBytesFromImageBuffer(offscreenCanvasElement->buffer(), destination, WTFMove(callback));
+        return getImageBytesFromImageBuffer(offscreenCanvasElement->makeRenderingResultsAvailable(ShouldApplyPostProcessingToDirtyRect::No), destination, WTFMove(callback));
     }
 #endif
     );
@@ -724,7 +724,7 @@ ExceptionOr<void> GPUQueue::copyExternalImageToTexture(ScriptExecutionContext& c
             return;
 
         bool supportedFormat;
-        auto newImageBytes = copyToDestinationFormat(imageBytes.data(), destination.texture->format(), sizeInBytes, supportedFormat);
+        uint8_t* newImageBytes = static_cast<uint8_t*>(copyToDestinationFormat(imageBytes.data(), destination.texture->format(), sizeInBytes, supportedFormat));
         GPUImageDataLayout dataLayout { 0, sizeInBytes / rows, rows };
         auto copyDestination = destination.convertToBacking();
 
@@ -733,7 +733,7 @@ ExceptionOr<void> GPUQueue::copyExternalImageToTexture(ScriptExecutionContext& c
         if (!supportedFormat || !(destinationTexture->usage() & GPUTextureUsage::RENDER_ATTACHMENT))
             copyDestination.mipLevel = INT_MAX;
 
-        m_backing->writeTexture(copyDestination, newImageBytes ? newImageBytes : imageBytes.data(), sizeInBytes, dataLayout.convertToBacking(), convertToBacking(copySize));
+        m_backing->writeTexture(copyDestination, newImageBytes ? std::span { newImageBytes, sizeInBytes } : imageBytes, dataLayout.convertToBacking(), convertToBacking(copySize));
         free(newImageBytes);
     });
     callbackScopeIsSafe = false;

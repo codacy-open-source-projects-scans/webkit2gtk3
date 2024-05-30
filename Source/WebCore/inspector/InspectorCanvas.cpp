@@ -366,6 +366,16 @@ std::optional<InspectorCanvasCallTracer::ProcessedArgument> InspectorCanvas::pro
     return processArgument(argument.get());
 }
 
+std::optional<InspectorCanvasCallTracer::ProcessedArgument> InspectorCanvas::processArgument(Ref<JSC::ArrayBuffer>&)
+{
+    return {{ JSON::Value::create(0), RecordingSwizzleType::TypedArray }};
+}
+
+std::optional<InspectorCanvasCallTracer::ProcessedArgument> InspectorCanvas::processArgument(Ref<JSC::ArrayBufferView>&)
+{
+    return {{ JSON::Value::create(0), RecordingSwizzleType::TypedArray }};
+}
+
 std::optional<InspectorCanvasCallTracer::ProcessedArgument> InspectorCanvas::processArgument(RefPtr<JSC::ArrayBuffer>& argument)
 {
     if (!argument)
@@ -1001,11 +1011,12 @@ Ref<Inspector::Protocol::Recording::Recording> InspectorCanvas::releaseObjectFor
 
 Inspector::Protocol::ErrorStringOr<String> InspectorCanvas::getContentAsDataURL(CanvasRenderingContext& context)
 {
+    RefPtr<ImageBuffer> buffer;
     if (context.compositingResultsNeedUpdating())
-        context.drawBufferToCanvas(CanvasRenderingContext::SurfaceBuffer::DrawingBuffer);
+        buffer = context.surfaceBufferToImageBuffer(CanvasRenderingContext::SurfaceBuffer::DrawingBuffer);
     else
-        context.drawBufferToCanvas(CanvasRenderingContext::SurfaceBuffer::DisplayBuffer);
-    if (auto* buffer = context.canvasBase().buffer())
+        buffer = context.surfaceBufferToImageBuffer(CanvasRenderingContext::SurfaceBuffer::DisplayBuffer);
+    if (buffer)
         return buffer->toDataURL("image/png"_s);
     return emptyString();
 }
@@ -1159,8 +1170,8 @@ int InspectorCanvas::indexForData(DuplicateDataVariant data)
         [&] (const RefPtr<OffscreenCanvas> offscreenCanvas) {
             String dataURL = "data:,"_s;
 
-            if (offscreenCanvas->originClean() && offscreenCanvas->hasCreatedImageBuffer()) {
-                if (auto *buffer = offscreenCanvas->buffer())
+            if (offscreenCanvas->originClean()) {
+                if (RefPtr buffer = offscreenCanvas->makeRenderingResultsAvailable())
                     dataURL = buffer->toDataURL("image/png"_s);
             }
 

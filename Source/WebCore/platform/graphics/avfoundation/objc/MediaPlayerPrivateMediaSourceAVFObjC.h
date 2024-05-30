@@ -128,7 +128,6 @@ ALLOW_NEW_API_WITHOUT_GUARDS_END
     void setVideoFullscreenFrame(FloatRect) override;
 #endif
 
-    bool requiresTextTrackRepresentation() const override;
     void setTextTrackRepresentation(TextTrackRepresentation*) override;
     void syncTextTrackBounds() override;
 
@@ -214,7 +213,7 @@ private:
     bool hasVideo() const override;
     bool hasAudio() const override;
 
-    void setPageIsVisible(bool, String&& sceneIdentifier) final;
+    void setPageIsVisible(bool) final;
 
     MediaTime duration() const override;
     MediaTime startTime() const override;

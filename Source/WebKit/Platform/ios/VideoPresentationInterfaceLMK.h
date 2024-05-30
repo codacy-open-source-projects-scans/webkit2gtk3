@@ -30,6 +30,7 @@
 #include <WebCore/VideoPresentationInterfaceIOS.h>
 
 OBJC_CLASS LMPlayableViewController;
+OBJC_CLASS WKCaptionLayerLayoutManager;
 OBJC_CLASS WKSLinearMediaPlayer;
 
 namespace WebCore {
@@ -47,6 +48,8 @@ public:
     ASCIILiteral logClassName() const { return "VideoPresentationInterfaceLMK"_s; };
 #endif
     ~VideoPresentationInterfaceLMK();
+
+    void captionsLayerBoundsChanged(const WebCore::FloatRect&);
 
 private:
     VideoPresentationInterfaceLMK(WebCore::PlaybackSessionInterfaceIOS&);
@@ -71,6 +74,7 @@ private:
     bool isExternalPlaybackActive() const final { return false; }
     bool willRenderToLayer() const final { return false; }
     AVPlayerViewController *avPlayerViewController() const final { return nullptr; }
+    CALayer *captionsLayer() final;
     void setupCaptionsLayer(CALayer *parent, const WebCore::FloatSize&) final;
     LMPlayableViewController *playableViewController() final;
 
@@ -78,6 +82,11 @@ private:
     void ensurePlayableViewController();
 
     RetainPtr<LMPlayableViewController> m_playerViewController;
+
+#if HAVE(SPATIAL_TRACKING_LABEL)
+    String m_spatialTrackingLabel;
+    RetainPtr<CALayer> m_spatialTrackingLayer;
+#endif
 };
 
 } // namespace WebKit

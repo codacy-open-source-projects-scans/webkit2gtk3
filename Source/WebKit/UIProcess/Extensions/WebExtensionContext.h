@@ -400,7 +400,7 @@ public:
     void didSelectOrDeselectTabs(const TabSet&);
 
     void didMoveTab(WebExtensionTab&, size_t oldIndex, const WebExtensionWindow* oldWindow = nullptr);
-    void didReplaceTab(WebExtensionTab& oldTab, WebExtensionTab& newTab);
+    void didReplaceTab(WebExtensionTab& oldTab, WebExtensionTab& newTab, SuppressEvents = SuppressEvents::No);
     void didChangeTabProperties(WebExtensionTab&, OptionSet<WebExtensionTab::ChangedProperties> = { });
 
     void didStartProvisionalLoadForFrame(WebPageProxyIdentifier, WebExtensionFrameIdentifier, WebExtensionFrameIdentifier parentFrameID, const URL&, WallTime);
@@ -588,6 +588,8 @@ private:
     void saveBackgroundPageListenersToStorage();
 
     void performTasksAfterBackgroundContentLoads();
+
+    void reportWebViewConfigurationErrorIfNeeded(const WebExtensionTab&) const;
 
 #if ENABLE(INSPECTOR_EXTENSIONS)
     URL inspectorBackgroundPageURL() const;

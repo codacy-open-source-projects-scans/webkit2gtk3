@@ -302,7 +302,7 @@ void FetchBodyConsumer::resolveWithFormData(Ref<DeferredPromise>&& promise, cons
 void FetchBodyConsumer::consumeFormDataAsStream(const FormData& formData, FetchBodySource& source, ScriptExecutionContext* context)
 {
     if (auto sharedBuffer = formData.asSharedBuffer()) {
-        if (source.enqueue(ArrayBuffer::tryCreate(sharedBuffer->makeContiguous()->data(), sharedBuffer->size())))
+        if (source.enqueue(ArrayBuffer::tryCreate(sharedBuffer->makeContiguous()->span())))
             source.close();
         return;
     }
@@ -323,7 +323,7 @@ void FetchBodyConsumer::consumeFormDataAsStream(const FormData& formData, FetchB
             return;
         }
 
-        if (!source->enqueue(ArrayBuffer::tryCreate(value.data(), value.size())))
+        if (!source->enqueue(ArrayBuffer::tryCreate(value)))
             m_formDataConsumer->cancel();
     });
 }
@@ -379,8 +379,7 @@ void FetchBodyConsumer::resolve(Ref<DeferredPromise>&& promise, const String& co
         return;
     case Type::Bytes: {
         RefPtr buffer = takeAsArrayBuffer();
-        auto byteLength = buffer ? buffer->byteLength() : 0;
-        RefPtr view = buffer ? Uint8Array::tryCreate(buffer.releaseNonNull(), 0, byteLength) : nullptr;
+        RefPtr view = buffer ? RefPtr { Uint8Array::create(buffer.releaseNonNull()) } : nullptr;
         fulfillPromiseWithUint8Array(WTFMove(promise), view.get());
         return;
     }
