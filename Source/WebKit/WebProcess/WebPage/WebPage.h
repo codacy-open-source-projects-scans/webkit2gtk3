@@ -1267,7 +1267,7 @@ public:
 #endif
 
 #if ENABLE(META_VIEWPORT)
-    void setViewportConfigurationViewLayoutSize(const WebCore::FloatSize&, double scaleFactor, double minimumEffectiveDeviceWidth);
+    void setViewportConfigurationViewLayoutSize(const WebCore::FloatSize&, double layoutSizeScaleFactorFromClient, double minimumEffectiveDeviceWidth);
     void setOverrideViewportArguments(const std::optional<WebCore::ViewportArguments>&);
     const WebCore::ViewportConfiguration& viewportConfiguration() const { return m_viewportConfiguration; }
 
@@ -1735,10 +1735,6 @@ public:
 #if ENABLE(EXTENSION_CAPABILITIES)
     const String& mediaEnvironment() const { return m_mediaEnvironment; }
     void setMediaEnvironment(const String&);
-#endif
-
-#if PLATFORM(COCOA)
-    std::optional<WebCore::SimpleRange> autocorrectionContextRange();
 #endif
 
 #if ENABLE(UNIFIED_TEXT_REPLACEMENT)

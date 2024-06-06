@@ -105,6 +105,9 @@
 #include "WebKitOptionMenuPrivate.h"
 #include "WebKitWebViewBackendPrivate.h"
 #include "WebKitWebViewClient.h"
+#if ENABLE(WPE_PLATFORM)
+#include "WebKitInputMethodContextImplWPE.h"
+#endif
 #endif
 
 #if ENABLE(2022_GLIB_API)
@@ -826,6 +829,8 @@ static void webkitWebViewCreatePage(WebKitWebView* webView, Ref<API::PageConfigu
 #elif PLATFORM(WPE)
 #if ENABLE(WPE_PLATFORM)
     webView->priv->view.reset(WKWPE::View::create(webView->priv->backend ? webkit_web_view_backend_get_wpe_backend(webView->priv->backend.get()) : nullptr, webkit_web_view_get_display(webView), configuration.get()));
+    if (auto* wpeView = webView->priv->view->wpeView())
+        g_signal_connect_object(wpeView, "closed", G_CALLBACK(webkitWebViewClosePage), webView, G_CONNECT_SWAPPED);
 #else
     webView->priv->view.reset(WKWPE::View::create(webkit_web_view_backend_get_wpe_backend(webView->priv->backend.get()), configuration.get()));
 #endif
@@ -932,6 +937,12 @@ static void webkitWebViewConstructed(GObject* object)
     GRefPtr<WebKitInputMethodContext> imContext = adoptGRef(webkitInputMethodContextImplGtkNew());
     webkitInputMethodContextSetWebView(imContext.get(), webView);
     webkitWebViewBaseSetInputMethodContext(WEBKIT_WEB_VIEW_BASE(webView), imContext.get());
+#elif PLATFORM(WPE) && ENABLE(WPE_PLATFORM)
+    if (priv->display) {
+        GRefPtr<WebKitInputMethodContext> imContext = adoptGRef(webkitInputMethodContextImplWPENew(priv->view->wpeView()));
+        webkitInputMethodContextSetWebView(imContext.get(), webView);
+        priv->view->setInputMethodContext(imContext.get());
+    }
 #endif
 
 #if PLATFORM(WPE)

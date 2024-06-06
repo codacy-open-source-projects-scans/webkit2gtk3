@@ -1947,7 +1947,6 @@ fast/canvas/webgl/webgl-compressed-texture-astc.html [ Skip ]
 
 webkit.org/b/223820 inspector/debugger/csp-exceptions.html [ Pass Failure Timeout ]
 
-webkit.org/b/223949 [ Release Debug ] crypto/crypto-random-values-oom.html [ Pass Timeout ]
 [ Guard-Malloc ] crypto/crypto-random-values-oom.html [ Skip ]
 
 webkit.org/b/223973 [ Debug ] imported/w3c/web-platform-tests/xhr/xhr-timeout-longtask.any.worker.html [ Pass Failure ]
@@ -2506,7 +2505,7 @@ webkit.org/b/269873 imported/w3c/web-platform-tests/webrtc-extensions/transfer-d
 [ Sonoma ] svg/as-image/img-with-svg-resource-not-in-dom-and-drawImage.html [ ImageOnlyFailure ]
 [ Sonoma ] svg/as-image/img-with-svg-resource-not-in-dom-no-size-and-drawImage.html [ ImageOnlyFailure ]
 
-webkit.org/b/270195 [ Debug ] fast/text/emoji-num-glyphs.html [ Timeout ]
+fast/text/emoji-num-glyphs.html [ Pass ]
 
 webkit.org/b/271178 media/now-playing-webaudio.html [ Pass Failure ]
 
@@ -2530,5 +2529,3 @@ webkit.org/b/273308 http/tests/media/media-source/mediasource-rvfc.html [ Timeou
 # webkit.org/b/274475 REGRESSION (278960@main?): [ MacOS iOS ] 8X imported/w3c/web-platform-t ests/navigation-api are consistently failing and 1 is crashing
 imported/w3c/web-platform-tests/navigation-api/navigation-history-entry/entries-after-navigations-in-multiple-windows.html [ Failure ]
 imported/w3c/web-platform-tests/navigation-api/navigation-history-entry/key-id-location-replace-cross-origin.html [ Failure ]
-
-webkit.org/b/274732 [ Debug ] js/dom/missing-exception-check-in-convertVariadicArguments.html [ Skip ]

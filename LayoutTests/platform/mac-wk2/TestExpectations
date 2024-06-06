@@ -1175,9 +1175,12 @@ webkit.org/b/218341 inspector/dom-debugger/attribute-modified-style.html [ Pass 
 
 webkit.org/b/218725 inspector/debugger/tail-deleted-frames/tail-deleted-frames-intermediate-frames.html [ Pass Timeout ]
 
+# These are only enabled on Cocoa WK2 ports
+webanimations/multiple-transform-properties-and-multiple-transform-properties-animation-with-delay-on-forced-layer.html [ Pass ]
 webanimations/rotate-property-and-rotate-animation-with-delay-on-forced-layer.html [ Pass ]
 webanimations/scale-property-and-scale-animation-with-delay-on-forced-layer.html [ Pass ]
 webanimations/transform-property-and-transform-animation-with-delay-on-forced-layer.html [ Pass ]
+webanimations/translate-property-and-translate-animation-with-delay-on-forced-layer.html [ Pass ]
 
 webkit.org/b/232040 webanimations/marker-opacity-animation-no-effect.html [ Pass ImageOnlyFailure ]
 
@@ -1277,8 +1280,6 @@ webkit.org/b/227273 fast/css-custom-paint/out-of-memory-while-adding-worklet-mod
 
 webkit.org/b/227467 [ arm64 Release ] fast/css/sticky/sticky-left.html [ Pass ImageOnlyFailure ]
 
-webkit.org/b/227504 [ Debug ] accessibility/table-title.html [ Pass Timeout ]
-
 # Behavior of navigator-language-ru changed in MacOS
 fast/text/international/system-language/navigator-language/navigator-language-ru.html [ Failure ]
 
@@ -1316,16 +1317,9 @@ webkit.org/b/228210 [ Debug ] inspector/model/remote-object/iterator-large.html 
 
 webkit.org/b/228591 fast/scrolling/mac/programmatic-scroll-overrides-rubberband.html [ Pass Failure ]
 
-webkit.org/b/229156 webrtc/video-addTrack.html [ Pass Failure ]
-
-webkit.org/b/229158 webrtc/video-setDirection.html [ Pass Failure ]
-
 webkit.org/b/229163 webrtc/video-addTransceiver.html [ Pass Failure ]
 
 webkit.org/b/229166 webrtc/utf8-sdp.html [ Pass Failure ]
-
-#rdar://82032946 ([Mac wk2] webanimations/translate-property-and-translate-animation-with-delay-on-forced-layer.html is a flaky image-only fail)
- webanimations/translate-property-and-translate-animation-with-delay-on-forced-layer.html [ Pass Failure ]
 
 #rdar://82043074 ([Star wk2 Debug arm64,Sky/AzulE wk2 Guard-Malloc] imported/w3c/web-platform-tests/xhr/xhr-timeout-longtask.any.html is a flaky failure)
 imported/w3c/web-platform-tests/xhr/xhr-timeout-longtask.any.html [ Pass Failure ]
@@ -1350,8 +1344,6 @@ webkit.org/b/228209 fast/speechrecognition/start-recognition-after-gum.html [ Pa
 
 webkit.org/b/230070 media/track/track-cue-css.html [ Pass ImageOnlyFailure ]
 
-webkit.org/b/230504 [ Release ] css3/masking/reference-clip-path-animate-transform-repaint.html [ Pass Failure ]
-
 webkit.org/b/230518 [ Release ]  accessibility/mac/button-shouldnot-have-axvalue.html [ Pass Crash ]
 
 webkit.org/b/231083 [ Debug ] imported/w3c/web-platform-tests/content-security-policy/generic/policy-inherited-correctly-by-plznavigate.html [ Pass Failure ]
@@ -1364,12 +1356,7 @@ platform/mac-wk2/plugins/npruntime/remove-property-from-javascript.html [ Skip ]
 platform/mac-wk2/plugins/npp-setwindow-called-on-scroll.html [ Skip ]
 platform/mac-wk2/plugins/destroy-during-async-npp-new.html [ Skip ]
 
-# Need to handle object fit MSE for non UI-side compositing
-webkit.org/b/264944 [ Ventura ] http/tests/media/media-source/media-source-video-fit-fill.html [ Failure ]
-
 fast/text/install-font-style-recalc.html [ Pass ]
-
-webkit.org/b/238880 [ Release ] imported/w3c/web-platform-tests/css/css-text/white-space/pre-wrap-012.html [ Pass ImageOnlyFailure ]
 
 webkit.org/b/239095 http/wpt/cache-storage/cache-storage-networkprocess-crash.html [ Pass Crash ]
 
@@ -1707,6 +1694,11 @@ webkit.org/b/263396 css3/color/text.html [ Skip ]
 [ Release ] http/tests/webgpu/webgpu/shader [ Pass Failure Timeout ]
 [ Release ] http/tests/webgpu/webgpu/web_platform [ Pass Failure Timeout ]
 
+# skipped due to debug crashes - https://bugs.webkit.org/show_bug.cgi?id=274972
+http/tests/webgpu/webgpu/api/validation/render_pass/render_pass_descriptor.html [ Skip ]
+http/tests/webgpu/webgpu/api/validation/texture/destroy.html [ Skip ]
+http/tests/webgpu/webgpu/web_platform/canvas/getCurrentTexture.html [ Skip ]
+
 # skipped debug due to https://bugs.webkit.org/show_bug.cgi?id=273961
 [ Release ] http/tests/webgpu/webgpu/api/operation/buffers/map.html [ Pass ]
 # skipped debug due to https://bugs.webkit.org/show_bug.cgi?id=273716
@@ -1815,8 +1807,6 @@ webkit.org/b/274709 imported/w3c/web-platform-tests/pointerevents/pointer-events
 
 webkit.org/b/274766 http/wpt/webauthn/public-key-credential-get-success-u2f.https.html [ Failure ]
 
-webkit.org/b/258228 [ Sonoma+ ] accessibility/mac/text-input-session-notifications.html [ Pass ]
-
-webkit.org/b/274847 http/tests/site-isolation/opened-window-length.html [ Timeout ]
+webkit.org/b/258228 [ Sonoma+ Debug ] accessibility/mac/text-input-session-notifications.html [ Skip ]
 
 webkit.org/b/274852 imported/w3c/web-platform-tests/css/css-view-transitions/new-content-flat-transform-ancestor.html [ ImageOnlyFailure ]

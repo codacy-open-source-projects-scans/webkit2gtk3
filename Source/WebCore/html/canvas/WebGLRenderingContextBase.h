@@ -588,8 +588,6 @@ protected:
     RefPtr<Image> videoFrameToImage(HTMLVideoElement&, ASCIILiteral functionName);
 #endif
 
-    WebGLTexture::TextureExtensionFlag textureExtensionFlags() const;
-
     bool enableSupportedExtension(ASCIILiteral extensionNameLiteral);
     void loseExtensions(LostContextMode);
 
@@ -705,12 +703,8 @@ protected:
     GCGLfloat m_clearDepth;
     GCGLint m_clearStencil;
     GCGLboolean m_colorMask[4];
+    GCGLuint m_stencilMask;
     GCGLboolean m_depthMask;
-
-    bool m_stencilEnabled;
-    GCGLuint m_stencilMask, m_stencilMaskBack;
-    GCGLint m_stencilFuncRef, m_stencilFuncRefBack; // Note that these are the user specified values, not the internal clamped value.
-    GCGLuint m_stencilFuncMask, m_stencilFuncMaskBack;
 
     bool m_rasterizerDiscardEnabled { false };
 
@@ -951,15 +945,6 @@ protected:
     // Helper function for validating compressed texture formats.
     bool validateCompressedTexFormat(ASCIILiteral functionName, GCGLenum format);
 
-    // Helper function to validate mode for draw{Arrays/Elements}.
-    bool validateDrawMode(ASCIILiteral functionName, GCGLenum);
-
-    // Helper function to validate if front/back stencilMask and stencilFunc settings are the same.
-    bool validateStencilSettings(ASCIILiteral functionName);
-
-    // Helper function to validate stencil func.
-    bool validateStencilFunc(ASCIILiteral functionName, GCGLenum);
-
     // Helper function for texParameterf and texParameteri.
     void texParameter(GCGLenum target, GCGLenum pname, GCGLfloat paramf, GCGLint parami, bool isFloat);
 
@@ -977,9 +962,6 @@ protected:
     // Helper function to validate input parameters for framebuffer functions.
     // Generate GL error if parameters are illegal.
     bool validateFramebufferFuncParameters(ASCIILiteral functionName, GCGLenum target, GCGLenum attachment);
-
-    // Helper function to validate blend equation mode.
-    virtual bool validateBlendEquation(ASCIILiteral functionName, GCGLenum) = 0;
 
     // Helper function to validate a GL capability.
     virtual bool validateCapability(ASCIILiteral functionName, GCGLenum);

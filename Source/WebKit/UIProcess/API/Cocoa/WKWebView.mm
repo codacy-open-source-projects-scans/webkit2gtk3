@@ -47,7 +47,6 @@
 #import "MediaPlaybackState.h"
 #import "MediaUtilities.h"
 #import "NavigationState.h"
-#import "ObjCObjectGraph.h"
 #import "PageClient.h"
 #import "ProvisionalPageProxy.h"
 #import "QuickLookThumbnailLoader.h"
@@ -2766,10 +2765,9 @@ static RetainPtr<NSArray> wkTextManipulationErrors(NSArray<_WKTextManipulationIt
 #if ENABLE(APP_HIGHLIGHTS)
 static void convertAndAddHighlight(Vector<Ref<WebCore::SharedMemory>>& buffers, NSData *highlight)
 {
-    auto sharedMemory = WebCore::SharedMemory::allocate(highlight.length);
-    if (sharedMemory) {
-        [highlight getBytes:sharedMemory->data() length:highlight.length];
-        buffers.append(*sharedMemory);
+    if (auto sharedMemory = WebCore::SharedMemory::allocate(highlight.length)) {
+        [highlight getBytes:sharedMemory->mutableSpan().data() length:highlight.length];
+        buffers.append(sharedMemory.releaseNonNull());
     }
 }
 #endif
@@ -4095,7 +4093,7 @@ static inline OptionSet<WebKit::FindOptions> toFindOptions(_WKFindOptions wkFind
 #if PLATFORM(MAC)
     return _page->viewScaleFactor();
 #else
-    return _page->layoutSizeScaleFactor();
+    return _page->layoutSizeScaleFactorFromClient();
 #endif
 }
 
@@ -4108,7 +4106,7 @@ static inline OptionSet<WebKit::FindOptions> toFindOptions(_WKFindOptions wkFind
 #if PLATFORM(MAC)
     _impl->setViewScale(viewScale);
 #else
-    if (_page->layoutSizeScaleFactor() == viewScale)
+    if (_page->layoutSizeScaleFactorFromClient() == viewScale)
         return;
 
     _page->setViewportConfigurationViewLayoutSize(_page->viewLayoutSize(), viewScale, _page->minimumEffectiveDeviceWidth());
@@ -4131,7 +4129,7 @@ static inline OptionSet<WebKit::FindOptions> toFindOptions(_WKFindOptions wkFind
         return;
 
     if (!self._shouldDeferGeometryUpdates)
-        _page->setViewportConfigurationViewLayoutSize(_page->viewLayoutSize(), _page->layoutSizeScaleFactor(), minimumEffectiveDeviceWidth);
+        _page->setViewportConfigurationViewLayoutSize(_page->viewLayoutSize(), _page->layoutSizeScaleFactorFromClient(), minimumEffectiveDeviceWidth);
     else
         _page->setMinimumEffectiveDeviceWidthWithoutViewportConfigurationUpdate(minimumEffectiveDeviceWidth);
 #endif

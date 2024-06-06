@@ -707,6 +707,20 @@ AutomaticLiveResizeEnabled:
     WebKit:
       default: WebKit::defaultAutomaticLiveResizeEnabled()
 
+AutomaticallyAdjustsViewScaleUsingMinimumEffectiveDeviceWidth:
+  type: bool
+  status: internal
+  humanReadableName: "Automatically Adjust View Scale"
+  humanReadableDescription: "Automatically Adjust View Scale to Fit Min. Effective Device Width"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      "ENABLE(FLEXIBLE_VIEW_SCALE_FACTOR)": true
+      default: false
+    WebCore:
+      default: false
+
 BackgroundFetchAPIEnabled:
   type: bool
   status: testable
@@ -875,6 +889,20 @@ CSS3DTransformBackfaceVisibilityInteroperabilityEnabled:
     WebCore:
       default: false
 
+CSSAnchorPositioningEnabled:
+  type: bool
+  status: testable
+  category: css
+  humanReadableName: "CSS Anchor Positioning"
+  humanReadableDescription: "Enable CSS Anchor Positioning"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 CSSColorContrastEnabled:
   type: bool
   status: testable
@@ -930,6 +958,20 @@ CSSCounterStyleAtRulesEnabled:
       default: true
     WebCore:
       default: true
+
+CSSDPropertyEnabled:
+  type: bool
+  status: testable
+  category: css
+  humanReadableName: "CSS d property"
+  humanReadableDescription: "Enable support for the CSS d property and SVG d presentation attribute"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
 
 CSSFieldSizingEnabled:
   type: bool
@@ -3575,7 +3617,7 @@ LayoutViewportHeightExpansionFactor:
     WebKitLegacy:
       default: 0
     WebKit:
-      "PLATFORM(WATCHOS)": 1
+      "PLATFORM(WATCHOS) || ENABLE(FLEXIBLE_VIEW_SCALE_FACTOR)" : 1
       default: 0
     WebCore:
       default: 0
@@ -6696,20 +6738,17 @@ UndoManagerAPIEnabled:
 
 UnifiedPDFEnabled:
   type: bool
-  status: internal
+  status: Unifiedpdf_feature_status
   category: security
   humanReadableName: "Unified PDF Viewer"
   humanReadableDescription: "Enable Unified PDF Viewer"
   condition: ENABLE(UNIFIED_PDF)
   defaultValue:
     WebKitLegacy:
-      "ENABLE(UNIFIED_PDF_BY_DEFAULT)": true
       default: false
     WebKit:
-      "ENABLE(UNIFIED_PDF_BY_DEFAULT)": true
       default: false
     WebCore:
-      "ENABLE(UNIFIED_PDF_BY_DEFAULT)": true
       default: false
 
 UpgradeKnownHostsToHTTPSEnabled:

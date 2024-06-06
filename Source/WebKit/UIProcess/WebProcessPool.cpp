@@ -47,6 +47,7 @@
 #include "LegacyGlobalSettings.h"
 #include "LoadedWebArchive.h"
 #include "Logging.h"
+#include "ModelProcessProxy.h"
 #include "NetworkProcessCreationParameters.h"
 #include "NetworkProcessMessages.h"
 #include "NetworkProcessProxy.h"
@@ -400,11 +401,6 @@ void WebProcessPool::setInjectedBundleClient(std::unique_ptr<API::InjectedBundle
         m_injectedBundleClient = makeUnique<API::InjectedBundleClient>();
     else
         m_injectedBundleClient = WTFMove(client);
-}
-
-void WebProcessPool::initializeConnectionClient(const WKContextConnectionClientBase* client)
-{
-    m_connectionClient.initialize(client);
 }
 
 void WebProcessPool::setHistoryClient(std::unique_ptr<API::LegacyContextHistoryClient>&& historyClient)
@@ -1104,8 +1100,6 @@ void WebProcessPool::processDidFinishLaunching(WebProcessProxy& process)
 
     if (m_configuration->ignoreSynchronousMessagingTimeoutsForTesting())
         process.protectedConnection()->ignoreTimeoutsForTesting();
-
-    m_connectionClient.didCreateConnection(this, process.protectedWebConnection().get());
 
 #if ENABLE(EXTENSION_CAPABILITIES)
     for (auto& page : process.pages()) {

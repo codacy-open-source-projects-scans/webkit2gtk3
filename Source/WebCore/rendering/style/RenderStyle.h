@@ -1481,7 +1481,7 @@ public:
     inline void setColumnSpan(ColumnSpan);
     inline void inheritColumnPropertiesFrom(const RenderStyle& parent);
 
-    inline void setTransform(const TransformOperations&);
+    inline void setTransform(TransformOperations&&);
     inline void setTransformOriginX(Length&&);
     inline void setTransformOriginY(Length&&);
     inline void setTransformOriginZ(float);
@@ -2190,6 +2190,14 @@ public:
     inline void setBlockStepInsert(BlockStepInsert);
     bool scrollAnchoringSuppressionStyleDidChange(const RenderStyle*) const;
     bool outOfFlowPositionStyleDidChange(const RenderStyle*) const;
+
+    static Vector<AtomString> initialAnchorNames();
+    inline const Vector<AtomString>& anchorNames() const;
+    inline void setAnchorNames(const Vector<AtomString>&);
+
+    static inline const AtomString& initialPositionAnchor();
+    inline const AtomString& positionAnchor() const;
+    inline void setPositionAnchor(const AtomString&);
 
 private:
     struct NonInheritedFlags {

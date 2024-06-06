@@ -49,24 +49,31 @@ namespace WebKit {
 
 // MARK: Static utility helper methods.
 
+static constexpr auto defaultTextIteratorBehaviors = WebCore::TextIteratorBehaviors {
+    WebCore::TextIteratorBehavior::EmitsObjectReplacementCharactersForImages,
+#if ENABLE(ATTACHMENT_ELEMENT)
+    WebCore::TextIteratorBehavior::EmitsObjectReplacementCharactersForAttachments
+#endif
+};
+
 WebCore::CharacterRange UnifiedTextReplacementController::characterRange(const WebCore::SimpleRange& scope, const WebCore::SimpleRange& range)
 {
-    return WebCore::characterRange(scope, range, { WebCore::TextIteratorBehavior::EmitsObjectReplacementCharactersForImagesOnly });
+    return WebCore::characterRange(scope, range, defaultTextIteratorBehaviors);
 }
 
 uint64_t UnifiedTextReplacementController::characterCount(const WebCore::SimpleRange& range)
 {
-    return WebCore::characterCount(range, { WebCore::TextIteratorBehavior::EmitsObjectReplacementCharactersForImagesOnly });
+    return WebCore::characterCount(range, defaultTextIteratorBehaviors);
 }
 
 WebCore::SimpleRange UnifiedTextReplacementController::resolveCharacterRange(const WebCore::SimpleRange& scope, WebCore::CharacterRange range)
 {
-    return WebCore::resolveCharacterRange(scope, range, { WebCore::TextIteratorBehavior::EmitsObjectReplacementCharactersForImagesOnly });
+    return WebCore::resolveCharacterRange(scope, range, defaultTextIteratorBehaviors);
 }
 
 String UnifiedTextReplacementController::plainText(const WebCore::SimpleRange& range)
 {
-    return WebCore::plainText(range, { WebCore::TextIteratorBehavior::EmitsObjectReplacementCharactersForImagesOnly });
+    return WebCore::plainText(range, defaultTextIteratorBehaviors);
 }
 
 // MARK: UnifiedTextReplacementController implementation.
@@ -74,6 +81,30 @@ String UnifiedTextReplacementController::plainText(const WebCore::SimpleRange& r
 UnifiedTextReplacementController::UnifiedTextReplacementController(WebPage& webPage)
     : m_webPage(webPage)
 {
+}
+
+static std::optional<WebCore::SimpleRange> contextRangeForDocument(const WebCore::Document& document)
+{
+    auto selection = document.selection().selection();
+
+    if (selection.isRange()) {
+        auto startOfFirstParagraph = WebCore::startOfParagraph(selection.start());
+        auto endOfLastParagraph = WebCore::endOfParagraph(selection.end());
+
+        auto paragraphRange = WebCore::makeSimpleRange(startOfFirstParagraph, endOfLastParagraph);
+
+        if (paragraphRange && WebCore::hasAnyPlainText(*paragraphRange, defaultTextIteratorBehaviors))
+            return paragraphRange;
+    }
+
+    auto startOfEditableContent = WebCore::startOfEditableContent(selection.start());
+    auto endOfEditableContent = WebCore::endOfEditableContent(selection.end());
+
+    auto editableContentRange = WebCore::makeSimpleRange(startOfEditableContent, endOfEditableContent);
+    if (editableContentRange && WebCore::hasAnyPlainText(*editableContentRange, defaultTextIteratorBehaviors))
+        return editableContentRange;
+
+    return selection.firstRange();
 }
 
 void UnifiedTextReplacementController::willBeginTextReplacementSession(const std::optional<WebUnifiedTextReplacementSessionData>& session, CompletionHandler<void(const Vector<WebUnifiedTextReplacementContextData>&)>&& completionHandler)
@@ -87,7 +118,8 @@ void UnifiedTextReplacementController::willBeginTextReplacementSession(const std
         return;
     }
 
-    auto contextRange = m_webPage->autocorrectionContextRange();
+    auto contextRange = contextRangeForDocument(*document);
+
     if (!contextRange) {
         RELEASE_LOG(UnifiedTextReplacement, "UnifiedTextReplacementController::willBeginTextReplacementSession (%s) => no context range", session ? session->uuid.toString().utf8().data() : "");
         completionHandler({ });
@@ -96,18 +128,21 @@ void UnifiedTextReplacementController::willBeginTextReplacementSession(const std
 
     // If the UUID is invalid, the session is ephemeral.
     if (session) {
-        auto liveRange = createLiveRange(*contextRange);
+        auto liveRange = WebCore::createLiveRange(*contextRange);
 
         ASSERT(!m_contextRanges.contains(session->uuid));
 
         m_contextRanges.set(session->uuid, liveRange);
-        m_replacementTypes.set(session->uuid, session->replacementType);
+        m_states.set(session->uuid, WTF::makeUniqueRef<UnifiedTextReplacementController::State>(*session));
     }
 
     auto selectedTextRange = document->selection().selection().firstRange();
 
-    auto attributedStringFromRange = WebCore::editingAttributedString(*contextRange);
+    auto attributedStringFromRange = WebCore::editingAttributedString(*contextRange, { WebCore::IncludedElement::Images, WebCore::IncludedElement::Attachments });
     auto selectedTextCharacterRange = UnifiedTextReplacementController::characterRange(*contextRange, *selectedTextRange);
+
+    if (attributedStringFromRange.string.isEmpty())
+        RELEASE_LOG(UnifiedTextReplacement, "UnifiedTextReplacementController::willBeginTextReplacementSession (%s) => attributed string is empty", session ? session->uuid.toString().utf8().data() : "");
 
     if (session) {
         auto attributedStringCharacterCount = attributedStringFromRange.string.length();
@@ -298,7 +333,7 @@ void UnifiedTextReplacementController::didEndTextReplacementSession(const WebUni
         return;
     }
 
-    auto replacementType = m_replacementTypes.get(session.uuid);
+    auto replacementType = m_states.get(session.uuid)->session.replacementType;
     switch (replacementType) {
     case WebUnifiedTextReplacementSessionData::ReplacementType::PlainText:
         didEndTextReplacementSession<WebUnifiedTextReplacementSessionData::ReplacementType::PlainText>(session, accepted);
@@ -316,14 +351,15 @@ void UnifiedTextReplacementController::didEndTextReplacementSession(const WebUni
         return;
     }
 
-    document->selection().setSelection({ *sessionRange });
+    if (m_states.get(session.uuid)->session.correctionType != WebUnifiedTextReplacementSessionData::CorrectionType::Spelling)
+        document->selection().setSelection({ *sessionRange });
 
     m_textIndicatorCharacterRangesForSessions.removeFirstMatching([&](auto& candidateSession) {
         return candidateSession.first == session.uuid;
     });
     removeTransparentMarkersForSession(session.uuid, RemoveAllMarkersForSession::Yes);
 
-    m_replacementTypes.remove(session.uuid);
+    m_states.remove(session.uuid);
     m_contextRanges.remove(session.uuid);
     m_originalDocumentNodes.remove(session.uuid);
     m_replacedDocumentNodes.remove(session.uuid);
@@ -382,7 +418,11 @@ void UnifiedTextReplacementController::removeTransparentMarkersForSession(const 
 
 void UnifiedTextReplacementController::textReplacementSessionDidReceiveTextWithReplacementRange(const WebUnifiedTextReplacementSessionData& session, const WebCore::AttributedString& attributedText, const WebCore::CharacterRange& range, const WebUnifiedTextReplacementContextData& context, bool finished)
 {
-    RELEASE_LOG(UnifiedTextReplacement, "UnifiedTextReplacementController::textReplacementSessionDidReceiveTextWithReplacementRange (%s) [range: %llu, %llu]", session.uuid.toString().utf8().data(), range.location, range.length);
+    auto hasAttributes = attributedText.attributes.containsIf([](const auto& rangeAndAttributeValues) {
+        return !rangeAndAttributeValues.second.isEmpty();
+    });
+
+    RELEASE_LOG(UnifiedTextReplacement, "UnifiedTextReplacementController::textReplacementSessionDidReceiveTextWithReplacementRange (%s) [range: %llu, %llu; has attributes: %d; finished: %d]", session.uuid.toString().utf8().data(), range.location, range.length, hasAttributes, finished);
 
     auto contextTextCharacterCount = context.attributedText.string.length();
 
@@ -474,7 +514,7 @@ void UnifiedTextReplacementController::textReplacementSessionDidReceiveTextWithR
     });
 #endif
 
-    replaceContentsOfRangeInSession(session.uuid, resolvedRange, *fragment);
+    replaceContentsOfRangeInSession(session.uuid, resolvedRange, *fragment, hasAttributes ? WebCore::Editor::MatchStyle::No : WebCore::Editor::MatchStyle::Yes);
 
     auto finalTextIndicatorUUID = WTF::UUID::createVersion4();
     auto characterRangeAfterReplace = WebCore::CharacterRange(range.location, range.length + characterCountDelta);
@@ -536,7 +576,7 @@ void UnifiedTextReplacementController::textReplacementSessionDidReceiveEditActio
         return;
     }
 
-    auto replacementType = m_replacementTypes.get(session.uuid);
+    auto replacementType = m_states.get(session.uuid)->session.replacementType;
     switch (replacementType) {
     case WebUnifiedTextReplacementSessionData::ReplacementType::PlainText:
         return textReplacementSessionPerformEditActionForPlainText(*document, session, action);
@@ -884,10 +924,10 @@ void UnifiedTextReplacementController::replaceContentsOfRangeInSession(const WTF
     });
 }
 
-void UnifiedTextReplacementController::replaceContentsOfRangeInSession(const WTF::UUID& uuid, const WebCore::SimpleRange& range, WebCore::DocumentFragment& fragment)
+void UnifiedTextReplacementController::replaceContentsOfRangeInSession(const WTF::UUID& uuid, const WebCore::SimpleRange& range, WebCore::DocumentFragment& fragment, WebCore::Editor::MatchStyle matchStyle)
 {
-    replaceContentsOfRangeInSessionInternal(uuid, range, [&fragment](WebCore::Editor& editor) {
-        editor.replaceSelectionWithFragment(fragment, WebCore::Editor::SelectReplacement::Yes, WebCore::Editor::SmartReplace::No, WebCore::Editor::MatchStyle::No, WebCore::EditAction::InsertReplacement);
+    replaceContentsOfRangeInSessionInternal(uuid, range, [&fragment, matchStyle](WebCore::Editor& editor) {
+        editor.replaceSelectionWithFragment(fragment, WebCore::Editor::SelectReplacement::Yes, WebCore::Editor::SmartReplace::No, matchStyle, WebCore::EditAction::InsertReplacement);
     });
 }
 

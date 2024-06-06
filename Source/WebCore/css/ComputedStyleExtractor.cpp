@@ -880,8 +880,8 @@ static Ref<CSSValue> computedTransform(RenderElement* renderer, const RenderStyl
         return CSSPrimitiveValue::create(CSSValueNone);
 
     CSSValueListBuilder list;
-    for (auto& operation : style.transform().operations()) {
-        if (auto functionValue = transformOperationAsCSSValue(*operation, style))
+    for (auto& operation : style.transform()) {
+        if (auto functionValue = transformOperationAsCSSValue(operation, style))
             list.append(functionValue.releaseNonNull());
     }
     if (!list.isEmpty())
@@ -3021,6 +3021,19 @@ static Ref<CSSValue> valueForScrollTimelineName(const Vector<AtomString>& names)
     return CSSValueList::createCommaSeparated(WTFMove(list));
 }
 
+static Ref<CSSValue> valueForAnchorName(const Vector<AtomString>& names)
+{
+    if (names.isEmpty())
+        return CSSPrimitiveValue::create(CSSValueNone);
+
+    CSSValueListBuilder list;
+    for (auto& name : names) {
+        ASSERT(!name.isNull());
+        list.append(CSSPrimitiveValue::createCustomIdent(name));
+    }
+    return CSSValueList::createCommaSeparated(WTFMove(list));
+}
+
 static Ref<CSSValue> scrollTimelineShorthandValue(const Vector<Ref<ScrollTimeline>>& timelines)
 {
     if (timelines.isEmpty())
@@ -4626,6 +4639,13 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
 
     case CSSPropertyQuotes:
         return valueForQuotes(style.quotes());
+
+    case CSSPropertyAnchorName:
+        return valueForAnchorName(style.anchorNames());
+    case CSSPropertyPositionAnchor:
+        if (style.positionAnchor().isNull())
+            return CSSPrimitiveValue::create(CSSValueAuto);
+        return CSSPrimitiveValue::createCustomIdent(style.positionAnchor());
 
     // Unimplemented CSS 3 properties (including CSS3 shorthand properties).
     case CSSPropertyAll:

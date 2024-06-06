@@ -69,6 +69,7 @@
 #include "RenderSVGModelObject.h"
 #include "RenderScrollbarPart.h"
 #include "RenderTableRow.h"
+#include "RenderTextControl.h"
 #include "RenderTheme.h"
 #include "RenderTreeBuilder.h"
 #include "RenderView.h"
@@ -535,8 +536,12 @@ static inline bool objectIsRelayoutBoundary(const RenderElement* object)
     if (object->isRenderView())
         return true;
 
-    if (object->isRenderTextControl())
-        return true;
+    if (auto* textControl = dynamicDowncast<RenderTextControl>(*object)) {
+        if (!textControl->isFlexItem() && !textControl->isGridItem()) {
+            // Flexing type of layout systems may compute different size than what input's preferred width is which won't happen unless they run their layout as well.
+            return true;
+        }
+    }
 
     if (object->shouldApplyLayoutContainment() && object->shouldApplySizeContainment())
         return true;
@@ -568,6 +573,7 @@ void RenderObject::clearNeedsLayout(EverHadSkippedContentLayout everHadSkippedCo
     setPosChildNeedsLayoutBit(false);
     setNeedsSimplifiedNormalFlowLayoutBit(false);
     setNormalChildNeedsLayoutBit(false);
+    setOutOfFlowChildNeedsStaticPositionLayoutBit(false);
     setNeedsPositionedMovementLayoutBit(false);
     if (auto* renderElement = dynamicDowncast<RenderElement>(*this))
         renderElement->setAncestorLineBoxDirty(false);
@@ -1455,6 +1461,8 @@ void RenderObject::outputRenderObject(TextStream& stream, bool mark, int depth) 
             stream << "[simplified]";
         if (needsPositionedMovementLayout())
             stream << "[positioned movement]";
+        if (outOfFlowChildNeedsStaticPositionLayout())
+            stream << "[out of flow child needs parent layout]";
     }
     stream.nextLine();
 }

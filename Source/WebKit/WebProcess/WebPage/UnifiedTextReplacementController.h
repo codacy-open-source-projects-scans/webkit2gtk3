@@ -31,6 +31,7 @@
 #include "WebUnifiedTextReplacementSessionData.h"
 
 #include <WebCore/DocumentFragment.h>
+#include <WebCore/Editor.h>
 #include <WebCore/Node.h>
 #include <WebCore/Range.h>
 #include <wtf/FastMalloc.h>
@@ -42,7 +43,6 @@ namespace WebCore {
 struct TextIndicatorData;
 enum class TextIndicatorOption : uint16_t;
 class DocumentMarker;
-class Editor;
 }
 
 namespace WebKit {
@@ -85,6 +85,12 @@ public:
     void removeTransparentMarkersForSession(const WTF::UUID&, RemoveAllMarkersForSession);
 
 private:
+    struct State {
+        WTF_MAKE_STRUCT_FAST_ALLOCATED;
+
+        WebUnifiedTextReplacementSessionData session;
+    };
+
     static WebCore::CharacterRange characterRange(const WebCore::SimpleRange& scope, const WebCore::SimpleRange&);
     static WebCore::SimpleRange resolveCharacterRange(const WebCore::SimpleRange& scope, WebCore::CharacterRange);
     static uint64_t characterCount(const WebCore::SimpleRange&);
@@ -95,7 +101,7 @@ private:
 
     void replaceContentsOfRangeInSessionInternal(const WTF::UUID&, const WebCore::SimpleRange&, WTF::Function<void(WebCore::Editor&)>&&);
     void replaceContentsOfRangeInSession(const WTF::UUID&, const WebCore::SimpleRange&, const String&);
-    void replaceContentsOfRangeInSession(const WTF::UUID&, const WebCore::SimpleRange&, WebCore::DocumentFragment&);
+    void replaceContentsOfRangeInSession(const WTF::UUID&, const WebCore::SimpleRange&, WebCore::DocumentFragment&, WebCore::Editor::MatchStyle = WebCore::Editor::MatchStyle::No);
 
     void textReplacementSessionPerformEditActionForPlainText(WebCore::Document&, const WebUnifiedTextReplacementSessionData&, WebTextReplacementData::EditAction);
     void textReplacementSessionPerformEditActionForRichText(WebCore::Document&, const WebUnifiedTextReplacementSessionData&, WebTextReplacementData::EditAction);
@@ -113,7 +119,7 @@ private:
 
     // FIXME: Unify these states into a single `State` struct.
     HashMap<WTF::UUID, Ref<WebCore::Range>> m_contextRanges;
-    HashMap<WTF::UUID, WebUnifiedTextReplacementSessionData::ReplacementType> m_replacementTypes;
+    HashMap<WTF::UUID, UniqueRef<State>> m_states;
     HashMap<WTF::UUID, int> m_replacementLocationOffsets;
     HashMap<WTF::UUID, Ref<WebCore::DocumentFragment>> m_originalDocumentNodes;
     HashMap<WTF::UUID, Ref<WebCore::DocumentFragment>> m_replacedDocumentNodes;

@@ -4679,6 +4679,10 @@ void Internals::setMaximumSourceBufferSize(SourceBuffer& buffer, uint64_t maximu
 void Internals::bufferedSamplesForTrackId(SourceBuffer& buffer, const AtomString& trackId, BufferedSamplesPromise&& promise)
 {
     buffer.bufferedSamplesForTrackId(parseInteger<uint64_t>(trackId).value_or(0))->whenSettled(RunLoop::current(), [promise = WTFMove(promise)](auto&& samples) mutable {
+        if (!samples) {
+            promise.reject(Exception { ExceptionCode::OperationError, makeString("Error "_s, samples.error()) });
+            return;
+        }
         promise.resolve(WTFMove(*samples));
     });
 }
@@ -4686,6 +4690,10 @@ void Internals::bufferedSamplesForTrackId(SourceBuffer& buffer, const AtomString
 void Internals::enqueuedSamplesForTrackID(SourceBuffer& buffer, const AtomString& trackID, BufferedSamplesPromise&& promise)
 {
     buffer.enqueuedSamplesForTrackID(parseInteger<uint64_t>(trackID).value_or(0))->whenSettled(RunLoop::current(), [promise = WTFMove(promise)](auto&& samples) mutable {
+        if (!samples) {
+            promise.reject(Exception { ExceptionCode::OperationError, makeString("Error "_s, samples.error()) });
+            return;
+        }
         promise.resolve(WTFMove(*samples));
     });
 }
@@ -5389,22 +5397,16 @@ MockContentFilterSettings& Internals::mockContentFilterSettings()
 
 #endif
 
-static void appendOffsets(StringBuilder& builder, const Vector<SnapOffset<LayoutUnit>>& snapOffsets)
+static void serializeOffset(StringBuilder& builder, const SnapOffset<LayoutUnit>& snapOffset)
 {
-    bool justStarting = true;
+    builder.append(snapOffset.offset.toUnsigned());
+    if (snapOffset.stop == ScrollSnapStop::Always)
+        builder.append(" (always)"_s);
+}
 
-    builder.append("{ "_s);
-    for (auto& coordinate : snapOffsets) {
-        if (!justStarting)
-            builder.append(", "_s);
-        else
-            justStarting = false;
-        builder.append(coordinate.offset.toUnsigned());
-        if (coordinate.stop == ScrollSnapStop::Always)
-            builder.append(" (always)"_s);
-
-    }
-    builder.append(" }"_s);
+static void serializeOffsets(StringBuilder& builder, const Vector<SnapOffset<LayoutUnit>>& snapOffsets)
+{
+    builder.append("{ "_s, interleave(snapOffsets, serializeOffset, ", "_s), " }"_s);
 }
 
 void Internals::setPlatformMomentumScrollingPredictionEnabled(bool enabled)
@@ -5426,14 +5428,14 @@ ExceptionOr<String> Internals::scrollSnapOffsets(Element& element)
     StringBuilder result;
     if (offsetInfo && !offsetInfo->horizontalSnapOffsets.isEmpty()) {
         result.append("horizontal = "_s);
-        appendOffsets(result, offsetInfo->horizontalSnapOffsets);
+        serializeOffsets(result, offsetInfo->horizontalSnapOffsets);
     }
 
     if (offsetInfo && !offsetInfo->verticalSnapOffsets.isEmpty()) {
         if (result.length())
             result.append(", "_s);
         result.append("vertical = "_s);
-        appendOffsets(result, offsetInfo->verticalSnapOffsets);
+        serializeOffsets(result, offsetInfo->verticalSnapOffsets);
     }
 
     return result.toString();
@@ -6252,36 +6254,40 @@ void Internals::sendH2Ping(String url, DOMPromiseDeferred<IDLDouble>&& promise)
 
 void Internals::clearCacheStorageMemoryRepresentation(DOMPromiseDeferred<void>&& promise)
 {
-    auto* document = contextDocument();
+    RefPtr document = contextDocument();
     if (!document)
         return;
 
     if (!m_cacheStorageConnection) {
-        if (auto* page = contextDocument()->page())
+        if (RefPtr page = document->page())
             m_cacheStorageConnection = page->cacheStorageProvider().createCacheStorageConnection();
         if (!m_cacheStorageConnection)
             return;
     }
-    m_cacheStorageConnection->clearMemoryRepresentation(ClientOrigin { document->topOrigin().data(), document->securityOrigin().data() }, [promise = WTFMove(promise)] (auto && result) mutable {
-        ASSERT_UNUSED(result, !result);
+
+    document->enqueueTaskWhenSettled(m_cacheStorageConnection->clearMemoryRepresentation(ClientOrigin { document->topOrigin().data(), document->securityOrigin().data() }), TaskSource::DOMManipulation, [promise = WTFMove(promise)] (auto&&) mutable {
         promise.resolve();
     });
 }
 
 void Internals::cacheStorageEngineRepresentation(DOMPromiseDeferred<IDLDOMString>&& promise)
 {
-    auto* document = contextDocument();
+    RefPtr document = contextDocument();
     if (!document)
         return;
 
     if (!m_cacheStorageConnection) {
-        if (auto* page = contextDocument()->page())
+        if (RefPtr page = document->page())
             m_cacheStorageConnection = page->cacheStorageProvider().createCacheStorageConnection();
         if (!m_cacheStorageConnection)
             return;
     }
-    m_cacheStorageConnection->engineRepresentation([promise = WTFMove(promise)](const String& result) mutable {
-        promise.resolve(result);
+    document->enqueueTaskWhenSettled(m_cacheStorageConnection->engineRepresentation(), TaskSource::DOMManipulation, [promise = WTFMove(promise)](auto&& result) mutable {
+        if (!result) {
+            promise.reject(Exception { ExceptionCode::InvalidStateError, "internal error"_s });
+            return;
+        }
+        promise.resolve(WTFMove(result.value()));
     });
 }
 

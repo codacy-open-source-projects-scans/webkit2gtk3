@@ -466,13 +466,17 @@ void RenderTreeBuilder::attachToRenderElementInternal(RenderElement& parent, Ren
         parent.setPreferredLogicalWidthsDirty(true);
 
     if (!parent.normalChildNeedsLayout()) {
-        // setNeedsLayoutAndPrefWidthsRecalc above already takes care of propagating dirty bits on the ancestor chain, but
-        // in order to compute static position for out of flow boxes, the parent has to run layout as well.
-        // FIXME: Introduce a dirty bit to bridge the gap between parent and containing block which would
-        // not trigger layout but a simple traversal all the way to the direct parent.
-        // FIXME: we should be able to ASSERT(isOutOfFlowBox) but some renderers mark themselves dirty when not yet attached to the tree.
-        auto shouldMarkContainingBlockChain = !isOutOfFlowBox || newChild->containingBlock() != &parent;
-        parent.setChildNeedsLayout(shouldMarkContainingBlockChain ? MarkingBehavior::MarkContainingBlockChain : MarkingBehavior::MarkOnlyThis);
+        if (isOutOfFlowBox) {
+            // setNeedsLayoutAndPrefWidthsRecalc above already takes care of propagating dirty bits on the ancestor chain, but
+            // in order to compute static position for out of flow boxes, the parent has to run normal flow layout as well (as opposed to simplified)
+            // FIXME: Introduce a dirty bit to bridge the gap between parent and containing block which would
+            // not trigger layout but a simple traversal all the way to the direct parent and also expand it non-direct parent cases.
+            if (newChild->containingBlock() == &parent)
+                parent.setOutOfFlowChildNeedsStaticPositionLayout();
+            else
+                parent.setChildNeedsLayout();
+        } else
+            parent.setChildNeedsLayout();
     }
 
     if (AXObjectCache* cache = parent.document().axObjectCache())
@@ -848,12 +852,6 @@ void RenderTreeBuilder::destroyAndCleanUpAnonymousWrappers(RenderObject& rendere
     if (rendererToDestroy.renderTreeBeingDestroyed()) {
         destroy(rendererToDestroy);
         return;
-    }
-
-    // Also destroy ::backdrop along with element if there is one
-    if (auto* renderElement = dynamicDowncast<RenderElement>(rendererToDestroy)) {
-        if (auto backdropRenderer = renderElement->backdropRenderer())
-            destroy(*backdropRenderer);
     }
 
     auto isAnonymousAndSafeToDelete = [] (const auto& renderer) {

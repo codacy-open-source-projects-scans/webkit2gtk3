@@ -528,13 +528,7 @@ void WebGLRenderingContextBase::initializeContextState()
     m_framebufferBinding = nullptr;
     m_renderbufferBinding = nullptr;
     m_depthMask = true;
-    m_stencilEnabled = false;
     m_stencilMask = 0xFFFFFFFF;
-    m_stencilMaskBack = 0xFFFFFFFF;
-    m_stencilFuncRef = 0;
-    m_stencilFuncRefBack = 0;
-    m_stencilFuncMask = 0xFFFFFFFF;
-    m_stencilFuncMaskBack = 0xFFFFFFFF;
 
     m_rasterizerDiscardEnabled = false;
 
@@ -820,11 +814,6 @@ void WebGLRenderingContextBase::markDrawingBuffersDirtyAfterTransfer()
     m_compositingResultsNeedUpdating = true;
 }
 
-WebGLTexture::TextureExtensionFlag WebGLRenderingContextBase::textureExtensionFlags() const
-{
-    return static_cast<WebGLTexture::TextureExtensionFlag>((m_oesTextureFloatLinear ? WebGLTexture::TextureExtensionFloatLinearEnabled : 0) | (m_oesTextureHalfFloatLinear ? WebGLTexture::TextureExtensionHalfFloatLinearEnabled : 0));
-}
-
 void WebGLRenderingContextBase::reshape(int width, int height, int oldWidth, int oldHeight)
 {
     if (isContextLost())
@@ -1099,14 +1088,14 @@ void WebGLRenderingContextBase::blendColor(GCGLfloat red, GCGLfloat green, GCGLf
 
 void WebGLRenderingContextBase::blendEquation(GCGLenum mode)
 {
-    if (isContextLost() || !validateBlendEquation("blendEquation"_s, mode))
+    if (isContextLost())
         return;
     m_context->blendEquation(mode);
 }
 
 void WebGLRenderingContextBase::blendEquationSeparate(GCGLenum modeRGB, GCGLenum modeAlpha)
 {
-    if (isContextLost() || !validateBlendEquation("blendEquation"_s, modeRGB) || !validateBlendEquation("blendEquation"_s, modeAlpha))
+    if (isContextLost())
         return;
     m_context->blendEquationSeparate(modeRGB, modeAlpha);
 }
@@ -1535,8 +1524,6 @@ void WebGLRenderingContextBase::disable(GCGLenum cap)
 {
     if (isContextLost() || !validateCapability("disable"_s, cap))
         return;
-    if (cap == GraphicsContextGL::STENCIL_TEST)
-        m_stencilEnabled = false;
     if (cap == GraphicsContextGL::SCISSOR_TEST)
         m_scissorEnabled = false;
     if (cap == GraphicsContextGL::RASTERIZER_DISCARD)
@@ -1608,8 +1595,6 @@ void WebGLRenderingContextBase::enable(GCGLenum cap)
 {
     if (isContextLost() || !validateCapability("enable"_s, cap))
         return;
-    if (cap == GraphicsContextGL::STENCIL_TEST)
-        m_stencilEnabled = true;
     if (cap == GraphicsContextGL::SCISSOR_TEST)
         m_scissorEnabled = true;
     if (cap == GraphicsContextGL::RASTERIZER_DISCARD)
@@ -2036,7 +2021,7 @@ WebGLAny WebGLRenderingContextBase::getParameter(GCGLenum pname)
     case GraphicsContextGL::STENCIL_REF:
         return getIntParameter(pname);
     case GraphicsContextGL::STENCIL_TEST:
-        return m_stencilEnabled;
+        return getBooleanParameter(pname);
     case GraphicsContextGL::STENCIL_VALUE_MASK:
         return getUnsignedIntParameter(pname);
     case GraphicsContextGL::STENCIL_WRITEMASK:
@@ -2772,8 +2757,6 @@ GCGLboolean WebGLRenderingContextBase::isEnabled(GCGLenum cap)
 {
     if (isContextLost() || !validateCapability("isEnabled"_s, cap))
         return 0;
-    if (cap == GraphicsContextGL::STENCIL_TEST)
-        return m_stencilEnabled;
     return m_context->isEnabled(cap);
 }
 
@@ -3095,12 +3078,6 @@ void WebGLRenderingContextBase::stencilFunc(GCGLenum func, GCGLint ref, GCGLuint
 {
     if (isContextLost())
         return;
-    if (!validateStencilFunc("stencilFunc"_s, func))
-        return;
-    m_stencilFuncRef = ref;
-    m_stencilFuncRefBack = ref;
-    m_stencilFuncMask = mask;
-    m_stencilFuncMaskBack = mask;
     m_context->stencilFunc(func, ref, mask);
 }
 
@@ -3108,27 +3085,6 @@ void WebGLRenderingContextBase::stencilFuncSeparate(GCGLenum face, GCGLenum func
 {
     if (isContextLost())
         return;
-    if (!validateStencilFunc("stencilFuncSeparate"_s, func))
-        return;
-    switch (face) {
-    case GraphicsContextGL::FRONT_AND_BACK:
-        m_stencilFuncRef = ref;
-        m_stencilFuncRefBack = ref;
-        m_stencilFuncMask = mask;
-        m_stencilFuncMaskBack = mask;
-        break;
-    case GraphicsContextGL::FRONT:
-        m_stencilFuncRef = ref;
-        m_stencilFuncMask = mask;
-        break;
-    case GraphicsContextGL::BACK:
-        m_stencilFuncRefBack = ref;
-        m_stencilFuncMaskBack = mask;
-        break;
-    default:
-        synthesizeGLError(GraphicsContextGL::INVALID_ENUM, "stencilFuncSeparate"_s, "invalid face"_s);
-        return;
-    }
     m_context->stencilFuncSeparate(face, func, ref, mask);
 }
 
@@ -3137,7 +3093,6 @@ void WebGLRenderingContextBase::stencilMask(GCGLuint mask)
     if (isContextLost())
         return;
     m_stencilMask = mask;
-    m_stencilMaskBack = mask;
     m_context->stencilMask(mask);
 }
 
@@ -3145,21 +3100,8 @@ void WebGLRenderingContextBase::stencilMaskSeparate(GCGLenum face, GCGLuint mask
 {
     if (isContextLost())
         return;
-    switch (face) {
-    case GraphicsContextGL::FRONT_AND_BACK:
+    if (face == GraphicsContextGL::FRONT_AND_BACK || face == GraphicsContextGL::FRONT)
         m_stencilMask = mask;
-        m_stencilMaskBack = mask;
-        break;
-    case GraphicsContextGL::FRONT:
-        m_stencilMask = mask;
-        break;
-    case GraphicsContextGL::BACK:
-        m_stencilMaskBack = mask;
-        break;
-    default:
-        synthesizeGLError(GraphicsContextGL::INVALID_ENUM, "stencilMaskSeparate"_s, "invalid face"_s);
-        return;
-    }
     m_context->stencilMaskSeparate(face, mask);
 }
 
@@ -4959,50 +4901,6 @@ bool WebGLRenderingContextBase::validateCompressedTexFormat(ASCIILiteral functio
         return false;
     }
     return true;
-}
-
-bool WebGLRenderingContextBase::validateDrawMode(ASCIILiteral functionName, GCGLenum mode)
-{
-    switch (mode) {
-    case GraphicsContextGL::POINTS:
-    case GraphicsContextGL::LINE_STRIP:
-    case GraphicsContextGL::LINE_LOOP:
-    case GraphicsContextGL::LINES:
-    case GraphicsContextGL::TRIANGLE_STRIP:
-    case GraphicsContextGL::TRIANGLE_FAN:
-    case GraphicsContextGL::TRIANGLES:
-        return true;
-    default:
-        synthesizeGLError(GraphicsContextGL::INVALID_ENUM, functionName, "invalid draw mode"_s);
-        return false;
-    }
-}
-
-bool WebGLRenderingContextBase::validateStencilSettings(ASCIILiteral functionName)
-{
-    if (m_stencilMask != m_stencilMaskBack || m_stencilFuncRef != m_stencilFuncRefBack || m_stencilFuncMask != m_stencilFuncMaskBack) {
-        synthesizeGLError(GraphicsContextGL::INVALID_OPERATION, functionName, "front and back stencils settings do not match"_s);
-        return false;
-    }
-    return true;
-}
-
-bool WebGLRenderingContextBase::validateStencilFunc(ASCIILiteral functionName, GCGLenum func)
-{
-    switch (func) {
-    case GraphicsContextGL::NEVER:
-    case GraphicsContextGL::LESS:
-    case GraphicsContextGL::LEQUAL:
-    case GraphicsContextGL::GREATER:
-    case GraphicsContextGL::GEQUAL:
-    case GraphicsContextGL::EQUAL:
-    case GraphicsContextGL::NOTEQUAL:
-    case GraphicsContextGL::ALWAYS:
-        return true;
-    default:
-        synthesizeGLError(GraphicsContextGL::INVALID_ENUM, functionName, "invalid function"_s);
-        return false;
-    }
 }
 
 bool WebGLRenderingContextBase::shouldPrintToConsole() const
