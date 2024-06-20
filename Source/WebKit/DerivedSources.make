@@ -655,11 +655,11 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/SessionState.serialization.in \
 	Shared/SyntheticEditingCommandType.serialization.in \
 	Shared/TextFlags.serialization.in \
+	Shared/TextAnimationType.serialization.in \
 	Shared/TextRecognitionResult.serialization.in \
 	Shared/TextRecognitionUpdateResult.serialization.in \
 	Shared/URLSchemeTaskParameters.serialization.in \
 	Shared/UndoOrRedo.serialization.in \
-	Shared/UnifiedTextReplacement.serialization.in \
 	Shared/UserContentControllerParameters.serialization.in \
 	Shared/UserData.serialization.in \
 	Shared/UserInterfaceIdiom.serialization.in \
@@ -897,8 +897,6 @@ all : module.private.modulemap
 
 ifeq ($(USE_INTERNAL_SDK),YES)
 WEBKIT_ADDITIONS_SWIFT_FILES = \
-	WKWebView+TextExtraction.swift \
-	TextStyleManager.swift \
 #
 
 $(WEBKIT_ADDITIONS_SWIFT_FILES): %.swift : %.swift.in

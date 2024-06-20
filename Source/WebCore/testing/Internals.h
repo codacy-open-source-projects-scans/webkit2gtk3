@@ -443,7 +443,7 @@ public:
     bool hasAutocorrectedMarker(int from, int length);
     bool hasDictationAlternativesMarker(int from, int length);
     bool hasCorrectionIndicatorMarker(int from, int length);
-#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+#if ENABLE(WRITING_TOOLS)
     bool hasUnifiedTextReplacementMarker(int from, int length);
 #endif
     void setContinuousSpellCheckingEnabled(bool);
@@ -982,6 +982,7 @@ public:
     void setMediaStreamSourceInterrupted(MediaStreamTrack&, bool);
     bool isMediaStreamSourceInterrupted(MediaStreamTrack&) const;
     bool isMediaStreamSourceEnded(MediaStreamTrack&) const;
+    bool isMediaStreamTrackPowerEfficient(const MediaStreamTrack&) const;
     bool isMockRealtimeMediaSourceCenterEnabled();
     bool shouldAudioTrackPlay(const AudioTrack&);
 #endif
@@ -1468,6 +1469,7 @@ public:
 
     Vector<PDFAnnotationRect> pdfAnnotationRectsForTesting(Element& pluginElement) const;
     void setPDFDisplayModeForTesting(Element&, const String&) const;
+    bool sendEditingCommandToPDFForTesting(Element&, const String& commandName, const String& argument) const;
     void registerPDFTest(Ref<VoidCallback>&&, Element&);
 
     const String& defaultSpatialTrackingLabel() const;

@@ -32,6 +32,7 @@
 #include "ChromeClient.h"
 #include "Document.h"
 #include "DocumentInlines.h"
+#include "Element.h"
 #include "ElementInlines.h"
 #include "EventLoop.h"
 #include "EventNames.h"
@@ -209,7 +210,7 @@ void FullscreenManager::requestFullscreenForElement(Ref<Element>&& element, RefP
 
         // Don't allow fullscreen if document is hidden.
         auto document = protectedDocument();
-        if (document->hidden()) {
+        if (document->hidden() && mode != HTMLMediaElementEnums::VideoFullscreenModeInWindow) {
             ERROR_LOG(identifier, "task - document hidden; failing.");
             failedPreflights(WTFMove(element), WTFMove(promise));
             completionHandler(false);
@@ -271,7 +272,7 @@ void FullscreenManager::requestFullscreenForElement(Ref<Element>&& element, RefP
             }
 
             auto page = this->page();
-            if (!page || this->document().hidden() || m_pendingFullscreenElement != element.ptr() || !element->isConnected()) {
+            if (!page || (this->document().hidden() && mode != HTMLMediaElementEnums::VideoFullscreenModeInWindow) || m_pendingFullscreenElement != element.ptr() || !element->isConnected()) {
                 ERROR_LOG(identifier, "task - page, document, or element mismatch; failing.");
                 failedPreflights(WTFMove(element), WTFMove(promise));
                 completionHandler(false);
@@ -545,7 +546,9 @@ bool FullscreenManager::willEnterFullscreen(Element& element, HTMLMediaElementEn
     } while ((ancestor = ancestor->document().ownerElement()));
 
     for (auto ancestor : makeReversedRange(ancestorsInTreeOrder)) {
-        ancestor->document().hideAllPopoversUntil(nullptr, FocusPreviousElement::No, FireEvents::No);
+        auto hideUntil = ancestor->topmostPopoverAncestor(Element::TopLayerElementType::Other);
+
+        ancestor->document().hideAllPopoversUntil(hideUntil, FocusPreviousElement::No, FireEvents::No);
 
         auto containingBlockBeforeStyleResolution = SingleThreadWeakPtr<RenderBlock> { };
         if (auto* renderer = ancestor->renderer())

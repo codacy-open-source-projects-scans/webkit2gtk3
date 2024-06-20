@@ -32,6 +32,7 @@
 #include "LayoutDisallowedScope.h"
 #include "LocalFrameView.h"
 #include "Logging.h"
+#include "Quirks.h"
 #include "RenderElement.h"
 #include "RenderLayoutState.h"
 #include "RenderStyleInlines.h"
@@ -225,6 +226,8 @@ void LocalFrameViewLayoutContext::performLayout()
         protectedView()->willDoLayout(layoutRoot);
         m_firstLayout = false;
     }
+
+    auto isSimplifiedLayout = layoutRoot->needsSimplifiedNormalFlowLayoutOnly();
     {
         TraceScope tracingScope(RenderTreeLayoutStart, RenderTreeLayoutEnd);
         SetForScope layoutPhase(m_layoutPhase, LayoutPhase::InRenderTreeLayout);
@@ -234,6 +237,7 @@ void LocalFrameViewLayoutContext::performLayout()
 #ifndef NDEBUG
         RenderTreeNeedsLayoutChecker checker(*renderView());
 #endif
+        ++m_layoutIdentifier;
         layoutRoot->layout();
         ++m_layoutCount;
 #if ENABLE(TEXT_AUTOSIZING)
@@ -267,7 +271,7 @@ void LocalFrameViewLayoutContext::performLayout()
         if (m_needsFullRepaint)
             renderView()->repaintRootContents();
         ASSERT(!layoutRoot->needsLayout());
-        protectedView()->didLayout(layoutRoot);
+        protectedView()->didLayout(layoutRoot, isSimplifiedLayout);
         runOrScheduleAsynchronousTasks();
     }
     InspectorInstrumentation::didLayout(frame, *layoutRoot);
@@ -507,6 +511,9 @@ bool LocalFrameViewLayoutContext::canPerformLayout() const
 #if ENABLE(TEXT_AUTOSIZING)
 void LocalFrameViewLayoutContext::applyTextSizingIfNeeded(RenderElement& layoutRoot)
 {
+    ASSERT(document());
+    if (document()->quirks().shouldIgnoreTextAutoSizing())
+        return;
     auto& settings = layoutRoot.settings();
     bool idempotentMode = settings.textAutosizingUsesIdempotentMode();
     if (!settings.textAutosizingEnabled() || idempotentMode || renderView()->printing())

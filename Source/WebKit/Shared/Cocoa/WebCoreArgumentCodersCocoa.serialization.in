@@ -359,7 +359,7 @@ using WebCore::CocoaColor = NSColor;
 #endif
 
 #if PLATFORM(IOS_FAMILY)
-using WebCore::CocoaColor = UIColor;
+using WebCore::CocoaColor = PlatformColor;
 #endif
 
 #if USE(AVFOUNDATION)
@@ -405,3 +405,12 @@ using CGDirectDisplayID = uint32_t
 using CFTimeInterval = double
 using CGGlyph = uint16_t
 using NSRect = CGRect
+
+#if ENABLE(WRITING_TOOLS)
+using WebCore::WritingTools::TextSuggestion::ID = WTF::UUID
+using WebCore::WritingTools::Session::ID = WTF::UUID
+#endif
+
+#if ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS) && USE(UICONTEXTMENU)
+using WebCore::MediaControlsContextMenuItem::ID = uint64_t;
+#endif

@@ -199,20 +199,20 @@ RefPtr<ImageBuffer> GPUCanvasContextCocoa::surfaceBufferToImageBuffer(SurfaceBuf
     return canvasBase().buffer();
 }
 
-ExceptionOr<RefPtr<ImageBitmap>> GPUCanvasContextCocoa::getCurrentTextureAsImageBitmap(ImageBuffer& buffer, bool originClean)
+RefPtr<ImageBuffer> GPUCanvasContextCocoa::transferToImageBuffer()
 {
+    auto buffer = canvasBase().allocateImageBuffer();
+    if (!buffer)
+        return nullptr;
+    Ref<ImageBuffer> bufferRef = buffer.releaseNonNull();
     if (m_configuration) {
-        buffer.flushDrawingContext();
         if (m_compositorIntegration)
-            m_compositorIntegration->paintCompositedResultsToCanvas(buffer, m_configuration->frameCount);
+            m_compositorIntegration->paintCompositedResultsToCanvas(bufferRef, m_configuration->frameCount);
         m_currentTexture = nullptr;
         if (m_presentationContext)
             m_presentationContext->present(true);
-
-        return { ImageBitmap::create(buffer, originClean) };
     }
-
-    return { ImageBitmap::create(buffer, originClean) };
+    return bufferRef;
 }
 
 GPUCanvasContext::CanvasType GPUCanvasContextCocoa::canvas()
@@ -317,9 +317,9 @@ ExceptionOr<RefPtr<GPUTexture>> GPUCanvasContextCocoa::getCurrentTexture()
     return protectedCurrentTexture;
 }
 
-PixelFormat GPUCanvasContextCocoa::pixelFormat() const
+ImageBufferPixelFormat GPUCanvasContextCocoa::pixelFormat() const
 {
-    return m_configuration ? PixelFormat::BGRA8 : PixelFormat::BGRX8;
+    return m_configuration ? ImageBufferPixelFormat::BGRA8 : ImageBufferPixelFormat::BGRX8;
 }
 
 DestinationColorSpace GPUCanvasContextCocoa::colorSpace() const

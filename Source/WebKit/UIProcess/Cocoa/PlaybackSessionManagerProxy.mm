@@ -55,8 +55,7 @@ PlaybackSessionModelContext::PlaybackSessionModelContext(PlaybackSessionManagerP
 
 PlaybackSessionModelContext::~PlaybackSessionModelContext()
 {
-    if (m_manager && m_videoReceiverEndpoint)
-        m_manager->uncacheVideoReceiverEndpoint(m_contextId);
+    invalidate();
 }
 
 void PlaybackSessionModelContext::addClient(PlaybackSessionModelClient& client)
@@ -90,7 +89,7 @@ void PlaybackSessionModelContext::setVideoReceiverEndpoint(const WebCore::VideoR
 
     m_videoReceiverEndpoint = endpoint;
 
-    if (m_manager)
+    if (m_manager && m_videoReceiverEndpoint)
         m_manager->setVideoReceiverEndpoint(m_contextId, endpoint);
 #else
     UNUSED_PARAM(endpoint);
@@ -445,6 +444,28 @@ void PlaybackSessionModelContext::isInWindowFullscreenActiveChanged(bool active)
         client.isInWindowFullscreenActiveChanged(active);
 }
 
+#if ENABLE(LINEAR_MEDIA_PLAYER)
+void PlaybackSessionModelContext::supportsLinearMediaPlayerChanged(bool supportsLinearMediaPlayer)
+{
+    if (m_supportsLinearMediaPlayer == supportsLinearMediaPlayer)
+        return;
+
+    ALWAYS_LOG_IF_POSSIBLE(LOGIDENTIFIER, supportsLinearMediaPlayer);
+    m_supportsLinearMediaPlayer = supportsLinearMediaPlayer;
+
+    for (auto& client : m_clients)
+        client.supportsLinearMediaPlayerChanged(supportsLinearMediaPlayer);
+
+    if (RefPtr manager = m_manager.get())
+        manager->updateVideoControlsManager(m_contextId);
+}
+#endif
+
+void PlaybackSessionModelContext::invalidate()
+{
+    setVideoReceiverEndpoint(nullptr);
+}
+
 #if !RELEASE_LOG_DISABLED
 const Logger* PlaybackSessionModelContext::loggerPtr() const
 {
@@ -472,7 +493,7 @@ PlaybackSessionManagerProxy::PlaybackSessionManagerProxy(WebPageProxy& page)
 #endif
 {
     ALWAYS_LOG(LOGIDENTIFIER);
-    m_page->process().addMessageReceiver(Messages::PlaybackSessionManagerProxy::messageReceiverName(), m_page->webPageID(), *this);
+    m_page->legacyMainFrameProcess().addMessageReceiver(Messages::PlaybackSessionManagerProxy::messageReceiverName(), m_page->webPageID(), *this);
 }
 
 PlaybackSessionManagerProxy::~PlaybackSessionManagerProxy()
@@ -486,14 +507,16 @@ PlaybackSessionManagerProxy::~PlaybackSessionManagerProxy()
 void PlaybackSessionManagerProxy::invalidate()
 {
     ALWAYS_LOG(LOGIDENTIFIER);
-    m_page->process().removeMessageReceiver(Messages::PlaybackSessionManagerProxy::messageReceiverName(), m_page->webPageID());
+    m_page->legacyMainFrameProcess().removeMessageReceiver(Messages::PlaybackSessionManagerProxy::messageReceiverName(), m_page->webPageID());
     m_page = nullptr;
 
     auto contextMap = WTFMove(m_contextMap);
     m_clientCounts.clear();
 
-    for (auto& [model, interface] : contextMap.values())
+    for (auto& [model, interface] : contextMap.values()) {
+        model->invalidate();
         interface->invalidate();
+    }
 }
 
 PlaybackSessionManagerProxy::ModelInterfaceTuple PlaybackSessionManagerProxy::createModelAndInterface(PlaybackSessionContextIdentifier contextId)
@@ -674,6 +697,13 @@ void PlaybackSessionManagerProxy::isInWindowFullscreenActiveChanged(PlaybackSess
     ensureModel(contextId).isInWindowFullscreenActiveChanged(active);
 }
 
+#if ENABLE(LINEAR_MEDIA_PLAYER)
+void PlaybackSessionManagerProxy::supportsLinearMediaPlayerChanged(PlaybackSessionContextIdentifier contextId, bool supportsLinearMediaPlayer)
+{
+    ensureModel(contextId).supportsLinearMediaPlayerChanged(supportsLinearMediaPlayer);
+}
+#endif
+
 void PlaybackSessionManagerProxy::handleControlledElementIDResponse(PlaybackSessionContextIdentifier contextId, String identifier) const
 {
 #if PLATFORM(MAC)
@@ -829,7 +859,7 @@ void PlaybackSessionManagerProxy::setVideoReceiverEndpoint(PlaybackSessionContex
     ALWAYS_LOG(LOGIDENTIFIER);
     WebCore::MediaPlayerIdentifier playerIdentifier = *interface->playerIdentifier();
 
-    Ref process = m_page->protectedProcess();
+    Ref process = m_page->protectedLegacyMainFrameProcess();
     WebCore::ProcessIdentifier processIdentifier = process->coreProcessIdentifier();
 
     Ref gpuProcess = process->processPool().ensureProtectedGPUProcess();
@@ -852,7 +882,7 @@ void PlaybackSessionManagerProxy::setVideoReceiverEndpoint(PlaybackSessionContex
 void PlaybackSessionManagerProxy::uncacheVideoReceiverEndpoint(PlaybackSessionContextIdentifier contextId)
 {
 #if ENABLE(LINEAR_MEDIA_PLAYER)
-    Ref process = m_page->protectedProcess();
+    Ref process = m_page->protectedLegacyMainFrameProcess();
     WebCore::ProcessIdentifier processIdentifier = process->coreProcessIdentifier();
 
     Ref gpuProcess = process->processPool().ensureProtectedGPUProcess();
@@ -928,6 +958,17 @@ bool PlaybackSessionManagerProxy::isPaused(PlaybackSessionContextIdentifier iden
 
     Ref model = *std::get<0>(iterator->value);
     return !model->isPlaying() && !model->isStalled();
+}
+
+void PlaybackSessionManagerProxy::updateVideoControlsManager(PlaybackSessionContextIdentifier identifier)
+{
+    if (m_controlsManagerContextId != identifier)
+        return;
+
+    ALWAYS_LOG(LOGIDENTIFIER);
+
+    if (RefPtr page = m_page.get())
+        page->videoControlsManagerDidChange();
 }
 
 #if !RELEASE_LOG_DISABLED

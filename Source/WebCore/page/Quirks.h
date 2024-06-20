@@ -103,6 +103,7 @@ public:
     WEBCORE_EXPORT String storageAccessUserAgentStringQuirkForDomain(const URL&);
     WEBCORE_EXPORT static bool needsIPadMiniUserAgent(const URL&);
     WEBCORE_EXPORT static bool needsIPhoneUserAgent(const URL&);
+    WEBCORE_EXPORT static bool needsDesktopUserAgent(const URL&);
 
     bool needsGMailOverflowScrollQuirk() const;
     bool needsYouTubeOverflowScrollQuirk() const;
@@ -158,6 +159,10 @@ public:
     bool shouldEnableApplicationCacheQuirk() const;
     bool shouldEnableFontLoadingAPIQuirk() const;
     bool needsVideoShouldMaintainAspectRatioQuirk() const;
+
+#if ENABLE(TEXT_AUTOSIZING)
+    bool shouldIgnoreTextAutoSizing() const;
+#endif
 
 #if PLATFORM(VISION)
     WEBCORE_EXPORT bool shouldDisableFullscreenVideoAspectRatioAdaptiveSizing() const;

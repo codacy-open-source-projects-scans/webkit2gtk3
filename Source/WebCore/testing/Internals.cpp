@@ -502,7 +502,7 @@ static bool markerTypeFrom(const String& markerType, DocumentMarker::Type& resul
     else if (equalLettersIgnoringASCIICase(markerType, "telephonenumber"_s))
         result = DocumentMarker::Type::TelephoneNumber;
 #endif
-#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+#if ENABLE(WRITING_TOOLS)
     else if (equalLettersIgnoringASCIICase(markerType, "unifiedtextreplacement"_s))
         result = DocumentMarker::Type::UnifiedTextReplacement;
 #endif
@@ -2797,7 +2797,7 @@ bool Internals::hasCorrectionIndicatorMarker(int from, int length)
     return hasMarkerFor(DocumentMarker::Type::CorrectionIndicator, from, length);
 }
 
-#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+#if ENABLE(WRITING_TOOLS)
 bool Internals::hasUnifiedTextReplacementMarker(int from, int length)
 {
     return hasMarkerFor(DocumentMarker::Type::UnifiedTextReplacement, from, length);
@@ -3325,9 +3325,6 @@ ExceptionOr<ScrollableArea*> Internals::scrollableAreaForNode(Node* node) const
             return Exception { ExceptionCode::InvalidAccessError };
 
         auto& renderBox = *element.renderBox();
-        if (!renderBox.canBeScrolledAndHasScrollableArea())
-            return Exception { ExceptionCode::InvalidAccessError };
-
         if (is<RenderListBox>(renderBox))
             scrollableArea = &downcast<RenderListBox>(renderBox);
         else {
@@ -6109,6 +6106,11 @@ bool Internals::isMediaStreamSourceEnded(MediaStreamTrack& track) const
     return track.source().isEnded();
 }
 
+bool Internals::isMediaStreamTrackPowerEfficient(const MediaStreamTrack& track) const
+{
+    return track.source().isPowerEfficient();
+}
+
 bool Internals::isMockRealtimeMediaSourceCenterEnabled()
 {
     return MockRealtimeMediaSourceCenter::mockRealtimeMediaSourceCenterEnabled();
@@ -7424,13 +7426,9 @@ bool Internals::readyToRetrieveComputedRoleOrLabel(Element& element) const
     if (element.renderer())
         return true;
 
-    auto* computedStyle = element.computedStyle();
-    // If we can't get computed style for some reason, assume we can query for computed role or label.
-    if (!computedStyle)
-        return true;
-
-    // If the element needs a renderer but doesn't have one yet, we aren't ready to query the computed accessibility role or label. Doing so before the renderer has been attached will yield incorrect results.
-    return !element.rendererIsNeeded(*computedStyle);
+    // If the RenderTree is not laid out, we aren't ready to query the computed accessibility role or label. Doing so will yield incorrect results.
+    auto& document = element.document();
+    return !document.inRenderTreeUpdate() && !(document.view() && document.view()->layoutContext().isInRenderTreeLayout());
 }
 
 bool Internals::hasScopeBreakingHasSelectors() const
@@ -7458,6 +7456,19 @@ void Internals::setPDFDisplayModeForTesting(Element& element, const String& disp
         return;
 
     pluginViewBase->setPDFDisplayModeForTesting(displayMode);
+}
+
+bool Internals::sendEditingCommandToPDFForTesting(Element& element, const String& commandName, const String& argument) const
+{
+    RefPtr pluginElement = dynamicDowncast<HTMLPlugInElement>(element);
+    if (!pluginElement)
+        return false;
+
+    RefPtr pluginViewBase = pluginElement->pluginWidget();
+    if (!pluginViewBase)
+        return false;
+
+    return pluginViewBase->sendEditingCommandToPDFForTesting(commandName, argument);
 }
 
 Vector<Internals::PDFAnnotationRect> Internals::pdfAnnotationRectsForTesting(Element& element) const

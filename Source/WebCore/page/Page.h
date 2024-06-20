@@ -174,12 +174,30 @@ class WheelEventDeltaFilter;
 class WheelEventTestMonitor;
 class WindowEventLoop;
 
+#if ENABLE(WRITING_TOOLS)
+class WritingToolsController;
+
+namespace WritingTools {
+enum class Action : uint8_t;
+enum class TextSuggestionState : uint8_t;
+
+struct Context;
+struct TextSuggestion;
+struct Session;
+
+using TextSuggestionID = WTF::UUID;
+using SessionID = WTF::UUID;
+}
+#endif
+
 #if ENABLE(WEBXR)
 class WebXRSession;
 #endif
 
 struct AXTreeData;
 struct ApplePayAMSUIRequest;
+struct AttributedString;
+struct CharacterRange;
 struct SimpleRange;
 struct TextRecognitionResult;
 
@@ -896,7 +914,7 @@ public:
     inline bool isMediaCaptureMuted() const;
     void schedulePlaybackControlsManagerUpdate();
 #if ENABLE(VIDEO)
-    void playbackControlsMediaEngineChanged();
+    void mediaEngineChanged(HTMLMediaElement&);
 #endif
     WEBCORE_EXPORT void setMuted(MediaProducerMutedStateFlags);
 
@@ -1020,6 +1038,7 @@ public:
 #endif
 
     WEBCORE_EXPORT void forEachDocument(const Function<void(Document&)>&) const;
+    void forEachRenderableDocument(const Function<void(Document&)>&) const;
     void forEachMediaElement(const Function<void(HTMLMediaElement&)>&);
     static void forEachDocumentFromMainFrame(const Frame&, const Function<void(Document&)>&);
     void forEachLocalFrame(const Function<void(LocalFrame&)>&);
@@ -1126,6 +1145,26 @@ public:
 
 #if ENABLE(GAMEPAD)
     void gamepadsRecentlyAccessed();
+#endif
+
+#if ENABLE(WRITING_TOOLS)
+    WEBCORE_EXPORT void willBeginTextReplacementSession(const std::optional<WritingTools::Session>&, CompletionHandler<void(const Vector<WritingTools::Context>&)>&&);
+
+    WEBCORE_EXPORT void didBeginTextReplacementSession(const WritingTools::Session&, const Vector<WritingTools::Context>&);
+
+    WEBCORE_EXPORT void textReplacementSessionDidReceiveReplacements(const WritingTools::Session&, const Vector<WritingTools::TextSuggestion>&, const WritingTools::Context&, bool finished);
+
+    WEBCORE_EXPORT void textReplacementSessionDidUpdateStateForReplacement(const WritingTools::Session&, WritingTools::TextSuggestionState, const WritingTools::TextSuggestion&, const WritingTools::Context&);
+
+    WEBCORE_EXPORT void didEndTextReplacementSession(const WritingTools::Session&, bool accepted);
+
+    WEBCORE_EXPORT void textReplacementSessionDidReceiveTextWithReplacementRange(const WritingTools::Session&, const AttributedString&, const CharacterRange&, const WritingTools::Context&, bool finished);
+
+    WEBCORE_EXPORT void textReplacementSessionDidReceiveEditAction(const WritingTools::Session&, WritingTools::Action);
+
+    WEBCORE_EXPORT void updateStateForSelectedReplacementIfNeeded();
+
+    WEBCORE_EXPORT std::optional<SimpleRange> contextRangeForSessionWithID(const WritingTools::SessionID&) const;
 #endif
 
 private:
@@ -1529,6 +1568,10 @@ private:
 
 #if ENABLE(GAMEPAD)
     MonotonicTime m_lastAccessNotificationTime;
+#endif
+
+#if ENABLE(WRITING_TOOLS)
+    UniqueRef<WritingToolsController> m_writingToolsController;
 #endif
 }; // class Page
 

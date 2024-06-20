@@ -502,8 +502,6 @@ public:
     WEBCORE_EXPORT bool hasFocus() const;
     void whenVisible(Function<void()>&&);
 
-    bool hasManifest() const;
-    
     WEBCORE_EXPORT ExceptionOr<Ref<Element>> createElementForBindings(const AtomString& tagName);
     WEBCORE_EXPORT Ref<DocumentFragment> createDocumentFragment();
     WEBCORE_EXPORT Ref<Text> createTextNode(String&& data);
@@ -809,6 +807,8 @@ public:
     void cancelParsing();
 
     ExceptionOr<void> write(Document* entryDocument, SegmentedString&&);
+    ExceptionOr<void> write(Document* entryDocument, FixedVector<std::variant<RefPtr<TrustedHTML>, String>>&&);
+    ExceptionOr<void> writeln(Document* entryDocument, FixedVector<std::variant<RefPtr<TrustedHTML>, String>>&&);
     WEBCORE_EXPORT ExceptionOr<void> write(Document* entryDocument, FixedVector<String>&&);
     WEBCORE_EXPORT ExceptionOr<void> writeln(Document* entryDocument, FixedVector<String>&&);
 
@@ -1689,6 +1689,11 @@ public:
 
     void performPendingViewTransitions();
 
+    bool renderingIsSuppressedForViewTransition() const;
+    void setRenderingIsSuppressedForViewTransitionAfterUpdateRendering();
+    void clearRenderingIsSuppressedForViewTransition();
+    void flushDeferredRenderingIsSuppressedForViewTransitionChanges();
+
 #if ENABLE(MEDIA_STREAM)
     void setHasCaptureMediaStreamTrack() { m_hasHadCaptureMediaStreamTrack = true; }
     bool hasHadCaptureMediaStreamTrack() const { return m_hasHadCaptureMediaStreamTrack; }
@@ -1957,6 +1962,8 @@ private:
     void frameDestroyed() final;
 
     void commonTeardown();
+
+    ExceptionOr<void> write(Document* entryDocument, FixedVector<std::variant<RefPtr<TrustedHTML>, String>>&&, ASCIILiteral lineFeed);
 
     WEBCORE_EXPORT Quirks& ensureQuirks();
     WEBCORE_EXPORT CachedResourceLoader& ensureCachedResourceLoader();
@@ -2582,6 +2589,8 @@ private:
 #endif
 
     bool m_hasViewTransitionPseudoElementTree { false };
+    bool m_renderingIsSuppressedForViewTransition { false };
+    bool m_enableRenderingIsSuppressedForViewTransitionAfterUpdateRendering { false };
 
 #if ENABLE(TOUCH_ACTION_REGIONS)
     bool m_mayHaveElementsWithNonAutoTouchAction { false };

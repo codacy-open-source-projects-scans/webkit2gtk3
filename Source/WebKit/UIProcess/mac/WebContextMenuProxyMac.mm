@@ -621,6 +621,9 @@ static NSString *menuItemIdentifier(const WebCore::ContextMenuAction action)
     case ContextMenuItemTagToggleVideoFullscreen:
         return _WKMenuItemIdentifierToggleFullScreen;
 
+    case ContextMenuItemTagToggleVideoViewer:
+        return _WKMenuItemIdentifierToggleVideoViewer;
+
     case ContextMenuItemTagTranslate:
         return _WKMenuItemIdentifierTranslate;
 
@@ -746,7 +749,7 @@ void WebContextMenuProxyMac::getContextMenuFromItems(const Vector<WebContextMenu
     }
 #endif
 
-#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+#if ENABLE(WRITING_TOOLS)
     if (!page()->canHandleSwapCharacters() || isPopover) {
         filteredItems.removeAllMatching([] (auto& item) {
             return item.action() == ContextMenuItemTagSwapCharacters;

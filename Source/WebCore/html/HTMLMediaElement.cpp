@@ -48,6 +48,7 @@
 #include "ContentSecurityPolicy.h"
 #include "ContentType.h"
 #include "CookieJar.h"
+#include "DNS.h"
 #include "DeprecatedGlobalSettings.h"
 #include "DiagnosticLoggingClient.h"
 #include "DiagnosticLoggingKeys.h"
@@ -2572,12 +2573,16 @@ bool HTMLMediaElement::isSafeToLoadURL(const URL& url, InvalidURLAction actionIf
         return false;
     }
 
-    if (!portAllowed(url)) {
+    if (!portAllowed(url) || isIPAddressDisallowed(url)) {
         if (actionIfInvalid == Complain) {
             if (frame)
                 FrameLoader::reportBlockedLoadFailed(*frame, url);
-            if (shouldLog)
-                ERROR_LOG(LOGIDENTIFIER, url , " was rejected because the port is not allowed");
+            if (shouldLog) {
+                if (isIPAddressDisallowed(url))
+                    ERROR_LOG(LOGIDENTIFIER, url , " was rejected because the address not allowed");
+                else
+                    ERROR_LOG(LOGIDENTIFIER, url , " was rejected because the port is not allowed");
+            }
         }
         return false;
     }
@@ -2884,9 +2889,19 @@ void HTMLMediaElement::changeNetworkStateFromLoadingToIdle()
 void HTMLMediaElement::mediaPlayerReadyStateChanged()
 {
     if (isSuspended()) {
-        queueTaskKeepingObjectAlive(*this, TaskSource::MediaElement, [this] {
-            mediaPlayerReadyStateChanged();
-        });
+        // FIXME: In some situations the MediaSource closing procedure triggerring a readyState
+        // update on the player, while the media element is suspended would lead to infinite
+        // recursion. The workaround is to attempt a fixed amount of recursions.
+        if (!m_isChangingReadyStateWhileSuspended) {
+            m_isChangingReadyStateWhileSuspended = true;
+            m_remainingReadyStateChangedAttempts.store(128);
+        }
+
+        if (m_remainingReadyStateChangedAttempts.exchangeSub(1)) {
+            queueTaskKeepingObjectAlive(*this, TaskSource::MediaElement, [this] {
+                mediaPlayerReadyStateChanged();
+            });
+        }
         return;
     }
 
@@ -2895,6 +2910,9 @@ void HTMLMediaElement::mediaPlayerReadyStateChanged()
     setReadyState(m_player->readyState());
 
     endProcessingMediaPlayerCallback();
+
+    m_isChangingReadyStateWhileSuspended = false;
+    m_remainingReadyStateChangedAttempts.store(0);
 }
 
 Expected<void, MediaPlaybackDenialReason> HTMLMediaElement::canTransitionFromAutoplayToPlay() const
@@ -3482,6 +3500,9 @@ void HTMLMediaElement::progressEventTimerFired()
     ASSERT(m_player);
     if (m_networkState != NETWORK_LOADING)
         return;
+
+    updateSleepDisabling();
+
     if (!m_player->supportsProgressMonitoring())
         return;
 
@@ -5946,7 +5967,7 @@ void HTMLMediaElement::mediaEngineWasUpdated()
 #endif
 
     if (RefPtr page = document().page())
-        page->playbackControlsMediaEngineChanged();
+        page->mediaEngineChanged(*this);
 }
 
 void HTMLMediaElement::mediaPlayerEngineUpdated()
@@ -7114,8 +7135,10 @@ bool HTMLMediaElement::videoUsesElementFullscreen() const
 {
 #if ENABLE(FULLSCREEN_API) && ENABLE(VIDEO_USES_ELEMENT_FULLSCREEN)
 #if ENABLE(LINEAR_MEDIA_PLAYER)
-    if (document().settings().linearMediaPlayerEnabled())
-        return false;
+    if (document().settings().linearMediaPlayerEnabled()) {
+        if (RefPtr player = m_player; player && player->supportsLinearMediaPlayer())
+            return false;
+    }
 #endif
 
 #if PLATFORM(IOS_FAMILY)
@@ -7166,7 +7189,7 @@ void HTMLMediaElement::enterFullscreen(VideoFullscreenMode mode)
         if (isContextStopped())
             return;
 
-        if (document().hidden()) {
+        if (document().hidden() && mode != HTMLMediaElementEnums::VideoFullscreenModePictureInPicture) {
             ALWAYS_LOG(logIdentifier, " returning because document is hidden");
             m_changingVideoFullscreenMode = false;
             return;

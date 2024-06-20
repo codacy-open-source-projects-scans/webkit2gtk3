@@ -55,7 +55,9 @@
 #include "WebSWServerToContextConnectionMessages.h"
 #include "WebServiceWorkerFetchTaskClient.h"
 #include "WebSocketProvider.h"
+#include "WebStorageProvider.h"
 #include "WebUserContentController.h"
+#include "WebWorkerClient.h"
 #include <WebCore/EditorClient.h>
 #include <WebCore/EmptyClients.h>
 #include <WebCore/MessageWithMessagePorts.h>
@@ -166,6 +168,8 @@ void WebSWContextManagerConnection::installServiceWorker(ServiceWorkerContextDat
 #if ENABLE(WEB_RTC)
         pageConfiguration.webRTCProvider = makeUniqueRef<RemoteWorkerLibWebRTCProvider>();
 #endif
+        pageConfiguration.storageProvider = makeUniqueRef<WebStorageProvider>(WebProcess::singleton().mediaKeysStorageDirectory(), WebProcess::singleton().mediaKeysStorageSalt());
+
         if (auto* serviceWorkerPage = m_serviceWorkerPageIdentifier ? Page::serviceWorkerPage(*m_serviceWorkerPageIdentifier) : nullptr)
             pageConfiguration.corsDisablingPatterns = serviceWorkerPage->corsDisablingPatterns();
 
@@ -203,7 +207,10 @@ void WebSWContextManagerConnection::installServiceWorker(ServiceWorkerContextDat
         notificationClient = makeUnique<WebNotificationClient>(nullptr);
 #endif
 
-        auto serviceWorkerThreadProxy = ServiceWorkerThreadProxy::create(WTFMove(page), WTFMove(contextData), WTFMove(workerData), WTFMove(effectiveUserAgent), workerThreadMode, WebProcess::singleton().cacheStorageProvider(), WTFMove(notificationClient));
+        auto serviceWorkerThreadProxy = ServiceWorkerThreadProxy::create(Ref { page }, WTFMove(contextData), WTFMove(workerData), WTFMove(effectiveUserAgent), workerThreadMode, WebProcess::singleton().cacheStorageProvider(), WTFMove(notificationClient));
+
+        auto workerClient = WebWorkerClient::create(WTFMove(page), serviceWorkerThreadProxy->thread());
+        serviceWorkerThreadProxy->thread().setWorkerClient(workerClient.moveToUniquePtr());
 
         if (lastNavigationWasAppInitiated)
             serviceWorkerThreadProxy->setLastNavigationWasAppInitiated(lastNavigationWasAppInitiated == WebCore::LastNavigationWasAppInitiated::Yes);

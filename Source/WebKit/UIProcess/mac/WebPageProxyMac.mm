@@ -47,6 +47,7 @@
 #import "WKBrowsingContextControllerInternal.h"
 #import "WKQuickLookPreviewController.h"
 #import "WKSharingServicePickerDelegate.h"
+#import "WebAutomationSession.h"
 #import "WebContextMenuProxyMac.h"
 #import "WebPageMessages.h"
 #import "WebPageProxyInternals.h"
@@ -71,8 +72,8 @@
 #import <wtf/ProcessPrivilege.h>
 #import <wtf/text/StringConcatenate.h>
 
-#define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, process().connection())
-#define MESSAGE_CHECK_URL(url) MESSAGE_CHECK_BASE(checkURLReceivedFromCurrentOrPreviousWebProcess(m_process, url), m_process->connection())
+#define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, legacyMainFrameProcess().connection())
+#define MESSAGE_CHECK_URL(url) MESSAGE_CHECK_BASE(checkURLReceivedFromCurrentOrPreviousWebProcess(m_legacyMainFrameProcess, url), m_legacyMainFrameProcess->connection())
 #define MESSAGE_CHECK_WITH_RETURN_VALUE(assertion, returnValue) MESSAGE_CHECK_WITH_RETURN_VALUE_BASE(assertion, process().connection(), returnValue)
 
 @interface NSApplication ()
@@ -353,7 +354,7 @@ void WebPageProxy::executeSavedCommandBySelector(const String& selector, Complet
 
 bool WebPageProxy::shouldDelayWindowOrderingForEvent(const WebKit::WebMouseEvent& event)
 {
-    if (process().state() != WebProcessProxy::State::Running)
+    if (legacyMainFrameProcess().state() != WebProcessProxy::State::Running)
         return false;
 
     const Seconds messageTimeout(3);
@@ -364,17 +365,21 @@ bool WebPageProxy::shouldDelayWindowOrderingForEvent(const WebKit::WebMouseEvent
 
 bool WebPageProxy::acceptsFirstMouse(int eventNumber, const WebKit::WebMouseEvent& event)
 {
+    // FIXME <https://webkit.org/b/275500>: Find a way to properly ensure that automated events get delivered into an unfocused window.
+    if (eventNumber == WebAutomationSession::synthesizedMouseEventMagicEventNumber)
+        return true;
+
     if (!hasRunningProcess())
         return false;
 
-    if (!m_process->hasConnection())
+    if (!m_legacyMainFrameProcess->hasConnection())
         return false;
 
     if (shouldAvoidSynchronouslyWaitingToPreventDeadlock())
         return false;
 
     send(Messages::WebPage::RequestAcceptsFirstMouse(eventNumber, event), IPC::SendOption::DispatchMessageEvenWhenWaitingForUnboundedSyncReply);
-    bool receivedReply = m_process->connection()->waitForAndDispatchImmediately<Messages::WebPageProxy::HandleAcceptsFirstMouse>(webPageID(), 3_s, IPC::WaitForOption::InterruptWaitingIfSyncMessageArrives) == IPC::Error::NoError;
+    bool receivedReply = m_legacyMainFrameProcess->connection()->waitForAndDispatchImmediately<Messages::WebPageProxy::HandleAcceptsFirstMouse>(webPageID(), 3_s, IPC::WaitForOption::InterruptWaitingIfSyncMessageArrives) == IPC::Error::NoError;
 
     if (!receivedReply)
         return false;

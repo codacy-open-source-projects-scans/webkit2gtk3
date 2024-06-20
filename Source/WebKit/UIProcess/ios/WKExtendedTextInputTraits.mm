@@ -131,13 +131,16 @@
     self.selectionHandleColor = nil;
     self.selectionHighlightColor = nil;
 
-#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+#if ENABLE(WRITING_TOOLS)
     [self restoreDefaultUnifiedTextReplacementBehaviorValue];
 #endif
 }
 
-#if USE(APPLE_INTERNAL_SDK)
-#import <WebKitAdditions/WKExtendedTextInputTraitsAdditions.mm>
+#if ENABLE(WRITING_TOOLS)
+- (void)restoreDefaultUnifiedTextReplacementBehaviorValue
+{
+    self.writingToolsBehavior = UIWritingToolsBehaviorLimited;
+}
 #endif
 
 @end

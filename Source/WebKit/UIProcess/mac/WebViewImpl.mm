@@ -67,7 +67,7 @@
 #import "WKQuickLookPreviewController.h"
 #import "WKRevealItemPresenter.h"
 #import "WKSafeBrowsingWarning.h"
-#import "WKTextIndicatorStyleManager.h"
+#import "WKTextAnimationManager.h"
 #import "WKTextInputWindowController.h"
 #import "WKTextPlaceholder.h"
 #import "WKViewLayoutStrategy.h"
@@ -80,7 +80,6 @@
 #import "WebPageProxy.h"
 #import "WebProcessPool.h"
 #import "WebProcessProxy.h"
-#import "WebTextReplacementData.h"
 #import "_WKDragActionsInternal.h"
 #import "_WKRemoteObjectRegistryInternal.h"
 #import "_WKThumbnailViewInternal.h"
@@ -133,6 +132,8 @@
 #import <pal/spi/cocoa/NSAccessibilitySPI.h>
 #import <pal/spi/cocoa/NSTouchBarSPI.h>
 #import <pal/spi/cocoa/VisionKitCoreSPI.h>
+#import <pal/spi/cocoa/WritingToolsSPI.h>
+#import <pal/spi/cocoa/WritingToolsUISPI.h>
 #import <pal/spi/mac/LookupSPI.h>
 #import <pal/spi/mac/NSAppearanceSPI.h>
 #import <pal/spi/mac/NSApplicationSPI.h>
@@ -160,13 +161,10 @@
 #include "MediaSessionCoordinatorProxyPrivate.h"
 #endif
 
-#if USE(APPLE_INTERNAL_SDK)
-#import <WebKitAdditions/WebViewImplAdditionsBefore.mm>
-#endif
-
 #import <pal/cocoa/RevealSoftLink.h>
 #import <pal/cocoa/VisionKitCoreSoftLink.h>
 #import <pal/cocoa/TranslationUIServicesSoftLink.h>
+#import <pal/cocoa/WritingToolsUISoftLink.h>
 #import <pal/mac/DataDetectorsSoftLink.h>
 
 #if HAVE(TOUCH_BAR) && ENABLE(WEB_PLAYBACK_CONTROLS_MANAGER)
@@ -1330,7 +1328,7 @@ WebViewImpl::WebViewImpl(NSView <WebViewImplDelegate> *view, WKWebView *outerWeb
 WebViewImpl::~WebViewImpl()
 {
     if (m_remoteObjectRegistry) {
-        m_page->process().processPool().removeMessageReceiver(Messages::RemoteObjectRegistry::messageReceiverName(), m_page->identifier());
+        m_page->configuration().processPool().removeMessageReceiver(Messages::RemoteObjectRegistry::messageReceiverName(), m_page->identifier());
         [m_remoteObjectRegistry _invalidate];
         m_remoteObjectRegistry = nil;
     }
@@ -2142,7 +2140,7 @@ void WebViewImpl::windowDidChangeOcclusionState()
 
 void WebViewImpl::screenDidChangeColorSpace()
 {
-    m_page->process().processPool().screenPropertiesChanged();
+    m_page->configuration().processPool().screenPropertiesChanged();
 }
 
 bool WebViewImpl::mightBeginDragWhileInactive()
@@ -2788,12 +2786,13 @@ void WebViewImpl::selectionDidChange()
         updateCursorAccessoryPlacement();
 #endif
 
-#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
+#if ENABLE(WRITING_TOOLS)
     if (wantsCompleteUnifiedTextReplacementBehavior()) {
         auto isRange = m_page->editorState().hasPostLayoutData() && m_page->editorState().selectionIsRange;
         auto selectionRect = isRange ? m_page->editorState().postLayoutData->selectionBoundingRect : IntRect { };
 
-        scheduleShowSwapCharactersViewForSelectionRectOfView(selectionRect, m_view.getAutoreleased());
+        // The affordance will only show up if the selected range consists of >= 50 characters.
+        [[PAL::getWTWritingToolsClass() sharedInstance] scheduleShowAffordanceForSelectionRect:selectionRect ofView:m_view.getAutoreleased() forDelegate:(NSObject<WTWritingToolsDelegate> *)m_view.getAutoreleased()];
     }
 #endif
 
@@ -3083,7 +3082,7 @@ void WebViewImpl::setContinuousSpellCheckingEnabled(bool enabled)
         return;
 
     TextChecker::setContinuousSpellCheckingEnabled(enabled);
-    m_page->process().updateTextCheckerState();
+    m_page->legacyMainFrameProcess().updateTextCheckerState();
 }
 
 void WebViewImpl::toggleContinuousSpellChecking()
@@ -3091,7 +3090,7 @@ void WebViewImpl::toggleContinuousSpellChecking()
     bool spellCheckingEnabled = !TextChecker::state().isContinuousSpellCheckingEnabled;
     TextChecker::setContinuousSpellCheckingEnabled(spellCheckingEnabled);
 
-    m_page->process().updateTextCheckerState();
+    m_page->legacyMainFrameProcess().updateTextCheckerState();
 }
 
 bool WebViewImpl::isGrammarCheckingEnabled()
@@ -3105,7 +3104,7 @@ void WebViewImpl::setGrammarCheckingEnabled(bool flag)
         return;
 
     TextChecker::setGrammarCheckingEnabled(flag);
-    m_page->process().updateTextCheckerState();
+    m_page->legacyMainFrameProcess().updateTextCheckerState();
 }
 
 void WebViewImpl::toggleGrammarChecking()
@@ -3113,14 +3112,14 @@ void WebViewImpl::toggleGrammarChecking()
     bool grammarCheckingEnabled = !TextChecker::state().isGrammarCheckingEnabled;
     TextChecker::setGrammarCheckingEnabled(grammarCheckingEnabled);
 
-    m_page->process().updateTextCheckerState();
+    m_page->legacyMainFrameProcess().updateTextCheckerState();
 }
 
 void WebViewImpl::toggleAutomaticSpellingCorrection()
 {
     TextChecker::setAutomaticSpellingCorrectionEnabled(!TextChecker::state().isAutomaticSpellingCorrectionEnabled);
 
-    m_page->process().updateTextCheckerState();
+    m_page->legacyMainFrameProcess().updateTextCheckerState();
 }
 
 void WebViewImpl::orderFrontSubstitutionsPanel(id sender)
@@ -3155,13 +3154,13 @@ void WebViewImpl::setAutomaticQuoteSubstitutionEnabled(bool flag)
         return;
 
     TextChecker::setAutomaticQuoteSubstitutionEnabled(flag);
-    m_page->process().updateTextCheckerState();
+    m_page->legacyMainFrameProcess().updateTextCheckerState();
 }
 
 void WebViewImpl::toggleAutomaticQuoteSubstitution()
 {
     TextChecker::setAutomaticQuoteSubstitutionEnabled(!TextChecker::state().isAutomaticQuoteSubstitutionEnabled);
-    m_page->process().updateTextCheckerState();
+    m_page->legacyMainFrameProcess().updateTextCheckerState();
 }
 
 bool WebViewImpl::isAutomaticDashSubstitutionEnabled()
@@ -3175,13 +3174,13 @@ void WebViewImpl::setAutomaticDashSubstitutionEnabled(bool flag)
         return;
 
     TextChecker::setAutomaticDashSubstitutionEnabled(flag);
-    m_page->process().updateTextCheckerState();
+    m_page->legacyMainFrameProcess().updateTextCheckerState();
 }
 
 void WebViewImpl::toggleAutomaticDashSubstitution()
 {
     TextChecker::setAutomaticDashSubstitutionEnabled(!TextChecker::state().isAutomaticDashSubstitutionEnabled);
-    m_page->process().updateTextCheckerState();
+    m_page->legacyMainFrameProcess().updateTextCheckerState();
 }
 
 bool WebViewImpl::isAutomaticLinkDetectionEnabled()
@@ -3195,13 +3194,13 @@ void WebViewImpl::setAutomaticLinkDetectionEnabled(bool flag)
         return;
 
     TextChecker::setAutomaticLinkDetectionEnabled(flag);
-    m_page->process().updateTextCheckerState();
+    m_page->legacyMainFrameProcess().updateTextCheckerState();
 }
 
 void WebViewImpl::toggleAutomaticLinkDetection()
 {
     TextChecker::setAutomaticLinkDetectionEnabled(!TextChecker::state().isAutomaticLinkDetectionEnabled);
-    m_page->process().updateTextCheckerState();
+    m_page->legacyMainFrameProcess().updateTextCheckerState();
 }
 
 bool WebViewImpl::isAutomaticTextReplacementEnabled()
@@ -3215,13 +3214,13 @@ void WebViewImpl::setAutomaticTextReplacementEnabled(bool flag)
         return;
 
     TextChecker::setAutomaticTextReplacementEnabled(flag);
-    m_page->process().updateTextCheckerState();
+    m_page->legacyMainFrameProcess().updateTextCheckerState();
 }
 
 void WebViewImpl::toggleAutomaticTextReplacement()
 {
     TextChecker::setAutomaticTextReplacementEnabled(!TextChecker::state().isAutomaticTextReplacementEnabled);
-    m_page->process().updateTextCheckerState();
+    m_page->legacyMainFrameProcess().updateTextCheckerState();
 }
 
 void WebViewImpl::uppercaseWord()
@@ -3246,8 +3245,8 @@ NSTextCheckingTypes WebViewImpl::getTextCheckingTypes() const
     if (allowsInlinePredictions()) {
         types |= (NSTextCheckingType)_NSTextCheckingTypeSingleCompletion;
 
-#if HAVE(TEXT_CHECKING_TYPE_GRAMMAR)
-        types |= (NSTextCheckingType)_NSTextCheckingTypeGrammar;
+#if HAVE(NS_TEXT_CHECKING_TYPE_MATH_COMPLETION)
+        types |= (NSTextCheckingType)_NSTextCheckingTypeMathCompletion;
 #endif
     }
 #endif
@@ -3440,8 +3439,8 @@ void WebViewImpl::dismissContentRelativeChildWindowsFromViewOnly()
 
 bool WebViewImpl::hasContentRelativeChildViews() const
 {
-#if ENABLE(UNIFIED_TEXT_REPLACEMENT_UI)
-    return [m_textIndicatorStyleManager hasActiveTextIndicatorStyle];
+#if ENABLE(WRITING_TOOLS)
+    return [m_TextAnimationTypeManager hasActiveTextAnimationType];
 #else
     return false;
 #endif
@@ -3477,15 +3476,15 @@ void WebViewImpl::contentRelativeViewsHysteresisTimerFired(PAL::HysteresisState 
 
 void WebViewImpl::suppressContentRelativeChildViews()
 {
-#if ENABLE(UNIFIED_TEXT_REPLACEMENT_UI)
-    [m_textIndicatorStyleManager suppressTextIndicatorStyle];
+#if ENABLE(WRITING_TOOLS)
+    [m_TextAnimationTypeManager suppressTextAnimationType];
 #endif
 }
 
 void WebViewImpl::restoreContentRelativeChildViews()
 {
-#if ENABLE(UNIFIED_TEXT_REPLACEMENT_UI)
-    [m_textIndicatorStyleManager restoreTextIndicatorStyle];
+#if ENABLE(WRITING_TOOLS)
+    [m_TextAnimationTypeManager restoreTextAnimationType];
 #endif
 }
 
@@ -3604,7 +3603,7 @@ void WebViewImpl::setIgnoresMouseDraggedEvents(bool ignoresMouseDraggedEvents)
 
 void WebViewImpl::setAccessibilityWebProcessToken(NSData *data, WebCore::FrameIdentifier frameID, pid_t pid)
 {
-    if (pid == m_page->process().processID()) {
+    if (pid == m_page->legacyMainFrameProcess().processID()) {
         m_remoteAccessibilityChild = data.length ? adoptNS([[NSAccessibilityRemoteUIElement alloc] initWithRemoteToken:data]) : nil;
         updateRemoteAccessibilityRegistration(true);
     }
@@ -3617,7 +3616,7 @@ void WebViewImpl::updateRemoteAccessibilityRegistration(bool registerProcess)
     // away, that information is not present in WebProcess
     pid_t pid = 0;
     if (registerProcess)
-        pid = m_page->process().processID();
+        pid = m_page->legacyMainFrameProcess().processID();
     else if (!registerProcess) {
         pid = [m_remoteAccessibilityChild processIdentifier];
         m_remoteAccessibilityChild = nil;
@@ -3959,7 +3958,7 @@ _WKRemoteObjectRegistry *WebViewImpl::remoteObjectRegistry()
 {
     if (!m_remoteObjectRegistry) {
         m_remoteObjectRegistry = adoptNS([[_WKRemoteObjectRegistry alloc] _initWithWebPageProxy:m_page.get()]);
-        m_page->process().processPool().addMessageReceiver(Messages::RemoteObjectRegistry::messageReceiverName(), m_page->identifier(), [m_remoteObjectRegistry remoteObjectRegistry]);
+        m_page->configuration().processPool().addMessageReceiver(Messages::RemoteObjectRegistry::messageReceiverName(), m_page->identifier(), [m_remoteObjectRegistry remoteObjectRegistry]);
     }
 
     return m_remoteObjectRegistry.get();
@@ -4458,14 +4457,14 @@ static NSPasteboard *pasteboardForAccessCategory(WebCore::DOMPasteAccessCategory
     }
 }
 
-void WebViewImpl::requestDOMPasteAccess(WebCore::DOMPasteAccessCategory pasteAccessCategory, const WebCore::IntRect&, const String& originIdentifier, CompletionHandler<void(WebCore::DOMPasteAccessResponse)>&& completion)
+void WebViewImpl::requestDOMPasteAccess(WebCore::DOMPasteAccessCategory pasteAccessCategory, WebCore::DOMPasteRequiresInteraction requiresInteraction, const WebCore::IntRect&, const String& originIdentifier, CompletionHandler<void(WebCore::DOMPasteAccessResponse)>&& completion)
 {
     ASSERT(!m_domPasteRequestHandler);
     hideDOMPasteMenuWithResult(WebCore::DOMPasteAccessResponse::DeniedForGesture);
 
     NSData *data = [pasteboardForAccessCategory(pasteAccessCategory) dataForType:@(WebCore::PasteboardCustomData::cocoaType().characters())];
     auto buffer = WebCore::SharedBuffer::create(data);
-    if (WebCore::PasteboardCustomData::fromSharedBuffer(buffer.get()).origin() == originIdentifier) {
+    if (requiresInteraction == WebCore::DOMPasteRequiresInteraction::No && WebCore::PasteboardCustomData::fromSharedBuffer(buffer.get()).origin() == originIdentifier) {
         m_page->grantAccessToCurrentPasteboardData(pasteboardNameForAccessCategory(pasteAccessCategory));
         completion(WebCore::DOMPasteAccessResponse::GrantedForGesture);
         return;
@@ -4606,27 +4605,24 @@ void WebViewImpl::removeTextPlaceholder(NSTextPlaceholder *placeholder, bool wil
         completionHandler();
 }
 
-#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
-void WebViewImpl::addTextIndicatorStyleForID(WTF::UUID uuid, const WebKit::TextIndicatorStyleData& data)
+#if ENABLE(WRITING_TOOLS_UI)
+void WebViewImpl::addTextAnimationTypeForID(WTF::UUID uuid, const WebKit::TextAnimationData& data)
 {
-    if (!m_page->preferences().textIndicatorStylingEnabled())
+    if (!m_page->preferences().textAnimationsEnabled())
         return;
 
-    if (![WKTextIndicatorStyleManager supportsTextIndicatorStyle])
-        return;
+    if (!m_TextAnimationTypeManager)
+        m_TextAnimationTypeManager = adoptNS([[WKTextAnimationManager alloc] initWithWebViewImpl:*this]);
 
-    if (!m_textIndicatorStyleManager)
-        m_textIndicatorStyleManager = adoptNS([[WKTextIndicatorStyleManager alloc] initWithWebViewImpl:*this]);
-
-    [m_textIndicatorStyleManager addTextIndicatorStyleForID:uuid withData:data];
+    [m_TextAnimationTypeManager addTextAnimationTypeForID:uuid withData:data];
 }
 
-void WebViewImpl::removeTextIndicatorStyleForID(WTF::UUID uuid)
+void WebViewImpl::removeTextAnimationForID(WTF::UUID uuid)
 {
-    if (!m_page->preferences().textIndicatorStylingEnabled())
+    if (!m_page->preferences().textAnimationsEnabled())
         return;
 
-    [m_textIndicatorStyleManager removeTextIndicatorStyleForID:uuid];
+    [m_TextAnimationTypeManager removeTextAnimationForID:uuid];
 }
 #endif
 
@@ -6189,9 +6185,18 @@ void WebViewImpl::togglePictureInPicture()
     [m_playbackControlsManager togglePictureInPicture];
 }
 
+
+RefPtr<PlatformPlaybackSessionInterface> WebViewImpl::protectedPlaybackSessionInterface() const
+{
+    if (RefPtr manager = m_page->playbackSessionManager())
+        return manager->controlsManagerInterface();
+
+    return nullptr;
+}
+
 bool WebViewImpl::isInWindowFullscreenActive() const
 {
-    if (auto* interface = m_page->playbackSessionManager()->controlsManagerInterface())
+    if (RefPtr interface = protectedPlaybackSessionInterface())
         return interface->isInWindowFullscreenActive();
 
     return false;
@@ -6199,7 +6204,7 @@ bool WebViewImpl::isInWindowFullscreenActive() const
 
 void WebViewImpl::toggleInWindowFullscreen()
 {
-    if (auto* interface = m_page->playbackSessionManager()->controlsManagerInterface())
+    if (RefPtr interface = protectedPlaybackSessionInterface())
         return interface->toggleInWindowFullscreen();
 }
 
@@ -6214,8 +6219,8 @@ void WebViewImpl::updateMediaPlaybackControlsManager()
         [m_playbackControlsManager setCanTogglePictureInPicture:NO];
     }
 
-    if (WebCore::PlatformPlaybackSessionInterface* interface = m_page->playbackSessionManager()->controlsManagerInterface()) {
-        [m_playbackControlsManager setPlaybackSessionInterfaceMac:interface];
+    if (RefPtr interface = protectedPlaybackSessionInterface()) {
+        [m_playbackControlsManager setPlaybackSessionInterfaceMac:interface.get()];
         interface->updatePlaybackControlsManagerCanTogglePictureInPicture();
     }
 }
@@ -6448,8 +6453,8 @@ void WebViewImpl::handleContextMenuTranslation(const WebCore::TranslationContext
 
 #endif // HAVE(TRANSLATION_UI_SERVICES) && ENABLE(CONTEXT_MENUS)
 
-#if ENABLE(UNIFIED_TEXT_REPLACEMENT)
-WebUnifiedTextReplacementBehavior WebViewImpl::unifiedTextReplacementBehavior() const
+#if ENABLE(WRITING_TOOLS)
+WebCore::WritingTools::Behavior WebViewImpl::unifiedTextReplacementBehavior() const
 {
     return m_page->configuration().unifiedTextReplacementBehavior();
 }
@@ -6460,11 +6465,11 @@ bool WebViewImpl::wantsCompleteUnifiedTextReplacementBehavior() const
 }
 #endif
 
-#if ENABLE(UNIFIED_TEXT_REPLACEMENT) && ENABLE(CONTEXT_MENUS)
+#if ENABLE(WRITING_TOOLS) && ENABLE(CONTEXT_MENUS)
 
 bool WebViewImpl::canHandleSwapCharacters() const
 {
-    return webViewCanHandleSwapCharacters() && unifiedTextReplacementBehavior() != WebUnifiedTextReplacementBehavior::None;
+    return [PAL::getWTWritingToolsViewControllerClass() isAvailable] && unifiedTextReplacementBehavior() != WebCore::WritingTools::Behavior::None;
 }
 
 void WebViewImpl::handleContextMenuSwapCharacters(IntRect selectionBoundsInRootView)
@@ -6475,7 +6480,7 @@ void WebViewImpl::handleContextMenuSwapCharacters(IntRect selectionBoundsInRootV
     }
 
     auto view = m_view.get();
-    showSwapCharactersViewRelativeToRectOfView(selectionBoundsInRootView, view.get());
+    [[PAL::getWTWritingToolsClass() sharedInstance] showPanelForSelectionRect:selectionBoundsInRootView ofView:view.get() forDelegate:(NSObject<WTWritingToolsDelegate> *)view.get()];
 }
 #endif
 
@@ -6691,10 +6696,6 @@ Ref<WebPageProxy> WebViewImpl::protectedPage() const
 {
     return m_page.get();
 }
-
-#if USE(APPLE_INTERNAL_SDK)
-#import <WebKitAdditions/WebViewImplAdditionsAfter.mm>
-#endif
 
 } // namespace WebKit
 

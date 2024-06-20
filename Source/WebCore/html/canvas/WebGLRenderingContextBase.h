@@ -445,7 +445,7 @@ public:
 #if ENABLE(MEDIA_STREAM) || ENABLE(WEB_CODECS)
     RefPtr<VideoFrame> surfaceBufferToVideoFrame(SurfaceBuffer);
 #endif
-    void markDrawingBuffersDirtyAfterTransfer();
+    RefPtr<ImageBuffer> transferToImageBuffer() final;
 
     void removeSharedObject(WebGLObject&);
     void removeContextObject(WebGLObject&);
@@ -458,7 +458,8 @@ public:
     void vertexAttribDivisor(GCGLuint index, GCGLuint divisor);
 
     // GraphicsContextGL::Client
-    void forceContextLost() override;
+    void forceContextLost() final;
+    void addDebugMessage(GCGLenum, GCGLenum, GCGLenum, const String&) final;
 
     void recycleContext();
 

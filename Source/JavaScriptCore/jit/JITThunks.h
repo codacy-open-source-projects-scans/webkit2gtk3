@@ -77,6 +77,8 @@ class NativeExecutable;
     macro(GetByIdCustomAccessorHandler, getByIdCustomAccessorHandler) \
     macro(GetByIdCustomValueHandler, getByIdCustomValueHandler) \
     macro(GetByIdGetterHandler, getByIdGetterHandler) \
+    macro(GetByIdProxyObjectLoadHandler, getByIdProxyObjectLoadHandler) \
+    macro(GetByIdModuleNamespaceLoadHandler, getByIdModuleNamespaceLoadHandler) \
     macro(PutByIdReplaceHandler, putByIdReplaceHandlerCodeGenerator) \
     macro(PutByIdTransitionNonAllocatingHandler, putByIdTransitionNonAllocatingHandlerCodeGenerator) \
     macro(PutByIdTransitionNewlyAllocatingHandler, putByIdTransitionNewlyAllocatingHandlerCodeGenerator) \
@@ -85,6 +87,10 @@ class NativeExecutable;
     macro(PutByIdCustomValueHandler, putByIdCustomValueHandler) \
     macro(PutByIdStrictSetterHandler, putByIdStrictSetterHandler) \
     macro(PutByIdSloppySetterHandler, putByIdSloppySetterHandler) \
+    macro(InByIdHitHandler, inByIdHitHandler) \
+    macro(InByIdMissHandler, inByIdMissHandler) \
+    macro(InstanceOfHitHandler, instanceOfHitHandler) \
+    macro(InstanceOfMissHandler, instanceOfMissHandler) \
 
 #if ENABLE(YARR_JIT_BACKREFERENCES_FOR_16BIT_EXPRS)
 #define JSC_FOR_EACH_YARR_JIT_BACKREFERENCES_THUNK(macro) \

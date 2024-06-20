@@ -133,8 +133,10 @@ namespace WebCore {
     M(TextShaping) \
     M(Tiling) \
     M(Threading) \
+    M(UnifiedTextReplacement) \
     M(URLParser) \
     M(Viewports) \
+    M(ViewTransitions) \
     M(VirtualMemory) \
     M(WebAudio) \
     M(WebGL) \

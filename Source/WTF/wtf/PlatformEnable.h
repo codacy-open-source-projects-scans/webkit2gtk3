@@ -561,6 +561,14 @@
 #define ENABLE_WHEEL_EVENT_REGIONS 0
 #endif
 
+#if !defined(ENABLE_WRITING_TOOLS)
+#define ENABLE_WRITING_TOOLS 0
+#endif
+
+#if !defined(ENABLE_WRITING_TOOLS_UI)
+#define ENABLE_WRITING_TOOLS_UI 0
+#endif
+
 #if !defined(ENABLE_WKPDFVIEW)
 #define ENABLE_WKPDFVIEW 0
 #endif
