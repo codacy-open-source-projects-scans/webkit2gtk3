@@ -130,18 +130,7 @@
     self.insertionPointColor = nil;
     self.selectionHandleColor = nil;
     self.selectionHighlightColor = nil;
-
-#if ENABLE(WRITING_TOOLS)
-    [self restoreDefaultUnifiedTextReplacementBehaviorValue];
-#endif
 }
-
-#if ENABLE(WRITING_TOOLS)
-- (void)restoreDefaultUnifiedTextReplacementBehaviorValue
-{
-    self.writingToolsBehavior = UIWritingToolsBehaviorLimited;
-}
-#endif
 
 @end
 

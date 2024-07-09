@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2012 Google Inc. All rights reserved.
- * Copyright (C) 2013-2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -176,6 +176,7 @@
 #include "PseudoElement.h"
 #include "PushSubscription.h"
 #include "PushSubscriptionData.h"
+#include "RTCNetworkManager.h"
 #include "RTCRtpSFrameTransform.h"
 #include "Range.h"
 #include "ReadableStream.h"
@@ -259,8 +260,8 @@
 #include <wtf/ProcessID.h>
 #include <wtf/RunLoop.h>
 #include <wtf/URLHelpers.h>
+#include <wtf/text/MakeString.h>
 #include <wtf/text/StringBuilder.h>
-#include <wtf/text/StringConcatenateNumbers.h>
 #include <wtf/text/StringToIntegerConversion.h>
 
 #if USE(CG)
@@ -503,8 +504,8 @@ static bool markerTypeFrom(const String& markerType, DocumentMarker::Type& resul
         result = DocumentMarker::Type::TelephoneNumber;
 #endif
 #if ENABLE(WRITING_TOOLS)
-    else if (equalLettersIgnoringASCIICase(markerType, "unifiedtextreplacement"_s))
-        result = DocumentMarker::Type::UnifiedTextReplacement;
+    else if (equalLettersIgnoringASCIICase(markerType, "writingtoolstextsuggestion"_s))
+        result = DocumentMarker::Type::WritingToolsTextSuggestion;
 #endif
     else if (equalLettersIgnoringASCIICase(markerType, "transparentcontent"_s))
         result = DocumentMarker::Type::TransparentContent;
@@ -840,6 +841,8 @@ static String styleValidityToToString(Style::Validity validity)
         return "NoStyleChange"_s;
     case Style::Validity::AnimationInvalid:
         return "AnimationInvalid"_s;
+    case Style::Validity::InlineStyleInvalid:
+        return "InlineStyleInvalid"_s;
     case Style::Validity::ElementInvalid:
         return "InlineStyleChange"_s;
     case Style::Validity::SubtreeInvalid:
@@ -1864,19 +1867,6 @@ void Internals::setEnableWebRTCEncryption(bool value)
 #endif
 }
 
-void Internals::setUseDTLS10(bool useDTLS10)
-{
-#if USE(LIBWEBRTC)
-    auto* document = contextDocument();
-    if (!document || !document->page())
-        return;
-    auto& rtcProvider = static_cast<LibWebRTCProvider&>(document->page()->webRTCProvider());
-    rtcProvider.setUseDTLS10(useDTLS10);
-#else
-    UNUSED_PARAM(useDTLS10);
-#endif
-}
-
 #endif // ENABLE(WEB_RTC)
 
 #if ENABLE(MEDIA_STREAM)
@@ -2798,9 +2788,9 @@ bool Internals::hasCorrectionIndicatorMarker(int from, int length)
 }
 
 #if ENABLE(WRITING_TOOLS)
-bool Internals::hasUnifiedTextReplacementMarker(int from, int length)
+bool Internals::hasWritingToolsTextSuggestionMarker(int from, int length)
 {
-    return hasMarkerFor(DocumentMarker::Type::UnifiedTextReplacement, from, length);
+    return hasMarkerFor(DocumentMarker::Type::WritingToolsTextSuggestion, from, length);
 }
 #endif
 
@@ -6106,11 +6096,6 @@ bool Internals::isMediaStreamSourceEnded(MediaStreamTrack& track) const
     return track.source().isEnded();
 }
 
-bool Internals::isMediaStreamTrackPowerEfficient(const MediaStreamTrack& track) const
-{
-    return track.source().isPowerEfficient();
-}
-
 bool Internals::isMockRealtimeMediaSourceCenterEnabled()
 {
     return MockRealtimeMediaSourceCenter::mockRealtimeMediaSourceCenterEnabled();
@@ -6122,7 +6107,19 @@ bool Internals::shouldAudioTrackPlay(const AudioTrack& track)
         return false;
     return downcast<AudioTrackPrivateMediaStream>(track.privateTrack()).shouldPlay();
 }
-#endif
+#endif // ENABLE(MEDIA_STREAM)
+
+#if ENABLE(WEB_RTC)
+String Internals::rtcNetworkInterfaceName() const
+{
+    RefPtr document = contextDocument();
+    RefPtr rtcNetworkManager = document ? document->rtcNetworkManager() : nullptr;
+    if (!rtcNetworkManager)
+        return { };
+
+    return rtcNetworkManager->interfaceNameForTesting();
+}
+#endif // ENABLE(WEB_RTC)
 
 bool Internals::isHardwareVP9DecoderExpected()
 {
@@ -6961,11 +6958,6 @@ int Internals::readPreferenceInteger(const String& domain, const String& key)
 
 #if !PLATFORM(COCOA)
 String Internals::encodedPreferenceValue(const String&, const String&)
-{
-    return emptyString();
-}
-
-String Internals::getUTIFromTag(const String&, const String&, const String&)
 {
     return emptyString();
 }

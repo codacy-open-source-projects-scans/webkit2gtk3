@@ -113,7 +113,6 @@ private:
     void clearSafeBrowsingWarning() override;
     void clearSafeBrowsingWarningIfForMainFrameNavigation() override;
     bool hasSafeBrowsingWarning() const override;
-    void didClearEditorStateAfterPageTransition() final { }
     
     bool showShareSheet(const WebCore::ShareDataWithParsedURL&, WTF::CompletionHandler<void(bool)>&&) override;
         
@@ -309,8 +308,9 @@ private:
 #endif
 
 #if ENABLE(WRITING_TOOLS) && ENABLE(CONTEXT_MENUS)
-    bool canHandleSwapCharacters() const override;
-    void handleContextMenuSwapCharacters(WebCore::IntRect selectionBoundsInRootView) override;
+    bool canHandleContextMenuWritingTools() const override;
+    void handleContextMenuWritingToolsDeprecated(WebCore::IntRect selectionBoundsInRootView) override;
+    void handleContextMenuWritingTools(WebCore::WritingTools::RequestedTool, WebCore::IntRect) override;
 #endif
 
 #if ENABLE(DATA_DETECTION)

@@ -103,9 +103,9 @@ void VideoPresentationModelVideoElement::setVideoElement(HTMLVideoElement* video
     if (m_videoElement) {
         for (auto& eventName : observedEventNames())
             m_videoElement->addEventListener(eventName, m_videoListener, false);
+        m_isListening = true;
         for (auto& eventName : documentObservedEventNames())
             m_videoElement->document().addEventListener(eventName, m_videoListener, false);
-        m_isListening = true;
     }
 
     updateForEventName(eventNameAll());
@@ -150,15 +150,18 @@ void VideoPresentationModelVideoElement::updateForEventName(const WTF::AtomStrin
 
 void VideoPresentationModelVideoElement::documentVisibilityChanged()
 {
-    if (!m_videoElement)
+    RefPtr videoElement = m_videoElement;
+
+    if (!videoElement)
         return;
 
-    bool isDocumentVisible = !m_videoElement->document().hidden();
+    bool isDocumentVisible = !videoElement->document().hidden();
 
     if (isDocumentVisible == m_documentIsVisible)
         return;
 
     m_documentIsVisible = isDocumentVisible;
+
     for (auto& client : copyToVector(m_clients))
         client->documentVisibilityChanged(m_documentIsVisible);
 }

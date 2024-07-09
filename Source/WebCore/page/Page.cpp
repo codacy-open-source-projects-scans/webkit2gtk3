@@ -190,6 +190,7 @@
 #include <wtf/StdLibExtras.h>
 #include <wtf/SystemTracing.h>
 #include <wtf/text/Base64.h>
+#include <wtf/text/MakeString.h>
 #include <wtf/text/StringHash.h>
 #include <wtf/text/TextStream.h>
 
@@ -351,6 +352,10 @@ Page::Page(PageConfiguration&& pageConfiguration)
     , m_speechRecognitionProvider((WTFMove(pageConfiguration.speechRecognitionProvider)))
     , m_mediaRecorderProvider((WTFMove(pageConfiguration.mediaRecorderProvider)))
     , m_webRTCProvider(WTFMove(pageConfiguration.webRTCProvider))
+    , m_rtcController(RTCController::create())
+#if PLATFORM(IOS_FAMILY)
+    , m_canShowWhileLocked(pageConfiguration.canShowWhileLocked)
+#endif
     , m_domTimerAlignmentInterval(DOMTimer::defaultAlignmentInterval())
     , m_domTimerAlignmentIntervalIncreaseTimer(*this, &Page::domTimerAlignmentIntervalIncreaseTimerFired)
     , m_activityState(pageInitialActivityState())
@@ -415,6 +420,7 @@ Page::Page(PageConfiguration&& pageConfiguration)
 #if ENABLE(WRITING_TOOLS)
     , m_writingToolsController(makeUniqueRef<WritingToolsController>(*this))
 #endif
+    , m_activeNowPlayingSessionUpdateTimer(*this, &Page::activeNowPlayingSessionUpdateTimerFired)
 {
     updateTimerThrottlingState();
 
@@ -1510,12 +1516,10 @@ void Page::windowScreenDidChange(PlatformDisplayID displayID, std::optional<Fram
     });
 
 #if ENABLE(VIDEO)
-    if (auto* localMainFrame = dynamicDowncast<LocalFrame>(mainFrame())) {
-        auto mode = preferredDynamicRangeMode(localMainFrame->protectedView().get());
-        forEachMediaElement([mode] (auto& element) {
-            element.setPreferredDynamicRangeMode(mode);
-        });
-    }
+    auto mode = preferredDynamicRangeMode(mainFrame().protectedVirtualView().get());
+    forEachMediaElement([mode] (auto& element) {
+        element.setPreferredDynamicRangeMode(mode);
+    });
 #endif
 
     if (RefPtr scrollingCoordinator = m_scrollingCoordinator)
@@ -2200,8 +2204,7 @@ void Page::didCompleteRenderingFrame()
 
     // FIXME: This is where we'd call requestPostAnimationFrame callbacks: webkit.org/b/249798.
     // FIXME: Run WindowEventLoop tasks from here: webkit.org/b/249684.
-    if (RefPtr localMainFrame = dynamicDowncast<LocalFrame>(mainFrame()))
-        InspectorInstrumentation::didCompleteRenderingFrame(*localMainFrame);
+    InspectorInstrumentation::didCompleteRenderingFrame(m_mainFrame);
 
     forEachDocument([&] (Document& document) {
         document.flushDeferredRenderingIsSuppressedForViewTransitionChanges();
@@ -3563,7 +3566,8 @@ void Page::setSessionID(PAL::SessionID sessionID)
     if (sessionID != m_sessionID) {
         constexpr auto doNotCreate = StorageNamespaceProvider::ShouldCreateNamespace::No;
         auto* localMainFrame = dynamicDowncast<LocalFrame>(m_mainFrame.get());
-        if (RefPtr sessionStorage = localMainFrame ? m_storageNamespaceProvider->sessionStorageNamespace(localMainFrame->document()->protectedTopOrigin(), *this, doNotCreate) : nullptr)
+        RefPtr topOrigin = localMainFrame ? &localMainFrame->document()->topOrigin() : m_mainFrameOrigin;
+        if (RefPtr sessionStorage = topOrigin ? m_storageNamespaceProvider->sessionStorageNamespace(*topOrigin, *this, doNotCreate) : nullptr)
             sessionStorage->setSessionIDForTesting(sessionID);
     }
 
@@ -3924,7 +3928,7 @@ void Page::disableICECandidateFiltering()
 {
     m_shouldEnableICECandidateFilteringByDefault = false;
 #if ENABLE(WEB_RTC)
-    m_rtcController.disableICECandidateFilteringForAllOrigins();
+    m_rtcController->disableICECandidateFilteringForAllOrigins();
 #endif
 }
 
@@ -3932,14 +3936,14 @@ void Page::enableICECandidateFiltering()
 {
     m_shouldEnableICECandidateFilteringByDefault = true;
 #if ENABLE(WEB_RTC)
-    m_rtcController.enableICECandidateFiltering();
+    m_rtcController->enableICECandidateFiltering();
 #endif
 }
 
 void Page::didChangeMainDocument()
 {
 #if ENABLE(WEB_RTC)
-    m_rtcController.reset(m_shouldEnableICECandidateFilteringByDefault);
+    m_rtcController->reset(m_shouldEnableICECandidateFilteringByDefault);
 #endif
     m_pointerCaptureController->reset();
 
@@ -4119,7 +4123,7 @@ ScrollLatchingController& Page::scrollLatchingController()
 #endif // ENABLE(WHEEL_EVENT_LATCHING)
 
 enum class DispatchedOnDocumentEventLoop : bool { No, Yes };
-static void dispatchPrintEvent(LocalFrame& mainFrame, const AtomString& eventType, DispatchedOnDocumentEventLoop dispatchedOnDocumentEventLoop)
+static void dispatchPrintEvent(Frame& mainFrame, const AtomString& eventType, DispatchedOnDocumentEventLoop dispatchedOnDocumentEventLoop)
 {
     Vector<Ref<LocalFrame>> frames;
     for (Frame* frame = &mainFrame; frame; frame = frame->tree().traverseNext()) {
@@ -4144,14 +4148,12 @@ static void dispatchPrintEvent(LocalFrame& mainFrame, const AtomString& eventTyp
 
 void Page::dispatchBeforePrintEvent()
 {
-    if (RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_mainFrame.get()))
-        dispatchPrintEvent(*localMainFrame, eventNames().beforeprintEvent, DispatchedOnDocumentEventLoop::No);
+    dispatchPrintEvent(m_mainFrame, eventNames().beforeprintEvent, DispatchedOnDocumentEventLoop::No);
 }
 
 void Page::dispatchAfterPrintEvent()
 {
-    if (RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_mainFrame.get()))
-        dispatchPrintEvent(*localMainFrame, eventNames().afterprintEvent, DispatchedOnDocumentEventLoop::Yes);
+    dispatchPrintEvent(m_mainFrame, eventNames().afterprintEvent, DispatchedOnDocumentEventLoop::Yes);
 }
 
 #if ENABLE(APPLE_PAY)
@@ -4853,39 +4855,49 @@ void Page::gamepadsRecentlyAccessed()
 #endif
 
 #if ENABLE(WRITING_TOOLS)
-void Page::willBeginTextReplacementSession(const std::optional<WritingTools::Session>& session, CompletionHandler<void(const Vector<WritingTools::Context>&)>&& completionHandler)
+void Page::willBeginWritingToolsSession(const std::optional<WritingTools::Session>& session, CompletionHandler<void(const Vector<WritingTools::Context>&)>&& completionHandler)
 {
-    m_writingToolsController->willBeginTextReplacementSession(session, WTFMove(completionHandler));
+    m_writingToolsController->willBeginWritingToolsSession(session, WTFMove(completionHandler));
 }
 
-void Page::didBeginTextReplacementSession(const WritingTools::Session& session, const Vector<WritingTools::Context>& contexts)
+void Page::didBeginWritingToolsSession(const WritingTools::Session& session, const Vector<WritingTools::Context>& contexts)
 {
-    m_writingToolsController->didBeginTextReplacementSession(session, contexts);
+    m_writingToolsController->didBeginWritingToolsSession(session, contexts);
 }
 
-void Page::textReplacementSessionDidReceiveReplacements(const WritingTools::Session& session, const Vector<WritingTools::TextSuggestion>& replacements, const WritingTools::Context& context, bool finished)
+void Page::proofreadingSessionDidReceiveSuggestions(const WritingTools::Session& session, const Vector<WritingTools::TextSuggestion>& suggestions, const WritingTools::Context& context, bool finished)
 {
-    m_writingToolsController->textReplacementSessionDidReceiveReplacements(session, replacements, context, finished);
+    m_writingToolsController->proofreadingSessionDidReceiveSuggestions(session, suggestions, context, finished);
 }
 
-void Page::textReplacementSessionDidUpdateStateForReplacement(const WritingTools::Session& session, WritingTools::TextSuggestion::State state, const WritingTools::TextSuggestion& replacement, const WritingTools::Context& context)
+void Page::proofreadingSessionDidUpdateStateForSuggestion(const WritingTools::Session& session, WritingTools::TextSuggestion::State state, const WritingTools::TextSuggestion& suggestion, const WritingTools::Context& context)
 {
-    m_writingToolsController->textReplacementSessionDidUpdateStateForReplacement(session, state, replacement, context);
+    m_writingToolsController->proofreadingSessionDidUpdateStateForSuggestion(session, state, suggestion, context);
 }
 
-void Page::didEndTextReplacementSession(const WritingTools::Session& session, bool accepted)
+void Page::didEndWritingToolsSession(const WritingTools::Session& session, bool accepted)
 {
-    m_writingToolsController->didEndTextReplacementSession(session, accepted);
+    m_writingToolsController->didEndWritingToolsSession(session, accepted);
 }
 
-void Page::textReplacementSessionDidReceiveTextWithReplacementRange(const WritingTools::Session& session, const AttributedString& attributedText, const CharacterRange& range, const WritingTools::Context& context, bool finished)
+void Page::compositionSessionDidReceiveTextWithReplacementRange(const WritingTools::Session& session, const AttributedString& attributedText, const CharacterRange& range, const WritingTools::Context& context, bool finished)
 {
-    m_writingToolsController->textReplacementSessionDidReceiveTextWithReplacementRange(session, attributedText, range, context, finished);
+    m_writingToolsController->compositionSessionDidReceiveTextWithReplacementRange(session, attributedText, range, context, finished);
 }
 
-void Page::updateStateForSelectedReplacementIfNeeded()
+void Page::updateStateForSelectedSuggestionIfNeeded()
 {
-    m_writingToolsController->updateStateForSelectedReplacementIfNeeded();
+    m_writingToolsController->updateStateForSelectedSuggestionIfNeeded();
+}
+
+void Page::respondToUnappliedWritingToolsEditing(EditCommandComposition* command)
+{
+    m_writingToolsController->respondToUnappliedEditing(command);
+}
+
+void Page::respondToReappliedWritingToolsEditing(EditCommandComposition* command)
+{
+    m_writingToolsController->respondToReappliedEditing(command);
 }
 
 std::optional<SimpleRange> Page::contextRangeForSessionWithID(const WritingTools::Session::ID& sessionID) const
@@ -4893,10 +4905,26 @@ std::optional<SimpleRange> Page::contextRangeForSessionWithID(const WritingTools
     return m_writingToolsController->contextRangeForSessionWithID(sessionID);
 }
 
-void Page::textReplacementSessionDidReceiveEditAction(const WritingTools::Session& session, WritingTools::Action action)
+void Page::writingToolsSessionDidReceiveAction(const WritingTools::Session& session, WritingTools::Action action)
 {
-    m_writingToolsController->textReplacementSessionDidReceiveEditAction(session, action);
+    m_writingToolsController->writingToolsSessionDidReceiveAction(session, action);
 }
 #endif
+
+void Page::hasActiveNowPlayingSessionChanged()
+{
+    if (!m_activeNowPlayingSessionUpdateTimer.isActive())
+        m_activeNowPlayingSessionUpdateTimer.startOneShot(0_s);
+}
+
+void Page::activeNowPlayingSessionUpdateTimerFired()
+{
+    bool hasActiveNowPlayingSession = PlatformMediaSessionManager::sharedManager().hasActiveNowPlayingSessionInGroup(mediaSessionGroupIdentifier());
+    if (hasActiveNowPlayingSession == m_hasActiveNowPlayingSession)
+        return;
+
+    m_hasActiveNowPlayingSession = hasActiveNowPlayingSession;
+    chrome().client().hasActiveNowPlayingSessionChanged(hasActiveNowPlayingSession);
+}
 
 } // namespace WebCore

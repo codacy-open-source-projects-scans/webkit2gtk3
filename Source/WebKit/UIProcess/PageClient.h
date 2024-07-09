@@ -157,8 +157,10 @@ struct PromisedAttachmentInfo;
 struct TranslationContextMenuInfo;
 #endif
 
+#if ENABLE(WRITING_TOOLS)
 namespace WritingTools {
 enum class Action : uint8_t;
+enum class RequestedTool : uint16_t;
 enum class TextSuggestionState : uint8_t;
 
 struct Context;
@@ -168,6 +170,7 @@ struct Session;
 using TextSuggestionID = WTF::UUID;
 using SessionID = WTF::UUID;
 }
+#endif
 
 }
 
@@ -531,8 +534,6 @@ public:
     virtual void scrollingNodeScrollViewDidScroll(WebCore::ScrollingNodeID) = 0;
 #endif
 
-    virtual void didClearEditorStateAfterPageTransition() = 0;
-
 #if PLATFORM(IOS_FAMILY)
     virtual void commitPotentialTapFailed() = 0;
     virtual void didGetTapHighlightGeometries(WebKit::TapIdentifier requestID, const WebCore::Color&, const Vector<WebCore::FloatQuad>& highlightedQuads, const WebCore::IntSize& topLeftRadius, const WebCore::IntSize& topRightRadius, const WebCore::IntSize& bottomLeftRadius, const WebCore::IntSize& bottomRightRadius, bool nodeHasBuiltInClickHandling) = 0;
@@ -718,8 +719,8 @@ public:
     virtual void storeAppHighlight(const WebCore::AppHighlight&) = 0;
 #endif
 #if ENABLE(WRITING_TOOLS_UI)
-    virtual void addTextAnimationTypeForID(const WTF::UUID&, const WebKit::TextAnimationData&) = 0;
-    virtual void removeTextAnimationForID(const WTF::UUID&) = 0;
+    virtual void addTextAnimationForAnimationID(const WTF::UUID&, const WebKit::TextAnimationData&) = 0;
+    virtual void removeTextAnimationForAnimationID(const WTF::UUID&) = 0;
 #endif
     virtual void requestScrollToRect(const WebCore::FloatRect& targetRect, const WebCore::FloatPoint& origin) { }
 
@@ -740,18 +741,19 @@ public:
 #endif
 
 #if ENABLE(WRITING_TOOLS) && ENABLE(CONTEXT_MENUS)
-    virtual bool canHandleSwapCharacters() const = 0;
-    virtual void handleContextMenuSwapCharacters(WebCore::IntRect selectionBoundsInRootView) = 0;
+    virtual bool canHandleContextMenuWritingTools() const = 0;
+    virtual void handleContextMenuWritingToolsDeprecated(WebCore::IntRect selectionBoundsInRootView) = 0;
+    virtual void handleContextMenuWritingTools(WebCore::WritingTools::RequestedTool, WebCore::IntRect) { }
 #endif
 
 #if ENABLE(WRITING_TOOLS)
-    virtual void textReplacementSessionShowInformationForReplacementWithIDRelativeToRect(const WebCore::WritingTools::SessionID&, const WebCore::WritingTools::TextSuggestionID&, WebCore::IntRect selectionBoundsInRootView) = 0;
+    virtual void proofreadingSessionShowDetailsForSuggestionWithIDRelativeToRect(const WebCore::WritingTools::SessionID&, const WebCore::WritingTools::TextSuggestionID&, WebCore::IntRect selectionBoundsInRootView) = 0;
 
-    virtual void textReplacementSessionUpdateStateForReplacementWithID(const WebCore::WritingTools::SessionID&, WebCore::WritingTools::TextSuggestionState, const WebCore::WritingTools::TextSuggestionID&) = 0;
+    virtual void proofreadingSessionUpdateStateForSuggestionWithID(const WebCore::WritingTools::SessionID&, WebCore::WritingTools::TextSuggestionState, const WebCore::WritingTools::TextSuggestionID&) = 0;
 
-    virtual void unifiedTextReplacementActiveWillChange() = 0;
+    virtual void writingToolsActiveWillChange() = 0;
 
-    virtual void unifiedTextReplacementActiveDidChange() = 0;
+    virtual void writingToolsActiveDidChange() = 0;
 #endif
 
 #if ENABLE(DATA_DETECTION)
@@ -787,6 +789,10 @@ public:
     };
     virtual void setGamepadsRecentlyAccessed(GamepadsRecentlyAccessed) { }
 #endif
+
+    virtual void hasActiveNowPlayingSessionChanged(bool) { }
+
+    virtual void scheduleVisibleContentRectUpdate() { }
 };
 
 } // namespace WebKit

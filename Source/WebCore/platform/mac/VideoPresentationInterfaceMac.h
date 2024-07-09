@@ -104,6 +104,7 @@ public:
     WEBCORE_EXPORT void requestHideAndExitPiP();
 
     std::optional<MediaPlayerIdentifier> playerIdentifier() const { return m_playerIdentifier; }
+
     WEBCORE_EXPORT void documentVisibilityChanged(bool) final;
 
 #if !RELEASE_LOG_DISABLED

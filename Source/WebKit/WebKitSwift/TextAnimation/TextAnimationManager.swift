@@ -41,7 +41,7 @@ import WebKitSwift
         delegate.containingViewForTextAnimationType().addSubview(self.effectView)
     }
     
-    @objc(addTextAnimationTypeForID:withStyleType:) public func beginEffect(for uuid: UUID, style: WKTextAnimationType) {
+    @objc(addTextAnimationForAnimationID:withStyleType:) public func beginEffect(for uuid: UUID, style: WKTextAnimationType) {
         if style == .initial {
             let newEffect = self.effectView.addEffect(UITextEffectView.PonderingEffect(chunk: TextEffectChunk(uuid: uuid), view: self.effectView) as UITextEffectView.TextEffect)
             self.chunkToEffect[uuid] = newEffect
@@ -51,7 +51,7 @@ import WebKitSwift
         }
     }
     
-    @objc(removeTextAnimationForID:) public func endEffect(for uuid: UUID) {
+    @objc(removeTextAnimationForAnimationID:) public func endEffect(for uuid: UUID) {
         if let effectID = chunkToEffect.removeValue(forKey: uuid) {
             self.effectView.removeEffect(effectID)
         }
@@ -114,8 +114,19 @@ extension TextAnimationManager: UITextEffectView.ReplacementTextEffect.Delegate 
     
     public func replacementEffectDidComplete(_ effect: UITextEffectView.ReplacementTextEffect) {
         self.effectView.removeEffect(effect.id)
-        
-        // FIXME: remove the effect from the chunkToEffect map rdar://126307144
+
+        guard let (animationID, _) = chunkToEffect.first(where: { (_, value) in value == effect.id }) else {
+            return
+        }
+
+        chunkToEffect[animationID] = nil
+
+        guard let delegate = self.delegate else {
+            Self.logger.debug("Can't obtain Targeted Preview. Missing delegate.")
+            return
+        }
+
+        delegate.callCompletionHandler(forAnimationID: animationID)
     }
 }
 

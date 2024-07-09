@@ -78,6 +78,7 @@
 #include <wtf/CheckedArithmetic.h>
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/text/MakeString.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/TextStream.h>
 
@@ -1147,7 +1148,9 @@ static inline IntRect computeImageDataRect(const ImageBuffer& buffer, IntSize so
 
 void CanvasRenderingContext2DBase::fillInternal(const Path& path, CanvasFillRule windingRule)
 {
-    auto targetSwitcher = CanvasFilterContextSwitcher::create(*this, path.fastBoundingRect());
+    std::unique_ptr<CanvasFilterContextSwitcher> targetSwitcher;
+    if (!state().filterOperations.isEmpty())
+        targetSwitcher = CanvasFilterContextSwitcher::create(*this, path.fastBoundingRect());
 
     auto* c = effectiveDrawingContext();
     if (!c)
@@ -1188,7 +1191,9 @@ void CanvasRenderingContext2DBase::fillInternal(const Path& path, CanvasFillRule
 
 void CanvasRenderingContext2DBase::strokeInternal(const Path& path)
 {
-    auto targetSwitcher = CanvasFilterContextSwitcher::create(*this, inflatedStrokeRect(path.fastBoundingRect()));
+    std::unique_ptr<CanvasFilterContextSwitcher> targetSwitcher;
+    if (!state().filterOperations.isEmpty())
+        targetSwitcher = CanvasFilterContextSwitcher::create(*this, inflatedStrokeRect(path.fastBoundingRect()));
 
     auto* c = effectiveDrawingContext();
     if (!c)
@@ -2327,14 +2332,13 @@ void CanvasRenderingContext2DBase::didDraw(std::optional<FloatRect> rect, Option
         dirtyRect.unite(shadowRect);
     }
 
-    // Inflate dirty rect to cover antialiasing on image buffers.
-    if (effectiveDrawingContext()->shouldAntialias())
-        dirtyRect.inflate(1);
-
     // FIXME: This does not apply the clip because we have no way of reading the clip out of the GraphicsContext.
     if (m_dirtyRect.contains(dirtyRect))
         canvasBase().didDraw(std::nullopt, shouldApplyPostProcessing);
     else {
+        // Inflate dirty rect to cover antialiasing on image buffers.
+        if (effectiveDrawingContext()->shouldAntialias())
+            dirtyRect.inflate(1);
 #if USE(COORDINATED_GRAPHICS)
         // In COORDINATED_GRAPHICS graphics layer is tiled and tiling logic handles dirty rects
         // internally and thus no unification of rects is needed here because that causes

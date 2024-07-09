@@ -577,7 +577,7 @@ Ref<RenderPassEncoder> CommandEncoder::beginRenderPass(const WGPURenderPassDescr
         if (hasDepthComponent) {
             const auto& mtlAttachment = mtlDescriptor.depthAttachment;
             auto clearDepth = std::clamp(RenderPassEncoder::quantizedDepthValue(attachment->depthClearValue, textureView.format()), 0., 1.);
-            mtlAttachment.clearDepth = clearDepth;
+            mtlAttachment.clearDepth = attachment->depthLoadOp == WGPULoadOp_Clear ? clearDepth : 1.0;
             mtlAttachment.texture = metalDepthStencilTexture;
             mtlAttachment.level = 0;
             mtlAttachment.loadAction = loadAction(attachment->depthLoadOp);
@@ -1856,13 +1856,15 @@ static bool validateResolveQuerySet(const QuerySet& querySet, uint32_t firstQuer
     if (firstQuery >= querySet.count())
         return false;
 
-    if (firstQuery + queryCount > querySet.count())
+    auto countEnd = checkedSum<uint64_t>(firstQuery, queryCount);
+    if (countEnd.hasOverflowed() || countEnd.value() > querySet.count())
         return false;
 
     if (destinationOffset % 256)
         return false;
 
-    if (destinationOffset + 8 * queryCount > destination.initialSize())
+    auto countTimes8PlusOffset = checkedSum<uint64_t>(destinationOffset, 8 * static_cast<uint64_t>(queryCount));
+    if (countTimes8PlusOffset.hasOverflowed() || countTimes8PlusOffset.value() > destination.initialSize())
         return false;
 
     return true;

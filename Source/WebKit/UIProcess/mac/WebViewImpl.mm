@@ -155,7 +155,7 @@
 #import <wtf/cf/TypeCastsCF.h>
 #import <wtf/cocoa/VectorCocoa.h>
 #import <wtf/spi/darwin/OSVariantSPI.h>
-#import <wtf/text/StringConcatenate.h>
+#import <wtf/text/MakeString.h>
 
 #if ENABLE(MEDIA_SESSION_COORDINATOR)
 #include "MediaSessionCoordinatorProxyPrivate.h"
@@ -2787,7 +2787,7 @@ void WebViewImpl::selectionDidChange()
 #endif
 
 #if ENABLE(WRITING_TOOLS)
-    if (wantsCompleteUnifiedTextReplacementBehavior()) {
+    if (isEditable() || m_page->configuration().writingToolsBehavior() == WebCore::WritingTools::Behavior::Complete) {
         auto isRange = m_page->editorState().hasPostLayoutData() && m_page->editorState().selectionIsRange;
         auto selectionRect = isRange ? m_page->editorState().postLayoutData->selectionBoundingRect : IntRect { };
 
@@ -4005,7 +4005,7 @@ NSDragOperation WebViewImpl::draggingEntered(id <NSDraggingInfo> draggingInfo)
     WebCore::IntPoint global(WebCore::globalPoint(draggingInfo.draggingLocation, [m_view window]));
     auto dragDestinationActionMask = coreDragDestinationActionMask([m_view _web_dragDestinationActionForDraggingInfo:draggingInfo]);
     auto dragOperationMask = coreDragOperationMask(draggingInfo.draggingSourceOperationMask);
-    WebCore::DragData dragData(draggingInfo, client, global, dragOperationMask, applicationFlagsForDrag(m_view.getAutoreleased(), draggingInfo), dragDestinationActionMask, m_page->webPageID());
+    WebCore::DragData dragData(draggingInfo, client, global, dragOperationMask, applicationFlagsForDrag(m_view.getAutoreleased(), draggingInfo), dragDestinationActionMask, m_page->webPageIDInMainFrameProcess());
 
     m_page->resetCurrentDragInformation();
     m_page->dragEntered(dragData, draggingInfo.draggingPasteboard.name);
@@ -4043,7 +4043,7 @@ NSDragOperation WebViewImpl::draggingUpdated(id <NSDraggingInfo> draggingInfo)
     WebCore::IntPoint global(WebCore::globalPoint(draggingInfo.draggingLocation, [m_view window]));
     auto dragDestinationActionMask = coreDragDestinationActionMask([m_view _web_dragDestinationActionForDraggingInfo:draggingInfo]);
     auto dragOperationMask = coreDragOperationMask(draggingInfo.draggingSourceOperationMask);
-    WebCore::DragData dragData(draggingInfo, client, global, dragOperationMask, applicationFlagsForDrag(m_view.getAutoreleased(), draggingInfo), dragDestinationActionMask, m_page->webPageID());
+    WebCore::DragData dragData(draggingInfo, client, global, dragOperationMask, applicationFlagsForDrag(m_view.getAutoreleased(), draggingInfo), dragDestinationActionMask, m_page->webPageIDInMainFrameProcess());
     m_page->dragUpdated(dragData, draggingInfo.draggingPasteboard.name);
 
     NSInteger numberOfValidItemsForDrop = m_page->currentDragNumberOfFilesToBeAccepted();
@@ -4067,7 +4067,7 @@ void WebViewImpl::draggingExited(id <NSDraggingInfo> draggingInfo)
 {
     WebCore::IntPoint client([m_view convertPoint:draggingInfo.draggingLocation fromView:nil]);
     WebCore::IntPoint global(WebCore::globalPoint(draggingInfo.draggingLocation, [m_view window]));
-    WebCore::DragData dragData(draggingInfo, client, global, coreDragOperationMask(draggingInfo.draggingSourceOperationMask), applicationFlagsForDrag(m_view.getAutoreleased(), draggingInfo), WebCore::anyDragDestinationAction(), m_page->webPageID());
+    WebCore::DragData dragData(draggingInfo, client, global, coreDragOperationMask(draggingInfo.draggingSourceOperationMask), applicationFlagsForDrag(m_view.getAutoreleased(), draggingInfo), WebCore::anyDragDestinationAction(), m_page->webPageIDInMainFrameProcess());
     m_page->dragExited(dragData);
     m_page->resetCurrentDragInformation();
     draggingInfo.numberOfValidItemsForDrop = m_initialNumberOfValidItemsForDrop;
@@ -4083,7 +4083,7 @@ bool WebViewImpl::performDragOperation(id <NSDraggingInfo> draggingInfo)
 {
     WebCore::IntPoint client([m_view convertPoint:draggingInfo.draggingLocation fromView:nil]);
     WebCore::IntPoint global(WebCore::globalPoint(draggingInfo.draggingLocation, [m_view window]));
-    auto dragData = Box<WebCore::DragData>::create(draggingInfo, client, global, coreDragOperationMask(draggingInfo.draggingSourceOperationMask), applicationFlagsForDrag(m_view.getAutoreleased(), draggingInfo), WebCore::anyDragDestinationAction(), m_page->webPageID());
+    auto dragData = Box<WebCore::DragData>::create(draggingInfo, client, global, coreDragOperationMask(draggingInfo.draggingSourceOperationMask), applicationFlagsForDrag(m_view.getAutoreleased(), draggingInfo), WebCore::anyDragDestinationAction(), m_page->webPageIDInMainFrameProcess());
 
     NSArray *types = draggingInfo.draggingPasteboard.types;
     SandboxExtension::Handle sandboxExtensionHandle;
@@ -4606,7 +4606,7 @@ void WebViewImpl::removeTextPlaceholder(NSTextPlaceholder *placeholder, bool wil
 }
 
 #if ENABLE(WRITING_TOOLS_UI)
-void WebViewImpl::addTextAnimationTypeForID(WTF::UUID uuid, const WebKit::TextAnimationData& data)
+void WebViewImpl::addTextAnimationForAnimationID(WTF::UUID uuid, const WebKit::TextAnimationData& data)
 {
     if (!m_page->preferences().textAnimationsEnabled())
         return;
@@ -4614,15 +4614,15 @@ void WebViewImpl::addTextAnimationTypeForID(WTF::UUID uuid, const WebKit::TextAn
     if (!m_TextAnimationTypeManager)
         m_TextAnimationTypeManager = adoptNS([[WKTextAnimationManager alloc] initWithWebViewImpl:*this]);
 
-    [m_TextAnimationTypeManager addTextAnimationTypeForID:uuid withData:data];
+    [m_TextAnimationTypeManager addTextAnimationForAnimationID:uuid withData:data];
 }
 
-void WebViewImpl::removeTextAnimationForID(WTF::UUID uuid)
+void WebViewImpl::removeTextAnimationForAnimationID(WTF::UUID uuid)
 {
     if (!m_page->preferences().textAnimationsEnabled())
         return;
 
-    [m_TextAnimationTypeManager removeTextAnimationForID:uuid];
+    [m_TextAnimationTypeManager removeTextAnimationForAnimationID:uuid];
 }
 #endif
 
@@ -5924,7 +5924,7 @@ void WebViewImpl::updateTouchBar()
 
     NSTouchBar *touchBar = nil;
     bool userActionRequirementsHaveBeenMet = !requiresUserActionForEditingControlsManager() || m_page->hasHadSelectionChangesFromUserInteraction();
-    if (m_page->editorState().isContentEditable && !m_page->isTouchBarUpdateSupressedForHiddenContentEditable()) {
+    if (m_page->editorState().isContentEditable && !m_page->isTouchBarUpdateSuppressedForHiddenContentEditable()) {
         updateTextTouchBar();
         if (userActionRequirementsHaveBeenMet)
             touchBar = textTouchBar();
@@ -6453,28 +6453,16 @@ void WebViewImpl::handleContextMenuTranslation(const WebCore::TranslationContext
 
 #endif // HAVE(TRANSLATION_UI_SERVICES) && ENABLE(CONTEXT_MENUS)
 
-#if ENABLE(WRITING_TOOLS)
-WebCore::WritingTools::Behavior WebViewImpl::unifiedTextReplacementBehavior() const
-{
-    return m_page->configuration().unifiedTextReplacementBehavior();
-}
-
-bool WebViewImpl::wantsCompleteUnifiedTextReplacementBehavior() const
-{
-    return [m_view _web_wantsCompleteUnifiedTextReplacementBehavior];
-}
-#endif
-
 #if ENABLE(WRITING_TOOLS) && ENABLE(CONTEXT_MENUS)
 
-bool WebViewImpl::canHandleSwapCharacters() const
+bool WebViewImpl::canHandleContextMenuWritingTools() const
 {
-    return [PAL::getWTWritingToolsViewControllerClass() isAvailable] && unifiedTextReplacementBehavior() != WebCore::WritingTools::Behavior::None;
+    return [PAL::getWTWritingToolsViewControllerClass() isAvailable] && m_page->writingToolsBehavior() != WebCore::WritingTools::Behavior::None;
 }
 
-void WebViewImpl::handleContextMenuSwapCharacters(IntRect selectionBoundsInRootView)
+void WebViewImpl::handleContextMenuWritingToolsDeprecated(IntRect selectionBoundsInRootView)
 {
-    if (!canHandleSwapCharacters()) {
+    if (!canHandleContextMenuWritingTools()) {
         ASSERT_NOT_REACHED();
         return;
     }

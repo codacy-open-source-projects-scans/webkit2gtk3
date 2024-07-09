@@ -1748,6 +1748,11 @@ URL WebChromeClient::allowedQueryParametersForAdvancedPrivacyProtections(const U
     return protectedPage()->allowedQueryParametersForAdvancedPrivacyProtections(url);
 }
 
+void WebChromeClient::didAddOrRemoveViewportConstrainedObjects()
+{
+    protectedPage()->didAddOrRemoveViewportConstrainedObjects();
+}
+
 #if ENABLE(TEXT_AUTOSIZING)
 
 void WebChromeClient::textAutosizingUsesIdempotentModeChanged()
@@ -1846,40 +1851,60 @@ void WebChromeClient::gamepadsRecentlyAccessed()
 
 #if ENABLE(WRITING_TOOLS)
 
-void WebChromeClient::textReplacementSessionShowInformationForReplacementWithIDRelativeToRect(const WebCore::WritingTools::Session::ID& sessionID, const WebCore::WritingTools::TextSuggestion::ID& replacementID, WebCore::IntRect selectionBoundsInRootView)
+void WebChromeClient::proofreadingSessionShowDetailsForSuggestionWithIDRelativeToRect(const WebCore::WritingTools::Session::ID& sessionID, const WebCore::WritingTools::TextSuggestion::ID& replacementID, WebCore::IntRect selectionBoundsInRootView)
 {
-    protectedPage()->textReplacementSessionShowInformationForReplacementWithIDRelativeToRect(sessionID, replacementID, selectionBoundsInRootView);
+    protectedPage()->proofreadingSessionShowDetailsForSuggestionWithIDRelativeToRect(sessionID, replacementID, selectionBoundsInRootView);
 }
 
-void WebChromeClient::textReplacementSessionUpdateStateForReplacementWithID(const WritingTools::Session::ID& sessionID, WritingTools::TextSuggestion::State state, const WritingTools::TextSuggestion::ID& replacementID)
+void WebChromeClient::proofreadingSessionUpdateStateForSuggestionWithID(const WritingTools::Session::ID& sessionID, WritingTools::TextSuggestion::State state, const WritingTools::TextSuggestion::ID& replacementID)
 {
-    protectedPage()->textReplacementSessionUpdateStateForReplacementWithID(sessionID, state, replacementID);
+    protectedPage()->proofreadingSessionUpdateStateForSuggestionWithID(sessionID, state, replacementID);
 }
 
 #endif
 
 #if ENABLE(WRITING_TOOLS_UI)
 
-void WebChromeClient::removeTextAnimationForID(const WritingTools::Session::ID& sessionID)
+void WebChromeClient::removeTextAnimationForAnimationID(const WTF::UUID& animationID)
 {
-    protectedPage()->removeTextAnimationForID(sessionID);
+    protectedPage()->removeTextAnimationForAnimationID(animationID);
 }
 
-void WebChromeClient::cleanUpTextAnimationsForSessionID(const WritingTools::Session::ID& sessionID)
+void WebChromeClient::removeTransparentMarkersForSessionID(const WritingTools::Session::ID& sessionID)
 {
-    protectedPage()->cleanUpTextAnimationsForSessionID(sessionID);
+    protectedPage()->removeTransparentMarkersForSessionID(sessionID);
 }
 
-void WebChromeClient::addSourceTextAnimation(const WritingTools::Session::ID& sessionID, const CharacterRange& range)
+void WebChromeClient::removeInitialTextAnimation(const WritingTools::Session::ID& sessionID)
 {
-    protectedPage()->addSourceTextAnimation(sessionID, range);
+    protectedPage()->removeInitialTextAnimation(sessionID);
 }
 
-void WebChromeClient::addDestinationTextAnimation(const WritingTools::Session::ID& sessionID, const CharacterRange& range)
+void WebChromeClient::addInitialTextAnimation(const WritingTools::Session::ID& sessionID)
 {
-    protectedPage()->addDestinationTextAnimation(sessionID, range);
+    protectedPage()->addInitialTextAnimation(sessionID);
+}
+
+void WebChromeClient::addSourceTextAnimation(const WritingTools::Session::ID& sessionID, const CharacterRange& range, const String string, WTF::CompletionHandler<void(void)>&& completionHandler)
+{
+    protectedPage()->addSourceTextAnimation(sessionID, range, string, WTFMove(completionHandler));
+}
+
+void WebChromeClient::addDestinationTextAnimation(const WritingTools::Session::ID& sessionID, const CharacterRange& range, const String string)
+{
+    protectedPage()->addDestinationTextAnimation(sessionID, range, string);
+}
+
+void WebChromeClient::clearAnimationsForSessionID(const WritingTools::Session::ID& sessionID)
+{
+    protectedPage()->clearAnimationsForSessionID(sessionID);
 }
 
 #endif
+
+void WebChromeClient::hasActiveNowPlayingSessionChanged(bool hasActiveNowPlayingSession)
+{
+    protectedPage()->hasActiveNowPlayingSessionChanged(hasActiveNowPlayingSession);
+}
 
 } // namespace WebKit

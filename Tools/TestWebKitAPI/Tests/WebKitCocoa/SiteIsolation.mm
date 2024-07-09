@@ -30,6 +30,7 @@
 #import "PlatformUtilities.h"
 #import "TestNavigationDelegate.h"
 #import "TestUIDelegate.h"
+#import "TestURLSchemeHandler.h"
 #import "TestWKWebView.h"
 #import "Utilities.h"
 #import "WKWebViewFindStringFindDelegate.h"
@@ -38,6 +39,7 @@
 #import <WebKit/WKNavigationPrivate.h>
 #import <WebKit/WKPreferencesPrivate.h>
 #import <WebKit/WKProcessPoolPrivate.h>
+#import <WebKit/WKURLSchemeTaskPrivate.h>
 #import <WebKit/WKWebViewPrivateForTesting.h>
 #import <WebKit/WKWebpagePreferencesPrivate.h>
 #import <WebKit/WKWebsiteDataStorePrivate.h>
@@ -45,6 +47,7 @@
 #import <WebKit/_WKFrameTreeNode.h>
 #import <WebKit/_WKWebsiteDataStoreConfiguration.h>
 #import <wtf/BlockPtr.h>
+#import <wtf/text/MakeString.h>
 
 namespace TestWebKitAPI {
 
@@ -59,15 +62,19 @@ static void enableSiteIsolation(WKWebViewConfiguration *configuration)
     }
 }
 
-static std::pair<RetainPtr<TestWKWebView>, RetainPtr<TestNavigationDelegate>> siteIsolatedViewAndDelegate(const HTTPServer& server, CGRect rect = CGRectZero)
+static std::pair<RetainPtr<TestWKWebView>, RetainPtr<TestNavigationDelegate>> siteIsolatedViewAndDelegate(RetainPtr<WKWebViewConfiguration> configuration, CGRect rect = CGRectZero)
 {
     auto navigationDelegate = adoptNS([TestNavigationDelegate new]);
     [navigationDelegate allowAnyTLSCertificate];
-    auto configuration = server.httpsProxyConfiguration();
-    enableSiteIsolation(configuration);
-    auto webView = adoptNS([[TestWKWebView alloc] initWithFrame:rect configuration:configuration]);
+    enableSiteIsolation(configuration.get());
+    auto webView = adoptNS([[TestWKWebView alloc] initWithFrame:rect configuration:configuration.get()]);
     webView.get().navigationDelegate = navigationDelegate.get();
     return { WTFMove(webView), WTFMove(navigationDelegate) };
+}
+
+static std::pair<RetainPtr<TestWKWebView>, RetainPtr<TestNavigationDelegate>> siteIsolatedViewAndDelegate(const HTTPServer& server, CGRect rect = CGRectZero)
+{
+    return siteIsolatedViewAndDelegate(server.httpsProxyConfiguration(), rect);
 }
 
 static bool processStillRunning(pid_t pid)
@@ -2982,6 +2989,86 @@ TEST(SiteIsolation, AdvancedPrivacyProtectionsHideScreenMetricsFromBindings)
     EXPECT_EQ(0, [[webView objectByEvaluatingJavaScript:@"screenY" inFrame:[childFrame info]] intValue]);
     EXPECT_EQ(0, [[webView objectByEvaluatingJavaScript:@"screen.availLeft" inFrame:[childFrame info]] intValue]);
     EXPECT_EQ(0, [[webView objectByEvaluatingJavaScript:@"screen.availTop" inFrame:[childFrame info]] intValue]);
+}
+
+TEST(SiteIsolation, UpdateWebpagePreferences)
+{
+    HTTPServer server({
+        { "/example"_s, { "<iframe src='https://b.com/frame'></iframe>"_s } },
+        { "/frame"_s, { ""_s } }
+    }, HTTPServer::Protocol::HttpsProxy);
+    auto [webView, navigationDelegate] = siteIsolatedViewAndDelegate(server);
+    [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"https://a.com/example"]]];
+    [navigationDelegate waitForDidFinishNavigation];
+
+    auto preferences = adoptNS([WKWebpagePreferences new]);
+    [preferences _setCustomUserAgent:@"Custom UserAgent"];
+    [webView _updateWebpagePreferences:preferences.get()];
+    while (![[webView objectByEvaluatingJavaScript:@"navigator.userAgent" inFrame:[[webView firstChildFrame] info]] isEqualToString:@"Custom UserAgent"])
+        Util::spinRunLoop();
+}
+
+TEST(SiteIsolation, MainFrameRedirectBetweenExistingProcesses)
+{
+    HTTPServer server({
+        { "/example"_s, { "<iframe src='https://webkit.org/webkit'></iframe>"_s } },
+        { "/webkit"_s, { "hi"_s } },
+        { "/webkit_redirect"_s, { 302, { { "Location"_s, "https://example.com/redirected"_s } }, "redirecting..."_s } },
+        { "/redirected"_s, { "hi"_s } },
+    }, HTTPServer::Protocol::HttpsProxy);
+
+    auto [webView, navigationDelegate] = siteIsolatedViewAndDelegate(server);
+    [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"https://example.com/example"]]];
+    [navigationDelegate waitForDidFinishNavigation];
+    EXPECT_EQ([[webView objectByEvaluatingJavaScript:@"window.length"] intValue], 1);
+    auto pidBefore = [webView _webProcessIdentifier];
+
+    [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"http://webkit.org/webkit_redirect"]]];
+    [navigationDelegate waitForDidFinishNavigation];
+    EXPECT_EQ([[webView objectByEvaluatingJavaScript:@"window.length"] intValue], 0);
+    EXPECT_EQ([webView _webProcessIdentifier], pidBefore);
+}
+
+TEST(SiteIsolation, URLSchemeTask)
+{
+    HTTPServer server({
+        { "/example"_s, { ""_s } },
+        { "/webkit"_s, { ""_s } }
+    }, HTTPServer::Protocol::HttpsProxy);
+
+    auto configuration = adoptNS([WKWebViewConfiguration new]);
+    auto handler = adoptNS([TestURLSchemeHandler new]);
+    handler.get().startURLSchemeTaskHandler = ^(WKWebView *, id<WKURLSchemeTask> task) {
+        if ([task.request.URL.path isEqualToString:@"/example"])
+            respond(task, "<iframe src='customscheme://webkit.org/webkit'></iframe>");
+        else if ([task.request.URL.path isEqualToString:@"/webkit"]) {
+            respond(task, "<script>"
+                "var xhr = new XMLHttpRequest();"
+                "xhr.open('GET', '/fetched');"
+                "xhr.onreadystatechange = function () {"
+                    "if (xhr.readyState == xhr.DONE) { alert(xhr.responseURL + ' ' + xhr.responseText) }"
+                "};"
+                "xhr.send();"
+            "</script>");
+        } else if ([task.request.URL.path isEqualToString:@"/fetched"]) {
+            auto newRequest = adoptNS([[NSURLRequest alloc] initWithURL:[NSURL URLWithString:@"customscheme://webkit.org/redirected"]]);
+            [(id<WKURLSchemeTaskPrivate>)task _willPerformRedirection:adoptNS([NSURLResponse new]).get() newRequest:newRequest.get() completionHandler:^(NSURLRequest *request) {
+                respond(task, "hi");
+            }];
+        } else
+            EXPECT_TRUE(false);
+    };
+    [configuration setURLSchemeHandler:handler.get() forURLScheme:@"customscheme"];
+    auto [webView, navigationDelegate] = siteIsolatedViewAndDelegate(configuration);
+    [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"customscheme://example.com/example"]]];
+    EXPECT_WK_STREQ([webView _test_waitForAlert], "customscheme://webkit.org/redirected hi");
+    checkFrameTreesInProcesses(webView.get(), {
+        { "customscheme://example.com"_s,
+            { { RemoteFrame } }
+        }, { RemoteFrame,
+            { { "customscheme://webkit.org"_s } }
+        },
+    });
 }
 
 }

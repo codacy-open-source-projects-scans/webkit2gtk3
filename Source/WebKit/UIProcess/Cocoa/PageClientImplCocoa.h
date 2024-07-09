@@ -100,8 +100,8 @@ public:
 #endif
 
 #if ENABLE(WRITING_TOOLS_UI)
-    void addTextAnimationTypeForID(const WTF::UUID&, const WebKit::TextAnimationData&) final;
-    void removeTextAnimationForID(const WTF::UUID&) final;
+    void addTextAnimationForAnimationID(const WTF::UUID&, const WebKit::TextAnimationData&) final;
+    void removeTextAnimationForAnimationID(const WTF::UUID&) final;
 #endif
 
     void microphoneCaptureWillChange() final;
@@ -119,17 +119,19 @@ public:
     WindowKind windowKind() final;
 
 #if ENABLE(WRITING_TOOLS)
-    void textReplacementSessionShowInformationForReplacementWithIDRelativeToRect(const WebCore::WritingTools::SessionID&, const WebCore::WritingTools::TextSuggestionID&, WebCore::IntRect selectionBoundsInRootView) final;
+    void proofreadingSessionShowDetailsForSuggestionWithIDRelativeToRect(const WebCore::WritingTools::SessionID&, const WebCore::WritingTools::TextSuggestionID&, WebCore::IntRect selectionBoundsInRootView) final;
 
-    void textReplacementSessionUpdateStateForReplacementWithID(const WebCore::WritingTools::SessionID&, WebCore::WritingTools::TextSuggestionState, const WTF::UUID& replacementUUID) final;
+    void proofreadingSessionUpdateStateForSuggestionWithID(const WebCore::WritingTools::SessionID&, WebCore::WritingTools::TextSuggestionState, const WTF::UUID& replacementUUID) final;
 
-    void unifiedTextReplacementActiveWillChange() final;
-    void unifiedTextReplacementActiveDidChange() final;
+    void writingToolsActiveWillChange() final;
+    void writingToolsActiveDidChange() final;
 #endif
 
 #if ENABLE(GAMEPAD)
     void setGamepadsRecentlyAccessed(GamepadsRecentlyAccessed) final;
 #endif
+
+    void hasActiveNowPlayingSessionChanged(bool) final;
 
 protected:
     RetainPtr<WKWebView> webView() const { return m_webView.get(); }
@@ -138,4 +140,4 @@ protected:
     std::unique_ptr<WebCore::AlternativeTextUIController> m_alternativeTextUIController;
 };
 
-}
+} // namespace WebKit

@@ -57,7 +57,7 @@
 #if PLATFORM(IOS_FAMILY)
 
 #if ENABLE(WRITING_TOOLS)
-#define WK_WEB_VIEW_PROTOCOLS <WKBEScrollViewDelegate, WTWritingToolsDelegate>
+#define WK_WEB_VIEW_PROTOCOLS <WKBEScrollViewDelegate, WTWritingToolsDelegate, UITextInputTraits>
 #else
 #define WK_WEB_VIEW_PROTOCOLS <WKBEScrollViewDelegate>
 #endif
@@ -67,7 +67,7 @@
 #if PLATFORM(MAC)
 
 #if ENABLE(WRITING_TOOLS)
-#define WK_WEB_VIEW_PROTOCOLS <WKShareSheetDelegate, WTWritingToolsDelegate>
+#define WK_WEB_VIEW_PROTOCOLS <WKShareSheetDelegate, WTWritingToolsDelegate, NSTextInputTraits>
 #else
 #define WK_WEB_VIEW_PROTOCOLS <WKShareSheetDelegate>
 #endif
@@ -248,8 +248,8 @@ struct PerWebProcessState {
     CocoaEdgeInsets _maximumViewportInset;
 
 #if ENABLE(WRITING_TOOLS)
-    RetainPtr<NSMapTable<NSUUID *, WTTextSuggestion *>> _unifiedTextReplacementSessionReplacements;
-    RetainPtr<NSMapTable<NSUUID *, WTSession *>> _unifiedTextReplacementSessions;
+    RetainPtr<NSMapTable<NSUUID *, WTTextSuggestion *>> _writingToolsTextSuggestions;
+    RetainPtr<NSMapTable<NSUUID *, WTSession *>> _writingToolsSessions;
 #endif
 
 #if PLATFORM(MAC)
@@ -402,9 +402,9 @@ struct PerWebProcessState {
 #endif
 
 #if ENABLE(WRITING_TOOLS)
-- (void)_textReplacementSession:(NSUUID *)sessionUUID showInformationForReplacementWithUUID:(NSUUID *)replacementUUID relativeToRect:(CGRect)rect;
+- (void)_proofreadingSessionWithUUID:(NSUUID *)sessionUUID showDetailsForSuggestionWithUUID:(NSUUID *)replacementUUID relativeToRect:(CGRect)rect;
 
-- (void)_textReplacementSession:(NSUUID *)sessionUUID updateState:(WebCore::WritingTools::TextSuggestionState)state forReplacementWithUUID:(NSUUID *)replacementUUID;
+- (void)_proofreadingSessionWithUUID:(NSUUID *)sessionUUID updateState:(WebCore::WritingTools::TextSuggestionState)state forSuggestionWithUUID:(NSUUID *)replacementUUID;
 
 #if PLATFORM(MAC)
 - (NSWritingToolsAllowedInputOptions)writingToolsAllowedInputOptions;
@@ -415,8 +415,8 @@ struct PerWebProcessState {
 #endif // ENABLE(WRITING_TOOLS)
 
 #if ENABLE(WRITING_TOOLS_UI)
-- (void)_addTextAnimationTypeForID:(NSUUID *)uuid withData:(const WebKit::TextAnimationData&)styleData;
-- (void)_removeTextAnimationForID:(NSUUID *)uuid;
+- (void)_addTextAnimationForAnimationID:(NSUUID *)uuid withData:(const WebKit::TextAnimationData&)styleData;
+- (void)_removeTextAnimationForAnimationID:(NSUUID *)uuid;
 #endif
 
 - (void)_internalDoAfterNextPresentationUpdate:(void (^)(void))updateBlock withoutWaitingForPainting:(BOOL)withoutWaitingForPainting withoutWaitingForAnimatedResize:(BOOL)withoutWaitingForAnimatedResize;
@@ -439,6 +439,8 @@ struct PerWebProcessState {
 
 - (WKPageRef)_pageForTesting;
 - (NakedPtr<WebKit::WebPageProxy>)_page;
+
+@property (nonatomic, setter=_setHasActiveNowPlayingSession:) BOOL _hasActiveNowPlayingSession;
 
 @end
 

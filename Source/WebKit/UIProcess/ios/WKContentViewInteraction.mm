@@ -144,6 +144,7 @@
 #import <WebCore/WebCoreCALayerExtras.h>
 #import <WebCore/WebEventPrivate.h>
 #import <WebCore/WebTextIndicatorLayer.h>
+#import <WebCore/WindowsKeyboardCodes.h>
 #import <WebCore/WritingDirection.h>
 #import <WebKit/WebSelectionRect.h> // FIXME: WebKit should not include WebKitLegacy headers!
 #import <pal/spi/cg/CoreGraphicsSPI.h>
@@ -166,6 +167,7 @@
 #import <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
 #import <wtf/cocoa/TypeCastsCocoa.h>
 #import <wtf/cocoa/VectorCocoa.h>
+#import <wtf/text/MakeString.h>
 #import <wtf/text/TextStream.h>
 
 #if ENABLE(DRAG_SUPPORT)
@@ -189,10 +191,6 @@
 
 #if HAVE(PEPPER_UI_CORE)
 #import "PepperUICoreSPI.h"
-#endif
-
-#if USE(APPLE_INTERNAL_SDK)
-#import <WebKitAdditions/WKContentViewInteractionAdditionsBefore.mm>
 #endif
 
 #if HAVE(AVKIT)
@@ -1741,6 +1739,9 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 
     [self _updateTapHighlight];
 
+    if (_page->editorState().selectionIsNone && _lastSelectionDrawingInfo.type == WebKit::WKSelectionDrawingInfo::SelectionType::None)
+        return;
+
     _selectionNeedsUpdate = YES;
     [self _updateChangedSelection:YES];
 }
@@ -3103,7 +3104,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     _isWaitingOnPositionInformation = YES;
     if (![self _hasValidOutstandingPositionInformationRequest:request])
         [self requestAsynchronousPositionInformationUpdate:request];
-    bool receivedResponse = connection->waitForAndDispatchImmediately<Messages::WebPageProxy::DidReceivePositionInformation>(_page->webPageID(), 1_s, IPC::WaitForOption::InterruptWaitingIfSyncMessageArrives) == IPC::Error::NoError;
+    bool receivedResponse = connection->waitForAndDispatchImmediately<Messages::WebPageProxy::DidReceivePositionInformation>(_page->webPageIDInMainFrameProcess(), 1_s, IPC::WaitForOption::InterruptWaitingIfSyncMessageArrives) == IPC::Error::NoError;
     _hasValidPositionInformation = receivedResponse && _positionInformation.canBeValid;
     return _hasValidPositionInformation;
 }
@@ -3989,7 +3990,7 @@ FOR_EACH_PRIVATE_WKCONTENTVIEW_ACTION(FORWARD_ACTION_TO_WKWEBVIEW)
         else
             presentationRect = visualData.caretRectAtStart;
         
-        String selectionContext = textBefore + selectedText + textAfter;
+        auto selectionContext = makeString(textBefore, selectedText, textAfter);
         NSRange selectedRangeInContext = NSMakeRange(textBefore.length(), selectedText.length());
 
         if (auto textSelectionAssistant = view->_textInteractionWrapper)
@@ -4432,11 +4433,6 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     if (action == @selector(cut:))
         return !editorState.isInPasswordField && editorState.isContentEditable && editorState.selectionIsRange;
 
-#if ENABLE(WRITING_TOOLS)
-    if (action == @selector(_startWritingTools:))
-        return [self unifiedTextReplacementBehavior] != WebCore::WritingTools::Behavior::None && [super canPerformAction:action withSender:sender];
-#endif
-
     if (action == @selector(paste:) || action == @selector(_pasteAsQuotation:) || action == @selector(_pasteAndMatchStyle:) || action == @selector(pasteAndMatchStyle:)) {
         if (editorState.selectionIsNone || !editorState.isContentEditable)
             return NO;
@@ -4727,13 +4723,6 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 
     [self lookupForWebView:sender];
 }
-
-#if ENABLE(WRITING_TOOLS)
-- (void)_startWritingToolsForWebView:(id)sender
-{
-    [super _startWritingTools:sender];
-}
-#endif
 
 - (void)accessibilityRetrieveSpeakSelectionContent
 {
@@ -5678,7 +5667,7 @@ static void logTextInteraction(const char* methodName, UIGestureRecognizer *loup
     _pendingAutocorrectionContextHandler = WTFMove(completionHandler);
     _page->requestAutocorrectionContext();
 
-    if (_page->legacyMainFrameProcess().connection()->waitForAndDispatchImmediately<Messages::WebPageProxy::HandleAutocorrectionContext>(_page->webPageID(), 1_s, IPC::WaitForOption::DispatchIncomingSyncMessagesWhileWaiting) != IPC::Error::NoError)
+    if (_page->legacyMainFrameProcess().connection()->waitForAndDispatchImmediately<Messages::WebPageProxy::HandleAutocorrectionContext>(_page->webPageIDInMainFrameProcess(), 1_s, IPC::WaitForOption::DispatchIncomingSyncMessagesWhileWaiting) != IPC::Error::NoError)
         RELEASE_LOG(TextInput, "Timed out while waiting for autocorrection context.");
 
     if (_autocorrectionContextNeedsUpdate)
@@ -5883,6 +5872,9 @@ static void logTextInteraction(const char* methodName, UIGestureRecognizer *loup
 
 - (WKFormAccessoryView *)formAccessoryView
 {
+#if PLATFORM(APPLETV)
+    return nil;
+#else
     if (WebKit::defaultAlternateFormControlDesignEnabled())
         return nil;
 
@@ -5890,6 +5882,7 @@ static void logTextInteraction(const char* methodName, UIGestureRecognizer *loup
         _formAccessoryView = adoptNS([[WKFormAccessoryView alloc] initWithInputAssistantItem:self.inputAssistantItem delegate:self]);
 
     return _formAccessoryView.get();
+#endif
 }
 
 - (void)accessoryOpen
@@ -6928,10 +6921,6 @@ static UITextAutocapitalizationType toUITextAutocapitalize(WebCore::Autocapitali
     traits.inlinePredictionType = allowsInlinePredictions ? UITextInlinePredictionTypeDefault : UITextInlinePredictionTypeNo;
 #endif
 
-#if ENABLE(WRITING_TOOLS)
-    [self _updateTextInputTraitsForUnifiedTextReplacement:traits];
-#endif
-
     [self _updateTextInputTraitsForInteractionTintColor];
 }
 
@@ -7217,6 +7206,26 @@ static UITextAutocapitalizationType toUITextAutocapitalize(WebCore::Autocapitali
         completionHandler(event, NO);
         return;
     }
+
+#if PLATFORM(MACCATALYST)
+    bool hasPendingArrowKey = _keyWebEventHandlers.containsIf([](auto& eventAndCompletion) {
+        switch ([eventAndCompletion.event keyCode]) {
+        case VK_RIGHT:
+        case VK_LEFT:
+        case VK_DOWN:
+        case VK_UP:
+            return true;
+        default:
+            return false;
+        }
+    });
+
+    if (hasPendingArrowKey) {
+        RELEASE_LOG_ERROR(KeyHandling, "Ignoring incoming key event due to pending arrow key event");
+        completionHandler(event, NO);
+        return;
+    }
+#endif // PLATFORM(MACCATALYST)
 
     if (event.type == WebEventKeyDown)
         _isHandlingActiveKeyEvent = YES;
@@ -8234,12 +8243,6 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 
     for (auto block : std::exchange(_actionsToPerformAfterEditorStateUpdate, { }))
         block();
-}
-
-- (void)_didClearEditorStateAfterPageTransition
-{
-    _cachedSelectedTextRange = nil;
-    _lastSelectionDrawingInfo = { };
 }
 
 - (void)_updateInitialWritingDirectionIfNecessary
@@ -9950,7 +9953,7 @@ static std::optional<WebCore::DragOperation> coreDragOperationForUIDropOperation
         dragOperationMask,
         { },
         WebKit::coreDragDestinationActionMask(dragDestinationAction),
-        _page->webPageID()
+        _page->webPageIDInMainFrameProcess()
     };
 }
 
@@ -10755,7 +10758,7 @@ static Vector<WebCore::IntSize> sizesOfPlaceholderElementsToInsertWhenDroppingIt
         context.get()[@"_WebViewURL"] = platformURL;
 
     if (_focusedElementInformation.nonAutofillCredentialType == WebCore::NonAutofillCredentialType::WebAuthn) {
-        context.get()[@"_page_id"] = [NSNumber numberWithUnsignedLong:_page->webPageID().toUInt64()];
+        context.get()[@"_page_id"] = [NSNumber numberWithUnsignedLong:_page->webPageIDInMainFrameProcess().toUInt64()];
         context.get()[@"_frame_id"] = [NSNumber numberWithUnsignedLong:_focusedElementInformation.frameID.object().toUInt64()];
         context.get()[@"_credential_type"] = WebCore::nonAutofillCredentialTypeString(_focusedElementInformation.nonAutofillCredentialType);
     }
@@ -11548,7 +11551,7 @@ static BOOL applicationIsKnownToIgnoreMouseEvents(const char* &warningVersion)
     if (![textInputContext isKindOfClass:_WKTextInputContext.class])
         return nil;
     auto elementContext = textInputContext._textInputContext;
-    if (elementContext.webPageIdentifier != _page->webPageID())
+    if (elementContext.webPageIdentifier != _page->webPageIDInMainFrameProcess())
         return nil;
     return textInputContext;
 }
@@ -11756,7 +11759,7 @@ static RetainPtr<NSItemProvider> createItemProvider(const WebKit::WebPageProxy& 
 
 #if ENABLE(WRITING_TOOLS_UI)
 
-- (void)addTextAnimationTypeForID:(NSUUID *)uuid withStyleType:(WKTextAnimationType)styleType
+- (void)addTextAnimationForAnimationID:(NSUUID *)uuid withStyleType:(WKTextAnimationType)styleType
 {
     if (!_page->preferences().textAnimationsEnabled())
         return;
@@ -11764,10 +11767,10 @@ static RetainPtr<NSItemProvider> createItemProvider(const WebKit::WebPageProxy& 
     if (!_textAnimationManager)
         _textAnimationManager = adoptNS([WebKit::allocWKSTextAnimationManagerInstance() initWithDelegate:self]);
 
-    [_textAnimationManager addTextAnimationTypeForID:uuid withStyleType:styleType];
+    [_textAnimationManager addTextAnimationForAnimationID:uuid withStyleType:styleType];
 }
 
-- (void)removeTextAnimationForID:(NSUUID *)uuid
+- (void)removeTextAnimationForAnimationID:(NSUUID *)uuid
 {
     if (!_page->preferences().textAnimationsEnabled())
         return;
@@ -11775,16 +11778,7 @@ static RetainPtr<NSItemProvider> createItemProvider(const WebKit::WebPageProxy& 
     if (!_textAnimationManager)
         return;
 
-    [_textAnimationManager removeTextAnimationForID:uuid];
-}
-
-#endif
-
-#if ENABLE(WRITING_TOOLS)
-
-- (WebCore::WritingTools::Behavior)unifiedTextReplacementBehavior
-{
-    return _page->configuration().unifiedTextReplacementBehavior();
+    [_textAnimationManager removeTextAnimationForAnimationID:uuid];
 }
 
 #endif
@@ -13177,6 +13171,12 @@ inline static NSString *extendSelectionCommand(UITextLayoutDirection direction)
     return self;
 }
 
+- (void)callCompletionHandlerForAnimationID:(NSUUID *)uuid
+{
+    auto animationUUID = WTF::UUID::fromNSUUID(uuid);
+    _page->callCompletionHandlerForAnimationID(*animationUUID);
+}
+
 #endif
 
 #pragma mark - BETextInteractionDelegate
@@ -13202,9 +13202,9 @@ inline static NSString *extendSelectionCommand(UITextLayoutDirection direction)
     return [_webView writingToolsAllowedInputOptions];
 }
 
-- (BOOL)wantsWritingToolsInlineEditing
+- (UIWritingToolsBehavior)writingToolsBehavior
 {
-    return [_webView wantsWritingToolsInlineEditing];
+    return [_webView writingToolsBehavior];
 }
 
 - (void)willBeginWritingToolsSession:(WTSession *)session requestContexts:(void (^)(NSArray<WTContext *> *))completion
@@ -13242,17 +13242,32 @@ inline static NSString *extendSelectionCommand(UITextLayoutDirection direction)
     [_webView writingToolsSession:session didReceiveAction:action];
 }
 
-- (void)_updateTextInputTraitsForUnifiedTextReplacement:(id<UITextInputTraits>)traits
+#endif
+
+#if ENABLE(MULTI_REPRESENTATION_HEIC)
+
+- (BOOL)supportsAdaptiveImageGlyph
 {
-    auto behavior = WebKit::convertToPlatformWritingToolsBehavior([self unifiedTextReplacementBehavior]);
-    [traits setWritingToolsBehavior:behavior];
+    if (self.webView._isEditable || self.webView.configuration._multiRepresentationHEICInsertionEnabled)
+        return _page->editorState().isContentRichlyEditable;
+
+    return NO;
+}
+
+- (void)insertAdaptiveImageGlyph:(NSAdaptiveImageGlyph *)adaptiveImageGlyph replacementRange:(UITextRange *)replacementRange
+{
+    _page->insertMultiRepresentationHEIC(adaptiveImageGlyph.imageContent, adaptiveImageGlyph.contentDescription);
 }
 
 #endif
 
-#if USE(APPLE_INTERNAL_SDK)
-#import <WebKitAdditions/WKContentViewInteractionAdditionsAfter.mm>
-#endif
+- (void)_closeCurrentTypingCommand
+{
+    if (!_page)
+        return;
+
+    _page->closeCurrentTypingCommand();
+}
 
 @end
 

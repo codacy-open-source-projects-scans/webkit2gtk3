@@ -13,19 +13,26 @@ promise_test(async (test) => {
         video.srcObject.getVideoTracks()[0].stop();
     });
 
-    video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { powerEfficientPixelFormat: false, facingMode: "environment" } });
+    video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { powerEfficient: true, facingMode: "user" } });
+    const track = video.srcObject.getVideoTracks()[0];
+
+    assert_array_equals(track.getCapabilities().powerEfficient, [false]);
+    assert_false(track.getSettings().powerEfficient);
+}, "Selecting a non power efficient source");
+
+promise_test(async (test) => {
+    test.add_cleanup(() => {
+        video.srcObject.getVideoTracks()[0].stop();
+    });
+
+    video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { powerEfficient: false, facingMode: "environment" } });
     const track = video.srcObject.getVideoTracks()[0];
 
     assert_equals(track.getSettings().width, 640);
     assert_equals(track.getSettings().height, 480);
 
-    assert_equals(undefined, track.getSettings().powerEfficientPixelFormat);
-    assert_equals(undefined, track.getCapabilities().powerEfficientPixelFormat);
-
-    await video.play();
-
-    if (window.internals)
-        assert_false(internals.isMediaStreamTrackPowerEfficient(track));
+    assert_array_equals(track.getCapabilities().powerEfficient, [false, true]);
+    assert_false(track.getSettings().powerEfficient);
 }, "Selecting a non power efficient preset");
 
 promise_test(async (test) => {
@@ -33,19 +40,15 @@ promise_test(async (test) => {
         video.srcObject.getVideoTracks()[0].stop();
     });
 
-    video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { powerEfficientPixelFormat: true, facingMode: "environment" } });
+    video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { powerEfficient: true, facingMode: "environment" } });
     const track = video.srcObject.getVideoTracks()[0];
 
     assert_equals(track.getSettings().width, 640);
     assert_equals(track.getSettings().height, 360);
-
-    assert_equals(undefined, track.getSettings().powerEfficientPixelFormat);
-    assert_equals(undefined, track.getCapabilities().powerEfficientPixelFormat);
-
     await video.play();
 
-    if (window.internals)
-        assert_true(internals.isMediaStreamTrackPowerEfficient(track));
+    assert_array_equals(track.getCapabilities().powerEfficient, [false, true]);
+    assert_equals(true, track.getSettings().powerEfficient);
 }, "Selecting a power efficient preset");
 
 promise_test(async (test) => {
@@ -55,7 +58,7 @@ promise_test(async (test) => {
         stream2.getVideoTracks()[0].stop();
     });
 
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { powerEfficientPixelFormat: true, facingMode: "environment" } });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { powerEfficient: true, facingMode: "environment" } });
 
     const stream2 = stream.clone();
     await stream2.getVideoTracks()[0].applyConstraints({ width: 1000 });
@@ -64,14 +67,11 @@ promise_test(async (test) => {
     await video.srcObject.getVideoTracks()[0].applyConstraints({ width: 1920 });
     await video.play();
 
-    if (!window.internals)
-        return;
-
-    assert_true(internals.isMediaStreamTrackPowerEfficient(stream.getVideoTracks()[0]), "first track");
-    assert_true(internals.isMediaStreamTrackPowerEfficient(stream2.getVideoTracks()[0]), "second track");
-    assert_true(internals.isMediaStreamTrackPowerEfficient(video.srcObject.getVideoTracks()[0]));
+    assert_array_equals(stream.getVideoTracks()[0].getCapabilities().powerEfficient, [false, true]);
+    assert_true(stream.getVideoTracks()[0].getSettings().powerEfficient, "first track");
+    assert_true(stream2.getVideoTracks()[0].getSettings().powerEfficient, "second track");
+    assert_true(video.srcObject.getVideoTracks()[0].getSettings().powerEfficient);
 }, "Selecting a power efficient preset and check clones");
-
     </script>
 </body>
 </html>

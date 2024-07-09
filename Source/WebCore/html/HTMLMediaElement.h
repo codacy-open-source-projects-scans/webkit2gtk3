@@ -183,7 +183,7 @@ public:
 
     virtual bool isVideo() const { return false; }
     bool hasVideo() const override { return false; }
-    bool hasAudio() const override;
+    WEBCORE_EXPORT bool hasAudio() const override;
     bool hasRenderer() const { return static_cast<bool>(renderer()); }
 
     WEBCORE_EXPORT static HashSet<WeakRef<HTMLMediaElement>>& allMediaElements();
@@ -232,6 +232,8 @@ public:
     bool inActiveDocument() const { return m_inActiveDocument; }
 
     MediaSessionGroupIdentifier mediaSessionGroupIdentifier() const final;
+
+    void isActiveNowPlayingSessionChanged() final;
 
 // DOM API
 // error state
@@ -570,7 +572,7 @@ public:
     RenderMedia* renderer() const;
 
     void resetPlaybackSessionState();
-    bool isVisibleInViewport() const;
+    WEBCORE_EXPORT bool isVisibleInViewport() const;
     bool hasEverNotifiedAboutPlaying() const;
     void setShouldDelayLoadEvent(bool);
 
@@ -753,6 +755,10 @@ protected:
     bool videoFullscreenStandby() const { return m_videoFullscreenStandby; }
     void setVideoFullscreenStandbyInternal(bool videoFullscreenStandby) { m_videoFullscreenStandby = videoFullscreenStandby; }
 
+protected:
+    // ActiveDOMObject
+    void stop() override;
+
 private:
     friend class Internals;
 
@@ -775,7 +781,6 @@ private:
     // ActiveDOMObject.
     void suspend(ReasonForSuspension) override;
     void resume() override;
-    void stop() override;
     bool virtualHasPendingActivity() const override;
 
     void stopWithoutDestroyingMediaPlayer();

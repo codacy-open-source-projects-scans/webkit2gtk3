@@ -101,7 +101,8 @@
 #endif
 
 #if PLATFORM(WPE)
-#include "WPEWebView.h"
+#include "WPEWebViewLegacy.h"
+#include "WPEWebViewPlatform.h"
 #include "WebKitOptionMenuPrivate.h"
 #include "WebKitWebViewBackendPrivate.h"
 #include "WebKitWebViewClient.h"
@@ -241,7 +242,58 @@ enum {
 
 static GParamSpec* sObjProperties[N_PROPERTIES] = { nullptr, };
 
-class PageLoadStateObserver;
+class PageLoadStateObserver final : public PageLoadState::Observer {
+    WTF_MAKE_FAST_ALLOCATED;
+public:
+    PageLoadStateObserver(WebKitWebView* webView)
+        : m_webView(webView)
+    {
+    }
+
+private:
+    void willChangeIsLoading() override
+    {
+        g_object_freeze_notify(G_OBJECT(m_webView));
+    }
+    void didChangeIsLoading() override;
+
+    void willChangeTitle() override
+    {
+        g_object_freeze_notify(G_OBJECT(m_webView));
+    }
+    void didChangeTitle() override;
+
+    void willChangeActiveURL() override;
+    void didChangeActiveURL() override;
+
+    void willChangeHasOnlySecureContent() override { }
+    void didChangeHasOnlySecureContent() override { }
+
+    void willChangeEstimatedProgress() override
+    {
+        g_object_freeze_notify(G_OBJECT(m_webView));
+    }
+    void didChangeEstimatedProgress() override
+    {
+        g_object_notify_by_pspec(G_OBJECT(m_webView), sObjProperties[PROP_ESTIMATED_LOAD_PROGRESS]);
+        g_object_thaw_notify(G_OBJECT(m_webView));
+    }
+
+    void willChangeCanGoBack() override { }
+    void didChangeCanGoBack() override { }
+    void willChangeCanGoForward() override { }
+    void didChangeCanGoForward() override { }
+    void willChangeNetworkRequestsInProgress() override { }
+    void didChangeNetworkRequestsInProgress() override { }
+    void willChangeCertificateInfo() override { }
+    void didChangeCertificateInfo() override { }
+    void willChangeWebProcessIsResponsive() override { }
+    void didChangeWebProcessIsResponsive() override { }
+    void didSwapWebProcesses() override { };
+
+    WebKitWebView* m_webView;
+};
+
 
 #if PLATFORM(WPE)
 static unsigned frameDisplayCallbackID;
@@ -286,7 +338,7 @@ struct _WebKitWebViewPrivate {
 #if ENABLE(WPE_PLATFORM)
     GRefPtr<WPEDisplay> display;
 #endif
-    std::unique_ptr<WKWPE::View> view;
+    RefPtr<WKWPE::View> view;
     Vector<FrameDisplayedCallback> frameDisplayedCallbacks;
     bool inFrameDisplayed;
     HashSet<unsigned> frameDisplayedCallbacksToRemove;
@@ -388,6 +440,35 @@ static void webkitWebViewSetIsLoading(WebKitWebView* webView, bool isLoading)
     g_object_notify_by_pspec(G_OBJECT(webView), sObjProperties[PROP_IS_LOADING]);
 }
 
+void PageLoadStateObserver::didChangeIsLoading()
+{
+    webkitWebViewSetIsLoading(m_webView, getPage(m_webView).pageLoadState().isLoading());
+    g_object_thaw_notify(G_OBJECT(m_webView));
+}
+
+void PageLoadStateObserver::didChangeTitle()
+{
+    m_webView->priv->title = getPage(m_webView).pageLoadState().title().utf8();
+    g_object_notify_by_pspec(G_OBJECT(m_webView), sObjProperties[PROP_TITLE]);
+    g_object_thaw_notify(G_OBJECT(m_webView));
+}
+
+void PageLoadStateObserver::willChangeActiveURL()
+{
+    if (m_webView->priv->isActiveURIChangeBlocked)
+        return;
+    g_object_freeze_notify(G_OBJECT(m_webView));
+}
+
+void PageLoadStateObserver::didChangeActiveURL()
+{
+    if (m_webView->priv->isActiveURIChangeBlocked)
+        return;
+    m_webView->priv->activeURI = getPage(m_webView).pageLoadState().activeURL().utf8();
+    g_object_notify_by_pspec(G_OBJECT(m_webView), sObjProperties[PROP_URI]);
+    g_object_thaw_notify(G_OBJECT(m_webView));
+}
+
 void webkitWebViewIsPlayingAudioChanged(WebKitWebView* webView)
 {
     g_object_notify_by_pspec(G_OBJECT(webView), sObjProperties[PROP_IS_PLAYING_AUDIO]);
@@ -409,78 +490,6 @@ void webkitWebViewMediaCaptureStateDidChange(WebKitWebView* webView, WebCore::Me
         g_object_notify_by_pspec(G_OBJECT(webView), sObjProperties[PROP_DISPLAY_CAPTURE_STATE]);
 }
 
-class PageLoadStateObserver final : public PageLoadState::Observer {
-    WTF_MAKE_FAST_ALLOCATED;
-public:
-    PageLoadStateObserver(WebKitWebView* webView)
-        : m_webView(webView)
-    {
-    }
-
-private:
-    void willChangeIsLoading() override
-    {
-        g_object_freeze_notify(G_OBJECT(m_webView));
-    }
-    void didChangeIsLoading() override
-    {
-        webkitWebViewSetIsLoading(m_webView, getPage(m_webView).pageLoadState().isLoading());
-        g_object_thaw_notify(G_OBJECT(m_webView));
-    }
-
-    void willChangeTitle() override
-    {
-        g_object_freeze_notify(G_OBJECT(m_webView));
-    }
-    void didChangeTitle() override
-    {
-        m_webView->priv->title = getPage(m_webView).pageLoadState().title().utf8();
-        g_object_notify_by_pspec(G_OBJECT(m_webView), sObjProperties[PROP_TITLE]);
-        g_object_thaw_notify(G_OBJECT(m_webView));
-    }
-
-    void willChangeActiveURL() override
-    {
-        if (m_webView->priv->isActiveURIChangeBlocked)
-            return;
-        g_object_freeze_notify(G_OBJECT(m_webView));
-    }
-    void didChangeActiveURL() override
-    {
-        if (m_webView->priv->isActiveURIChangeBlocked)
-            return;
-        m_webView->priv->activeURI = getPage(m_webView).pageLoadState().activeURL().utf8();
-        g_object_notify_by_pspec(G_OBJECT(m_webView), sObjProperties[PROP_URI]);
-        g_object_thaw_notify(G_OBJECT(m_webView));
-    }
-
-    void willChangeHasOnlySecureContent() override { }
-    void didChangeHasOnlySecureContent() override { }
-
-    void willChangeEstimatedProgress() override
-    {
-        g_object_freeze_notify(G_OBJECT(m_webView));
-    }
-    void didChangeEstimatedProgress() override
-    {
-        g_object_notify_by_pspec(G_OBJECT(m_webView), sObjProperties[PROP_ESTIMATED_LOAD_PROGRESS]);
-        g_object_thaw_notify(G_OBJECT(m_webView));
-    }
-
-    void willChangeCanGoBack() override { }
-    void didChangeCanGoBack() override { }
-    void willChangeCanGoForward() override { }
-    void didChangeCanGoForward() override { }
-    void willChangeNetworkRequestsInProgress() override { }
-    void didChangeNetworkRequestsInProgress() override { }
-    void willChangeCertificateInfo() override { }
-    void didChangeCertificateInfo() override { }
-    void willChangeWebProcessIsResponsive() override { }
-    void didChangeWebProcessIsResponsive() override { }
-    void didSwapWebProcesses() override { };
-
-    WebKitWebView* m_webView;
-};
 
 #if PLATFORM(WPE)
 WebKitWebViewClient::WebKitWebViewClient(WebKitWebView* webView)
@@ -828,12 +837,14 @@ static void webkitWebViewCreatePage(WebKitWebView* webView, Ref<API::PageConfigu
     webkitWebViewBaseCreateWebPage(WEBKIT_WEB_VIEW_BASE(webView), WTFMove(configuration));
 #elif PLATFORM(WPE)
 #if ENABLE(WPE_PLATFORM)
-    webView->priv->view.reset(WKWPE::View::create(webView->priv->backend ? webkit_web_view_backend_get_wpe_backend(webView->priv->backend.get()) : nullptr, webkit_web_view_get_display(webView), configuration.get()));
-    if (auto* wpeView = webView->priv->view->wpeView())
-        g_signal_connect_object(wpeView, "closed", G_CALLBACK(webkitWebViewClosePage), webView, G_CONNECT_SWAPPED);
-#else
-    webView->priv->view.reset(WKWPE::View::create(webkit_web_view_backend_get_wpe_backend(webView->priv->backend.get()), configuration.get()));
+    if (!webView->priv->backend) {
+        webView->priv->view = WKWPE::ViewPlatform::create(webkit_web_view_get_display(webView), configuration.get());
+        if (auto* wpeView = webView->priv->view->wpeView())
+            g_signal_connect_object(wpeView, "closed", G_CALLBACK(webkitWebViewClosePage), webView, G_CONNECT_SWAPPED);
+        return;
+    }
 #endif
+    webView->priv->view = WKWPE::ViewLegacy::create(webkit_web_view_backend_get_wpe_backend(webView->priv->backend.get()), configuration.get());
 #endif
 }
 
@@ -894,8 +905,11 @@ static void webkitWebViewConstructed(GObject* object)
 
 #if ENABLE(2022_GLIB_API)
 #if ENABLE(REMOTE_INSPECTOR)
-    if (priv->isControlledByAutomation)
+    if (priv->isControlledByAutomation) {
+        if (!webkit_web_context_is_automation_allowed(priv->context.get()))
+            g_critical("WebKitWebView is-controlled-by-automation set but automation is not allowed in the context, falling back to default session.");
         priv->networkSession = webkit_web_context_get_network_session_for_automation(priv->context.get());
+    }
 #endif
     if (!priv->networkSession)
         priv->networkSession = webkit_network_session_get_default();
@@ -3090,7 +3104,7 @@ RendererBufferFormat webkitWebViewGetRendererBufferFormat(WebKitWebView* webView
 #if PLATFORM(GTK)
     return webkitWebViewBaseGetRendererBufferFormat(WEBKIT_WEB_VIEW_BASE(webView));
 #elif PLATFORM(WPE) && ENABLE(WPE_PLATFORM)
-    return webView->priv->view->renderBufferFormat();
+    return static_cast<WKWPE::ViewPlatform*>(webView->priv->view.get())->renderBufferFormat();
 #endif
 }
 #endif
@@ -3455,7 +3469,7 @@ guint64 webkit_web_view_get_page_id(WebKitWebView* webView)
 {
     g_return_val_if_fail(WEBKIT_IS_WEB_VIEW(webView), 0);
 
-    return getPage(webView).webPageID().toUInt64();
+    return getPage(webView).webPageIDInMainFrameProcess().toUInt64();
 }
 
 /**
@@ -5248,7 +5262,7 @@ void webkit_web_view_send_message_to_page(WebKitWebView* webView, WebKitUserMess
     GRefPtr<WebKitUserMessage> adoptedMessage = message;
     Ref page = getPage(webView);
     if (!callback) {
-        page->ensureRunningProcess().send(Messages::WebPage::SendMessageToWebProcessExtension(webkitUserMessageGetMessage(message)), page->webPageID().toUInt64());
+        page->ensureRunningProcess().send(Messages::WebPage::SendMessageToWebProcessExtension(webkitUserMessageGetMessage(message)), page->webPageIDInMainFrameProcess().toUInt64());
         return;
     }
 
@@ -5267,7 +5281,7 @@ void webkit_web_view_send_message_to_page(WebKitWebView* webView, WebKitUserMess
         }
     };
     page->ensureRunningProcess().sendWithAsyncReply(Messages::WebPage::SendMessageToWebProcessExtensionWithReply(webkitUserMessageGetMessage(message)),
-        WTFMove(completionHandler), page->webPageID().toUInt64());
+        WTFMove(completionHandler), page->webPageIDInMainFrameProcess().toUInt64());
 }
 
 /**

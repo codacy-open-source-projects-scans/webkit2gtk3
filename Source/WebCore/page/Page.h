@@ -100,6 +100,7 @@ class BadgeClient;
 class BroadcastChannelRegistry;
 class CacheStorageProvider;
 class Chrome;
+class CompositeEditCommand;
 class ContextMenuController;
 class CookieJar;
 class CryptoClient;
@@ -110,6 +111,7 @@ class DiagnosticLoggingClient;
 class DragCaretController;
 class DragController;
 class EditorClient;
+class EditCommandComposition;
 class ElementTargetingController;
 class Element;
 class FocusController;
@@ -416,7 +418,7 @@ public:
     PointerLockController& pointerLockController() { return m_pointerLockController.get(); }
 #endif
     WebRTCProvider& webRTCProvider() { return m_webRTCProvider.get(); }
-    RTCController& rtcController() { return m_rtcController; }
+    RTCController& rtcController() { return m_rtcController.get(); }
     WEBCORE_EXPORT void disableICECandidateFiltering();
     WEBCORE_EXPORT void enableICECandidateFiltering();
     bool shouldEnableICECandidateFilteringByDefault() const { return m_shouldEnableICECandidateFilteringByDefault; }
@@ -1148,23 +1150,34 @@ public:
 #endif
 
 #if ENABLE(WRITING_TOOLS)
-    WEBCORE_EXPORT void willBeginTextReplacementSession(const std::optional<WritingTools::Session>&, CompletionHandler<void(const Vector<WritingTools::Context>&)>&&);
+    WEBCORE_EXPORT void willBeginWritingToolsSession(const std::optional<WritingTools::Session>&, CompletionHandler<void(const Vector<WritingTools::Context>&)>&&);
 
-    WEBCORE_EXPORT void didBeginTextReplacementSession(const WritingTools::Session&, const Vector<WritingTools::Context>&);
+    WEBCORE_EXPORT void didBeginWritingToolsSession(const WritingTools::Session&, const Vector<WritingTools::Context>&);
 
-    WEBCORE_EXPORT void textReplacementSessionDidReceiveReplacements(const WritingTools::Session&, const Vector<WritingTools::TextSuggestion>&, const WritingTools::Context&, bool finished);
+    WEBCORE_EXPORT void proofreadingSessionDidReceiveSuggestions(const WritingTools::Session&, const Vector<WritingTools::TextSuggestion>&, const WritingTools::Context&, bool finished);
 
-    WEBCORE_EXPORT void textReplacementSessionDidUpdateStateForReplacement(const WritingTools::Session&, WritingTools::TextSuggestionState, const WritingTools::TextSuggestion&, const WritingTools::Context&);
+    WEBCORE_EXPORT void proofreadingSessionDidUpdateStateForSuggestion(const WritingTools::Session&, WritingTools::TextSuggestionState, const WritingTools::TextSuggestion&, const WritingTools::Context&);
 
-    WEBCORE_EXPORT void didEndTextReplacementSession(const WritingTools::Session&, bool accepted);
+    WEBCORE_EXPORT void didEndWritingToolsSession(const WritingTools::Session&, bool accepted);
 
-    WEBCORE_EXPORT void textReplacementSessionDidReceiveTextWithReplacementRange(const WritingTools::Session&, const AttributedString&, const CharacterRange&, const WritingTools::Context&, bool finished);
+    WEBCORE_EXPORT void compositionSessionDidReceiveTextWithReplacementRange(const WritingTools::Session&, const AttributedString&, const CharacterRange&, const WritingTools::Context&, bool finished);
 
-    WEBCORE_EXPORT void textReplacementSessionDidReceiveEditAction(const WritingTools::Session&, WritingTools::Action);
+    WEBCORE_EXPORT void writingToolsSessionDidReceiveAction(const WritingTools::Session&, WritingTools::Action);
 
-    WEBCORE_EXPORT void updateStateForSelectedReplacementIfNeeded();
+    WEBCORE_EXPORT void updateStateForSelectedSuggestionIfNeeded();
+
+    void respondToUnappliedWritingToolsEditing(EditCommandComposition*);
+    void respondToReappliedWritingToolsEditing(EditCommandComposition*);
 
     WEBCORE_EXPORT std::optional<SimpleRange> contextRangeForSessionWithID(const WritingTools::SessionID&) const;
+#endif
+
+    bool hasActiveNowPlayingSession() const { return m_hasActiveNowPlayingSession; }
+    void hasActiveNowPlayingSessionChanged();
+    void activeNowPlayingSessionUpdateTimerFired();
+
+#if PLATFORM(IOS_FAMILY)
+    bool canShowWhileLocked() const { return m_canShowWhileLocked; }
 #endif
 
 private:
@@ -1274,7 +1287,7 @@ private:
 
     UniqueRef<MediaRecorderProvider> m_mediaRecorderProvider;
     UniqueRef<WebRTCProvider> m_webRTCProvider;
-    RTCController m_rtcController;
+    Ref<RTCController> m_rtcController;
 
     PlatformDisplayID m_displayID { 0 };
     std::optional<FramesPerSecond> m_displayNominalFramesPerSecond;
@@ -1307,6 +1320,7 @@ private:
 
 #if PLATFORM(IOS_FAMILY)
     bool m_enclosedInScrollableAncestorView { false };
+    bool m_canShowWhileLocked { false };
 #endif
     
     bool m_useSystemAppearance { false };
@@ -1573,6 +1587,9 @@ private:
 #if ENABLE(WRITING_TOOLS)
     UniqueRef<WritingToolsController> m_writingToolsController;
 #endif
+
+    bool m_hasActiveNowPlayingSession { false };
+    Timer m_activeNowPlayingSessionUpdateTimer;
 }; // class Page
 
 inline Page* Frame::page() const

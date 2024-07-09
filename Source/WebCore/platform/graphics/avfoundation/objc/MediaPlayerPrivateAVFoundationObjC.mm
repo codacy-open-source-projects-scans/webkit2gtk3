@@ -1154,7 +1154,7 @@ void MediaPlayerPrivateAVFoundationObjC::createAVPlayer()
     if (m_muted) {
         [m_avPlayer setMuted:m_muted];
 
-#if HAVE(AVPLAYER_SUPRESSES_AUDIO_RENDERING)
+#if HAVE(AVPLAYER_SUPPRESSES_AUDIO_RENDERING)
         if (player->isVideoPlayer())
             m_avPlayer.get().suppressesAudioRendering = YES;
 #endif
@@ -1685,7 +1685,7 @@ void MediaPlayerPrivateAVFoundationObjC::setMuted(bool muted)
         return;
 
     [m_avPlayer setMuted:m_muted];
-#if HAVE(AVPLAYER_SUPRESSES_AUDIO_RENDERING)
+#if HAVE(AVPLAYER_SUPPRESSES_AUDIO_RENDERING)
     if (!m_muted)
         m_avPlayer.get().suppressesAudioRendering = NO;
 #endif
@@ -2151,7 +2151,7 @@ static void fulfillRequestWithKeyData(AVAssetResourceLoadingRequest *request, Ar
         ASSERT(start <= std::numeric_limits<int>::max());
         ASSERT(end <= std::numeric_limits<int>::max());
         auto requestedKeyData = keyData->slice(static_cast<int>(start), static_cast<int>(end));
-        RetainPtr<NSData> nsData = adoptNS([[NSData alloc] initWithBytes:requestedKeyData->data() length:requestedKeyData->byteLength()]);
+        RetainPtr nsData = toNSData(requestedKeyData->span());
         [dataRequest respondWithData:nsData.get()];
     }
 

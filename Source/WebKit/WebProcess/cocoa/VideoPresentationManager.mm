@@ -118,8 +118,8 @@ void VideoPresentationInterfaceContext::hasVideoChanged(bool hasVideo)
 
 void VideoPresentationInterfaceContext::documentVisibilityChanged(bool isDocumentVisible)
 {
-    if (m_manager)
-        m_manager->documentVisibilityChanged(m_contextId, isDocumentVisible);
+    if (RefPtr manager = m_manager.get())
+        manager->documentVisibilityChanged(m_contextId, isDocumentVisible);
 }
 
 void VideoPresentationInterfaceContext::videoDimensionsChanged(const FloatSize& videoDimensions)
@@ -529,8 +529,8 @@ void VideoPresentationManager::hasVideoChanged(PlaybackSessionContextIdentifier 
 
 void VideoPresentationManager::documentVisibilityChanged(PlaybackSessionContextIdentifier contextId, bool isDocumentVisibile)
 {
-    if (m_page)
-        m_page->send(Messages::VideoPresentationManagerProxy::SetDocumentVisibility(contextId, isDocumentVisibile));
+    if (RefPtr page = m_page.get())
+        page->send(Messages::VideoPresentationManagerProxy::SetDocumentVisibility(contextId, isDocumentVisibile));
 }
 
 void VideoPresentationManager::videoDimensionsChanged(PlaybackSessionContextIdentifier contextId, const FloatSize& videoDimensions)
@@ -816,6 +816,8 @@ void VideoPresentationManager::setVideoLayerFrameFenced(PlaybackSessionContextId
         model->setVideoLayerFrame(bounds);
     } else
         model->setVideoSizeFenced(bounds.size(), WTFMove(machSendRight));
+
+    model->setTextTrackRepresentationBounds(enclosingIntRect(bounds));
 }
 
 void VideoPresentationManager::setVideoFullscreenFrame(PlaybackSessionContextIdentifier contextId, WebCore::FloatRect frame)

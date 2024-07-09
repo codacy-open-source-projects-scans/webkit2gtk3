@@ -145,6 +145,8 @@ public:
     bool isValid() const { return m_isValid; }
     uint8_t* data() { RELEASE_ASSERT(m_isValid); return static_cast<uint8_t*>(m_info.data); }
     const uint8_t* data() const { RELEASE_ASSERT(m_isValid); return static_cast<uint8_t*>(m_info.data); }
+    std::span<uint8_t> mutableSpan() { return { data(), size() }; }
+    std::span<const uint8_t> span() const { return { data(), size() }; }
     size_t size() const { ASSERT(m_isValid); return m_isValid ? static_cast<size_t>(m_info.size) : 0; }
     MapType* mappedData() const  { ASSERT(m_isValid); return m_isValid ? const_cast<MapType*>(&m_info) : nullptr; }
     Vector<uint8_t> createVector() const;
@@ -277,19 +279,19 @@ inline std::optional<T> gstStructureGet(const GstStructure* structure, ASCIILite
 
     T value;
     if constexpr(std::is_same_v<T, int>) {
-        if (gst_structure_get_int(structure, key.characters(), &value))
+        if (UNLIKELY(gst_structure_get_int(structure, key.characters(), &value)))
             return value;
     } else if constexpr(std::is_same_v<T, int64_t>) {
-        if (gst_structure_get_int64(structure, key.characters(), &value))
+        if (UNLIKELY(gst_structure_get_int64(structure, key.characters(), &value)))
             return value;
     } else if constexpr(std::is_same_v<T, unsigned>) {
-        if (gst_structure_get_uint(structure, key.characters(), &value))
+        if (UNLIKELY(gst_structure_get_uint(structure, key.characters(), &value)))
             return value;
     } else if constexpr(std::is_same_v<T, uint64_t>) {
-        if (gst_structure_get_uint64(structure, key.characters(), &value))
+        if (UNLIKELY(gst_structure_get_uint64(structure, key.characters(), &value)))
             return value;
     } else if constexpr(std::is_same_v<T, double>) {
-        if (gst_structure_get_double(structure, key.characters(), &value))
+        if (UNLIKELY(gst_structure_get_double(structure, key.characters(), &value)))
             return value;
     }
     return std::nullopt;
@@ -432,5 +434,9 @@ private:
     GUniquePtr<GstIterator> m_iter;
     bool m_started { false };
 };
+
+#if !GST_CHECK_VERSION(1, 20, 0)
+GstBuffer* gst_buffer_new_memdup(gconstpointer data, gsize size);
+#endif
 
 #endif // USE(GSTREAMER)

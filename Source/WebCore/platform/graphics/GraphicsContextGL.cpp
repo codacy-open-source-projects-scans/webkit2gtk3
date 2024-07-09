@@ -37,6 +37,7 @@
 #include "HostWindow.h"
 #include "Image.h"
 #include "ImageObserver.h"
+#include "NotImplemented.h"
 #include "PixelBuffer.h"
 #include "VideoFrame.h"
 
@@ -570,6 +571,18 @@ GCGLint GraphicsContextGL::getInternalformati(GCGLenum target, GCGLenum internal
     getInternalformativ(target, internalformat, pname, value);
     return value[0];
 }
+
+void GraphicsContextGL::framebufferDiscard(GCGLenum, std::span<const GCGLenum>)
+{
+    notImplemented();
+}
+
+#if ENABLE(WEBXR)
+void GraphicsContextGL::framebufferResolveRenderbuffer(GCGLenum, GCGLenum, GCGLenum, PlatformGLObject)
+{
+    notImplemented();
+}
+#endif
 
 void GraphicsContextGL::setDrawingBufferColorSpace(const DestinationColorSpace&)
 {

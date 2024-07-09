@@ -56,8 +56,8 @@
 #include <wtf/StdLibExtras.h>
 #include <wtf/UniqueArray.h>
 #include <wtf/text/CString.h>
+#include <wtf/text/MakeString.h>
 #include <wtf/text/StringBuilder.h>
-#include <wtf/text/StringConcatenateNumbers.h>
 
 namespace WTR {
 
@@ -954,7 +954,7 @@ void TestRunner::queueLoadHTMLString(JSStringRef content, JSStringRef baseURL, J
 
 void TestRunner::stopLoading()
 {
-    WKBundlePageStopLoading(page());
+    postPageMessage("StopLoading");
 }
 
 void TestRunner::queueReload()

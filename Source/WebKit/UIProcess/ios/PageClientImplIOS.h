@@ -197,7 +197,6 @@ private:
     void elementDidBlur() override;
     void focusedElementDidChangeInputMode(WebCore::InputMode) override;
     void didUpdateEditorState() override;
-    void didClearEditorStateAfterPageTransition() final;
     bool isFocusingElement() override;
     void selectionDidChange() override;
     bool interpretKeyEvent(const NativeWebKeyboardEvent&, bool isCharEvent) override;
@@ -354,6 +353,8 @@ private:
 #if HAVE(SPATIAL_TRACKING_LABEL)
     const String& spatialTrackingLabel() const final;
 #endif
+
+    void scheduleVisibleContentRectUpdate() final;
 
     RetainPtr<WKContentView> contentView() const { return m_contentView.get(); }
 

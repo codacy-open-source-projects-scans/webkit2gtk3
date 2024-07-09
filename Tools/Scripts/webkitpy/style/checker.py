@@ -157,7 +157,10 @@ _PATH_RULES_SPECIFIER = [
     ([
         # The WPEQtViewLoadRequest class uses Qt naming conventions (d_ptr).
         os.path.join('Source', 'WebKit', 'UIProcess', 'API', 'wpe', 'qt5', 'WPEQtViewLoadRequest.h'),
-        os.path.join('Source', 'WebKit', 'UIProcess', 'API', 'wpe', 'qt6', 'WPEQtViewLoadRequest.h')],
+        os.path.join('Source', 'WebKit', 'UIProcess', 'API', 'wpe', 'qt6', 'WPEQtViewLoadRequest.h'),
+
+        # The WPEQtView class uses Qt naming conventions (d_ptr).
+        os.path.join('Source', 'WebKit', 'UIProcess', 'API', 'wpe', 'qt6', 'WPEQtView.h')],
      ["-readability/naming/underscores"]),
 
     ([
@@ -169,14 +172,16 @@ _PATH_RULES_SPECIFIER = [
      ["-readability/parameter_name", "-readability/naming/acronym"]),
 
     ([
-        # The WPEViewQtQuick / WPEDisplayQtQuick follow GLib API conventions.
+        # The WPE QtQuick files follow GLib API conventions.
         os.path.join('Source', 'WebKit', 'UIProcess', 'API', 'wpe', 'qt6', 'WPEViewQtQuick.h'),
+        os.path.join('Source', 'WebKit', 'UIProcess', 'API', 'wpe', 'qt6', 'WPEToplevelQtQuick.h'),
         os.path.join('Source', 'WebKit', 'UIProcess', 'API', 'wpe', 'qt6', 'WPEDisplayQtQuick.h')],
      ["-build/header_guard", "-readability/naming/underscores", "-readability/parameter_name", "-whitespace/declaration", "-whitespace/parens"]),
 
     ([
-        # The WPEViewQtQuick / WPEDisplayQtQuick follow GLib API conventions.
+        # The WPE QtQuick files follow GLib API conventions.
         os.path.join('Source', 'WebKit', 'UIProcess', 'API', 'wpe', 'qt6', 'WPEViewQtQuick.cpp'),
+        os.path.join('Source', 'WebKit', 'UIProcess', 'API', 'wpe', 'qt6', 'WPEToplevelQtQuick.cpp'),
         os.path.join('Source', 'WebKit', 'UIProcess', 'API', 'wpe', 'qt6', 'WPEDisplayQtQuick.cpp')],
      ["-build/include_order", "-whitespace/parens"]),
 

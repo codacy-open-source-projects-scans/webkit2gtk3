@@ -44,7 +44,7 @@
 #import <wtf/MachSendRight.h>
 #import <wtf/RunLoop.h>
 #import <wtf/spi/darwin/XPCSPI.h>
-#import <wtf/text/StringConcatenate.h>
+#import <wtf/text/MakeString.h>
 
 #if PLATFORM(IOS_FAMILY)
 #import "ProcessAssertion.h"
@@ -591,6 +591,7 @@ std::optional<audit_token_t> Connection::getAuditToken()
     return WTFMove(auditToken);
 }
 
+#if !USE(EXTENSIONKIT_PROCESS_TERMINATION)
 bool Connection::kill()
 {
     if (m_xpcConnection) {
@@ -598,9 +599,9 @@ bool Connection::kill()
         m_wasKilled = true;
         return true;
     }
-
     return false;
 }
+#endif
 
 pid_t Connection::remoteProcessID() const
 {

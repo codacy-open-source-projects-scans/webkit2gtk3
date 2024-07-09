@@ -82,6 +82,7 @@
 #import <pal/spi/cocoa/NSAccessibilitySPI.h>
 #import <wtf/cocoa/TypeCastsCocoa.h>
 #import <wtf/cocoa/VectorCocoa.h>
+#import <wtf/text/MakeString.h>
 
 using namespace WebCore;
 
@@ -742,26 +743,6 @@ static RetainPtr<AXTextMarkerRef> previousTextMarker(AXObjectCache* cache, const
 
     auto previousMarker = cache->previousTextMarker(marker);
     return previousMarker ? previousMarker.platformData() : nil;
-}
-
-- (RetainPtr<AXTextMarkerRef>)textMarkerForFirstPositionInTextControl:(HTMLTextFormControlElement &)textControl
-{
-    ASSERT(isMainThread());
-
-    RefPtr<AXCoreObject> backingObject = self.axBackingObject;
-    if (!backingObject)
-        return nil;
-
-    auto* cache = backingObject->axObjectCache();
-    if (!cache)
-        return nil;
-
-    auto textMarkerData = cache->textMarkerDataForFirstPositionInTextControl(textControl);
-    if (!textMarkerData)
-        return nil;
-
-    auto rawTextMarkerData = textMarkerData->toRawTextMarkerData();
-    return adoptCF(AXTextMarkerCreate(kCFAllocatorDefault, (const UInt8*)&rawTextMarkerData, sizeof(rawTextMarkerData)));
 }
 
 static NSAttributedString *attributedStringForTextMarkerRange(const AXCoreObject& object, AXTextMarkerRangeRef textMarkerRangeRef, AXCoreObject::SpellCheck spellCheck)

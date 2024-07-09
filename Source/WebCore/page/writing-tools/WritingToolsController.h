@@ -27,12 +27,17 @@
 
 #if ENABLE(WRITING_TOOLS)
 
-#include "Range.h"
-#include "ReplaceSelectionCommand.h"
-#include "WritingToolsTypes.h"
+#import "Range.h"
+#import "WritingToolsCompositionCommand.h"
+#import "WritingToolsTypes.h"
+#import <wtf/CheckedPtr.h>
+#import <wtf/FastMalloc.h>
+#import <wtf/WeakPtr.h>
 
 namespace WebCore {
 
+class CompositeEditCommand;
+class EditCommandComposition;
 class Document;
 class DocumentFragment;
 class DocumentMarker;
@@ -41,28 +46,32 @@ class Page;
 
 struct SimpleRange;
 
-class WritingToolsController final {
+class WritingToolsController final : public CanMakeWeakPtr<WritingToolsController>, public CanMakeCheckedPtr<WritingToolsController> {
     WTF_MAKE_FAST_ALLOCATED;
     WTF_MAKE_NONCOPYABLE(WritingToolsController);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(WritingToolsController);
 
 public:
     explicit WritingToolsController(Page&);
 
-    void willBeginTextReplacementSession(const std::optional<WritingTools::Session>&, CompletionHandler<void(const Vector<WritingTools::Context>&)>&&);
+    void willBeginWritingToolsSession(const std::optional<WritingTools::Session>&, CompletionHandler<void(const Vector<WritingTools::Context>&)>&&);
 
-    void didBeginTextReplacementSession(const WritingTools::Session&, const Vector<WritingTools::Context>&);
+    void didBeginWritingToolsSession(const WritingTools::Session&, const Vector<WritingTools::Context>&);
 
-    void textReplacementSessionDidReceiveReplacements(const WritingTools::Session&, const Vector<WritingTools::TextSuggestion>&, const WritingTools::Context&, bool finished);
+    void proofreadingSessionDidReceiveSuggestions(const WritingTools::Session&, const Vector<WritingTools::TextSuggestion>&, const WritingTools::Context&, bool finished);
 
-    void textReplacementSessionDidUpdateStateForReplacement(const WritingTools::Session&, WritingTools::TextSuggestion::State, const WritingTools::TextSuggestion&, const WritingTools::Context&);
+    void proofreadingSessionDidUpdateStateForSuggestion(const WritingTools::Session&, WritingTools::TextSuggestion::State, const WritingTools::TextSuggestion&, const WritingTools::Context&);
 
-    void didEndTextReplacementSession(const WritingTools::Session&, bool accepted);
+    void didEndWritingToolsSession(const WritingTools::Session&, bool accepted);
 
-    void textReplacementSessionDidReceiveTextWithReplacementRange(const WritingTools::Session&, const AttributedString&, const CharacterRange&, const WritingTools::Context&, bool finished);
+    void compositionSessionDidReceiveTextWithReplacementRange(const WritingTools::Session&, const AttributedString&, const CharacterRange&, const WritingTools::Context&, bool finished);
 
-    void textReplacementSessionDidReceiveEditAction(const WritingTools::Session&, WritingTools::Action);
+    void writingToolsSessionDidReceiveAction(const WritingTools::Session&, WritingTools::Action);
 
-    void updateStateForSelectedReplacementIfNeeded();
+    void updateStateForSelectedSuggestionIfNeeded();
+
+    void respondToUnappliedEditing(EditCommandComposition*);
+    void respondToReappliedEditing(EditCommandComposition*);
 
     // FIXME: Refactor `TextAnimationController` in such a way so as to not explicitly depend on `WritingToolsController`,
     // and then remove this method after doing so.
@@ -73,14 +82,16 @@ private:
         WTF_MAKE_STRUCT_FAST_ALLOCATED;
         WTF_STRUCT_OVERRIDE_DELETE_FOR_CHECKED_PTR(CompositionState);
 
-        CompositionState(const Ref<Range>& contextRange, const Vector<Ref<ReplaceSelectionCommand>>& commands)
-            : contextRange(contextRange)
-            , commands(commands)
+        CompositionState(const Vector<Ref<WritingToolsCompositionCommand>>& unappliedCommands, const Vector<Ref<WritingToolsCompositionCommand>>& reappliedCommands)
+            : unappliedCommands(unappliedCommands)
+            , reappliedCommands(reappliedCommands)
         {
         }
 
-        Ref<Range> contextRange;
-        Vector<Ref<ReplaceSelectionCommand>> commands;
+        // These two vectors should never have the same command in both of them.
+        Vector<Ref<WritingToolsCompositionCommand>> unappliedCommands;
+        Vector<Ref<WritingToolsCompositionCommand>> reappliedCommands;
+        bool hasReceivedText { false };
     };
 
     struct ProofreadingState : CanMakeCheckedPtr<ProofreadingState> {
@@ -110,8 +121,15 @@ private:
         using Value = CompositionState;
     };
 
-    enum MatchStyle : bool {
-        No, Yes
+    class EditingScope {
+        WTF_MAKE_NONCOPYABLE(EditingScope); WTF_MAKE_FAST_ALLOCATED;
+    public:
+        EditingScope(Document&);
+        ~EditingScope();
+
+    private:
+        RefPtr<Document> m_document;
+        bool m_editingWasSuppressed;
     };
 
     static CharacterRange characterRange(const SimpleRange& scope, const SimpleRange&);
@@ -125,16 +143,18 @@ private:
     std::optional<std::tuple<Node&, DocumentMarker&>> findTextSuggestionMarkerContainingRange(const SimpleRange&) const;
     std::optional<std::tuple<Node&, DocumentMarker&>> findTextSuggestionMarkerByID(const SimpleRange& outerRange, const WritingTools::TextSuggestion::ID&) const;
 
-    template<typename State>
-    void replaceContentsOfRangeInSessionInternal(State&, const SimpleRange&, WTF::Function<void()>&&);
     void replaceContentsOfRangeInSession(ProofreadingState&, const SimpleRange&, const String&);
-    void replaceContentsOfRangeInSession(CompositionState&, const SimpleRange&, RefPtr<DocumentFragment>&&, MatchStyle);
+    void replaceContentsOfRangeInSession(CompositionState&, const SimpleRange&, const AttributedString&, WritingToolsCompositionCommand::State);
+
+    void showOriginalCompositionForSession(const WritingTools::Session&);
+    void showRewrittenCompositionForSession(const WritingTools::Session&);
+    void restartCompositionForSession(const WritingTools::Session&);
 
     template<WritingTools::Session::Type Type>
-    void textReplacementSessionDidReceiveEditAction(const WritingTools::Session&, WritingTools::Action);
+    void writingToolsSessionDidReceiveAction(const WritingTools::Session&, WritingTools::Action);
 
     template<WritingTools::Session::Type Type>
-    void didEndTextReplacementSession(const WritingTools::Session&, bool accepted);
+    void didEndWritingToolsSession(const WritingTools::Session&, bool accepted);
 
     RefPtr<Document> document() const;
 

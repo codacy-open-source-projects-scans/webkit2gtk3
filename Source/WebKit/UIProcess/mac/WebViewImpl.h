@@ -165,10 +165,6 @@ enum class ReplacementBehavior : uint8_t;
 - (void)_didHandleAcceptedCandidate;
 - (void)_didUpdateCandidateListVisibility:(BOOL)visible;
 
-#if ENABLE(WRITING_TOOLS)
-- (BOOL)_web_wantsCompleteUnifiedTextReplacementBehavior;
-#endif
-
 @end
 
 namespace WebCore {
@@ -716,13 +712,10 @@ public:
     void handleContextMenuTranslation(const WebCore::TranslationContextMenuInfo&);
 #endif
 
-#if ENABLE(WRITING_TOOLS)
-    WebCore::WritingTools::Behavior unifiedTextReplacementBehavior() const;
-#endif
-
 #if ENABLE(WRITING_TOOLS) && ENABLE(CONTEXT_MENUS)
-    bool canHandleSwapCharacters() const;
-    void handleContextMenuSwapCharacters(WebCore::IntRect selectionBoundsInRootView);
+    bool canHandleContextMenuWritingTools() const;
+    // FIXME: (rdar://127608508) Remove all uses of this method when possible, in favor of the non-deprecated implementation.
+    void handleContextMenuWritingToolsDeprecated(WebCore::IntRect selectionBoundsInRootView);
 #endif
 
 #if ENABLE(MEDIA_SESSION_COORDINATOR)
@@ -746,13 +739,9 @@ public:
     bool inlinePredictionsEnabled() const { return m_inlinePredictionsEnabled; }
 #endif
 
-#if ENABLE(WRITING_TOOLS)
-    bool wantsCompleteUnifiedTextReplacementBehavior() const;
-#endif
-
 #if ENABLE(WRITING_TOOLS_UI)
-    void addTextAnimationTypeForID(WTF::UUID, const WebKit::TextAnimationData&);
-    void removeTextAnimationForID(WTF::UUID);
+    void addTextAnimationForAnimationID(WTF::UUID, const WebKit::TextAnimationData&);
+    void removeTextAnimationForAnimationID(WTF::UUID);
 #endif
 
 #if HAVE(INLINE_PREDICTIONS)

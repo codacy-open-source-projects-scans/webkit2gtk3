@@ -467,6 +467,8 @@ private:
     void textAutosizingUsesIdempotentModeChanged() final;
 #endif
 
+    void didAddOrRemoveViewportConstrainedObjects() final;
+
 #if ENABLE(META_VIEWPORT)
     double baseViewportLayoutSizeScaleFactor() const final;
 #endif
@@ -507,20 +509,29 @@ private:
 #endif
 
 #if ENABLE(WRITING_TOOLS)
-    void textReplacementSessionShowInformationForReplacementWithIDRelativeToRect(const WebCore::WritingTools::SessionID&, const WebCore::WritingTools::TextSuggestionID&, WebCore::IntRect selectionBoundsInRootView) final;
+    void proofreadingSessionShowDetailsForSuggestionWithIDRelativeToRect(const WebCore::WritingTools::SessionID&, const WebCore::WritingTools::TextSuggestionID&, WebCore::IntRect selectionBoundsInRootView) final;
 
-    void textReplacementSessionUpdateStateForReplacementWithID(const WebCore::WritingTools::SessionID&, WebCore::WritingTools::TextSuggestionState, const WebCore::WritingTools::TextSuggestionID&) final;
+    void proofreadingSessionUpdateStateForSuggestionWithID(const WebCore::WritingTools::SessionID&, WebCore::WritingTools::TextSuggestionState, const WebCore::WritingTools::TextSuggestionID&) final;
 #endif
 
 #if ENABLE(WRITING_TOOLS_UI)
-    void removeTextAnimationForID(const WebCore::WritingTools::SessionID&) final;
+    void removeTextAnimationForAnimationID(const WTF::UUID&) final;
 
-    void cleanUpTextAnimationsForSessionID(const WebCore::WritingTools::SessionID&) final;
+    void removeInitialTextAnimation(const WebCore::WritingTools::SessionID&) final;
 
-    void addSourceTextAnimation(const WebCore::WritingTools::SessionID&, const WebCore::CharacterRange&) final;
+    void addInitialTextAnimation(const WebCore::WritingTools::SessionID&) final;
 
-    void addDestinationTextAnimation(const WebCore::WritingTools::SessionID&, const WebCore::CharacterRange&) final;
+    void removeTransparentMarkersForSessionID(const WebCore::WritingTools::SessionID&) final;
+
+    void addSourceTextAnimation(const WebCore::WritingTools::SessionID&, const WebCore::CharacterRange&, const String, WTF::CompletionHandler<void(void)>&&) final;
+
+    void addDestinationTextAnimation(const WebCore::WritingTools::SessionID&, const WebCore::CharacterRange&, const String) final;
+
+    void clearAnimationsForSessionID(const WebCore::WritingTools::SessionID&) final;
+
 #endif
+
+    void hasActiveNowPlayingSessionChanged(bool) final;
 
     mutable bool m_cachedMainFrameHasHorizontalScrollbar { false };
     mutable bool m_cachedMainFrameHasVerticalScrollbar { false };

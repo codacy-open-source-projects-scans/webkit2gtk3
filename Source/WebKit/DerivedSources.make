@@ -261,6 +261,7 @@ MESSAGE_RECEIVERS = \
 	WebProcess/WebPage/ViewGestureGeometryCollector \
 	WebProcess/WebPage/DrawingArea \
 	WebProcess/WebPage/WebPage \
+	WebProcess/WebPage/WebPageTesting \
 	WebProcess/WebPage/VisitedLinkTableController \
 	WebProcess/WebPage/Cocoa/TextCheckingControllerProxy \
 	WebProcess/WebPage/ViewUpdateDispatcher \
@@ -357,7 +358,7 @@ FRAMEWORK_FLAGS := $(addprefix -F, $(BUILT_PRODUCTS_DIR) $(FRAMEWORK_SEARCH_PATH
 HEADER_FLAGS := $(addprefix -I, $(BUILT_PRODUCTS_DIR) $(HEADER_SEARCH_PATHS) $(SYSTEM_HEADER_SEARCH_PATHS))
 EXTERNAL_FLAGS := -DRELEASE_WITHOUT_OPTIMIZATIONS $(addprefix -D, $(GCC_PREPROCESSOR_DEFINITIONS))
 
-platform_h_compiler_command = $(CC) -std=c++2a -x c++ $(1) $(SANITIZE_FLAGS) $(SDK_FLAGS) $(TARGET_TRIPLE_FLAGS) $(FRAMEWORK_FLAGS) $(HEADER_FLAGS) $(EXTERNAL_FLAGS) -include "wtf/Platform.h" /dev/null
+platform_h_compiler_command = $(CC) -std=c++2b -x c++ $(1) $(SANITIZE_FLAGS) $(SDK_FLAGS) $(TARGET_TRIPLE_FLAGS) $(FRAMEWORK_FLAGS) $(HEADER_FLAGS) $(EXTERNAL_FLAGS) -include "wtf/Platform.h" /dev/null
 
 FEATURE_AND_PLATFORM_FLAGS := $(shell $(call platform_h_compiler_command,-E -P -dM) | $(PERL) -ne "print if s/\#define ((?:HAVE_|USE_|ENABLE_|WTF_PLATFORM_)\w+) (1|0)/\1=\2/")
 FEATURE_AND_PLATFORM_DEFINES := $(patsubst %=1, %, $(filter %=1, $(FEATURE_AND_PLATFORM_FLAGS)))
@@ -415,7 +416,13 @@ sandbox-profiles-ios : $(SANDBOX_PROFILES_IOS)
 
 all : $(SANDBOX_PROFILES_WITHOUT_WEBPUSHD) $(WEBPUSHD_SANDBOX_PROFILE) $(SANDBOX_PROFILES_IOS)
 
-%.sb : %.sb.in
+NOTIFICATION_ALLOW_LISTS = \
+	Resources/cocoa/NotificationAllowList/EmbeddedForwardedNotifications.def \
+	Resources/cocoa/NotificationAllowList/ForwardedNotifications.def \
+	Resources/cocoa/NotificationAllowList/MacForwardedNotifications.def \
+	Resources/cocoa/NotificationAllowList/NonForwardedNotifications.def
+
+%.sb : %.sb.in $(NOTIFICATION_ALLOW_LISTS)
 	@echo Pre-processing $* sandbox profile...
 	grep -o '^[^;]*' $< | $(CC) $(SANITIZE_FLAGS) $(SDK_FLAGS) $(TARGET_TRIPLE_FLAGS) $(SANDBOX_DEFINES) $(TEXT_PREPROCESSOR_FLAGS) $(FRAMEWORK_FLAGS) $(HEADER_FLAGS) $(EXTERNAL_FLAGS) -include "wtf/Platform.h" - > $@.tmp
 	$(WebKit2)/Scripts/compile-sandbox.sh $@.tmp $* $(SDK_NAME) $(SANDBOX_IMPORT_DIR)

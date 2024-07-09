@@ -147,6 +147,7 @@
 #include <wtf/NativePromise.h>
 #include <wtf/Ref.h>
 #include <wtf/text/CString.h>
+#include <wtf/text/MakeString.h>
 
 #if USE(AUDIO_SESSION)
 #include "AudioSession.h"
@@ -1683,6 +1684,12 @@ void HTMLMediaElement::loadResource(const URL& initialURL, const ContentType& in
 
     RefPtr page = frame->page();
     if (!page) {
+        mediaLoadingFailed(MediaPlayer::NetworkState::FormatError);
+        return;
+    }
+
+    if (!m_player) {
+        ASSERT_NOT_REACHED("It should not be possible to enter loadResource without a valid m_player object");
         mediaLoadingFailed(MediaPlayer::NetworkState::FormatError);
         return;
     }
@@ -8788,7 +8795,7 @@ void HTMLMediaElement::resumeAutoplaying()
 void HTMLMediaElement::mayResumePlayback(bool shouldResume)
 {
     ALWAYS_LOG(LOGIDENTIFIER, "paused = ", paused());
-    if (paused() && shouldResume)
+    if (!ended() && paused() && shouldResume)
         play();
 }
 
@@ -9595,6 +9602,12 @@ String HTMLMediaElement::localizedSourceType() const
     return { };
 }
 
+void HTMLMediaElement::isActiveNowPlayingSessionChanged()
+{
+    if (RefPtr page = protectedDocument()->protectedPage())
+        page->hasActiveNowPlayingSessionChanged();
+}
+
 #if HAVE(SPATIAL_TRACKING_LABEL)
 void HTMLMediaElement::updateSpatialTrackingLabel()
 {
@@ -9621,7 +9634,8 @@ void HTMLMediaElement::setSpatialTrackingLabel(const String& spatialTrackingLabe
         return;
     m_spatialTrackingLabel = spatialTrackingLabel;
 
-    m_player->setSpatialTrackingLabel(spatialTrackingLabel);
+    if (m_player)
+        m_player->setSpatialTrackingLabel(spatialTrackingLabel);
 }
 
 void HTMLMediaElement::defaultSpatialTrackingLabelChanged(const String& defaultSpatialTrackingLabel)

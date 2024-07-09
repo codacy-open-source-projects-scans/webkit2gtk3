@@ -647,6 +647,8 @@ public:
     virtual void beginSystemPreview(const URL&, const SecurityOriginData&, const SystemPreviewInfo&, CompletionHandler<void()>&&) { }
 #endif
 
+    virtual void didAddOrRemoveViewportConstrainedObjects() { }
+
     virtual void requestCookieConsent(CompletionHandler<void(CookieConsentDecisionResult)>&&) = 0;
 
     virtual bool isUsingUISideCompositing() const { return false; }
@@ -664,18 +666,26 @@ public:
     virtual double baseViewportLayoutSizeScaleFactor() const { return 1; }
 
 #if ENABLE(WRITING_TOOLS)
-    virtual void textReplacementSessionShowInformationForReplacementWithIDRelativeToRect(const WritingTools::SessionID&, const WritingTools::TextSuggestionID&, IntRect) { }
+    virtual void proofreadingSessionShowDetailsForSuggestionWithIDRelativeToRect(const WritingTools::SessionID&, const WritingTools::TextSuggestionID&, IntRect) { }
 
-    virtual void textReplacementSessionUpdateStateForReplacementWithID(const WritingTools::SessionID&, WritingTools::TextSuggestionState, const WritingTools::TextSuggestionID&) { }
+    virtual void proofreadingSessionUpdateStateForSuggestionWithID(const WritingTools::SessionID&, WritingTools::TextSuggestionState, const WritingTools::TextSuggestionID&) { }
 
-    virtual void removeTextAnimationForID(const WritingTools::SessionID&) { }
+    virtual void removeTextAnimationForAnimationID(const WTF::UUID&) { }
 
-    virtual void cleanUpTextAnimationsForSessionID(const WritingTools::SessionID&) { }
+    virtual void removeTransparentMarkersForSessionID(const WritingTools::SessionID&) { }
 
-    virtual void addSourceTextAnimation(const WritingTools::SessionID&, const CharacterRange&) { }
+    virtual void removeInitialTextAnimation(const WritingTools::SessionID&) { }
 
-    virtual void addDestinationTextAnimation(const WritingTools::SessionID&, const CharacterRange&) { }
+    virtual void addInitialTextAnimation(const WritingTools::SessionID&) { }
+
+    virtual void addSourceTextAnimation(const WritingTools::SessionID&, const CharacterRange&, const String, WTF::CompletionHandler<void(void)>&&) { }
+
+    virtual void addDestinationTextAnimation(const WritingTools::SessionID&, const CharacterRange&, const String) { }
+
+    virtual void clearAnimationsForSessionID(const WritingTools::SessionID&) { };
 #endif
+
+    virtual void hasActiveNowPlayingSessionChanged(bool) { }
 
     WEBCORE_EXPORT virtual ~ChromeClient();
 

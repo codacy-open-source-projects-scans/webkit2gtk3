@@ -99,7 +99,7 @@
 #include <wtf/glib/RunLoopSourcePriority.h>
 #include <wtf/text/AtomString.h>
 #include <wtf/text/CString.h>
-#include <wtf/text/StringConcatenateNumbers.h>
+#include <wtf/text/MakeString.h>
 #include <wtf/text/StringToIntegerConversion.h>
 
 #if USE(GSTREAMER_MPEGTS)
@@ -1252,16 +1252,16 @@ void MediaPlayerPrivateGStreamer::videoSinkCapsChanged(GstPad* videoSinkPad)
     });
 }
 
-void MediaPlayerPrivateGStreamer::handleTextSample(GstSample* sample, const char* streamId)
+void MediaPlayerPrivateGStreamer::handleTextSample(GRefPtr<GstSample>&& sample, const String& streamId)
 {
     for (auto& track : m_textTracks.values()) {
-        if (!strcmp(track->stringId().string().utf8().data(), streamId)) {
-            track->handleSample(sample);
+        if (track->stringId() == streamId) {
+            track->handleSample(WTFMove(sample));
             return;
         }
     }
 
-    GST_WARNING_OBJECT(m_pipeline.get(), "Got sample with unknown stream ID %s.", streamId);
+    GST_WARNING_OBJECT(m_pipeline.get(), "Got sample with unknown stream ID %s.", streamId.utf8().data());
 }
 
 MediaTime MediaPlayerPrivateGStreamer::platformDuration() const
@@ -3213,6 +3213,10 @@ void MediaPlayerPrivateGStreamer::configureVideoDecoder(GstElement* decoder)
     configureMediaStreamVideoDecoder(decoder);
 
     auto pad = adoptGRef(gst_element_get_static_pad(decoder, "src"));
+    if (!pad) {
+        GST_INFO_OBJECT(pipeline(), "the decoder %s does not have a src pad, probably because it's a hardware decoder sink, can't get decoder stats", name.get());
+        return;
+    }
     gst_pad_add_probe(pad.get(), static_cast<GstPadProbeType>(GST_PAD_PROBE_TYPE_QUERY_DOWNSTREAM | GST_PAD_PROBE_TYPE_BUFFER), [](GstPad*, GstPadProbeInfo* info, gpointer userData) -> GstPadProbeReturn {
         auto* player = static_cast<MediaPlayerPrivateGStreamer*>(userData);
         if (GST_PAD_PROBE_INFO_TYPE(info) & GST_PAD_PROBE_TYPE_BUFFER) {

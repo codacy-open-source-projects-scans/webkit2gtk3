@@ -1509,7 +1509,7 @@ class TestRunJavaScriptCoreTests(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        timeout=7200,
+                        timeout=3 * 60 * 60,
                         command=['/bin/sh', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --release --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
                         logfiles={'json': self.jsonFileName},
                         )
@@ -1524,7 +1524,7 @@ class TestRunJavaScriptCoreTests(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        timeout=7200,
+                        timeout=3 * 60 * 60,
                         command=['/bin/sh', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --release --remote-config-file=remote-machines.json --no-testmasm --no-testair --no-testb3 --no-testdfg --no-testapi --memory-limited --verbose --jsc-only --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
                         logfiles={'json': self.jsonFileName},
                         )
@@ -1538,7 +1538,7 @@ class TestRunJavaScriptCoreTests(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        timeout=7200,
+                        timeout=3 * 60 * 60,
                         command=['/bin/sh', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --debug --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
                         logfiles={'json': self.jsonFileName},
                         )
@@ -1553,7 +1553,7 @@ class TestRunJavaScriptCoreTests(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        timeout=7200,
+                        timeout=3 * 60 * 60,
                         logfiles={'json': self.jsonFileName},
                         command=['/bin/sh', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --debug --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
                         )
@@ -1571,7 +1571,7 @@ class TestRunJavaScriptCoreTests(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        timeout=7200,
+                        timeout=3 * 60 * 60,
                         logfiles={'json': self.jsonFileName},
                         command=['/bin/sh', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --debug --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
                         )
@@ -1589,7 +1589,7 @@ class TestRunJavaScriptCoreTests(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        timeout=7200,
+                        timeout=3 * 60 * 60,
                         logfiles={'json': self.jsonFileName},
                         command=['/bin/sh', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --debug --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
                         )
@@ -1607,7 +1607,7 @@ class TestRunJavaScriptCoreTests(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        timeout=7200,
+                        timeout=3 * 60 * 60,
                         logfiles={'json': self.jsonFileName},
                         command=['/bin/sh', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --release --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
                         )
@@ -1625,7 +1625,7 @@ class TestRunJavaScriptCoreTests(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        timeout=7200,
+                        timeout=3 * 60 * 60,
                         logfiles={'json': self.jsonFileName},
                         command=['/bin/sh', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --release --memory-limited --verbose --jsc-only --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
                         )
@@ -1643,7 +1643,7 @@ class TestRunJavaScriptCoreTests(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        timeout=7200,
+                        timeout=3 * 60 * 60,
                         logfiles={'json': self.jsonFileName},
                         command=['/bin/sh', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --release --memory-limited --verbose --jsc-only --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
                         )
@@ -1677,7 +1677,7 @@ class TestRunJSCTestsWithoutChange(BuildStepMixinAdditions, unittest.TestCase):
                         logEnviron=False,
                         command=['/bin/sh', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --release --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
                         logfiles={'json': self.jsonFileName},
-                        timeout=7200,
+                        timeout=3 * 60 * 60,
                         )
             + 0,
         )
@@ -1693,7 +1693,7 @@ class TestRunJSCTestsWithoutChange(BuildStepMixinAdditions, unittest.TestCase):
                         logEnviron=False,
                         command=['/bin/sh', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --debug --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
                         logfiles={'json': self.jsonFileName},
-                        timeout=7200,
+                        timeout=3 * 60 * 60,
                         )
             + ExpectShell.log('stdio', stdout='9 failures found.')
             + 2,
@@ -8088,6 +8088,16 @@ class TestValidateCommitMessage(BuildStepMixinAdditions, unittest.TestCase):
         self.expectOutcome(result=FAILURE, state_string='Commit message contains (OOPS!) and no reviewer found')
         rc = self.runStep()
         self.assertEqual(self.getProperty('comment_text'), 'Commit message contains (OOPS!) and no reviewer found, blocking PR #1234')
+        return rc
+
+    def test_failure_multiple(self):
+        self.setupStep(ValidateCommitMessage())
+        ValidateCommitMessage._files = lambda x: ['+++ Tools/CISupport/ews-build/steps.py']
+        self.setUpCommonProperties()
+        self.expectCommonRemoteCommandsWithOutput('No reviewer information in commit message\nFailed to access https://raw.githubusercontent.com/WebKit/WebKit/main/metadata/contributors.json\n')
+        self.expectOutcome(result=FAILURE, state_string='No reviewer information in commit message')
+        rc = self.runStep()
+        self.assertEqual(self.getProperty('comment_text'), 'No reviewer information in commit message, blocking PR #1234')
         return rc
 
     def test_failure_no_reviewer(self):

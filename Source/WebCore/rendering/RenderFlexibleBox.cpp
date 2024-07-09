@@ -756,10 +756,9 @@ std::optional<LayoutUnit> RenderFlexibleBox::computeMainAxisExtentForChild(Rende
             return child.maxPreferredLogicalWidth() - child.borderAndPaddingLogicalWidth();
         }
     }
-    
-    // FIXME: Figure out how this should work for regions and pass in the appropriate values.
-    RenderFragmentContainer* fragment = nullptr;
-    return child.computeLogicalWidthInFragmentUsing(sizeType, size, contentLogicalWidth(), *this, fragment) - child.borderAndPaddingLogicalWidth();
+
+    auto mainAxisWidth = isColumnFlow() ? availableLogicalHeight(AvailableLogicalHeightType::ExcludeMarginBorderPadding) : contentLogicalWidth();
+    return child.computeLogicalWidthInFragmentUsing(sizeType, size, mainAxisWidth, *this, { }) - child.borderAndPaddingLogicalWidth();
 }
 
 BlockFlowDirection RenderFlexibleBox::transformedBlockFlowDirection() const
@@ -1630,6 +1629,8 @@ std::optional<LayoutUnit> RenderFlexibleBox::usedChildOverridingMainSizeForPerce
 {
     ASSERT(!mainAxisIsChildInlineAxis(child));
 
+    if (m_inPostFlexing && child.style().flexBasis().isFixed())
+        return LayoutUnit { child.style().flexBasis().value() };
     // The main size of a fully inflexible item with a definite flex basis is, by definition, definite.
     if (child.style().flexGrow() == 0.0 && child.style().flexShrink() == 0.0 && childMainSizeIsDefinite(child, flexBasisForChild(child)))
         return child.overridingLogicalHeight();
@@ -2237,6 +2238,7 @@ void RenderFlexibleBox::layoutAndPlaceChildren(LayoutUnit& crossAxisOffset, Flex
     std::optional<BaselineAlignmentState> baselineAlignmentState;
     LayoutUnit maxChildCrossAxisExtent;
     ContentDistribution distribution = style().resolvedJustifyContentDistribution(contentAlignmentNormalBehavior());
+    auto inPostFlexing = SetForScope { m_inPostFlexing, true };
     bool shouldFlipMainAxis = !isColumnFlow() && !isLeftToRightFlow();
     for (size_t i = 0; i < flexItems.size(); ++i) {
         const auto& flexItem = flexItems[i];

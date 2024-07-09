@@ -27,6 +27,7 @@
 #include <wtf/OptionSet.h>
 #include <wtf/UUID.h>
 #include <wtf/WeakPtr.h>
+#include <wtf/text/MakeString.h>
 #include <wtf/text/WTFString.h>
 
 #if PLATFORM(IOS_FAMILY)
@@ -99,7 +100,7 @@ public:
         PlatformTextChecking = 1 << 15,
 #endif
 #if ENABLE(WRITING_TOOLS)
-        UnifiedTextReplacement = 1 << 16,
+        WritingToolsTextSuggestion = 1 << 16,
 #endif
         TransparentContent = 1 << 17,
     };
@@ -118,17 +119,16 @@ public:
 #endif
 
 #if ENABLE(WRITING_TOOLS)
-    struct UnifiedTextReplacementData {
+    struct WritingToolsTextSuggestionData {
         enum class State: uint8_t {
-            Pending,
-            Committed,
-            Reverted
+            Accepted,
+            Rejected
         };
 
         String originalText;
-        WritingTools::TextSuggestionID replacementID;
+        WritingTools::TextSuggestionID suggestionID;
         WritingTools::SessionID sessionID;
-        State state { State::Pending };
+        State state { State::Accepted };
     };
 #endif
 
@@ -149,7 +149,7 @@ public:
         , PlatformTextCheckingData // PlatformTextChecking
 #endif
 #if ENABLE(WRITING_TOOLS)
-        , UnifiedTextReplacementData // UnifiedTextReplacement
+        , WritingToolsTextSuggestionData // WritingToolsTextSuggestion
 #endif
         , TransparentContentData // TransparentContent
     >;
@@ -203,7 +203,7 @@ constexpr auto DocumentMarker::allMarkers() -> OptionSet<Type>
         Type::PlatformTextChecking,
 #endif
 #if ENABLE(WRITING_TOOLS)
-        Type::UnifiedTextReplacement,
+        Type::WritingToolsTextSuggestion,
 #endif
         Type::TransparentContent,
     };
@@ -228,7 +228,7 @@ inline String DocumentMarker::description() const
         return *description;
 
 #if ENABLE(WRITING_TOOLS)
-    if (auto* data = std::get_if<DocumentMarker::UnifiedTextReplacementData>(&m_data))
+    if (auto* data = std::get_if<DocumentMarker::WritingToolsTextSuggestionData>(&m_data))
         return makeString("('"_s, data->originalText, "', state: "_s, enumToUnderlyingType(data->state), ')');
 #endif
 
