@@ -39,6 +39,7 @@
 #import <WebCore/FontCocoa.h>
 #import <WebCore/IOSurface.h>
 #import <limits.h>
+#import <pal/spi/cf/CFNetworkSPI.h>
 #import <pal/spi/cocoa/ContactsSPI.h>
 #import <wtf/RetainPtr.h>
 #import <wtf/cocoa/TypeCastsCocoa.h>
@@ -433,8 +434,9 @@ struct ObjCHolderForTesting {
         RetainPtr<NSPersonNameComponents>,
         RetainPtr<NSPresentationIntent>,
         RetainPtr<NSURLProtectionSpace>,
+        RetainPtr<NSURLRequest>,
         RetainPtr<NSURLCredential>,
-#if USE(PASSKIT) && !PLATFORM(WATCHOS) && !PLATFORM(APPLETV)
+#if USE(PASSKIT)
         RetainPtr<CNContact>,
         RetainPtr<CNPhoneNumber>,
         RetainPtr<CNPostalAddress>,
@@ -565,7 +567,7 @@ static bool wkNSURLProtectionSpace_isEqual(NSURLProtectionSpace *a, SEL, NSURLPr
     return true;
 }
 
-#if USE(PASSKIT) && !PLATFORM(WATCHOS)
+#if USE(PASSKIT)
 static bool CNPostalAddressTesting_isEqual(CNPostalAddress *a, CNPostalAddress *b)
 {
     // CNPostalAddress treats a nil formattedAddress and empty formattedAddress the same for equality.
@@ -595,7 +597,7 @@ static bool NSURLCredentialTesting_isEqual(NSURLCredential *a, NSURLCredential *
     return true;
 }
 
-#if USE(PASSKIT) && !PLATFORM(WATCHOS) && !PLATFORM(APPLETV)
+#if USE(PASSKIT)
 static BOOL wkSecureCoding_isEqual(id a, SEL, id b)
 {
     RetainPtr<WKKeyedCoder> aCoder = adoptNS([WKKeyedCoder new]);
@@ -606,7 +608,7 @@ static BOOL wkSecureCoding_isEqual(id a, SEL, id b)
 
     return [[aCoder accumulatedDictionary] isEqual:[bCoder accumulatedDictionary]];
 }
-#endif // USE(PASSKIT) && !PLATFORM(WATCHOS) && !PLATFORM(APPLETV)
+#endif // USE(PASSKIT)
 
 inline bool operator==(const ObjCHolderForTesting& a, const ObjCHolderForTesting& b)
 {
@@ -622,7 +624,7 @@ inline bool operator==(const ObjCHolderForTesting& a, const ObjCHolderForTesting
         class_replaceMethod([NSURLProtectionSpace class], @selector(isEqual:), (IMP)wkNSURLProtectionSpace_isEqual, "v@:@");
         class_addMethod([NSURLProtectionSpace class], @selector(oldIsEqual:), oldIsEqual2, "v@:@");
 
-#if USE(PASSKIT) && !PLATFORM(WATCHOS) && !PLATFORM(APPLETV)
+#if USE(PASSKIT)
         class_addMethod(PAL::getPKPaymentMethodClass(), @selector(isEqual:), (IMP)wkSecureCoding_isEqual, "v@:@");
         class_addMethod(PAL::getPKPaymentTokenClass(), @selector(isEqual:), (IMP)wkSecureCoding_isEqual, "v@:@");
         class_addMethod(PAL::getPKDateComponentsRangeClass(), @selector(isEqual:), (IMP)wkSecureCoding_isEqual, "v@:@");
@@ -643,7 +645,7 @@ inline bool operator==(const ObjCHolderForTesting& a, const ObjCHolderForTesting
     EXPECT_TRUE(aObject != nil);
     EXPECT_TRUE(bObject != nil);
 
-#if USE(PASSKIT) && !PLATFORM(WATCHOS)
+#if USE(PASSKIT)
     if ([aObject isKindOfClass:PAL::getCNPostalAddressClass()])
         return CNPostalAddressTesting_isEqual(aObject, bObject);
 #endif
@@ -864,7 +866,7 @@ static void destroyTempKeychain(SecKeychainRef keychainRef)
 }
 #endif // HAVE(SEC_KEYCHAIN)
 
-#if USE(PASSKIT) && !PLATFORM(WATCHOS) && !PLATFORM(APPLETV)
+#if USE(PASSKIT)
 static RetainPtr<CNMutablePostalAddress> postalAddressForTesting()
 {
     RetainPtr<CNMutablePostalAddress> address = adoptNS([PAL::getCNMutablePostalAddressClass() new]);
@@ -893,7 +895,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 
     return contact;
 }
-#endif // USE(PASSKIT) && !PLATFORM(WATCHOS) && !PLATFORM(APPLETV)
+#endif // USE(PASSKIT)
 
 static void runTestNS(ObjCHolderForTesting&& holderArg)
 {
@@ -1107,7 +1109,7 @@ TEST(IPCSerialization, Basic)
     components.get().nickname = nil;
     runTestNS({ components.get() });
 
-#if USE(PASSKIT) && !PLATFORM(WATCHOS)
+#if USE(PASSKIT)
     // CNPhoneNumber
     // Digits must be non-null at init-time, but countryCode can be null.
     // However, Contacts will calculate a default country code if you pass in a null one,
@@ -1134,7 +1136,7 @@ TEST(IPCSerialization, Basic)
     runTestNS({ pkContact.get() });
     pkContact.get().supplementarySubLocality = nil;
     runTestNS({ pkContact.get() });
-#endif // USE(PASSKIT) && !PLATFORM(WATCHOS)
+#endif // USE(PASSKIT)
 
 
     // CFURL
@@ -1377,6 +1379,26 @@ static RetainPtr<DDScannerResult> fakeDataDetectorResultForTesting()
 
 TEST(IPCSerialization, SecureCoding)
 {
+    // NSURLRequest
+    NSURL *url = [NSURL URLWithString:@"https://webkit.org/"];
+    NSURLRequest *urlRequest = [NSURLRequest requestWithURL:url];
+    runTestNS({ urlRequest });
+
+    NSDictionary *jsonDict = @{
+        @"a" : @1,
+        @"b" : @2
+    };
+    NSData *postData = [NSJSONSerialization dataWithJSONObject:jsonDict options:0 error:Nil];
+    NSMutableURLRequest *postRequest = [[NSMutableURLRequest alloc] initWithURL:url];
+
+    [postRequest setValue:@"application/json" forHTTPHeaderField:@"Accept"];
+    [postRequest setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    [postRequest setHTTPMethod:@"POST"];
+    [postRequest setHTTPBody:postData];
+    [postRequest _setPrivacyProxyFailClosed:YES];
+
+    runTestNS({ postRequest });
+
     // DDScannerResult
     //   - Note: For now, there's no reasonable way to create anything but an empty DDScannerResult object
     auto scannerResult = fakeDataDetectorResultForTesting();

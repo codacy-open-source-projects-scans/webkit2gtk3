@@ -2998,6 +2998,7 @@ void Texture::waitForCommandBufferCompletion()
 void Texture::setCommandEncoder(CommandEncoder& commandEncoder) const
 {
     m_commandEncoders.add(commandEncoder);
+    commandEncoder.addTexture(m_texture);
     if (!m_canvasBacking && isDestroyed())
         commandEncoder.makeSubmitInvalid();
 }
