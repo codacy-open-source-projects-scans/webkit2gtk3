@@ -52,6 +52,22 @@ struct LineContent {
     InlineLayoutUnit rubyAnnotationOffset { 0.f };
 };
 
+static bool isContentfulOrHasDecoration(const InlineItem& inlineItem, const InlineFormattingContext& formattingContext)
+{
+    if (inlineItem.isFloat() || inlineItem.isOpaque())
+        return false;
+    if (auto* inlineTextItem = dynamicDowncast<InlineTextItem>(inlineItem)) {
+        auto wouldPorduceEmptyRun = inlineTextItem->isFullyTrimmable() || inlineTextItem->isEmpty() || inlineTextItem->isWordSeparator() || inlineTextItem->isZeroWidthSpaceSeparator() || inlineTextItem->isQuirkNonBreakingSpace();
+        return !wouldPorduceEmptyRun;
+    }
+
+    if (inlineItem.isInlineBoxStart())
+        return !!formattingContext.geometryForBox(inlineItem.layoutBox()).marginBorderAndPaddingStart();
+    if (inlineItem.isInlineBoxEnd())
+        return !!formattingContext.geometryForBox(inlineItem.layoutBox()).marginBorderAndPaddingEnd();
+    return inlineItem.isBox() || inlineItem.isLineBreak();
+}
+
 static inline StringBuilder toString(const Line::RunList& runs)
 {
     // FIXME: We could try to reuse the content builder in InlineItemsBuilder if this turns out to be a perf bottleneck.
@@ -273,6 +289,7 @@ LineLayoutResult LineBuilder::layoutInlineContent(const LineInput& lineInput, co
         , { WTFMove(lineContent.rubyBaseAlignmentOffsetList), lineContent.rubyAnnotationOffset }
         , lineContent.endsWithHyphen
         , result.nonSpanningInlineLevelBoxCount
+        , { }
         , { }
         , lineContent.range.isEmpty() ? std::make_optional(m_lineLogicalRect.top() + m_candidateContentMaximumHeight) : std::nullopt
     };
@@ -579,14 +596,7 @@ InlineLayoutUnit LineBuilder::leadingPunctuationWidthForLineCandiate(size_t firs
     if (firstInlineTextItemIndex) {
         // The text content is not the first in the candidate list. However it may be the first contentful one.
         for (size_t index = firstInlineTextItemIndex; index-- > candidateContentStartIndex;) {
-            auto& inlineItem = m_inlineItemList[index];
-            ASSERT(!inlineItem.isText() && !inlineItem.isLineBreak() && !inlineItem.isWordBreakOpportunity());
-            if (inlineItem.isFloat() || inlineItem.isOpaque())
-                continue;
-            auto isContentful = inlineItem.isBox()
-                || (inlineItem.isInlineBoxStart() && formattingContext().geometryForBox(inlineItem.layoutBox()).marginBorderAndPaddingStart())
-                || (inlineItem.isInlineBoxEnd() && formattingContext().geometryForBox(inlineItem.layoutBox()).marginBorderAndPaddingEnd());
-            if (isContentful)
+            if (isContentfulOrHasDecoration(m_inlineItemList[index], formattingContext()))
                 return { };
         }
     }
@@ -610,20 +620,7 @@ InlineLayoutUnit LineBuilder::trailingPunctuationOrStopOrCommaWidthForLineCandia
         // the last (2?) line(s) when there's trailing hanging punctuation.
         // For now let's probe the content all the way to layoutRangeEnd.
         for (auto index = lastInlineTextItemIndex + 1; index < layoutRangeEnd; ++index) {
-            auto isContentfulInlineItem = [&] {
-                auto& inlineItem = m_inlineItemList[index];
-                if (inlineItem.isFloat() || inlineItem.isOpaque())
-                    return false;
-                if (auto* inlineTextItem = dynamicDowncast<InlineTextItem>(inlineItem)) {
-                    if (inlineTextItem->isFullyTrimmable() || inlineTextItem->isEmpty() || inlineTextItem->isWordSeparator() || inlineTextItem->isZeroWidthSpaceSeparator() || inlineTextItem->isQuirkNonBreakingSpace())
-                        return false;
-                    return true;
-                }
-                return inlineItem.isBox()
-                    || (inlineItem.isInlineBoxStart() && formattingContext().geometryForBox(inlineItem.layoutBox()).marginBorderAndPaddingStart())
-                    || (inlineItem.isInlineBoxEnd() && formattingContext().geometryForBox(inlineItem.layoutBox()).marginBorderAndPaddingEnd());
-            }();
-            if (isContentfulInlineItem)
+            if (isContentfulOrHasDecoration(m_inlineItemList[index], formattingContext()))
                 return { };
         }
         return TextUtil::hangablePunctuationEndWidth(inlineTextItem, style);
@@ -1050,7 +1047,7 @@ LineBuilder::Result LineBuilder::processLineBreakingResult(const LineCandidate& 
     if (lineBreakingResult.action == InlineContentBreaker::Result::Action::Keep) {
         // This continuous content can be fully placed on the current line.
         for (auto& run : candidateRuns)
-            m_line.append(run.inlineItem, run.style, run.logicalWidth);
+            m_line.append(run.inlineItem, run.style, run.contentWidth());
         // We are keeping this content on the line but we need to check if we could have wrapped here
         // in order to be able to revert back to this position if needed.
         // Let's just ignore cases like collapsed leading whitespace for now.
@@ -1149,12 +1146,12 @@ void LineBuilder::commitPartialContent(const InlineContentBreaker::ContinuousCon
                 return;
             }
             // The partial run is the last content to commit.
-            m_line.append(run.inlineItem, run.style, run.logicalWidth);
+            m_line.append(run.inlineItem, run.style, run.contentWidth());
             if (auto hyphenWidth = partialTrailingContent.hyphenWidth)
                 m_line.addTrailingHyphen(*hyphenWidth);
             return;
         }
-        m_line.append(run.inlineItem, run.style, run.logicalWidth);
+        m_line.append(run.inlineItem, run.style, run.contentWidth());
     }
 }
 
@@ -1238,14 +1235,7 @@ bool LineBuilder::isLastLineWithInlineContent(const LineContent& lineContent, si
     }
     // Omit floats to see if this is the last line with inline content.
     for (auto i = needsLayoutEnd; i--;) {
-        auto& inlineItem = m_inlineItemList[i];
-        auto isContentfulInlineType = [&] {
-            if (inlineItem.isFloat() || inlineItem.isOpaque())
-                return false;
-            auto* inlineTextItem = dynamicDowncast<InlineTextItem>(inlineItem);
-            return !inlineTextItem || !inlineTextItem->isWhitespace() || InlineTextItem::shouldPreserveSpacesAndTabs(*inlineTextItem);
-        }();
-        if (isContentfulInlineType) {
+        if (isContentfulOrHasDecoration(m_inlineItemList[i], formattingContext())) {
             // InlineItems beyond this line range won't produce any inline content.
             return i == lineContent.range.endIndex() - 1;
         }

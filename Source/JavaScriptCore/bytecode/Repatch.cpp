@@ -443,7 +443,6 @@ static InlineCacheAction tryCacheGetBy(JSGlobalObject* globalObject, CodeBlock* 
                 if (stubInfo.cacheType() == CacheType::Unset
                     && slot.slotBase() == baseCell
                     && InlineAccess::isCacheableArrayLength(stubInfo, jsCast<JSArray*>(baseCell))) {
-
                     bool generatedCodeInline = InlineAccess::generateArrayLength(stubInfo, jsCast<JSArray*>(baseCell));
                     if (generatedCodeInline) {
                         repatchSlowPathCall(codeBlock, stubInfo, appropriateGetByOptimizeFunction(kind));
@@ -781,8 +780,9 @@ static InlineCacheAction tryCacheArrayGetByVal(JSGlobalObject* globalObject, Cod
             case Float64ArrayType:
                 accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayFloat64Load : AccessCase::IndexedTypedArrayFloat64Load;
                 break;
-            // FIXME: Optimize BigInt64Array / BigUint64Array in IC
+            // FIXME: Optimize BigInt64Array / BigUint64Array / Float16Array in IC
             // https://bugs.webkit.org/show_bug.cgi?id=221183
+            case Float16ArrayType:
             case BigInt64ArrayType:
             case BigUint64ArrayType:
                 return GiveUpOnCache;
@@ -1325,8 +1325,9 @@ static InlineCacheAction tryCacheArrayPutByVal(JSGlobalObject* globalObject, Cod
             case Float64ArrayType:
                 accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayFloat64Store : AccessCase::IndexedTypedArrayFloat64Store;
                 break;
-            // FIXME: Optimize BigInt64Array / BigUint64Array in IC
+            // FIXME: Optimize BigInt64Array / BigUint64Array / Float16Array in IC
             // https://bugs.webkit.org/show_bug.cgi?id=221183
+            case Float16ArrayType:
             case BigInt64ArrayType:
             case BigUint64ArrayType:
                 return GiveUpOnCache;
@@ -1921,8 +1922,9 @@ static InlineCacheAction tryCacheArrayInByVal(JSGlobalObject* globalObject, Code
             case Float64ArrayType:
                 accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayFloat64InHit : AccessCase::IndexedTypedArrayFloat64InHit;
                 break;
-            // FIXME: Optimize BigInt64Array / BigUint64Array in IC
+            // FIXME: Optimize BigInt64Array / BigUint64Array / Float16Array in IC
             // https://bugs.webkit.org/show_bug.cgi?id=221183
+            case Float16ArrayType:
             case BigInt64ArrayType:
             case BigUint64ArrayType:
                 return GiveUpOnCache;

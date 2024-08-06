@@ -466,7 +466,7 @@ void WebProcessProxy::updateRegistrationWithDataStore()
 
 void WebProcessProxy::initializeWebProcess(WebProcessCreationParameters&& parameters)
 {
-    sendWithAsyncReply(Messages::WebProcess::InitializeWebProcess(WTFMove(parameters)), [weakThis = WeakPtr { *this }] (ProcessIdentity processIdentity) {
+    sendWithAsyncReply(Messages::WebProcess::InitializeWebProcess(WTFMove(parameters)), [weakThis = WeakPtr { *this }, initializationActivityAndGrant = initializationActivityAndGrant()] (ProcessIdentity processIdentity) {
         if (RefPtr protectedThis = weakThis.get())
             protectedThis->m_processIdentity = WTFMove(processIdentity);
     }, 0);
@@ -474,13 +474,13 @@ void WebProcessProxy::initializeWebProcess(WebProcessCreationParameters&& parame
 
 void WebProcessProxy::initializePreferencesForGPUAndNetworkProcesses(const WebPageProxy& page)
 {
-    if (!m_sharedPreferencesForWebProcess) {
-        updateSharedPreferencesForWebProcess(page.preferences());
-        ASSERT(m_sharedPreferencesForWebProcess);
+    if (!m_sharedPreferencesForWebProcess.version) {
+        updateSharedPreferencesForWebProcess(page.preferences().store());
+        ASSERT(m_sharedPreferencesForWebProcess.version);
     } else {
 #if ASSERT_ENABLED
-        auto sharedPreferencesForWebProcess = *m_sharedPreferencesForWebProcess;
-        ASSERT(!WebKit::updateSharedPreferencesForWebProcess(sharedPreferencesForWebProcess, page.preferences()));
+        auto sharedPreferencesForWebProcess = m_sharedPreferencesForWebProcess;
+        ASSERT(!WebKit::updateSharedPreferencesForWebProcess(sharedPreferencesForWebProcess, page.preferences().store()));
 #endif
     }
 
@@ -488,9 +488,9 @@ void WebProcessProxy::initializePreferencesForGPUAndNetworkProcesses(const WebPa
 
 bool WebProcessProxy::hasSameGPUAndNetworkProcessPreferencesAs(const API::PageConfiguration& pageConfiguration) const
 {
-    if (m_sharedPreferencesForWebProcess) {
-        auto sharedPreferencesForWebProcess = *m_sharedPreferencesForWebProcess;
-        if (WebKit::updateSharedPreferencesForWebProcess(sharedPreferencesForWebProcess, pageConfiguration.preferences()))
+    if (m_sharedPreferencesForWebProcess.version) {
+        auto sharedPreferencesForWebProcess = m_sharedPreferencesForWebProcess;
+        if (WebKit::updateSharedPreferencesForWebProcess(sharedPreferencesForWebProcess, pageConfiguration.preferences().store()))
             return false;
     }
     return true;
@@ -692,6 +692,8 @@ void WebProcessProxy::shutDown()
     m_backgroundResponsivenessTimer.invalidate();
     m_audibleMediaActivity = std::nullopt;
     m_mediaStreamingActivity = std::nullopt;
+    m_foregroundToken = nullptr;
+    m_backgroundToken = nullptr;
 
     for (Ref page : mainPages())
         page->disconnectFramesFromPage();
@@ -1065,9 +1067,7 @@ void WebProcessProxy::createGPUProcessConnection(GPUProcessConnectionIdentifier 
     ASSERT(m_processIdentity);
 #endif
     parameters.webProcessIdentity = m_processIdentity;
-    ASSERT(m_sharedPreferencesForWebProcess);
-    if (m_sharedPreferencesForWebProcess)
-        parameters.sharedPreferencesForWebProcess = *m_sharedPreferencesForWebProcess;
+    parameters.sharedPreferencesForWebProcess = m_sharedPreferencesForWebProcess;
 #if ENABLE(IPC_TESTING_API)
     parameters.ignoreInvalidMessageForTesting = ignoreInvalidMessageForTesting();
 #endif
@@ -2181,15 +2181,10 @@ Ref<WebProcessPool> WebProcessProxy::protectedProcessPool() const
     return processPool();
 }
 
-std::optional<SharedPreferencesForWebProcess> WebProcessProxy::updateSharedPreferencesForWebProcess(const WebPreferences& preferences)
+std::optional<SharedPreferencesForWebProcess> WebProcessProxy::updateSharedPreferencesForWebProcess(const WebPreferencesStore& preferencesStore)
 {
-    if (!m_sharedPreferencesForWebProcess) {
-        m_sharedPreferencesForWebProcess = WebKit::sharedPreferencesForWebProcess(preferences);
-        m_sharedPreferencesForWebProcess->version = 1;
-        return m_sharedPreferencesForWebProcess;
-    }
-    if (WebKit::updateSharedPreferencesForWebProcess(*m_sharedPreferencesForWebProcess, preferences)) {
-        ++m_sharedPreferencesForWebProcess->version;
+    if (WebKit::updateSharedPreferencesForWebProcess(m_sharedPreferencesForWebProcess, preferencesStore)) {
+        ++m_sharedPreferencesForWebProcess.version;
         return m_sharedPreferencesForWebProcess;
     }
     return std::nullopt;
@@ -2280,9 +2275,9 @@ void WebProcessProxy::createSpeechRecognitionServer(SpeechRecognitionServerIdent
     auto createRealtimeMediaSource = [weakPage = WeakPtr { targetPage }]() {
         return weakPage ? weakPage->createRealtimeMediaSourceForSpeechRecognition() : CaptureSourceOrError { { "Page is invalid"_s, WebCore::MediaAccessDenialReason::InvalidAccess } };
     };
-    speechRecognitionServer = makeUnique<SpeechRecognitionServer>(Ref { *connection() }, identifier, WTFMove(permissionChecker), WTFMove(checkIfMockCaptureDevicesEnabled), WTFMove(createRealtimeMediaSource));
+    speechRecognitionServer = makeUnique<SpeechRecognitionServer>(*this, identifier, WTFMove(permissionChecker), WTFMove(checkIfMockCaptureDevicesEnabled), WTFMove(createRealtimeMediaSource));
 #else
-    speechRecognitionServer = makeUnique<SpeechRecognitionServer>(Ref { *connection() }, identifier, WTFMove(permissionChecker), WTFMove(checkIfMockCaptureDevicesEnabled));
+    speechRecognitionServer = makeUnique<SpeechRecognitionServer>(*this, identifier, WTFMove(permissionChecker), WTFMove(checkIfMockCaptureDevicesEnabled));
 #endif
 
     addMessageReceiver(Messages::SpeechRecognitionServer::messageReceiverName(), identifier, *speechRecognitionServer);
@@ -2299,7 +2294,7 @@ void WebProcessProxy::destroySpeechRecognitionServer(SpeechRecognitionServerIden
 SpeechRecognitionRemoteRealtimeMediaSourceManager& WebProcessProxy::ensureSpeechRecognitionRemoteRealtimeMediaSourceManager()
 {
     if (!m_speechRecognitionRemoteRealtimeMediaSourceManager) {
-        m_speechRecognitionRemoteRealtimeMediaSourceManager = makeUnique<SpeechRecognitionRemoteRealtimeMediaSourceManager>(Ref { *connection() });
+        m_speechRecognitionRemoteRealtimeMediaSourceManager = makeUnique<SpeechRecognitionRemoteRealtimeMediaSourceManager>(*this);
         addMessageReceiver(Messages::SpeechRecognitionRemoteRealtimeMediaSourceManager::messageReceiverName(), *m_speechRecognitionRemoteRealtimeMediaSourceManager);
     }
 
@@ -2365,6 +2360,7 @@ void WebProcessProxy::endBackgroundActivityForFullscreenInput()
 
 void WebProcessProxy::establishRemoteWorkerContext(RemoteWorkerType workerType, const WebPreferencesStore& store, const RegistrableDomain& registrableDomain, std::optional<ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier, CompletionHandler<void()>&& completionHandler)
 {
+    updateSharedPreferencesForWebProcess(store);
     WEBPROCESSPROXY_RELEASE_LOG(Loading, "establishRemoteWorkerContext: Started (workerType=%" PUBLIC_LOG_STRING ")", workerType == RemoteWorkerType::ServiceWorker ? "service" : "shared");
     markProcessAsRecentlyUsed();
     auto& remoteWorkerInformation = workerType == RemoteWorkerType::ServiceWorker ? m_serviceWorkerInformation : m_sharedWorkerInformation;

@@ -635,7 +635,7 @@ static inline void disableAllJITOptions()
     Options::useJITCage() = false;
     Options::useConcurrentJIT() = false;
 
-    if (!OptionsHelper::wasOverridden(Options::useWasmID))
+    if (!Options::useInterpretedJSEntryWrappers())
         Options::useWasm() = false;
 
     Options::usePollingTraps() = true;
@@ -718,17 +718,12 @@ void Options::notifyOptionsChanged()
     Options::useConcurrentGC() = false;
     Options::forceUnlinkedDFG() = false;
     Options::useWasmSIMD() = false;
-    Options::useInterpretedJSEntryWrappers() = false;
 #if !CPU(ARM_THUMB2)
     Options::useBBQJIT() = false;
 #endif
 #if CPU(ARM_THUMB2)
     Options::useBBQTierUpChecks() = false;
 #endif
-#endif
-
-#if ENABLE(C_LOOP) || !CPU(ADDRESS64) || !(CPU(ARM64) || (CPU(X86_64) && !OS(WINDOWS)))
-    Options::useInterpretedJSEntryWrappers() = false;
 #endif
 
 #if !CPU(ARM64)
@@ -830,15 +825,13 @@ void Options::notifyOptionsChanged()
         if (Options::forceAllFunctionsToUseSIMD() && !Options::useWasmSIMD())
             Options::forceAllFunctionsToUseSIMD() = false;
 
+#if USE(JSVALUE32_64)
         if (Options::useWasmTailCalls()) {
-            // The single-pass BBQ JIT doesn't support these features currently, so we should use a different
-            // BBQ backend if any of them are enabled. We should remove these limitations as support for each
-            // is added.
-            // FIXME: Add WASM tail calls support to single-pass BBQ JIT. https://bugs.webkit.org/show_bug.cgi?id=253192
             Options::useBBQJIT() = false;
             Options::useWasmLLInt() = true;
             Options::wasmLLIntTiersUpToBBQ() = false;
         }
+#endif
 
         if (Options::useWasmSIMD() && !(Options::useWasmLLInt() || Options::useWasmIPInt())) {
             // The LLInt is responsible for discovering if functions use SIMD.
@@ -1372,7 +1365,7 @@ void Option::dump(StringBuilder& builder) const
         builder.append('"', m_optionString ? span8(m_optionString) : ""_span, '"');
         break;
     case Options::Type::GCLogLevel:
-        builder.append(GCLogging::levelAsString(m_gcLogLevel));
+        builder.append(m_gcLogLevel);
         break;
     case Options::Type::OSLogType:
         builder.append(asString(m_osLogType));

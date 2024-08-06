@@ -31,64 +31,111 @@
 
 #if HAVE(FULL_FEATURED_USER_NOTIFICATIONS)
 
-static NSMutableArray *notificationsByBundleIdentifier(NSString *bundleIdentifier)
+@interface _WKMockUserNotificationCenter ()
+- (instancetype)_internalInitWithBundleIdentifier:(NSString *)bundleIdentifier;
+@end
+
+static _WKMockUserNotificationCenter *centersByBundleIdentifier(NSString *bundleIdentifier)
 {
-    static NeverDestroyed<RetainPtr<NSMutableDictionary>> notifications = adoptNS([NSMutableDictionary new]);
+    static NeverDestroyed<RetainPtr<NSMutableDictionary>> centers = adoptNS([NSMutableDictionary new]);
 
-    if (!notifications->get()[bundleIdentifier])
-        notifications->get()[bundleIdentifier] = [NSMutableArray arrayWithCapacity:1];
+    if (!centers->get()[bundleIdentifier])
+        centers->get()[bundleIdentifier] = [[_WKMockUserNotificationCenter alloc] _internalInitWithBundleIdentifier:bundleIdentifier];
 
-    return notifications->get()[bundleIdentifier];
+    return centers->get()[bundleIdentifier];
+}
+
+static NSMutableSet *notificationPermissions()
+{
+    static NeverDestroyed<RetainPtr<NSMutableSet>> permissions = adoptNS([NSMutableSet new]);
+    return permissions->get();
 }
 
 @implementation _WKMockUserNotificationCenter {
-    RetainPtr<NSMutableArray> notifications;
+    RetainPtr<NSString> m_bundleIdentifier;
+    RetainPtr<NSMutableArray> m_notifications;
+    RetainPtr<NSNumber> m_appBadge;
 }
 
-- (instancetype)initWithBundleIdentifier:(NSString *)bundleIdentifier
+- (instancetype)_internalInitWithBundleIdentifier:(NSString *)bundleIdentifier
 {
     self = [super init];
     if (!self)
         return nil;
 
-    notifications = notificationsByBundleIdentifier(bundleIdentifier);
+    m_bundleIdentifier = bundleIdentifier;
+    m_notifications = adoptNS([[NSMutableArray alloc] init]);
+
     return self;
+}
+
+- (instancetype)initWithBundleIdentifier:(NSString *)bundleIdentifier
+{
+    self = centersByBundleIdentifier(bundleIdentifier);
+    return [self retain];
 }
 
 - (void)addNotificationRequest:(UNNotificationRequest *)request withCompletionHandler:(nullable void(^)(NSError *error))completionHandler
 {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-    [notifications.get() addObject:[UNNotification notificationWithRequest:request date:[NSDate now]]];
+    [m_notifications.get() addObject:[UNNotification notificationWithRequest:request date:[NSDate now]]];
 #pragma clang diagnostic pop
+
+    // For testing purposes, we know that requests without a targetContentIdentifier are for badging only
+    if (!request.content.targetContentIdentifier)
+        m_appBadge = request.content.badge;
 
     callOnMainRunLoop([completionHandler = makeBlockPtr(completionHandler)] mutable {
         completionHandler(nil);
     });
 }
 
+- (NSNumber *)getAppBadgeForTesting
+{
+    return m_appBadge.get();
+}
+
 - (void)getDeliveredNotificationsWithCompletionHandler:(void(^)(NSArray<UNNotification *> *notifications))completionHandler
 {
-    callOnMainRunLoop([completionHandler = makeBlockPtr(completionHandler), notifications = [notifications.get() copy]] mutable {
+    callOnMainRunLoop([completionHandler = makeBlockPtr(completionHandler), notifications = [m_notifications.get() copy]] mutable {
         completionHandler(notifications);
     });
 }
 
+
 - (void)removePendingNotificationRequestsWithIdentifiers:(NSArray<NSString *> *) identifiers
 {
     RetainPtr toRemove = adoptNS([NSMutableArray new]);
-    for (UNNotification *notification in notifications.get()) {
+    for (UNNotification *notification in m_notifications.get()) {
         if ([identifiers containsObject:notification.request.identifier])
             [toRemove addObject:notification];
     }
 
-    [notifications removeObjectsInArray:toRemove.get()];
+    [m_notifications removeObjectsInArray:toRemove.get()];
 }
 
 - (void)removeDeliveredNotificationsWithIdentifiers:(NSArray<NSString *> *) identifiers
 {
     // For now, the mock UNUserNotificationCenter doesn't distinguish between pending and delivered notifications.
     [self removePendingNotificationRequestsWithIdentifiers:identifiers];
+}
+
+- (void)getNotificationSettingsWithCompletionHandler:(void(^)(UNNotificationSettings *settings))completionHandler
+{
+    callOnMainRunLoop([completionHandler = makeBlockPtr(completionHandler), hasPermission = [notificationPermissions() containsObject:m_bundleIdentifier.get()]]() mutable {
+        RetainPtr settings = [UNMutableNotificationSettings emptySettings];
+        [settings setAuthorizationStatus:UNAuthorizationStatusAuthorized];
+        completionHandler(settings.get());
+    });
+}
+
+- (void)requestAuthorizationWithOptions:(UNAuthorizationOptions)options completionHandler:(void (^)(BOOL granted, NSError *))completionHandler
+{
+    [notificationPermissions() addObject:m_bundleIdentifier.get()];
+    callOnMainRunLoop([completionHandler = makeBlockPtr(completionHandler)] mutable {
+        completionHandler(YES, nil);
+    });
 }
 
 @end

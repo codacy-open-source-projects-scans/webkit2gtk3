@@ -4774,18 +4774,18 @@ void WebPage::willStartUserTriggeredZooming()
 }
 
 #if ENABLE(IOS_TOUCH_EVENTS)
-void WebPage::dispatchAsynchronousTouchEvents(Vector<EventDispatcher::TouchEventData, 1>&& queue)
+void WebPage::dispatchAsynchronousTouchEvents(UniqueRef<EventDispatcher::TouchEventQueue>&& queue)
 {
-    for (auto& touchEventData : queue) {
+    for (auto& touchEventData : queue.get()) {
         auto handleTouchEventResult = dispatchTouchEvent(touchEventData.frameID, touchEventData.event);
         if (auto& completionHandler = touchEventData.completionHandler)
             completionHandler(handleTouchEventResult.wasHandled(), handleTouchEventResult.remoteUserInputEventData());
     }
 }
 
-void WebPage::cancelAsynchronousTouchEvents(Vector<EventDispatcher::TouchEventData, 1>&& queue)
+void WebPage::cancelAsynchronousTouchEvents(UniqueRef<EventDispatcher::TouchEventQueue>&& queue)
 {
-    for (auto& touchEventData : queue) {
+    for (auto& touchEventData : queue.get()) {
         if (auto& completionHandler = touchEventData.completionHandler)
             completionHandler(true, std::nullopt);
     }
@@ -5494,6 +5494,34 @@ FloatSize WebPage::screenSizeForFingerprintingProtections(const LocalFrame&, Flo
     }
 
     return std::get<std::tuple_size_v<decltype(fixedSizes)> - 1>(fixedSizes);
+}
+
+void WebPage::shouldDismissKeyboardAfterTapAtPoint(FloatPoint point, CompletionHandler<void(bool)>&& completion)
+{
+    RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_page->mainFrame());
+    if (!localMainFrame)
+        return completion(false);
+
+    RefPtr mainFrameView = localMainFrame->view();
+    if (!mainFrameView)
+        return completion(false);
+
+    FloatPoint adjustedPoint;
+    RefPtr target = localMainFrame->nodeRespondingToClickEvents(point, adjustedPoint);
+    if (!target)
+        return completion(true);
+
+    if (target->hasEditableStyle())
+        return completion(false);
+
+    if (RefPtr element = dynamicDowncast<Element>(*target); element && element->isFormControlElement())
+        return completion(false);
+
+    auto minimumSizeForDismissal = FloatSize { 0.9f * mainFrameView->unobscuredContentSize().width(), 150.f };
+
+    bool isReplaced;
+    FloatSize targetSize = target->absoluteBoundingRect(&isReplaced).size();
+    completion(targetSize.width() >= minimumSizeForDismissal.width() && targetSize.height() >= minimumSizeForDismissal.height());
 }
 
 } // namespace WebKit

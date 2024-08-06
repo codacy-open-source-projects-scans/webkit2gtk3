@@ -1138,8 +1138,9 @@ private:
             switch (node->arrayMode().type()) {
             case Array::BigInt64Array:
             case Array::BigUint64Array:
+            case Array::Float16Array:
                 // Make it Array::Generic.
-                // FIXME: Add BigInt64Array / BigUint64Array support.
+                // FIXME: Add BigInt64Array / BigUint64Array / Float16Array support.
                 // https://bugs.webkit.org/show_bug.cgi?id=221172
                 node->setArrayMode(ArrayMode(Array::Generic, node->arrayMode().action()));
                 break;
@@ -1327,8 +1328,9 @@ private:
             switch (node->arrayMode().type()) {
             case Array::BigInt64Array:
             case Array::BigUint64Array:
+            case Array::Float16Array:
                 // Make it Array::Generic.
-                // FIXME: Add BigInt64Array / BigUint64Array support.
+                // FIXME: Add BigInt64Array / BigUint64Array / Float16Array support.
                 // https://bugs.webkit.org/show_bug.cgi?id=221172
                 node->setArrayMode(ArrayMode(Array::Generic, node->arrayMode().action()));
                 break;
@@ -1497,7 +1499,7 @@ private:
             }
             default: {
                 // Make it Array::Generic.
-                // FIXME: Add BigInt64Array / BigUint64Array support.
+                // FIXME: Add BigInt64Array / BigUint64Array / Float16Array support.
                 // https://bugs.webkit.org/show_bug.cgi?id=221172
                 node->setArrayMode(ArrayMode(Array::Generic, node->arrayMode().action()));
                 break;
@@ -3167,8 +3169,23 @@ private:
         }
 
         case ForwardVarargs:
+            fixEdge<KnownInt32Use>(node->child1());
+            break;
+
+        case VarargsLength: {
+            // Actually this is common that we are passing undefined / null.
+            if (node->child1()->shouldSpeculateOther()) {
+                insertCheck<OtherUse>(node->child1().node());
+                m_graph.convertToConstant(node, jsNumber(1));
+            }
+            break;
+        }
+
         case LoadVarargs: {
             fixEdge<KnownInt32Use>(node->child1());
+            // Actually this is common that we are passing undefined / null.
+            if (node->child2()->shouldSpeculateOther())
+                fixEdge<OtherUse>(node->child2());
             break;
         }
 
@@ -3214,7 +3231,6 @@ private:
         case TailCallForwardVarargs:
         case TailCallForwardVarargsInlinedCaller:
         case CallWasm:
-        case VarargsLength:
         case ProfileControlFlow:
         case NewObject:
         case NewGenerator:

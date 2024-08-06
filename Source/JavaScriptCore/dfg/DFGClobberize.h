@@ -971,7 +971,8 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
     }
 
     case LoadVarargs: {
-        clobberTop();
+        if (node->argumentsChild().useKind() != OtherUse)
+            clobberTop();
         LoadVarargsData* data = node->loadVarargsData();
         write(AbstractHeap(Stack, data->count));
         for (unsigned i = data->limit; i--;)
@@ -1012,6 +1013,7 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
             return;
             
         case Array::Generic:
+        case Array::Float16Array:
         case Array::BigInt64Array:
         case Array::BigUint64Array:
             clobberTop();
@@ -1157,6 +1159,7 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
             return;
             
         case Array::Generic:
+        case Array::Float16Array:
         case Array::BigInt64Array:
         case Array::BigUint64Array:
             clobberTop();

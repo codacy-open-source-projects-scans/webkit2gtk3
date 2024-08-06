@@ -1231,6 +1231,7 @@ $(PROJECT_DIR)/css/CSSStyleSheet.idl
 $(PROJECT_DIR)/css/CSSSupportsRule.idl
 $(PROJECT_DIR)/css/CSSUnknownRule.idl
 $(PROJECT_DIR)/css/CSSValueKeywords.in
+$(PROJECT_DIR)/css/CSSViewTransitionRule.idl
 $(PROJECT_DIR)/css/DOMCSSCustomPropertyDescriptor.idl
 $(PROJECT_DIR)/css/DOMCSSNamespace+CSSNumericFactory.idl
 $(PROJECT_DIR)/css/DOMCSSNamespace+CSSPainting.idl
@@ -1416,6 +1417,7 @@ $(PROJECT_DIR)/dom/IdleRequestOptions.idl
 $(PROJECT_DIR)/dom/InnerHTML.idl
 $(PROJECT_DIR)/dom/InputEvent.idl
 $(PROJECT_DIR)/dom/KeyboardEvent.idl
+$(PROJECT_DIR)/dom/MapperCallback.idl
 $(PROJECT_DIR)/dom/MessageChannel.idl
 $(PROJECT_DIR)/dom/MessageEvent.idl
 $(PROJECT_DIR)/dom/MessagePort.idl
@@ -1434,7 +1436,6 @@ $(PROJECT_DIR)/dom/NodeList.idl
 $(PROJECT_DIR)/dom/NonDocumentTypeChildNode.idl
 $(PROJECT_DIR)/dom/NonElementParentNode.idl
 $(PROJECT_DIR)/dom/Observable.idl
-$(PROJECT_DIR)/dom/OverflowEvent.idl
 $(PROJECT_DIR)/dom/PageTransitionEvent.idl
 $(PROJECT_DIR)/dom/ParentNode.idl
 $(PROJECT_DIR)/dom/PointerEvent.idl

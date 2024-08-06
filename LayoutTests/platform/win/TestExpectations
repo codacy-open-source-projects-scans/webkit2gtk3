@@ -101,6 +101,8 @@ fast/dom/HTMLLinkElement/prefetch-too-many-clients.html [ Skip ]
 # MEDIA_CAPTURE is disabled
 fast/forms/file/file-input-capture.html [ Skip ]
 
+http/wpt/mediasession [ Skip ]
+
 # MEDIA_SOURCE is disabled
 webkit.org/b/64731 fast/history/page-cache-media-source-opened.html [ Skip ]
 webkit.org/b/64731 fast/history/page-cache-media-source-closed.html [ Skip ]
@@ -289,6 +291,7 @@ fast/forms/select-multiple-elements-with-mouse-drag-with-options-less-than-size.
 http/tests/local/drag-over-remote-content.html [ Skip ]
 http/tests/misc/bubble-drag-events.html [ Skip ]
 http/tests/misc/drag-over-iframe-invalid-source-crash.html [ Skip ]
+http/tests/security/drag-drop-local-file.html [ Skip ]
 http/tests/security/drag-drop-same-unique-origin.html [ Skip ]
 http/tests/security/drag-over-remote-content-iframe.html [ Skip ]
 http/tests/security/resources/drag-drop-allowed.html [ Skip ]
@@ -499,6 +502,7 @@ fast/css-generated-content/quotes-lang-case-insensitive.html [ ImageOnlyFailure 
 fast/css-generated-content/quotes-lang.html [ ImageOnlyFailure Pass ]
 fast/css/cascade/box-shadow-and-webkit-box-shadow-cascade-order.html [ ImageOnlyFailure ]
 fast/css/counters/counter-list-item.html [ ImageOnlyFailure ]
+fast/css/cssom-insertrule-crash.html [ ImageOnlyFailure ]
 fast/css/display-contents-all.html [ ImageOnlyFailure ]
 fast/css/unexpected-word-wrapping-with-non-empty-spans.html [ ImageOnlyFailure ]
 fast/custom-elements/defined-update-style.html [ ImageOnlyFailure ]
@@ -708,9 +712,6 @@ http/tests/cache-storage [ Skip ]
 
 http/tests/canvas/canvas-slow-font-loading.html [ ImageOnlyFailure ]
 http/tests/canvas/color-fonts [ Skip ]
-
-# Flaky GC test 
-webkit.org/b/277234 http/tests/canvas/ctx.2d-canvas-style-no-document-leak.html [ Skip ] # Pass Failure
 
 http/wpt/clear-site-data/partitioning.html [ Skip ] # Not supported yet. This test is slow.
 
@@ -3935,6 +3936,8 @@ editing/style/unbold-in-bold.html [ Failure ]
 
 fast/html/body-color-legacy-parsing-3.html [ Pass ImageOnlyFailure ]
 
+webkit.org/b/277612 fast/html/request-video-frame-callback-does-not-leak.html [ Pass Failure ]
+
 # Fails on Buildbot
 fast/picture/viewport-resize.html [ Pass Failure ]
 
@@ -4067,6 +4070,7 @@ js/dom/webassembly-memory-shared-fail.html [ Skip ]
 storage/indexeddb/wasm-exceptions.html [ Skip ]
 wasm [ Skip ]
 webgl/2.0.y/conformance2/wasm [ Skip ]
+workers/wasm-long-compile-many.html [ Skip ]
 workers/wasm-long-compile.html [ Skip ]
 workers/wasm-mem-post-message.html [ Skip ]
 

@@ -621,8 +621,8 @@ void WebExtensionController::handleContentRuleListNotification(WebPageProxyIdent
     if (!savedMatchedRule || m_purgeOldMatchedRulesTimer)
         return;
 
-    m_purgeOldMatchedRulesTimer = makeUnique<WebCore::Timer>(*this, &WebExtensionController::purgeOldMatchedRules);
-    m_purgeOldMatchedRulesTimer->start(purgeMatchedRulesInterval, purgeMatchedRulesInterval);
+    m_purgeOldMatchedRulesTimer = makeUnique<RunLoop::Timer>(RunLoop::current(), this, &WebExtensionController::purgeOldMatchedRules);
+    m_purgeOldMatchedRulesTimer->startRepeating(purgeMatchedRulesInterval);
 }
 
 void WebExtensionController::purgeOldMatchedRules()
@@ -642,7 +642,7 @@ void WebExtensionController::updateWebsitePoliciesForNavigation(API::WebsitePoli
     auto actionPatterns = websitePolicies.activeContentRuleListActionPatterns();
 
     for (Ref context : m_extensionContexts) {
-        if (!context->hasPermission(_WKWebExtensionPermissionDeclarativeNetRequestWithHostAccess))
+        if (!context->hasPermission(WKWebExtensionPermissionDeclarativeNetRequestWithHostAccess))
             continue;
 
         Vector<String> patterns;

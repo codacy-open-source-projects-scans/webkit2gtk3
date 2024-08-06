@@ -505,7 +505,8 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         // https://bugs.webkit.org/show_bug.cgi?id=143071
         switch (node->op()) {
         case LoadVarargs:
-            clobberWorld();
+            if (node->argumentsChild().useKind() != OtherUse)
+                clobberWorld();
             break;
         case ForwardVarargs:
             break;
@@ -2192,7 +2193,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
                 node->isBinaryUseKind(SymbolUse) ||
                 node->isBinaryUseKind(StringIdentUse) ||
                 node->isBinaryUseKind(ObjectUse) ||
-                node->isReflexiveBinaryUseKind(ObjectUse, ObjectOrOtherUse)) {
+                node->isSymmetricBinaryUseKind(ObjectUse, ObjectOrOtherUse)) {
                 switch (node->op()) {
                 case CompareLess:
                 case CompareGreater:
@@ -2267,7 +2268,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
             // FIXME: Is there any case not involving NaN where x === x is not guaranteed to return true?
             // If not I might slightly simplify that check.
             if (node->isBinaryUseKind(BooleanUse)
-                || node->isReflexiveBinaryUseKind(BooleanUse, UntypedUse)
+                || node->isSymmetricBinaryUseKind(BooleanUse, UntypedUse)
                 || node->isBinaryUseKind(Int32Use)
                 || node->isBinaryUseKind(Int52RepUse)
                 || node->isBinaryUseKind(StringUse)
@@ -2275,11 +2276,11 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
                 || node->isBinaryUseKind(SymbolUse)
                 || node->isBinaryUseKind(ObjectUse)
                 || node->isBinaryUseKind(OtherUse)
-                || node->isReflexiveBinaryUseKind(OtherUse, UntypedUse)
+                || node->isSymmetricBinaryUseKind(OtherUse, UntypedUse)
                 || node->isBinaryUseKind(MiscUse)
-                || node->isReflexiveBinaryUseKind(MiscUse, UntypedUse)
-                || node->isReflexiveBinaryUseKind(StringIdentUse, NotStringVarUse)
-                || node->isReflexiveBinaryUseKind(StringUse, UntypedUse)
+                || node->isSymmetricBinaryUseKind(MiscUse, UntypedUse)
+                || node->isSymmetricBinaryUseKind(StringIdentUse, NotStringVarUse)
+                || node->isSymmetricBinaryUseKind(StringUse, UntypedUse)
                 || node->isBinaryUseKind(BigInt32Use)
                 || node->isBinaryUseKind(HeapBigIntUse)
                 || node->isBinaryUseKind(AnyBigIntUse)) {
@@ -4237,6 +4238,9 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
             break;
         case Array::BigUint64Array:
             filter(node->child1(), SpecBigUint64Array | admittedTypes);
+            break;
+        case Array::Float16Array:
+            filter(node->child1(), SpecFloat16Array | admittedTypes);
             break;
         case Array::AnyTypedArray:
             filter(node->child1(), SpecTypedArrayView | admittedTypes);

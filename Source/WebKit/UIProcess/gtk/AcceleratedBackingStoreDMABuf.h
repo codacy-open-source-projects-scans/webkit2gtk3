@@ -27,6 +27,7 @@
 
 #include "AcceleratedBackingStore.h"
 #include "DMABufRendererBufferFormat.h"
+#include "FenceMonitor.h"
 #include "MessageReceiver.h"
 #include "RendererBufferFormat.h"
 #include <WebCore/IntSize.h>
@@ -80,7 +81,7 @@ private:
     void didCreateBuffer(uint64_t id, const WebCore::IntSize&, uint32_t format, Vector<WTF::UnixFileDescriptor>&&, Vector<uint32_t>&& offsets, Vector<uint32_t>&& strides, uint64_t modifier, DMABufRendererBufferFormat::Usage);
     void didCreateBufferSHM(uint64_t id, WebCore::ShareableBitmapHandle&&);
     void didDestroyBuffer(uint64_t id);
-    void frame(uint64_t id, WebCore::Region&&);
+    void frame(uint64_t id, WebCore::Region&&, WTF::UnixFileDescriptor&&);
     void frameDone();
     void ensureGLContext();
     bool prepareForRendering();
@@ -238,6 +239,7 @@ private:
         RefPtr<Buffer> m_buffer;
     };
 
+    FenceMonitor m_fenceMonitor;
     GRefPtr<GdkGLContext> m_gdkGLContext;
     bool m_glContextInitialized { false };
     uint64_t m_surfaceID { 0 };

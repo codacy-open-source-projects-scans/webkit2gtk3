@@ -151,4 +151,9 @@ void WebPageProxy::callAfterNextPresentationUpdate(CompletionHandler<void()>&& c
     webkitWebViewBaseCallAfterNextPresentationUpdate(WEBKIT_WEB_VIEW_BASE(viewWidget()), WTFMove(callback));
 }
 
+bool WebPageProxy::useExplicitSync() const
+{
+    return true;
+}
+
 } // namespace WebKit

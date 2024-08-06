@@ -40,6 +40,7 @@
 #import <WebCore/LocalizedStrings.h>
 #import <WebCore/NotificationData.h>
 #import <WebCore/NotificationPayload.h>
+#import <WebCore/SecurityOrigin.h>
 #import <WebCore/SecurityOriginData.h>
 #import <pal/spi/cocoa/LaunchServicesSPI.h>
 #import <span>
@@ -715,7 +716,7 @@ void WebPushDaemon::cancelNotification(PushClientConnection& connection, const W
     [center removeDeliveredNotificationsWithIdentifiers:identifiers];
 }
 
-void WebPushDaemon::getPushPermissionState(PushClientConnection& connection, const URL& scopeURL, CompletionHandler<void(WebCore::PushPermissionState)>&& replySender)
+void WebPushDaemon::getPushPermissionState(PushClientConnection& connection, const WebCore::SecurityOriginData& origin, CompletionHandler<void(WebCore::PushPermissionState)>&& replySender)
 {
     auto identifier = connection.subscriptionSetIdentifier();
     if (identifier.pushPartition.isEmpty()) {
@@ -726,18 +727,18 @@ void WebPushDaemon::getPushPermissionState(PushClientConnection& connection, con
 #if PLATFORM(IOS)
     const auto& webClipIdentifier = identifier.pushPartition;
     RetainPtr webClip = [UIWebClip webClipWithIdentifier:(NSString *)webClipIdentifier];
-    URL webClipURL { [webClip pageURL] };
+    auto webClipOrigin = WebCore::SecurityOriginData::fromURL(URL { [webClip pageURL] });
 
-    if (webClipURL.isEmpty() || scopeURL.isEmpty() || !protocolHostAndPortAreEqual(webClipURL, scopeURL)) {
-        WEBPUSHDAEMON_RELEASE_LOG(Push, "Denied push permission because web clip URL %{sensitive}@ (empty: %d) does not match scope %{sensitive}@ (empty: %d)", (NSURL *)webClipURL, webClipURL.isEmpty(), (NSURL *)scopeURL, scopeURL.isEmpty());
+    if (origin.isNull() || origin.isOpaque() || origin != webClipOrigin) {
+        WEBPUSHDAEMON_RELEASE_LOG(Push, "Denied push permission because web clip origin %{sensitive}s does not match expected origin %{sensitive}s", webClipOrigin.toString().utf8().data(), origin.toString().utf8().data());
         return replySender(WebCore::PushPermissionState::Denied);
     }
 #endif
 
-    auto notificationCenterBundleIdentifier = platformNotificationCenterBundleIdentifier(connection);
-    RetainPtr center = adoptNS([[UNUserNotificationCenter alloc] initWithBundleIdentifier:notificationCenterBundleIdentifier.get()]);
+    RetainPtr notificationCenterBundleIdentifier = platformNotificationCenterBundleIdentifier(connection);
+    RetainPtr center = adoptNS([[m_userNotificationCenterClass alloc] initWithBundleIdentifier:notificationCenterBundleIdentifier.get()]);
 
-    auto blockPtr = makeBlockPtr([replySender = WTFMove(replySender)](UNNotificationSettings *settings) mutable {
+    auto blockPtr = makeBlockPtr([originString = origin.toString(), replySender = WTFMove(replySender)](UNNotificationSettings *settings) mutable {
         auto permissionState = [](UNAuthorizationStatus status) {
             switch (status) {
             case UNAuthorizationStatusNotDetermined: return WebCore::PushPermissionState::Prompt;
@@ -746,10 +747,108 @@ void WebPushDaemon::getPushPermissionState(PushClientConnection& connection, con
             default: return WebCore::PushPermissionState::Prompt;
             }
         }(settings.authorizationStatus);
-        replySender(permissionState);
+        RELEASE_LOG(Push, "getPushPermissionState for %{sensitive}s with result: %u", originString.utf8().data(), static_cast<unsigned>(permissionState));
+
+        WorkQueue::main().dispatch([replySender = WTFMove(replySender), permissionState] mutable {
+            replySender(permissionState);
+        });
     });
 
     [center getNotificationSettingsWithCompletionHandler:blockPtr.get()];
+}
+
+void WebPushDaemon::requestPushPermission(PushClientConnection& connection, const WebCore::SecurityOriginData& origin, CompletionHandler<void(bool)>&& replySender)
+{
+    auto identifier = connection.subscriptionSetIdentifier();
+    if (identifier.pushPartition.isEmpty()) {
+        WEBPUSHDAEMON_RELEASE_LOG_ERROR(Push, "Denied push permission since no pushPartition specified");
+        return replySender(false);
+    }
+
+#if PLATFORM(IOS)
+    const auto& webClipIdentifier = identifier.pushPartition;
+    RetainPtr webClip = [UIWebClip webClipWithIdentifier:(NSString *)webClipIdentifier];
+    auto webClipOrigin = WebCore::SecurityOriginData::fromURL(URL { [webClip pageURL] });
+
+    if (origin.isNull() || origin.isOpaque() || origin != webClipOrigin) {
+        WEBPUSHDAEMON_RELEASE_LOG(Push, "Denied push permission because web clip origin %{sensitive}s does not match expected origin %{sensitive}s", webClipOrigin.toString().utf8().data(), origin.toString().utf8().data());
+        return replySender(false);
+    }
+#endif
+
+    RetainPtr notificationCenterBundleIdentifier = platformNotificationCenterBundleIdentifier(connection);
+    RetainPtr center = adoptNS([[m_userNotificationCenterClass alloc] initWithBundleIdentifier:notificationCenterBundleIdentifier.get()]);
+    UNAuthorizationOptions options = UNAuthorizationOptionBadge | UNAuthorizationOptionAlert | UNAuthorizationOptionSound;
+
+    auto blockPtr = makeBlockPtr([originString = origin.toString(), replySender = WTFMove(replySender)](BOOL granted, NSError *error) mutable {
+        if (error)
+            RELEASE_LOG_ERROR(Push, "Failed to request push permission for %{sensitive}s: %{public}@", originString.utf8().data(), error);
+        else
+            RELEASE_LOG(Push, "Requested push permission for %{sensitive}s with result: %d", originString.utf8().data(), granted);
+
+        WorkQueue::main().dispatch([replySender = WTFMove(replySender), granted] mutable {
+            replySender(granted);
+        });
+    });
+
+    [center requestAuthorizationWithOptions:options completionHandler:blockPtr.get()];
+}
+
+void WebPushDaemon::setAppBadge(PushClientConnection& connection, WebCore::SecurityOriginData&& badgeOriginData, std::optional<uint64_t> appBadge)
+{
+    URL appPageURL;
+
+#if PLATFORM(IOS)
+    auto webClipIdentifier = connection.pushPartitionString();
+    RetainPtr webClip = [UIWebClip webClipWithIdentifier:(NSString *)webClipIdentifier];
+    appPageURL = [webClip pageURL];
+#elif PLATFORM(MAC)
+    // FIXME: Establish the app page URL for Mac apps here
+#endif
+
+    if (!appPageURL.isEmpty()) {
+        auto badgeOrigin = badgeOriginData.securityOrigin();
+        auto appOrigin = WebCore::SecurityOrigin::create(appPageURL);
+        if (!badgeOrigin->isSameSiteAs(appOrigin.get()))
+            return;
+    }
+
+#if PLATFORM(IOS)
+    RetainPtr state = adoptNS([[UISApplicationState alloc] initWithBundleIdentifier:platformNotificationCenterBundleIdentifier(connection).get()]);
+    state.get().badgeValue = appBadge ? [NSNumber numberWithUnsignedLongLong:*appBadge] : nil;
+#elif PLATFORM(MAC)
+    String bundleIdentifier = connection.pushPartitionString().isEmpty() ? connection.hostAppCodeSigningIdentifier() : connection.pushPartitionString();
+    RetainPtr center = adoptNS([[m_userNotificationCenterClass alloc]  initWithBundleIdentifier:(NSString *)bundleIdentifier]);
+    if (!center)
+        return;
+
+    UNMutableNotificationContent *content = [UNMutableNotificationContent new];
+    content.badge = appBadge ? [NSNumber numberWithLongLong:*appBadge] : nil;
+    UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:NSUUID.UUID.UUIDString content:content trigger:nil];
+    [center addNotificationRequest:request withCompletionHandler:^(NSError *error) {
+        if (error)
+            WEBPUSHDAEMON_RELEASE_LOG_ERROR(Push, "Error attempting to set badge count for web app %s", connection.pushPartitionString().utf8().data());
+    }];
+#endif // PLATFORM(MAC)
+}
+
+void WebPushDaemon::getAppBadgeForTesting(PushClientConnection& connection, CompletionHandler<void(std::optional<uint64_t>)>&& completionHandler)
+{
+#if PLATFORM(IOS)
+    UNUSED_PARAM(connection);
+    completionHandler(std::nullopt);
+#else
+    RELEASE_ASSERT(m_userNotificationCenterClass == _WKMockUserNotificationCenter.class);
+
+    String bundleIdentifier = connection.pushPartitionString().isEmpty() ? connection.hostAppCodeSigningIdentifier() : connection.pushPartitionString();
+    RetainPtr center = adoptNS([[_WKMockUserNotificationCenter alloc] initWithBundleIdentifier:(NSString *)bundleIdentifier]);
+    NSNumber *centerBadge = [center getAppBadgeForTesting];
+
+    if (centerBadge)
+        completionHandler([centerBadge unsignedLongLongValue]);
+    else
+        completionHandler(std::nullopt);
+#endif
 }
 
 #endif // HAVE(FULL_FEATURED_USER_NOTIFICATIONS)

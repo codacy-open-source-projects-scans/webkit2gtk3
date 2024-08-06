@@ -6050,6 +6050,7 @@ IGNORE_CLANG_WARNINGS_END
 
         case Array::BigInt64Array:
         case Array::BigUint64Array:
+        case Array::Float16Array:
         case Array::Generic: {
             if (m_graph.m_slowGetByVal.contains(m_node)) {
                 if (m_graph.varArgChild(m_node, 0).useKind() == ObjectUse) {
@@ -6410,6 +6411,7 @@ IGNORE_CLANG_WARNINGS_END
         switch (arrayMode.type()) {
         case Array::BigInt64Array:
         case Array::BigUint64Array:
+        case Array::Float16Array:
         case Array::Generic: {
             if (m_graph.m_slowPutByVal.contains(m_node) || (child1.useKind() != CellUse && child1.useKind() != KnownCellUse)) {
                 if (child1.useKind() == CellUse || child1.useKind() == KnownCellUse) {
@@ -6815,6 +6817,7 @@ IGNORE_CLANG_WARNINGS_END
         case Array::Unprofiled:
         case Array::BigInt64Array:
         case Array::BigUint64Array:
+        case Array::Float16Array:
             DFG_CRASH(m_graph, m_node, "Bad array type");
             break;
         }
@@ -10988,7 +10991,7 @@ IGNORE_CLANG_WARNINGS_END
             return;
         }
 
-        if (m_node->isReflexiveBinaryUseKind(SymbolUse, UntypedUse)) {
+        if (m_node->isSymmetricBinaryUseKind(SymbolUse, UntypedUse)) {
             Edge symbolEdge = m_node->child1();
             Edge untypedEdge = m_node->child2();
             if (symbolEdge.useKind() != SymbolUse)
@@ -11002,13 +11005,13 @@ IGNORE_CLANG_WARNINGS_END
         }
 
         if (m_node->isBinaryUseKind(MiscUse)
-            || m_node->isReflexiveBinaryUseKind(MiscUse, UntypedUse)
+            || m_node->isSymmetricBinaryUseKind(MiscUse, UntypedUse)
             || m_node->isBinaryUseKind(OtherUse)
-            || m_node->isReflexiveBinaryUseKind(OtherUse, UntypedUse)
+            || m_node->isSymmetricBinaryUseKind(OtherUse, UntypedUse)
             || m_node->isBinaryUseKind(BooleanUse)
-            || m_node->isReflexiveBinaryUseKind(BooleanUse, UntypedUse)
+            || m_node->isSymmetricBinaryUseKind(BooleanUse, UntypedUse)
 #if !USE(BIGINT32)
-            || m_node->isReflexiveBinaryUseKind(NotDoubleUse, NeitherDoubleNorHeapBigIntNorStringUse)) {
+            || m_node->isSymmetricBinaryUseKind(NotDoubleUse, NeitherDoubleNorHeapBigIntNorStringUse)) {
 #else
             ) {
 #endif
@@ -12712,26 +12715,39 @@ IGNORE_CLANG_WARNINGS_END
     {
         JSGlobalObject* globalObject = m_graph.globalObjectFor(m_origin.semantic);
         LoadVarargsData* data = m_node->loadVarargsData();
-        LValue jsArguments = lowJSValue(m_node->argumentsChild());
+        LValue jsArguments = lowJSValue(m_node->argumentsChild(), ManualOperandSpeculation);
         LValue lengthIncludingThis = lowInt32(m_node->child1());
 
-        speculate(
-            VarargsOverflow, noValue(), nullptr,
-            m_out.bitOr(m_out.isZero32(lengthIncludingThis), m_out.above(lengthIncludingThis, m_out.constInt32(data->limit))));
+        speculate(m_node->argumentsChild());
 
-        m_out.store32(lengthIncludingThis, payloadFor(data->machineCount));
-
-        // FIXME: This computation is rather silly. If operationLoadVarargs just took a pointer instead
-        // of a VirtualRegister, we wouldn't have to do this.
-        // https://bugs.webkit.org/show_bug.cgi?id=141660
-        LValue machineStart = m_out.lShr(
-            m_out.sub(addressFor(data->machineStart).value(), m_callFrame),
-            m_out.constIntPtr(3));
-
-        vmCall(
-            Void, operationLoadVarargs, weakPointer(globalObject),
-            m_out.castToInt32(machineStart), jsArguments, m_out.constInt32(data->offset),
-            lengthIncludingThis, m_out.constInt32(data->mandatoryMinimum));
+        switch (m_node->argumentsChild().useKind()) {
+        case UntypedUse: {
+            speculate(VarargsOverflow, noValue(), nullptr, m_out.bitOr(m_out.isZero32(lengthIncludingThis), m_out.above(lengthIncludingThis, m_out.constInt32(data->limit))));
+            m_out.store32(lengthIncludingThis, payloadFor(data->machineCount));
+            // FIXME: This computation is rather silly. If operationLoadVarargs just took a pointer instead
+            // of a VirtualRegister, we wouldn't have to do this.
+            // https://bugs.webkit.org/show_bug.cgi?id=141660
+            LValue machineStart = m_out.lShr(m_out.sub(addressFor(data->machineStart).value(), m_callFrame), m_out.constIntPtr(3));
+            vmCall(Void, operationLoadVarargs, weakPointer(globalObject), m_out.castToInt32(machineStart), jsArguments, m_out.constInt32(data->offset), lengthIncludingThis, m_out.constInt32(data->mandatoryMinimum));
+            break;
+        }
+        case OtherUse: {
+            // lengthIncludingThis is 1
+            if (!data->limit) {
+                terminate(VarargsOverflow);
+                break;
+            }
+            m_out.store32(lengthIncludingThis, payloadFor(data->machineCount));
+            if (data->mandatoryMinimum) {
+                LValue machineStart = m_out.lShr(m_out.sub(addressFor(data->machineStart).value(), m_callFrame), m_out.constIntPtr(3));
+                vmCall(Void, operationLoadVarargs, weakPointer(globalObject), m_out.castToInt32(machineStart), jsArguments, m_out.constInt32(data->offset), lengthIncludingThis, m_out.constInt32(data->mandatoryMinimum));
+            }
+            break;
+        }
+        default:
+            DFG_CRASH(m_graph, m_node, "Bad use kind");
+            break;
+        }
     }
 
     void compileForwardVarargs()
@@ -17201,7 +17217,7 @@ IGNORE_CLANG_WARNINGS_END
                 auto generator = Box<JITGetByIdGenerator>::create(
                     jit.codeBlock(), stubInfo, JITType::FTLJIT, semanticNodeOrigin, callSiteIndex,
                     params.unavailableRegisters(), identifier, JSValueRegs(params[1].gpr()),
-                    JSValueRegs(params[0].gpr()), stubInfoGPR, type);
+                    JSValueRegs(params[0].gpr()), stubInfoGPR, type, CacheType::GetByIdSelf);
 
                 generator->generateFastPath(jit);
                 CCallHelpers::Label done = jit.label();
@@ -21535,6 +21551,12 @@ IGNORE_CLANG_WARNINGS_END
         case MiscUse:
             speculateMisc(edge);
             break;
+        case MapIteratorObjectUse:
+            speculateMapIteratorObject(edge);
+            break;
+        case SetIteratorObjectUse:
+            speculateSetIteratorObject(edge);
+            break;
         default:
             DFG_CRASH(m_graph, m_node, "Unsupported speculation use kind");
         }
@@ -22160,7 +22182,7 @@ IGNORE_CLANG_WARNINGS_END
 
     void speculateMapIteratorObject(Edge edge)
     {
-        speculateMapObject(edge, lowCell(edge));
+        speculateMapIteratorObject(edge, lowCell(edge));
     }
 
     void speculateSetObject(Edge edge, LValue cell)
@@ -22182,7 +22204,7 @@ IGNORE_CLANG_WARNINGS_END
 
     void speculateSetIteratorObject(Edge edge)
     {
-        speculateMapObject(edge, lowCell(edge));
+        speculateSetIteratorObject(edge, lowCell(edge));
     }
 
     void speculateWeakMapObject(Edge edge, LValue cell)

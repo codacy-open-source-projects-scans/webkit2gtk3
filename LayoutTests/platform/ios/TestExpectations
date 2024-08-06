@@ -2022,7 +2022,6 @@ fast/dom/DeviceOrientation/updates.html
 fast/dom/MutationObserver/inline-event-listener.html
 fast/dom/Window/open-window-min-size.html
 fast/dom/rtl-scroll-to-leftmost-and-resize.html
-fast/dynamic/paused-event-dispatch.html
 fast/events/resize-subframe.html
 fast/files/read-blob-async.html
 fast/files/read-file-async.html
@@ -3123,8 +3122,7 @@ editing/selection/character-granularity-rect.html [ Pass ]
 webkit.org/b/184783 compositing/ios/overflow-scroll-touch-tiles.html [ Pass Failure ]
 
 # Disabled globally.
-#http/tests/xmlhttprequest/gzip-content-type-no-content-encoding.html [ Pass ]
-# FIXME: Uncomment above after webkit.org/b/277198 is resolved (new expectation set below).
+http/tests/xmlhttprequest/gzip-content-type-no-content-encoding.html [ Pass ]
 
 webkit.org/b/173041 http/tests/websocket/tests/hybi/handshake-ok-with-legacy-sec-websocket-response-headers.html [ Pass Failure ]
 
@@ -3986,6 +3984,7 @@ imported/w3c/web-platform-tests/css/css-writing-modes/forms/select-multiple-scro
 imported/w3c/web-platform-tests/css/css-writing-modes/forms/select-size-scrolling-and-sizing.optional.html [ Failure ]
 imported/w3c/web-platform-tests/css/css-writing-modes/forms/select-multiple-options-visual-order.html [ Failure ]
 imported/w3c/web-platform-tests/css/css-writing-modes/forms/select-multiple-keyboard-selection.optional.html [ Failure ]
+fast/css/container-query-listbox.html [ Skip ]
 fast/forms/select/multiselect-in-listbox-mouse-release-outside.html [ Skip ]
 
 # To investigate: might need to relax the tests, or adapt native thumb appearance.
@@ -4698,6 +4697,7 @@ imported/w3c/web-platform-tests/css/css-ruby/rt-display-blockified.html [ Skip ]
 imported/w3c/web-platform-tests/css/css-ruby/ruby-bidi-003.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-ruby/ruby-text-combine-upright-001a.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-ruby/ruby-text-combine-upright-001b.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-ruby/ruby-align-001.html [ ImageOnlyFailure ]
 fast/ruby/annotation-with-line-gap.html [ ImageOnlyFailure ]
 fast/ruby/tight-line-spacing-with-line-height.html [ ImageOnlyFailure ]
 
@@ -7414,7 +7414,8 @@ webkit.org/b/277195 imported/w3c/web-platform-tests/html/semantics/interactive-e
 imported/w3c/web-platform-tests/html/semantics/invokers/invoketarget-on-dialog-behavior.tentative.html [ Failure ]
 imported/w3c/web-platform-tests/html/semantics/invokers/invoketarget-on-popover-behavior.tentative.html [ Failure ]
 
-# webkit.org/b/277198 (REGRESSION (iOS 18): 2 http/tests/xmlhttprequests layout tests are constantly failing.)
-# FIXME: Uncomment explicit pass expectation above when this is resolved (search for bug link)
-http/tests/xmlhttprequest/chunked-progress-event-expectedLength.html [ Failure ]
-http/tests/xmlhttprequest/gzip-content-type-no-content-encoding.html [ Failure ]
+# webkit.org/b/277308 (webgl/1.0.3/conformance/uniforms/out-of-bounds-uniform-array-access.html needs to be marked as slow.)
+webgl/1.0.3/conformance/uniforms/out-of-bounds-uniform-array-access.html [ Slow ]
+
+# webkit.org/b/27730 (REGRESSION (280752@main?): [ macOS iOS ] http/wpt/service-workers/fetch-service-worker-preload-cache.https.html is flaky failing.)
+http/wpt/service-workers/fetch-service-worker-preload-cache.https.html [ Pass Failure ]

@@ -615,8 +615,6 @@ public:
     void setHeaderHeight(float);
     void setFooterHeight(float);
 
-    void setTopContentInset(float);
-
 #if ENABLE(FULLSCREEN_API)
     void webkitWillEnterFullScreenForElement(Element&);
     void webkitDidEnterFullScreenForElement(Element&);
@@ -1490,6 +1488,8 @@ public:
     using ImageBufferResourceLimits = WebCore::ImageBufferResourceLimits;
     using ImageBufferResourceLimitsPromise = DOMPromiseDeferred<IDLDictionary<ImageBufferResourceLimits>>;
     void getImageBufferResourceLimits(ImageBufferResourceLimitsPromise&&);
+
+    void setResourceCachingDisabledByWebInspector(bool);
 
 private:
     explicit Internals(Document&);

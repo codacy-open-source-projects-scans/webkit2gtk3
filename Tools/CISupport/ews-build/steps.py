@@ -28,6 +28,7 @@ from buildbot.steps import master, shell, transfer, trigger
 from buildbot.steps.source import git
 from buildbot.steps.worker import CompositeStepMixin
 from datetime import date
+from shlex import quote
 
 from twisted.internet import defer, reactor, task
 
@@ -540,10 +541,19 @@ class ShellMixin(object):
     def has_windows_shell(self):
         return self.getProperty('platform', '*') in self.WINDOWS_SHELL_PLATFORMS
 
-    def shell_command(self, command):
+    def shell_command(self, command, pipefail=True):
         if self.has_windows_shell():
-            return ['sh', '-c', command]
-        return ['/bin/sh', '-c', command]
+            shell = 'sh'
+        else:
+            shell = '/bin/sh'
+
+        if pipefail:
+            # -o pipefail is new in POSIX 2024, but commonly `sh` is provided by `bash`
+            # or `zsh` which have long supported the `pipefail` option, even when
+            # invoked as `sh` (and in POSIX-compliant mode).
+            return [shell, '-o', 'pipefail', '-c', command]
+        else:
+            return [shell, '-c', command]
 
     def shell_exit_0(self):
         if self.has_windows_shell():
@@ -1249,13 +1259,14 @@ class CheckChangeRelevance(AnalyzeChange):
     ]
 
     jsc_path_regexes = [
-        re.compile(rb'.*jsc.*', re.IGNORECASE),
         re.compile(rb'.*javascriptcore.*', re.IGNORECASE),
         re.compile(rb'JSTests/', re.IGNORECASE),
+        re.compile(rb'LayoutTests/js.*', re.IGNORECASE),  # This catches both js/ and jsc-layout-tests.yaml
         re.compile(rb'Source/WTF/', re.IGNORECASE),
         re.compile(rb'Source/bmalloc/', re.IGNORECASE),
         re.compile(rb'Source/cmake/', re.IGNORECASE),
         re.compile(rb'.*Makefile.*', re.IGNORECASE),
+        re.compile(rb'Tools/.*jsc.*', re.IGNORECASE),
         re.compile(rb'Tools/Scripts/build-webkit', re.IGNORECASE),
         re.compile(rb'Tools/Scripts/webkitdirs.pm', re.IGNORECASE),
     ]
@@ -3615,7 +3626,7 @@ class RunJavaScriptCoreTests(shell.Test, AddToLogMixin, ShellMixin):
 
         self.setCommand(self.command + customBuildFlag(self.getProperty('platform'), self.getProperty('fullPlatform')))
         self.command.extend(self.command_extra)
-        self.command = self.shell_command(' '.join(self.command) + ' 2>&1 | Tools/Scripts/filter-test-logs jsc')
+        self.command = self.shell_command(' '.join(quote(str(c)) for c in self.command) + ' 2>&1 | Tools/Scripts/filter-test-logs jsc')
         return super().start()
 
     def evaluateCommand(self, cmd):
@@ -3991,7 +4002,7 @@ class RunWebKitTests(shell.Test, AddToLogMixin, ShellMixin):
         self.log_observer_json = logobserver.BufferLogObserver()
         self.addLogObserver('json', self.log_observer_json)
         self.setLayoutTestCommand()
-        self.command = self.shell_command(' '.join(str(c) for c in self.command) + ' 2>&1 | Tools/Scripts/filter-test-logs layout')
+        self.command = self.shell_command(' '.join(quote(str(c)) for c in self.command) + ' 2>&1 | Tools/Scripts/filter-test-logs layout')
         return super().start()
 
     # FIXME: This will break if run-webkit-tests changes its default log formatter.
