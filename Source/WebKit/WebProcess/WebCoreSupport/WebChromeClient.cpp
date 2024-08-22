@@ -103,6 +103,7 @@
 #include <WebCore/TextRecognitionOptions.h>
 #include <WebCore/ViewportConfiguration.h>
 #include <WebCore/WindowFeatures.h>
+#include <wtf/TZoneMallocInlines.h>
 
 #if HAVE(WEBGPU_IMPLEMENTATION)
 #import <WebCore/WebGPUCreateImpl.h>
@@ -180,6 +181,8 @@ AXRelayProcessSuspendedNotification::~AXRelayProcessSuspendedNotification()
 #if !PLATFORM(COCOA)
 void AXRelayProcessSuspendedNotification::sendProcessSuspendMessage(bool) { }
 #endif
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebChromeClient);
 
 WebChromeClient::WebChromeClient(WebPage& page)
     : m_page(page)
@@ -352,7 +355,7 @@ Page* WebChromeClient::createWindow(LocalFrame& frame, const WindowFeatures& win
         webFrame->info(), /* originatingFrameInfoData */
         webFrame->page()->webPageProxyIdentifier(),
         webFrame->info(), /* frameInfo */
-        0, /* navigationID */
+        std::nullopt, /* navigationID */
         navigationAction.originalRequest(), /* originalRequest */
         navigationAction.originalRequest() /* request */
     };
@@ -607,15 +610,6 @@ bool WebChromeClient::runJavaScriptPrompt(LocalFrame& frame, const String& messa
 
     std::tie(result) = sendResult.takeReply();
     return !result.isNull();
-}
-
-void WebChromeClient::setStatusbarText(const String& statusbarText)
-{
-    // Notify the bundle client.
-    auto page = protectedPage();
-    page->injectedBundleUIClient().willSetStatusbarText(page.ptr(), statusbarText);
-
-    page->send(Messages::WebPageProxy::SetStatusText(statusbarText));
 }
 
 KeyboardUIMode WebChromeClient::keyboardUIMode()
@@ -1150,6 +1144,12 @@ unsigned WebChromeClient::remoteImagesCountForTesting() const
 {
     return protectedPage()->remoteImagesCountForTesting();
 }
+
+void WebChromeClient::registerBlobPathForTesting(const String& path, CompletionHandler<void()>&& completionHandler)
+{
+    WebProcess::singleton().ensureNetworkProcessConnection().connection().sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::RegisterBlobPathForTesting(path), WTFMove(completionHandler));
+}
+
 
 void WebChromeClient::contentRuleListNotification(const URL& url, const ContentRuleListResults& results)
 {
@@ -1863,53 +1863,49 @@ void WebChromeClient::gamepadsRecentlyAccessed()
 
 #if ENABLE(WRITING_TOOLS)
 
-void WebChromeClient::proofreadingSessionShowDetailsForSuggestionWithIDRelativeToRect(const WebCore::WritingTools::Session::ID& sessionID, const WebCore::WritingTools::TextSuggestion::ID& replacementID, WebCore::IntRect selectionBoundsInRootView)
+void WebChromeClient::proofreadingSessionShowDetailsForSuggestionWithIDRelativeToRect(const WebCore::WritingTools::TextSuggestion::ID& replacementID, WebCore::IntRect selectionBoundsInRootView)
 {
-    protectedPage()->proofreadingSessionShowDetailsForSuggestionWithIDRelativeToRect(sessionID, replacementID, selectionBoundsInRootView);
+    protectedPage()->proofreadingSessionShowDetailsForSuggestionWithIDRelativeToRect(replacementID, selectionBoundsInRootView);
 }
 
-void WebChromeClient::proofreadingSessionUpdateStateForSuggestionWithID(const WritingTools::Session::ID& sessionID, WritingTools::TextSuggestion::State state, const WritingTools::TextSuggestion::ID& replacementID)
+void WebChromeClient::proofreadingSessionUpdateStateForSuggestionWithID(WritingTools::TextSuggestion::State state, const WritingTools::TextSuggestion::ID& replacementID)
 {
-    protectedPage()->proofreadingSessionUpdateStateForSuggestionWithID(sessionID, state, replacementID);
+    protectedPage()->proofreadingSessionUpdateStateForSuggestionWithID(state, replacementID);
 }
-
-#endif
-
-#if ENABLE(WRITING_TOOLS_UI)
 
 void WebChromeClient::removeTextAnimationForAnimationID(const WTF::UUID& animationID)
 {
     protectedPage()->removeTextAnimationForAnimationID(animationID);
 }
 
-void WebChromeClient::removeTransparentMarkersForSessionID(const WritingTools::Session::ID& sessionID)
+void WebChromeClient::removeTransparentMarkersForActiveWritingToolsSession()
 {
-    protectedPage()->removeTransparentMarkersForSessionID(sessionID);
+    protectedPage()->removeTransparentMarkersForActiveWritingToolsSession();
 }
 
-void WebChromeClient::removeInitialTextAnimation(const WritingTools::Session::ID& sessionID)
+void WebChromeClient::removeInitialTextAnimationForActiveWritingToolsSession()
 {
-    protectedPage()->removeInitialTextAnimation(sessionID);
+    protectedPage()->removeInitialTextAnimationForActiveWritingToolsSession();
 }
 
-void WebChromeClient::addInitialTextAnimation(const WritingTools::Session::ID& sessionID)
+void WebChromeClient::addInitialTextAnimationForActiveWritingToolsSession()
 {
-    protectedPage()->addInitialTextAnimation(sessionID);
+    protectedPage()->addInitialTextAnimationForActiveWritingToolsSession();
 }
 
-void WebChromeClient::addSourceTextAnimation(const WritingTools::Session::ID& sessionID, const CharacterRange& range, const String string, WTF::CompletionHandler<void(WebCore::TextAnimationRunMode)>&& completionHandler)
+void WebChromeClient::addSourceTextAnimationForActiveWritingToolsSession(const CharacterRange& range, const String& string, CompletionHandler<void(WebCore::TextAnimationRunMode)>&& completionHandler)
 {
-    protectedPage()->addSourceTextAnimation(sessionID, range, string, WTFMove(completionHandler));
+    protectedPage()->addSourceTextAnimationForActiveWritingToolsSession(range, string, WTFMove(completionHandler));
 }
 
-void WebChromeClient::addDestinationTextAnimation(const WritingTools::Session::ID& sessionID, const CharacterRange& range, const String string)
+void WebChromeClient::addDestinationTextAnimationForActiveWritingToolsSession(const std::optional<CharacterRange>& range, const String& string)
 {
-    protectedPage()->addDestinationTextAnimation(sessionID, range, string);
+    protectedPage()->addDestinationTextAnimationForActiveWritingToolsSession(range, string);
 }
 
-void WebChromeClient::clearAnimationsForSessionID(const WritingTools::Session::ID& sessionID)
+void WebChromeClient::clearAnimationsForActiveWritingToolsSession()
 {
-    protectedPage()->clearAnimationsForSessionID(sessionID);
+    protectedPage()->clearAnimationsForActiveWritingToolsSession();
 }
 
 #endif

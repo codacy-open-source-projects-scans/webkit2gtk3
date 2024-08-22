@@ -644,6 +644,11 @@ RefPtr<ViewSnapshot> PageClientImpl::takeViewSnapshot(std::optional<WebCore::Int
     return m_impl->takeViewSnapshot();
 }
 
+RefPtr<ViewSnapshot> PageClientImpl::takeViewSnapshot(std::optional<WebCore::IntRect>&&, ForceSoftwareCapturingViewportSnapshot forceSoftwareCapturing)
+{
+    return m_impl->takeViewSnapshot(forceSoftwareCapturing);
+}
+
 void PageClientImpl::selectionDidChange()
 {
     m_impl->selectionDidChange();
@@ -973,11 +978,6 @@ void PageClientImpl::derefView()
 void PageClientImpl::startWindowDrag()
 {
     m_impl->startWindowDrag();
-}
-
-NSWindow *PageClientImpl::platformWindow()
-{
-    return m_impl->window();
 }
 
 #if ENABLE(DRAG_SUPPORT)

@@ -929,7 +929,7 @@ class StyleProperties:
         if not a_is_high_priority and b_is_high_priority:
             return 1
 
-        # Sort logical longhands to the back, before shorthands.
+        # Sort longhands in a logical property group to the back, before shorthands.
         a_is_in_logical_property_group = a.codegen_properties.logical_property_group
         b_is_in_logical_property_group = b.codegen_properties.logical_property_group
         if a_is_in_logical_property_group and not b_is_in_logical_property_group:
@@ -3937,6 +3937,7 @@ class GenerateCSSPropertyParsing:
                     "CSSPropertyParser.h",
                     "CSSPropertyParserConsumer+Angle.h",
                     "CSSPropertyParserConsumer+Color.h",
+                    "CSSPropertyParserConsumer+Font.h",
                     "CSSPropertyParserConsumer+Ident.h",
                     "CSSPropertyParserConsumer+Integer.h",
                     "CSSPropertyParserConsumer+Image.h",
@@ -3950,7 +3951,6 @@ class GenerateCSSPropertyParsing:
                     "CSSPropertyParserConsumer+String.h",
                     "CSSPropertyParserConsumer+Time.h",
                     "CSSPropertyParserConsumer+URL.h",
-                    "CSSPropertyParserWorkerSafe.h",
                     "CSSValuePool.h",
                     "DeprecatedGlobalSettings.h",
                 ]
@@ -3959,7 +3959,7 @@ class GenerateCSSPropertyParsing:
             with self.generation_context.namespace("WebCore", to=writer):
                 self.generation_context.generate_using_namespace_declarations(
                     to=writer,
-                    namespaces=["CSSPropertyParserHelpers", "CSSPropertyParserHelpersWorkerSafe"]
+                    namespaces=["CSSPropertyParserHelpers"]
                 )
 
                 self._generate_css_property_parsing_cpp_property_parsing_functions(

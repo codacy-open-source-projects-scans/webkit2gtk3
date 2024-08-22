@@ -36,25 +36,19 @@
 #include "WebPushDaemonConnectionConfiguration.h"
 #include "WebPushMessage.h"
 #include <WebCore/SecurityOriginData.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
 using namespace WebCore;
 
-NetworkNotificationManager::NetworkNotificationManager(NetworkSession& networkSession, const String& webPushMachServiceName, WebPushD::WebPushDaemonConnectionConfiguration&& configuration)
-    : m_networkSession(networkSession)
-{
-    if (!m_networkSession.sessionID().isEphemeral() && !webPushMachServiceName.isEmpty()) {
-#if PLATFORM(COCOA)
-        auto token = m_networkSession.networkProcess().parentProcessConnection()->getAuditToken();
-        if (token) {
-            Vector<uint8_t> auditTokenData(sizeof(*token));
-            memcpy(auditTokenData.data(), &(*token), sizeof(*token));
-            configuration.hostAppAuditTokenData = WTFMove(auditTokenData);
-        }
-#endif
+WTF_MAKE_TZONE_ALLOCATED_IMPL(NetworkNotificationManager);
 
-        m_connection = makeUnique<WebPushD::Connection>(webPushMachServiceName.utf8(), *this, WTFMove(configuration));
-    }
+// FIXME: instead of passing in ephemeral session state, we should probably just avoid constructing this object altogether.
+NetworkNotificationManager::NetworkNotificationManager(const String& webPushMachServiceName, bool isEphemeralSession, WebPushD::WebPushDaemonConnectionConfiguration&& configuration)
+    : m_isEphemeralSession(isEphemeralSession)
+{
+    if (!webPushMachServiceName.isEmpty() && !isEphemeralSession)
+        m_connection = makeUnique<WebPushD::Connection>(webPushMachServiceName.utf8(), WTFMove(configuration));
 }
 
 void NetworkNotificationManager::setPushAndNotificationsEnabledForOrigin(const SecurityOriginData& origin, bool enabled, CompletionHandler<void()>&& completionHandler)
@@ -67,6 +61,16 @@ void NetworkNotificationManager::setPushAndNotificationsEnabledForOrigin(const S
     m_connection->sendWithAsyncReplyWithoutUsingIPCConnection(Messages::PushClientConnection::SetPushAndNotificationsEnabledForOrigin(origin.toString(), enabled), WTFMove(completionHandler));
 }
 
+void NetworkNotificationManager::getPendingPushMessage(CompletionHandler<void(const std::optional<WebPushMessage>&)>&& completionHandler)
+{
+    CompletionHandler<void(std::optional<WebPushMessage>&&)> replyHandler = [completionHandler = WTFMove(completionHandler)] (auto&& message) mutable {
+        RELEASE_LOG(Push, "Done getting %u push messages", message ? 1 : 0);
+        completionHandler(WTFMove(message));
+    };
+
+    m_connection->sendWithAsyncReplyWithoutUsingIPCConnection(Messages::PushClientConnection::GetPendingPushMessage(), WTFMove(replyHandler));
+}
+
 void NetworkNotificationManager::getPendingPushMessages(CompletionHandler<void(const Vector<WebPushMessage>&)>&& completionHandler)
 {
     CompletionHandler<void(Vector<WebPushMessage>&&)> replyHandler = [completionHandler = WTFMove(completionHandler)] (Vector<WebPushMessage>&& messages) mutable {
@@ -77,10 +81,8 @@ void NetworkNotificationManager::getPendingPushMessages(CompletionHandler<void(c
     m_connection->sendWithAsyncReplyWithoutUsingIPCConnection(Messages::PushClientConnection::GetPendingPushMessages(), WTFMove(replyHandler));
 }
 
-void NetworkNotificationManager::showNotification(IPC::Connection&, const WebCore::NotificationData& notification, RefPtr<NotificationResources>&& notificationResources, CompletionHandler<void()>&& completionHandler)
+void NetworkNotificationManager::showNotification(const WebCore::NotificationData& notification, RefPtr<NotificationResources>&& notificationResources, CompletionHandler<void()>&& completionHandler)
 {
-    RELEASE_ASSERT(m_networkSession.networkProcess().builtInNotificationsEnabled());
-
     if (!m_connection) {
         completionHandler();
         return;
@@ -89,10 +91,13 @@ void NetworkNotificationManager::showNotification(IPC::Connection&, const WebCor
     m_connection->sendWithAsyncReplyWithoutUsingIPCConnection(Messages::PushClientConnection::ShowNotification { notification, notificationResources }, WTFMove(completionHandler));
 }
 
+void NetworkNotificationManager::showNotification(IPC::Connection&, const WebCore::NotificationData& notification, RefPtr<NotificationResources>&& notificationResources, CompletionHandler<void()>&& completionHandler)
+{
+    showNotification(notification, WTFMove(notificationResources), WTFMove(completionHandler));
+}
+
 void NetworkNotificationManager::getNotifications(const URL& registrationURL, const String& tag, CompletionHandler<void(Expected<Vector<WebCore::NotificationData>, WebCore::ExceptionData>&&)>&& completionHandler)
 {
-    RELEASE_ASSERT(m_networkSession.networkProcess().builtInNotificationsEnabled());
-
     if (!m_connection) {
         completionHandler(makeUnexpected(ExceptionData { ExceptionCode::InvalidStateError, "No active connection to webpushd"_s }));
         return;
@@ -123,9 +128,7 @@ void NetworkNotificationManager::didDestroyNotification(const WTF::UUID&)
 
 void NetworkNotificationManager::requestPermission(WebCore::SecurityOriginData&& origin, CompletionHandler<void(bool)>&& completionHandler)
 {
-    RELEASE_ASSERT(m_networkSession.networkProcess().builtInNotificationsEnabled());
-
-    if (m_networkSession.sessionID().isEphemeral())
+    if (m_isEphemeralSession)
         return completionHandler(false);
 
     if (!m_connection) {
@@ -166,7 +169,7 @@ void NetworkNotificationManager::unsubscribeFromPushService(URL&& scopeURL, std:
 
 void NetworkNotificationManager::getPushSubscription(URL&& scopeURL, CompletionHandler<void(Expected<std::optional<WebCore::PushSubscriptionData>, WebCore::ExceptionData>&&)>&& completionHandler)
 {
-    if (m_networkSession.sessionID().isEphemeral()) {
+    if (m_isEphemeralSession) {
         completionHandler(std::optional<WebCore::PushSubscriptionData> { });
         return;
     }
@@ -177,23 +180,6 @@ void NetworkNotificationManager::getPushSubscription(URL&& scopeURL, CompletionH
     }
 
     m_connection->sendWithAsyncReplyWithoutUsingIPCConnection(Messages::PushClientConnection::GetPushSubscription(WTFMove(scopeURL)), WTFMove(completionHandler));
-}
-
-void NetworkNotificationManager::getPushPermissionState(URL&& scopeURL, CompletionHandler<void(Expected<uint8_t, WebCore::ExceptionData>&&)>&& completionHandler)
-{
-    if (m_networkSession.sessionID().isEphemeral()) {
-        completionHandler(static_cast<uint8_t>(PushPermissionState::Denied));
-        return;
-    }
-
-    if (!m_connection) {
-        completionHandler(makeUnexpected(ExceptionData { ExceptionCode::AbortError, "No connection to push daemon"_s }));
-        return;
-    }
-
-    m_connection->sendWithAsyncReplyWithoutUsingIPCConnection(Messages::PushClientConnection::GetPushPermissionState(WebCore::SecurityOriginData::fromURL(scopeURL)), [completionHandler = WTFMove(completionHandler)](WebCore::PushPermissionState state) mutable {
-        completionHandler(static_cast<uint8_t>(state));
-    });
 }
 
 void NetworkNotificationManager::incrementSilentPushCount(WebCore::SecurityOriginData&& origin, CompletionHandler<void(unsigned)>&& completionHandler)
@@ -234,6 +220,24 @@ void NetworkNotificationManager::getAppBadgeForTesting(CompletionHandler<void(st
     }
 
     m_connection->sendWithAsyncReplyWithoutUsingIPCConnection(Messages::PushClientConnection::GetAppBadgeForTesting(), WTFMove(completionHandler));
+}
+
+static void getPushPermissionStateImpl(WebPushD::Connection* connection, WebCore::SecurityOriginData&& origin, CompletionHandler<void(WebCore::PushPermissionState)>&& completionHandler)
+{
+    if (!connection)
+        return completionHandler(WebCore::PushPermissionState::Denied);
+
+    connection->sendWithAsyncReplyWithoutUsingIPCConnection(Messages::PushClientConnection::GetPushPermissionState(WTFMove(origin)), WTFMove(completionHandler));
+}
+
+void NetworkNotificationManager::getPermissionState(WebCore::SecurityOriginData&& origin, CompletionHandler<void(WebCore::PushPermissionState)>&& completionHandler)
+{
+    getPushPermissionStateImpl(m_connection.get(), WTFMove(origin), WTFMove(completionHandler));
+}
+
+void NetworkNotificationManager::getPermissionStateSync(WebCore::SecurityOriginData&& origin, CompletionHandler<void(WebCore::PushPermissionState)>&& completionHandler)
+{
+    getPushPermissionStateImpl(m_connection.get(), WTFMove(origin), WTFMove(completionHandler));
 }
 
 } // namespace WebKit

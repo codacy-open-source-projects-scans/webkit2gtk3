@@ -25,7 +25,6 @@
 #include "CSSCustomPropertySyntax.h"
 #include "CSSParserTokenRange.h"
 #include "CSSPropertyParserHelpers.h"
-#include "CSSPropertyParserWorkerSafe.h"
 #include "StyleRuleType.h"
 #include <wtf/text/StringView.h>
 
@@ -150,6 +149,8 @@ private:
 
     bool consumeScrollTimelineShorthand(bool important);
     bool consumeViewTimelineShorthand(bool important);
+
+    bool consumeTextBoxShorthand(bool important);
 
     bool consumeTextWrapShorthand(bool important);
     bool consumeWhiteSpaceShorthand(bool important);

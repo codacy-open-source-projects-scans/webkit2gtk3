@@ -32,6 +32,7 @@
 
 #include "AnimationUtilities.h"
 #include "BasicShapeConversion.h"
+#include "BasicShapesShape.h"
 #include "CalculationValue.h"
 #include "FloatRect.h"
 #include "FloatRoundedRect.h"
@@ -515,7 +516,7 @@ Path BasicShapeXywh::path(const FloatRect& boundingBox) const
     auto width = floatValueForLength(m_width, boundingBox.width());
     auto height = floatValueForLength(m_height, boundingBox.height());
 
-    auto rect = FloatRect(insetX, insetY, width, height);
+    auto rect = FloatRect(boundingBox.x() + insetX, boundingBox.y() + insetY, width, height);
     auto radii = FloatRoundedRect::Radii(floatSizeForLengthSize(m_topLeftRadius, boundingBox.size()),
         floatSizeForLengthSize(m_topRightRadius, boundingBox.size()),
         floatSizeForLengthSize(m_bottomLeftRadius, boundingBox.size()),
@@ -617,12 +618,12 @@ bool BasicShapePolygon::canBlend(const BasicShape& other) const
     return values().size() == otherPolygon.values().size() && windRule() == otherPolygon.windRule();
 }
 
-Ref<BasicShape> BasicShapePolygon::blend(const BasicShape& other, const BlendingContext& context) const
+Ref<BasicShape> BasicShapePolygon::blend(const BasicShape& from, const BlendingContext& context) const
 {
-    ASSERT(type() == other.type());
+    ASSERT(type() == from.type());
 
-    auto& otherPolygon = downcast<BasicShapePolygon>(other);
-    ASSERT(m_values.size() == otherPolygon.values().size());
+    auto& fromPolygon = downcast<BasicShapePolygon>(from);
+    ASSERT(m_values.size() == fromPolygon.values().size());
     ASSERT(!(m_values.size() % 2));
 
     size_t length = m_values.size();
@@ -630,12 +631,12 @@ Ref<BasicShape> BasicShapePolygon::blend(const BasicShape& other, const Blending
     if (!length)
         return result;
 
-    result->setWindRule(otherPolygon.windRule());
+    result->setWindRule(windRule());
 
     for (size_t i = 0; i < length; i = i + 2) {
         result->appendPoint(
-            WebCore::blend(otherPolygon.values().at(i), m_values.at(i), context),
-            WebCore::blend(otherPolygon.values().at(i + 1), m_values.at(i + 1), context));
+            WebCore::blend(fromPolygon.values().at(i), m_values.at(i), context),
+            WebCore::blend(fromPolygon.values().at(i + 1), m_values.at(i + 1), context));
     }
 
     return result;
@@ -646,6 +647,8 @@ void BasicShapePolygon::dump(TextStream& ts) const
     ts.dumpProperty("wind-rule", windRule());
     ts.dumpProperty("path", values());
 }
+
+// MARK: -
 
 Ref<BasicShapePath> BasicShapePath::create(std::unique_ptr<SVGPathByteStream>&& byteStream, float zoom, WindRule windRule)
 {
@@ -688,6 +691,9 @@ bool BasicShapePath::operator==(const BasicShape& other) const
 
 bool BasicShapePath::canBlend(const BasicShape& other) const
 {
+    if (other.type() == Type::Shape)
+        return other.canBlend(*this);
+
     if (type() != other.type())
         return false;
 
@@ -697,6 +703,9 @@ bool BasicShapePath::canBlend(const BasicShape& other) const
 
 Ref<BasicShape> BasicShapePath::blend(const BasicShape& from, const BlendingContext& context) const
 {
+    if (from.type() == Type::Shape)
+        return BasicShapeShape::blendWithPath(from, *this, context);
+
     ASSERT(type() == from.type());
 
     auto& fromPath = downcast<BasicShapePath>(from);

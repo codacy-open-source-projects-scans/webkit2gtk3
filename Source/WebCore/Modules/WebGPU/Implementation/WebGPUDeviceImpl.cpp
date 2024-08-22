@@ -61,10 +61,12 @@
 #include "WebGPUTextureImpl.h"
 #include "WebGPUTextureViewImpl.h"
 #include "WebGPUValidationError.h"
+#include "WebGPUXRBindingImpl.h"
 #include <CoreGraphics/CGColorSpace.h>
 #include <WebGPU/WebGPUExt.h>
 #include <wtf/BlockPtr.h>
 #include <wtf/SegmentedVector.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore::WebGPU {
 
@@ -72,6 +74,8 @@ static auto invalidEntryPointName()
 {
     return CString("");
 }
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(DeviceImpl);
 
 DeviceImpl::DeviceImpl(WebGPUPtr<WGPUDevice>&& device, Ref<SupportedFeatures>&& features, Ref<SupportedLimits>&& limits, ConvertToBackingContext& convertToBackingContext)
     : Device(WTFMove(features), WTFMove(limits))
@@ -94,6 +98,11 @@ Ref<Queue> DeviceImpl::queue()
 void DeviceImpl::destroy()
 {
     wgpuDeviceDestroy(m_backing.get());
+}
+
+RefPtr<XRBinding> DeviceImpl::createXRBinding()
+{
+    return XRBindingImpl::create(adoptWebGPU(wgpuDeviceCreateXRBinding(m_backing.get())), m_convertToBackingContext);
 }
 
 RefPtr<Buffer> DeviceImpl::createBuffer(const BufferDescriptor& descriptor)

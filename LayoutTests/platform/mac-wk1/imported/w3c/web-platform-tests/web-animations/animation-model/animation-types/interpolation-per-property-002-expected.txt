@@ -200,6 +200,10 @@ PASS ruby-align (type: discrete) has testInterpolation function
 PASS ruby-align uses discrete animation when animating between "start" and "center" with linear easing
 PASS ruby-align uses discrete animation when animating between "start" and "center" with effect easing
 PASS ruby-align uses discrete animation when animating between "start" and "center" with keyframe easing
+PASS ruby-position (type: discrete) has testInterpolation function
+PASS ruby-position uses discrete animation when animating between "under" and "over" with linear easing
+PASS ruby-position uses discrete animation when animating between "under" and "over" with effect easing
+PASS ruby-position uses discrete animation when animating between "under" and "over" with keyframe easing
 PASS scroll-snap-align (type: discrete) has testInterpolation function
 PASS scroll-snap-align uses discrete animation when animating between "none" and "start" with linear easing
 PASS scroll-snap-align uses discrete animation when animating between "none" and "start" with effect easing
@@ -305,13 +309,13 @@ PASS text-autospace uses discrete animation when animating between "normal" and 
 PASS text-autospace uses discrete animation when animating between "normal" and "no-autospace" with effect easing
 PASS text-autospace uses discrete animation when animating between "normal" and "no-autospace" with keyframe easing
 PASS text-box-edge (type: discrete) has testInterpolation function
-PASS text-box-edge uses discrete animation when animating between "leading" and "text" with linear easing
-PASS text-box-edge uses discrete animation when animating between "leading" and "text" with effect easing
-PASS text-box-edge uses discrete animation when animating between "leading" and "text" with keyframe easing
+PASS text-box-edge uses discrete animation when animating between "auto" and "text" with linear easing
+PASS text-box-edge uses discrete animation when animating between "auto" and "text" with effect easing
+PASS text-box-edge uses discrete animation when animating between "auto" and "text" with keyframe easing
 PASS text-box-trim (type: discrete) has testInterpolation function
-PASS text-box-trim uses discrete animation when animating between "none" and "start" with linear easing
-PASS text-box-trim uses discrete animation when animating between "none" and "start" with effect easing
-PASS text-box-trim uses discrete animation when animating between "none" and "start" with keyframe easing
+PASS text-box-trim uses discrete animation when animating between "none" and "trim-start" with linear easing
+PASS text-box-trim uses discrete animation when animating between "none" and "trim-start" with effect easing
+PASS text-box-trim uses discrete animation when animating between "none" and "trim-start" with keyframe easing
 PASS text-decoration (type: discrete) has testInterpolation function
 PASS text-decoration uses discrete animation when animating between "underline" and "overline" with linear easing
 PASS text-decoration uses discrete animation when animating between "underline" and "overline" with effect easing
@@ -435,6 +439,10 @@ PASS vector-effect (type: discrete) has testInterpolation function
 PASS vector-effect uses discrete animation when animating between "none" and "non-scaling-stroke" with linear easing
 PASS vector-effect uses discrete animation when animating between "none" and "non-scaling-stroke" with effect easing
 PASS vector-effect uses discrete animation when animating between "none" and "non-scaling-stroke" with keyframe easing
+PASS view-transition-class (type: discrete) has testInterpolation function
+PASS view-transition-class uses discrete animation when animating between "none" and "card scale-animation" with linear easing
+PASS view-transition-class uses discrete animation when animating between "none" and "card scale-animation" with effect easing
+PASS view-transition-class uses discrete animation when animating between "none" and "card scale-animation" with keyframe easing
 PASS view-transition-name (type: discrete) has testInterpolation function
 PASS view-transition-name uses discrete animation when animating between "none" and "header" with linear easing
 PASS view-transition-name uses discrete animation when animating between "none" and "header" with effect easing

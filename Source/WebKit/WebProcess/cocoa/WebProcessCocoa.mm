@@ -161,9 +161,7 @@
 #if PLATFORM(MAC)
 #import "AppKitSPI.h"
 #import "WKAccessibilityWebPageObjectMac.h"
-#import "WebSwitchingGPUClient.h"
 #import <Security/SecStaticCode.h>
-#import <WebCore/DisplayConfigurationMonitor.h>
 #import <WebCore/ScrollbarThemeMac.h>
 #import <pal/spi/cf/CoreTextSPI.h>
 #import <pal/spi/mac/NSScrollerImpSPI.h>
@@ -420,8 +418,6 @@ void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters& para
 #if PLATFORM(MAC)
     WebCore::FontCache::setFontAllowlist(parameters.fontAllowList);
 #endif
-
-    m_compositingRenderServerPort = WTFMove(parameters.acceleratedCompositingPort);
 
     WebCore::registerMemoryReleaseNotifyCallbacks();
     MemoryPressureHandler::ReliefLogger::setLoggingEnabled(parameters.shouldEnableMemoryPressureReliefLogging);
@@ -891,11 +887,13 @@ void WebProcess::platformInitializeProcess(const AuxiliaryProcessInitializationP
     WebCore::PublicSuffixStore::singleton().enablePublicSuffixCache();
 
 #if ENABLE(LOGD_BLOCKING_IN_WEBCONTENT)
+    if (isLockdownModeEnabled()) {
 #if PLATFORM(IOS_FAMILY)
-    prewarmLogs();
+        prewarmLogs();
 #endif
-    registerLogHook();
-#endif
+        registerLogHook();
+    }
+#endif // ENABLE(LOGD_BLOCKING_IN_WEBCONTENT)
 
 #if PLATFORM(MAC)
     // Deny the WebContent process access to the WindowServer.
@@ -903,7 +901,6 @@ void WebProcess::platformInitializeProcess(const AuxiliaryProcessInitializationP
     auto retval = CGSSetDenyWindowServerConnections(true);
     RELEASE_ASSERT(retval == kCGErrorSuccess);
 
-    SwitchingGPUClient::setSingleton(WebSwitchingGPUClient::singleton());
     MainThreadSharedTimer::shouldSetupPowerObserver() = false;
 #endif // PLATFORM(MAC)
 
@@ -1191,10 +1188,6 @@ void WebProcess::scrollerStylePreferenceChanged(bool useOverlayScrollbars)
     [NSScrollerImpPair _updateAllScrollerImpPairsForNewRecommendedScrollerStyle:style];
 }
 
-void WebProcess::displayConfigurationChanged(CGDirectDisplayID, CGDisplayChangeSummaryFlags flags)
-{
-    DisplayConfigurationMonitor::singleton().dispatchDisplayWasReconfigured(flags);
-}
 #endif
 
 #if PLATFORM(IOS_FAMILY) && !PLATFORM(MACCATALYST)

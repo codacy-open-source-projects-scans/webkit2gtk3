@@ -36,6 +36,7 @@
 #include "MediaSessionReadyState.h"
 #include <wtf/Logger.h>
 #include <wtf/MonotonicTime.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/UniqueRef.h>
 #include <wtf/WeakHashSet.h>
 #include <wtf/WeakPtr.h>
@@ -75,7 +76,7 @@ public:
 };
 
 class MediaSession : public RefCounted<MediaSession>, public ActiveDOMObject, public CanMakeWeakPtr<MediaSession> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(MediaSession);
 public:
     static Ref<MediaSession> create(Navigator&);
     ~MediaSession();
@@ -86,7 +87,7 @@ public:
 
     MediaMetadata* metadata() const { return m_metadata.get(); };
     void setMetadata(RefPtr<MediaMetadata>&&);
-    void metadataUpdated();
+    void metadataUpdated(const MediaMetadata&);
 
     MediaSessionPlaybackState playbackState() const { return m_playbackState; };
     void setPlaybackState(MediaSessionPlaybackState);
@@ -130,6 +131,7 @@ public:
     const Logger& logger() const { return *m_logger.get(); }
 #endif
 
+    bool hasObserver(MediaSessionObserver&) const;
     void addObserver(MediaSessionObserver&);
     void removeObserver(MediaSessionObserver&);
 
@@ -145,7 +147,7 @@ private:
     void updateReportedPosition();
 
     void forEachObserver(const Function<void(MediaSessionObserver&)>&);
-    void notifyMetadataObservers();
+    void notifyMetadataObservers(const RefPtr<MediaMetadata>&);
     void notifyPositionStateObservers();
     void notifyPlaybackStateObservers();
     void notifyActionHandlerObservers();
@@ -158,6 +160,7 @@ private:
 
     WeakPtr<Navigator> m_navigator;
     RefPtr<MediaMetadata> m_metadata;
+    RefPtr<MediaMetadata> m_defaultMetadata;
     MediaSessionPlaybackState m_playbackState { MediaSessionPlaybackState::None };
     std::optional<MediaPositionState> m_positionState;
     std::optional<double> m_lastReportedPosition;

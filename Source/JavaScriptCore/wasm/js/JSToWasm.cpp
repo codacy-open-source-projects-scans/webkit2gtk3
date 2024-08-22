@@ -60,7 +60,7 @@ void marshallJSResult(CCallHelpers& jit, const TypeDefinition& typeDefinition, c
             jit.convertFloatToDouble(src.fpr(), src.fpr());
             FALLTHROUGH;
         case TypeKind::F64: {
-            jit.moveTrustedValue(jsNumber(pureNaN()), dst);
+            jit.moveTrustedValue(jsNumber(PNaN), dst);
             auto isNaN = jit.branchIfNaN(src.fpr());
 #if USE(JSVALUE64)
             jit.boxDouble(src.fpr(), dst, DoNotHaveTagRegisters);
@@ -211,7 +211,11 @@ void marshallJSResult(CCallHelpers& jit, const TypeDefinition& typeDefinition, c
         jit.setupArguments<decltype(operationAllocateResultsArray)>(GPRInfo::wasmContextInstancePointer, CCallHelpers::TrustedImmPtr(&typeDefinition), indexingType, savedResultsGPR);
         JIT_COMMENT(jit, "operationAllocateResultsArray");
         jit.callOperation<OperationPtrTag>(operationAllocateResultsArray);
+#if USE(JSVALUE64)
         exceptionChecks.append(jit.branchTestPtr(CCallHelpers::NonZero, GPRInfo::returnValueGPR2));
+#else
+        exceptionChecks.append(jit.branchTestPtr(CCallHelpers::Zero, GPRInfo::returnValueGPR2));
+#endif
         if constexpr (!!maxFrameExtentForSlowPathCall)
             jit.addPtr(CCallHelpers::TrustedImm32(maxFrameExtentForSlowPathCall), CCallHelpers::stackPointerRegister);
 
@@ -256,7 +260,7 @@ std::shared_ptr<InternalFunction> createJSToWasmJITInterpreter()
         jit.emitFunctionPrologue();
 
         // saveJSEntrypointInterpreterRegisters
-        jit.subPtr(CCallHelpers::TrustedImmPtr(Wasm::JSEntrypointInterpreterCallee::SpillStackSpaceAligned), CCallHelpers::stackPointerRegister);
+        jit.subPtr(CCallHelpers::TrustedImmPtr(Wasm::JITLessJSEntrypointCallee::SpillStackSpaceAligned), CCallHelpers::stackPointerRegister);
 
 #if CPU(ARM64) || CPU(ARM64E) || CPU(X86_64)
         CCallHelpers::Address memBaseSlot { GPRInfo::callFrameRegister, -2 * static_cast<long>(sizeof(Register)) };
@@ -275,13 +279,13 @@ std::shared_ptr<InternalFunction> createJSToWasmJITInterpreter()
         }
 
         {
-            CCallHelpers::Address calleeSlot { GPRInfo::regWS0, WebAssemblyFunction::offsetOfInterpreterCallee() };
+            CCallHelpers::Address calleeSlot { GPRInfo::regWS0, WebAssemblyFunction::offsetOfJSToWasmCallee() };
             jit.loadPtr(calleeSlot, GPRInfo::regWS0);
         }
 
 #if ASSERT_ENABLED
         {
-            CCallHelpers::Address identSlot { GPRInfo::regWS0, JSEntrypointInterpreterCallee::offsetOfIdent() };
+            CCallHelpers::Address identSlot { GPRInfo::regWS0, JITLessJSEntrypointCallee::offsetOfIdent() };
             jit.load32(identSlot, GPRInfo::regWS1);
             jit.move(MacroAssembler::TrustedImm32(0xBF), GPRInfo::regWA0);
             auto ok = jit.branch32(CCallHelpers::Equal, GPRInfo::regWS1, GPRInfo::regWA0);
@@ -292,7 +296,7 @@ std::shared_ptr<InternalFunction> createJSToWasmJITInterpreter()
 
         // Allocate stack space (no stack check)
         {
-            CCallHelpers::Address frameSlot { GPRInfo::regWS0, JSEntrypointInterpreterCallee::offsetOfFrameSize() };
+            CCallHelpers::Address frameSlot { GPRInfo::regWS0, JITLessJSEntrypointCallee::offsetOfFrameSize() };
             jit.load32(frameSlot, GPRInfo::regWS1);
             jit.subPtr(GPRInfo::regWS1, CCallHelpers::stackPointerRegister);
         }
@@ -316,7 +320,7 @@ std::shared_ptr<InternalFunction> createJSToWasmJITInterpreter()
             jit.loadPtr(CCallHelpers::Address { GPRInfo::wasmBoundsCheckingSizeRegister, JSWebAssemblyInstance::offsetOfCachedBoundsCheckingSize() }, GPRInfo::wasmContextInstancePointer);
 #endif
 #if !CPU(ARMv7)
-#if GIGACAGE_ENABLED && !(ENABLE(C_LOOP)|| ENABLE(C_LOOP_WIN))
+#if GIGACAGE_ENABLED && !ENABLE(C_LOOP)
             // cagePrimitive(GigacageConfig + Gigacage::Config::basePtrs + GigacagePrimitiveBasePtrOffset, constexpr Gigacage::primitiveGigacageMask, ptr, scratch)
             auto gigacageConfig = bitwise_cast<uint8_t*>(&WebConfig::g_config) + static_cast<ptrdiff_t>(Gigacage::startOffsetOfGigacageConfig);
             auto gigacageDisablingPrimitiveIsForbidden = gigacageConfig + OBJECT_OFFSETOF(Gigacage::Config, disablingPrimitiveGigacageIsForbidden);
@@ -343,7 +347,7 @@ std::shared_ptr<InternalFunction> createJSToWasmJITInterpreter()
         jit.loadPair64(CCallHelpers::Address { CCallHelpers::stackPointerRegister, 2 * 8 }, GPRInfo::regWA2, GPRInfo::regWA3);
         jit.loadPair64(CCallHelpers::Address { CCallHelpers::stackPointerRegister, 4 * 8 }, GPRInfo::regWA4, GPRInfo::regWA5);
         jit.loadPair64(CCallHelpers::Address { CCallHelpers::stackPointerRegister, 6 * 8 }, GPRInfo::regWA6, GPRInfo::regWA7);
-#elif CPU(X86_64) || CPU(X86_64_WIN)
+#elif CPU(X86_64)
         jit.loadPair64(CCallHelpers::Address { CCallHelpers::stackPointerRegister, 0 * 8 }, GPRInfo::regWA0, GPRInfo::regWA1);
         jit.loadPair64(CCallHelpers::Address { CCallHelpers::stackPointerRegister, 2 * 8 }, GPRInfo::regWA2, GPRInfo::regWA3);
         jit.loadPair64(CCallHelpers::Address { CCallHelpers::stackPointerRegister, 4 * 8 }, GPRInfo::regWA4, GPRInfo::regWA5);
@@ -364,7 +368,7 @@ std::shared_ptr<InternalFunction> createJSToWasmJITInterpreter()
         jit.loadPairDouble(CCallHelpers::Address { CCallHelpers::stackPointerRegister, (GPRInfo::numberOfArgumentRegisters + 2) * 8 }, FPRInfo::argumentFPR2, FPRInfo::argumentFPR3);
         jit.loadPairDouble(CCallHelpers::Address { CCallHelpers::stackPointerRegister, (GPRInfo::numberOfArgumentRegisters + 4) * 8 }, FPRInfo::argumentFPR4, FPRInfo::argumentFPR5);
         jit.loadPairDouble(CCallHelpers::Address { CCallHelpers::stackPointerRegister, (GPRInfo::numberOfArgumentRegisters + 6) * 8 }, FPRInfo::argumentFPR6, FPRInfo::argumentFPR7);
-#elif CPU(X86_64) || CPU(X86_64_WIN) || CPU(RISCV64)
+#elif CPU(X86_64) || CPU(RISCV64)
         jit.loadDouble(CCallHelpers::Address { CCallHelpers::stackPointerRegister, (GPRInfo::numberOfArgumentRegisters + 0) * 8 }, FPRInfo::argumentFPR0);
         jit.loadDouble(CCallHelpers::Address { CCallHelpers::stackPointerRegister, (GPRInfo::numberOfArgumentRegisters + 1) * 8 }, FPRInfo::argumentFPR1);
         jit.loadDouble(CCallHelpers::Address { CCallHelpers::stackPointerRegister, (GPRInfo::numberOfArgumentRegisters + 2) * 8 }, FPRInfo::argumentFPR2);
@@ -373,10 +377,19 @@ std::shared_ptr<InternalFunction> createJSToWasmJITInterpreter()
         jit.loadDouble(CCallHelpers::Address { CCallHelpers::stackPointerRegister, (GPRInfo::numberOfArgumentRegisters + 5) * 8 }, FPRInfo::argumentFPR5);
         jit.loadDouble(CCallHelpers::Address { CCallHelpers::stackPointerRegister, (GPRInfo::numberOfArgumentRegisters + 6) * 8 }, FPRInfo::argumentFPR6);
         jit.loadDouble(CCallHelpers::Address { CCallHelpers::stackPointerRegister, (GPRInfo::numberOfArgumentRegisters + 7) * 8 }, FPRInfo::argumentFPR7);
+#elif CPU(ARM_THUMB2)
+        jit.loadDouble(CCallHelpers::Address { CCallHelpers::stackPointerRegister, GPRInfo::numberOfArgumentRegisters * 4 + 0 * 8 }, FPRInfo::argumentFPR0);
+        jit.loadDouble(CCallHelpers::Address { CCallHelpers::stackPointerRegister, GPRInfo::numberOfArgumentRegisters * 4 + 1 * 8 }, FPRInfo::argumentFPR1);
+        jit.loadDouble(CCallHelpers::Address { CCallHelpers::stackPointerRegister, GPRInfo::numberOfArgumentRegisters * 4 + 2 * 8 }, FPRInfo::argumentFPR2);
+        jit.loadDouble(CCallHelpers::Address { CCallHelpers::stackPointerRegister, GPRInfo::numberOfArgumentRegisters * 4 + 3 * 8 }, FPRInfo::argumentFPR3);
+        jit.loadDouble(CCallHelpers::Address { CCallHelpers::stackPointerRegister, GPRInfo::numberOfArgumentRegisters * 4 + 4 * 8 }, FPRInfo::argumentFPR4);
+        jit.loadDouble(CCallHelpers::Address { CCallHelpers::stackPointerRegister, GPRInfo::numberOfArgumentRegisters * 4 + 5 * 8 }, FPRInfo::argumentFPR5);
+        jit.loadDouble(CCallHelpers::Address { CCallHelpers::stackPointerRegister, GPRInfo::numberOfArgumentRegisters * 4 + 6 * 8 }, FPRInfo::argumentFPR6);
+        jit.loadDouble(CCallHelpers::Address { CCallHelpers::stackPointerRegister, GPRInfo::numberOfArgumentRegisters * 4 + 7 * 8 }, FPRInfo::argumentFPR7);
 #endif
 
         // Pop argument space values
-        jit.addPtr(MacroAssembler::TrustedImmPtr(Wasm::JSEntrypointInterpreterCallee::RegisterStackSpaceAligned), CCallHelpers::stackPointerRegister);
+        jit.addPtr(MacroAssembler::TrustedImmPtr(Wasm::JITLessJSEntrypointCallee::RegisterStackSpaceAligned), CCallHelpers::stackPointerRegister);
 
 #if ASSERT_ENABLED
         for (int32_t i = 0; i < 30; ++i)
@@ -400,16 +413,16 @@ std::shared_ptr<InternalFunction> createJSToWasmJITInterpreter()
         // Store Callee's wasm callee
 
 #if USE(JSVALUE64)
-        jit.loadPtr(CCallHelpers::Address { GPRInfo::regWS0, JSEntrypointInterpreterCallee::offsetOfWasmCallee() }, GPRInfo::regWS1);
+        jit.loadPtr(CCallHelpers::Address { GPRInfo::regWS0, JITLessJSEntrypointCallee::offsetOfWasmCallee() }, GPRInfo::regWS1);
         jit.storePtr(GPRInfo::regWS1, CCallHelpers::Address { CCallHelpers::stackPointerRegister, (CallFrameSlot::callee - CallerFrameAndPC::sizeInRegisters) * 8 });
 #else
-        jit.loadPtr(CCallHelpers::Address { GPRInfo::regWS0, JSEntrypointInterpreterCallee::offsetOfWasmCallee() + PayloadOffset }, GPRInfo::regWS1);
+        jit.loadPtr(CCallHelpers::Address { GPRInfo::regWS0, JITLessJSEntrypointCallee::offsetOfWasmCallee() + PayloadOffset }, GPRInfo::regWS1);
         jit.storePtr(GPRInfo::regWS1, CCallHelpers::Address { CCallHelpers::stackPointerRegister, (CallFrameSlot::callee - CallerFrameAndPC::sizeInRegisters) * 8 + PayloadOffset });
-        jit.loadPtr(CCallHelpers::Address { GPRInfo::regWS0, JSEntrypointInterpreterCallee::offsetOfWasmCallee() + TagOffset }, GPRInfo::regWS1);
+        jit.loadPtr(CCallHelpers::Address { GPRInfo::regWS0, JITLessJSEntrypointCallee::offsetOfWasmCallee() + TagOffset }, GPRInfo::regWS1);
         jit.storePtr(GPRInfo::regWS1, CCallHelpers::Address { CCallHelpers::stackPointerRegister, (CallFrameSlot::callee - CallerFrameAndPC::sizeInRegisters) * 8 + TagOffset });
 #endif
 
-        jit.loadPtr(CCallHelpers::Address { GPRInfo::regWS0, JSEntrypointInterpreterCallee::offsetOfWasmFunctionPrologue() }, GPRInfo::regWS0);
+        jit.loadPtr(CCallHelpers::Address { GPRInfo::regWS0, JITLessJSEntrypointCallee::offsetOfWasmFunctionPrologue() }, GPRInfo::regWS0);
         jit.call(GPRInfo::regWS0, WasmEntryPtrTag);
 
         // Restore SP
@@ -428,10 +441,10 @@ std::shared_ptr<InternalFunction> createJSToWasmJITInterpreter()
         jit.loadPtr(CCallHelpers::Address { GPRInfo::regWS1, 0 }, GPRInfo::regWS1);
         jit.addPtr(GPRInfo::regWS1, GPRInfo::regWS0);
 
-        jit.load32(CCallHelpers::Address { GPRInfo::regWS0, JSEntrypointInterpreterCallee::offsetOfFrameSize() }, GPRInfo::regWS1);
+        jit.load32(CCallHelpers::Address { GPRInfo::regWS0, JITLessJSEntrypointCallee::offsetOfFrameSize() }, GPRInfo::regWS1);
         jit.subPtr(GPRInfo::callFrameRegister, GPRInfo::regWS1, GPRInfo::regWS1);
         jit.move(GPRInfo::regWS1, CCallHelpers::stackPointerRegister);
-        jit.subPtr(MacroAssembler::TrustedImmPtr(JSEntrypointInterpreterCallee::SpillStackSpaceAligned), CCallHelpers::stackPointerRegister);
+        jit.subPtr(MacroAssembler::TrustedImmPtr(JITLessJSEntrypointCallee::SpillStackSpaceAligned), CCallHelpers::stackPointerRegister);
 
         // Save return registers
 #if CPU(ARM64) || CPU(ARM64E)
@@ -439,7 +452,7 @@ std::shared_ptr<InternalFunction> createJSToWasmJITInterpreter()
         jit.storePair64(GPRInfo::regWA2, GPRInfo::regWA3, CCallHelpers::Address { CCallHelpers::stackPointerRegister, 2 * 8 });
         jit.storePair64(GPRInfo::regWA4, GPRInfo::regWA5, CCallHelpers::Address { CCallHelpers::stackPointerRegister, 4 * 8 });
         jit.storePair64(GPRInfo::regWA6, GPRInfo::regWA7, CCallHelpers::Address { CCallHelpers::stackPointerRegister, 6 * 8 });
-#elif CPU(X86_64) || CPU(X86_64_WIN)
+#elif CPU(X86_64)
         jit.storePair64(GPRInfo::regWA0, GPRInfo::regWA1, CCallHelpers::Address { CCallHelpers::stackPointerRegister, 0 * 8 });
         jit.storePair64(GPRInfo::regWA2, GPRInfo::regWA3, CCallHelpers::Address { CCallHelpers::stackPointerRegister, 2 * 8 });
         jit.storePair64(GPRInfo::regWA4, GPRInfo::regWA5, CCallHelpers::Address { CCallHelpers::stackPointerRegister, 4 * 8 });
@@ -459,7 +472,7 @@ std::shared_ptr<InternalFunction> createJSToWasmJITInterpreter()
         jit.storePairDouble(FPRInfo::argumentFPR2, FPRInfo::argumentFPR3, CCallHelpers::Address { CCallHelpers::stackPointerRegister, (GPRInfo::numberOfArgumentRegisters +  2) * 8 });
         jit.storePairDouble(FPRInfo::argumentFPR4, FPRInfo::argumentFPR5, CCallHelpers::Address { CCallHelpers::stackPointerRegister, (GPRInfo::numberOfArgumentRegisters +  4) * 8 });
         jit.storePairDouble(FPRInfo::argumentFPR6, FPRInfo::argumentFPR7, CCallHelpers::Address { CCallHelpers::stackPointerRegister, (GPRInfo::numberOfArgumentRegisters +  6) * 8 });
-#elif CPU(X86_64) || CPU(X86_64_WIN) || CPU(RISCV64)
+#elif CPU(X86_64) || CPU(RISCV64)
         jit.storeDouble(FPRInfo::argumentFPR0, CCallHelpers::Address { CCallHelpers::stackPointerRegister, (GPRInfo::numberOfArgumentRegisters +  0) * 8 });
         jit.storeDouble(FPRInfo::argumentFPR1, CCallHelpers::Address { CCallHelpers::stackPointerRegister, (GPRInfo::numberOfArgumentRegisters +  1) * 8 });
         jit.storeDouble(FPRInfo::argumentFPR2, CCallHelpers::Address { CCallHelpers::stackPointerRegister, (GPRInfo::numberOfArgumentRegisters +  2) * 8 });
@@ -468,12 +481,25 @@ std::shared_ptr<InternalFunction> createJSToWasmJITInterpreter()
         jit.storeDouble(FPRInfo::argumentFPR5, CCallHelpers::Address { CCallHelpers::stackPointerRegister, (GPRInfo::numberOfArgumentRegisters +  5) * 8 });
         jit.storeDouble(FPRInfo::argumentFPR6, CCallHelpers::Address { CCallHelpers::stackPointerRegister, (GPRInfo::numberOfArgumentRegisters +  6) * 8 });
         jit.storeDouble(FPRInfo::argumentFPR7, CCallHelpers::Address { CCallHelpers::stackPointerRegister, (GPRInfo::numberOfArgumentRegisters +  7) * 8 });
+#elif CPU(ARM_THUMB2)
+        jit.storeDouble(FPRInfo::argumentFPR0, CCallHelpers::Address { CCallHelpers::stackPointerRegister, GPRInfo::numberOfArgumentRegisters * 4 +  0 * 8 });
+        jit.storeDouble(FPRInfo::argumentFPR1, CCallHelpers::Address { CCallHelpers::stackPointerRegister, GPRInfo::numberOfArgumentRegisters * 4 +  1 * 8 });
+        jit.storeDouble(FPRInfo::argumentFPR2, CCallHelpers::Address { CCallHelpers::stackPointerRegister, GPRInfo::numberOfArgumentRegisters * 4 +  2 * 8 });
+        jit.storeDouble(FPRInfo::argumentFPR3, CCallHelpers::Address { CCallHelpers::stackPointerRegister, GPRInfo::numberOfArgumentRegisters * 4 +  3 * 8 });
+        jit.storeDouble(FPRInfo::argumentFPR4, CCallHelpers::Address { CCallHelpers::stackPointerRegister, GPRInfo::numberOfArgumentRegisters * 4 +  4 * 8 });
+        jit.storeDouble(FPRInfo::argumentFPR5, CCallHelpers::Address { CCallHelpers::stackPointerRegister, GPRInfo::numberOfArgumentRegisters * 4 +  5 * 8 });
+        jit.storeDouble(FPRInfo::argumentFPR6, CCallHelpers::Address { CCallHelpers::stackPointerRegister, GPRInfo::numberOfArgumentRegisters * 4 +  6 * 8 });
+        jit.storeDouble(FPRInfo::argumentFPR7, CCallHelpers::Address { CCallHelpers::stackPointerRegister, GPRInfo::numberOfArgumentRegisters * 4 +  7 * 8 });
 #endif
 
         // Prepare frame
         jit.setupArguments<decltype(operationJSToWasmEntryWrapperBuildReturnFrame)>(CCallHelpers::stackPointerRegister, GPRInfo::callFrameRegister);
         jit.callOperation<OperationPtrTag>(operationJSToWasmEntryWrapperBuildReturnFrame);
+#if USE(JSVALUE64)
         exceptionChecks.append(jit.branchTestPtr(CCallHelpers::NonZero, GPRInfo::returnValueGPR2));
+#else
+        exceptionChecks.append(jit.branchTestPtr(CCallHelpers::Zero, GPRInfo::returnValueGPR2));
+#endif
 
         // restoreJSEntrypointInterpreterRegisters
 
@@ -483,7 +509,7 @@ std::shared_ptr<InternalFunction> createJSToWasmJITInterpreter()
 #else
         jit.load32(wasmInstanceSlot, GPRInfo::wasmContextInstancePointer);
 #endif
-        jit.addPtr(CCallHelpers::TrustedImmPtr(Wasm::JSEntrypointInterpreterCallee::SpillStackSpaceAligned), CCallHelpers::stackPointerRegister);
+        jit.addPtr(CCallHelpers::TrustedImmPtr(Wasm::JITLessJSEntrypointCallee::SpillStackSpaceAligned), CCallHelpers::stackPointerRegister);
 
         jit.emitFunctionEpilogue();
         jit.ret();

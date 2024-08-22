@@ -55,7 +55,7 @@ public:
 
         CallbackResult<void> handleEvent(Subscriber& subscriber) final
         {
-            auto context = scriptExecutionContext();
+            RefPtr context = scriptExecutionContext();
 
             if (!context) {
                 subscriber.complete();
@@ -70,9 +70,6 @@ public:
         }
 
     private:
-        Ref<Observable> m_sourceObservable;
-        Ref<PredicateCallback> m_predicate;
-
         SubscriberCallbackFilter(ScriptExecutionContext& context, Ref<Observable> source, Ref<PredicateCallback> predicate)
             : SubscriberCallback(&context)
             , m_sourceObservable(source)
@@ -80,16 +77,15 @@ public:
         { }
 
         bool hasCallback() const final { return true; }
+
+        Ref<Observable> m_sourceObservable;
+        Ref<PredicateCallback> m_predicate;
     };
 
 private:
-    Ref<Subscriber> m_subscriber;
-    Ref<PredicateCallback> m_predicate;
-    uint64_t m_idx { 0 };
-
     void next(JSC::JSValue value) final
     {
-        auto context = scriptExecutionContext();
+        RefPtr context = scriptExecutionContext();
         if (!context)
             return;
 
@@ -152,6 +148,9 @@ private:
         , m_predicate(predicate)
     { }
 
+    Ref<Subscriber> m_subscriber;
+    Ref<PredicateCallback> m_predicate;
+    uint64_t m_idx { 0 };
 };
 
 Ref<SubscriberCallback> createSubscriberCallbackFilter(ScriptExecutionContext& context, Ref<Observable> observable, Ref<PredicateCallback> predicate)

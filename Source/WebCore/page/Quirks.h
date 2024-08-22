@@ -27,7 +27,8 @@
 
 #include "Event.h"
 #include <optional>
-#include <wtf/WeakPtr.h>
+#include <wtf/Forward.h>
+#include <wtf/TZoneMalloc.h>
 
 namespace WebCore {
 
@@ -49,7 +50,8 @@ enum class IsSyntheticClick : bool;
 enum class StorageAccessWasGranted : uint8_t;
 
 class Quirks {
-    WTF_MAKE_NONCOPYABLE(Quirks); WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(Quirks);
+    WTF_MAKE_NONCOPYABLE(Quirks);
 public:
     Quirks(Document&);
     ~Quirks();
@@ -77,13 +79,13 @@ public:
 #endif
     bool shouldDisablePointerEventsQuirk() const;
     bool needsDeferKeyDownAndKeyPressTimersUntilNextEditingCommand() const;
-    bool shouldTooltipPreventFromProceedingWithClick(const Element&) const;
     bool shouldHideSearchFieldResultsButton() const;
     bool shouldExposeShowModalDialog() const;
     bool shouldNavigatorPluginsBeEmpty() const;
     bool shouldDisableNavigatorStandaloneQuirk() const;
 
     bool shouldPreventOrientationMediaQueryFromEvaluatingToLandscape() const;
+    bool shouldFlipScreenDimensions() const;
 
     WEBCORE_EXPORT bool shouldDispatchSyntheticMouseEventsWhenModifyingSelection() const;
     WEBCORE_EXPORT bool shouldSuppressAutocorrectionAndAutocapitalizationInHiddenEditableAreas() const;
@@ -107,6 +109,8 @@ public:
     WEBCORE_EXPORT static bool needsIPadMiniUserAgent(const URL&);
     WEBCORE_EXPORT static bool needsIPhoneUserAgent(const URL&);
     WEBCORE_EXPORT static bool needsDesktopUserAgent(const URL&);
+
+    WEBCORE_EXPORT static std::optional<Vector<HashSet<String>>> defaultVisibilityAdjustmentSelectors(const URL&);
 
     bool needsGMailOverflowScrollQuirk() const;
     bool needsIPadSkypeOverflowScrollQuirk() const;

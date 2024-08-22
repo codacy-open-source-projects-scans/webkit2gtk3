@@ -27,6 +27,7 @@
 
 #include "AXObjectCache.h"
 #include "BorderPainter.h"
+#include "BorderShape.h"
 #include "CachedResourceLoader.h"
 #include "ContentData.h"
 #include "ContentVisibilityDocumentState.h"
@@ -97,9 +98,9 @@
 #include "Styleable.h"
 #include "TextAutoSizing.h"
 #include "ViewTransition.h"
-#include <wtf/IsoMallocInlines.h>
 #include <wtf/MathExtras.h>
 #include <wtf/StackStats.h>
+#include <wtf/TZoneMallocInlines.h>
 
 #if ENABLE(CONTENT_CHANGE_OBSERVER)
 #include "ContentChangeObserver.h"
@@ -107,7 +108,7 @@
 
 namespace WebCore {
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(RenderElement);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderElement);
 
 struct SameSizeAsRenderElement : public RenderObject {
     SingleThreadPackedWeakPtr<RenderObject> firstChild;
@@ -122,7 +123,6 @@ static_assert(sizeof(RenderElement) == sizeof(SameSizeAsRenderElement), "RenderE
 inline RenderElement::RenderElement(Type type, ContainerNode& elementOrDocument, RenderStyle&& style, OptionSet<TypeFlag> flags, TypeSpecificFlags typeSpecificFlags)
     : RenderObject(type, elementOrDocument, flags, typeSpecificFlags)
     , m_firstChild(nullptr)
-    , m_ancestorLineBoxDirty(false)
     , m_hasInitializedStyle(false)
     , m_hasPausedImageAnimations(false)
     , m_hasCounterNodeMap(false)
@@ -857,7 +857,7 @@ void RenderElement::styleWillChange(StyleDifference diff, const RenderStyle& new
             if (auto* inlineFormattingContextRoot = dynamicDowncast<RenderBlockFlow>(*this); inlineFormattingContextRoot && inlineFormattingContextRoot->modernLineLayout())
                 inlineFormattingContextRoot->modernLineLayout()->rootStyleWillChange(*inlineFormattingContextRoot, newStyle);
             if (auto* lineLayout = LayoutIntegration::LineLayout::containing(*this))
-                lineLayout->styleWillChange(*this, newStyle);
+                lineLayout->styleWillChange(*this, newStyle, diff);
         }
         // If our z-index changes value or our visibility changes,
         // we need to dirty our stacking context's z-order list.
@@ -1098,9 +1098,9 @@ void RenderElement::willBeRemovedFromTree()
     RenderObject::willBeRemovedFromTree();
 }
 
-bool RenderElement::didVisitSinceLayout(LayoutIdentifier identifier) const
+bool RenderElement::didVisitDuringLastLayout() const
 {
-    return layoutIdentifier() >= identifier;
+    return layoutIdentifier() == view().frameView().layoutContext().layoutIdentifier();
 }
 
 inline void RenderElement::clearSubtreeLayoutRootIfNeeded() const
@@ -1307,9 +1307,9 @@ bool RenderElement::repaintAfterLayoutIfNeeded(SingleThreadWeakPtr<const RenderL
             // If the border radius changed, repaints at style change time will take care of that.
             // This code is attempting to detect whether border-radius constraining based on box size
             // affects the radii, using the outlineBoundsRect as a proxy for the border box.
-            auto oldRadii = style().getRoundedBorderFor(oldOutlineBounds).radii();
-            auto newRadii = style().getRoundedBorderFor(newOutlineBounds).radii();
-            if (oldRadii != newRadii)
+            auto oldShapeApproximation = BorderShape::shapeForBorderRect(style(), oldOutlineBounds);
+            auto newShapeApproximation = BorderShape::shapeForBorderRect(style(), newOutlineBounds);
+            if (oldShapeApproximation.radii() != newShapeApproximation.radii())
                 return true;
         }
 
@@ -1824,6 +1824,11 @@ const RenderStyle* RenderElement::spellingErrorPseudoStyle() const
 const RenderStyle* RenderElement::grammarErrorPseudoStyle() const
 {
     return textSegmentPseudoStyle(PseudoId::GrammarError);
+}
+
+const RenderStyle* RenderElement::targetTextPseudoStyle() const
+{
+    return textSegmentPseudoStyle(PseudoId::TargetText);
 }
 
 bool RenderElement::getLeadingCorner(FloatPoint& point, bool& insideFixed) const

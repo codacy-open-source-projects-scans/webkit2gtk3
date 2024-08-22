@@ -78,14 +78,6 @@
 #import <wtf/cocoa/Entitlements.h>
 #import <wtf/cocoa/SpanCocoa.h>
 
-#define MESSAGE_CHECK(assertion) do { \
-    if (auto webView = this->webView()) { \
-        MESSAGE_CHECK_BASE(assertion, webView->_page->legacyMainFrameProcess().connection()); \
-    } else { \
-        ASSERT_NOT_REACHED(); \
-    } \
-while (0)
-
 @interface UIWindow ()
 - (BOOL)_isHostedInAnotherProcess;
 @end
@@ -1189,7 +1181,7 @@ bool PageClientImpl::isTextRecognitionInFullscreenVideoEnabled() const
     return [contentView() isTextRecognitionInFullscreenVideoEnabled];
 }
 
-#if ENABLE(VIDEO)
+#if ENABLE(IMAGE_ANALYSIS) && ENABLE(VIDEO)
 void PageClientImpl::beginTextRecognitionForVideoInElementFullscreen(ShareableBitmap::Handle&& bitmapHandle, FloatRect bounds)
 {
     [contentView() beginTextRecognitionForVideoInElementFullscreen:WTFMove(bitmapHandle) bounds:bounds];
@@ -1250,5 +1242,3 @@ void PageClientImpl::scheduleVisibleContentRectUpdate()
 } // namespace WebKit
 
 #endif // PLATFORM(IOS_FAMILY)
-
-#undef MESSAGE_CHECK

@@ -1,5 +1,5 @@
 // Copyright 2015 The Chromium Authors. All rights reserved.
-// Copyright (C) 2016 Apple Inc. All rights reserved.
+// Copyright (C) 2016-2024 Apple Inc. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -31,8 +31,10 @@
 #include "CSSSupportsParser.h"
 
 #include "CSSParserImpl.h"
+#include "CSSPropertyParserConsumer+Font.h"
 #include "CSSPropertyParserHelpers.h"
 #include "CSSSelectorParser.h"
+#include "CSSTokenizer.h"
 #include "FontCustomPlatformData.h"
 #include "StyleRule.h"
 
@@ -100,7 +102,7 @@ CSSSupportsParser::SupportsResult CSSSupportsParser::consumeCondition(CSSParserT
             return Invalid;
 
         range.consume();
-        if (range.peek().type() != WhitespaceToken)
+        if (!CSSTokenizer::isWhitespace(range.peek().type()))
             return Invalid;
         range.consumeWhitespace();
     }
@@ -114,7 +116,7 @@ CSSSupportsParser::SupportsResult CSSSupportsParser::consumeNegation(CSSParserTo
 
     if (range.peek().type() == IdentToken)
         range.consume();
-    if (range.peek().type() != WhitespaceToken)
+    if (!CSSTokenizer::isWhitespace(range.peek().type()))
         return Invalid;
     range.consumeWhitespace();
     auto result = consumeConditionInParenthesis(range, tokenType);
@@ -163,7 +165,7 @@ CSSSupportsParser::SupportsResult CSSSupportsParser::consumeSupportsSelectorFunc
     auto block = range.consumeBlock();
     block.consumeWhitespace();
 
-    return CSSSelectorParser::supportsComplexSelector(block, m_parser.context(), m_isNestedContext) ? Supported : Unsupported;
+    return CSSSelectorParser::supportsComplexSelector(block, m_parser.context()) ? Supported : Unsupported;
 }
 
 // <supports-font-format-fn>

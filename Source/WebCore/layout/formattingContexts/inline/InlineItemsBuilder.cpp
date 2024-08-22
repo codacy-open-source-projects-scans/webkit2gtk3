@@ -33,6 +33,7 @@
 #include "TextBreakingPositionCache.h"
 #include "TextUtil.h"
 #include "UnicodeBidi.h"
+#include "platform/text/TextSpacing.h"
 #include <wtf/Scope.h>
 #include <wtf/text/TextBreakIterator.h>
 #include <wtf/unicode/CharacterNames.h>
@@ -679,6 +680,7 @@ static inline bool canCacheMeasuredWidthOnInlineTextItem(const InlineTextBox& in
 
 void InlineItemsBuilder::computeInlineTextItemWidths(InlineItemList& inlineItemList)
 {
+    TextSpacing::SpacingState spacingState;
     for (auto& inlineItem : inlineItemList) {
         auto* inlineTextItem = dynamicDowncast<InlineTextItem>(inlineItem);
         if (!inlineTextItem)
@@ -690,7 +692,8 @@ void InlineItemsBuilder::computeInlineTextItemWidths(InlineItemList& inlineItemL
         auto needsMeasuring = length && !inlineTextItem->isZeroWidthSpaceSeparator();
         if (!needsMeasuring || !canCacheMeasuredWidthOnInlineTextItem(inlineTextBox, inlineTextItem->isWhitespace()))
             continue;
-        inlineTextItem->setWidth(TextUtil::width(*inlineTextItem, inlineTextItem->style().fontCascade(), start, start + length, { }));
+        inlineTextItem->setWidth(TextUtil::width(*inlineTextItem, inlineTextItem->style().fontCascade(), start, start + length, { }, TextUtil::UseTrailingWhitespaceMeasuringOptimization::Yes, spacingState));
+        spacingState.lastCharacterClassFromPreviousRun = inlineItem.style().textAutospace().isNoAutospace() ? TextSpacing::CharacterClass::Undefined : TextSpacing::characterClass(inlineTextBox.content().characterAt(start + length - 1));
     }
 }
 
@@ -866,7 +869,7 @@ void InlineItemsBuilder::handleInlineBoxEnd(const Box& inlineBox, InlineItemList
 void InlineItemsBuilder::handleInlineLevelBox(const Box& layoutBox, InlineItemList& inlineItemList)
 {
     if (layoutBox.isRubyAnnotationBox())
-        return;
+        return inlineItemList.append({ layoutBox, InlineItem::Type::Opaque });
 
     if (layoutBox.isAtomicInlineLevelBox()) {
         m_isTextAndForcedLineBreakOnlyContent = false;

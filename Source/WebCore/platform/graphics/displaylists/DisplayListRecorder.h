@@ -193,7 +193,7 @@ protected:
 
 private:
     bool hasPlatformContext() const final { return false; }
-    PlatformGraphicsContext* platformContext() const final { return nullptr; }
+    PlatformGraphicsContext* platformContext() const final { ASSERT_NOT_REACHED(); return nullptr; }
 
     const DestinationColorSpace& colorSpace() const final { return m_colorSpace; }
 
@@ -239,7 +239,7 @@ private:
     WEBCORE_EXPORT void drawDecomposedGlyphs(const Font&, const DecomposedGlyphs&) override;
     WEBCORE_EXPORT void drawGlyphsAndCacheResources(const Font&, const GlyphBufferGlyph*, const GlyphBufferAdvance*, unsigned count, const FloatPoint& localAnchor, FontSmoothingMode) final;
 
-    WEBCORE_EXPORT void drawDisplayListItems(const Vector<Item>&, const ResourceHeap&, const FloatPoint& destination) final;
+    WEBCORE_EXPORT void drawDisplayListItems(const Vector<Item>&, const ResourceHeap&, ControlFactory&, const FloatPoint& destination) final;
 
     WEBCORE_EXPORT void drawImageBuffer(ImageBuffer&, const FloatRect& destination, const FloatRect& source, ImagePaintingOptions) final;
     WEBCORE_EXPORT void drawConsumingImageBuffer(RefPtr<ImageBuffer>, const FloatRect& destination, const FloatRect& source, ImagePaintingOptions) final;

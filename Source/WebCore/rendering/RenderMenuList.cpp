@@ -55,7 +55,7 @@
 #include "StyleResolver.h"
 #include "TextRun.h"
 #include <math.h>
-#include <wtf/IsoMallocInlines.h>
+#include <wtf/TZoneMallocInlines.h>
 
 #if PLATFORM(IOS_FAMILY)
 #include "LocalizedStrings.h"
@@ -66,7 +66,7 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(RenderMenuList);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderMenuList);
 
 #if PLATFORM(IOS_FAMILY)
 static size_t selectedOptionCount(const RenderMenuList& renderMenuList)
@@ -180,7 +180,7 @@ void RenderMenuList::adjustInnerStyle()
         if (auto* inlineFormattingContextRoot = dynamicDowncast<RenderBlockFlow>(*m_innerBlock); inlineFormattingContextRoot && inlineFormattingContextRoot->modernLineLayout())
             inlineFormattingContextRoot->modernLineLayout()->rootStyleWillChange(*inlineFormattingContextRoot, innerStyle);
         if (auto* lineLayout = LayoutIntegration::LineLayout::containing(*m_innerBlock))
-            lineLayout->styleWillChange(*m_innerBlock, innerStyle);
+            lineLayout->styleWillChange(*m_innerBlock, innerStyle, StyleDifference::Layout);
         LayoutIntegration::LineLayout::updateStyle(*m_innerBlock);
         for (auto& child : childrenOfType<RenderText>(*m_innerBlock))
             LayoutIntegration::LineLayout::updateStyle(child);

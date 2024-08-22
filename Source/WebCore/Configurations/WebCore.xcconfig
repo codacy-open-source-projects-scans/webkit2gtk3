@@ -62,8 +62,8 @@ FRAMEWORK_SEARCH_PATHS[sdk=macosx*] = $(WK_QUOTED_OVERRIDE_FRAMEWORKS_DIR);
 SYSTEM_FRAMEWORK_SEARCH_PATHS = $(inherited) $(WK_PRIVATE_SDK_DIR)$(SYSTEM_LIBRARY_DIR)/PrivateFrameworks $(SDK_DIR)$(SYSTEM_LIBRARY_DIR)/Frameworks;
 
 HEADER_SEARCH_PATHS = PAL ForwardingHeaders /usr/include/libxslt /usr/include/libxml2 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore $(BUILT_PRODUCTS_DIR)$(WK_LIBRARY_HEADERS_FOLDER_PATH) $(WEBKITADDITIONS_HEADER_SEARCH_PATHS) $(ANGLE_HEADER_SEARCH_PATHS) $(LIBWEBRTC_HEADER_SEARCH_PATHS) $(OBJROOT)/PAL.build/PAL.build/DerivedSources $(OBJROOT)/PAL.build/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/PAL.build/DerivedSources $(HEADER_SEARCH_PATHS) $(SRCROOT);
-SYSTEM_HEADER_SEARCH_PATHS = $(PROJECT_DIR)/PAL/ThirdParty/libavif/include $(WK_PRIVATE_SDK_DIR)$(WK_ALTERNATE_WEBKIT_SDK_PATH)$(WK_LIBRARY_HEADERS_FOLDER_PATH) $(inherited);
-LIBRARY_SEARCH_PATHS = $(WK_PRIVATE_SDK_DIR)/System/Library/PrivateFrameworks/FontServices.framework "$(SDK_DIR)$(WEBCORE_LIBRARY_DIR)" $(SDK_DIR)$(WK_LIBRARY_INSTALL_PATH) "$(WK_PRIVATE_SDK_DIR)/usr/lib/xr/" "$(SDKROOT)/usr/lib/swift" $(inherited);
+SYSTEM_HEADER_SEARCH_PATHS = $(PROJECT_DIR)/PAL/ThirdParty/dav1d/include $(WK_PRIVATE_SDK_DIR)$(WK_ALTERNATE_WEBKIT_SDK_PATH)$(WK_LIBRARY_HEADERS_FOLDER_PATH) $(inherited);
+LIBRARY_SEARCH_PATHS = $(WK_PRIVATE_SDK_DIR)/System/Library/PrivateFrameworks/FontServices.framework "$(SDK_DIR)$(WEBCORE_LIBRARY_DIR)" $(SDK_DIR)$(WK_LIBRARY_INSTALL_PATH) "$(SDKROOT)/usr/lib/swift" $(inherited);
 
 INFOPLIST_FILE = Info.plist;
 
@@ -164,12 +164,7 @@ WK_DEBUG_LDFLAGS[config=Debug] = -Wl,-debug_variant
 WK_APPLEJPEGXL_LDFLAGS = $(WK_APPLEJPEGXL_LDFLAGS_$(WK_USE_APPLEJPEGXL));
 WK_APPLEJPEGXL_LDFLAGS_YES = -weak_framework AppleJPEGXL;
 
-// Tomorrow me will be smart enough to figure out how to do this properly.
 JSC_SEC_LD_FLAGS[sdk=iphoneos*] = -weak_framework BrowserEngineCore;
-JSC_SEC_LD_FLAGS[sdk=iphoneos17.0*] = ;
-JSC_SEC_LD_FLAGS[sdk=iphoneos17.1*] = ;
-JSC_SEC_LD_FLAGS[sdk=iphoneos17.2*] = ;
-JSC_SEC_LD_FLAGS[sdk=iphoneos17.3*] = ;
 JSC_SEC_LD_FLAGS[sdk=appletv*] = ;
 JSC_SEC_LD_FLAGS[sdk=watch*] = ;
 JSC_SEC_LD_FLAGS[sdk=xr*] = ;

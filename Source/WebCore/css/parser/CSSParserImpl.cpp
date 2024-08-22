@@ -44,6 +44,7 @@
 #include "CSSParserObserverWrapper.h"
 #include "CSSParserToken.h"
 #include "CSSPropertyParser.h"
+#include "CSSPropertyParserConsumer+Font.h"
 #include "CSSPropertyParserConsumer+Ident.h"
 #include "CSSPropertyParserConsumer+Integer.h"
 #include "CSSPropertyParserConsumer+Length.h"
@@ -376,7 +377,8 @@ bool CSSParserImpl::consumeRuleList(CSSParserTokenRange range, RuleList ruleList
     while (!range.atEnd()) {
         RefPtr<StyleRuleBase> rule;
         switch (range.peek().type()) {
-        case WhitespaceToken:
+        case NonNewlineWhitespaceToken:
+        case NewlineToken:
             range.consumeWhitespace();
             continue;
         case AtKeywordToken:
@@ -840,7 +842,8 @@ RefPtr<StyleRuleFontFeatureValuesBlock> CSSParserImpl::consumeFontFeatureValuesR
     Vector<FontFeatureValuesTag> tags;
     while (!range.atEnd()) {
         switch (range.peek().type()) {
-        case WhitespaceToken:
+        case NonNewlineWhitespaceToken:
+        case NewlineToken:
         case SemicolonToken:
             range.consume();
             break;
@@ -868,7 +871,7 @@ RefPtr<StyleRuleFontFeatureValues> CSSParserImpl::consumeFontFeatureValuesRule(C
     // @font-feature-values <family-name># { <declaration-list> }
 
     auto originalPrelude = prelude;
-    auto fontFamilies = CSSPropertyParserHelpers::consumeFamilyNameListRaw(prelude);
+    auto fontFamilies = CSSPropertyParserHelpers::consumeFontFeatureValuesFamilyNameList(prelude);
     if (fontFamilies.isEmpty() || !prelude.atEnd())
         return nullptr;
 
@@ -1430,7 +1433,8 @@ void CSSParserImpl::consumeBlockContent(CSSParserTokenRange range, StyleRuleType
             consumeUntilSemicolon();
         };
         switch (range.peek().type()) {
-        case WhitespaceToken:
+        case NonNewlineWhitespaceToken:
+        case NewlineToken:
         case SemicolonToken:
             range.consume();
             break;

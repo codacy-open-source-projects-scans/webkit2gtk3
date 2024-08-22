@@ -323,12 +323,20 @@ void ElementRuleCollector::matchHostPseudoClassRules(CascadeLevel level)
     if (!shadowRules)
         return;
 
-    auto& shadowHostRules = shadowRules->hostPseudoClassRules();
-    if (shadowHostRules.isEmpty())
-        return;
+    auto collect = [&] (const auto& rules) {
+        if (rules.isEmpty())
+            return;
 
-    MatchRequest hostMatchRequest { *shadowRules, ScopeOrdinal::Shadow };
-    collectMatchingRulesForList(&shadowHostRules, hostMatchRequest);
+        MatchRequest hostMatchRequest { *shadowRules, ScopeOrdinal::Shadow };
+        collectMatchingRulesForList(&rules, hostMatchRequest);
+    };
+
+    if (shadowRules->hasHostPseudoClassRulesInUniversalBucket()) {
+        if (auto* universalRules = shadowRules->universalRules())
+            collect(*universalRules);
+    }
+
+    collect(shadowRules->hostPseudoClassRules());
 }
 
 void ElementRuleCollector::matchSlottedPseudoElementRules(CascadeLevel level)
@@ -445,6 +453,21 @@ void ElementRuleCollector::matchUARules(const RuleSet& rules)
     sortAndTransferMatchedRules(DeclarationOrigin::UserAgent);
 }
 
+static Vector<AtomString> classListForNamedViewTransitionPseudoElement(const Document& document, const AtomString& name)
+{
+    auto* activeViewTransition = document.activeViewTransition();
+    if (!activeViewTransition)
+        return { };
+
+    ASSERT(!name.isNull());
+
+    auto* capturedElement = activeViewTransition->namedElements().find(name);
+    if (!capturedElement)
+        return { };
+
+    return capturedElement->classList;
+}
+
 inline bool ElementRuleCollector::ruleMatches(const RuleData& ruleData, unsigned& specificity, ScopeOrdinal styleScopeOrdinal, const ContainerNode* scopingRoot)
 {
     // We know a sufficiently simple single part selector matches simply because we found it from the rule hash when filtering the RuleSet.
@@ -500,6 +523,8 @@ inline bool ElementRuleCollector::ruleMatches(const RuleData& ruleData, unsigned
         context.pseudoId = m_pseudoElementRequest->pseudoId();
         context.pseudoElementNameArgument = m_pseudoElementRequest->nameArgument();
         context.scrollbarState = m_pseudoElementRequest->scrollbarState();
+        if (isNamedViewTransitionPseudoElement(m_pseudoElementRequest->identifier()))
+            context.classList = classListForNamedViewTransitionPseudoElement(element().document(), context.pseudoElementNameArgument);
     }
     context.styleScopeOrdinal = styleScopeOrdinal;
     context.selectorMatchingState = m_selectorMatchingState;

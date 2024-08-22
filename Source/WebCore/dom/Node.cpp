@@ -90,9 +90,9 @@
 #include <JavaScriptCore/HeapInlines.h>
 #include <variant>
 #include <wtf/HexNumber.h>
-#include <wtf/IsoMallocInlines.h>
 #include <wtf/RefCountedLeakCounter.h>
 #include <wtf/SHA1.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/MakeString.h>
 #include <wtf/text/StringBuilder.h>
@@ -104,11 +104,14 @@
 
 namespace WebCore {
 
-WTF_MAKE_COMPACT_ISO_ALLOCATED_IMPL(Node);
+WTF_MAKE_COMPACT_TZONE_OR_ISO_ALLOCATED_IMPL(Node);
 
 using namespace HTMLNames;
 
 struct SameSizeAsNode : EventTarget, CanMakeCheckedPtr<SameSizeAsNode> {
+    WTF_MAKE_FAST_ALLOCATED;
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(SameSizeAsNode);
+public:
 #if ASSERT_ENABLED
     uint32_t m_isAllocatedMemory;
     bool inRemovedLastRefFunction;

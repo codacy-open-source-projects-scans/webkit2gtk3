@@ -40,8 +40,11 @@
 #import "WebExtensionTabQueryParameters.h"
 #import "WebExtensionUtilities.h"
 #import <wtf/BlockPtr.h>
+#import <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebExtensionWindow);
 
 WebExtensionWindow::WebExtensionWindow(const WebExtensionContext& context, WKWebExtensionWindow* delegate)
     : m_extensionContext(context)
@@ -51,7 +54,7 @@ WebExtensionWindow::WebExtensionWindow(const WebExtensionContext& context, WKWeb
     , m_respondsToWindowType([delegate respondsToSelector:@selector(windowTypeForWebExtensionContext:)])
     , m_respondsToWindowState([delegate respondsToSelector:@selector(windowStateForWebExtensionContext:)])
     , m_respondsToSetWindowState([delegate respondsToSelector:@selector(setWindowState:forWebExtensionContext:completionHandler:)])
-    , m_respondsToIsUsingPrivateBrowsing([delegate respondsToSelector:@selector(isUsingPrivateBrowsingForWebExtensionContext:)])
+    , m_respondsToIsPrivate([delegate respondsToSelector:@selector(isPrivateForWebExtensionContext:)])
     , m_respondsToFrame([delegate respondsToSelector:@selector(frameForWebExtensionContext:)])
     , m_respondsToSetFrame([delegate respondsToSelector:@selector(setFrame:forWebExtensionContext:completionHandler:)])
 #if PLATFORM(MAC)
@@ -130,7 +133,7 @@ bool WebExtensionWindow::matches(const WebExtensionTabQueryParameters& parameter
     if (!extensionHasAccess())
         return false;
 
-    if (parameters.windowIdentifier && identifier() != parameters.windowIdentifier.value())
+    if (parameters.windowIdentifier && identifier() != parameters.windowIdentifier.value() && !isCurrent(parameters.windowIdentifier.value()))
         return false;
 
     if (parameters.windowType && !matches(parameters.windowType.value()))
@@ -139,7 +142,7 @@ bool WebExtensionWindow::matches(const WebExtensionTabQueryParameters& parameter
     if (parameters.frontmostWindow && isFrontmost() != parameters.frontmostWindow.value())
         return false;
 
-    if (parameters.currentWindow) {
+    if (parameters.currentWindow || isCurrent(parameters.windowIdentifier)) {
         auto currentWindow = extensionContext()->getWindow(WebExtensionWindowConstants::CurrentIdentifier, webPageProxyIdentifier);
         if (!currentWindow)
             return false;
@@ -154,7 +157,7 @@ bool WebExtensionWindow::matches(const WebExtensionTabQueryParameters& parameter
 bool WebExtensionWindow::extensionHasAccess() const
 {
     bool isPrivate = this->isPrivate();
-    return !isPrivate || (isPrivate && extensionContext()->hasAccessInPrivateBrowsing());
+    return !isPrivate || (isPrivate && extensionContext()->hasAccessToPrivateData());
 }
 
 WebExtensionWindow::TabVector WebExtensionWindow::tabs(SkipValidation skipValidation) const
@@ -178,7 +181,7 @@ WebExtensionWindow::TabVector WebExtensionWindow::tabs(SkipValidation skipValida
         // SkipValidation::Yes is needed to avoid reentry, since activeTab() calls tabs().
         RefPtr activeTab = this->activeTab(SkipValidation::Yes);
         if (!activeTab || !result.contains(*activeTab)) {
-            RELEASE_LOG_ERROR(Extensions, "Array returned by tabsForWebExtensionContext: does not contain the active tab; %{public}@ not in %{public}@", activeTab ? activeTab->delegate() : nil, tabs);
+            RELEASE_LOG_ERROR(Extensions, "Array returned by tabsForWebExtensionContext: does not contain the active tab; %{sensitive}@ not in %{sensitive}@", activeTab ? activeTab->delegate() : nil, tabs);
             ASSERT_NOT_REACHED();
             return { };
         }
@@ -202,7 +205,7 @@ RefPtr<WebExtensionTab> WebExtensionWindow::activeTab(SkipValidation skipValidat
         // SkipValidation::Yes is needed to avoid reentry, since tabs() calls activeTab().
         auto tabs = this->tabs(SkipValidation::Yes);
         if (!tabs.contains(result)) {
-            RELEASE_LOG_ERROR(Extensions, "Array returned by tabsForWebExtensionContext: does not contain the active tab; %{public}@ not in %{public}@", result->delegate(), [m_delegate tabsForWebExtensionContext:m_extensionContext->wrapper()] ?: @[ ]);
+            RELEASE_LOG_ERROR(Extensions, "Array returned by tabsForWebExtensionContext: does not contain the active tab; %{sensitive}@ not in %{sensitive}@", result->delegate(), [m_delegate tabsForWebExtensionContext:m_extensionContext->wrapper()] ?: @[ ]);
             ASSERT_NOT_REACHED();
             return nullptr;
         }
@@ -353,11 +356,11 @@ bool WebExtensionWindow::isPrivate() const
     if (m_cachedPrivate)
         return m_private;
 
-    if (!isValid() || !m_respondsToIsUsingPrivateBrowsing)
+    if (!isValid() || !m_respondsToIsPrivate)
         return false;
 
     // Private can't change after the fact, so cache it for quick access and to ensure it does not change.
-    m_private = [m_delegate isUsingPrivateBrowsingForWebExtensionContext:m_extensionContext->wrapper()];
+    m_private = [m_delegate isPrivateForWebExtensionContext:m_extensionContext->wrapper()];
     m_cachedPrivate = true;
 
     return m_private;

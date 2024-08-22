@@ -66,8 +66,8 @@
 #include "SVGImage.h"
 #include "Settings.h"
 #include "TextPainter.h"
-#include <wtf/IsoMallocInlines.h>
 #include <wtf/StackStats.h>
+#include <wtf/TZoneMallocInlines.h>
 
 #if PLATFORM(IOS_FAMILY)
 #include "LogicalSelectionOffsetCaches.h"
@@ -85,7 +85,7 @@
 
 namespace WebCore {
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(RenderImage);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderImage);
 
 #if PLATFORM(IOS_FAMILY)
 // FIXME: This doesn't behave correctly for floating or positioned images, but WebCore doesn't handle those well
@@ -746,7 +746,10 @@ ImageDrawResult RenderImage::paintIntoRect(PaintInfo& paintInfo, const FloatRect
         imageOrientation(),
         image ? chooseInterpolationQuality(paintInfo.context(), *image, image, LayoutSize(rect.size())) : InterpolationQuality::Default,
         settings().imageSubsamplingEnabled() ? AllowImageSubsampling::Yes : AllowImageSubsampling::No,
-        settings().showDebugBorders() ? ShowDebugBackground::Yes : ShowDebugBackground::No
+        settings().showDebugBorders() ? ShowDebugBackground::Yes : ShowDebugBackground::No,
+#if USE(SKIA)
+        StrictImageClamping::No,
+#endif
     };
 
     auto drawResult = ImageDrawResult::DidNothing;
@@ -783,10 +786,10 @@ bool RenderImage::foregroundIsKnownToBeOpaqueInRect(const LayoutRect& localRect,
         return false;
     FillBox backgroundClip = style().backgroundClip();
     // Background paints under borders.
-    if (backgroundClip == FillBox::Border && style().hasBorder() && !borderObscuresBackground())
+    if (backgroundClip == FillBox::BorderBox && style().hasBorder() && !borderObscuresBackground())
         return false;
     // Background shows in padding area.
-    if ((backgroundClip == FillBox::Border || backgroundClip == FillBox::Padding) && style().hasPadding())
+    if ((backgroundClip == FillBox::BorderBox || backgroundClip == FillBox::PaddingBox) && style().hasPadding())
         return false;
     // Object-fit may leave parts of the content box empty.
     ObjectFit objectFit = style().objectFit();

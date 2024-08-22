@@ -37,6 +37,7 @@
 #import "Logging.h"
 #import "NativeWebKeyboardEvent.h"
 #import "NativeWebTouchEvent.h"
+#import "NetworkProcessMessages.h"
 #import "PageClient.h"
 #import "PickerDismissalReason.h"
 #import "PlatformWritingToolsUtilities.h"
@@ -3117,9 +3118,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     if (!_page->hasRunningProcess())
         return NO;
 
-    auto* connection = _page->legacyMainFrameProcess().connection();
-    if (!connection)
-        return NO;
+    Ref connection = _page->legacyMainFrameProcess().connection();
 
     if (_isWaitingOnPositionInformation)
         return NO;
@@ -4849,8 +4848,10 @@ static UIPasteboard *pasteboardForAccessCategory(WebCore::DOMPasteAccessCategory
 - (BOOL)_handleDOMPasteRequestWithResult:(WebCore::DOMPasteAccessResponse)response
 {
     if (auto pasteAccessCategory = std::exchange(_domPasteRequestCategory, std::nullopt)) {
-        if (response == WebCore::DOMPasteAccessResponse::GrantedForCommand || response == WebCore::DOMPasteAccessResponse::GrantedForGesture)
-            _page->grantAccessToCurrentPasteboardData(pasteboardNameForAccessCategory(*pasteAccessCategory));
+        if (response == WebCore::DOMPasteAccessResponse::GrantedForCommand || response == WebCore::DOMPasteAccessResponse::GrantedForGesture) {
+            if (auto replyID = _page->grantAccessToCurrentPasteboardData(pasteboardNameForAccessCategory(*pasteAccessCategory), [] () { }))
+                _page->websiteDataStore().protectedNetworkProcess()->connection().waitForAsyncReplyAndDispatchImmediately<Messages::NetworkProcess::AllowFilesAccessFromWebProcess>(*replyID, 100_ms);
+        }
     }
 
     if (auto pasteHandler = WTFMove(_domPasteRequestHandler)) {
@@ -5725,7 +5726,7 @@ static void logTextInteraction(const char* methodName, UIGestureRecognizer *loup
     _pendingAutocorrectionContextHandler = WTFMove(completionHandler);
     _page->requestAutocorrectionContext();
 
-    if (_page->legacyMainFrameProcess().connection()->waitForAndDispatchImmediately<Messages::WebPageProxy::HandleAutocorrectionContext>(_page->webPageIDInMainFrameProcess(), 1_s, IPC::WaitForOption::DispatchIncomingSyncMessagesWhileWaiting) != IPC::Error::NoError)
+    if (_page->legacyMainFrameProcess().connection().waitForAndDispatchImmediately<Messages::WebPageProxy::HandleAutocorrectionContext>(_page->webPageIDInMainFrameProcess(), 1_s, IPC::WaitForOption::DispatchIncomingSyncMessagesWhileWaiting) != IPC::Error::NoError)
         RELEASE_LOG(TextInput, "Timed out while waiting for autocorrection context.");
 
     if (_autocorrectionContextNeedsUpdate)
@@ -11924,35 +11925,6 @@ static RetainPtr<NSItemProvider> createItemProvider(const WebKit::WebPageProxy& 
     }];
 }
 
-#if ENABLE(WRITING_TOOLS_UI)
-
-- (void)addTextAnimationForAnimationID:(NSUUID *)uuid withStyleType:(WKTextAnimationType)styleType
-{
-    if (!_page->preferences().textAnimationsEnabled())
-        return;
-
-    if (!_textAnimationManager)
-        _textAnimationManager = adoptNS([WebKit::allocWKSTextAnimationManagerInstance() initWithDelegate:self]);
-
-    [_textAnimationManager addTextAnimationForAnimationID:uuid withStyleType:styleType];
-}
-
-- (void)removeTextAnimationForAnimationID:(NSUUID *)uuid
-{
-    if (!uuid)
-        return;
-
-    if (!_page->preferences().textAnimationsEnabled())
-        return;
-
-    if (!_textAnimationManager)
-        return;
-
-    [_textAnimationManager removeTextAnimationForAnimationID:uuid];
-}
-
-#endif
-
 #if HAVE(UIFINDINTERACTION)
 
 - (void)find:(id)sender
@@ -13308,7 +13280,7 @@ inline static NSString *extendSelectionCommand(UITextLayoutDirection direction)
 
 #pragma mark - WKSTextAnimationSourceDelegate
 
-#if ENABLE(WRITING_TOOLS_UI)
+#if ENABLE(WRITING_TOOLS)
 - (void)targetedPreviewForID:(NSUUID *)uuid completionHandler:(void (^)(UITargetedPreview *))completionHandler
 {
     auto textUUID = WTF::UUID::fromNSUUID(uuid);
@@ -13356,6 +13328,12 @@ inline static NSString *extendSelectionCommand(UITextLayoutDirection direction)
 {
     auto animationUUID = WTF::UUID::fromNSUUID(uuid);
     _page->callCompletionHandlerForAnimationID(*animationUUID, WebCore::TextAnimationRunMode::RunAnimation);
+}
+
+- (void)replacementEffectDidComplete
+{
+    _page->didEndPartialIntelligenceTextPonderingAnimationImpl();
+    _page->showSelectionForActiveWritingToolsSessionIfNeeded();
 }
 
 #endif
@@ -13427,6 +13405,31 @@ inline static NSString *extendSelectionCommand(UITextLayoutDirection direction)
 - (void)writingToolsSession:(WTSession *)session didReceiveAction:(WTAction)action
 {
     [_webView writingToolsSession:session didReceiveAction:action];
+}
+
+- (void)addTextAnimationForAnimationID:(NSUUID *)uuid withStyleType:(WKTextAnimationType)styleType
+{
+    if (!_page->preferences().textAnimationsEnabled())
+        return;
+
+    if (!_textAnimationManager)
+        _textAnimationManager = adoptNS([WebKit::allocWKSTextAnimationManagerInstance() initWithDelegate:self]);
+
+    [_textAnimationManager addTextAnimationForAnimationID:uuid withStyleType:styleType];
+}
+
+- (void)removeTextAnimationForAnimationID:(NSUUID *)uuid
+{
+    if (!uuid)
+        return;
+
+    if (!_page->preferences().textAnimationsEnabled())
+        return;
+
+    if (!_textAnimationManager)
+        return;
+
+    [_textAnimationManager removeTextAnimationForAnimationID:uuid];
 }
 
 #endif

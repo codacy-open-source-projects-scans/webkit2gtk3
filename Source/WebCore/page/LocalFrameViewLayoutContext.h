@@ -29,6 +29,7 @@
 #include "RenderLayerModelObject.h"
 #include "Timer.h"
 #include <wtf/CheckedRef.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakHashSet.h>
 #include <wtf/WeakPtr.h>
 
@@ -60,13 +61,13 @@ struct UpdateScrollInfoAfterLayoutTransaction {
 };
 
 class LocalFrameViewLayoutContext final : public CanMakeCheckedPtr<LocalFrameViewLayoutContext> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(LocalFrameViewLayoutContext);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(LocalFrameViewLayoutContext);
 public:
     LocalFrameViewLayoutContext(LocalFrameView&);
     ~LocalFrameViewLayoutContext();
 
-    WEBCORE_EXPORT void layout(bool canDeferUpdateLayerPositions = false);
+    WEBCORE_EXPORT void layout();
     bool needsLayout() const;
 
     // We rely on the side-effects of layout, like compositing updates, to update state in various subsystems
@@ -143,15 +144,13 @@ private:
     friend class LayoutStateDisabler;
     friend class SubtreeLayoutStateMaintainer;
 
-    bool needsLayoutInternal() const;
-
-    void performLayout(bool canDeferUpdateLayerPositions);
+    void performLayout();
     bool canPerformLayout() const;
     bool isLayoutSchedulingEnabled() const { return m_layoutSchedulingIsEnabled; }
 
     void layoutTimerFired();
     void runPostLayoutTasks();
-    void runOrScheduleAsynchronousTasks(bool canDeferUpdateLayerPositions);
+    void runOrScheduleAsynchronousTasks();
     bool inAsynchronousTasks() const { return m_inAsynchronousTasks; }
 
     void setSubtreeLayoutRoot(RenderElement&);

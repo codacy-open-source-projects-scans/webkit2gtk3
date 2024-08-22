@@ -57,6 +57,7 @@
 #include <WebCore/ResourceRequest.h>
 #include <WebCore/RuntimeApplicationChecks.h>
 #include <WebCore/SWServer.h>
+#include <wtf/TZoneMallocInlines.h>
 
 #if PLATFORM(COCOA)
 #include "DefaultWebBrowserChecks.h"
@@ -73,6 +74,9 @@ namespace WebKit {
 using namespace WebCore;
 
 constexpr Seconds cachedNetworkResourceLoaderLifetime { 30_s };
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(NetworkSession);
+WTF_MAKE_TZONE_ALLOCATED_IMPL_NESTED(NetworkSessionCachedNetworkResourceLoader, NetworkSession::CachedNetworkResourceLoader);
 
 std::unique_ptr<NetworkSession> NetworkSession::create(NetworkProcess& networkProcess, const NetworkSessionCreationParameters& parameters)
 {
@@ -118,6 +122,21 @@ static Ref<NetworkStorageManager> createNetworkStorageManager(NetworkProcess& ne
     return NetworkStorageManager::create(networkProcess, parameters.sessionID, parameters.dataStoreIdentifier, connectionID, parameters.generalStorageDirectory, parameters.localStorageDirectory, parameters.indexedDBDirectory, parameters.cacheStorageDirectory, serviceWorkerStorageDirectory, parameters.perOriginStorageQuota, parameters.originQuotaRatio, parameters.totalQuotaRatio, parameters.standardVolumeCapacity, parameters.volumeCapacityOverride, parameters.unifiedOriginStorageLevel, parameters.storageSiteValidationEnabled);
 }
 
+#if ENABLE(WEB_PUSH_NOTIFICATIONS)
+static WebPushD::WebPushDaemonConnectionConfiguration configurationWithHostAuditToken(NetworkProcess& networkProcess, WebPushD::WebPushDaemonConnectionConfiguration configuration)
+{
+#if PLATFORM(COCOA)
+    auto token = networkProcess.parentProcessConnection()->getAuditToken();
+    if (token) {
+        Vector<uint8_t> auditTokenData(sizeof(*token));
+        memcpy(auditTokenData.data(), &(*token), sizeof(*token));
+        configuration.hostAppAuditTokenData = WTFMove(auditTokenData);
+    }
+#endif
+    return configuration;
+}
+#endif
+
 NetworkSession::NetworkSession(NetworkProcess& networkProcess, const NetworkSessionCreationParameters& parameters)
     : m_sessionID(parameters.sessionID)
     , m_networkProcess(networkProcess)
@@ -141,7 +160,7 @@ NetworkSession::NetworkSession(NetworkProcess& networkProcess, const NetworkSess
     , m_inspectionForServiceWorkersAllowed(parameters.inspectionForServiceWorkersAllowed)
     , m_storageManager(createNetworkStorageManager(networkProcess, parameters))
 #if ENABLE(WEB_PUSH_NOTIFICATIONS)
-    , m_notificationManager(*this, parameters.webPushMachServiceName, WebPushD::WebPushDaemonConnectionConfiguration { parameters.webPushDaemonConnectionConfiguration })
+    , m_notificationManager(parameters.webPushMachServiceName, parameters.sessionID.isEphemeral(), configurationWithHostAuditToken(networkProcess, parameters.webPushDaemonConnectionConfiguration))
 #endif
 {
     if (!m_sessionID.isEphemeral()) {
@@ -271,7 +290,7 @@ void NetworkSession::notifyResourceLoadStatisticsProcessed()
     m_networkProcess->parentProcessConnection()->send(Messages::NetworkProcessProxy::NotifyResourceLoadStatisticsProcessed(), 0);
 }
 
-void NetworkSession::deleteAndRestrictWebsiteDataForRegistrableDomains(OptionSet<WebsiteDataType> dataTypes, RegistrableDomainsToDeleteOrRestrictWebsiteDataFor&& domains, bool shouldNotifyPage, CompletionHandler<void(HashSet<RegistrableDomain>&&)>&& completionHandler)
+void NetworkSession::deleteAndRestrictWebsiteDataForRegistrableDomains(OptionSet<WebsiteDataType> dataTypes, RegistrableDomainsToDeleteOrRestrictWebsiteDataFor&& domains, CompletionHandler<void(HashSet<RegistrableDomain>&&)>&& completionHandler)
 {
     if (auto* storageSession = networkStorageSession()) {
         for (auto& domain : domains.domainsToEnforceSameSiteStrictFor)
@@ -279,7 +298,7 @@ void NetworkSession::deleteAndRestrictWebsiteDataForRegistrableDomains(OptionSet
     }
     domains.domainsToEnforceSameSiteStrictFor.clear();
 
-    m_networkProcess->deleteAndRestrictWebsiteDataForRegistrableDomains(m_sessionID, dataTypes, WTFMove(domains), shouldNotifyPage, WTFMove(completionHandler));
+    m_networkProcess->deleteAndRestrictWebsiteDataForRegistrableDomains(m_sessionID, dataTypes, WTFMove(domains), WTFMove(completionHandler));
 }
 
 void NetworkSession::registrableDomainsWithWebsiteData(OptionSet<WebsiteDataType> dataTypes, bool shouldNotifyPage, CompletionHandler<void(HashSet<RegistrableDomain>&&)>&& completionHandler)

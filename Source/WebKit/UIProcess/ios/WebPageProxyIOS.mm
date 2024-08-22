@@ -43,7 +43,7 @@
 #import "NativeWebKeyboardEvent.h"
 #import "NavigationState.h"
 #import "PageClient.h"
-#import "PaymentAuthorizationViewController.h"
+#import "PaymentAuthorizationController.h"
 #import "PrintInfo.h"
 #import "ProvisionalPageProxy.h"
 #import "RemoteLayerTreeHost.h"
@@ -737,7 +737,7 @@ void WebPageProxy::setSmartInsertDeleteEnabled(bool)
 void WebPageProxy::registerWebProcessAccessibilityToken(std::span<const uint8_t> data, FrameIdentifier frameID)
 {
     // Note: The WebFrameProxy with this FrameIdentifier might not exist in the UI process. See rdar://130998804.
-    pageClient().accessibilityWebProcessTokenReceived(data, frameID, legacyMainFrameProcess().connection()->remoteProcessID());
+    pageClient().accessibilityWebProcessTokenReceived(data, frameID, legacyMainFrameProcess().connection().remoteProcessID());
 }
 
 void WebPageProxy::relayAccessibilityNotification(const String& notificationName, std::span<const uint8_t> data)
@@ -1294,7 +1294,7 @@ void WebPageProxy::requestPasswordForQuickLookDocumentInMainFrameShared(const St
 
 std::unique_ptr<PaymentAuthorizationPresenter> WebPageProxy::Internals::paymentCoordinatorAuthorizationPresenter(WebPaymentCoordinatorProxy& paymentCoordinatorProxy, PKPaymentRequest *paymentRequest)
 {
-    return makeUnique<PaymentAuthorizationViewController>(paymentCoordinatorProxy, paymentRequest);
+    return makeUnique<PaymentAuthorizationController>(paymentCoordinatorProxy, paymentRequest);
 }
 
 UIViewController *WebPageProxy::Internals::paymentCoordinatorPresentingViewController(const WebPaymentCoordinatorProxy&)
@@ -1433,6 +1433,9 @@ WebContentMode WebPageProxy::effectiveContentModeAfterAdjustingPolicies(API::Web
         policies.setMediaSourcePolicy(WebsiteMediaSourcePolicy::Enable);
     }
 
+    if (auto selectors = Quirks::defaultVisibilityAdjustmentSelectors(request.url()))
+        policies.setVisibilityAdjustmentSelectors({ WTFMove(*selectors) });
+
     if (Quirks::needsIPhoneUserAgent(request.url())) {
         policies.setCustomUserAgent(makeStringByReplacingAll(standardUserAgentWithApplicationName(m_applicationNameForUserAgent), "iPad"_s, "iPhone"_s));
         policies.setCustomNavigatorPlatform("iPhone"_s);
@@ -1506,17 +1509,17 @@ void WebPageProxy::setScreenIsBeingCaptured(bool captured)
 
 void WebPageProxy::willOpenAppLink()
 {
-    if (m_legacyMainFrameProcessActivityState.hasValidOpeningAppLinkActivity())
+    if (hasValidOpeningAppLinkActivity())
         return;
 
     // We take a background activity for 25 seconds when switching to another app via an app link in case the WebPage
     // needs to run script to pass information to the native app.
     // We chose 25 seconds because the system only gives us 30 seconds and we don't want to get too close to that limit
     // to avoid assertion invalidation (or even termination).
-    m_legacyMainFrameProcessActivityState.takeOpeningAppLinkActivity();
+    takeOpeningAppLinkActivity();
     WorkQueue::main().dispatchAfter(25_s, [weakThis = WeakPtr { *this }] {
         if (weakThis)
-            weakThis->m_legacyMainFrameProcessActivityState.dropOpeningAppLinkActivity();
+            weakThis->dropOpeningAppLinkActivity();
     });
 }
 
@@ -1553,13 +1556,12 @@ void WebPageProxy::Internals::isUserFacingChanged(bool isUserFacing)
 
 #endif
 
-void WebPageProxy::willPerformPasteCommand(DOMPasteAccessCategory pasteAccessCategory, std::optional<FrameIdentifier> frameID)
+std::optional<IPC::AsyncReplyID> WebPageProxy::willPerformPasteCommand(DOMPasteAccessCategory pasteAccessCategory, CompletionHandler<void()>&& completionHandler, std::optional<FrameIdentifier> frameID)
 {
     switch (pasteAccessCategory) {
     case DOMPasteAccessCategory::General:
     case DOMPasteAccessCategory::Fonts:
-        grantAccessToCurrentPasteboardData(UIPasteboardNameGeneral, frameID);
-        return;
+        return grantAccessToCurrentPasteboardData(UIPasteboardNameGeneral, WTFMove(completionHandler), frameID);
     }
 }
 

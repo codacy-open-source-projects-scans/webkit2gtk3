@@ -47,6 +47,7 @@
 #include <wtf/CheckedPtr.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/RetainPtr.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakObjCPtr.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/WorkQueue.h>
@@ -190,6 +191,7 @@ class WebProcessProxy;
 struct WebHitTestResultData;
 
 enum class ContinueUnsafeLoad : bool;
+enum class ForceSoftwareCapturingViewportSnapshot : bool;
 enum class UndoOrRedo : bool;
 
 typedef id <NSValidatedUserInterfaceItem> ValidationItem;
@@ -198,7 +200,7 @@ typedef HashMap<String, ValidationVector> ValidationMap;
 
 class WebViewImpl final : public CanMakeWeakPtr<WebViewImpl>, public CanMakeCheckedPtr<WebViewImpl> {
     WTF_MAKE_NONCOPYABLE(WebViewImpl);
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(WebViewImpl);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(WebViewImpl);
 public:
     WebViewImpl(NSView <WebViewImplDelegate> *, WKWebView *outerWebView, WebProcessPool&, Ref<API::PageConfiguration>&&);
@@ -535,6 +537,7 @@ public:
     NSArray *namesOfPromisedFilesDroppedAtDestination(NSURL *dropDestination);
 
     RefPtr<ViewSnapshot> takeViewSnapshot();
+    RefPtr<ViewSnapshot> takeViewSnapshot(ForceSoftwareCapturingViewportSnapshot);
     void saveBackForwardSnapshotForCurrentItem();
     void saveBackForwardSnapshotForItem(WebBackForwardListItem&);
 
@@ -738,7 +741,7 @@ public:
     bool inlinePredictionsEnabled() const { return m_inlinePredictionsEnabled; }
 #endif
 
-#if ENABLE(WRITING_TOOLS_UI)
+#if ENABLE(WRITING_TOOLS)
     void addTextAnimationForAnimationID(WTF::UUID, const WebCore::TextAnimationData&);
     void removeTextAnimationForAnimationID(WTF::UUID);
 #endif
@@ -981,7 +984,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 #endif
 
 #if ENABLE(WRITING_TOOLS)
-    RetainPtr<WKTextAnimationManager> m_TextAnimationTypeManager;
+    RetainPtr<WKTextAnimationManager> m_textAnimationTypeManager;
 #endif
 
 #if HAVE(NSSCROLLVIEW_SEPARATOR_TRACKING_ADAPTER)

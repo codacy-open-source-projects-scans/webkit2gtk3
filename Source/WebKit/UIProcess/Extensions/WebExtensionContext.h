@@ -81,6 +81,7 @@
 #endif
 
 #if ENABLE(WK_WEB_EXTENSIONS_SIDEBAR)
+#include "WebExtensionSidebar.h"
 #include "WebExtensionSidebarParameters.h"
 #endif
 
@@ -262,6 +263,7 @@ public:
         Background,
         Inspector,
         Popup,
+        Sidebar,
         Tab,
     };
 
@@ -327,8 +329,8 @@ public:
     bool requestedOptionalAccessToAllHosts() const { return m_requestedOptionalAccessToAllHosts; }
     void setRequestedOptionalAccessToAllHosts(bool requested) { m_requestedOptionalAccessToAllHosts = requested; }
 
-    bool hasAccessInPrivateBrowsing() const { return m_hasAccessInPrivateBrowsing; }
-    void setHasAccessInPrivateBrowsing(bool);
+    bool hasAccessToPrivateData() const { return m_hasAccessToPrivateData; }
+    void setHasAccessToPrivateData(bool);
 
     void grantPermissions(PermissionsSet&&, WallTime expirationDate = WallTime::infinity());
     void denyPermissions(PermissionsSet&&, WallTime expirationDate = WallTime::infinity());
@@ -385,6 +387,8 @@ public:
     RefPtr<WebExtensionTab> getCurrentTab(WebPageProxyIdentifier, IncludeExtensionViews = IncludeExtensionViews::Yes, IgnoreExtensionAccess = IgnoreExtensionAccess::No) const;
     void forgetTab(WebExtensionTabIdentifier) const;
 
+    bool canOpenNewWindow() const;
+    void openNewWindow(const WebExtensionWindowParameters&, CompletionHandler<void(RefPtr<WebExtensionWindow>)>&&);
     void openNewTab(const WebExtensionTabParameters&, CompletionHandler<void(RefPtr<WebExtensionTab>)>&&);
 
     WindowVector openWindows(IgnoreExtensionAccess = IgnoreExtensionAccess::No) const;
@@ -436,6 +440,16 @@ public:
     Ref<WebExtensionAction> getOrCreateAction(WebExtensionWindow*);
     Ref<WebExtensionAction> getOrCreateAction(WebExtensionTab*);
     void performAction(WebExtensionTab*, UserTriggered = UserTriggered::No);
+
+#if ENABLE(WK_WEB_EXTENSIONS_SIDEBAR)
+    WebExtensionSidebar& defaultSidebar();
+    std::optional<Ref<WebExtensionSidebar>> getSidebar(WebExtensionWindow const&);
+    std::optional<Ref<WebExtensionSidebar>> getSidebar(WebExtensionTab const&);
+    std::optional<Ref<WebExtensionSidebar>> getOrCreateSidebar(WebExtensionWindow&);
+    std::optional<Ref<WebExtensionSidebar>> getOrCreateSidebar(WebExtensionTab&);
+    void openSidebarForTab(WebExtensionTab&, UserTriggered = UserTriggered::No);
+    void closeSidebarForTab(WebExtensionTab&, UserTriggered = UserTriggered::No);
+#endif // ENABLE(WK_WEB_EXTENSIONS_SIDEBAR)
 
     const CommandsVector& commands();
     WebExtensionCommand* command(const String& identifier);
@@ -916,7 +930,7 @@ private:
     size_t m_pendingPermissionRequests { 0 };
 
     bool m_requestedOptionalAccessToAllHosts { false };
-    bool m_hasAccessInPrivateBrowsing { false };
+    bool m_hasAccessToPrivateData { false };
 
     VoidCompletionHandlerVector m_actionsToPerformAfterBackgroundContentLoads;
     EventListenerTypeCountedSet m_backgroundContentEventListeners;
@@ -954,6 +968,12 @@ private:
     WeakHashMap<WebExtensionWindow, Ref<WebExtensionAction>> m_actionWindowMap;
     WeakHashMap<WebExtensionTab, Ref<WebExtensionAction>> m_actionTabMap;
     RefPtr<WebExtensionAction> m_defaultAction;
+
+#if ENABLE(WK_WEB_EXTENSIONS_SIDEBAR)
+    WeakHashMap<WebExtensionWindow, Ref<WebExtensionSidebar>> m_sidebarWindowMap;
+    WeakHashMap<WebExtensionTab, Ref<WebExtensionSidebar>> m_sidebarTabMap;
+    RefPtr<WebExtensionSidebar> m_defaultSidebar;
+#endif // ENABLE(WK_WEB_EXTENSIONS_SIDEBAR)
 
     PortCountedSet m_ports;
     PageProxyIdentifierPortMap m_pagePortMap;

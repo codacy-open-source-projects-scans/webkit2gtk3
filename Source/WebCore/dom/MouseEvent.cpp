@@ -35,11 +35,11 @@
 #include "PlatformMouseEvent.h"
 #include <JavaScriptCore/CallFrame.h>
 #include <JavaScriptCore/JSGlobalObjectInlines.h>
-#include <wtf/IsoMallocInlines.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(MouseEvent);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(MouseEvent);
 
 bool isAnyClick(const AtomString& eventType)
 {
@@ -53,7 +53,7 @@ bool isAnyClick(const Event& event)
 
 Ref<MouseEvent> MouseEvent::create(const AtomString& type, const MouseEventInit& initializer)
 {
-    return adoptRef(*new MouseEvent(EventInterfaceType::MouseEvent, type, initializer));
+    return adoptRef(*new MouseEvent(EventInterfaceType::MouseEvent, type, initializer, IsTrusted::No));
 }
 
 Ref<MouseEvent> MouseEvent::create(const AtomString& eventType, RefPtr<WindowProxy>&& view, const PlatformMouseEvent& event, const Vector<Ref<MouseEvent>>& coalescedEvents, const Vector<Ref<MouseEvent>>& predictedEvents, int detail, Node* relatedTarget)
@@ -125,8 +125,8 @@ MouseEvent::MouseEvent(enum EventInterfaceType eventInterface, const AtomString&
     initCoordinates(clientLocation);
 }
 
-MouseEvent::MouseEvent(enum EventInterfaceType eventInterface, const AtomString& eventType, const MouseEventInit& initializer)
-    : MouseRelatedEvent(eventInterface, eventType, initializer)
+MouseEvent::MouseEvent(enum EventInterfaceType eventInterface, const AtomString& eventType, const MouseEventInit& initializer, IsTrusted isTrusted)
+    : MouseRelatedEvent(eventInterface, eventType, initializer, isTrusted)
     , m_button(initializer.button == enumToUnderlyingType(MouseButton::None) ? enumToUnderlyingType(MouseButton::Left) : initializer.button)
     , m_buttons(initializer.buttons)
     , m_buttonDown(initializer.button != enumToUnderlyingType(MouseButton::None))

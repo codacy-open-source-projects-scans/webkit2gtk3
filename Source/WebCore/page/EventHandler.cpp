@@ -133,8 +133,10 @@
 #include "WindowsKeyboardCodes.h"
 #include <wtf/Assertions.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/Scope.h>
 #include <wtf/SetForScope.h>
 #include <wtf/StdLibExtras.h>
+#include <wtf/TZoneMallocInlines.h>
 
 #if ENABLE(IOS_TOUCH_EVENTS)
 #include "PlatformTouchEventIOS.h"
@@ -162,6 +164,8 @@
 #endif
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(EventHandler);
 
 using namespace HTMLNames;
 
@@ -2339,8 +2343,11 @@ HandleUserInputEventResult EventHandler::handleMouseReleaseEvent(const PlatformM
 
     // If an immediate action began or was completed using this series of mouse events, then we should send mouseup to
     // the DOM and return now so that we don't perform our own default behaviors.
-    if (m_immediateActionStage == ImmediateActionStage::ActionCompleted || m_immediateActionStage == ImmediateActionStage::ActionUpdated || m_immediateActionStage == ImmediateActionStage::ActionCancelledAfterUpdate) {
-        m_immediateActionStage = ImmediateActionStage::None;
+    if (immediateActionBeganOrWasCompleted(m_immediateActionStage)) {
+        // We reset the immediate action stage after event dispatch, and not before, so that DOM event handling can query for the stage if needed.
+        auto resetImmediateActionStageAfterMouseEventDispatch = makeScopeExit([&] {
+            m_immediateActionStage = ImmediateActionStage::None;
+        });
         return !dispatchMouseEvent(eventNames().mouseupEvent, m_lastElementUnderMouse.get(), m_clickCount, platformMouseEvent, FireMouseOverOut::No);
     }
     m_immediateActionStage = ImmediateActionStage::None;
@@ -4591,7 +4598,10 @@ void EventHandler::defaultBackspaceEventHandler(KeyboardEvent& event)
 
 void EventHandler::stopKeyboardScrolling()
 {
-    if (auto animator = m_frame->page()->currentKeyboardScrollingAnimator())
+    RefPtr page = m_frame->page();
+    if (!page)
+        return;
+    if (auto animator = page->currentKeyboardScrollingAnimator())
         animator->handleKeyUpEvent();
 }
 

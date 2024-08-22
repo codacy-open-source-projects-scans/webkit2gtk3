@@ -80,10 +80,10 @@
 #include "TextInputType.h"
 #include "TreeScopeInlines.h"
 #include "TypedElementDescendantIteratorInlines.h"
-#include <wtf/IsoMallocInlines.h>
 #include <wtf/Language.h>
 #include <wtf/MathExtras.h>
 #include <wtf/Ref.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/MakeString.h>
 #include <wtf/text/StringToIntegerConversion.h>
 
@@ -93,7 +93,7 @@
 
 namespace WebCore {
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(HTMLInputElement);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(HTMLInputElement);
 
 using namespace HTMLNames;
 
@@ -811,6 +811,8 @@ void HTMLInputElement::attributeChanged(const QualifiedName& name, const AtomStr
             setFormControlValueMatchesRenderer(false);
         }
         updateValidity();
+        if (selfOrPrecedingNodesAffectDirAuto())
+            updateEffectiveDirectionalityOfDirAuto();
         m_valueAttributeWasUpdatedAfterParsing = !m_parsingInProgress;
         break;
     case AttributeNames::nameAttr:
@@ -864,7 +866,6 @@ void HTMLInputElement::attributeChanged(const QualifiedName& name, const AtomStr
         m_maxResults = newValue.isNull() ? -1 : std::min(parseHTMLInteger(newValue).value_or(0), maxSavedResults);
         break;
     case AttributeNames::autosaveAttr:
-    case AttributeNames::incrementalAttr:
         invalidateStyleForSubtree();
         break;
     case AttributeNames::maxAttr:
@@ -1365,11 +1366,8 @@ void HTMLInputElement::defaultEventHandler(Event& event)
     }
 
     if (m_inputType->shouldSubmitImplicitly(event)) {
-        if (isSearchField()) {
+        if (isSearchField())
             addSearchResult();
-            if (document().settings().searchInputIncrementalAttributeAndSearchEventEnabled())
-                onSearch();
-        }
         // Form submission finishes editing, just as loss of focus does.
         // If there was a change, send the event now.
         if (wasChangedSinceLastFormControlChangeEvent())
@@ -1677,18 +1675,6 @@ bool HTMLInputElement::matchesReadWritePseudoClass() const
 void HTMLInputElement::addSearchResult()
 {
     m_inputType->addSearchResult();
-}
-
-void HTMLInputElement::onSearch()
-{
-    // The type of the input element could have changed during event handling. If we are no longer
-    // a search field, don't try to do search things.
-    auto* searchInputType = dynamicDowncast<SearchInputType>(*m_inputType);
-    if (!searchInputType)
-        return;
-
-    searchInputType->stopSearchEventTimer();
-    dispatchEvent(Event::create(eventNames().searchEvent, Event::CanBubble::Yes, Event::IsCancelable::No));
 }
 
 void HTMLInputElement::resumeFromDocumentSuspension()

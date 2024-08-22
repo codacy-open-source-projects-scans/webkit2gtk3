@@ -67,7 +67,7 @@ extension TextAnimationManager: UITextEffectViewSource {
             return UITargetedPreview(view: UIView(frame: .zero))
         }
         
-        let defaultPreview = UITargetedPreview(view: UIView(frame: .zero), parameters:UIPreviewParameters(), target:UIPreviewTarget(container:delegate.containingViewForTextAnimationType(), center:delegate.containingViewForTextAnimationType().center))
+        let defaultPreview = UITargetedPreview(view: UIView(frame: .zero), parameters: UIPreviewParameters(), target: UIPreviewTarget(container: delegate.containingViewForTextAnimationType(), center: delegate.containingViewForTextAnimationType().center))
         guard let uuidChunk = chunk as? TextEffectChunk else {
             Self.logger.debug("Can't get text preview. Incorrect UITextEffectTextChunk subclass")
             return defaultPreview
@@ -101,32 +101,36 @@ extension TextAnimationManager: UITextEffectView.ReplacementTextEffect.Delegate 
             Self.logger.debug("Can't get text preview. Incorrect UITextEffectTextChunk subclass")
             return nil
         }
+
         guard let delegate = self.delegate else {
             Self.logger.debug("Can't obtain Targeted Preview. Missing delegate." )
             return nil
         }
+
         guard let preview = await delegate.targetedPreview(for: uuidChunk.uuid) else {
             Self.logger.debug("Could not generate a UITargetedPreview")
             return nil
         }
+
         return preview
     }
     
     public func replacementEffectDidComplete(_ effect: UITextEffectView.ReplacementTextEffect) {
         self.effectView.removeEffect(effect.id)
 
-        guard let (animationID, _) = chunkToEffect.first(where: { (_, value) in value == effect.id }) else {
+        guard let (animationID, _) = self.chunkToEffect.first(where: { (_, value) in value == effect.id }) else {
             return
         }
 
-        chunkToEffect[animationID] = nil
+        self.chunkToEffect[animationID] = nil
 
         guard let delegate = self.delegate else {
-            Self.logger.debug("Can't obtain Targeted Preview. Missing delegate.")
+            Self.logger.debug("Missing delegate.")
             return
         }
 
         delegate.callCompletionHandler(forAnimationID: animationID)
+        delegate.replacementEffectDidComplete();
     }
 }
 

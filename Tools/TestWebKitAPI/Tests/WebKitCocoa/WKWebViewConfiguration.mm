@@ -118,7 +118,9 @@ TEST(WebKit, InvalidConfiguration)
     configurationForEphemeralView.get().websiteDataStore = [WKWebsiteDataStore nonPersistentDataStore];
     auto ephemeralWebView = adoptNS([[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configurationForEphemeralView.get()]);
     shouldThrowExceptionWhenUsed([&](WKWebViewConfiguration *configuration) {
+        ALLOW_DEPRECATED_DECLARATIONS_BEGIN
         [configuration _setRelatedWebView:ephemeralWebView.get()];
+        ALLOW_DEPRECATED_DECLARATIONS_END
     }, true);
 }
 
@@ -127,8 +129,8 @@ TEST(WebKit, ConfigurationGroupIdentifierIsCopied)
     auto configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
     [configuration _setGroupIdentifier:@"TestGroupIdentifier"];
 
-    auto configuationCopy = adoptNS([configuration copy]);
-    EXPECT_STREQ([configuration _groupIdentifier].UTF8String, [configuationCopy _groupIdentifier].UTF8String);
+    auto configurationCopy = adoptNS([configuration copy]);
+    EXPECT_STREQ([configuration _groupIdentifier].UTF8String, [configurationCopy _groupIdentifier].UTF8String);
 }
 
 TEST(WebKit, DefaultConfigurationEME)

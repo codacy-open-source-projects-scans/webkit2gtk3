@@ -37,10 +37,13 @@
 #import "TextureView.h"
 #import <wtf/CheckedArithmetic.h>
 #import <wtf/StdLibExtras.h>
+#import <wtf/TZoneMallocInlines.h>
 
 namespace WebGPU {
 
 constexpr static auto largeBufferSize = 32 * 1024 * 1024;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(Queue);
 
 Queue::Queue(id<MTLCommandQueue> commandQueue, Device& device)
     : m_commandQueue(commandQueue)
@@ -827,7 +830,7 @@ void Queue::writeTexture(const WGPUImageCopyTexture& destination, std::span<uint
         // https://developer.apple.com/documentation/metal/mtlblitcommandencoder/1400771-copyfrombuffer?language=objc
         // "When you copy to a 2D texture, depth must be 1."
         auto sourceSize = MTLSizeMake(widthForMetal, heightForMetal, 1);
-        if (!widthForMetal || !heightForMetal)
+        if (!widthForMetal || !heightForMetal || bytesPerRow < Texture::bytesPerRow(textureFormat, widthForMetal, texture.sampleCount()))
             return;
 
         auto destinationOrigin = MTLOriginMake(destination.origin.x, destination.origin.y, 0);
@@ -853,7 +856,7 @@ void Queue::writeTexture(const WGPUImageCopyTexture& destination, std::span<uint
     case WGPUTextureDimension_3D: {
         auto sourceSize = MTLSizeMake(widthForMetal, heightForMetal, depthForMetal);
         auto destinationOrigin = MTLOriginMake(destination.origin.x, destination.origin.y, destination.origin.z);
-        if (!widthForMetal || !heightForMetal || !depthForMetal)
+        if (!widthForMetal || !heightForMetal || !depthForMetal || bytesPerRow < Texture::bytesPerRow(textureFormat, widthForMetal, texture.sampleCount()))
             return;
 
         [m_blitCommandEncoder

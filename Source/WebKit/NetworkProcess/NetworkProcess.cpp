@@ -100,6 +100,7 @@
 #include <wtf/OptionSet.h>
 #include <wtf/ProcessPrivilege.h>
 #include <wtf/RunLoop.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/UUID.h>
 #include <wtf/UniqueRef.h>
 #include <wtf/WTFProcess.h>
@@ -146,6 +147,8 @@ static void callExitSoon(IPC::Connection*)
         terminateProcess(EXIT_FAILURE);
     });
 }
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(NetworkProcess);
 
 NetworkProcess::NetworkProcess(AuxiliaryProcessInitializationParameters&& parameters)
     : m_downloadManager(*this)
@@ -1887,7 +1890,7 @@ static Vector<WebCore::SecurityOriginData> filterForRegistrableDomains(const Has
     return originsDeleted;
 }
 
-void NetworkProcess::deleteAndRestrictWebsiteDataForRegistrableDomains(PAL::SessionID sessionID, OptionSet<WebsiteDataType> websiteDataTypes, RegistrableDomainsToDeleteOrRestrictWebsiteDataFor&& domains, bool shouldNotifyPage, CompletionHandler<void(HashSet<RegistrableDomain>&&)>&& completionHandler)
+void NetworkProcess::deleteAndRestrictWebsiteDataForRegistrableDomains(PAL::SessionID sessionID, OptionSet<WebsiteDataType> websiteDataTypes, RegistrableDomainsToDeleteOrRestrictWebsiteDataFor&& domains, CompletionHandler<void(HashSet<RegistrableDomain>&&)>&& completionHandler)
 {
     RELEASE_LOG(Storage, "NetworkProcess::deleteAndRestrictWebsiteDataForRegistrableDomains started to delete and restrict data for session %" PRIu64 " - %zu domainsToDeleteAllCookiesFor, %zu domainsToDeleteAllButHttpOnlyCookiesFor, %zu domainsToDeleteAllScriptWrittenStorageFor", sessionID.toUInt64(), domains.domainsToDeleteAllCookiesFor.size(), domains.domainsToDeleteAllButHttpOnlyCookiesFor.size(), domains.domainsToDeleteAllScriptWrittenStorageFor.size());
     auto* session = networkSession(sessionID);
@@ -1912,10 +1915,7 @@ void NetworkProcess::deleteAndRestrictWebsiteDataForRegistrableDomains(PAL::Sess
         HashSet<RegistrableDomain> m_domains;
     };
     
-    auto callbackAggregator = adoptRef(*new CallbackAggregator([this, completionHandler = WTFMove(completionHandler), shouldNotifyPage] (HashSet<RegistrableDomain>&& domainsWithData) mutable {
-        if (shouldNotifyPage)
-            parentProcessConnection()->send(Messages::NetworkProcessProxy::NotifyWebsiteDataDeletionForRegistrableDomainsFinished(), 0);
-        
+    auto callbackAggregator = adoptRef(*new CallbackAggregator([completionHandler = WTFMove(completionHandler)] (HashSet<RegistrableDomain>&& domainsWithData) mutable {
         RunLoop::main().dispatch([completionHandler = WTFMove(completionHandler), domainsWithData = crossThreadCopy(WTFMove(domainsWithData))] () mutable {
             completionHandler(WTFMove(domainsWithData));
         });
@@ -2038,7 +2038,7 @@ void NetworkProcess::deleteCookiesForTesting(PAL::SessionID sessionID, Registrab
     else
         toDeleteFor.domainsToDeleteAllButHttpOnlyCookiesFor.append(domain);
 
-    deleteAndRestrictWebsiteDataForRegistrableDomains(sessionID, cookieType, WTFMove(toDeleteFor), true, [completionHandler = WTFMove(completionHandler)] (HashSet<RegistrableDomain>&& domainsDeletedFor) mutable {
+    deleteAndRestrictWebsiteDataForRegistrableDomains(sessionID, cookieType, WTFMove(toDeleteFor), [completionHandler = WTFMove(completionHandler)] (HashSet<RegistrableDomain>&& domainsDeletedFor) mutable {
         UNUSED_PARAM(domainsDeletedFor);
         completionHandler();
     });
@@ -2523,6 +2523,18 @@ void NetworkProcess::clickBackgroundFetch(PAL::SessionID sessionID, const String
 }
 #if ENABLE(WEB_PUSH_NOTIFICATIONS)
 
+void NetworkProcess::getPendingPushMessage(PAL::SessionID sessionID, CompletionHandler<void(const std::optional<WebPushMessage>&)>&& callback)
+{
+    if (auto* session = networkSession(sessionID)) {
+        RELEASE_LOG(Push, "NetworkProcess getting pending push messages for session ID %" PRIu64, sessionID.toUInt64());
+        session->notificationManager().getPendingPushMessage(WTFMove(callback));
+        return;
+    }
+
+    RELEASE_LOG(Push, "NetworkProcess could not find session for ID %llu to get pending push messages", sessionID.toUInt64());
+    callback(std::nullopt);
+}
+
 void NetworkProcess::getPendingPushMessages(PAL::SessionID sessionID, CompletionHandler<void(const Vector<WebPushMessage>&)>&& callback)
 {
     if (auto* session = networkSession(sessionID)) {
@@ -2558,7 +2570,8 @@ void NetworkProcess::processPushMessage(PAL::SessionID sessionID, WebPushMessage
         auto scope = pushMessage.registrationURL.string();
         bool isDeclarative = !!pushMessage.notificationPayload;
         session->ensureSWServer().processPushMessage(WTFMove(pushMessage.pushData), WTFMove(pushMessage.notificationPayload), WTFMove(pushMessage.registrationURL), [this, protectedThis = Ref { *this }, sessionID, origin = WTFMove(origin), scope = WTFMove(scope), callback = WTFMove(callback), isDeclarative](bool result, std::optional<WebCore::NotificationPayload>&& resultPayload) mutable {
-            if (!isDeclarative && !result) {
+            // When using built-in notifications, we expect clients to use getPendingPushMessage, which automatically tracks silent push counts within webpushd.
+            if (!m_builtInNotificationsEnabled &&!isDeclarative && !result) {
                 if (auto* session = networkSession(sessionID)) {
                     session->notificationManager().incrementSilentPushCount(WTFMove(origin), [scope = WTFMove(scope), callback = WTFMove(callback), result](unsigned newSilentPushCount) mutable {
                         RELEASE_LOG_ERROR(Push, "Push message for scope %" SENSITIVE_LOG_STRING " not handled properly; new silent push count: %u", scope.utf8().data(), newSilentPushCount);
@@ -2577,6 +2590,11 @@ void NetworkProcess::processPushMessage(PAL::SessionID sessionID, WebPushMessage
 }
 
 #else
+
+void NetworkProcess::getPendingPushMessage(PAL::SessionID, CompletionHandler<void(const std::optional<WebPushMessage>&)>&& callback)
+{
+    callback({ });
+}
 
 void NetworkProcess::getPendingPushMessages(PAL::SessionID, CompletionHandler<void(const Vector<WebPushMessage>&)>&& callback)
 {
@@ -3011,6 +3029,22 @@ void NetworkProcess::countNonDefaultSessionSets(PAL::SessionID sessionID, Comple
 {
     auto* session = networkSession(sessionID);
     completionHandler(session ? session->countNonDefaultSessionSets() : 0);
+}
+
+void NetworkProcess::allowFilesAccessFromWebProcess(WebCore::ProcessIdentifier processID, const Vector<String>& paths, CompletionHandler<void()>&& completionHandler)
+{
+    if (auto* connection = webProcessConnection(processID)) {
+        for (auto& path : paths)
+            connection->allowAccessToFile(path);
+    }
+    completionHandler();
+}
+
+void NetworkProcess::allowFileAccessFromWebProcess(WebCore::ProcessIdentifier processID, const String& path, CompletionHandler<void()>&& completionHandler)
+{
+    if (auto* connection = webProcessConnection(processID))
+        connection->allowAccessToFile(path);
+    completionHandler();
 }
 
 void NetworkProcess::requestBackgroundFetchPermission(PAL::SessionID sessionID, const ClientOrigin& origin, CompletionHandler<void(bool)>&& callback)

@@ -57,12 +57,14 @@ class TableFormattingState;
 
 class LayoutState : public CanMakeWeakPtr<LayoutState> {
     WTF_MAKE_NONCOPYABLE(LayoutState);
-    WTF_MAKE_ISO_ALLOCATED(LayoutState);
+    WTF_MAKE_TZONE_OR_ISO_ALLOCATED(LayoutState);
 public:
     // Primary layout state has a direct geometry cache in layout boxes.
     enum class Type { Primary, Secondary };
 
-    LayoutState(const Document&, const ElementBox& rootContainer, Type);
+    using FormattingContextLayoutFunction = Function<void(const ElementBox&, std::optional<LayoutUnit>, LayoutState&)>;
+
+    LayoutState(const Document&, const ElementBox& rootContainer, Type, FormattingContextLayoutFunction&&);
     ~LayoutState();
 
     Type type() const { return m_type; }
@@ -103,6 +105,8 @@ public:
 
     const ElementBox& root() const { return m_rootContainer; }
 
+    void layoutWithFormattingContextForBox(const ElementBox&, std::optional<LayoutUnit> widthConstraint);
+
 private:
     void setQuirksMode(QuirksMode quirksMode) { m_quirksMode = quirksMode; }
     BoxGeometry& ensureGeometryForBoxSlow(const Box&);
@@ -122,6 +126,8 @@ private:
 
     CheckedRef<const ElementBox> m_rootContainer;
     Ref<SecurityOrigin> m_securityOrigin;
+
+    FormattingContextLayoutFunction m_formattingContextLayoutFunction;
 };
 
 inline bool LayoutState::hasBoxGeometry(const Box& layoutBox) const

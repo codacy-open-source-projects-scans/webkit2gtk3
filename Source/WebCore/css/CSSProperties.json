@@ -652,10 +652,23 @@
                 "url": "https://www.w3.org/TR/css-fonts-4/#font-stretch-prop"
             }
         },
+        "text-box": {
+            "codegen-properties": {
+                "longhands": [
+                    "text-box-trim",
+                    "text-box-edge"
+                ],
+                "settings-flag": "cssTextBoxTrimEnabled"
+            },
+            "specification": {
+                "category": "css-inline",
+                "url": "https://www.w3.org/TR/css-inline-3/#text-box-shorthand"
+            }
+        },
         "text-box-edge": {
-            "inherited": true,
+            "inherited": false,
             "values": [
-                "leading",
+                "auto",
                 "text",
                 "ex",
                 "ideographic",
@@ -664,28 +677,30 @@
                 "cap"
             ],
             "codegen-properties": {
-                "converter": "TextBoxEdge",
+                "converter": "TextEdge",
                 "settings-flag": "cssTextBoxTrimEnabled",
-                "parser-function": "consumeTextBoxEdge",
-                "parser-grammar-unused": "leading | [ [ text | cap | ex | ideographic | ideographic-ink ] [ text | alphabetic | ideographic | ideographic-ink ]? ]",
+                "parser-function": "consumeTextEdge",
+                "parser-function-requires-current-property": true,
+                "parser-grammar-unused": "auto | [ [ text | cap | ex | ideographic | ideographic-ink ] [ text | alphabetic | ideographic | ideographic-ink ]? ]",
                 "parser-grammar-unused-reason": "Needs support for 'groups' and 'optional'."
             },
             "specification": {
                 "category": "css-inline",
-                "url": "https://www.w3.org/TR/css-inline-3/#text-edges"
+                "url": "https://www.w3.org/TR/css-inline-3/#text-box-edge"
             },
             "status": "experimental"
         },
         "text-box-trim": {
             "values": [
                 "none",
-                "start",
-                "end",
-                "both"
+                "trim-start",
+                "trim-end",
+                "trim-both"
             ],
             "codegen-properties": {
                 "settings-flag": "cssTextBoxTrimEnabled",
-                "parser-grammar": "<<values>>"
+                "parser-grammar": "<<values>>",
+                "parser-exported": true
             },
             "specification": {
                 "category": "css-inline",
@@ -723,7 +738,8 @@
                 "custom": "Initial|Inherit",
                 "font-property": true,
                 "high-priority": true,
-                "parser-grammar": "normal | <feature-tag-value>#@(no-single-item-opt)"
+                "parser-grammar": "normal | <feature-tag-value>#@(no-single-item-opt)",
+                "parser-exported": true
             },
             "specification": {
                 "category": "css-fonts-4",
@@ -1653,7 +1669,12 @@
                 "content-box",
                 {
                     "value": "border",
-                    "status": "unimplemented",
+                    "status": "unimplemented"
+                },
+                {
+                    "value": "border-area",
+                    "settings-flag": "cssBackgroundClipBorderAreaEnabled",
+                    "status": "experimental",
                     "url": "https://drafts.csswg.org/css-backgrounds-4/#background-clip"
                 },
                 {
@@ -1669,7 +1690,10 @@
                 "name-for-methods": "Clip",
                 "fill-layer-property": true,
                 "separator": " ",
-                "parser-grammar": "<single-background-clip>#"
+                "parser-function": "consumeBackgroundClip",
+                "parser-function-requires-context": true,
+                "parser-grammar-unused": "<single-background-clip>#",
+                "parser-grammar-unused-reason": "Needs support for settings-enabled keywords in the grammaer."
             },
             "specification": {
                 "category": "css-backgrounds",
@@ -3849,6 +3873,31 @@
                 "color-property": true,
                 "parser-grammar": "<color>"
             }
+        },
+        "line-fit-edge": {
+            "inherited": true,
+            "values": [
+                "leading",
+                "text",
+                "ex",
+                "ideographic",
+                "ideographic-ink",
+                "alphabetic",
+                "cap"
+            ],
+            "codegen-properties": {
+                "converter": "TextEdge",
+                "settings-flag": "cssTextBoxTrimEnabled",
+                "parser-function": "consumeTextEdge",
+                "parser-function-requires-current-property": true,
+                "parser-grammar-unused": "leading | [ [ text | cap | ex | ideographic | ideographic-ink ] [ text | alphabetic | ideographic | ideographic-ink ]? ]",
+                "parser-grammar-unused-reason": "Needs support for 'groups' and 'optional'."
+            },
+            "specification": {
+                "category": "css-inline",
+                "url": "https://www.w3.org/TR/css-inline-3/#text-edges"
+            },
+            "status": "experimental"
         },
         "line-height": {
             "inherited": true,
@@ -8344,23 +8393,21 @@
             "inherited": true,
             "codegen-properties": {
                 "converter": "TextUnderlineOffset",
-                "parser-grammar": "auto | <length>",
-                "parser-grammar-comment": "The current specification has a <length-percentage>, not just <length>"
+                "parser-grammar": "auto | <length-percentage>"
             },
             "specification": {
                 "category": "css-text-decor",
-                "url": "https://www.w3.org/TR/css-text-decor-4/#underline-offset"
+                "url": "https://drafts.csswg.org/css-text-decor-4/#underline-offset"
             }
         },
         "text-decoration-thickness": {
             "codegen-properties": {
                 "converter": "TextDecorationThickness",
-                "parser-grammar": "auto | from-font | <length-percentage>",
-                "parser-grammar-comment": "The current specification has a <length-percentage>, not just <length>"
+                "parser-grammar": "auto | from-font | <length-percentage>"
             },
             "specification": {
                 "category": "css-text-decor",
-                "url": "https://www.w3.org/TR/css-text-decor-4/#text-decoration-thickness"
+                "url": "https://drafts.csswg.org/css-text-decor-4/#text-decoration-thickness-property"
             }
         },
         "-webkit-text-decorations-in-effect": {
@@ -9273,6 +9320,20 @@
                 "url": "https://drafts.csswg.org/scroll-animations-1/#view-timeline-name"
             }
         },
+        "view-transition-class": {
+            "codegen-properties": {
+                "converter": "ViewTransitionClass",
+                "name-for-methods": "ViewTransitionClasses",
+                "parser-function": "consumeViewTransitionClass",
+                "parser-grammar-unused": "none | <custom-ident>+",
+                "parser-grammar-unused-reason": "Needs support for '+' multipliers.",
+                "settings-flag": "viewTransitionClassesEnabled"
+            },
+            "specification": {
+                "category": "css-view-transitions",
+                "url": "https://drafts.csswg.org/css-view-transitions-2/#view-transition-class-prop"
+            }
+        },
         "view-transition-name": {
             "codegen-properties": {
                 "converter": "ViewTransitionName",
@@ -9612,7 +9673,8 @@
                     "normal"
                 ],
                 "codegen-properties": {
-                    "parser-grammar": "normal | <feature-tag-value>#@(no-single-item-opt)"
+                    "parser-grammar": "normal | <feature-tag-value>#@(no-single-item-opt)",
+                    "parser-exported": true
                 },
                 "specification": {
                     "category": "css-fonts-4",
@@ -9875,7 +9937,7 @@
         "@font-palette-values": {
             "font-family": {
                 "codegen-properties": {
-                    "parser-function": "consumeFamilyNameList",
+                    "parser-function": "consumeFontPaletteValuesFontFamily",
                     "parser-grammar-unused": "<family-name>#",
                     "parser-grammar-unused-reason": "Needs support for special 'family-name' processing."
                 },
@@ -9959,6 +10021,21 @@
                     "settings-flag": "crossDocumentViewTransitionsEnabled",
                     "parser-grammar": "<<values>>",
                     "parser-exported": true
+                },
+                 "specification": {
+                     "category": "css-view-transitions",
+                     "url": "https://www.w3.org/TR/css-view-transitions-2/#view-transition-navigation-descriptor"
+                 }
+            },
+            "types": {
+                "values": [
+                    "none"
+                ],
+                "codegen-properties": {
+                    "settings-flag": "crossDocumentViewTransitionsEnabled",
+                    "parser-grammar-unused": "none | <custom-ident>+",
+                    "parser-grammar-unused-reason": "Needs support for space separated idents",
+                    "parser-function": "consumeViewTransitionTypes"
                 },
                  "specification": {
                      "category": "css-view-transitions",
@@ -10276,6 +10353,7 @@
         },
         "<font-stretch-absolute>": {
             "grammar": "normal | ultra-condensed | extra-condensed | condensed | semi-condensed | semi-expanded | expanded | extra-expanded | ultra-expanded",
+            "exported": true,
             "specification": {
                 "category": "css-fonts-4",
                 "url": "https://drafts.csswg.org/css-fonts-4/#stretchmappings"
@@ -10452,6 +10530,7 @@
         },
         "<blend-mode>": {
             "grammar": "normal | multiply | screen | overlay | darken | lighten | color-dodge | color-burn | hard-light | soft-light | difference | exclusion | hue | saturation | color | luminosity",
+            "exported": true,
             "specification": {
                 "category": "css-compositing",
                 "url": "https://www.w3.org/TR/compositing-1/#ltblendmodegt"

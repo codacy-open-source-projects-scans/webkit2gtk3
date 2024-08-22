@@ -223,9 +223,9 @@ GetByStatus::GetByStatus(const ModuleNamespaceAccessCase& accessCase)
 {
 }
 
-GetByStatus GetByStatus::computeForStubInfoWithoutExitSiteFeedback(const ConcurrentJSLocker& locker, CodeBlock* profiledBlock, StructureStubInfo* stubInfo, CallLinkStatus::ExitSiteData callExitSiteData, CodeOrigin codeOrigin)
+GetByStatus GetByStatus::computeForStubInfoWithoutExitSiteFeedback(const ConcurrentJSLocker& locker, CodeBlock* profiledBlock, StructureStubInfo* stubInfo, CallLinkStatus::ExitSiteData callExitSiteData, CodeOrigin)
 {
-    StubInfoSummary summary = StructureStubInfo::summary(profiledBlock->vm(), stubInfo);
+    StubInfoSummary summary = StructureStubInfo::summary(locker, profiledBlock->vm(), stubInfo);
     if (!isInlineable(summary))
         return GetByStatus(summary, stubInfo);
     
@@ -259,9 +259,9 @@ GetByStatus GetByStatus::computeForStubInfoWithoutExitSiteFeedback(const Concurr
     }
         
     case CacheType::Stub: {
-        PolymorphicAccess* list = stubInfo->m_stub.get();
-        if (list->size() == 1) {
-            const AccessCase& access = list->at(0);
+        auto list = stubInfo->listedAccessCases(locker);
+        if (list.size() == 1) {
+            const AccessCase& access = *list.at(0);
             switch (access.type()) {
             case AccessCase::ModuleNamespaceLoad:
                 return GetByStatus(access.as<ModuleNamespaceAccessCase>());
@@ -276,15 +276,7 @@ GetByStatus GetByStatus::computeForStubInfoWithoutExitSiteFeedback(const Concurr
             }
             case AccessCase::LoadMegamorphic:
             case AccessCase::IndexedMegamorphicLoad: {
-                // Emitting LoadMegamorphic means that we give up polymorphic IC optimization. So this needs very careful handling.
-                // It is possible that one function can be inlined from the other function, and then it gets limited # of structures.
-                // In this case, continue using IC is better than falling back to megamorphic case. But if the function gets compiled before,
-                // and even optimizing JIT saw the megamorphism, then this is likely that this function continues having megamorphic behavior,
-                // and inlined megamorphic code is faster. Currently, we use LoadMegamorphic only when the exact same form of CodeOrigin gets
-                // this megamorphic GetById before (same level of inlining etc.). This is very conservative but effective since IC is very fast
-                // when it worked well (but costly if it doesn't work and get megamorphic). Once this cost-benefit tradeoff gets changed (via
-                // handler IC), we can revisit this condition.
-                if (isSameStyledCodeOrigin(stubInfo->codeOrigin, codeOrigin) && !stubInfo->tookSlowPath)
+                if (!stubInfo->tookSlowPath)
                     return GetByStatus(Megamorphic, /* wasSeenInJIT */ true);
                 break;
             }
@@ -293,8 +285,8 @@ GetByStatus GetByStatus::computeForStubInfoWithoutExitSiteFeedback(const Concurr
             }
         }
 
-        for (unsigned listIndex = 0; listIndex < list->size(); ++listIndex) {
-            const AccessCase& access = list->at(listIndex);
+        for (unsigned listIndex = 0; listIndex < list.size(); ++listIndex) {
+            const AccessCase& access = *list.at(listIndex);
             bool viaGlobalProxy = access.viaGlobalProxy();
 
             if (access.usesPolyProto())
@@ -658,6 +650,21 @@ CacheableIdentifier GetByStatus::singleIdentifier() const
 
     return singleIdentifierForICStatus(m_variants);
 }
+
+#if ENABLE(JIT)
+
+CacheType GetByStatus::preferredCacheType() const
+{
+    if (!isSimple())
+        return CacheType::GetByIdSelf;
+    for (const auto& variant : m_variants) {
+        if (variant.conditionSet().isEmpty())
+            return CacheType::GetByIdSelf;
+    }
+    return CacheType::GetByIdPrototype;
+}
+
+#endif
 
 void GetByStatus::dump(PrintStream& out) const
 {

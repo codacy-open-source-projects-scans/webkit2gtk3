@@ -161,10 +161,10 @@ AccentColorEnabled:
       "PLATFORM(COCOA)" : true
       default: false
     WebKit:
-      "PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WPE)": true
+      "PLATFORM(COCOA) || USE(THEME_ADWAITA)": true
       default: false
     WebCore:
-      "PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WPE)": true
+      "PLATFORM(COCOA) || USE(THEME_ADWAITA)": true
       default: false
 
 AccessHandleEnabled:
@@ -273,6 +273,19 @@ AllowMultiElementImplicitSubmission:
   type: bool
   status: embedder
   webKitLegacyPreferenceKey: WebKitAllowMultiElementImplicitFormSubmissionPreferenceKey
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
+AllowPrivacySensitiveOperationsInNonPersistentDataStores:
+  type: bool
+  status: embedder
+  humanReadableName: "Allow Privacy-Sensitive Operations in Non-Persistent Data Stores"
+  humanReadableDescription: "Allow Privacy-Sensitive Operations in Non-Persistent Data Stores"
   defaultValue:
     WebKitLegacy:
       default: false
@@ -423,6 +436,7 @@ AllowsPictureInPictureMediaPlayback:
       default: false
     WebCore:
       default: true
+  disableInLockdownMode: true
 
 AlternateFormControlDesignEnabled:
   type: bool
@@ -463,6 +477,22 @@ AlternateWebMPlayerEnabled:
       default: true
     WebCore:
       default: true
+      
+AltitudeAngleEnabled:
+  type: bool
+  status: stable
+  category: dom
+  humanReadableName: "altitudeAngle PointerEvent Property"
+  humanReadableDescription: "Enable the `altitudeAngle` property of the PointerEvents API"
+  defaultValue:
+    WebKitLegacy:
+     default: false
+    WebKit:
+      "PLATFORM(COCOA)": true
+      default: false
+    WebCore:
+      "PLATFORM(COCOA)": true
+      default: false
 
 AlwaysAllowLocalWebarchive:
   type: bool
@@ -645,6 +675,7 @@ AttachmentElementEnabled:
       default: WebKit::defaultAttachmentElementEnabled()
     WebKit:
       default: false
+  sharedPreferenceForWebProcess: true
 
 AttachmentWideLayoutEnabled:
   type: bool
@@ -747,6 +778,22 @@ AuxclickEventEnabled:
     WebCore:
       default: true
 
+AzimuthAngleEnabled:
+  type: bool
+  status: stable
+  category: dom
+  humanReadableName: "azimuthAngle PointerEvent Property"
+  humanReadableDescription: "Enable the `azimuthAngle` property of the PointerEvents API"
+  defaultValue:
+    WebKitLegacy:
+     default: false
+    WebKit:
+      "PLATFORM(COCOA)": true
+      default: false
+    WebCore:
+      "PLATFORM(COCOA)": true
+      default: false
+
 BackgroundFetchAPIEnabled:
   type: bool
   status: testable
@@ -800,6 +847,21 @@ BeaconAPIEnabled:
       default: false
     WebKit:
       default: true
+    WebCore:
+      default: false
+
+BlobFileAccessEnforcementEnabled:
+  type: bool
+  status: testable
+  category: security
+  humanReadableName: "Enforce blob backed file access valid for web process"
+  humanReadableDescription: "Validate file backed blobs were created by the correct web process"
+  sharedPreferenceForWebProcess: true
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
     WebCore:
       default: false
 
@@ -929,12 +991,40 @@ CSSAnchorPositioningEnabled:
     WebCore:
       default: false
 
+CSSBackgroundClipBorderAreaEnabled:
+  type: bool
+  status: stable
+  category: css
+  humanReadableName: "CSS background-clip: border-area"
+  humanReadableDescription: "Enable the border-area value for background-clip"
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
+    WebCore:
+      default: true
+
 CSSColorContrastEnabled:
   type: bool
   status: testable
   category: css
   humanReadableName: "CSS color-contrast()"
   humanReadableDescription: "Enable support for CSS color-contrast() defined in CSS Color 5"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
+CSSColorLayersEnabled:
+  type: bool
+  category: css
+  status: preview
+  humanReadableName: "CSS color-layers()"
+  humanReadableDescription: "Enable support for CSS color-layers()"
   defaultValue:
     WebKitLegacy:
       default: false
@@ -1171,17 +1261,17 @@ CSSRhythmicSizingEnabled:
 
 CSSRubyAlignEnabled:
   type: bool
-  status: testable
+  status: stable
   category: css
   humanReadableName: "CSS ruby-align property"
   humanReadableDescription: "Enable ruby-align"
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 CSSScopeAtRuleEnabled:
   type: bool
@@ -1241,7 +1331,7 @@ CSSScrollbarGutterEnabled:
 
 CSSScrollbarWidthEnabled:
   type: bool
-  status: testable
+  status: stable
   category: css
   humanReadableName: "CSS scrollbar-width property"
   humanReadableDescription: "Enable scrollbar-width CSS property"
@@ -1249,13 +1339,13 @@ CSSScrollbarWidthEnabled:
     WebKitLegacy:
       default: false
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 CSSShapeFunctionEnabled:
   type: bool
-  status: testable
+  status: preview
   category: css
   humanReadableName: "CSS shape() function"
   humanReadableDescription: "Enable the CSS shape() function"
@@ -1311,17 +1401,17 @@ CSSTextAutospaceEnabled:
 
 CSSTextBoxTrimEnabled:
   type: bool
-  status: preview
+  status: stable
   category: css
   humanReadableName: "CSS text-box-trim property"
   humanReadableDescription: "Enable text-box-trim"
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 CSSTextGroupAlignEnabled:
   type: bool
@@ -1480,6 +1570,7 @@ CacheAPIEnabled:
       default: true
     WebCore:
       default: false
+  disableInLockdownMode: true
 
 CanvasColorSpaceEnabled:
   type: bool
@@ -1616,6 +1707,21 @@ CaretBrowsingEnabled:
     WebCore:
       default: false
 
+ChildProcessDebuggabilityEnabled:
+  comment: Disables GPU process IPC timeouts
+  type: bool
+  status: internal
+  humanReadableName: "Child Process Debuggability"
+  humanReadableDescription: "Enable stopping child processes with a debugger"
+  exposed: [ WebKit ]
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 ClearSiteDataHTTPHeaderEnabled:
   type: bool
   status: stable
@@ -1719,6 +1825,7 @@ ContactPickerAPIEnabled:
       default: false
     WebCore:
       default: false
+  sharedPreferenceForWebProcess: true
 
 ContentChangeObserverEnabled:
   type: bool
@@ -1819,12 +1926,12 @@ CookieStoreAPIExtendedAttributesEnabled:
     WebCore:
       default: false
 
-CookieStoreAPIServiceWorkerEnabled:
+CookieStoreManagerEnabled:
   type: bool
   category: dom
   status: testable
-  humanReadableName: "Cookie Store API for Service Workers"
-  humanReadableDescription: "Enable Cookie Store API for Service Workers"
+  humanReadableName: "Cookie Store API CookieStoreManager"
+  humanReadableDescription: "Enable Cookie Store API CookieStoreManager which controls cookie change subscriptions for Service Workers"
   defaultValue:
     WebKitLegacy:
       default: false
@@ -1832,6 +1939,7 @@ CookieStoreAPIServiceWorkerEnabled:
       default: false
     WebCore:
       default: false
+  sharedPreferenceForWebProcess: true
 
 CoreMathMLEnabled:
   type: bool
@@ -2073,6 +2181,7 @@ DataListElementEnabled:
     WebCore:
       "PLATFORM(WATCHOS)": false
       default: true
+  sharedPreferenceForWebProcess: true
 
 DataTransferItemsEnabled:
   type: bool
@@ -2443,6 +2552,7 @@ EmbedElementEnabled:
       default: true
     WebCore:
       default: true
+  disableInLockdownMode: true
 
 EnableInheritURIQueryComponent:
   type: bool
@@ -2467,6 +2577,7 @@ EncryptedMediaAPIEnabled:
       default: true
     WebCore:
       default: false
+  sharedPreferenceForWebProcess: true
 
 EnterKeyHintEnabled:
   type: bool
@@ -2651,6 +2762,7 @@ FileReaderAPIEnabled:
       default: true
     WebCore:
       default: true
+  disableInLockdownMode: true
 
 FileSystemAccessEnabled:
   type: bool
@@ -2667,6 +2779,7 @@ FileSystemAccessEnabled:
     WebCore:
       "PLATFORM(COCOA)" : true
       default: false
+  disableInLockdownMode: true
 
 FilterLinkDecorationByDefaultEnabled:
   type: bool
@@ -2881,6 +2994,7 @@ GamepadsEnabled:
       default: true
     WebCore:
       default: false
+  disableInLockdownMode: true
   sharedPreferenceForWebProcess: true
 
 # FIXME: This is on by default in WebKit2. Perhaps we should consider turning it on for WebKitLegacy as well.
@@ -3124,6 +3238,21 @@ IPCTestingAPIEnabled:
     WebKit:
       default: false
 
+IgnoreIframeEmbeddingProtectionsEnabled:
+  type: bool
+  status: internal
+  category: security
+  humanReadableName: "Ignore iframe Embedding Protections"
+  humanReadableDescription: "Ignores X-Frame-Options and CSP ancestors"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+  sharedPreferenceForWebProcess: true
+
 IgnoreInvalidMessageWhenIPCTestingAPIEnabled:
   type: bool
   status: internal
@@ -3271,6 +3400,7 @@ IndexedDBAPIEnabled:
       default: true
     WebCore:
       default: true
+  disableInLockdownMode: true
 
 InlineMediaPlaybackRequiresPlaysInlineAttribute:
   type: bool
@@ -3298,6 +3428,7 @@ InputTypeColorEnabled:
       default: true
     WebCore:
       default: false
+  sharedPreferenceForWebProcess: true
 
 InputTypeDateEnabled:
   type: bool
@@ -4209,6 +4340,7 @@ MathMLEnabled:
       default: true
     WebCore:
       default: true
+  disableInLockdownMode: true
 
 MaxParseDuration:
   type: double
@@ -4385,6 +4517,7 @@ MediaDevicesEnabled:
     WebCore:
       "PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
+  disableInLockdownMode: true
 
 MediaEnabled:
   type: bool
@@ -4714,6 +4847,8 @@ ModelElementEnabled:
       default: false
     WebCore:
       default: false
+  disableInLockdownMode: true
+  sharedPreferenceForWebProcess: true
 
 ModelProcessEnabled:
   type: bool
@@ -4903,6 +5038,7 @@ NotificationsEnabled:
     WebCore:
       "PLATFORM(IOS_FAMILY)": false
       default: true
+  disableInLockdownMode: true
 
 ObservableEnabled:
   type: bool
@@ -5044,6 +5180,7 @@ PDFJSViewerEnabled:
       default: false
     WebCore:
       default: false
+  disableInLockdownMode: true
 
 PDFPluginEnabled:
   type: bool
@@ -5072,19 +5209,19 @@ PDFPluginHUDEnabled:
     WebCore:
       default: false
 
-PageAtRuleSupportEnabled:
+PageAtRuleMarginDescriptorsEnabled:
   type: bool
-  status: unstable
+  status: stable
   category: css
-  humanReadableName: "@page CSS at-rule support"
-  humanReadableDescription: "Enable @page support"
+  humanReadableName: "@page CSS at-rule margin descriptors"
+  humanReadableDescription: "Enable support for @page margin descriptors"
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 PageVisibilityBasedProcessSuppressionEnabled:
   type: bool
@@ -5169,6 +5306,7 @@ PeerConnectionEnabled:
       default: false
     WebCore:
       default: true
+  disableInLockdownMode: true
 
 PeerConnectionVideoScalingAdaptationDisabled:
   type: bool
@@ -5254,6 +5392,7 @@ PictureInPictureAPIEnabled:
       default: true
     WebCore:
       default: true
+  disableInLockdownMode: true
 
 PitchCorrectionAlgorithm:
   type: uint32_t
@@ -5452,6 +5591,7 @@ PushAPIEnabled:
       default: false
     WebKit:
       default: false
+  disableInLockdownMode: true
 
 ReadableByteStreamAPIEnabled:
   type: bool
@@ -5482,6 +5622,7 @@ RemotePlaybackEnabled:
     WebCore:
       "PLATFORM(VISION)" : false
       default: true
+  disableInLockdownMode: true
 
 RemoveBackgroundEnabled:
   type: bool
@@ -5916,7 +6057,7 @@ ScrollToTextFragmentFeatureDetectionEnabled:
 
 ScrollToTextFragmentGenerationEnabled:
   type: bool
-  status: unstable
+  status: stable
   category: dom
   humanReadableName: "Scroll To Text Fragment Generation"
   humanReadableDescription: "Enable Scroll To Text Fragment Generation Menu"
@@ -5924,9 +6065,9 @@ ScrollToTextFragmentGenerationEnabled:
     WebKitLegacy:
       default: false
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 ScrollToTextFragmentIndicatorEnabled:
   type: bool
@@ -5966,20 +6107,6 @@ ScrollingPerformanceTestingEnabled:
       default: false
     WebKit:
       default: false
-    WebCore:
-      default: false
-
-SearchInputIncrementalAttributeAndSearchEventEnabled:
-  type: bool
-  status: embedder
-  category: html
-  humanReadableName: "Search control incremental attribute and search event"
-  humanReadableDescription: "Enable search control incremental attribute and search event support"
-  defaultValue:
-    WebKitLegacy:
-      default: WebKit::defaultSearchInputIncrementalAttributeAndSearchEventEnabled()
-    WebKit:
-      default: WebKit::defaultSearchInputIncrementalAttributeAndSearchEventEnabled()
     WebCore:
       default: false
 
@@ -6125,6 +6252,7 @@ ServiceWorkersEnabled:
       default: true
     WebCore:
       default: false
+  sharedPreferenceForWebProcess: true
 
 ServiceWorkersUserGestureEnabled:
   type: bool
@@ -6542,6 +6670,7 @@ SpeechRecognitionEnabled:
       default: false
     WebCore:
       default: false
+  disableInLockdownMode: true
   sharedPreferenceForWebProcess: true
 
 SpeechSynthesisAPIEnabled:
@@ -6556,6 +6685,8 @@ SpeechSynthesisAPIEnabled:
       default: true
     WebCore:
       default: true
+  disableInLockdownMode: true
+  sharedPreferenceForWebProcess: true
 
 SpringTimingFunctionEnabled:
   type: bool
@@ -6697,6 +6828,7 @@ SystemPreviewEnabled:
       default: false
     WebCore:
       default: false
+  disableInLockdownMode: true
 
 TabsToLinks:
   type: bool
@@ -6709,6 +6841,20 @@ TabsToLinks:
     WebKit:
       "PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
+
+TargetTextPseudoElementEnabled:
+  type: bool
+  status: stable
+  category: css
+  humanReadableName: "::target-text pseudo-element"
+  humanReadableDescription: "Enable the ::target-text CSS pseudo-element"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: true
+    WebCore:
+      default: true
 
 TelephoneNumberParsingEnabled:
   type: bool
@@ -6739,7 +6885,7 @@ TextAnimationsEnabled:
   status: internal
   humanReadableName: "Text Animations"
   humanReadableDescription: "Text Animations"
-  condition: ENABLE(WRITING_TOOLS_UI)
+  condition: ENABLE(WRITING_TOOLS)
   defaultValue:
     WebKitLegacy:
       default: true
@@ -6837,7 +6983,7 @@ TextRecognitionInVideosEnabled:
   category: media
   humanReadableName: "Text Recognition in Videos"
   humanReadableDescription: "Enable Text Recognition in Videos"
-  condition: ENABLE(IMAGE_ANALYSIS)
+  condition: ENABLE(IMAGE_ANALYSIS) && ENABLE(VIDEO)
   exposed: [ WebKit ]
   defaultValue:
     WebCore:
@@ -6846,6 +6992,7 @@ TextRecognitionInVideosEnabled:
       default: false
     WebKit:
       default: defaultTextRecognitionInVideosEnabled()
+  sharedPreferenceForWebProcess: true
 
 ThreadedAnimationResolutionEnabled:
   type: bool
@@ -7392,6 +7539,34 @@ ViewGestureDebuggingEnabled:
     WebKit:
       default: false
 
+ViewTransitionClassesEnabled:
+  type: bool
+  category: animation
+  status: stable
+  humanReadableName: "View Transition Classes"
+  humanReadableDescription: "Support specifying classes for view transitions"
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
+    WebCore:
+      default: true
+
+ViewTransitionTypesEnabled:
+  type: bool
+  category: animation
+  status: stable
+  humanReadableName: "View Transition Types"
+  humanReadableDescription: "Support specifying types for view transitions"
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
+    WebCore:
+      default: true
+
 ViewTransitionsEnabled:
   type: bool
   category: animation
@@ -7599,6 +7774,7 @@ WebAudioEnabled:
       default: true
     WebCore:
       default: false
+  disableInLockdownMode: true
 
 WebAuthenticationASEnabled:
   type: bool
@@ -7646,6 +7822,7 @@ WebCodecsAV1Enabled:
     WebCore:
       "USE(GSTREAMER)": true
       default: false
+  disableInLockdownMode: true
 
 WebCodecsAudioEnabled:
   type: bool
@@ -7701,6 +7878,7 @@ WebCodecsVideoEnabled:
       "PLATFORM(COCOA)": true
       "USE(GSTREAMER)": true
       default: false
+  disableInLockdownMode: true
 
 WebCryptoSafeCurvesEnabled:
   type: bool
@@ -7774,6 +7952,7 @@ WebGLEnabled:
       default: true
     WebCore:
       default: false
+  disableInLockdownMode: true
   sharedPreferenceForWebProcess: true
 
 WebGLTimerQueriesEnabled:
@@ -7788,24 +7967,6 @@ WebGLTimerQueriesEnabled:
     WebKit:
       default: false
     WebCore:
-      default: false
-
-WebGLUsingMetal:
-  type: bool
-  status: internal
-  category: dom
-  humanReadableName: "WebGL via Metal"
-  humanReadableDescription: "Use the Metal backend for ANGLE"
-  condition: ENABLE(WEBGL) && PLATFORM(COCOA)
-  defaultValue:
-    WebKitLegacy:
-      "HAVE(WEBGL_COMPATIBLE_METAL)": true
-      default: false
-    WebKit:
-      "HAVE(WEBGL_COMPATIBLE_METAL)": true
-      default: false
-    WebCore:
-      "HAVE(WEBGL_COMPATIBLE_METAL)": true
       default: false
 
 WebGPUEnabled:
@@ -7824,6 +7985,7 @@ WebGPUEnabled:
     WebCore:
       "ENABLE(WEBGPU_BY_DEFAULT)": true
       default: false
+  disableInLockdownMode: true
   sharedPreferenceForWebProcess: true
 
 WebInspectorEngineeringSettingsAllowed:
@@ -7853,6 +8015,7 @@ WebLocksAPIEnabled:
       default: true
     WebCore:
       default: true
+  disableInLockdownMode: true
   sharedPreferenceForWebProcess: true
 
 WebMFormatReaderEnabled:
@@ -7933,11 +8096,12 @@ WebRTCEncodedTransformEnabled:
     WebKitLegacy:
       default: false
     WebKit:
-      "USE(LIBWEBRTC) && PLATFORM(COCOA)": WebKit::defaultPeerConnectionEnabledAvailable()
+      "USE(LIBWEBRTC) && (PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WPE))": WebKit::defaultPeerConnectionEnabledAvailable()
       default: false
     WebCore:
       "USE(LIBWEBRTC)": true
       default: false
+  disableInLockdownMode: true
 
 # FIXME: Is this implemented for WebKitLegacy? If not, this should be excluded from WebKitLegacy entirely.
 WebRTCH264HardwareEncoderEnabled:
@@ -8177,6 +8341,7 @@ WebXRAugmentedRealityModuleEnabled:
       default: false
     WebCore:
       default: false
+  disableInLockdownMode: true
 
 WebXREnabled:
   type: bool
@@ -8192,6 +8357,7 @@ WebXREnabled:
       default: true
     WebCore:
       default: true
+  disableInLockdownMode: true
   sharedPreferenceForWebProcess: true
 
 WebXRGamepadsModuleEnabled:
@@ -8223,6 +8389,41 @@ WebXRHandInputModuleEnabled:
       default: true
     WebCore:
       default: true
+
+WebXRLayersAPIEnabled:
+  type: bool
+  status: Webxr_layers_feature_status
+  category: dom
+  humanReadableName: "WebXR Layers API"
+  humanReadableDescription: "Adds support for the WebXR Layers API"
+  condition: ENABLE(WEBXR_LAYERS)
+  defaultValue:
+    WebKitLegacy:
+      "PLATFORM(VISION) && ENABLE(WEBXR_WEBGPU_BY_DEFAULT)": true
+      default: false
+    WebKit:
+      "PLATFORM(VISION) && ENABLE(WEBXR_WEBGPU_BY_DEFAULT)": true
+      default: false
+    WebCore:
+      "PLATFORM(VISION) && ENABLE(WEBXR_WEBGPU_BY_DEFAULT)": true
+      default: false
+
+WebXRWebGPUBindingsEnabled:
+  type: bool
+  status: Webgpu_webxr_feature_status
+  category: dom
+  humanReadableName: "WebGPU Support for WebXR"
+  humanReadableDescription: "Adds WebGPU support for WebXR"
+  defaultValue:
+    WebKitLegacy:
+      "PLATFORM(VISION) && ENABLE(WEBXR_WEBGPU_BY_DEFAULT)": true
+      default: false
+    WebKit:
+      "PLATFORM(VISION) && ENABLE(WEBXR_WEBGPU_BY_DEFAULT)": true
+      default: false
+    WebCore:
+      "PLATFORM(VISION) && ENABLE(WEBXR_WEBGPU_BY_DEFAULT)": true
+      default: false
 
 WheelEventGesturesBecomeNonBlocking:
   type: bool

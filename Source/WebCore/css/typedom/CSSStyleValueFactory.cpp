@@ -50,8 +50,8 @@
 #include "StylePropertiesInlines.h"
 #include "StylePropertyShorthand.h"
 #include <wtf/FixedVector.h>
-#include <wtf/IsoMallocInlines.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/MakeString.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/StringView.h>
@@ -180,7 +180,7 @@ ExceptionOr<Ref<CSSStyleValue>> CSSStyleValueFactory::reifyValue(const CSSValue&
     if (auto* primitiveValue = dynamicDowncast<CSSPrimitiveValue>(cssValue)) {
         if (primitiveValue->isCalculated()) {
             auto* calcValue = primitiveValue->cssCalcValue();
-            auto result = CSSNumericValue::reifyMathExpression(calcValue->expressionNode());
+            auto result = CSSNumericValue::reifyMathExpression(calcValue->tree());
             if (result.hasException())
                 return result.releaseException();
             return static_reference_cast<CSSStyleValue>(result.releaseReturnValue());

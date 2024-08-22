@@ -83,6 +83,7 @@ axis
 background
 behavior
 bgcolor
+blocking
 border
 bordercolor
 capture
@@ -160,7 +161,6 @@ http-equiv
 id
 imagesizes
 imagesrcset
-incremental
 inert
 inputmode
 integrity
@@ -283,7 +283,9 @@ onoffline
 ononline
 onorientationchange
 onpagehide
+onpagereveal
 onpageshow
+onpageswap
 onpaste
 onpause
 onplay
@@ -299,11 +301,11 @@ onpointerup
 onpopstate
 onprogress
 onratechange
+onredraw
 onrejectionhandled
 onreset
 onresize
 onscroll
-onsearch
 onsecuritypolicyviolation
 onseeked
 onseeking

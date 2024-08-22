@@ -25,7 +25,6 @@
 
 #pragma once
 
-#include "AnchorPositionEvaluator.h"
 #include "CSSToLengthConversionData.h"
 #include "CSSToStyleMap.h"
 #include "CascadeLevel.h"
@@ -58,7 +57,6 @@ struct BuilderContext {
     const RenderStyle& parentStyle;
     const RenderStyle* rootElementStyle = nullptr;
     RefPtr<const Element> element = nullptr;
-    AnchorPositionedStateMap* anchorPositionedStateMap = nullptr;
 };
 
 class BuilderState {
@@ -114,6 +112,8 @@ public:
     {
         return m_currentProperty && m_currentProperty->cascadeLevel == CascadeLevel::Author;
     }
+
+    CSSPropertyID cssPropertyID() const;
 
 private:
     // See the comment in maybeUpdateFontForLetterSpacing() about why this needs to be a friend.

@@ -39,8 +39,11 @@
 #import <wtf/BlockPtr.h>
 #import <wtf/MainThread.h>
 #import <wtf/RetainPtr.h>
+#import <wtf/TZoneMallocInlines.h>
 
 namespace WebPushTool {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(Connection);
 
 std::unique_ptr<Connection> Connection::create(PreferTestService preferTestService, String bundleIdentifier, String pushPartition)
 {
@@ -134,7 +137,6 @@ void Connection::sendAuditToken()
     }
 
     WebKit::WebPushD::WebPushDaemonConnectionConfiguration configuration;
-    configuration.useMockBundlesForTesting = true;
     configuration.bundleIdentifierOverride = m_bundleIdentifier;
     configuration.pushPartitionString = m_pushPartition;
 
@@ -143,7 +145,7 @@ void Connection::sendAuditToken()
     memcpy(tokenVector.data(), &token, sizeof(token));
     configuration.hostAppAuditTokenData = WTFMove(tokenVector);
 
-    sendWithoutUsingIPCConnection(Messages::PushClientConnection::UpdateConnectionConfiguration(WTFMove(configuration)));
+    sendWithoutUsingIPCConnection(Messages::PushClientConnection::InitializeConnection(WTFMove(configuration)));
 }
 
 static OSObjectPtr<xpc_object_t> messageDictionaryFromEncoder(UniqueRef<IPC::Encoder>&& encoder)

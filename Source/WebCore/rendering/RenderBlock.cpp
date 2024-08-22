@@ -25,6 +25,7 @@
 #include "RenderBlock.h"
 
 #include "AXObjectCache.h"
+#include "BorderShape.h"
 #include "DocumentInlines.h"
 #include "Editor.h"
 #include "Element.h"
@@ -75,10 +76,10 @@
 #include "ShadowRoot.h"
 #include "ShapeOutsideInfo.h"
 #include "TransformState.h"
-#include <wtf/IsoMallocInlines.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/SetForScope.h>
 #include <wtf/StackStats.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/TextStream.h>
 
 namespace WebCore {
@@ -86,7 +87,7 @@ namespace WebCore {
 using namespace HTMLNames;
 using namespace WTF::Unicode;
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(RenderBlock);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderBlock);
 
 struct SameSizeAsRenderBlock : public RenderBox {
 };
@@ -1168,9 +1169,10 @@ void RenderBlock::paintObject(PaintInfo& paintInfo, const LayoutPoint& paintOffs
         auto borderRect = LayoutRect(paintOffset, size());
 
         if (paintInfo.paintBehavior.contains(PaintBehavior::EventRegionIncludeBackground) && visibleToHitTesting()) {
-            auto borderRoundedRect = style().getRoundedBorderFor(borderRect);
-            LOG_WITH_STREAM(EventRegions, stream << "RenderBlock " << *this << " uniting region " << borderRoundedRect << " event listener types " << style().eventListenerRegionTypes());
-            paintInfo.eventRegionContext()->unite(FloatRoundedRect(borderRoundedRect), *this, style(), isRenderTextControl() && downcast<RenderTextControl>(*this).textFormControlElement().isInnerTextElementEditable());
+            auto borderShape = BorderShape::shapeForBorderRect(style(), borderRect);
+            LOG_WITH_STREAM(EventRegions, stream << "RenderBlock " << *this << " uniting region " << borderShape.deprecatedRoundedRect() << " event listener types " << style().eventListenerRegionTypes());
+            bool overrideUserModifyIsEditable = isRenderTextControl() && downcast<RenderTextControl>(*this).textFormControlElement().isInnerTextElementEditable();
+            paintInfo.eventRegionContext()->unite(borderShape.deprecatedPixelSnappedRoundedRect(document().deviceScaleFactor()), *this, style(), overrideUserModifyIsEditable);
         }
 
         if (!paintInfo.paintBehavior.contains(PaintBehavior::EventRegionIncludeForeground))
@@ -2755,11 +2757,11 @@ void RenderBlock::addFocusRingRects(Vector<LayoutRect>& rects, const LayoutPoint
     auto* inlineContinuation = this->inlineContinuation();
     if (inlineContinuation) {
         // FIXME: This check really isn't accurate. 
-        bool nextInlineHasLineBox = inlineContinuation->firstLineBox();
+        bool nextInlineHasLineBox = inlineContinuation->firstLegacyInlineBox();
         // FIXME: This is wrong. The principal renderer may not be the continuation preceding this block.
         // FIXME: This is wrong for block-flows that are horizontal.
         // https://bugs.webkit.org/show_bug.cgi?id=46781
-        bool prevInlineHasLineBox = downcast<RenderInline>(*inlineContinuation->element()->renderer()).firstLineBox();
+        bool prevInlineHasLineBox = downcast<RenderInline>(*inlineContinuation->element()->renderer()).firstLegacyInlineBox();
         auto topMargin = prevInlineHasLineBox ? collapsedMarginBefore() : 0_lu;
         auto bottomMargin = nextInlineHasLineBox ? collapsedMarginAfter() : 0_lu;
         LayoutRect rect(additionalOffset.x(), additionalOffset.y() - topMargin, width(), height() + topMargin + bottomMargin);

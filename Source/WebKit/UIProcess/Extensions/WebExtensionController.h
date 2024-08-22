@@ -45,6 +45,7 @@
 #include <wtf/Forward.h>
 #include <wtf/Identified.h>
 #include <wtf/RunLoop.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/URLHash.h>
 #include <wtf/WeakHashSet.h>
 
@@ -155,6 +156,8 @@ public:
     template<typename T, typename RawValue>
     void sendToAllProcesses(const T& message, const ObjectIdentifierGenericBase<RawValue>& destinationID);
 
+    bool isFeatureEnabled(const String& featureName) const;
+
 #if PLATFORM(MAC)
     void addItemsToContextMenu(WebPageProxy&, const ContextMenuContextData&, NSMenu *);
 #endif
@@ -218,7 +221,7 @@ private:
     void testFinished(bool result, String message, String sourceURL, unsigned lineNumber);
 
     class HTTPCookieStoreObserver : public API::HTTPCookieStoreObserver {
-        WTF_MAKE_FAST_ALLOCATED;
+        WTF_MAKE_TZONE_ALLOCATED_INLINE(HTTPCookieStoreObserver);
 
     public:
         explicit HTTPCookieStoreObserver(WebExtensionController& extensionController)

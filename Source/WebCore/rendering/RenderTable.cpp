@@ -30,6 +30,7 @@
 #include "AutoTableLayout.h"
 #include "BackgroundPainter.h"
 #include "BorderPainter.h"
+#include "BorderShape.h"
 #include "CollapsedBorderValue.h"
 #include "Document.h"
 #include "FixedTableLayout.h"
@@ -57,15 +58,15 @@
 #include "RenderTreeBuilder.h"
 #include "RenderView.h"
 #include "StyleInheritedData.h"
-#include <wtf/IsoMallocInlines.h>
 #include <wtf/SetForScope.h>
 #include <wtf/StackStats.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 
 using namespace HTMLNames;
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(RenderTable);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderTable);
 
 RenderTable::RenderTable(Type type, Element& element, RenderStyle&& style)
     : RenderBlock(type, element, WTFMove(style), { })
@@ -846,7 +847,8 @@ void RenderTable::paintBoxDecorations(PaintInfo& paintInfo, const LayoutPoint& p
         // into a transparency layer, and then clip that in one go (which requires setting up the clip before
         // beginning the layer).
         stateSaver.save();
-        paintInfo.context().clipRoundedRect(style().getRoundedBorderFor(rect).pixelSnappedRoundedRectForPainting(document().deviceScaleFactor()));
+        auto borderShape = BorderShape::shapeForBorderRect(style(), rect);
+        borderShape.clipToOuterShape(paintInfo.context(), document().deviceScaleFactor());
         paintInfo.context().beginTransparencyLayer(1);
     }
 

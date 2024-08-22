@@ -39,10 +39,6 @@ class GridLayoutState;
 class GridSpan;
 
 struct ContentAlignmentData {
-    WTF_MAKE_NONCOPYABLE(ContentAlignmentData); WTF_MAKE_FAST_ALLOCATED;
-public:
-    ContentAlignmentData() = default;
-
     LayoutUnit positionOffset;
     LayoutUnit distributionOffset;
 };
@@ -50,7 +46,7 @@ public:
 enum class GridAxisPosition : uint8_t { GridAxisStart, GridAxisEnd, GridAxisCenter };
 
 class RenderGrid final : public RenderBlock {
-    WTF_MAKE_ISO_ALLOCATED(RenderGrid);
+    WTF_MAKE_TZONE_OR_ISO_ALLOCATED(RenderGrid);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderGrid);
 public:
     RenderGrid(Element&, RenderStyle&&);
@@ -205,15 +201,15 @@ private:
 
     LayoutUnit gridAreaBreadthForOutOfFlowGridItem(const RenderBox&, GridTrackSizingDirection);
     LayoutUnit logicalOffsetForOutOfFlowGridItem(const RenderBox&, GridTrackSizingDirection, LayoutUnit) const;
-    void gridAreaPositionForOutOfFlowGridItem(const RenderBox&, GridTrackSizingDirection, LayoutUnit& start, LayoutUnit& end) const;
-    void gridAreaPositionForInFlowGridItem(const RenderBox&, GridTrackSizingDirection, LayoutUnit& start, LayoutUnit& end) const;
-    void gridAreaPositionForGridItem(const RenderBox&, GridTrackSizingDirection, LayoutUnit& start, LayoutUnit& end) const;
+    std::pair<LayoutUnit, LayoutUnit> gridAreaPositionForOutOfFlowGridItem(const RenderBox&, GridTrackSizingDirection) const;
+    std::pair<LayoutUnit, LayoutUnit> gridAreaPositionForInFlowGridItem(const RenderBox&, GridTrackSizingDirection) const;
+    std::pair<LayoutUnit, LayoutUnit> gridAreaPositionForGridItem(const RenderBox&, GridTrackSizingDirection) const;
 
     GridAxisPosition columnAxisPositionForGridItem(const RenderBox&) const;
     GridAxisPosition rowAxisPositionForGridItem(const RenderBox&) const;
     LayoutUnit columnAxisOffsetForGridItem(const RenderBox&) const;
     LayoutUnit rowAxisOffsetForGridItem(const RenderBox&) const;
-    void computeContentPositionAndDistributionOffset(GridTrackSizingDirection, const LayoutUnit& availableFreeSpace, unsigned numberOfGridTracks);
+    ContentAlignmentData computeContentPositionAndDistributionOffset(GridTrackSizingDirection, const LayoutUnit& availableFreeSpace, unsigned numberOfGridTracks) const;
     void setLogicalPositionForGridItem(RenderBox&) const;
     void setLogicalOffsetForGridItem(RenderBox&, GridTrackSizingDirection) const;
     LayoutUnit logicalOffsetForGridItem(const RenderBox&, GridTrackSizingDirection) const;
@@ -291,7 +287,6 @@ private:
     OutOfFlowPositionsMap m_outOfFlowItemColumn;
     OutOfFlowPositionsMap m_outOfFlowItemRow;
 
-    bool m_hasAnyOrthogonalItem {false};
     bool m_hasAspectRatioBlockSizeDependentItem { false };
     bool m_baselineItemsCached {false};
     bool m_hasAnyBaselineAlignmentItem { false };

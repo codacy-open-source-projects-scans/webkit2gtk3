@@ -98,16 +98,6 @@ enum class AccessType : int8_t {
 static constexpr unsigned numberOfAccessTypes = 0 JSC_FOR_EACH_STRUCTURE_STUB_INFO_ACCESS_TYPE(JSC_INCREMENT_ACCESS_TYPE);
 #undef JSC_INCREMENT_ACCESS_TYPE
 
-enum class CacheType : int8_t {
-    Unset,
-    GetByIdSelf,
-    PutByIdReplace,
-    InByIdSelf,
-    Stub,
-    ArrayLength,
-    StringLength,
-};
-
 struct UnlinkedStructureStubInfo;
 struct BaselineUnlinkedStructureStubInfo;
 
@@ -154,9 +144,9 @@ public:
     // This returns true if it has marked everything that it will ever mark.
     template<typename Visitor> void propagateTransitions(Visitor&);
         
-    StubInfoSummary summary(VM&) const;
+    StubInfoSummary summary(const ConcurrentJSLocker&, VM&) const;
     
-    static StubInfoSummary summary(VM&, const StructureStubInfo*);
+    static StubInfoSummary summary(const ConcurrentJSLocker&, VM&, const StructureStubInfo*);
 
     CacheableIdentifier identifier() const { return m_identifier; }
 
@@ -243,7 +233,11 @@ public:
 
     bool useHandlerIC() const { return useDataIC && Options::useHandlerIC(); }
 
+    Vector<AccessCase*, 16> listedAccessCases(const AbstractLocker&) const;
+
 private:
+    AccessGenerationResult upgradeForPolyProtoIfNecessary(const GCSafeConcurrentJSLocker&, VM&, CodeBlock*, const Vector<AccessCase*, 16>&, AccessCase&);
+
     ALWAYS_INLINE bool considerRepatchingCacheImpl(VM& vm, CodeBlock* codeBlock, Structure* structure, CacheableIdentifier impl)
     {
         DisallowGC disallowGC;
@@ -355,13 +349,16 @@ private:
             });
     }
 
-    void replaceHandler(CodeBlock*, Ref<InlineCacheHandler>&&);
+    void setInlinedHandler(CodeBlock*, Ref<InlineCacheHandler>&&);
+    void clearInlinedHandler(CodeBlock*);
+    void initializeWithUnitHandler(CodeBlock*, Ref<InlineCacheHandler>&&);
     void prependHandler(CodeBlock*, Ref<InlineCacheHandler>&&, bool isMegamorphic);
-    void rewireStubAsJumpInAccess(CodeBlock*, InlineCacheHandler&);
+    void rewireStubAsJumpInAccess(CodeBlock*, Ref<InlineCacheHandler>&&);
 
 public:
     static constexpr ptrdiff_t offsetOfByIdSelfOffset() { return OBJECT_OFFSETOF(StructureStubInfo, byIdSelfOffset); }
     static constexpr ptrdiff_t offsetOfInlineAccessBaseStructureID() { return OBJECT_OFFSETOF(StructureStubInfo, m_inlineAccessBaseStructureID); }
+    static constexpr ptrdiff_t offsetOfInlineHolder() { return OBJECT_OFFSETOF(StructureStubInfo, m_inlineHolder); }
     static constexpr ptrdiff_t offsetOfDoneLocation() { return OBJECT_OFFSETOF(StructureStubInfo, doneLocation); }
     static constexpr ptrdiff_t offsetOfSlowPathStartLocation() { return OBJECT_OFFSETOF(StructureStubInfo, slowPathStartLocation); }
     static constexpr ptrdiff_t offsetOfSlowOperation() { return OBJECT_OFFSETOF(StructureStubInfo, m_slowOperation); }
@@ -404,6 +401,7 @@ public:
     CodeOrigin codeOrigin { };
     PropertyOffset byIdSelfOffset;
     WriteBarrierStructureID m_inlineAccessBaseStructureID;
+    JSCell* m_inlineHolder { nullptr };
     CacheableIdentifier m_identifier;
     // This is either the start of the inline IC for *byId caches. or the location of patchable jump for 'instanceof' caches.
     // If useDataIC is true, then it is nullptr.
@@ -417,8 +415,9 @@ public:
     };
 
     JSGlobalObject* m_globalObject { nullptr };
-    std::unique_ptr<PolymorphicAccess> m_stub;
 private:
+    std::unique_ptr<PolymorphicAccess> m_stub;
+    RefPtr<InlineCacheHandler> m_inlinedHandler;
     RefPtr<InlineCacheHandler> m_handler;
     // Represents those structures that already have buffered AccessCases in the PolymorphicAccess.
     // Note that it's always safe to clear this. If we clear it prematurely, then if we see the same

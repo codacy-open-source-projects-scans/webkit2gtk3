@@ -35,6 +35,7 @@
 #include "InspectorFrontendClient.h"
 #include <wtf/Forward.h>
 #include <wtf/Noncopyable.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/WTFString.h>
 
@@ -50,10 +51,10 @@ class Page;
 
 class InspectorFrontendClientLocal : public InspectorFrontendClient {
     WTF_MAKE_NONCOPYABLE(InspectorFrontendClientLocal);
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(InspectorFrontendClientLocal);
 public:
     class WEBCORE_EXPORT Settings {
-        WTF_MAKE_FAST_ALLOCATED;
+        WTF_MAKE_TZONE_ALLOCATED(Settings);
     public:
         Settings() = default;
         virtual ~Settings() = default;
@@ -145,7 +146,7 @@ private:
     std::optional<bool> evaluationResultToBoolean(InspectorFrontendAPIDispatcher::EvaluationResult);
 
     InspectorController* m_inspectedPageController { nullptr };
-    SingleThreadWeakPtr<Page> m_frontendPage;
+    WeakPtr<Page> m_frontendPage;
     // TODO(yurys): this ref shouldn't be needed.
     RefPtr<InspectorFrontendHost> m_frontendHost;
     std::unique_ptr<InspectorFrontendClientLocal::Settings> m_settings;

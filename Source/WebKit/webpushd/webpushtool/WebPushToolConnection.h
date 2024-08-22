@@ -31,6 +31,7 @@
 #include <memory>
 #include <wtf/CompletionHandler.h>
 #include <wtf/RetainPtr.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/URL.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/spi/darwin/XPCSPI.h>
@@ -59,13 +60,16 @@ enum class WaitForServiceToExist : bool {
 };
 
 class Connection final : public CanMakeWeakPtr<Connection>, public IPC::MessageSender {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(Connection);
 public:
     static std::unique_ptr<Connection> create(PreferTestService, String bundleIdentifier, String pushPartition);
     Connection(PreferTestService, String bundleIdentifier, String pushPartition);
     ~Connection() final { }
 
     void connectToService(WaitForServiceToExist);
+
+    String bundleIdentifier() const { return m_bundleIdentifier; }
+    String pushPartition() const { return m_pushPartition; }
 
     void sendPushMessage(PushMessageForTesting&&, CompletionHandler<void(String)>&&);
     void getPushPermissionState(const String& scope, CompletionHandler<void(WebCore::PushPermissionState)>&&);

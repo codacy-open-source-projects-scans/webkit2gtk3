@@ -48,7 +48,7 @@ enum ShouldComputePreferred { ComputeActual, ComputePreferred };
 enum class StretchingMode { Any, Explicit };
 
 class RenderBox : public RenderBoxModelObject {
-    WTF_MAKE_ISO_ALLOCATED(RenderBox);
+    WTF_MAKE_TZONE_OR_ISO_ALLOCATED(RenderBox);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(RenderBox);
 public:
     virtual ~RenderBox();
@@ -81,7 +81,7 @@ public:
     inline LayoutUnit logicalHeight() const;
 
     enum class AllowIntrinsic : bool { No, Yes };
-    LayoutUnit constrainLogicalWidthInFragmentByMinMax(LayoutUnit, LayoutUnit, RenderBlock&, RenderFragmentContainer*, AllowIntrinsic = AllowIntrinsic::Yes) const;
+    LayoutUnit constrainLogicalWidthInFragmentByMinMax(LayoutUnit, LayoutUnit, const RenderBlock&, RenderFragmentContainer*, AllowIntrinsic = AllowIntrinsic::Yes) const;
     LayoutUnit constrainLogicalHeightByMinMax(LayoutUnit logicalHeight, std::optional<LayoutUnit> intrinsicContentHeight) const;
     LayoutUnit constrainContentBoxLogicalHeightByMinMax(LayoutUnit logicalHeight, std::optional<LayoutUnit> intrinsicContentHeight) const;
 
@@ -110,9 +110,8 @@ public:
     LayoutRect borderBoundingBox() const final { return borderBoxRect(); }
     inline LayoutSize borderBoxLogicalSize() const;
 
+    // Don't use this; it doesn't make sense in a future world with corner-shape. Use BorderShape instead.
     WEBCORE_EXPORT RoundedRectRadii borderRadii() const;
-    RoundedRect borderRoundedRect() const;
-    RoundedRect roundedBorderBoxRect() const;
 
     // The content area of the box (excludes padding - and intrinsic padding for table cells, etc... - and border).
     inline LayoutRect contentBoxRect() const;

@@ -54,6 +54,7 @@
 #include <wtf/CompletionHandler.h>
 #include <wtf/LogInitialization.h>
 #include <wtf/MachSendRight.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/TranslatedProcess.h>
 
 #if PLATFORM(IOS_FAMILY)
@@ -70,16 +71,14 @@
 #include <wtf/BlockPtr.h>
 #endif
 
-#if USE(GBM)
-#include <WebCore/PlatformDisplay.h>
+#if PLATFORM(GTK) || PLATFORM(WPE)
+#include "DRMDevice.h"
 #endif
 
 #if ENABLE(EXTENSION_CAPABILITIES)
 #include "ExtensionCapabilityGrant.h"
 #include "MediaCapability.h"
 #endif
-
-#define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, this->connection())
 
 namespace WebKit {
 using namespace WebCore;
@@ -108,6 +107,8 @@ static RefPtr<GPUProcessProxy>& keptAliveGPUProcessProxy()
     static MainThreadNeverDestroyed<RefPtr<GPUProcessProxy>> keptAliveGPUProcessProxy;
     return keptAliveGPUProcessProxy.get();
 }
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(GPUProcessProxy);
 
 void GPUProcessProxy::keepProcessAliveTemporarily()
 {
@@ -202,7 +203,7 @@ GPUProcessProxy::GPUProcessProxy()
 #endif
 
 #if USE(GBM)
-    parameters.renderDeviceFile = WebCore::PlatformDisplay::sharedDisplay().drmRenderNodeFile();
+    parameters.renderDeviceFile = drmRenderNodeDevice();
 #endif
 
     platformInitializeGPUProcessParameters(parameters);
@@ -385,7 +386,7 @@ void GPUProcessProxy::updateSandboxAccess(bool allowAudioCapture, bool allowVide
         m_hasSentMicrophoneSandboxExtension = true;
 
 #if HAVE(SCREEN_CAPTURE_KIT)
-    if (allowDisplayCapture && !m_hasSentDisplayCaptureSandboxExtension && addDisplayCaptureSandboxExtension(connection()->getAuditToken(), extensions))
+    if (allowDisplayCapture && !m_hasSentDisplayCaptureSandboxExtension && addDisplayCaptureSandboxExtension(connection().getAuditToken(), extensions))
         m_hasSentDisplayCaptureSandboxExtension = true;
 #endif
 
@@ -472,7 +473,7 @@ void GPUProcessProxy::connectionWillOpen(IPC::Connection&)
 void GPUProcessProxy::processWillShutDown(IPC::Connection& connection)
 {
     RELEASE_LOG(Process, "%p - GPUProcessProxy::processWillShutDown:", this);
-    ASSERT_UNUSED(connection, this->connection() == &connection);
+    ASSERT_UNUSED(connection, &this->connection() == &connection);
     if (singleton() == this)
         singleton() = nullptr;
 }
@@ -527,6 +528,7 @@ void GPUProcessProxy::gpuProcessExited(ProcessTerminationReason reason)
     case ProcessTerminationReason::NavigationSwap:
     case ProcessTerminationReason::RequestedByNetworkProcess:
     case ProcessTerminationReason::RequestedByGPUProcess:
+    case ProcessTerminationReason::RequestedByModelProcess:
     case ProcessTerminationReason::GPUProcessCrashedTooManyTimes:
     case ProcessTerminationReason::ModelProcessCrashedTooManyTimes:
         ASSERT_NOT_REACHED();
@@ -580,7 +582,7 @@ void GPUProcessProxy::didClose(IPC::Connection&)
     gpuProcessExited(ProcessTerminationReason::Crash); // May cause |this| to get deleted.
 }
 
-void GPUProcessProxy::didReceiveInvalidMessage(IPC::Connection& connection, IPC::MessageName messageName)
+void GPUProcessProxy::didReceiveInvalidMessage(IPC::Connection& connection, IPC::MessageName messageName, int32_t)
 {
     logInvalidMessage(connection, messageName);
 
@@ -757,11 +759,6 @@ void GPUProcessProxy::didCreateContextForVisibilityPropagation(WebPageProxyIdent
 #endif
 
 #if PLATFORM(MAC)
-void GPUProcessProxy::displayConfigurationChanged(CGDirectDisplayID displayID, CGDisplayChangeSummaryFlags flags)
-{
-    send(Messages::GPUProcess::DisplayConfigurationChanged { displayID, flags }, 0);
-}
-
 void GPUProcessProxy::setScreenProperties(const WebCore::ScreenProperties& properties)
 {
     send(Messages::GPUProcess::SetScreenProperties { properties }, 0);
@@ -831,7 +828,5 @@ void GPUProcessProxy::statusBarWasTapped(CompletionHandler<void()>&& completionH
 #endif
 
 } // namespace WebKit
-
-#undef MESSAGE_CHECK
 
 #endif // ENABLE(GPU_PROCESS)

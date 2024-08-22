@@ -28,8 +28,8 @@
 #if ENABLE(IMAGE_ANALYSIS)
 
 #include "Timer.h"
-#include <wtf/FastMalloc.h>
 #include <wtf/PriorityQueue.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/URL.h>
 #include <wtf/URLHash.h>
 #include <wtf/WeakHashMap.h>
@@ -48,7 +48,7 @@ class Timer;
 class WeakPtrImplWithEventTargetData;
 
 class ImageAnalysisQueue {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(ImageAnalysisQueue);
 public:
     ImageAnalysisQueue(Page&);
     ~ImageAnalysisQueue();
@@ -80,7 +80,7 @@ private:
     // FIXME: Refactor the source and target LIDs into either a std::pair<> of strings, or its own named struct.
     String m_sourceLanguageIdentifier;
     String m_targetLanguageIdentifier;
-    SingleThreadWeakPtr<Page> m_page;
+    WeakPtr<Page> m_page;
     Timer m_resumeProcessingTimer;
     WeakHashMap<HTMLImageElement, URL, WeakPtrImplWithEventTargetData> m_queuedElements;
     PriorityQueue<Task, firstIsHigherPriority> m_queue;

@@ -30,11 +30,22 @@
 #import "_WKWebExtensionCommand.h"
 #import "_WKWebExtensionContext.h"
 #import "_WKWebExtensionController.h"
+#import "_WKWebExtensionControllerConfiguration.h"
 #import "_WKWebExtensionDataRecord.h"
 #import "_WKWebExtensionMatchPattern.h"
 #import "_WKWebExtensionMessagePort.h"
+#import "_WKWebExtensionTab.h"
 #import "_WKWebExtensionTabCreationOptions.h"
+#import "_WKWebExtensionWindow.h"
 #import "_WKWebExtensionWindowCreationOptions.h"
+
+#undef _WKWebExtensionTab
+#undef _WKWebExtensionWindow
+@interface _WKWebExtensionStaging : NSObject <_WKWebExtensionTab, _WKWebExtensionWindow>
+@end
+
+@implementation _WKWebExtensionStaging
+@end
 
 NSErrorDomain const _WKWebExtensionErrorDomain = @"WKWebExtensionErrorDomain";
 
@@ -75,6 +86,10 @@ NSString * const _WKWebExtensionContextNotificationUserInfoKeyMatchPatterns = @"
 
 #undef _WKWebExtensionController
 @implementation _WKWebExtensionController
+@end
+
+#undef _WKWebExtensionControllerConfiguration
+@implementation _WKWebExtensionControllerConfiguration
 @end
 
 NSErrorDomain const _WKWebExtensionDataRecordErrorDomain = @"WKWebExtensionDataRecordErrorDomain";

@@ -283,6 +283,9 @@ void GPUProcess::initializeGPUProcess(GPUProcessCreationParameters&& parameters,
 
 #if USE(GBM)
     WebCore::DRMDeviceManager::singleton().initializeMainDevice(parameters.renderDeviceFile);
+
+    // Ensure that the GBM device is also initialized before WebGL worker threads try using it.
+    RELEASE_ASSERT(WebCore::DRMDeviceManager::singleton().mainGBMDeviceNode(WebCore::DRMDeviceManager::NodeType::Render));
 #endif
 
     m_applicationVisibleName = WTFMove(parameters.applicationVisibleName);
@@ -534,14 +537,6 @@ void GPUProcess::cancelGetDisplayMediaPrompt()
 }
 
 #endif // HAVE(SCREEN_CAPTURE_KIT)
-
-#if PLATFORM(MAC)
-void GPUProcess::displayConfigurationChanged(CGDirectDisplayID displayID, CGDisplayChangeSummaryFlags flags)
-{
-    for (auto& connection : m_webProcessConnections.values())
-        connection->displayConfigurationChanged(displayID, flags);
-}
-#endif
 
 void GPUProcess::addSession(PAL::SessionID sessionID, GPUProcessSessionParameters&& parameters)
 {

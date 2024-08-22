@@ -169,9 +169,9 @@ PutByStatus PutByStatus::computeForStubInfo(const ConcurrentJSLocker& locker, Co
     return computeForStubInfo(locker, baselineBlock, stubInfo, CallLinkStatus::computeExitSiteData(baselineBlock, codeOrigin.bytecodeIndex()), codeOrigin);
 }
 
-PutByStatus PutByStatus::computeForStubInfo(const ConcurrentJSLocker& locker, CodeBlock* profiledBlock, StructureStubInfo* stubInfo, CallLinkStatus::ExitSiteData callExitSiteData, CodeOrigin codeOrigin)
+PutByStatus PutByStatus::computeForStubInfo(const ConcurrentJSLocker& locker, CodeBlock* profiledBlock, StructureStubInfo* stubInfo, CallLinkStatus::ExitSiteData callExitSiteData, CodeOrigin)
 {
-    StubInfoSummary summary = StructureStubInfo::summary(profiledBlock->vm(), stubInfo);
+    StubInfoSummary summary = StructureStubInfo::summary(locker, profiledBlock->vm(), stubInfo);
     if (!isInlineable(summary))
         return PutByStatus(summary, *stubInfo);
     
@@ -192,26 +192,17 @@ PutByStatus PutByStatus::computeForStubInfo(const ConcurrentJSLocker& locker, Co
     }
         
     case CacheType::Stub: {
-        PolymorphicAccess* list = stubInfo->m_stub.get();
+        auto list = stubInfo->listedAccessCases(locker);
 
         PutByStatus result;
         result.m_state = Simple;
 
-        if (list->size() == 1) {
-            const AccessCase& access = list->at(0);
+        if (list.size() == 1) {
+            const AccessCase& access = *list.at(0);
             switch (access.type()) {
             case AccessCase::StoreMegamorphic:
             case AccessCase::IndexedMegamorphicStore: {
-                // Emitting StoreMegamorphic means that we give up polymorphic IC optimization. So this needs very careful handling.
-                // It is possible that one function can be inlined from the other function, and then it gets limited # of structures.
-                // In this case, continue using IC is better than falling back to megamorphic case. But if the function gets compiled before,
-                // and even optimizing JIT saw the megamorphism, then this is likely that this function continues having megamorphic behavior,
-                // and inlined megamorphic code is faster. Currently, we use StoreMegamorphic only when the exact same form of CodeOrigin gets
-                // this megamorphic GetById before (same level of inlining etc.). This is very conservative but effective since IC is very fast
-                // when it worked well (but costly if it doesn't work and get megamorphic). Once this cost-benefit tradeoff gets changed (via
-                // handler IC), we can revisit this condition.
-                // FIXME: Add this thing.
-                if (isSameStyledCodeOrigin(stubInfo->codeOrigin, codeOrigin) && !stubInfo->tookSlowPath)
+                if (!stubInfo->tookSlowPath)
                     return PutByStatus(Megamorphic);
                 break;
             }
@@ -232,8 +223,8 @@ PutByStatus PutByStatus::computeForStubInfo(const ConcurrentJSLocker& locker, Co
             }
         }
 
-        for (unsigned i = 0; i < list->size(); ++i) {
-            const AccessCase& access = list->at(i);
+        for (unsigned i = 0; i < list.size(); ++i) {
+            const AccessCase& access = *list.at(i);
             bool viaGlobalProxy = access.viaGlobalProxy();
 
             if (access.usesPolyProto())

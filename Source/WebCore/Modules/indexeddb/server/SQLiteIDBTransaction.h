@@ -32,6 +32,7 @@
 #include <wtf/HashMap.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/RobinHoodHashSet.h>
+#include <wtf/TZoneMalloc.h>
 
 namespace WebCore {
 
@@ -46,7 +47,7 @@ class SQLiteIDBBackingStore;
 class SQLiteIDBCursor;
 
 class SQLiteIDBTransaction {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(SQLiteIDBTransaction);
     WTF_MAKE_NONCOPYABLE(SQLiteIDBTransaction);
 public:
     SQLiteIDBTransaction(SQLiteIDBBackingStore&, const IDBTransactionInfo&);
@@ -67,7 +68,9 @@ public:
     IDBTransactionMode mode() const { return m_info.mode(); }
     IDBTransactionDurability durability() const { return m_info.durability(); }
     bool inProgress() const;
+    bool inProgressOrReadOnly() const;
 
+    SQLiteDatabase* sqliteDatabase() const;
     SQLiteTransaction* sqliteTransaction() const { return m_sqliteTransaction.get(); }
     SQLiteIDBBackingStore& backingStore() { return m_backingStore; }
 
@@ -80,10 +83,12 @@ private:
 
     void moveBlobFilesIfNecessary();
     void deleteBlobFilesIfNecessary();
+    bool isReadOnly() const { return mode() == IDBTransactionMode::Readonly; }
 
     IDBTransactionInfo m_info;
 
     SQLiteIDBBackingStore& m_backingStore;
+    CheckedPtr<SQLiteDatabase> m_sqliteDatabase;
     std::unique_ptr<SQLiteTransaction> m_sqliteTransaction;
     HashMap<IDBResourceIdentifier, std::unique_ptr<SQLiteIDBCursor>> m_cursors;
     HashSet<SQLiteIDBCursor*> m_backingStoreCursors;

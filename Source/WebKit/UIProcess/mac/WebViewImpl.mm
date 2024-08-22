@@ -34,6 +34,7 @@
 #import "APIPageConfiguration.h"
 #import "AppKitSPI.h"
 #import "CoreTextHelpers.h"
+#import "FrameProcess.h"
 #import "FullscreenClient.h"
 #import "InsertTextOptions.h"
 #import "Logging.h"
@@ -41,6 +42,7 @@
 #import "NativeWebKeyboardEvent.h"
 #import "NativeWebMouseEvent.h"
 #import "NativeWebWheelEvent.h"
+#import "NetworkProcessMessages.h"
 #import "PageClient.h"
 #import "PageClientImplMac.h"
 #import "PasteboardTypes.h"
@@ -50,6 +52,7 @@
 #import "RemoteLayerTreeDrawingAreaProxyMac.h"
 #import "RemoteObjectRegistry.h"
 #import "RemoteObjectRegistryMessages.h"
+#import "Site.h"
 #import "TextChecker.h"
 #import "TextCheckerState.h"
 #import "TiledCoreAnimationDrawingAreaProxy.h"
@@ -152,6 +155,7 @@
 #import <wtf/ProcessPrivilege.h>
 #import <wtf/SetForScope.h>
 #import <wtf/SoftLinking.h>
+#import <wtf/TZoneMallocInlines.h>
 #import <wtf/cf/TypeCastsCF.h>
 #import <wtf/cocoa/VectorCocoa.h>
 #import <wtf/spi/darwin/OSVariantSPI.h>
@@ -1216,6 +1220,8 @@ static bool isInRecoveryOS()
     return os_variant_is_basesystem("WebKit");
 }
 
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebViewImpl);
+
 WebViewImpl::WebViewImpl(NSView <WebViewImplDelegate> *view, WKWebView *outerWebView, WebProcessPool& processPool, Ref<API::PageConfiguration>&& configuration)
     : m_view(view)
     , m_pageClient(makeUniqueWithoutRefCountedCheck<PageClientImpl>(view, outerWebView))
@@ -1301,7 +1307,8 @@ WebViewImpl::WebViewImpl(NSView <WebViewImplDelegate> *view, WKWebView *outerWeb
 
     m_page->setAddsVisitedLinks(processPool.historyClient().addsVisitedLinks());
 
-    m_page->initializeWebPage();
+    auto& openerInfo = m_page->configuration().openerInfo();
+    m_page->initializeWebPage(openerInfo ? openerInfo->site : Site(aboutBlankURL()));
 
     registerDraggedTypes();
 
@@ -3440,7 +3447,7 @@ void WebViewImpl::dismissContentRelativeChildWindowsFromViewOnly()
 bool WebViewImpl::hasContentRelativeChildViews() const
 {
 #if ENABLE(WRITING_TOOLS)
-    return [m_TextAnimationTypeManager hasActiveTextAnimationType];
+    return [m_textAnimationTypeManager hasActiveTextAnimationType];
 #else
     return false;
 #endif
@@ -3477,14 +3484,14 @@ void WebViewImpl::contentRelativeViewsHysteresisTimerFired(PAL::HysteresisState 
 void WebViewImpl::suppressContentRelativeChildViews()
 {
 #if ENABLE(WRITING_TOOLS)
-    [m_TextAnimationTypeManager suppressTextAnimationType];
+    [m_textAnimationTypeManager suppressTextAnimationType];
 #endif
 }
 
 void WebViewImpl::restoreContentRelativeChildViews()
 {
 #if ENABLE(WRITING_TOOLS)
-    [m_TextAnimationTypeManager restoreTextAnimationType];
+    [m_textAnimationTypeManager restoreTextAnimationType];
 #endif
 }
 
@@ -4079,6 +4086,60 @@ bool WebViewImpl::prepareForDragOperation(id <NSDraggingInfo>)
     return true;
 }
 
+static void performDragWithLegacyFiles(RefPtr<WebPageProxy> page, Box<Vector<String>>&& fileNames, Box<WebCore::DragData>&& dragData, const String& pasteboardName)
+{
+    auto* networkProcess = page->websiteDataStore().networkProcessIfExists();
+    if (!networkProcess)
+        return;
+    networkProcess->sendWithAsyncReply(Messages::NetworkProcess::AllowFilesAccessFromWebProcess(page->protectedLegacyMainFrameProcess()->coreProcessIdentifier(), *fileNames), [page = WTFMove(page), fileNames, dragData, pasteboardName]() mutable {
+        if (!page)
+            return;
+        SandboxExtension::Handle sandboxExtensionHandle;
+        Vector<SandboxExtension::Handle> sandboxExtensionForUpload;
+
+        page->createSandboxExtensionsIfNeeded(*fileNames, sandboxExtensionHandle, sandboxExtensionForUpload);
+        dragData->setFileNames(*fileNames);
+        page->performDragOperation(*dragData, pasteboardName, WTFMove(sandboxExtensionHandle), WTFMove(sandboxExtensionForUpload));
+    });
+}
+
+static bool handleLegacyFilesPasteboard(id<NSDraggingInfo> draggingInfo, Box<WebCore::DragData>&& dragData, RefPtr<WebPageProxy> page, RetainPtr<NSView<WebViewImplDelegate>> view)
+{
+    // FIXME: legacyFilesPromisePasteboardType() contains UTIs, not path names. Also, it's not
+    // guaranteed that the count of UTIs equals the count of files, since some clients only write
+    // unique UTIs.
+    NSArray *files = [draggingInfo.draggingPasteboard propertyListForType:WebCore::legacyFilesPromisePasteboardType()];
+    if (![files isKindOfClass:[NSArray class]])
+        return false;
+
+    NSString *dropDestinationPath = FileSystem::createTemporaryDirectory(@"WebKitDropDestination");
+    if (!dropDestinationPath)
+        return false;
+
+    size_t fileCount = files.count;
+    auto fileNames = Box<Vector<String>>::create();
+    NSURL *dropDestination = [NSURL fileURLWithPath:dropDestinationPath isDirectory:YES];
+    String pasteboardName = draggingInfo.draggingPasteboard.name;
+    [draggingInfo enumerateDraggingItemsWithOptions:0 forView:view.autorelease() classes:@[NSFilePromiseReceiver.class] searchOptions:@{ } usingBlock:[&](NSDraggingItem *draggingItem, NSInteger idx, BOOL *stop) {
+        auto queue = adoptNS([NSOperationQueue new]);
+        [draggingItem.item receivePromisedFilesAtDestination:dropDestination options:@{ } operationQueue:queue.get() reader:[page = WTFMove(page), fileNames, fileCount, dragData, pasteboardName](NSURL *fileURL, NSError *errorOrNil) {
+            if (errorOrNil)
+                return;
+
+            RunLoop::main().dispatch([page = WTFMove(page), path = RetainPtr { fileURL.path }, fileNames, fileCount, dragData, pasteboardName] () mutable {
+                if (!page)
+                    return;
+                fileNames->append(path.get());
+                if (fileNames->size() != fileCount)
+                    return;
+                performDragWithLegacyFiles(page, WTFMove(fileNames), WTFMove(dragData), pasteboardName);
+            });
+        }];
+    }];
+
+    return true;
+}
+
 bool WebViewImpl::performDragOperation(id <NSDraggingInfo> draggingInfo)
 {
     WebCore::IntPoint client([m_view convertPoint:draggingInfo.draggingLocation fromView:nil]);
@@ -4089,45 +4150,8 @@ bool WebViewImpl::performDragOperation(id <NSDraggingInfo> draggingInfo)
     SandboxExtension::Handle sandboxExtensionHandle;
     Vector<SandboxExtension::Handle> sandboxExtensionForUpload;
 
-    if (![types containsObject:PasteboardTypes::WebArchivePboardType] && [types containsObject:WebCore::legacyFilesPromisePasteboardType()]) {
-
-        // FIXME: legacyFilesPromisePasteboardType() contains UTIs, not path names. Also, it's not
-        // guaranteed that the count of UTIs equals the count of files, since some clients only write
-        // unique UTIs.
-        NSArray *files = [draggingInfo.draggingPasteboard propertyListForType:WebCore::legacyFilesPromisePasteboardType()];
-        if (![files isKindOfClass:[NSArray class]])
-            return false;
-
-        NSString *dropDestinationPath = FileSystem::createTemporaryDirectory(@"WebKitDropDestination");
-        if (!dropDestinationPath)
-            return false;
-
-        size_t fileCount = files.count;
-        auto fileNames = Box<Vector<String>>::create();
-        NSURL *dropDestination = [NSURL fileURLWithPath:dropDestinationPath isDirectory:YES];
-        String pasteboardName = draggingInfo.draggingPasteboard.name;
-        [draggingInfo enumerateDraggingItemsWithOptions:0 forView:m_view.getAutoreleased() classes:@[ NSFilePromiseReceiver.class ] searchOptions:@{ } usingBlock:[&](NSDraggingItem *draggingItem, NSInteger idx, BOOL *stop) {
-            auto queue = adoptNS([NSOperationQueue new]);
-            [draggingItem.item receivePromisedFilesAtDestination:dropDestination options:@{ } operationQueue:queue.get() reader:[this, fileNames, fileCount, dragData, pasteboardName](NSURL *fileURL, NSError *errorOrNil) {
-                if (errorOrNil)
-                    return;
-
-                RunLoop::main().dispatch([this, path = RetainPtr { fileURL.path }, fileNames, fileCount, dragData, pasteboardName] {
-                    fileNames->append(path.get());
-                    if (fileNames->size() == fileCount) {
-                        SandboxExtension::Handle sandboxExtensionHandle;
-                        Vector<SandboxExtension::Handle> sandboxExtensionForUpload;
-
-                        m_page->createSandboxExtensionsIfNeeded(*fileNames, sandboxExtensionHandle, sandboxExtensionForUpload);
-                        dragData->setFileNames(*fileNames);
-                        m_page->performDragOperation(*dragData, pasteboardName, WTFMove(sandboxExtensionHandle), WTFMove(sandboxExtensionForUpload));
-                    }
-                });
-            }];
-        }];
-
-        return true;
-    }
+    if (![types containsObject:PasteboardTypes::WebArchivePboardType] && [types containsObject:WebCore::legacyFilesPromisePasteboardType()])
+        return handleLegacyFilesPasteboard(draggingInfo, WTFMove(dragData), protectedPage(), m_view.get());
 
     if ([types containsObject:WebCore::legacyFilenamesPasteboardType()]) {
         NSArray *files = [draggingInfo.draggingPasteboard propertyListForType:WebCore::legacyFilenamesPasteboardType()];
@@ -4465,8 +4489,9 @@ void WebViewImpl::requestDOMPasteAccess(WebCore::DOMPasteAccessCategory pasteAcc
     NSData *data = [pasteboardForAccessCategory(pasteAccessCategory) dataForType:@(WebCore::PasteboardCustomData::cocoaType().characters())];
     auto buffer = WebCore::SharedBuffer::create(data);
     if (requiresInteraction == WebCore::DOMPasteRequiresInteraction::No && WebCore::PasteboardCustomData::fromSharedBuffer(buffer.get()).origin() == originIdentifier) {
-        m_page->grantAccessToCurrentPasteboardData(pasteboardNameForAccessCategory(pasteAccessCategory));
-        completion(WebCore::DOMPasteAccessResponse::GrantedForGesture);
+        m_page->grantAccessToCurrentPasteboardData(pasteboardNameForAccessCategory(pasteAccessCategory), [completion = WTFMove(completion)] () mutable {
+            completion(WebCore::DOMPasteAccessResponse::GrantedForGesture);
+        });
         return;
     }
 
@@ -4488,7 +4513,7 @@ void WebViewImpl::requestDOMPasteAccess(WebCore::DOMPasteAccessCategory pasteAcc
 void WebViewImpl::handleDOMPasteRequestForCategoryWithResult(WebCore::DOMPasteAccessCategory pasteAccessCategory, WebCore::DOMPasteAccessResponse response)
 {
     if (response == WebCore::DOMPasteAccessResponse::GrantedForCommand || response == WebCore::DOMPasteAccessResponse::GrantedForGesture)
-        m_page->grantAccessToCurrentPasteboardData(pasteboardNameForAccessCategory(pasteAccessCategory));
+        m_page->grantAccessToCurrentPasteboardData(pasteboardNameForAccessCategory(pasteAccessCategory), [] () { });
 
     hideDOMPasteMenuWithResult(response);
 }
@@ -4504,15 +4529,24 @@ void WebViewImpl::hideDOMPasteMenuWithResult(WebCore::DOMPasteAccessResponse res
     m_domPasteMenuDelegate = nil;
 }
 
-static RetainPtr<CGImageRef> takeWindowSnapshot(CGSWindowID windowID, bool captureAtNominalResolution)
+static RetainPtr<CGImageRef> takeWindowSnapshot(CGSWindowID windowID, bool captureAtNominalResolution, ForceSoftwareCapturingViewportSnapshot forceSoftwareCapturing)
 {
-    CGSWindowCaptureOptions options = kCGSCaptureIgnoreGlobalClipShape;
-    if (captureAtNominalResolution)
-        options |= kCGSWindowCaptureNominalResolution;
-    RetainPtr<CFArrayRef> windowSnapshotImages = adoptCF(CGSHWCaptureWindowList(CGSMainConnectionID(), &windowID, 1, options));
+    // FIXME <https://webkit.org/b/277572>: CGSHWCaptureWindowList is currently bugged where
+    // the kCGSCaptureIgnoreGlobalClipShape option has no effect and the resulting screenshot
+    // still contains the window's rounded corners. There are WPT tests relying on comparing
+    // WebDriver's screenshots that cannot tolerate this inconsistency, especially due to
+    // CGSHWCaptureWindowList not always succeeding. So for WebDriver only, we bypass that bug
+    // and always use deprecated CGWindowListCreateImage instead.
 
-    if (windowSnapshotImages && CFArrayGetCount(windowSnapshotImages.get()))
-        return checked_cf_cast<CGImageRef>(CFArrayGetValueAtIndex(windowSnapshotImages.get(), 0));
+    if (forceSoftwareCapturing == ForceSoftwareCapturingViewportSnapshot::No) {
+        CGSWindowCaptureOptions options = kCGSCaptureIgnoreGlobalClipShape;
+        if (captureAtNominalResolution)
+            options |= kCGSWindowCaptureNominalResolution;
+        RetainPtr<CFArrayRef> windowSnapshotImages = adoptCF(CGSHWCaptureWindowList(CGSMainConnectionID(), &windowID, 1, options));
+
+        if (windowSnapshotImages && CFArrayGetCount(windowSnapshotImages.get()))
+            return checked_cf_cast<CGImageRef>(CFArrayGetValueAtIndex(windowSnapshotImages.get(), 0));
+    }
 
     // Fall back to the non-hardware capture path if we didn't get a snapshot
     // (which usually happens if the window is fully off-screen).
@@ -4526,20 +4560,25 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 
 RefPtr<ViewSnapshot> WebViewImpl::takeViewSnapshot()
 {
+    return takeViewSnapshot(ForceSoftwareCapturingViewportSnapshot::No);
+}
+
+RefPtr<ViewSnapshot> WebViewImpl::takeViewSnapshot(ForceSoftwareCapturingViewportSnapshot forceSoftwareCapturing)
+{
     NSWindow *window = [m_view window];
 
     CGSWindowID windowID = (CGSWindowID)window.windowNumber;
     if (!windowID || !window.isVisible)
         return nullptr;
 
-    RetainPtr<CGImageRef> windowSnapshotImage = takeWindowSnapshot(windowID, false);
+    RetainPtr<CGImageRef> windowSnapshotImage = takeWindowSnapshot(windowID, false, forceSoftwareCapturing);
     if (!windowSnapshotImage)
         return nullptr;
 
     // Work around <rdar://problem/17084993>; re-request the snapshot at kCGWindowImageNominalResolution if it was captured at the wrong scale.
     CGFloat desiredSnapshotWidth = window.frame.size.width * window.screen.backingScaleFactor;
     if (CGImageGetWidth(windowSnapshotImage.get()) != desiredSnapshotWidth)
-        windowSnapshotImage = takeWindowSnapshot(windowID, true);
+        windowSnapshotImage = takeWindowSnapshot(windowID, true, forceSoftwareCapturing);
 
     if (!windowSnapshotImage)
         return nullptr;
@@ -4605,16 +4644,16 @@ void WebViewImpl::removeTextPlaceholder(NSTextPlaceholder *placeholder, bool wil
         completionHandler();
 }
 
-#if ENABLE(WRITING_TOOLS_UI)
+#if ENABLE(WRITING_TOOLS)
 void WebViewImpl::addTextAnimationForAnimationID(WTF::UUID uuid, const WebCore::TextAnimationData& data)
 {
     if (!m_page->preferences().textAnimationsEnabled())
         return;
 
-    if (!m_TextAnimationTypeManager)
-        m_TextAnimationTypeManager = adoptNS([[WKTextAnimationManager alloc] initWithWebViewImpl:*this]);
+    if (!m_textAnimationTypeManager)
+        m_textAnimationTypeManager = adoptNS([[WKTextAnimationManager alloc] initWithWebViewImpl:*this]);
 
-    [m_TextAnimationTypeManager addTextAnimationForAnimationID:uuid withData:data];
+    [m_textAnimationTypeManager addTextAnimationForAnimationID:uuid withData:data];
 }
 
 void WebViewImpl::removeTextAnimationForAnimationID(WTF::UUID uuid)
@@ -4622,8 +4661,9 @@ void WebViewImpl::removeTextAnimationForAnimationID(WTF::UUID uuid)
     if (!m_page->preferences().textAnimationsEnabled())
         return;
 
-    [m_TextAnimationTypeManager removeTextAnimationForAnimationID:uuid];
+    [m_textAnimationTypeManager removeTextAnimationForAnimationID:uuid];
 }
+
 #endif
 
 ViewGestureController& WebViewImpl::ensureGestureController()
@@ -5269,7 +5309,7 @@ void WebViewImpl::setMarkedText(id string, NSRange selectedRange, NSRange replac
 #if HAVE(INLINE_PREDICTIONS)
     if (RetainPtr attributedString = dynamic_objc_cast<NSAttributedString>(string)) {
         BOOL hasTextCompletion = [&] {
-            __block BOOL result;
+            __block BOOL result = NO;
 
             [attributedString enumerateAttribute:NSTextCompletionAttributeName inRange:NSMakeRange(0, [attributedString length]) options:0 usingBlock:^(id value, NSRange range, BOOL *stop) {
                 if ([value respondsToSelector:@selector(boolValue)] && [value boolValue]) {

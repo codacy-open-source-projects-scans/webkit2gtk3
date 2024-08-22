@@ -751,6 +751,7 @@ public:
 
     void compileInstanceOf(Node*);
     void compileInstanceOfCustom(Node*);
+    void compileInstanceOfMegamorphic(Node*);
     void compileOverridesHasInstance(Node*);
 
     void compileIsCellWithType(Node*);
@@ -1594,6 +1595,7 @@ public:
     void compileValueDiv(Node*);
     void compileArithDiv(Node*);
     void compileArithFRound(Node*);
+    void compileArithF16Round(Node*);
     void compileValueMod(Node*);
     void compileArithMod(Node*);
     void compileArithPow(Node*);
@@ -1607,7 +1609,6 @@ public:
     void compileGetIndexedPropertyStorage(Node*);
     void compileResolveRope(Node*);
     JITCompiler::Jump jumpForTypedArrayOutOfBounds(Node*, GPRReg baseGPR, GPRReg indexGPR, GPRReg scratchGPR, GPRReg scratch2GPR);
-    JITCompiler::Jump jumpForTypedArrayIsDetachedIfOutOfBounds(Node*, GPRReg baseGPR, JITCompiler::Jump outOfBounds);
     void compileGetTypedArrayByteOffset(Node*);
 #if USE(LARGE_TYPED_ARRAYS)
     void compileGetTypedArrayByteOffsetAsInt52(Node*);

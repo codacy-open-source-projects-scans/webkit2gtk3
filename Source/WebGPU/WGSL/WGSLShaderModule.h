@@ -36,13 +36,14 @@
 
 #include <wtf/HashSet.h>
 #include <wtf/OptionSet.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/StringHash.h>
 #include <wtf/text/WTFString.h>
 
 namespace WGSL {
 
 class ShaderModule {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(ShaderModule);
 public:
     explicit ShaderModule(const String& source)
         : ShaderModule(source, { })
@@ -141,6 +142,9 @@ public:
     bool usesPackedVec3() const { return m_usesPackedVec3; }
     void setUsesPackedVec3() { m_usesPackedVec3 = true; }
     void clearUsesPackedVec3() { m_usesPackedVec3 = false; }
+
+    bool usesMin() const { return m_usesMin; }
+    void setUsesMin() { m_usesMin = true; }
 
     template<typename T>
     std::enable_if_t<std::is_base_of_v<AST::Node, T>, void> replace(T* current, T&& replacement)
@@ -291,6 +295,7 @@ private:
     bool m_usesDot4U8Packed { false };
     bool m_usesExtractBits { false };
     bool m_usesPackedVec3 { false };
+    bool m_usesMin { false };
     OptionSet<Extension> m_enabledExtensions;
     OptionSet<LanguageFeature> m_requiredFeatures;
     Configuration m_configuration;

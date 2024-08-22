@@ -58,6 +58,7 @@
 #include <wtf/RefPtr.h>
 #include <wtf/RobinHoodHashSet.h>
 #include <wtf/Seconds.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/UUID.h>
 #include <wtf/WeakHashMap.h>
 #include <wtf/WeakHashSet.h>
@@ -123,6 +124,7 @@ class WebPageGroup;
 class WebPageProxy;
 class WebPermissionControllerProxy;
 class WebPreferences;
+class WebProcessActivityState;
 class WebProcessPool;
 class WebUserContentControllerProxy;
 class WebsiteDataStore;
@@ -159,7 +161,7 @@ using WebProcessWithMediaStreamingToken = WebProcessWithMediaStreamingCounter::T
 enum class CheckBackForwardList : bool { No, Yes };
 
 class WebProcessProxy : public AuxiliaryProcessProxy {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(WebProcessProxy);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(WebProcessProxy);
 public:
     using WebPageProxyMap = HashMap<WebPageProxyIdentifier, WeakRef<WebPageProxy>>;
@@ -278,7 +280,8 @@ public:
     void updateTextCheckerState();
 
     void willAcquireUniversalFileReadSandboxExtension() { m_mayHaveUniversalFileReadSandboxExtension = true; }
-    void assumeReadAccessToBaseURL(WebPageProxy&, const String&);
+    void assumeReadAccessToBaseURL(WebPageProxy&, const String&, CompletionHandler<void()>&&, bool directoryOnly = false);
+    void assumeReadAccessToBaseURLs(WebPageProxy&, const Vector<String>&, CompletionHandler<void()>&&);
     bool hasAssumedReadAccessToURL(const URL&) const;
 
     bool checkURLReceivedFromWebProcess(const String&, CheckBackForwardList = CheckBackForwardList::Yes);
@@ -300,7 +303,6 @@ public:
 
     static void notifyPageStatisticsAndDataRecordsProcessed();
 
-    static void notifyWebsiteDataDeletionForRegistrableDomainsFinished();
     static void notifyWebsiteDataScanForRegistrableDomainsFinished();
 
     void setThirdPartyCookieBlockingMode(WebCore::ThirdPartyCookieBlockingMode, CompletionHandler<void()>&&);
@@ -347,11 +349,6 @@ public:
 #if PLATFORM(COCOA)
     Vector<String> mediaMIMETypes() const;
     void cacheMediaMIMETypes(const Vector<String>&);
-#endif
-
-#if PLATFORM(MAC)
-    void requestHighPerformanceGPU();
-    void releaseHighPerformanceGPU();
 #endif
 
 #if HAVE(DISPLAY_LINK)
@@ -521,6 +518,8 @@ public:
     const WebCore::ProcessIdentity& processIdentity();
 #endif
 
+    WebProcessActivityState& activityState() { return m_activityState; }
+
 private:
     Type type() const final { return Type::WebContent; }
 
@@ -598,7 +597,7 @@ private:
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
     bool didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, UniqueRef<IPC::Encoder>&) override;
     void didClose(IPC::Connection&) final;
-    void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName) override;
+    void didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName, int32_t indexOfObjectFailingDecoding) override;
 
     // ResponsivenessTimer::Client
     void didBecomeUnresponsive() override;
@@ -801,6 +800,8 @@ private:
     Seconds m_totalBackgroundTime;
     Seconds m_totalSuspendedTime;
     WebCore::ProcessIdentity m_processIdentity;
+
+    UniqueRef<WebProcessActivityState> m_activityState;
 };
 
 WTF::TextStream& operator<<(WTF::TextStream&, const WebProcessProxy&);

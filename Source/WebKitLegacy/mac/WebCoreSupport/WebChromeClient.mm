@@ -91,6 +91,7 @@
 #import <pal/spi/mac/NSViewSPI.h>
 #import <wtf/BlockObjCExceptions.h>
 #import <wtf/RefPtr.h>
+#import <wtf/TZoneMallocInlines.h>
 #import <wtf/Vector.h>
 #import <wtf/text/WTFString.h>
 
@@ -157,6 +158,8 @@ NSString *WebConsoleMessageErrorMessageLevel = @"ErrorMessageLevel";
 
 using namespace WebCore;
 using namespace HTMLNames;
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebChromeClient);
 
 WebChromeClient::WebChromeClient(WebView *webView) 
     : m_webView(webView)
@@ -559,15 +562,6 @@ bool WebChromeClient::runJavaScriptPrompt(LocalFrame& frame, const String& promp
 
     result = [[WebDefaultUIDelegate sharedUIDelegate] webView:m_webView runJavaScriptTextInputPanelWithPrompt:prompt defaultText:defaultString initiatedByFrame:kit(&frame)];
     return !result.isNull();
-}
-
-void WebChromeClient::setStatusbarText(const String& status)
-{
-    // We want the temporaries allocated here to be released even before returning to the 
-    // event loop; see <http://bugs.webkit.org/show_bug.cgi?id=9880>.
-    @autoreleasepool {
-        CallUIDelegate(m_webView, @selector(webView:setStatusText:), (NSString *)status);
-    }
 }
 
 void WebChromeClient::invalidateRootView(const IntRect&)
@@ -1167,6 +1161,11 @@ RefPtr<WebCore::ShapeDetection::TextDetector> WebChromeClient::createTextDetecto
 #else
     return nullptr;
 #endif
+}
+
+void WebChromeClient::registerBlobPathForTesting(const String&, CompletionHandler<void()>&& completion)
+{
+    completion();
 }
 
 void WebChromeClient::requestCookieConsent(CompletionHandler<void(CookieConsentDecisionResult)>&& completion)

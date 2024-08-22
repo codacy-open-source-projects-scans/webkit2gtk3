@@ -3067,12 +3067,10 @@ static void dataDetectorImageOverlayPositionInformation(const HTMLElement& overl
 
     auto [foundElement, elementBounds] = *elementAndBounds;
     auto identifierValue = parseInteger<uint64_t>(foundElement->attributeWithoutSynchronization(HTMLNames::x_apple_data_detectors_resultAttr));
-    if (!identifierValue)
+    if (!identifierValue || !*identifierValue)
         return;
 
     auto identifier = ObjectIdentifier<ImageOverlayDataDetectionResultIdentifierType>(*identifierValue);
-    if (!identifier.isValid())
-        return;
 
     auto* dataDetectionResults = frame->dataDetectionResultsIfExists();
     if (!dataDetectionResults)
@@ -3148,6 +3146,9 @@ static void imagePositionInformation(WebPage& page, Element& element, const Inte
     info.isAnimating = image.isAnimating();
     RefPtr htmlElement = dynamicDowncast<HTMLElement>(element);
     info.elementContainsImageOverlay = htmlElement && ImageOverlay::hasOverlay(*htmlElement);
+#if ENABLE(SPATIAL_IMAGE_DETECTION)
+    info.isSpatialImage = image.isSpatial();
+#endif
 
     if (request.includeSnapshot || request.includeImageData)
         info.image = createShareableBitmap(renderImage, { screenSize() * page.corePage()->deviceScaleFactor(), AllowAnimatedImages::Yes, UseSnapshotForTransparentImages::Yes });
@@ -3320,7 +3321,7 @@ static void textInteractionPositionInformation(WebPage& page, const HTMLInputEle
 RefPtr<ShareableBitmap> WebPage::shareableBitmapSnapshotForNode(Element& element)
 {
     // Ensure that the image contains at most 600K pixels, so that it is not too big.
-    if (auto snapshot = snapshotNode(element, SnapshotOptionsShareable, 600 * 1024))
+    if (auto snapshot = snapshotNode(element, SnapshotOption::Shareable, 600 * 1024))
         return snapshot->bitmap();
     return nullptr;
 }
@@ -3612,6 +3613,10 @@ void WebPage::performActionOnElement(uint32_t action, const String& authorizatio
             return;
         send(Messages::WebPageProxy::SaveImageToLibrary(WTFMove(*handle), authorizationToken));
     }
+#if ENABLE(SPATIAL_IMAGE_DETECTION)
+    else if (static_cast<SheetAction>(action) == SheetAction::ViewSpatial)
+        element->webkitRequestFullscreen();
+#endif
 
     handleAnimationActions(*element, action);
 }
@@ -4734,15 +4739,15 @@ void WebPage::updateLayoutViewportHeightExpansionTimerFired()
         if (!view->hasViewportConstrainedObjects())
             return false;
 
-        Vector<Ref<Element>> largeViewportConstrainedElements;
+        HashSet<Ref<Element>> largeViewportConstrainedElements;
         for (auto& renderer : *view->viewportConstrainedObjects()) {
             RefPtr element = renderer.element();
             if (!element)
                 continue;
 
             auto bounds = renderer.absoluteBoundingBoxRect();
-            if (intersection(viewportRect, bounds).area() > 0.9 * viewportRect.area())
-                largeViewportConstrainedElements.append(element.releaseNonNull());
+            if (intersection(viewportRect, bounds).height() > 0.9 * viewportRect.height())
+                largeViewportConstrainedElements.add(element.releaseNonNull());
         }
 
         if (largeViewportConstrainedElements.isEmpty())
@@ -4753,9 +4758,23 @@ void WebPage::updateLayoutViewportHeightExpansionTimerFired()
             return false;
 
         auto& hitTestedNodes = hitTestResult.listBasedTestResult();
-        return std::ranges::any_of(largeViewportConstrainedElements, [&hitTestedNodes](auto& element) {
-            return hitTestedNodes.contains(element);
-        });
+        HashSet<Ref<Element>> elementsOutsideOfAnyLargeViewportConstrainedContainers;
+        for (auto& node : hitTestedNodes) {
+            RefPtr firstParentOrSelf = dynamicDowncast<Element>(node) ?: node->parentElementInComposedTree();
+            Vector<Ref<Element>> ancestorsForHitTestedNode;
+            for (RefPtr parent = firstParentOrSelf; parent; parent = parent->parentElementInComposedTree()) {
+                if (largeViewportConstrainedElements.contains(*parent))
+                    return true;
+
+                if (elementsOutsideOfAnyLargeViewportConstrainedContainers.contains(*parent))
+                    break;
+
+                ancestorsForHitTestedNode.append(*parent);
+            }
+            for (auto& ancestor : ancestorsForHitTestedNode)
+                elementsOutsideOfAnyLargeViewportConstrainedContainers.add(ancestor);
+        }
+        return false;
     }();
 
     if (hitTestedToLargeViewportConstrainedElement) {
@@ -4887,7 +4906,7 @@ void WebPage::drawToPDFiOS(WebCore::FrameIdentifier frameID, const PrintInfo& pr
         auto originalLayoutViewportOverrideRect = frameView.layoutViewportOverrideRect();
         frameView.setLayoutViewportOverrideRect(LayoutRect(snapshotRect));
 
-        auto pdfData = pdfSnapshotAtSize(snapshotRect, snapshotSize, 0);
+        auto pdfData = pdfSnapshotAtSize(snapshotRect, snapshotSize, { });
 
         frameView.setLayoutViewportOverrideRect(originalLayoutViewportOverrideRect);
         reply(SharedBuffer::create(pdfData.get()));

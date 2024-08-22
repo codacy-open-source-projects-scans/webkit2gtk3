@@ -29,6 +29,7 @@
 #include "DragActions.h"
 #include "FocusDirection.h"
 #include "HitTestRequest.h"
+#include "ImmediateActionStage.h"
 #include "LayoutPoint.h"
 #include "PlatformMouseEvent.h"
 #include "RenderObject.h"
@@ -44,6 +45,7 @@
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
 #include <wtf/RefPtr.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakRef.h>
 
 #if PLATFORM(COCOA)
@@ -124,17 +126,8 @@ extern const unsigned InvalidTouchIdentifier;
 enum AppendTrailingWhitespace { ShouldAppendTrailingWhitespace, DontAppendTrailingWhitespace };
 enum CheckDragHysteresis { ShouldCheckDragHysteresis, DontCheckDragHysteresis };
 
-enum class ImmediateActionStage : uint8_t {
-    None,
-    PerformedHitTest,
-    ActionUpdated,
-    ActionCancelledWithoutUpdate,
-    ActionCancelledAfterUpdate,
-    ActionCompleted
-};
-
 class EventHandler final : public CanMakeCheckedPtr<EventHandler> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(EventHandler);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(EventHandler);
 public:
     explicit EventHandler(LocalFrame&);

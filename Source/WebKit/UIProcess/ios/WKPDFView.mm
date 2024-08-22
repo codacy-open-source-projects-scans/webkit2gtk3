@@ -51,6 +51,13 @@
 #import <wtf/cocoa/Entitlements.h>
 #import <wtf/cocoa/NSURLExtras.h>
 
+#if PLATFORM(APPLETV)
+#import "PDFKitSoftLink.h"
+#define PDFHostViewControllerClass WebKit::getPDFHostViewControllerClass()
+#else
+#define PDFHostViewControllerClass PDFHostViewController
+#endif
+
 #if HAVE(UIFINDINTERACTION)
 
 @interface WKPDFFoundTextRange : UITextRange
@@ -109,6 +116,10 @@
 
 #endif // HAVE(UIFINDINTERACTION)
 
+#if ENABLE(OVERLAY_REGIONS_IN_EVENT_REGION)
+static void* kvoContext = &kvoContext;
+#endif
+
 @interface WKPDFView () <PDFHostViewControllerDelegate, WKActionSheetAssistantDelegate
 #if HAVE(UIFINDINTERACTION)
     , UITextSearching
@@ -145,6 +156,15 @@
 #endif
 }
 
++ (BOOL)platformSupportsPDFView
+{
+#if PLATFORM(APPLETV)
+    return WebKit::isPDFKitFrameworkAvailable();
+#else
+    return YES;
+#endif
+}
+
 - (void)dealloc
 {
 #if HAVE(SHARE_SHEET_UI)
@@ -162,6 +182,11 @@
     _searchAggregator = nil;
     _searchString = nil;
 #endif
+
+#if ENABLE(OVERLAY_REGIONS_IN_EVENT_REGION)
+    [[_webView _wkScrollView] removeObserver:self forKeyPath:@"contentSize" context:kvoContext];
+#endif
+
     [super dealloc];
 }
 
@@ -199,6 +224,10 @@
     _keyboardScrollingAnimator = adoptNS([[WKKeyboardScrollViewAnimator alloc] initWithScrollView:webView._scrollViewInternal]);
     _webView = webView;
 
+#if ENABLE(OVERLAY_REGIONS_IN_EVENT_REGION)
+    [[_webView _wkScrollView] addObserver:self forKeyPath:@"contentSize" options:NSKeyValueObservingOptionNew context:kvoContext];
+#endif
+
     [self updateBackgroundColor];
 
     return self;
@@ -206,7 +235,7 @@
 
 - (void)updateBackgroundColor
 {
-    UIColor *backgroundColor = PDFHostViewController.backgroundColor;
+    UIColor *backgroundColor = [PDFHostViewControllerClass backgroundColor];
 
 #if PLATFORM(VISION)
     if (_isShowingPasswordView)
@@ -223,10 +252,10 @@
     _suggestedFilename = adoptNS([filename copy]);
 
 #if HAVE(SETUSEIOSURFACEFORTILES)
-    [PDFHostViewController setUseIOSurfaceForTiles:false];
+    [PDFHostViewControllerClass setUseIOSurfaceForTiles:false];
 #endif
 
-    [PDFHostViewController createHostView:[self, weakSelf = WeakObjCPtr<WKPDFView>(self)](PDFHostViewController *hostViewController) {
+    [PDFHostViewControllerClass createHostView:[self, weakSelf = WeakObjCPtr<WKPDFView>(self)](PDFHostViewController *hostViewController) {
         ASSERT(isMainRunLoop());
 
         WKPDFView *autoreleasedSelf = weakSelf.getAutoreleased();
@@ -507,6 +536,22 @@ static NSStringCompareOptions stringCompareOptions(_WKFindOptions findOptions)
 {
     return self.isBackground;
 }
+
+#pragma mark KVO
+
+#if ENABLE(OVERLAY_REGIONS_IN_EVENT_REGION)
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary<NSString *, id> *)change context:(void*)context
+{
+    if (context != kvoContext) {
+        [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
+        return;
+    }
+
+    ASSERT(object == [_webView _wkScrollView]);
+
+    [_webView _updateOverlayRegionsForCustomContentView];
+}
+#endif
 
 #pragma mark PDFHostViewControllerDelegate
 

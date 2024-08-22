@@ -41,7 +41,7 @@
 
 namespace JSC {
 
-ALWAYS_INLINE uint32_t toNonWrappingUint32(JSGlobalObject* globalObject, JSValue value)
+ALWAYS_INLINE uint32_t toNonWrappingUint32(JSGlobalObject* globalObject, JSValue value, ErrorType errorType = ErrorType::TypeError)
 {
     VM& vm = getVM(globalObject);
     auto throwScope = DECLARE_THROW_SCOPE(vm);
@@ -58,7 +58,11 @@ ALWAYS_INLINE uint32_t toNonWrappingUint32(JSGlobalObject* globalObject, JSValue
             return static_cast<uint32_t>(truncedValue);
     }
 
-    throwException(globalObject, throwScope, createTypeError(globalObject, "Expect an integer argument in the range: [0, 2^32 - 1]"_s));
+    constexpr auto message = "Expect an integer argument in the range: [0, 2^32 - 1]"_s;
+    if (errorType == ErrorType::RangeError)
+        throwRangeError(globalObject, throwScope, message);
+    else
+        throwTypeError(globalObject, throwScope, message);
     return { };
 }
 
@@ -157,7 +161,6 @@ ALWAYS_INLINE JSValue defaultValueForReferenceType(const Wasm::Type type)
     ASSERT(Wasm::isRefType(type));
     if (Wasm::isExternref(type))
         return jsUndefined();
-    ASSERT_IMPLIES(!Options::useWasmTypedFunctionReferences(), Wasm::isFuncref(type));
     return jsNull();
 }
 
@@ -213,12 +216,12 @@ ALWAYS_INLINE uint64_t fromJSValue(JSGlobalObject* globalObject, const Wasm::Typ
             WebAssemblyFunction* wasmFunction = nullptr;
             WebAssemblyWrapperFunction* wasmWrapperFunction = nullptr;
             if (!isWebAssemblyHostFunction(value, wasmFunction, wasmWrapperFunction) && (!type.isNullable() || !value.isNull()))
-                return throwVMTypeError(globalObject, scope, "Funcref must be an exported wasm function"_s);
+                return throwVMTypeError(globalObject, scope, "Argument value did not match the reference type"_s);
             if (isRefWithTypeIndex(type) && !value.isNull()) {
                 Wasm::TypeIndex paramIndex = type.index;
                 Wasm::TypeIndex argIndex = wasmFunction ? wasmFunction->typeIndex() : wasmWrapperFunction->typeIndex();
                 if (paramIndex != argIndex)
-                    return throwVMTypeError(globalObject, scope, "Argument function did not match the reference type"_s);
+                    return throwVMTypeError(globalObject, scope, "Argument value did not match the reference type"_s);
             }
         } else {
             ASSERT(Options::useWasmGC());
@@ -226,7 +229,7 @@ ALWAYS_INLINE uint64_t fromJSValue(JSGlobalObject* globalObject, const Wasm::Typ
             if (!Wasm::TypeInformation::castReference(value, type.isNullable(), type.index)) {
                 // FIXME: provide a better error message here
                 // https://bugs.webkit.org/show_bug.cgi?id=247746
-                return throwVMTypeError(globalObject, scope, "Argument value did not match reference type"_s);
+                return throwVMTypeError(globalObject, scope, "Argument value did not match the reference type"_s);
             }
         }
         break;

@@ -45,13 +45,9 @@ static _WKMockUserNotificationCenter *centersByBundleIdentifier(NSString *bundle
     return centers->get()[bundleIdentifier];
 }
 
-static NSMutableSet *notificationPermissions()
-{
-    static NeverDestroyed<RetainPtr<NSMutableSet>> permissions = adoptNS([NSMutableSet new]);
-    return permissions->get();
-}
-
 @implementation _WKMockUserNotificationCenter {
+    dispatch_queue_t m_queue;
+    BOOL m_hasPermission;
     RetainPtr<NSString> m_bundleIdentifier;
     RetainPtr<NSMutableArray> m_notifications;
     RetainPtr<NSNumber> m_appBadge;
@@ -63,6 +59,7 @@ static NSMutableSet *notificationPermissions()
     if (!self)
         return nil;
 
+    m_queue = dispatch_queue_create(nullptr, DISPATCH_QUEUE_SERIAL_WITH_AUTORELEASE_POOL);
     m_bundleIdentifier = bundleIdentifier;
     m_notifications = adoptNS([[NSMutableArray alloc] init]);
 
@@ -86,7 +83,7 @@ static NSMutableSet *notificationPermissions()
     if (!request.content.targetContentIdentifier)
         m_appBadge = request.content.badge;
 
-    callOnMainRunLoop([completionHandler = makeBlockPtr(completionHandler)] mutable {
+    dispatch_async(m_queue, ^{
         completionHandler(nil);
     });
 }
@@ -98,8 +95,9 @@ static NSMutableSet *notificationPermissions()
 
 - (void)getDeliveredNotificationsWithCompletionHandler:(void(^)(NSArray<UNNotification *> *notifications))completionHandler
 {
-    callOnMainRunLoop([completionHandler = makeBlockPtr(completionHandler), notifications = [m_notifications.get() copy]] mutable {
-        completionHandler(notifications);
+    RetainPtr<NSArray> notifications = adoptNS([m_notifications copy]);
+    dispatch_async(m_queue, ^{
+        completionHandler(notifications.get());
     });
 }
 
@@ -123,19 +121,27 @@ static NSMutableSet *notificationPermissions()
 
 - (void)getNotificationSettingsWithCompletionHandler:(void(^)(UNNotificationSettings *settings))completionHandler
 {
-    callOnMainRunLoop([completionHandler = makeBlockPtr(completionHandler), hasPermission = [notificationPermissions() containsObject:m_bundleIdentifier.get()]]() mutable {
-        RetainPtr settings = [UNMutableNotificationSettings emptySettings];
-        [settings setAuthorizationStatus:UNAuthorizationStatusAuthorized];
-        completionHandler(settings.get());
+    BOOL hasPermission = m_hasPermission;
+    dispatch_async(m_queue, ^{
+        UNMutableNotificationSettings *settings = [UNMutableNotificationSettings emptySettings];
+        settings.authorizationStatus = hasPermission ? UNAuthorizationStatusAuthorized : UNAuthorizationStatusNotDetermined;
+        completionHandler(settings);
     });
 }
 
 - (void)requestAuthorizationWithOptions:(UNAuthorizationOptions)options completionHandler:(void (^)(BOOL granted, NSError *))completionHandler
 {
-    [notificationPermissions() addObject:m_bundleIdentifier.get()];
-    callOnMainRunLoop([completionHandler = makeBlockPtr(completionHandler)] mutable {
+    m_hasPermission = YES;
+    dispatch_async(m_queue, ^{
         completionHandler(YES, nil);
     });
+}
+
+- (UNNotificationSettings *)notificationSettings
+{
+    RetainPtr settings = [UNMutableNotificationSettings emptySettings];
+    [settings setAuthorizationStatus:m_hasPermission ? UNAuthorizationStatusAuthorized : UNAuthorizationStatusNotDetermined];
+    return settings.get();
 }
 
 @end

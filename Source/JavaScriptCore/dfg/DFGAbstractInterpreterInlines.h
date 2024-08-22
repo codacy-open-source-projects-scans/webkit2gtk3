@@ -50,6 +50,7 @@
 #include "JSWebAssemblyInstance.h"
 #include "MathCommon.h"
 #include "NumberConstructor.h"
+#include "ObjectConstructor.h"
 #include "PutByStatus.h"
 #include "RegExpObject.h"
 #include "RegExpPrototype.h"
@@ -1474,7 +1475,11 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
     case ArithFRound:
         executeDoubleUnaryOpEffects(node, [](double value) -> double { return static_cast<float>(value); });
         break;
-        
+
+    case ArithF16Round:
+        executeDoubleUnaryOpEffects(node, [](double value) -> double { return static_cast<double>(Float16 { value }); });
+        break;
+
     case ArithUnary:
         executeDoubleUnaryOpEffects(node, arithUnaryFunction(node->arithUnaryType()));
         break;
@@ -2692,12 +2697,8 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
             }
             break;
         }
+        case Array::Float16Array:
         case Array::Float32Array:
-            if (node->op() == GetByVal && arrayMode.isOutOfBounds())
-                setNonCellTypeForNode(node, SpecBytecodeDouble | SpecOther);
-            else
-                setNonCellTypeForNode(node, SpecFullDouble);
-            break;
         case Array::Float64Array:
             if (node->op() == GetByVal && arrayMode.isOutOfBounds())
                 setNonCellTypeForNode(node, SpecBytecodeDouble | SpecOther);
@@ -4926,8 +4927,13 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
     case OverridesHasInstance:
         setNonCellTypeForNode(node, SpecBoolean);
         break;
-            
+
     case InstanceOf:
+        clobberWorld();
+        setNonCellTypeForNode(node, SpecBoolean);
+        break;
+
+    case InstanceOfMegamorphic:
         clobberWorld();
         setNonCellTypeForNode(node, SpecBoolean);
         break;
@@ -4992,10 +4998,45 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
     case Flush:
     case PhantomLocal:
         break;
+
+    case Construct: {
+        Edge calleeNode = m_graph.child(node, 0);
+        Edge newTargetNode = m_graph.child(node, 1);
+        JSValue calleeValue = forNode(calleeNode).m_value;
+        JSValue newTargetValue = forNode(newTargetNode).m_value;
+        if (calleeValue && newTargetValue) {
+            auto* callee = jsDynamicCast<JSObject*>(calleeValue);
+            auto* newTarget = jsDynamicCast<JSFunction*>(newTargetValue);
+            if (callee && newTarget) {
+                JSGlobalObject* globalObject = m_graph.globalObjectFor(node->origin.semantic);
+                if (callee->globalObject() == globalObject) {
+                    if (callee->classInfo() == ObjectConstructor::info() && node->numChildren() == 2) {
+                        if (FunctionRareData* rareData = newTarget->rareData()) {
+                            if (rareData->allocationProfileWatchpointSet().isStillValid() && globalObject->structureCacheClearedWatchpointSet().isStillValid()) {
+                                Structure* structure = rareData->internalFunctionAllocationStructure();
+                                if (structure && structure->classInfoForCells() == JSFinalObject::info() && structure->hasMonoProto()) {
+                                    m_graph.freeze(rareData);
+                                    m_graph.watchpoints().addLazily(rareData->allocationProfileWatchpointSet());
+                                    m_graph.freeze(globalObject);
+                                    m_graph.watchpoints().addLazily(globalObject->structureCacheClearedWatchpointSet());
+                                    m_state.setShouldTryConstantFolding(true);
+                                    didFoldClobberWorld();
+                                    setForNode(node, structure);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        clobberWorld();
+        makeHeapTopForNode(node);
+        break;
+    }
             
     case Call:
     case TailCallInlinedCaller:
-    case Construct:
     case CallVarargs:
     case CallForwardVarargs:
     case TailCallVarargsInlinedCaller:

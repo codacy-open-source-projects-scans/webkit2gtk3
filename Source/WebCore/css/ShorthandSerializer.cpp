@@ -31,6 +31,7 @@
 #include "CSSParserIdioms.h"
 #include "CSSPendingSubstitutionValue.h"
 #include "CSSPropertyNames.h"
+#include "CSSPropertyParserConsumer+Font.h"
 #include "CSSPropertyParserConsumer+Ident.h"
 #include "CSSValueKeywords.h"
 #include "CSSValuePair.h"
@@ -126,6 +127,7 @@ private:
     String serializeGridTemplate() const;
     String serializeOffset() const;
     String serializePageBreak() const;
+    String serializeTextBox() const;
     String serializeTextWrap() const;
     String serializeWhiteSpace() const;
 
@@ -402,6 +404,8 @@ String ShorthandSerializer::serialize()
         return serializeLonghandsOmittingTrailingInitialValue();
     case CSSPropertyTextWrap:
         return serializeTextWrap();
+    case CSSPropertyTextBox:
+        return serializeTextBox();
     case CSSPropertyWebkitColumnBreakAfter:
     case CSSPropertyWebkitColumnBreakBefore:
         return serializeColumnBreak();
@@ -1251,6 +1255,28 @@ String ShorthandSerializer::serializePageBreak() const
     default:
         return String();
     }
+}
+
+String ShorthandSerializer::serializeTextBox() const
+{
+    auto textBoxTrim = longhandValueID(0);
+    auto& textBoxEdge = longhandValue(longhandIndex(1, CSSPropertyTextBoxEdge));
+    auto textBoxEdgeIsAuto = [&]() {
+        if (auto* primitiveValue = dynamicDowncast<CSSPrimitiveValue>(textBoxEdge))
+            return primitiveValue->valueID() == CSSValueAuto;
+        return false;
+    }();
+
+    if (textBoxTrim == CSSValueNone && textBoxEdgeIsAuto)
+        return nameString(CSSValueNormal);
+
+    if (textBoxEdgeIsAuto)
+        return nameLiteral(textBoxTrim);
+
+    if (textBoxTrim == CSSValueTrimBoth)
+        return textBoxEdge.cssText();
+
+    return makeString(nameLiteral(textBoxTrim), ' ', textBoxEdge.cssText());
 }
 
 String ShorthandSerializer::serializeTextWrap() const

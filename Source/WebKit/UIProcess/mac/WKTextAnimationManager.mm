@@ -24,7 +24,7 @@
  */
 
 
-#if ENABLE(WRITING_TOOLS_UI) && PLATFORM(MAC)
+#if ENABLE(WRITING_TOOLS) && PLATFORM(MAC)
 
 #import "config.h"
 #import "WKTextAnimationManager.h"
@@ -89,34 +89,47 @@
 {
     RetainPtr<id<_WTTextEffect>> effect;
     RetainPtr chunk = adoptNS([PAL::alloc_WTTextChunkInstance() initChunkWithIdentifier:uuid.UUIDString]);
+
     switch (data.style) {
     case WebCore::TextAnimationType::Initial:
         effect = adoptNS([PAL::alloc_WTSweepTextEffectInstance() initWithChunk:chunk.get() effectView:_effectView.get()]);
         break;
+
     case WebCore::TextAnimationType::Source:
         effect = adoptNS([PAL::alloc_WTReplaceSourceTextEffectInstance() initWithChunk:chunk.get() effectView:_effectView.get()]);
+
         effect.get().preCompletion = makeBlockPtr([weakWebView = WeakPtr<WebKit::WebViewImpl>(_webView), uuid = RetainPtr(uuid), runMode = data.runMode] {
             auto strongWebView = weakWebView.get();
             auto animationID = WTF::UUID::fromNSUUID(uuid.get());
             if (strongWebView && animationID)
                 strongWebView->page().callCompletionHandlerForAnimationID(*animationID, runMode);
         }).get();
+
         break;
+
     case WebCore::TextAnimationType::Final:
         effect = adoptNS([PAL::alloc_WTReplaceDestinationTextEffectInstance() initWithChunk:chunk.get() effectView:_effectView.get()]);
-        static_cast<_WTReplaceDestinationTextEffect *>(effect.get()).preCompletion = makeBlockPtr([weakWebView = WeakPtr<WebKit::WebViewImpl>(_webView), remainingID = data.unanimatedRangeUUID] {
+
+        effect.get().preCompletion = makeBlockPtr([weakWebView = WeakPtr<WebKit::WebViewImpl>(_webView), remainingID = data.unanimatedRangeUUID] {
             auto strongWebView = weakWebView.get();
             if (strongWebView)
                 strongWebView->page().updateUnderlyingTextVisibilityForTextAnimationID(remainingID, false);
         }).get();
+
         effect.get().completion = makeBlockPtr([weakWebView = WeakPtr<WebKit::WebViewImpl>(_webView), remainingID = data.unanimatedRangeUUID, uuid = RetainPtr(uuid), runMode = data.runMode] {
             auto strongWebView = weakWebView.get();
-            if (strongWebView)
-                strongWebView->page().updateUnderlyingTextVisibilityForTextAnimationID(remainingID, true);
             auto animationID = WTF::UUID::fromNSUUID(uuid.get());
-            if (animationID)
-                strongWebView->page().callCompletionHandlerForAnimationID(*animationID, runMode);
+
+            if (!strongWebView || !animationID)
+                return;
+
+            strongWebView->page().didEndPartialIntelligenceTextPonderingAnimationImpl();
+            strongWebView->page().showSelectionForActiveWritingToolsSessionIfNeeded();
+
+            strongWebView->page().updateUnderlyingTextVisibilityForTextAnimationID(remainingID, true);
+            strongWebView->page().callCompletionHandlerForAnimationID(*animationID, runMode);
         }).get();
+
         break;
     }
 
@@ -209,7 +222,7 @@
     WebCore::IntSize bitmapSize(rect.size.width, rect.size.height);
     bitmapSize.scale(deviceScale, deviceScale);
 
-    _webView->page().takeSnapshot(WebCore::IntRect(rect), bitmapSize, WebKit::SnapshotOptionsShareable, [rect, completionHandler = makeBlockPtr(completionHandler)](std::optional<WebCore::ShareableBitmap::Handle>&& imageHandle) {
+    _webView->page().takeSnapshot(WebCore::IntRect(rect), bitmapSize, WebKit::SnapshotOption::Shareable, [rect, completionHandler = makeBlockPtr(completionHandler)](std::optional<WebCore::ShareableBitmap::Handle>&& imageHandle) {
         if (!imageHandle) {
             completionHandler(nil);
             return;
@@ -238,5 +251,5 @@
 
 @end
 
-#endif // ENABLE(WRITING_TOOLS_UI) && PLATFORM(MAC)
+#endif // ENABLE(WRITING_TOOLS) && PLATFORM(MAC)
 

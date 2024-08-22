@@ -78,6 +78,7 @@
 #include <WebCore/ResourceError.h>
 #include <wtf/CallbackAggregator.h>
 #include <wtf/CompletionHandler.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/WeakHashSet.h>
 #include <wtf/text/MakeString.h>
 
@@ -109,6 +110,7 @@
 #endif
 
 #define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, connection())
+#define MESSAGE_CHECK_COMPLETION(assertion, completion) MESSAGE_CHECK_COMPLETION_BASE(assertion, connection(), completion)
 
 namespace WebKit {
 using namespace WebCore;
@@ -121,6 +123,8 @@ static WeakHashSet<NetworkProcessProxy>& networkProcessesSet()
     static NeverDestroyed<WeakHashSet<NetworkProcessProxy>> set;
     return set;
 }
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(NetworkProcessProxy);
 
 Vector<Ref<NetworkProcessProxy>> NetworkProcessProxy::allNetworkProcesses()
 {
@@ -149,8 +153,7 @@ Ref<NetworkProcessProxy> NetworkProcessProxy::ensureDefaultNetworkProcess()
 void NetworkProcessProxy::terminate()
 {
     AuxiliaryProcessProxy::terminate();
-    if (auto* connection = this->connection())
-        connection->invalidate();
+    connection().invalidate();
 }
 
 void NetworkProcessProxy::requestTermination()
@@ -300,7 +303,7 @@ void NetworkProcessProxy::connectionWillOpen(IPC::Connection& connection)
 
 void NetworkProcessProxy::processWillShutDown(IPC::Connection& connection)
 {
-    ASSERT_UNUSED(connection, this->connection() == &connection);
+    ASSERT_UNUSED(connection, &this->connection() == &connection);
 }
 
 void NetworkProcessProxy::getNetworkProcessConnection(WebProcessProxy& webProcessProxy, CompletionHandler<void(NetworkProcessConnectionInfo&&)>&& reply)
@@ -328,8 +331,8 @@ void NetworkProcessProxy::getNetworkProcessConnection(WebProcessProxy& webProces
         reply(NetworkProcessConnectionInfo { WTFMove(*identifier), cookieAcceptPolicy });
         UNUSED_VARIABLE(this);
 #elif OS(DARWIN)
-        MESSAGE_CHECK(*identifier);
-        reply(NetworkProcessConnectionInfo { WTFMove(*identifier) , cookieAcceptPolicy, connection()->getAuditToken() });
+        MESSAGE_CHECK_COMPLETION(*identifier, reply({ }));
+        reply(NetworkProcessConnectionInfo { WTFMove(*identifier) , cookieAcceptPolicy, connection().getAuditToken() });
 #else
         notImplemented();
 #endif
@@ -372,7 +375,7 @@ void NetworkProcessProxy::dataTaskWithRequest(WebPageProxy& page, PAL::SessionID
 
 void NetworkProcessProxy::dataTaskReceivedChallenge(DataTaskIdentifier identifier, WebCore::AuthenticationChallenge&& challenge, CompletionHandler<void(AuthenticationChallengeDisposition, WebCore::Credential&&)>&& completionHandler)
 {
-    MESSAGE_CHECK(decltype(m_dataTasks)::isValidKey(identifier));
+    MESSAGE_CHECK_COMPLETION(decltype(m_dataTasks)::isValidKey(identifier), completionHandler({ }, { }));
     if (auto task = m_dataTasks.get(identifier))
         task->client().didReceiveChallenge(*task, WTFMove(challenge), WTFMove(completionHandler));
     else
@@ -381,14 +384,14 @@ void NetworkProcessProxy::dataTaskReceivedChallenge(DataTaskIdentifier identifie
 
 void NetworkProcessProxy::dataTaskWillPerformHTTPRedirection(DataTaskIdentifier identifier, WebCore::ResourceResponse&& response, WebCore::ResourceRequest&& request, CompletionHandler<void(bool)>&& completionHandler)
 {
-    MESSAGE_CHECK(decltype(m_dataTasks)::isValidKey(identifier));
+    MESSAGE_CHECK_COMPLETION(decltype(m_dataTasks)::isValidKey(identifier), completionHandler(false));
     if (auto task = m_dataTasks.get(identifier))
         task->client().willPerformHTTPRedirection(*task, WTFMove(response), WTFMove(request), WTFMove(completionHandler));
 }
 
 void NetworkProcessProxy::dataTaskDidReceiveResponse(DataTaskIdentifier identifier, WebCore::ResourceResponse&& response, CompletionHandler<void(bool)>&& completionHandler)
 {
-    MESSAGE_CHECK(decltype(m_dataTasks)::isValidKey(identifier));
+    MESSAGE_CHECK_COMPLETION(decltype(m_dataTasks)::isValidKey(identifier), completionHandler(false));
     if (auto task = m_dataTasks.get(identifier))
         task->client().didReceiveResponse(*task, WTFMove(response), WTFMove(completionHandler));
     else
@@ -492,7 +495,7 @@ void NetworkProcessProxy::didClose(IPC::Connection& connection)
     networkProcessDidTerminate(ProcessTerminationReason::Crash);
 }
 
-void NetworkProcessProxy::didReceiveInvalidMessage(IPC::Connection& connection, IPC::MessageName messageName)
+void NetworkProcessProxy::didReceiveInvalidMessage(IPC::Connection& connection, IPC::MessageName messageName, int32_t)
 {
     logInvalidMessage(connection, messageName);
     terminate();
@@ -520,9 +523,9 @@ void NetworkProcessProxy::didReceiveAuthenticationChallenge(PAL::SessionID sessi
             store->addSecKeyProxyStore(WTFMove(newSecKeyProxyStore));
         }
     }
-    auto authenticationChallenge = AuthenticationChallengeProxy::create(WTFMove(coreChallenge), challengeID, *connection(), WTFMove(secKeyProxyStore));
+    auto authenticationChallenge = AuthenticationChallengeProxy::create(WTFMove(coreChallenge), challengeID, connection(), WTFMove(secKeyProxyStore));
 #else
-    auto authenticationChallenge = AuthenticationChallengeProxy::create(WTFMove(coreChallenge), challengeID, *connection(), nullptr);
+    auto authenticationChallenge = AuthenticationChallengeProxy::create(WTFMove(coreChallenge), challengeID, connection(), nullptr);
 #endif
 
     RefPtr<WebPageProxy> page;
@@ -572,9 +575,9 @@ void NetworkProcessProxy::didBlockLoadToKnownTracker(WebPageProxyIdentifier page
         page->didBlockLoadToKnownTracker(url);
 }
 
-void NetworkProcessProxy::triggerBrowsingContextGroupSwitchForNavigation(WebPageProxyIdentifier pageID, uint64_t navigationID, BrowsingContextGroupSwitchDecision browsingContextGroupSwitchDecision, const WebCore::RegistrableDomain& responseDomain, NetworkResourceLoadIdentifier existingNetworkResourceLoadIdentifierToResume, CompletionHandler<void(bool success)>&& completionHandler)
+void NetworkProcessProxy::triggerBrowsingContextGroupSwitchForNavigation(WebPageProxyIdentifier pageID, WebCore::NavigationIdentifier navigationID, BrowsingContextGroupSwitchDecision browsingContextGroupSwitchDecision, const WebCore::RegistrableDomain& responseDomain, NetworkResourceLoadIdentifier existingNetworkResourceLoadIdentifierToResume, CompletionHandler<void(bool success)>&& completionHandler)
 {
-    RELEASE_LOG(ProcessSwapping, "%p - NetworkProcessProxy::triggerBrowsingContextGroupSwitchForNavigation: pageID=%" PRIu64 ", navigationID=%" PRIu64 ", browsingContextGroupSwitchDecision=%u, existingNetworkResourceLoadIdentifierToResume=%" PRIu64, this, pageID.toUInt64(), navigationID, (unsigned)browsingContextGroupSwitchDecision, existingNetworkResourceLoadIdentifierToResume.toUInt64());
+    RELEASE_LOG(ProcessSwapping, "%p - NetworkProcessProxy::triggerBrowsingContextGroupSwitchForNavigation: pageID=%" PRIu64 ", navigationID=%" PRIu64 ", browsingContextGroupSwitchDecision=%u, existingNetworkResourceLoadIdentifierToResume=%" PRIu64, this, pageID.toUInt64(), navigationID.toUInt64(), (unsigned)browsingContextGroupSwitchDecision, existingNetworkResourceLoadIdentifierToResume.toUInt64());
     if (auto page = pageID ? WebProcessProxy::webPage(pageID) : nullptr)
         page->triggerBrowsingContextGroupSwitchForNavigation(navigationID, browsingContextGroupSwitchDecision, responseDomain, existingNetworkResourceLoadIdentifierToResume, WTFMove(completionHandler));
     else
@@ -1208,11 +1211,6 @@ void NetworkProcessProxy::notifyResourceLoadStatisticsProcessed()
     WebProcessProxy::notifyPageStatisticsAndDataRecordsProcessed();
 }
 
-void NetworkProcessProxy::notifyWebsiteDataDeletionForRegistrableDomainsFinished()
-{
-    WebProcessProxy::notifyWebsiteDataDeletionForRegistrableDomainsFinished();
-}
-
 void NetworkProcessProxy::notifyWebsiteDataScanForRegistrableDomainsFinished()
 {
     WebProcessProxy::notifyWebsiteDataScanForRegistrableDomainsFinished();
@@ -1799,11 +1797,15 @@ void NetworkProcessProxy::clearBundleIdentifier(CompletionHandler<void()>&& comp
 void NetworkProcessProxy::didExceedMemoryLimit()
 {
     AuxiliaryProcessProxy::terminate();
-    if (auto* connection = this->connection())
-        connection->invalidate();
+    connection().invalidate();
     networkProcessDidTerminate(ProcessTerminationReason::ExceededMemoryLimit);
 }
 #endif
+
+void NetworkProcessProxy::getPendingPushMessage(PAL::SessionID sessionID, CompletionHandler<void(const std::optional<WebPushMessage>&)>&& completionHandler)
+{
+    sendWithAsyncReply(Messages::NetworkProcess::GetPendingPushMessage { sessionID }, WTFMove(completionHandler));
+}
 
 void NetworkProcessProxy::getPendingPushMessages(PAL::SessionID sessionID, CompletionHandler<void(const Vector<WebPushMessage>&)>&& completionHandler)
 {
@@ -2029,4 +2031,5 @@ void NetworkProcessProxy::setEmulatedConditions(PAL::SessionID sessionID, std::o
 
 } // namespace WebKit
 
+#undef MESSAGE_CHECK_COMPLETION
 #undef MESSAGE_CHECK

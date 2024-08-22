@@ -57,6 +57,7 @@
 #import "WKWebViewInternal.h"
 #import "WKWebpagePreferencesPrivate.h"
 #import "WKWebsiteDataStorePrivate.h"
+#import "WKWindowFeaturesPrivate.h"
 #import "WebCoreArgumentCoders.h"
 #import "WebExtensionAction.h"
 #import "WebExtensionConstants.h"
@@ -84,6 +85,7 @@
 #import <wtf/CallbackAggregator.h>
 #import <wtf/EnumTraits.h>
 #import <wtf/FileSystem.h>
+#import <wtf/TZoneMallocInlines.h>
 #import <wtf/URLParser.h>
 #import <wtf/cocoa/VectorCocoa.h>
 #import <wtf/text/MakeString.h>
@@ -355,6 +357,9 @@ bool WebExtensionContext::unload(NSError **outError)
     m_actionWindowMap.clear();
     m_actionTabMap.clear();
     m_defaultAction = nullptr;
+#if ENABLE(WK_WEB_EXTENSIONS_SIDEBAR)
+    m_defaultSidebar = nullptr;
+#endif
     m_popupPageActionMap.clear();
 
     m_ports.clear();
@@ -615,17 +620,17 @@ URL WebExtensionContext::overrideNewTabPageURL() const
     return { m_baseURL, extension().overrideNewTabPagePath() };
 }
 
-void WebExtensionContext::setHasAccessInPrivateBrowsing(bool hasAccess)
+void WebExtensionContext::setHasAccessToPrivateData(bool hasAccess)
 {
-    if (m_hasAccessInPrivateBrowsing == hasAccess)
+    if (m_hasAccessToPrivateData == hasAccess)
         return;
 
-    m_hasAccessInPrivateBrowsing = hasAccess;
+    m_hasAccessToPrivateData = hasAccess;
 
     if (!isLoaded())
         return;
 
-    if (m_hasAccessInPrivateBrowsing) {
+    if (m_hasAccessToPrivateData) {
         addDeclarativeNetRequestRulesToPrivateUserContentControllers();
 
         for (auto& controller : extensionController()->allPrivateUserContentControllers())
@@ -1990,6 +1995,27 @@ void WebExtensionContext::forgetTab(WebExtensionTabIdentifier identifier) const
     [m_tabDelegateToIdentifierMap removeObjectForKey:tab->delegate()];
 }
 
+bool WebExtensionContext::canOpenNewWindow() const
+{
+    ASSERT(isLoaded());
+
+    return [extensionController()->delegate() respondsToSelector:@selector(webExtensionController:openNewWindowUsingConfiguration:forExtensionContext:completionHandler:)];
+}
+
+void WebExtensionContext::openNewWindow(const WebExtensionWindowParameters& parameters, CompletionHandler<void(RefPtr<WebExtensionWindow>)>&& completionHandler)
+{
+    ASSERT(isLoaded());
+
+    windowsCreate(parameters, [this, protectedThis = Ref { *this }, completionHandler = WTFMove(completionHandler)](Expected<std::optional<WebExtensionWindowParameters>, WebExtensionError>&& result) mutable {
+        if (!result || !result.value()) {
+            completionHandler(nullptr);
+            return;
+        }
+
+        completionHandler(getWindow(result.value()->identifier.value()));
+    });
+}
+
 void WebExtensionContext::openNewTab(const WebExtensionTabParameters& parameters, CompletionHandler<void(RefPtr<WebExtensionTab>)>&& completionHandler)
 {
     tabsCreate(std::nullopt, parameters, [this, protectedThis = Ref { *this }, completionHandler = WTFMove(completionHandler)](Expected<std::optional<WebExtensionTabParameters>, WebExtensionError>&& result) mutable {
@@ -2622,6 +2648,46 @@ void WebExtensionContext::performAction(WebExtensionTab* tab, UserTriggered user
     fireActionClickedEventIfNeeded(tab);
 }
 
+#if ENABLE(WK_WEB_EXTENSIONS_SIDEBAR)
+WebExtensionSidebar& WebExtensionContext::defaultSidebar()
+{
+    if (!m_defaultSidebar)
+        m_defaultSidebar = WebExtensionSidebar::create(*this, WebExtensionSidebar::IsDefault::Yes);
+
+    return *m_defaultSidebar;
+}
+
+std::optional<Ref<WebExtensionSidebar>> WebExtensionContext::getSidebar(WebExtensionWindow const& window)
+{
+    if (RefPtr windowSidebar = m_sidebarWindowMap.get(window))
+        return *windowSidebar;
+
+    return std::nullopt;
+}
+
+std::optional<Ref<WebExtensionSidebar>> WebExtensionContext::getSidebar(WebExtensionTab const& tab)
+{
+    if (RefPtr tabSidebar = m_sidebarTabMap.get(tab))
+        return *tabSidebar;
+
+    return std::nullopt;
+}
+
+std::optional<Ref<WebExtensionSidebar>> WebExtensionContext::getOrCreateSidebar(WebExtensionWindow& window)
+{
+    return m_sidebarWindowMap.ensure(window, [&] {
+        return WebExtensionSidebar::create(*this, window);
+    }).iterator->value;
+}
+
+std::optional<Ref<WebExtensionSidebar>> WebExtensionContext::getOrCreateSidebar(WebExtensionTab& tab)
+{
+    return m_sidebarTabMap.ensure(tab, [&] {
+        return WebExtensionSidebar::create(*this, tab);
+    }).iterator->value;
+}
+#endif // ENABLE(WK_WEB_EXTENSIONS_SIDEBAR)
+
 const WebExtensionContext::CommandsVector& WebExtensionContext::commands()
 {
     if (m_populatedCommands)
@@ -2898,7 +2964,7 @@ void WebExtensionContext::userGesturePerformed(WebExtensionTab& tab)
     if (!hasPermission(WKWebExtensionPermissionActiveTab))
         return;
 
-    if (!tab.shouldGrantTabPermissionsOnUserGesture())
+    if (!tab.shouldGrantPermissionsOnUserGesture())
         return;
 
     auto currentURL = tab.url();
@@ -3131,7 +3197,9 @@ WKWebViewConfiguration *WebExtensionContext::webViewConfiguration(WebViewPurpose
     configuration._corsDisablingPatterns = corsDisablingPatterns();
     configuration._crossOriginAccessControlCheckEnabled = NO;
     configuration._processDisplayName = processDisplayName();
+    ALLOW_DEPRECATED_DECLARATIONS_BEGIN
     configuration._relatedWebView = relatedWebView();
+    ALLOW_DEPRECATED_DECLARATIONS_END
     configuration._requiredWebExtensionBaseURL = baseURL();
     configuration._shouldRelaxThirdPartyCookieBlocking = YES;
 
@@ -3165,7 +3233,7 @@ WKWebViewConfiguration *WebExtensionContext::webViewConfiguration(WebViewPurpose
 WebsiteDataStore* WebExtensionContext::websiteDataStore(std::optional<PAL::SessionID> sessionID) const
 {
     RefPtr result = extensionController()->websiteDataStore(sessionID);
-    if (result && !result->isPersistent() && !hasAccessInPrivateBrowsing())
+    if (result && !result->isPersistent() && !hasAccessToPrivateData())
         return nullptr;
     return result.get();
 }
@@ -3796,7 +3864,7 @@ void WebExtensionContext::loadInspectorBackgroundPage(WebInspectorUIProxy& inspe
         return;
 
     class InspectorExtensionClient : public API::InspectorExtensionClient {
-        WTF_MAKE_FAST_ALLOCATED;
+        WTF_MAKE_TZONE_ALLOCATED_INLINE(InspectorExtensionClient);
 
     public:
         explicit InspectorExtensionClient(API::InspectorExtension& inspectorExtension, WebExtensionContext& extensionContext)
@@ -3847,7 +3915,9 @@ void WebExtensionContext::loadInspectorBackgroundPage(WebInspectorUIProxy& inspe
 
         // The devtools_page needs to load in the Inspector's process instead of the extension's web process.
         // Force this by relating the web view to the Inspector's web view and sharing the same process pool and data store.
+        ALLOW_DEPRECATED_DECLARATIONS_BEGIN
         configuration._relatedWebView = inspectorWebView;
+        ALLOW_DEPRECATED_DECLARATIONS_END
         configuration._processDisplayName = inspectorWebViewConfiguration._processDisplayName;
         configuration.processPool = inspectorWebViewConfiguration.processPool;
         configuration.websiteDataStore = inspectorWebViewConfiguration.websiteDataStore;

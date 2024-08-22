@@ -221,7 +221,6 @@ public:
     virtual void runJavaScriptAlert(LocalFrame&, const String&) = 0;
     virtual bool runJavaScriptConfirm(LocalFrame&, const String&) = 0;
     virtual bool runJavaScriptPrompt(LocalFrame&, const String& message, const String& defaultValue, String& result) = 0;
-    virtual void setStatusbarText(const String&) = 0;
     virtual KeyboardUIMode keyboardUIMode() = 0;
 
     virtual bool hoverSupportedByPrimaryPointingDevice() const = 0;
@@ -395,6 +394,8 @@ public:
     virtual void getBarcodeDetectorSupportedFormats(CompletionHandler<void(Vector<ShapeDetection::BarcodeFormat>&&)>&& completionHandler) const { completionHandler({ }); }
     virtual RefPtr<ShapeDetection::FaceDetector> createFaceDetector(const ShapeDetection::FaceDetectorOptions&) const { return nullptr; }
     virtual RefPtr<ShapeDetection::TextDetector> createTextDetector() const { return nullptr; }
+
+    virtual void registerBlobPathForTesting(const String&, CompletionHandler<void()>&&) { }
 
     // Pass nullptr as the GraphicsLayer to detatch the root layer.
     virtual void attachRootGraphicsLayer(LocalFrame&, GraphicsLayer*) = 0;
@@ -672,23 +673,23 @@ public:
     virtual double baseViewportLayoutSizeScaleFactor() const { return 1; }
 
 #if ENABLE(WRITING_TOOLS)
-    virtual void proofreadingSessionShowDetailsForSuggestionWithIDRelativeToRect(const WritingTools::SessionID&, const WritingTools::TextSuggestionID&, IntRect) { }
+    virtual void proofreadingSessionShowDetailsForSuggestionWithIDRelativeToRect(const WritingTools::TextSuggestionID&, IntRect) { }
 
-    virtual void proofreadingSessionUpdateStateForSuggestionWithID(const WritingTools::SessionID&, WritingTools::TextSuggestionState, const WritingTools::TextSuggestionID&) { }
+    virtual void proofreadingSessionUpdateStateForSuggestionWithID(WritingTools::TextSuggestionState, const WritingTools::TextSuggestionID&) { }
 
     virtual void removeTextAnimationForAnimationID(const WTF::UUID&) { }
 
-    virtual void removeTransparentMarkersForSessionID(const WritingTools::SessionID&) { }
+    virtual void removeTransparentMarkersForActiveWritingToolsSession() { }
 
-    virtual void removeInitialTextAnimation(const WritingTools::SessionID&) { }
+    virtual void removeInitialTextAnimationForActiveWritingToolsSession() { }
 
-    virtual void addInitialTextAnimation(const WritingTools::SessionID&) { }
+    virtual void addInitialTextAnimationForActiveWritingToolsSession() { }
 
-    virtual void addSourceTextAnimation(const WritingTools::SessionID&, const CharacterRange&, const String, WTF::CompletionHandler<void(TextAnimationRunMode)>&&) { }
+    virtual void addSourceTextAnimationForActiveWritingToolsSession(const CharacterRange&, const String&, CompletionHandler<void(TextAnimationRunMode)>&&) { }
 
-    virtual void addDestinationTextAnimation(const WritingTools::SessionID&, const CharacterRange&, const String) { }
+    virtual void addDestinationTextAnimationForActiveWritingToolsSession(const std::optional<CharacterRange>&, const String&) { }
 
-    virtual void clearAnimationsForSessionID(const WritingTools::SessionID&) { };
+    virtual void clearAnimationsForActiveWritingToolsSession() { };
 #endif
 
     virtual void hasActiveNowPlayingSessionChanged(bool) { }

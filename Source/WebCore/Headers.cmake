@@ -171,6 +171,10 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/WebGPU/Implementation/WebGPUShaderModuleImpl.h
     Modules/WebGPU/Implementation/WebGPUTextureImpl.h
     Modules/WebGPU/Implementation/WebGPUTextureViewImpl.h
+    Modules/WebGPU/Implementation/WebGPUXRBindingImpl.h
+    Modules/WebGPU/Implementation/WebGPUXRProjectionLayerImpl.h
+    Modules/WebGPU/Implementation/WebGPUXRSubImageImpl.h
+    Modules/WebGPU/Implementation/WebGPUXRViewImpl.h
 
     Modules/WebGPU/InternalAPI/WebGPU.h
     Modules/WebGPU/InternalAPI/WebGPUAdapter.h
@@ -302,6 +306,11 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/WebGPU/InternalAPI/WebGPUVertexFormat.h
     Modules/WebGPU/InternalAPI/WebGPUVertexState.h
     Modules/WebGPU/InternalAPI/WebGPUVertexStepMode.h
+    Modules/WebGPU/InternalAPI/WebGPUXRBinding.h
+    Modules/WebGPU/InternalAPI/WebGPUXREye.h
+    Modules/WebGPU/InternalAPI/WebGPUXRProjectionLayer.h
+    Modules/WebGPU/InternalAPI/WebGPUXRSubImage.h
+    Modules/WebGPU/InternalAPI/WebGPUXRView.h
 
     Modules/airplay/PlaybackTargetClientContextIdentifier.h
 
@@ -340,6 +349,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     Modules/cookie-consent/CookieConsentDecisionResult.h
 
+    Modules/cookie-store/CookieChangeSubscription.h
     Modules/cookie-store/CookieStoreGetOptions.h
 
     Modules/credentialmanagement/CredentialRequestOptions.h
@@ -397,6 +407,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/identity/CredentialRequestCoordinatorClient.h
     Modules/identity/DigitalCredentialRequestOptions.h
     Modules/identity/IdentityCredentialsContainer.h
+    Modules/identity/IdentityRequestProvider.h
+    Modules/identity/OpenID4VPRequest.h
 
     Modules/indexeddb/IDBActiveDOMObject.h
     Modules/indexeddb/IDBDatabaseIdentifier.h
@@ -886,6 +898,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     css/StyleSheetList.h
 
     css/calc/CSSCalcSymbolsAllowed.h
+    css/calc/CSSCalcTree.h
+    css/calc/CSSCalcType.h
     css/calc/CSSCalcValue.h
 
     css/color/CSSColorDescriptors.h
@@ -904,6 +918,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     css/parser/CSSPropertyParserConsumer+UnevaluatedCalc.h
     css/parser/CSSSelectorParser.h
     css/parser/CSSSelectorParserContext.h
+    css/parser/CSSTokenizer.h
+    css/parser/CSSTokenizerInputStream.h
     css/parser/MutableCSSSelector.h
 
     css/query/ContainerQuery.h
@@ -1059,6 +1075,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     dom/SimulatedClickOptions.h
     dom/SlotAssignmentMode.h
     dom/SpaceSplitString.h
+    dom/StartViewTransitionOptions.h
     dom/StaticRange.h
     dom/StyledElement.h
     dom/TaskSource.h
@@ -1086,6 +1103,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     dom/UserTypingGestureIndicator.h
     dom/ValidityStateFlags.h
     dom/ViewTransition.h
+    dom/ViewTransitionTypeSet.h
     dom/VisibilityAdjustment.h
     dom/ViewTransitionUpdateCallback.h
     dom/ViewportArguments.h
@@ -1432,6 +1450,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     loader/MediaResourceLoader.h
     loader/MixedContentChecker.h
     loader/NavigationAction.h
+    loader/NavigationIdentifier.h
     loader/NavigationRequester.h
     loader/NavigationScheduler.h
     loader/NetscapePlugInStreamLoader.h
@@ -1542,6 +1561,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/GlobalWindowIdentifier.h
     page/HandleUserInputEventResult.h
     page/ImageAnalysisQueue.h
+    page/ImmediateActionStage.h
     page/InteractionRegion.h
     page/IsLoggedIn.h
     page/LayoutMilestone.h
@@ -1863,7 +1883,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/audio/PushPullFIFO.h
     platform/audio/SharedAudioDestination.h
 
-    platform/calc/CalcExpressionNode.h
+    platform/calc/CalculationOperator.h
+    platform/calc/CalculationTree.h
     platform/calc/CalculationValue.h
 
     platform/encryptedmedia/CDMEncryptionScheme.h
@@ -2144,6 +2165,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     platform/graphics/egl/GLContext.h
     platform/graphics/egl/GLContextWrapper.h
+    platform/graphics/egl/GLDisplay.h
     platform/graphics/egl/GLFence.h
 
     platform/graphics/filters/DistantLightSource.h
@@ -2488,7 +2510,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/style/StyleScrollSnapPoints.h
     rendering/style/StyleSelfAlignmentData.h
     rendering/style/StyleSurroundData.h
-    rendering/style/StyleTextBoxEdge.h
+    rendering/style/StyleTextEdge.h
     rendering/style/StyleTransformData.h
     rendering/style/StyleVisitedLinkColorData.h
     rendering/style/TextDecorationThickness.h

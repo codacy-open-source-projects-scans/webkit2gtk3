@@ -36,6 +36,7 @@
 #include <wtf/ApproximateTime.h>
 #include <wtf/CheckedPtr.h>
 #include <wtf/Ref.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/Vector.h>
 #include <wtf/WeakHashSet.h>
 #include <wtf/WeakPtr.h>
@@ -49,7 +50,7 @@ class Node;
 class Page;
 
 class ElementTargetingController final : public CanMakeCheckedPtr<ElementTargetingController> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(ElementTargetingController);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(ElementTargetingController);
 public:
     ElementTargetingController(Page&);
@@ -91,13 +92,13 @@ private:
 
     void recomputeAdjustedElementsIfNeeded();
 
-    SingleThreadWeakPtr<Page> m_page;
+    WeakPtr<Page> m_page;
     DeferrableOneShotTimer m_recentAdjustmentClientRectsCleanUpTimer;
     WeakHashSet<Document, WeakPtrImplWithEventTargetData> m_documentsAffectedByVisibilityAdjustment;
     HashMap<ElementIdentifier, IntRect> m_recentAdjustmentClientRects;
     ApproximateTime m_startTimeForSelectorBasedVisibilityAdjustment;
     Timer m_selectorBasedVisibilityAdjustmentTimer;
-    Vector<std::pair<ElementIdentifier, TargetedElementSelectors>> m_visibilityAdjustmentSelectors;
+    Vector<std::pair<Markable<ElementIdentifier>, TargetedElementSelectors>> m_visibilityAdjustmentSelectors;
     Vector<TargetedElementSelectors> m_initialVisibilityAdjustmentSelectors;
     Region m_adjustmentClientRegion;
     Region m_repeatedAdjustmentClientRegion;

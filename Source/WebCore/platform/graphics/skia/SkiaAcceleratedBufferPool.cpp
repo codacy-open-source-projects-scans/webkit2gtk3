@@ -71,9 +71,9 @@ RefPtr<Nicosia::Buffer> SkiaAcceleratedBufferPool::createAcceleratedBuffer(const
 {
     auto* grContext = PlatformDisplay::sharedDisplay().skiaGrContext();
     RELEASE_ASSERT(grContext);
-    auto imageInfo = SkImageInfo::MakeN32Premul(size.width(), size.height(), SkColorSpace::MakeSRGB());
+    auto imageInfo = SkImageInfo::Make(size.width(), size.height(), kRGBA_8888_SkColorType, kPremul_SkAlphaType, SkColorSpace::MakeSRGB());
     SkSurfaceProps properties = { 0, FontRenderOptions::singleton().subpixelOrder() };
-    auto surface = SkSurfaces::RenderTarget(grContext, skgpu::Budgeted::kNo, imageInfo, 0, kTopLeft_GrSurfaceOrigin, &properties);
+    auto surface = SkSurfaces::RenderTarget(grContext, skgpu::Budgeted::kNo, imageInfo, PlatformDisplay::sharedDisplay().msaaSampleCount(), kTopLeft_GrSurfaceOrigin, &properties);
     if (!surface)
         return nullptr;
     return Nicosia::AcceleratedBuffer::create(WTFMove(surface), supportsAlpha ? Nicosia::Buffer::SupportsAlpha : Nicosia::Buffer::NoFlags);

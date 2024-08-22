@@ -42,11 +42,14 @@
 #include "RealtimeOutgoingAudioSourceGStreamer.h"
 #include "RealtimeOutgoingVideoSourceGStreamer.h"
 #include <wtf/StdLibExtras.h>
+#include <wtf/TZoneMalloc.h>
 
 namespace WebCore {
 
 GST_DEBUG_CATEGORY(webkit_webrtc_pc_backend_debug);
 #define GST_CAT_DEFAULT webkit_webrtc_pc_backend_debug
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(WebRTCLogObserver);
 
 class WebRTCLogObserver : public WebCoreLogObserver {
 public:
@@ -351,20 +354,6 @@ RTCRtpTransceiver& GStreamerPeerConnectionBackend::newRemoteTransceiver(std::uni
 void GStreamerPeerConnectionBackend::collectTransceivers()
 {
     m_endpoint->collectTransceivers();
-}
-
-void GStreamerPeerConnectionBackend::addPendingTrackEvent(PendingTrackEvent&& event)
-{
-    m_pendingTrackEvents.append(WTFMove(event));
-}
-
-void GStreamerPeerConnectionBackend::dispatchPendingTrackEvents(MediaStream& mediaStream)
-{
-    auto events = WTFMove(m_pendingTrackEvents);
-    for (auto& event : events) {
-        event.streams = Vector<Ref<MediaStream>>({ mediaStream });
-        dispatchTrackEvent(event);
-    }
 }
 
 void GStreamerPeerConnectionBackend::removeTrack(RTCRtpSender& sender)

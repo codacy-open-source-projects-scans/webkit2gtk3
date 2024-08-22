@@ -35,6 +35,7 @@
 #include <wtf/FastMalloc.h>
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/UUID.h>
 #include <wtf/UniqueRef.h>
 #include <wtf/Vector.h>
@@ -68,6 +69,15 @@ struct RemovedPushRecord {
     WEBCORE_EXPORT RemovedPushRecord isolatedCopy() &&;
 };
 
+struct PushSubscriptionSetRecord {
+    PushSubscriptionSetIdentifier identifier;
+    String securityOrigin;
+    bool enabled;
+
+    WEBCORE_EXPORT PushSubscriptionSetRecord isolatedCopy() const &;
+    WEBCORE_EXPORT PushSubscriptionSetRecord isolatedCopy() &&;
+};
+
 struct PushTopics {
     Vector<String> enabledTopics;
     Vector<String> ignoredTopics;
@@ -77,7 +87,7 @@ struct PushTopics {
 };
 
 class PushDatabase {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_EXPORT(PushDatabase, WEBCORE_EXPORT);
 public:
     using CreationHandler = CompletionHandler<void(std::unique_ptr<PushDatabase>&&)>;
 
@@ -93,6 +103,7 @@ public:
     WEBCORE_EXPORT void getRecordByTopic(const String& topic, CompletionHandler<void(std::optional<PushRecord>&&)>&&);
     WEBCORE_EXPORT void getRecordBySubscriptionSetAndScope(const PushSubscriptionSetIdentifier&, const String& scope, CompletionHandler<void(std::optional<PushRecord>&&)>&&);
     WEBCORE_EXPORT void getIdentifiers(CompletionHandler<void(HashSet<PushSubscriptionIdentifier>&&)>&&);
+    WEBCORE_EXPORT void getPushSubscriptionSetRecords(CompletionHandler<void(Vector<PushSubscriptionSetRecord>&&)>&&);
     WEBCORE_EXPORT void getTopics(CompletionHandler<void(PushTopics&&)>&&);
 
     WEBCORE_EXPORT void incrementSilentPushCount(const PushSubscriptionSetIdentifier&, const String& securityOrigin, CompletionHandler<void(unsigned)>&&);
@@ -100,6 +111,7 @@ public:
     WEBCORE_EXPORT void removeRecordsBySubscriptionSet(const PushSubscriptionSetIdentifier&, CompletionHandler<void(Vector<RemovedPushRecord>&&)>&&);
     WEBCORE_EXPORT void removeRecordsBySubscriptionSetAndSecurityOrigin(const PushSubscriptionSetIdentifier&, const String& securityOrigin, CompletionHandler<void(Vector<RemovedPushRecord>&&)>&&);
 
+    WEBCORE_EXPORT void setPushesEnabled(const PushSubscriptionSetIdentifier&, bool, CompletionHandler<void(bool recordsChanged)>&&);
     WEBCORE_EXPORT void setPushesEnabledForOrigin(const PushSubscriptionSetIdentifier&, const String& securityOrigin, bool, CompletionHandler<void(bool recordsChanged)>&&);
 
 private:
@@ -109,8 +121,6 @@ private:
     template<typename... Args> WebCore::SQLiteStatementAutoResetScope bindStatementOnQueue(ASCIILiteral query, Args&&...);
 
     void dispatchOnWorkQueue(Function<void()>&&);
-
-    enum class SubscriptionSetState { Enabled, Ignored };
 
     Ref<WorkQueue> m_queue;
     UniqueRef<WebCore::SQLiteDatabase> m_db;

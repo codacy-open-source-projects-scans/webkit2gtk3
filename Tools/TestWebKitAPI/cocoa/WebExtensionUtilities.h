@@ -92,7 +92,7 @@
 @property (nonatomic, copy) void (^reload)(BOOL);
 @property (nonatomic, copy) void (^goBack)(void);
 @property (nonatomic, copy) void (^goForward)(void);
-@property (nonatomic, copy) void (^duplicate)(WKWebExtensionTabCreationOptions *, void (^completionHandler)(TestWebExtensionTab *, NSError *));
+@property (nonatomic, copy) void (^duplicate)(WKWebExtensionTabConfiguration *, void (^completionHandler)(TestWebExtensionTab *, NSError *));
 
 @end
 
@@ -144,6 +144,8 @@ inline NSString *constructScript(NSArray *lines) { return [lines componentsJoine
 inline NSString *constructJSArrayOfStrings(NSArray *elements) { return [NSString stringWithFormat:@"['%@']", [elements componentsJoinedByString:@"', '"]]; }
 
 NSData *makePNGData(CGSize, SEL colorSelector);
+
+void runScriptWithUserGesture(const String&, WKWebView *);
 
 #endif
 

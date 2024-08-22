@@ -774,15 +774,19 @@ static InlineCacheAction tryCacheArrayGetByVal(JSGlobalObject* globalObject, Cod
             case Uint32ArrayType:
                 accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayUint32Load : AccessCase::IndexedTypedArrayUint32Load;
                 break;
+            case Float16ArrayType:
+                if (!CCallHelpers::supportsFloat16())
+                    return GiveUpOnCache;
+                accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayFloat16Load : AccessCase::IndexedTypedArrayFloat16Load;
+                break;
             case Float32ArrayType:
                 accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayFloat32Load : AccessCase::IndexedTypedArrayFloat32Load;
                 break;
             case Float64ArrayType:
                 accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayFloat64Load : AccessCase::IndexedTypedArrayFloat64Load;
                 break;
-            // FIXME: Optimize BigInt64Array / BigUint64Array / Float16Array in IC
+            // FIXME: Optimize BigInt64Array / BigUint64Array in IC
             // https://bugs.webkit.org/show_bug.cgi?id=221183
-            case Float16ArrayType:
             case BigInt64ArrayType:
             case BigUint64ArrayType:
                 return GiveUpOnCache;
@@ -1319,15 +1323,19 @@ static InlineCacheAction tryCacheArrayPutByVal(JSGlobalObject* globalObject, Cod
             case Uint32ArrayType:
                 accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayUint32Store : AccessCase::IndexedTypedArrayUint32Store;
                 break;
+            case Float16ArrayType:
+                if (!CCallHelpers::supportsFloat16())
+                    return GiveUpOnCache;
+                accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayFloat16Store : AccessCase::IndexedTypedArrayFloat16Store;
+                break;
             case Float32ArrayType:
                 accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayFloat32Store : AccessCase::IndexedTypedArrayFloat32Store;
                 break;
             case Float64ArrayType:
                 accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayFloat64Store : AccessCase::IndexedTypedArrayFloat64Store;
                 break;
-            // FIXME: Optimize BigInt64Array / BigUint64Array / Float16Array in IC
+            // FIXME: Optimize BigInt64Array / BigUint64Array in IC
             // https://bugs.webkit.org/show_bug.cgi?id=221183
-            case Float16ArrayType:
             case BigInt64ArrayType:
             case BigUint64ArrayType:
                 return GiveUpOnCache;
@@ -1896,35 +1904,39 @@ static InlineCacheAction tryCacheArrayInByVal(JSGlobalObject* globalObject, Code
 #endif
             switch (typedArray->type()) {
             case Int8ArrayType:
-                accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayInt8InHit : AccessCase::IndexedTypedArrayInt8InHit;
+                accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayInt8In : AccessCase::IndexedTypedArrayInt8In;
                 break;
             case Uint8ArrayType:
-                accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayUint8InHit : AccessCase::IndexedTypedArrayUint8InHit;
+                accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayUint8In : AccessCase::IndexedTypedArrayUint8In;
                 break;
             case Uint8ClampedArrayType:
-                accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayUint8ClampedInHit : AccessCase::IndexedTypedArrayUint8ClampedInHit;
+                accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayUint8ClampedIn : AccessCase::IndexedTypedArrayUint8ClampedIn;
                 break;
             case Int16ArrayType:
-                accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayInt16InHit : AccessCase::IndexedTypedArrayInt16InHit;
+                accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayInt16In : AccessCase::IndexedTypedArrayInt16In;
                 break;
             case Uint16ArrayType:
-                accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayUint16InHit : AccessCase::IndexedTypedArrayUint16InHit;
+                accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayUint16In : AccessCase::IndexedTypedArrayUint16In;
                 break;
             case Int32ArrayType:
-                accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayInt32InHit : AccessCase::IndexedTypedArrayInt32InHit;
+                accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayInt32In : AccessCase::IndexedTypedArrayInt32In;
                 break;
             case Uint32ArrayType:
-                accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayUint32InHit : AccessCase::IndexedTypedArrayUint32InHit;
+                accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayUint32In : AccessCase::IndexedTypedArrayUint32In;
+                break;
+            case Float16ArrayType:
+                if (!CCallHelpers::supportsFloat16())
+                    return GiveUpOnCache;
+                accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayFloat16In : AccessCase::IndexedTypedArrayFloat16In;
                 break;
             case Float32ArrayType:
-                accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayFloat32InHit : AccessCase::IndexedTypedArrayFloat32InHit;
+                accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayFloat32In : AccessCase::IndexedTypedArrayFloat32In;
                 break;
             case Float64ArrayType:
-                accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayFloat64InHit : AccessCase::IndexedTypedArrayFloat64InHit;
+                accessType = typedArray->isResizableOrGrowableShared() ? AccessCase::IndexedResizableTypedArrayFloat64In : AccessCase::IndexedTypedArrayFloat64In;
                 break;
-            // FIXME: Optimize BigInt64Array / BigUint64Array / Float16Array in IC
+            // FIXME: Optimize BigInt64Array / BigUint64Array in IC
             // https://bugs.webkit.org/show_bug.cgi?id=221183
-            case Float16ArrayType:
             case BigInt64ArrayType:
             case BigUint64ArrayType:
                 return GiveUpOnCache;

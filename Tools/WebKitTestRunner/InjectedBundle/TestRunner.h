@@ -411,9 +411,7 @@ public:
     bool doesStatisticsDomainIDExistInDatabase(unsigned domainID);
     void setStatisticsEnabled(bool value);
     bool isStatisticsEphemeral();
-    void installStatisticsDidModifyDataRecordsCallback(JSContextRef, JSValueRef callback);
     void installStatisticsDidScanDataRecordsCallback(JSContextRef, JSValueRef callback);
-    void statisticsDidModifyDataRecordsCallback();
     void statisticsDidScanDataRecordsCallback();
     void statisticsNotifyObserver(JSContextRef, JSValueRef completionHandler);
     void statisticsProcessStatisticsAndDataRecords(JSContextRef, JSValueRef completionHandler);
@@ -564,6 +562,8 @@ public:
     void getAndClearReportedWindowProxyAccessDomains(JSContextRef, JSValueRef);
 
     void setTopContentInset(JSContextRef, double, JSValueRef);
+
+    void setPageScaleFactor(JSContextRef, double scaleFactor, long x, long y, JSValueRef callback);
 
 private:
     TestRunner();

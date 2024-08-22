@@ -130,6 +130,7 @@
 #include <WebCore/MediaSessionIdentifier.h>
 #include <WebCore/MediaUniqueIdentifier.h>
 #include <WebCore/ModelPlayerIdentifier.h>
+#include <WebCore/NavigationIdentifier.h>
 #include <WebCore/PageIdentifier.h>
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
 #include <WebCore/PlaybackTargetClientContextIdentifier.h>
@@ -374,6 +375,8 @@ std::optional<JSC::JSValue> jsValueForArguments(JSC::JSGlobalObject* globalObjec
         return jsValueForDecodedMessage<MessageName::TestWithEnabledBy_AlwaysEnabled>(globalObject, decoder);
     case MessageName::TestWithEnabledBy_ConditionallyEnabled:
         return jsValueForDecodedMessage<MessageName::TestWithEnabledBy_ConditionallyEnabled>(globalObject, decoder);
+    case MessageName::TestWithEnabledBy_MultiConditionallyEnabled:
+        return jsValueForDecodedMessage<MessageName::TestWithEnabledBy_MultiConditionallyEnabled>(globalObject, decoder);
     case MessageName::TestWithEnabledIf_AlwaysEnabled:
         return jsValueForDecodedMessage<MessageName::TestWithEnabledIf_AlwaysEnabled>(globalObject, decoder);
     case MessageName::TestWithEnabledIf_OnlyEnabledIfFeatureEnabled:
@@ -499,6 +502,7 @@ Vector<ASCIILiteral> serializedIdentifiers()
     static_assert(sizeof(uint64_t) == sizeof(WebCore::MediaSessionIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::ModelPlayerIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::MediaUniqueIdentifier));
+    static_assert(sizeof(uint64_t) == sizeof(WebCore::NavigationIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::OpaqueOriginIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::PageIdentifier));
     static_assert(sizeof(uint64_t) == sizeof(WebCore::PlatformLayerIdentifierID));
@@ -642,6 +646,7 @@ Vector<ASCIILiteral> serializedIdentifiers()
         "WebCore::MediaSessionIdentifier"_s,
         "WebCore::ModelPlayerIdentifier"_s,
         "WebCore::MediaUniqueIdentifier"_s,
+        "WebCore::NavigationIdentifier"_s,
         "WebCore::OpaqueOriginIdentifier"_s,
         "WebCore::PageIdentifier"_s,
         "WebCore::PlatformLayerIdentifierID"_s,
@@ -1103,6 +1108,8 @@ std::optional<Vector<ArgumentDescription>> messageArgumentDescriptions(MessageNa
         return Vector<ArgumentDescription> {
             { "url"_s, "String"_s, ASCIILiteral(), false },
         };
+    case MessageName::TestWithEnabledBy_MultiConditionallyEnabled:
+        return Vector<ArgumentDescription> { };
     case MessageName::TestWithEnabledIf_AlwaysEnabled:
         return Vector<ArgumentDescription> {
             { "url"_s, "String"_s, ASCIILiteral(), false },

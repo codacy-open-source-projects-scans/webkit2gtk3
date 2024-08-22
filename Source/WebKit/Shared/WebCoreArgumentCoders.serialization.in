@@ -1977,7 +1977,7 @@ struct WebCore::ElementContext {
     WebCore::FloatRect boundingRect;
     WebCore::PageIdentifier webPageIdentifier;
     WebCore::ScriptExecutionContextIdentifier documentIdentifier;
-    WebCore::ElementIdentifier elementIdentifier;
+    Markable<WebCore::ElementIdentifier> elementIdentifier;
 };
 
 struct WebCore::ElementAnimationContext {
@@ -2939,11 +2939,8 @@ struct WebCore::GraphicsContextGLAttributes {
     bool preserveDrawingBuffer;
     WebCore::GraphicsContextGLPowerPreference powerPreference;
     bool isWebGL2;
-#if PLATFORM(MAC) || PLATFORM(MACCATALYST)
+#if PLATFORM(MAC)
     uint64_t windowGPUID;
-#endif
-#if PLATFORM(COCOA)
-    bool useMetal;
 #endif
 #if ENABLE(WEBXR)
     bool xrCompatible;
@@ -3585,6 +3582,7 @@ enum class WebCore::ApplePayButtonStyle : uint8_t {
     WebCore::IntSize thumbSize();
     WebCore::IntRect trackBounds();
     Vector<double> tickRatios();
+    double thumbPosition();
 }
 
 [RefCounted, AdditionalEncoder=StreamConnectionEncoder] class WebCore::SwitchThumbPart {
@@ -4156,7 +4154,7 @@ enum class WebCore::ScrollSnapStop : bool;
     float offset;
     WebCore::ScrollSnapStop stop;
     bool hasSnapAreaLargerThanViewport;
-    WebCore::ElementIdentifier snapTargetID;
+    Markable<WebCore::ElementIdentifier> snapTargetID;
     bool isFocused;
     Vector<size_t> snapAreaIndices;
 };
@@ -4880,7 +4878,7 @@ class WebCore::SocketStreamError {
 
 header: <WebCore/InbandGenericCue.h>
 [CustomHeader, AdditionalEncoder=StreamConnectionEncoder] struct WebCore::GenericCueData {
-    WebCore::InbandGenericCueIdentifier m_uniqueId;
+    Markable<WebCore::InbandGenericCueIdentifier> m_uniqueId;
     MediaTime m_startTime;
     MediaTime m_endTime;
     AtomString m_id;
@@ -6050,6 +6048,8 @@ header: <WebCore/ISOVTTCue.h>
     bool expectCancel;
     bool supportClientPin;
     bool supportInternalUV;
+    long maxCredentialCountInList;
+    long maxCredentialIdLength;
 };
 
 [Nested] enum class WebCore::MockWebAuthenticationConfiguration::NfcError : uint8_t {
@@ -6077,6 +6077,22 @@ struct WebCore::MockWebAuthenticationConfiguration {
     std::optional<WebCore::MockWebAuthenticationConfiguration::HidConfiguration> hid;
     std::optional<WebCore::MockWebAuthenticationConfiguration::NfcConfiguration> nfc;
     std::optional<WebCore::MockWebAuthenticationConfiguration::CcidConfiguration> ccid;
+};
+
+struct WebCore::OpenID4VPRequest {
+};
+
+[Nested] struct WebCore::IdentityRequestProvider {
+    WebCore::IdentityCredentialProtocol protocol;
+    WebCore::OpenID4VPRequest request;
+};
+
+struct WebCore::DigitalCredentialRequestOptions {
+    Vector<WebCore::IdentityRequestProvider> providers;
+};
+
+enum class WebCore::IdentityCredentialProtocol : uint8_t {
+    Openid4vp
 };
 
 #endif // ENABLE(WEB_AUTHN)
@@ -6664,6 +6680,11 @@ enum class WebCore::WebGPU::PredefinedColorSpace : uint8_t {
 };
 
 struct WebCore::CookieStoreGetOptions {
+    String name;
+    String url;
+};
+
+struct WebCore::CookieChangeSubscription {
     String name;
     String url;
 };

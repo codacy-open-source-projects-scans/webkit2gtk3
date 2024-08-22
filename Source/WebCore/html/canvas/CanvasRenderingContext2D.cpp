@@ -36,6 +36,7 @@
 #include "CSSFilter.h"
 #include "CSSFontSelector.h"
 #include "CSSPropertyNames.h"
+#include "CSSPropertyParserConsumer+Font.h"
 #include "CSSPropertyParserHelpers.h"
 #include "CSSPropertyParserWorkerSafe.h"
 #include "DocumentInlines.h"
@@ -60,15 +61,15 @@
 #include "TextRun.h"
 #include "UnicodeBidi.h"
 #include <wtf/CheckedArithmetic.h>
-#include <wtf/IsoMallocInlines.h>
 #include <wtf/MathExtras.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/StringBuilder.h>
 
 namespace WebCore {
 
 using namespace HTMLNames;
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(CanvasRenderingContext2D);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(CanvasRenderingContext2D);
 
 std::unique_ptr<CanvasRenderingContext2D> CanvasRenderingContext2D::create(CanvasBase& canvas, CanvasRenderingContext2DSettings&& settings, bool usesCSSCompatibilityParseMode)
 {
@@ -185,8 +186,8 @@ void CanvasRenderingContext2D::setFontWithoutUpdatingStyle(const String& newFont
         return;
 
     // According to http://lists.w3.org/Archives/Public/public-html/2009Jul/0947.html,
-    // the "inherit" and "initial" values must be ignored. CSSPropertyParserWorkerSafe::parseFont() ignores these.
-    auto fontRaw = CSSPropertyParserWorkerSafe::parseFont(newFont, strictToCSSParserMode(!usesCSSCompatibilityParseMode()));
+    // the "inherit" and "initial" values must be ignored. CSSPropertyParserHelpers::parseFont() ignores these.
+    auto fontRaw = CSSPropertyParserHelpers::parseFont(newFont, strictToCSSParserMode(!usesCSSCompatibilityParseMode()));
     if (!fontRaw)
         return;
 

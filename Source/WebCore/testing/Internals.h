@@ -331,6 +331,7 @@ public:
     ExceptionOr<Ref<DOMRect>> absoluteLineRectFromPoint(int x, int y);
 
     ExceptionOr<Ref<DOMRect>> absoluteCaretBounds();
+    ExceptionOr<bool> isCaretVisible();
     ExceptionOr<bool> isCaretBlinkingSuspended();
     ExceptionOr<bool> isCaretBlinkingSuspended(Document&);
 
@@ -404,6 +405,8 @@ public:
         RefPtr<Range> range;
     };
     Vector<TextIteratorState> statesOfTextIterator(const Range&);
+
+    String textFragmentDirectiveForRange(const Range&);
 
     ExceptionOr<void> setDelegatesScrolling(bool enabled);
 
@@ -602,8 +605,6 @@ public:
     ExceptionOr<String> pageSizeAndMarginsInPixels(int pageNumber, int width, int height, int marginTop, int marginRight, int marginBottom, int marginLeft) const;
 
     ExceptionOr<float> pageScaleFactor() const;
-
-    ExceptionOr<void> setPageScaleFactor(float scaleFactor, int x, int y);
     ExceptionOr<void> setPageZoomFactor(float);
     ExceptionOr<void> setTextZoomFactor(float);
 
@@ -868,6 +869,7 @@ public:
     void disableCORSForURL(const String&);
 
     RefPtr<File> createFile(const String&);
+    void asyncCreateFile(const String&, DOMPromiseDeferred<IDLInterface<File>>&&);
     String createTemporaryFile(const String& name, const String& contents);
 
     void queueMicroTask(int);

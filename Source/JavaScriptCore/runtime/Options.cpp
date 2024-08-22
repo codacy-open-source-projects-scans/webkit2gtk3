@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2011-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -71,6 +71,7 @@ extern "C" char **environ;
 namespace JSC {
 
 bool useOSLogOptionHasChanged = false;
+Options::SandboxPolicy Options::machExceptionHandlerSandboxPolicy = Options::SandboxPolicy::Unknown;
 
 namespace OptionsHelper {
 
@@ -542,8 +543,17 @@ static void scaleJITPolicy()
     scaleOption(Options::thresholdForOMGOptimizeSoon(), 1);
 }
 
+#if OS(DARWIN)
+static void disableAllSignalHandlerBasedOptions();
+#endif
+
 static void overrideDefaults()
 {
+#if OS(DARWIN)
+    if (Options::machExceptionHandlerSandboxPolicy == Options::SandboxPolicy::Block)
+        disableAllSignalHandlerBasedOptions();
+#endif
+
 #if !PLATFORM(IOS_FAMILY)
     if (WTF::numberOfProcessorCores() < 4)
 #endif
@@ -621,6 +631,28 @@ void Options::setAllJITCodeValidations(bool value)
     Options::useJITAsserts() = value;
 }
 
+static inline void disableAllWasmOptions()
+{
+    Options::useWasm() = false;
+    Options::useWasmIPInt() = false;
+    Options::useWasmLLInt() = false;
+    Options::useBBQJIT() = false;
+    Options::useOMGJIT() = false;
+    Options::dumpWasmDisassembly() = false;
+    Options::dumpBBQDisassembly() = false;
+    Options::dumpOMGDisassembly() = false;
+    Options::failToCompileWasmCode() = true;
+
+    Options::useWasmFastMemory() = false;
+    Options::useWasmFaultSignalHandler() = false;
+    Options::numberOfWasmCompilerThreads() = 0;
+
+    Options::useWasmGC() = false;
+    Options::useWasmSIMD() = false;
+    Options::useWasmRelaxedSIMD() = false;
+    Options::useWasmTailCalls() = false;
+}
+
 static inline void disableAllJITOptions()
 {
     Options::useLLInt() = true;
@@ -635,8 +667,10 @@ static inline void disableAllJITOptions()
     Options::useJITCage() = false;
     Options::useConcurrentJIT() = false;
 
-    if (!Options::useInterpretedJSEntryWrappers())
-        Options::useWasm() = false;
+    if (!Options::useWasmJITLessJSEntrypoint() && Options::useWasm())
+        disableAllWasmOptions();
+
+    Options::useWasmSIMD() = false;
 
     Options::usePollingTraps() = true;
 
@@ -651,6 +685,16 @@ static inline void disableAllJITOptions()
     Options::dumpOMGDisassembly() = false;
     Options::needDisassemblySupport() = false;
 }
+
+#if OS(DARWIN)
+static void disableAllSignalHandlerBasedOptions()
+{
+    Options::usePollingTraps() = true;
+    Options::useSharedArrayBuffer() = false;
+    Options::useWasmFastMemory() = false;
+    Options::useWasmFaultSignalHandler() = false;
+}
+#endif
 
 void Options::executeDumpOptions()
 {
@@ -736,22 +780,27 @@ void Options::notifyOptionsChanged()
     if (!Options::allowDoubleShape())
         Options::useJIT() = false; // We don't support JIT with !allowDoubleShape. So disable it.
 
+    if (!Options::useWasm())
+        disableAllWasmOptions();
+
     // At initialization time, we may decide that useJIT should be false for any
     // number of reasons (including failing to allocate JIT memory), and therefore,
     // will / should not be able to enable any JIT related services.
-    if (!Options::useJIT())
+    if (!Options::useJIT()) {
         disableAllJITOptions();
-    else {
+#if OS(DARWIN)
+        // If we don't know what the sandbox policy is on mach exception handler use is, we'll
+        // take the default behavior of blocking its use if the JIT is disabled. JIT disablement
+        // is a good proxy indicator for when mach exception handler use would also be blocked.
+        if (machExceptionHandlerSandboxPolicy == SandboxPolicy::Unknown)
+            disableAllSignalHandlerBasedOptions();
+#endif
+    } else {
         if (WTF::isX86BinaryRunningOnARM()) {
             Options::useBaselineJIT() = false;
             Options::useDFGJIT() = false;
             Options::useFTLJIT() = false;
         }
-
-        // Windows: Building with WEBASSEMBLY_OMGJIT and disabling at runtime
-#if OS(WINDOWS)
-        Options::useOMGJIT() = false;
-#endif
 
         if (Options::dumpDisassembly()
             || Options::asyncDisassembly()
@@ -924,10 +973,8 @@ void Options::notifyOptionsChanged()
     Options::useWasmFastMemory() = false;
 #endif
 
-#if ENABLE(UNIFIED_AND_FREEZABLE_CONFIG_RECORD)
     uint8_t* reservedConfigBytes = reinterpret_cast_ptr<uint8_t*>(WebConfig::g_config + WebConfig::reservedSlotsForExecutableAllocator);
     reservedConfigBytes[WebConfig::ReservedByteForAllocationProfiling] = Options::useAllocationProfiling() ? 1 : 0;
-#endif
 
     // Do range checks where needed and make corrections to the options:
     ASSERT(Options::thresholdForOptimizeAfterLongWarmUp() >= Options::thresholdForOptimizeAfterWarmUp());
@@ -957,9 +1004,10 @@ void Options::initialize()
             RELEASE_ASSERT(OptionsHelper::addressOfOption(gcMaxHeapSizeID) ==  &Options::gcMaxHeapSize());
             RELEASE_ASSERT(OptionsHelper::addressOfOption(forceOSRExitToLLIntID) ==  &Options::forceOSRExitToLLInt());
 
-#ifndef NDEBUG
+#if ENABLE(JSC_RESTRICTED_OPTIONS_BY_DEFAULT)
             Config::enableRestrictedOptions();
 #endif
+
             // Initialize each of the options with their default values:
 #define INIT_OPTION(type_, name_, defaultValue_, availability_, description_) { \
                 name_() = defaultValue_; \

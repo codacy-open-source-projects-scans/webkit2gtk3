@@ -55,6 +55,7 @@
 #include <wtf/Scope.h>
 #include <wtf/StdSet.h>
 #include <wtf/SuspendableWorkQueue.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/WeakHashSet.h>
 #include <wtf/text/MakeString.h>
 #include <wtf/text/StringBuilder.h>
@@ -348,6 +349,8 @@ static WeakHashSet<ResourceLoadStatisticsStore>& allStores()
     return map;
 }
 
+WTF_MAKE_TZONE_ALLOCATED_IMPL(ResourceLoadStatisticsStore);
+
 ResourceLoadStatisticsStore::ResourceLoadStatisticsStore(WebResourceLoadStatisticsStore& store, SuspendableWorkQueue& workQueue, ShouldIncludeLocalhost shouldIncludeLocalhost, const String& storageDirectoryPath, PAL::SessionID sessionID)
     : DatabaseUtilities(FileSystem::pathByAppendingComponent(storageDirectoryPath, "observations.db"_s))
     , m_store(store)
@@ -426,8 +429,8 @@ void ResourceLoadStatisticsStore::removeDataRecords(CompletionHandler<void()>&& 
 
     setDataRecordsBeingRemoved(true);
 
-    RunLoop::main().dispatch([store = Ref { m_store }, domainsToDeleteOrRestrictWebsiteDataFor = crossThreadCopy(WTFMove(domainsToDeleteOrRestrictWebsiteDataFor)), completionHandler = WTFMove(completionHandler), weakThis = WeakPtr { *this }, shouldNotifyPagesWhenDataRecordsWereScanned = m_parameters.shouldNotifyPagesWhenDataRecordsWereScanned, workQueue = m_workQueue] () mutable {
-        store->deleteAndRestrictWebsiteDataForRegistrableDomains(WebResourceLoadStatisticsStore::monitoredDataTypes(), WTFMove(domainsToDeleteOrRestrictWebsiteDataFor), shouldNotifyPagesWhenDataRecordsWereScanned, [completionHandler = WTFMove(completionHandler), weakThis = WTFMove(weakThis), workQueue](HashSet<RegistrableDomain>&& domainsWithDeletedWebsiteData) mutable {
+    RunLoop::main().dispatch([store = Ref { m_store }, domainsToDeleteOrRestrictWebsiteDataFor = crossThreadCopy(WTFMove(domainsToDeleteOrRestrictWebsiteDataFor)), completionHandler = WTFMove(completionHandler), weakThis = WeakPtr { *this }, workQueue = m_workQueue] () mutable {
+        store->deleteAndRestrictWebsiteDataForRegistrableDomains(WebResourceLoadStatisticsStore::monitoredDataTypes(), WTFMove(domainsToDeleteOrRestrictWebsiteDataFor), [completionHandler = WTFMove(completionHandler), weakThis = WTFMove(weakThis), workQueue](HashSet<RegistrableDomain>&& domainsWithDeletedWebsiteData) mutable {
             workQueue->dispatch([domainsWithDeletedWebsiteData = crossThreadCopy(WTFMove(domainsWithDeletedWebsiteData)), completionHandler = WTFMove(completionHandler), weakThis = WTFMove(weakThis)] () mutable {
                 if (!weakThis) {
                     completionHandler();
@@ -455,9 +458,6 @@ void ResourceLoadStatisticsStore::removeDataRecords(CompletionHandler<void()>&& 
 void ResourceLoadStatisticsStore::processStatisticsAndDataRecords()
 {
     ASSERT(!RunLoop::isMain());
-
-    if (parameters().isRunningTest && !m_parameters.shouldNotifyPagesWhenDataRecordsWereScanned)
-        return;
 
     if (m_parameters.shouldClassifyResourcesBeforeDataRecordsRemoval)
         classifyPrevalentResources();

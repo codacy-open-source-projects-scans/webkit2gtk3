@@ -82,13 +82,11 @@ PointerEvent::PointerEvent(const AtomString& type, const PlatformTouchEvent& eve
     , m_coalescedEvents(coalescedEvents)
     , m_predictedEvents(predictedEvents)
 {
-    // See https://github.com/w3c/pointerevents/issues/274. We might expose the azimuth and altitude
-    // directly as well as the tilt.
-    double azimuthAngle = event.azimuthAngleAtIndex(index);
-    double altitudeAngle = event.altitudeAngleAtIndex(index);
-
-    m_tiltX = round(cos(azimuthAngle) * cos(altitudeAngle) * 90);
-    m_tiltY = round(sin(azimuthAngle) * cos(altitudeAngle) * 90);
+    m_azimuthAngle = event.azimuthAngleAtIndex(index);
+    m_altitudeAngle = m_pointerType == penPointerEventType() ? event.altitudeAngleAtIndex(index) : piOverTwoDouble;
+    auto tilt = tiltFromAngle(m_altitudeAngle, m_azimuthAngle);
+    m_tiltX = tilt.tiltX;
+    m_tiltY = tilt.tiltY;
 }
 
 } // namespace WebCore

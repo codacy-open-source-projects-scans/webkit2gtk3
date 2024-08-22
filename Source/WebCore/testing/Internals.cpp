@@ -88,6 +88,7 @@
 #include "FloatQuad.h"
 #include "FontCache.h"
 #include "FormController.h"
+#include "FragmentDirectiveGenerator.h"
 #include "FrameLoader.h"
 #include "FullscreenManager.h"
 #include "GCObservation.h"
@@ -128,6 +129,7 @@
 #include "InternalsMapLike.h"
 #include "InternalsSetLike.h"
 #include "JSDOMPromiseDeferred.h"
+#include "JSFile.h"
 #include "JSImageData.h"
 #include "JSInternals.h"
 #include "LegacySchemeRegistry.h"
@@ -1919,7 +1921,16 @@ ExceptionOr<Ref<DOMRect>> Internals::absoluteCaretBounds()
 
     return DOMRect::create(document->frame()->selection().absoluteCaretBounds());
 }
-    
+
+ExceptionOr<bool> Internals::isCaretVisible()
+{
+    RefPtr document = contextDocument();
+    if (!document || !document->frame())
+        return Exception { ExceptionCode::InvalidAccessError };
+
+    return document->frame()->selection().isCaretVisible();
+}
+
 ExceptionOr<bool> Internals::isCaretBlinkingSuspended()
 {
     auto* document = contextDocument();
@@ -2506,6 +2517,13 @@ Vector<Internals::TextIteratorState> Internals::statesOfTextIterator(const Range
     return states;
 }
 
+String Internals::textFragmentDirectiveForRange(const Range& range)
+{
+    auto simpleRange = makeSimpleRange(range);
+    simpleRange.start.document().updateLayout();
+    return FragmentDirectiveGenerator(simpleRange).urlWithFragment().string();
+}
+
 #if !PLATFORM(MAC)
 ExceptionOr<RefPtr<Range>> Internals::rangeForDictionaryLookupAtLocation(int, int)
 {
@@ -3063,7 +3081,7 @@ uint64_t Internals::messagePortIdentifier(const MessagePort& port) const
 
 bool Internals::isMessagePortAlive(uint64_t messagePortIdentifier) const
 {
-    MessagePortIdentifier portIdentifier { Process::identifier(), AtomicObjectIdentifier<PortIdentifierType>(messagePortIdentifier) };
+    MessagePortIdentifier portIdentifier { Process::identifier(), LegacyNullableAtomicObjectIdentifier<PortIdentifierType>(messagePortIdentifier) };
     return MessagePort::isMessagePortAliveForTesting(portIdentifier);
 }
 
@@ -3721,16 +3739,6 @@ ExceptionOr<float> Internals::pageScaleFactor() const
         return Exception { ExceptionCode::InvalidAccessError };
 
     return document->page()->pageScaleFactor();
-}
-
-ExceptionOr<void> Internals::setPageScaleFactor(float scaleFactor, int x, int y)
-{
-    Document* document = contextDocument();
-    if (!document || !document->page())
-        return Exception { ExceptionCode::InvalidAccessError };
-
-    document->page()->setPageScaleFactor(scaleFactor, IntPoint(x, y));
-    return { };
 }
 
 ExceptionOr<void> Internals::setPageZoomFactor(float zoomFactor)
@@ -5366,8 +5374,38 @@ RefPtr<File> Internals::createFile(const String& path)
     if (!url.protocolIsFile())
         return nullptr;
 
+    if (auto* page = document->page())
+        page->chrome().client().registerBlobPathForTesting(url.fileSystemPath(), [] () { });
+
     return File::create(document, url.fileSystemPath());
 }
+void Internals::asyncCreateFile(const String& path, DOMPromiseDeferred<IDLInterface<File>>&& promise)
+{
+    Document* document = contextDocument();
+    if (!document) {
+        promise.reject(ExceptionCode::InvalidStateError);
+        return;
+    }
+
+    URL url = document->completeURL(path);
+    if (!url.protocolIsFile()) {
+        promise.reject(ExceptionCode::InvalidStateError);
+        return;
+    }
+
+    if (auto* page = document->page()) {
+        auto fileSystemPath = url.fileSystemPath();
+        page->chrome().client().registerBlobPathForTesting(fileSystemPath, [promise = WTFMove(promise), weakDocument = WeakPtr { *document }, url = WTFMove(url)] () mutable {
+            if (!weakDocument) {
+                promise.reject(ExceptionCode::InvalidStateError);
+                return;
+            }
+            promise.resolve(File::create(weakDocument.get(), url.fileSystemPath()));
+        });
+    } else
+        promise.reject(ExceptionCode::InvalidStateError);
+}
+
 
 String Internals::createTemporaryFile(const String& name, const String& contents)
 {

@@ -53,10 +53,12 @@
 #include <variant>
 #include <wtf/CompletionHandler.h>
 #include <wtf/Forward.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/URL.h>
 #include <wtf/WeakPtr.h>
 
 #if PLATFORM(COCOA)
+#include "CocoaWindow.h"
 #include "WKBrowserEngineDefinitions.h"
 #include "WKFoundation.h"
 
@@ -177,6 +179,7 @@ using SessionID = WTF::UUID;
 namespace WebKit {
 
 enum class UndoOrRedo : bool;
+enum class ForceSoftwareCapturingViewportSnapshot : bool;
 enum class TapHandlingResult : uint8_t;
 
 class ContextMenuContextData;
@@ -240,7 +243,7 @@ class WebKitWebResourceLoadManager;
 #endif
 
 class PageClient : public CanMakeWeakPtr<PageClient> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(PageClient);
 public:
     virtual ~PageClient() { }
 
@@ -375,6 +378,10 @@ public:
 
 #if PLATFORM(COCOA) || PLATFORM(GTK)
     virtual RefPtr<ViewSnapshot> takeViewSnapshot(std::optional<WebCore::IntRect>&&) = 0;
+#endif
+
+#if PLATFORM(MAC)
+    virtual RefPtr<ViewSnapshot> takeViewSnapshot(std::optional<WebCore::IntRect>&&, ForceSoftwareCapturingViewportSnapshot) = 0;
 #endif
 
 #if USE(APPKIT)
@@ -514,7 +521,6 @@ public:
     virtual void showPlatformContextMenu(NSMenu *, WebCore::IntPoint) = 0;
 
     virtual void startWindowDrag() = 0;
-    virtual NSWindow *platformWindow() = 0;
     virtual void setShouldSuppressFirstResponderChanges(bool) = 0;
 
     virtual NSView *inspectorAttachmentView() = 0;
@@ -532,6 +538,8 @@ public:
     virtual void layerTreeCommitComplete() = 0;
 
     virtual void scrollingNodeScrollViewDidScroll(WebCore::ScrollingNodeID) = 0;
+
+    virtual CocoaWindow *platformWindow() const = 0;
 #endif
 
 #if PLATFORM(IOS_FAMILY)
@@ -718,10 +726,7 @@ public:
 #if ENABLE(APP_HIGHLIGHTS)
     virtual void storeAppHighlight(const WebCore::AppHighlight&) = 0;
 #endif
-#if ENABLE(WRITING_TOOLS_UI)
-    virtual void addTextAnimationForAnimationID(const WTF::UUID&, const WebCore::TextAnimationData&) = 0;
-    virtual void removeTextAnimationForAnimationID(const WTF::UUID&) = 0;
-#endif
+
     virtual void requestScrollToRect(const WebCore::FloatRect& targetRect, const WebCore::FloatPoint& origin) { }
 
 #if PLATFORM(COCOA)
@@ -746,13 +751,18 @@ public:
 #endif
 
 #if ENABLE(WRITING_TOOLS)
-    virtual void proofreadingSessionShowDetailsForSuggestionWithIDRelativeToRect(const WebCore::WritingTools::SessionID&, const WebCore::WritingTools::TextSuggestionID&, WebCore::IntRect selectionBoundsInRootView) = 0;
+    virtual void proofreadingSessionShowDetailsForSuggestionWithIDRelativeToRect(const WebCore::WritingTools::TextSuggestionID&, WebCore::IntRect selectionBoundsInRootView) = 0;
 
-    virtual void proofreadingSessionUpdateStateForSuggestionWithID(const WebCore::WritingTools::SessionID&, WebCore::WritingTools::TextSuggestionState, const WebCore::WritingTools::TextSuggestionID&) = 0;
+    virtual void proofreadingSessionUpdateStateForSuggestionWithID(WebCore::WritingTools::TextSuggestionState, const WebCore::WritingTools::TextSuggestionID&) = 0;
 
     virtual void writingToolsActiveWillChange() = 0;
-
     virtual void writingToolsActiveDidChange() = 0;
+
+    virtual void didEndPartialIntelligenceTextPonderingAnimation() = 0;
+    virtual bool intelligenceTextPonderingAnimationIsComplete() = 0;
+
+    virtual void addTextAnimationForAnimationID(const WTF::UUID&, const WebCore::TextAnimationData&) = 0;
+    virtual void removeTextAnimationForAnimationID(const WTF::UUID&) = 0;
 #endif
 
 #if ENABLE(DATA_DETECTION)

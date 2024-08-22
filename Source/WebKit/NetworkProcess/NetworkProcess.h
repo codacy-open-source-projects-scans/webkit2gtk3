@@ -59,6 +59,7 @@
 #include <wtf/MemoryPressureHandler.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/RetainPtr.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/ASCIILiteral.h>
 
@@ -134,7 +135,7 @@ enum class CacheOption : uint8_t;
 class NetworkProcess final : public AuxiliaryProcess, private DownloadManager::Client, public ThreadSafeRefCounted<NetworkProcess>, public CanMakeCheckedPtr<NetworkProcess>
 {
     WTF_MAKE_NONCOPYABLE(NetworkProcess);
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(NetworkProcess);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(NetworkProcess);
 public:
     using RegistrableDomain = WebCore::RegistrableDomain;
@@ -214,7 +215,7 @@ public:
     void registrableDomainsExemptFromWebsiteDataDeletion(PAL::SessionID, CompletionHandler<void(HashSet<RegistrableDomain>)>&&);
     void clearPrevalentResource(PAL::SessionID, RegistrableDomain&&, CompletionHandler<void()>&&);
     void clearUserInteraction(PAL::SessionID, RegistrableDomain&&, CompletionHandler<void()>&&);
-    void deleteAndRestrictWebsiteDataForRegistrableDomains(PAL::SessionID, OptionSet<WebsiteDataType>, RegistrableDomainsToDeleteOrRestrictWebsiteDataFor&&, bool shouldNotifyPage, CompletionHandler<void(HashSet<RegistrableDomain>&&)>&&);
+    void deleteAndRestrictWebsiteDataForRegistrableDomains(PAL::SessionID, OptionSet<WebsiteDataType>, RegistrableDomainsToDeleteOrRestrictWebsiteDataFor&&, CompletionHandler<void(HashSet<RegistrableDomain>&&)>&&);
     void deleteCookiesForTesting(PAL::SessionID, RegistrableDomain, bool includeHttpOnlyCookies, CompletionHandler<void()>&&);
     void dumpResourceLoadStatistics(PAL::SessionID, CompletionHandler<void(String)>&&);
     void updatePrevalentDomainsToBlockCookiesFor(PAL::SessionID, const Vector<RegistrableDomain>& domainsToBlock, CompletionHandler<void()>&&);
@@ -393,6 +394,7 @@ public:
     bool ftpEnabled() const { return m_ftpEnabled; }
     bool builtInNotificationsEnabled() const { return m_builtInNotificationsEnabled; }
 
+    void getPendingPushMessage(PAL::SessionID, CompletionHandler<void(const std::optional<WebPushMessage>&)>&&);
     void getPendingPushMessages(PAL::SessionID, CompletionHandler<void(const Vector<WebPushMessage>&)>&&);
     void processPushMessage(PAL::SessionID, WebPushMessage&&, WebCore::PushPermissionState, CompletionHandler<void(bool, std::optional<WebCore::NotificationPayload>&&)>&&);
     void processNotificationEvent(WebCore::NotificationData&&, WebCore::NotificationEventType, CompletionHandler<void(bool)>&&);
@@ -426,6 +428,9 @@ public:
     void setPersistedDomains(PAL::SessionID, HashSet<RegistrableDomain>&&);
 
     void getAppBadgeForTesting(PAL::SessionID, CompletionHandler<void(std::optional<uint64_t>)>&&);
+
+    void allowFilesAccessFromWebProcess(WebCore::ProcessIdentifier, const Vector<String>&, CompletionHandler<void()>&&);
+    void allowFileAccessFromWebProcess(WebCore::ProcessIdentifier, const String&, CompletionHandler<void()>&&);
 
 private:
     // CheckedPtr interface

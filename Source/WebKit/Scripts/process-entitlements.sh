@@ -441,7 +441,7 @@ fi
 
 function ios_family_process_webcontent_entitlements()
 {
-    if [[ "${PLATFORM_NAME}" != watchos ]]; then
+    if [[ "${PLATFORM_NAME}" != watchos && "${PLATFORM_NAME}" != appletvos ]]; then
         plistbuddy Add :com.apple.private.verified-jit bool YES
         if [[ "${PLATFORM_NAME}" == iphoneos ]]; then
             if (( $(( ${SDK_VERSION_ACTUAL} )) >= 170400 )); then
@@ -549,6 +549,7 @@ function ios_family_process_webpushd_entitlements()
     plistbuddy Add :com.apple.usernotification.notificationschedulerproxy bool YES
     plistbuddy Add :com.apple.uikitservices.app.value-access bool YES
     plistbuddy Add :com.apple.private.usernotifications.app-management-domain.proxy string com.apple.WebKit.PushBundles
+    plistbuddy Add :com.apple.frontboard.launchapplications bool YES
 }
 
 function ios_family_process_network_entitlements()

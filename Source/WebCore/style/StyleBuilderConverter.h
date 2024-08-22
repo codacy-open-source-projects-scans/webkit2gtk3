@@ -30,6 +30,7 @@
 #include "AnchorPositionEvaluator.h"
 #include "BasicShapeConversion.h"
 #include "CSSBasicShapes.h"
+#include "CSSCalcSymbolTable.h"
 #include "CSSCalcValue.h"
 #include "CSSContentDistributionValue.h"
 #include "CSSCounterStyleRegistry.h"
@@ -45,13 +46,12 @@
 #include "CSSOffsetRotateValue.h"
 #include "CSSPrimitiveValue.h"
 #include "CSSPrimitiveValueMappings.h"
+#include "CSSPropertyParserConsumer+Font.h"
 #include "CSSPropertyParserHelpers.h"
 #include "CSSRayValue.h"
 #include "CSSReflectValue.h"
 #include "CSSSubgridValue.h"
 #include "CSSValuePair.h"
-#include "CalcExpressionLength.h"
-#include "CalcExpressionOperation.h"
 #include "CalculationValue.h"
 #include "FontPalette.h"
 #include "FontSelectionValueInlines.h"
@@ -72,7 +72,7 @@
 #include "StyleBuilderState.h"
 #include "StyleReflection.h"
 #include "StyleScrollSnapPoints.h"
-#include "StyleTextBoxEdge.h"
+#include "StyleTextEdge.h"
 #include "TabSize.h"
 #include "TextSpacing.h"
 #include "TouchAction.h"
@@ -136,7 +136,7 @@ public:
     static TextUnderlineOffset convertTextUnderlineOffset(BuilderState&, const CSSValue&);
     static TextDecorationThickness convertTextDecorationThickness(BuilderState&, const CSSValue&);
     static RefPtr<StyleReflection> convertReflection(BuilderState&, const CSSValue&);
-    static TextBoxEdge convertTextBoxEdge(BuilderState&, const CSSValue&);
+    static TextEdge convertTextEdge(BuilderState&, const CSSValue&);
     static IntSize convertInitialLetter(BuilderState&, const CSSValue&);
     static float convertTextStrokeWidth(BuilderState&, const CSSValue&);
     static OptionSet<LineBoxContain> convertLineBoxContain(BuilderState&, const CSSValue&);
@@ -216,6 +216,7 @@ public:
 
     static std::optional<Length> convertBlockStepSize(BuilderState&, const CSSValue&);
 
+    static Vector<Style::ScopedName> convertViewTransitionClass(BuilderState&, const CSSValue&);
     static std::optional<Style::ScopedName> convertViewTransitionName(BuilderState&, const CSSValue&);
     static RefPtr<WillChangeData> convertWillChange(BuilderState&, const CSSValue&);
     
@@ -235,7 +236,6 @@ private:
     static void updateColorScheme(const CSSPrimitiveValue&, StyleColorScheme&);
 #endif
 
-    static Length convertTo100PercentMinusLength(const Length&);
     template<CSSValueID, CSSValueID> static Length convertPositionComponent(BuilderState&, const CSSValue&);
 
     static GridLength createGridTrackBreadth(const CSSPrimitiveValue&, BuilderState&);
@@ -263,10 +263,10 @@ inline Length BuilderConverter::convertLength(const BuilderState& builderState, 
         return Length(primitiveValue.doubleValue(), LengthType::Percent);
 
     if (primitiveValue.isCalculatedPercentageWithLength())
-        return Length(primitiveValue.cssCalcValue()->createCalculationValue(conversionData));
+        return Length(primitiveValue.cssCalcValue()->createCalculationValue(conversionData, CSSCalcSymbolTable { }));
 
     if (primitiveValue.isAnchor())
-        return AnchorPositionEvaluator::resolveAnchorValue(primitiveValue.cssAnchorValue(), builderState);
+        return AnchorPositionEvaluator::resolveAnchorValue(builderState, *primitiveValue.cssAnchorValue());
 
     ASSERT_NOT_REACHED();
     return Length(0, LengthType::Fixed);
@@ -393,7 +393,7 @@ inline Length BuilderConverter::convertToRadiusLength(const CSSToLengthConversio
     if (value.isPercentage())
         return Length(value.doubleValue(), LengthType::Percent);
     if (value.isCalculatedPercentageWithLength())
-        return Length(value.cssCalcValue()->createCalculationValue(conversionData));
+        return Length(value.cssCalcValue()->createCalculationValue(conversionData, CSSCalcSymbolTable { }));
     auto length = value.computeLength<Length>(conversionData);
     if (length.isNegative())
         return { 0, LengthType::Fixed };
@@ -411,20 +411,6 @@ inline LengthSize BuilderConverter::convertRadius(BuilderState& builderState, co
     ASSERT(!radius.width.isNegative());
     ASSERT(!radius.height.isNegative());
     return radius;
-}
-
-inline Length BuilderConverter::convertTo100PercentMinusLength(const Length& length)
-{
-    if (length.isPercent())
-        return Length(100 - length.value(), LengthType::Percent);
-    
-    // Turn this into a calc expression: calc(100% - length)
-    auto lengths = Vector<std::unique_ptr<CalcExpressionNode>>::from(
-        makeUnique<CalcExpressionLength>(Length(100, LengthType::Percent)),
-        makeUnique<CalcExpressionLength>(length)
-    );
-    auto operation = makeUnique<CalcExpressionOperation>(WTFMove(lengths), CalcOperator::Subtract);
-    return Length(CalculationValue::create(WTFMove(operation), ValueRange::All));
 }
 
 inline Length BuilderConverter::convertPositionComponentX(BuilderState& builderState, const CSSValue& value)
@@ -847,7 +833,7 @@ inline int BuilderConverter::convertMarqueeSpeed(BuilderState&, const CSSValue& 
 {
     auto& primitiveValue = downcast<CSSPrimitiveValue>(value);
     if (primitiveValue.isTime())
-        return primitiveValue.computeTime<int, CSSPrimitiveValue::Milliseconds>();
+        return primitiveValue.computeTime<int, CSSPrimitiveValue::TimeUnit::Milliseconds>();
     // For scrollamount support.
     ASSERT(primitiveValue.isNumber());
     return primitiveValue.intValue();
@@ -917,15 +903,7 @@ inline OptionSet<TextUnderlinePosition> BuilderConverter::convertTextUnderlinePo
 
 inline TextUnderlineOffset BuilderConverter::convertTextUnderlineOffset(BuilderState& builderState, const CSSValue& value)
 {
-    auto& primitiveValue = downcast<CSSPrimitiveValue>(value);
-    switch (primitiveValue.valueID()) {
-    case CSSValueAuto:
-        return TextUnderlineOffset::createWithAuto();
-    default:
-        ASSERT(primitiveValue.isLength());
-        auto computedLength = convertComputedLength<float>(builderState, primitiveValue);
-        return TextUnderlineOffset::createWithLength(computedLength);
-    }
+    return TextUnderlineOffset::createWithLength(BuilderConverter::convertLengthOrAuto(builderState, value));
 }
 
 inline TextDecorationThickness BuilderConverter::convertTextDecorationThickness(BuilderState& builderState, const CSSValue& value)
@@ -942,7 +920,7 @@ inline TextDecorationThickness BuilderConverter::convertTextDecorationThickness(
 
         auto conversionData = builderState.cssToLengthConversionData();
         if (primitiveValue.isCalculatedPercentageWithLength())
-            return TextDecorationThickness::createWithLength(Length(primitiveValue.cssCalcValue()->createCalculationValue(conversionData)));
+            return TextDecorationThickness::createWithLength(Length(primitiveValue.cssCalcValue()->createCalculationValue(conversionData, CSSCalcSymbolTable { })));
 
         ASSERT(primitiveValue.isLength());
         return TextDecorationThickness::createWithLength(primitiveValue.computeLength<Length>(conversionData));
@@ -970,57 +948,65 @@ inline RefPtr<StyleReflection> BuilderConverter::convertReflection(BuilderState&
     return reflection;
 }
 
-inline TextBoxEdge BuilderConverter::convertTextBoxEdge(BuilderState&, const CSSValue& value)
+inline TextEdge BuilderConverter::convertTextEdge(BuilderState&, const CSSValue& value)
 {
-    auto& values = downcast<CSSValueList>(value);
-    auto& firstValue = downcast<CSSPrimitiveValue>(*values.item(0));
-
-    auto overValue = [&] {
-        switch (firstValue.valueID()) {
-        case CSSValueLeading:
-            return TextBoxEdgeType::Leading;
+    auto overValue = [&](CSSValueID valueID) {
+        switch (valueID) {
         case CSSValueText:
-            return TextBoxEdgeType::Text;
+            return TextEdgeType::Text;
         case CSSValueCap:
-            return TextBoxEdgeType::CapHeight;
+            return TextEdgeType::CapHeight;
         case CSSValueEx:
-            return TextBoxEdgeType::ExHeight;
+            return TextEdgeType::ExHeight;
         case CSSValueIdeographic:
-            return TextBoxEdgeType::CJKIdeographic;
+            return TextEdgeType::CJKIdeographic;
         case CSSValueIdeographicInk:
-            return TextBoxEdgeType::CJKIdeographicInk;
+            return TextEdgeType::CJKIdeographicInk;
         default:
             ASSERT_NOT_REACHED();
-            return TextBoxEdgeType::Leading;
+            return TextEdgeType::Auto;
         }
     };
 
-    auto underValue = [&] {
-        if (firstValue.valueID() == CSSValueLeading)
-            return TextBoxEdgeType::Leading;
-        if (values.length() == 1) {
-            // https://www.w3.org/TR/css-inline-3/#text-edges
-            // "If only one value is specified, both edges are assigned that same keyword if possible; else text is assumed as the missing value."
-            // FIXME: Figure out what "if possible" means here.
-            return TextBoxEdgeType::Text;
-        }
-
-        auto& secondValue = downcast<CSSPrimitiveValue>(*values.item(1));
-        switch (secondValue.valueID()) {
+    auto underValue = [&](CSSValueID valueID) {
+        switch (valueID) {
         case CSSValueText:
-            return TextBoxEdgeType::Text;
+            return TextEdgeType::Text;
         case CSSValueAlphabetic:
-            return TextBoxEdgeType::Alphabetic;
+            return TextEdgeType::Alphabetic;
         case CSSValueIdeographic:
-            return TextBoxEdgeType::CJKIdeographic;
+            return TextEdgeType::CJKIdeographic;
         case CSSValueIdeographicInk:
-            return TextBoxEdgeType::CJKIdeographicInk;
+            return TextEdgeType::CJKIdeographicInk;
         default:
             ASSERT_NOT_REACHED();
-            return TextBoxEdgeType::Leading;
+            return TextEdgeType::Auto;
         }
     };
-    return { overValue(), underValue() };
+
+    // One value was given.
+    if (is<CSSPrimitiveValue>(value)) {
+        switch (value.valueID()) {
+        case CSSValueAuto:
+            return { TextEdgeType::Auto, TextEdgeType::Auto };
+        case CSSValueLeading:
+            return { TextEdgeType::Leading, TextEdgeType::Leading };
+        // https://www.w3.org/TR/css-inline-3/#text-edges
+        // "If only one value is specified, both edges are assigned that same keyword if possible; else text is assumed as the missing value."
+        case CSSValueCap:
+        case CSSValueEx:
+            return { overValue(value.valueID()), TextEdgeType::Text };
+        default:
+            return { overValue(value.valueID()), underValue(value.valueID()) };
+        }
+    }
+
+    // Two values were given.
+    auto& pair = downcast<CSSValuePair>(value);
+    return {
+        overValue(downcast<CSSPrimitiveValue>(pair.first()).valueID()),
+        underValue(downcast<CSSPrimitiveValue>(pair.second()).valueID())
+    };
 }
 
 inline IntSize BuilderConverter::convertInitialLetter(BuilderState&, const CSSValue& value)
@@ -1518,7 +1504,7 @@ inline Length BuilderConverter::convertTextLengthOrNormal(BuilderState& builderS
     if (primitiveValue.isPercentage())
         return Length(clampTo<double>(primitiveValue.doubleValue(), minValueForCssLength, maxValueForCssLength), LengthType::Percent);
     if (primitiveValue.isCalculatedPercentageWithLength())
-        return Length(primitiveValue.cssCalcValue()->createCalculationValue(conversionData));
+        return Length(primitiveValue.cssCalcValue()->createCalculationValue(conversionData, CSSCalcSymbolTable { }));
     if (primitiveValue.isNumber())
         return Length(primitiveValue.doubleValue(), LengthType::Fixed);
     ASSERT_NOT_REACHED();
@@ -1869,7 +1855,7 @@ inline Length BuilderConverter::convertLineHeight(BuilderState& builderState, co
         if (primitiveValue.isLength())
             length = primitiveValue.computeLength<Length>(conversionData);
         else {
-            auto value = primitiveValue.cssCalcValue()->createCalculationValue(conversionData)->evaluate(builderState.style().computedFontSize());
+            auto value = primitiveValue.cssCalcValue()->createCalculationValue(conversionData, CSSCalcSymbolTable { })->evaluate(builderState.style().computedFontSize());
             length = { clampTo<float>(value, minValueForCssLength, static_cast<float>(maxValueForCssLength)), LengthType::Fixed };
         }
         if (multiplier != 1.f)
@@ -2097,6 +2083,22 @@ inline OptionSet<Containment> BuilderConverter::convertContain(BuilderState&, co
         };
     }
     return containment;
+}
+
+inline Vector<Style::ScopedName> BuilderConverter::convertViewTransitionClass(BuilderState& state, const CSSValue& value)
+{
+    if (auto* primitiveValue = dynamicDowncast<CSSPrimitiveValue>(value)) {
+        if (value.valueID() == CSSValueNone)
+            return { };
+        return { Style::ScopedName { AtomString { primitiveValue->stringValue() }, state.styleScopeOrdinal() } };
+    }
+
+    auto* list = dynamicDowncast<CSSValueList>(value);
+    if (!list)
+        return { };
+    return WTF::map(*list, [&](auto& item) {
+        return Style::ScopedName { AtomString { downcast<CSSPrimitiveValue>(item).stringValue() }, state.styleScopeOrdinal() };
+    });
 }
 
 inline std::optional<Style::ScopedName> BuilderConverter::convertViewTransitionName(BuilderState& state, const CSSValue& value)

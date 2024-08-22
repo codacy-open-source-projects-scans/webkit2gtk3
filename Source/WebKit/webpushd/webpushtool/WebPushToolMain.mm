@@ -30,6 +30,7 @@
 #import "WebPushToolConnection.h"
 #import <optional>
 #import <wtf/MainThread.h>
+#import <wtf/TZoneMallocInlines.h>
 #import <wtf/WTFProcess.h>
 
 #if HAVE(OS_LAUNCHD_JOB) && (PLATFORM(MAC) || PLATFORM(IOS))
@@ -61,8 +62,8 @@ static void printUsageAndTerminate(NSString *message)
 #endif
     fprintf(stderr, "  streamDebugMessages\n");
     fprintf(stderr, "    Stream debug messages from webpushd\n");
-    fprintf(stderr, "  injectPushMessage <target app identifier> <partition string> <registration URL> <message>\n");
-    fprintf(stderr, "    Inject a test push message to the target app, push partition, and registration URL\n");
+    fprintf(stderr, "  injectPushMessage <scope URL> <message>\n");
+    fprintf(stderr, "    Inject a test push message <message> to the provided --bundleIdentifier and --pushPartition with service worker scope <scope URL>\n");
     fprintf(stderr, "  getPushPermissionState <scope URL>\n");
     fprintf(stderr, "    Gets the permission state for the given service worker scope.\n");
     fprintf(stderr, "  requestPushPermission <scope URL>\n");
@@ -74,14 +75,6 @@ static void printUsageAndTerminate(NSString *message)
 
 static std::unique_ptr<PushMessageForTesting> pushMessageFromArguments(NSEnumerator<NSString *> *enumerator)
 {
-    NSString *appIdentifier = [enumerator nextObject];
-    if (!appIdentifier)
-        return nullptr;
-
-    NSString *pushPartition = [enumerator nextObject];
-    if (!pushPartition)
-        return nullptr;
-
     NSString *registrationString = [enumerator nextObject];
     if (!registrationString)
         return nullptr;
@@ -95,9 +88,9 @@ static std::unique_ptr<PushMessageForTesting> pushMessageFromArguments(NSEnumera
         return nullptr;
 
 #if ENABLE(DECLARATIVE_WEB_PUSH)
-    PushMessageForTesting pushMessage = { appIdentifier, pushPartition, registrationURL, message, WebKit::WebPushD::PushMessageDisposition::Legacy, std::nullopt };
+    PushMessageForTesting pushMessage = { { }, { }, registrationURL, message, WebKit::WebPushD::PushMessageDisposition::Legacy, std::nullopt };
 #else
-    PushMessageForTesting pushMessage = { appIdentifier, pushPartition, registrationURL, message, WebKit::WebPushD::PushMessageDisposition::Legacy };
+    PushMessageForTesting pushMessage = { { }, { }, registrationURL, message, WebKit::WebPushD::PushMessageDisposition::Legacy };
 #endif
 
     return makeUniqueWithoutFastMallocCheck<PushMessageForTesting>(WTFMove(pushMessage));
@@ -162,7 +155,6 @@ static bool registerDaemonWithLaunchD(WebPushTool::PreferTestService preferTestS
 namespace WebKit {
 
 class WebPushToolVerb {
-    WTF_MAKE_FAST_ALLOCATED;
 public:
     virtual ~WebPushToolVerb() = default;
     virtual void run(WebPushTool::Connection&) = 0;
@@ -170,6 +162,7 @@ public:
 };
 
 class InjectPushMessageVerb : public WebPushToolVerb {
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(InjectPushMessageVerb);
 public:
     InjectPushMessageVerb(PushMessageForTesting&& message)
         : m_pushMessage(WTFMove(message)) { }
@@ -177,9 +170,13 @@ public:
 
     void run(WebPushTool::Connection& connection) override
     {
-        connection.sendPushMessage(WTFMove(m_pushMessage), [this](String error) mutable {
+        auto pushMessage = m_pushMessage;
+        pushMessage.targetAppCodeSigningIdentifier = connection.bundleIdentifier();
+        pushMessage.pushPartitionString = connection.pushPartition();
+
+        connection.sendPushMessage(WTFMove(pushMessage), [this, bundleIdentifier = connection.bundleIdentifier(), webClipIdentifier = connection.pushPartition()](String error) mutable {
             if (error.isEmpty())
-                printf("Successfully injected push message\n");
+                printf("Successfully injected push message %s for [bundleID = %s, webClipIdentifier = %s, scope = %s]\n", m_pushMessage.payload.utf8().data(), bundleIdentifier.utf8().data(), webClipIdentifier.utf8().data(), m_pushMessage.registrationURL.string().utf8().data());
             else
                 printf("Injected push message with error: %s\n", error.utf8().data());
             done();
@@ -191,6 +188,7 @@ private:
 };
 
 class GetPushPermissionStateVerb : public WebPushToolVerb {
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(GetPushPermissionStateVerb);
 public:
     GetPushPermissionStateVerb(const String& scope)
         : m_scope(scope) { }
@@ -209,6 +207,7 @@ private:
 };
 
 class RequestPushPermissionVerb : public WebPushToolVerb {
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(RequestPushPermissionVerb);
 public:
     RequestPushPermissionVerb(const String& scope)
         : m_scope(scope) { }
@@ -233,7 +232,7 @@ int WebPushToolMain(int, char **)
     auto preferTestService = WebPushTool::PreferTestService::Yes;
     bool host = false;
     std::unique_ptr<WebPushToolVerb> verb;
-    RetainPtr<NSString> bundleIdentifier;
+    RetainPtr<NSString> bundleIdentifier = @"com.apple.WebKit.TestWebKitAPI";
     RetainPtr<NSString> pushPartition;
 
     @autoreleasepool {

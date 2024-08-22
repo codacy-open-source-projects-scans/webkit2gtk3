@@ -28,6 +28,7 @@
 
 #include "BackgroundPainter.h"
 #include "BorderPainter.h"
+#include "BorderShape.h"
 #include "CSSFontSelector.h"
 #include "Document.h"
 #include "DocumentInlines.h"
@@ -95,12 +96,12 @@
 #include <algorithm>
 #include <math.h>
 #include <wtf/Assertions.h>
-#include <wtf/IsoMallocInlines.h>
 #include <wtf/StackStats.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(RenderBox);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderBox);
 
 struct SameSizeAsRenderBox : public RenderBoxModelObject {
     virtual ~SameSizeAsRenderBox() = default;
@@ -344,9 +345,14 @@ void RenderBox::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle
         if (auto* scrollableArea = layer()->scrollableArea())
             scrollableArea->scrollbarsController().scrollbarLayoutDirectionChanged(shouldPlaceVerticalScrollbarOnLeft() ? UserInterfaceLayoutDirection::RTL : UserInterfaceLayoutDirection::LTR);
     }
+
+    bool isDocElementRenderer = isDocumentElementRenderer();
+
     if (layer() && oldStyle && oldStyle->scrollbarWidth() != newStyle.scrollbarWidth()) {
-        if (auto* scrollableArea = layer()->scrollableArea())
-            scrollableArea->scrollbarsController().scrollbarWidthChanged(newStyle.scrollbarWidth());
+        if (isDocElementRenderer)
+            view().frameView().scrollbarWidthChanged(newStyle.scrollbarWidth());
+        else if (auto* scrollableArea = layer()->scrollableArea())
+            scrollableArea->scrollbarWidthChanged(newStyle.scrollbarWidth());
     }
 
 #if ENABLE(DARK_MODE_CSS)
@@ -366,7 +372,6 @@ void RenderBox::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle
     }
 
     bool isBodyRenderer = isBody();
-    bool isDocElementRenderer = isDocumentElementRenderer();
 
     if (isDocElementRenderer || isBodyRenderer) {
 #if ENABLE(DARK_MODE_CSS)
@@ -704,7 +709,7 @@ void RenderBox::constrainLogicalMinMaxSizesByAspectRatio(LayoutUnit& computedMin
     }
 }
 
-LayoutUnit RenderBox::constrainLogicalWidthInFragmentByMinMax(LayoutUnit logicalWidth, LayoutUnit availableWidth, RenderBlock& cb, RenderFragmentContainer* fragment, AllowIntrinsic allowIntrinsic) const
+LayoutUnit RenderBox::constrainLogicalWidthInFragmentByMinMax(LayoutUnit logicalWidth, LayoutUnit availableWidth, const RenderBlock& cb, RenderFragmentContainer* fragment, AllowIntrinsic allowIntrinsic) const
 {
     const RenderStyle& styleToUse = style();
     LayoutUnit computedMaxWidth = LayoutUnit::max();
@@ -760,40 +765,34 @@ LayoutUnit RenderBox::constrainLogicalHeightByMinMax(LayoutUnit logicalHeight, s
 
 LayoutUnit RenderBox::constrainContentBoxLogicalHeightByMinMax(LayoutUnit logicalHeight, std::optional<LayoutUnit> intrinsicContentHeight) const
 {
+    // If the min/max height and logical height are both percentages we take advantage of already knowing the current resolved percentage height
+    // to avoid recursing up through our containing blocks again to determine it.
     const RenderStyle& styleToUse = style();
     if (!styleToUse.logicalMaxHeight().isUndefined()) {
-        if (std::optional<LayoutUnit> maxH = computeContentLogicalHeight(MaxSize, styleToUse.logicalMaxHeight(), intrinsicContentHeight))
-            logicalHeight = std::min(logicalHeight, maxH.value());
+        if (styleToUse.logicalMaxHeight().isPercent() && styleToUse.logicalHeight().isPercent()) {
+            auto availableLogicalHeight = logicalHeight / styleToUse.logicalHeight().value() * 100;
+            logicalHeight = std::min(logicalHeight, valueForLength(styleToUse.logicalMaxHeight(), availableLogicalHeight));
+        } else {
+            if (std::optional<LayoutUnit> maxH = computeContentLogicalHeight(MaxSize, styleToUse.logicalMaxHeight(), intrinsicContentHeight))
+                logicalHeight = std::min(logicalHeight, maxH.value());
+        }
     }
-    if (std::optional<LayoutUnit> computedContentLogicalHeight = computeContentLogicalHeight(MinSize, styleToUse.logicalMinHeight(), intrinsicContentHeight))
-        return std::max(logicalHeight, computedContentLogicalHeight.value());
+
+    if (styleToUse.logicalMinHeight().isPercent() && styleToUse.logicalHeight().isPercent()) {
+        auto availableLogicalHeight = logicalHeight / styleToUse.logicalHeight().value() * 100;
+        logicalHeight = std::max(logicalHeight, valueForLength(styleToUse.logicalMinHeight(), availableLogicalHeight));
+    } else {
+        if (std::optional<LayoutUnit> computedContentLogicalHeight = computeContentLogicalHeight(MinSize, styleToUse.logicalMinHeight(), intrinsicContentHeight))
+            logicalHeight = std::max(logicalHeight, computedContentLogicalHeight.value());
+    }
     return logicalHeight;
 }
 
-RoundedRect RenderBox::borderRoundedRect() const
-{
-    auto& style = this->style();
-    LayoutRect bounds = frameRect();
-    bounds.setLocation({ });
-
-    return style.getRoundedBorderFor(bounds);
-}
-
+// FIXME: Despite the name, this returns rounded borders based on the padding box, which seems wrong.
 RoundedRect::Radii RenderBox::borderRadii() const
 {
-    auto& style = this->style();
-    LayoutRect bounds = frameRect();
-
-    unsigned borderLeft = style.borderLeftWidth();
-    unsigned borderTop = style.borderTopWidth();
-    bounds.moveBy(LayoutPoint(borderLeft, borderTop));
-    bounds.contract(borderLeft + style.borderRightWidth(), borderTop + style.borderBottomWidth());
-    return style.getRoundedBorderFor(bounds).radii();
-}
-
-RoundedRect RenderBox::roundedBorderBoxRect() const
-{
-    return style().getRoundedInnerBorderFor(borderBoxRect());
+    auto borderShape = BorderShape::shapeForBorderRect(style(), paddingBoxRectIncludingScrollbar());
+    return borderShape.deprecatedRoundedRect().radii();
 }
 
 LayoutRect RenderBox::paddingBoxRect() const
@@ -1562,8 +1561,10 @@ bool RenderBox::hitTestBorderRadius(const HitTestLocation& hitTestLocation, cons
     LayoutPoint adjustedLocation = accumulatedOffset + location();
     LayoutRect borderRect = borderBoxRect();
     borderRect.moveBy(adjustedLocation);
-    RoundedRect border = style().getRoundedBorderFor(borderRect);
-    return hitTestLocation.intersects(border);
+
+    auto borderShape = BorderShape::shapeForBorderRect(style(), borderRect);
+    // To handle non-round corners, BorderShape should do the hit-testing.
+    return hitTestLocation.intersects(borderShape.deprecatedRoundedRect());
 }
 
 bool RenderBox::nodeAtPoint(const HitTestRequest& request, HitTestResult& result, const HitTestLocation& locationInContainer, const LayoutPoint& accumulatedOffset, HitTestAction action)
@@ -1690,7 +1691,8 @@ void RenderBox::paintBoxDecorations(PaintInfo& paintInfo, const LayoutPoint& pai
         // into a transparency layer, and then clip that in one go (which requires setting up the clip before
         // beginning the layer).
         stateSaver.save();
-        paintInfo.context().clipRoundedRect(style().getRoundedBorderFor(paintRect).pixelSnappedRoundedRectForPainting(document().deviceScaleFactor()));
+        auto borderShape = BorderShape::shapeForBorderRect(style(), paintRect);
+        borderShape.clipToOuterShape(paintInfo.context(), document().deviceScaleFactor());
         paintInfo.context().beginTransparencyLayer(1);
     }
 
@@ -1794,13 +1796,13 @@ bool RenderBox::backgroundIsKnownToBeOpaqueInRect(const LayoutRect& localRect) c
         return false;
     LayoutRect backgroundRect;
     switch (style().backgroundClip()) {
-    case FillBox::Border:
+    case FillBox::BorderBox:
         backgroundRect = borderBoxRect();
         break;
-    case FillBox::Padding:
+    case FillBox::PaddingBox:
         backgroundRect = paddingBoxRect();
         break;
-    case FillBox::Content:
+    case FillBox::ContentBox:
         backgroundRect = contentBoxRect();
         break;
     default:
@@ -1890,7 +1892,7 @@ bool RenderBox::computeBackgroundIsKnownToBeObscured(const LayoutPoint& paintOff
 bool RenderBox::backgroundHasOpaqueTopLayer() const
 {
     auto& fillLayer = style().backgroundLayers();
-    if (fillLayer.clip() != FillBox::Border)
+    if (fillLayer.clip() != FillBox::BorderBox)
         return false;
 
     // Clipped with local scrolling

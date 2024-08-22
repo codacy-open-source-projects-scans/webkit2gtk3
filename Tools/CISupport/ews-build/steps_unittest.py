@@ -87,6 +87,7 @@ def mock_load_contributors(*args, **kwargs):
         'webkit-commit-queue': {'name': 'WebKit Committer', 'status': 'committer', 'email': 'committer@webkit.org'},
         'WebKit Committer': {'status': 'committer'},
         'Myles C. Maxfield': {'status': 'reviewer'},
+        'Abrar Protyasha': {'status': 'reviewer'},
     }, []
 
 
@@ -1173,7 +1174,7 @@ class TestCompileWebKit(BuildStepMixinAdditions, unittest.TestCase):
             ExpectShell(workdir='wkdir',
                         timeout=3600,
                         logEnviron=False,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'perl Tools/Scripts/build-webkit --release -hideShellScriptEnvironment WK_VALIDATE_DEPENDENCIES=YES --ios-simulator 2>&1 | perl Tools/Scripts/filter-build-webkit -logfile build-log.txt'],
+                        command=['/bin/sh', '-c', 'perl Tools/Scripts/build-webkit --release -hideShellScriptEnvironment WK_VALIDATE_DEPENDENCIES=YES --ios-simulator 2>&1 | perl Tools/Scripts/filter-build-webkit -logfile build-log.txt'],
                         )
             + 0,
         )
@@ -1190,7 +1191,7 @@ class TestCompileWebKit(BuildStepMixinAdditions, unittest.TestCase):
             ExpectShell(workdir='wkdir',
                         timeout=3600,
                         logEnviron=False,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'perl Tools/Scripts/build-webkit --release --architecture "x86_64 arm64" -hideShellScriptEnvironment WK_VALIDATE_DEPENDENCIES=YES 2>&1 | perl Tools/Scripts/filter-build-webkit -logfile build-log.txt'],
+                        command=['/bin/sh', '-c', 'perl Tools/Scripts/build-webkit --release --architecture "x86_64 arm64" -hideShellScriptEnvironment WK_VALIDATE_DEPENDENCIES=YES 2>&1 | perl Tools/Scripts/filter-build-webkit -logfile build-log.txt'],
                         )
             + 0,
         )
@@ -1238,7 +1239,7 @@ class TestCompileWebKit(BuildStepMixinAdditions, unittest.TestCase):
             ExpectShell(workdir='wkdir',
                         timeout=3600,
                         logEnviron=False,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'perl Tools/Scripts/build-webkit --debug -hideShellScriptEnvironment WK_VALIDATE_DEPENDENCIES=YES 2>&1 | perl Tools/Scripts/filter-build-webkit -logfile build-log.txt'],
+                        command=['/bin/sh', '-c', 'perl Tools/Scripts/build-webkit --debug -hideShellScriptEnvironment WK_VALIDATE_DEPENDENCIES=YES 2>&1 | perl Tools/Scripts/filter-build-webkit -logfile build-log.txt'],
                         )
             + ExpectShell.log('stdio', stdout='1 error generated.')
             + 2,
@@ -1272,7 +1273,7 @@ class TestCompileWebKitWithoutChange(BuildStepMixinAdditions, unittest.TestCase)
             ExpectShell(workdir='wkdir',
                         timeout=3600,
                         logEnviron=False,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'perl Tools/Scripts/build-webkit --release -hideShellScriptEnvironment WK_VALIDATE_DEPENDENCIES=YES --ios-simulator 2>&1 | perl Tools/Scripts/filter-build-webkit -logfile build-log.txt'],
+                        command=['/bin/sh', '-c', 'perl Tools/Scripts/build-webkit --release -hideShellScriptEnvironment WK_VALIDATE_DEPENDENCIES=YES --ios-simulator 2>&1 | perl Tools/Scripts/filter-build-webkit -logfile build-log.txt'],
                         )
             + 0,
         )
@@ -1288,7 +1289,7 @@ class TestCompileWebKitWithoutChange(BuildStepMixinAdditions, unittest.TestCase)
             ExpectShell(workdir='wkdir',
                         timeout=3600,
                         logEnviron=False,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'perl Tools/Scripts/build-webkit --debug -hideShellScriptEnvironment WK_VALIDATE_DEPENDENCIES=YES 2>&1 | perl Tools/Scripts/filter-build-webkit -logfile build-log.txt'],
+                        command=['/bin/sh', '-c', 'perl Tools/Scripts/build-webkit --debug -hideShellScriptEnvironment WK_VALIDATE_DEPENDENCIES=YES 2>&1 | perl Tools/Scripts/filter-build-webkit -logfile build-log.txt'],
                         )
             + ExpectShell.log('stdio', stdout='1 error generated.')
             + 2,
@@ -1413,7 +1414,7 @@ class TestCompileJSC(BuildStepMixinAdditions, unittest.TestCase):
             ExpectShell(workdir='wkdir',
                         timeout=3600,
                         logEnviron=False,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'perl Tools/Scripts/build-jsc --release WK_VALIDATE_DEPENDENCIES=YES 2>&1 | perl Tools/Scripts/filter-build-webkit -logfile build-log.txt'],
+                        command=['/bin/sh', '-c', 'perl Tools/Scripts/build-jsc --release WK_VALIDATE_DEPENDENCIES=YES 2>&1 | perl Tools/Scripts/filter-build-webkit -logfile build-log.txt'],
                         )
             + 0,
         )
@@ -1429,7 +1430,7 @@ class TestCompileJSC(BuildStepMixinAdditions, unittest.TestCase):
             ExpectShell(workdir='wkdir',
                         timeout=3600,
                         logEnviron=False,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'perl Tools/Scripts/build-jsc --debug WK_VALIDATE_DEPENDENCIES=YES 2>&1 | perl Tools/Scripts/filter-build-webkit -logfile build-log.txt'],
+                        command=['/bin/sh', '-c', 'perl Tools/Scripts/build-jsc --debug WK_VALIDATE_DEPENDENCIES=YES 2>&1 | perl Tools/Scripts/filter-build-webkit -logfile build-log.txt'],
                         )
             + ExpectShell.log('stdio', stdout='1 error generated.')
             + 2,
@@ -1510,7 +1511,7 @@ class TestRunJavaScriptCoreTests(BuildStepMixinAdditions, unittest.TestCase):
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
                         timeout=3 * 60 * 60,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --release --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
+                        command=['/bin/sh', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --release --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
                         logfiles={'json': self.jsonFileName},
                         )
             + 0,
@@ -1525,7 +1526,7 @@ class TestRunJavaScriptCoreTests(BuildStepMixinAdditions, unittest.TestCase):
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
                         timeout=3 * 60 * 60,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --release --remote-config-file=remote-machines.json --no-testmasm --no-testair --no-testb3 --no-testdfg --no-testapi --memory-limited --verbose --jsc-only --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
+                        command=['/bin/sh', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --release --remote-config-file=remote-machines.json --no-testmasm --no-testair --no-testb3 --no-testdfg --no-testapi --memory-limited --verbose --jsc-only --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
                         logfiles={'json': self.jsonFileName},
                         )
             + 0,
@@ -1539,7 +1540,7 @@ class TestRunJavaScriptCoreTests(BuildStepMixinAdditions, unittest.TestCase):
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
                         timeout=3 * 60 * 60,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --debug --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
+                        command=['/bin/sh', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --debug --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
                         logfiles={'json': self.jsonFileName},
                         )
             + ExpectShell.log('stdio', stdout='9 failures found.')
@@ -1555,7 +1556,7 @@ class TestRunJavaScriptCoreTests(BuildStepMixinAdditions, unittest.TestCase):
                         logEnviron=False,
                         timeout=3 * 60 * 60,
                         logfiles={'json': self.jsonFileName},
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --debug --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
+                        command=['/bin/sh', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --debug --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
                         )
             + 2
             + ExpectShell.log('json', stdout=self.jsc_single_stress_test_failure),
@@ -1573,7 +1574,7 @@ class TestRunJavaScriptCoreTests(BuildStepMixinAdditions, unittest.TestCase):
                         logEnviron=False,
                         timeout=3 * 60 * 60,
                         logfiles={'json': self.jsonFileName},
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --debug --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
+                        command=['/bin/sh', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --debug --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
                         )
             + 2
             + ExpectShell.log('json', stdout=self.jsc_multiple_stress_test_failures),
@@ -1591,7 +1592,7 @@ class TestRunJavaScriptCoreTests(BuildStepMixinAdditions, unittest.TestCase):
                         logEnviron=False,
                         timeout=3 * 60 * 60,
                         logfiles={'json': self.jsonFileName},
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --debug --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
+                        command=['/bin/sh', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --debug --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
                         )
             + 2
             + ExpectShell.log('json', stdout=self.jsc_masm_failure),
@@ -1609,7 +1610,7 @@ class TestRunJavaScriptCoreTests(BuildStepMixinAdditions, unittest.TestCase):
                         logEnviron=False,
                         timeout=3 * 60 * 60,
                         logfiles={'json': self.jsonFileName},
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --release --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
+                        command=['/bin/sh', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --release --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
                         )
             + 2
             + ExpectShell.log('json', stdout=self.jsc_b3_and_stress_test_failure),
@@ -1627,7 +1628,7 @@ class TestRunJavaScriptCoreTests(BuildStepMixinAdditions, unittest.TestCase):
                         logEnviron=False,
                         timeout=3 * 60 * 60,
                         logfiles={'json': self.jsonFileName},
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --release --memory-limited --verbose --jsc-only --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
+                        command=['/bin/sh', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --release --memory-limited --verbose --jsc-only --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
                         )
             + 2
             + ExpectShell.log('json', stdout=self.jsc_dfg_air_and_stress_test_failure),
@@ -1645,7 +1646,7 @@ class TestRunJavaScriptCoreTests(BuildStepMixinAdditions, unittest.TestCase):
                         logEnviron=False,
                         timeout=3 * 60 * 60,
                         logfiles={'json': self.jsonFileName},
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --release --memory-limited --verbose --jsc-only --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
+                        command=['/bin/sh', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --release --memory-limited --verbose --jsc-only --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
                         )
             + 0
             + ExpectShell.log('json', stdout=self.jsc_passed_with_flaky),
@@ -1675,7 +1676,7 @@ class TestRunJSCTestsWithoutChange(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --release --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
+                        command=['/bin/sh', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --release --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
                         logfiles={'json': self.jsonFileName},
                         timeout=3 * 60 * 60,
                         )
@@ -1691,7 +1692,7 @@ class TestRunJSCTestsWithoutChange(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --debug --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
+                        command=['/bin/sh', '-c', f'perl Tools/Scripts/run-javascriptcore-tests --no-build --no-fail-fast --json-output={self.jsonFileName} --debug --treat-failing-as-flaky=0.6,10,200 2>&1 | Tools/Scripts/filter-test-logs jsc'],
                         logfiles={'json': self.jsonFileName},
                         timeout=3 * 60 * 60,
                         )
@@ -1847,7 +1848,7 @@ ts","version":4,"num_passes":42158,"pixel_tests_enabled":false,"date":"11:28AM o
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + 0,
         )
@@ -1863,7 +1864,7 @@ ts","version":4,"num_passes":42158,"pixel_tests_enabled":false,"date":"11:28AM o
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + 0
             + ExpectShell.log('stdio', stdout='''Unexpected flakiness: timeouts (2)
@@ -1883,7 +1884,7 @@ ts","version":4,"num_passes":42158,"pixel_tests_enabled":false,"date":"11:28AM o
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests --exclude-tests imported/w3c/web-platform-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests --exclude-tests imported/w3c/web-platform-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + 0,
         )
@@ -1928,7 +1929,7 @@ ts","version":4,"num_passes":42158,"pixel_tests_enabled":false,"date":"11:28AM o
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + 2
             + ExpectShell.log('json', stdout=self.results_json_regressions),
@@ -1958,7 +1959,7 @@ ts","version":4,"num_passes":42158,"pixel_tests_enabled":false,"date":"11:28AM o
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + 0
             + ExpectShell.log('json', stdout=self.results_json_flakes),
@@ -1978,7 +1979,7 @@ ts","version":4,"num_passes":42158,"pixel_tests_enabled":false,"date":"11:28AM o
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + 2
             + ExpectShell.log('json', stdout=self.results_json_mix_flakes_and_regression),
@@ -1998,7 +1999,7 @@ ts","version":4,"num_passes":42158,"pixel_tests_enabled":false,"date":"11:28AM o
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + 2
             + ExpectShell.log('json', stdout=self.results_json_with_newlines),
@@ -2018,7 +2019,7 @@ ts","version":4,"num_passes":42158,"pixel_tests_enabled":false,"date":"11:28AM o
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + 2
             + ExpectShell.log('json', stdout=self.results_json_with_newlines + " non-JSON nonsense"),
@@ -2038,7 +2039,7 @@ ts","version":4,"num_passes":42158,"pixel_tests_enabled":false,"date":"11:28AM o
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + 2
             + ExpectShell.log('json', stdout=self.results_with_missing_results),
@@ -2060,7 +2061,7 @@ ts","version":4,"num_passes":42158,"pixel_tests_enabled":false,"date":"11:28AM o
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --debug --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --debug --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + ExpectShell.log('stdio', stdout='Unexpected error.')
             + 254,
@@ -2077,7 +2078,7 @@ ts","version":4,"num_passes":42158,"pixel_tests_enabled":false,"date":"11:28AM o
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + ExpectShell.log('stdio', stdout='9 failures found.')
             + 2,
@@ -2095,7 +2096,7 @@ ts","version":4,"num_passes":42158,"pixel_tests_enabled":false,"date":"11:28AM o
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging imported/w3c/web-platform-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging imported/w3c/web-platform-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + 0,
         )
@@ -2114,7 +2115,7 @@ ts","version":4,"num_passes":42158,"pixel_tests_enabled":false,"date":"11:28AM o
                         logEnviron=False,
                         maxTime=60 * 90,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --no-retry 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --no-retry 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + ExpectShell.log('stdio', stdout='9 failures found.')
             + 2,
@@ -2134,7 +2135,7 @@ ts","version":4,"num_passes":42158,"pixel_tests_enabled":false,"date":"11:28AM o
                         logEnviron=False,
                         maxTime=60 * 90,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --no-retry 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --no-retry 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + 0,
         )
@@ -2183,7 +2184,7 @@ ts","version":4,"num_passes":42158,"pixel_tests_enabled":false,"date":"11:28AM o
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + 0,
         )
@@ -2202,7 +2203,7 @@ ts","version":4,"num_passes":42158,"pixel_tests_enabled":false,"date":"11:28AM o
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + 0,
         )
@@ -2222,7 +2223,7 @@ ts","version":4,"num_passes":42158,"pixel_tests_enabled":false,"date":"11:28AM o
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + 2,
         )
@@ -2278,7 +2279,7 @@ class TestRunWebKitTestsInStressMode(BuildStepMixinAdditions, unittest.TestCase)
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --dump-render-tree --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 10 --iterations 100 test1 test2 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --dump-render-tree --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 10 --iterations 100 test1 test2 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + 0,
         )
@@ -2295,7 +2296,7 @@ class TestRunWebKitTestsInStressMode(BuildStepMixinAdditions, unittest.TestCase)
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 10 --iterations 100 test 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 10 --iterations 100 test 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + ExpectShell.log('stdio', stdout='9 failures found.')
             + 2,
@@ -2315,7 +2316,7 @@ class TestRunWebKitTestsInStressMode(BuildStepMixinAdditions, unittest.TestCase)
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 10 --iterations 100 test1 test2 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 10 --iterations 100 test1 test2 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + 0,
         )
@@ -2333,7 +2334,7 @@ class TestRunWebKitTestsInStressMode(BuildStepMixinAdditions, unittest.TestCase)
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 10 --iterations 100 test1 test2 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 10 --iterations 100 test1 test2 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + 0,
         )
@@ -2365,7 +2366,7 @@ class TestRunWebKitTestsInStressGuardmallocMode(BuildStepMixinAdditions, unittes
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 10 --guard-malloc --iterations 100 test1 test2 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 10 --guard-malloc --iterations 100 test1 test2 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + 0,
         )
@@ -2382,7 +2383,7 @@ class TestRunWebKitTestsInStressGuardmallocMode(BuildStepMixinAdditions, unittes
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 10 --guard-malloc --iterations 100 test 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 10 --guard-malloc --iterations 100 test 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + ExpectShell.log('stdio', stdout='9 failures found.')
             + 2,
@@ -2420,7 +2421,7 @@ class TestRunWebKitTestsWithoutChange(BuildStepMixinAdditions, unittest.TestCase
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests --builder-name iOS-13-Simulator-WK2-Tests-EWS --build-number 123 --buildbot-worker ews126 --buildbot-master {EWS_BUILD_HOSTNAMES[0]} --report https://results.webkit.org/ 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', f'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests --builder-name iOS-13-Simulator-WK2-Tests-EWS --build-number 123 --buildbot-worker ews126 --buildbot-master {EWS_BUILD_HOSTNAMES[0]} --report https://results.webkit.org/ 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         env={'RESULTS_SERVER_API_KEY': 'test-api-key'},
                         )
             + 0,
@@ -2440,7 +2441,7 @@ class TestRunWebKitTestsWithoutChange(BuildStepMixinAdditions, unittest.TestCase
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests --builder-name iOS-13-Simulator-WK2-Tests-EWS --build-number 123 --buildbot-worker ews126 --buildbot-master {EWS_BUILD_HOSTNAMES[0]} --report https://results.webkit.org/ --skipped=always test1.html test2.html test3.html test4.html test5.html 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', f'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests --builder-name iOS-13-Simulator-WK2-Tests-EWS --build-number 123 --buildbot-worker ews126 --buildbot-master {EWS_BUILD_HOSTNAMES[0]} --report https://results.webkit.org/ --skipped=always test1.html test2.html test3.html test4.html test5.html 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         env={'RESULTS_SERVER_API_KEY': 'test-api-key'},
                         )
             + 0,
@@ -2460,7 +2461,7 @@ class TestRunWebKitTestsWithoutChange(BuildStepMixinAdditions, unittest.TestCase
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests --builder-name iOS-13-Simulator-WK2-Tests-EWS --build-number 123 --buildbot-worker ews126 --buildbot-master {EWS_BUILD_HOSTNAMES[0]} --report https://results.webkit.org/ --skipped=always test-was-skipped-patch-removed-expectation-but-still-fails.html 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', f'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests --builder-name iOS-13-Simulator-WK2-Tests-EWS --build-number 123 --buildbot-worker ews126 --buildbot-master {EWS_BUILD_HOSTNAMES[0]} --report https://results.webkit.org/ --skipped=always test-was-skipped-patch-removed-expectation-but-still-fails.html 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         env={'RESULTS_SERVER_API_KEY': 'test-api-key'},
                         )
             + 0,
@@ -2480,7 +2481,7 @@ class TestRunWebKitTestsWithoutChange(BuildStepMixinAdditions, unittest.TestCase
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests --builder-name iOS-13-Simulator-WK2-Tests-EWS --build-number 123 --buildbot-worker ews126 --buildbot-master {EWS_BUILD_HOSTNAMES[0]} --report https://results.webkit.org/ --skipped=always test-fails-withpatch1.html test-fails-withpatch2.html test-pre-existent-failure1.html test-pre-existent-failure2.html 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', f'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests --builder-name iOS-13-Simulator-WK2-Tests-EWS --build-number 123 --buildbot-worker ews126 --buildbot-master {EWS_BUILD_HOSTNAMES[0]} --report https://results.webkit.org/ --skipped=always test-fails-withpatch1.html test-fails-withpatch2.html test-pre-existent-failure1.html test-pre-existent-failure2.html 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         env={'RESULTS_SERVER_API_KEY': 'test-api-key'},
                         )
             + ExpectShell.log('stdio', stdout='2 failures found.')
@@ -2502,7 +2503,7 @@ class TestRunWebKitTestsWithoutChange(BuildStepMixinAdditions, unittest.TestCase
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests --builder-name iOS-13-Simulator-WK2-Tests-EWS --build-number 123 --buildbot-worker ews126 --buildbot-master {EWS_BUILD_HOSTNAMES[0]} --report https://results.webkit.org/ 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', f'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests --builder-name iOS-13-Simulator-WK2-Tests-EWS --build-number 123 --buildbot-worker ews126 --buildbot-master {EWS_BUILD_HOSTNAMES[0]} --report https://results.webkit.org/ 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         env={'RESULTS_SERVER_API_KEY': 'test-api-key'},
                         )
             + 0,
@@ -2520,7 +2521,7 @@ class TestRunWebKitTestsWithoutChange(BuildStepMixinAdditions, unittest.TestCase
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests --builder-name iOS-13-Simulator-WK2-Tests-EWS --build-number 123 --buildbot-worker ews126 --buildbot-master {EWS_BUILD_HOSTNAMES[0]} --report https://results.webkit.org/ 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', f'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests --builder-name iOS-13-Simulator-WK2-Tests-EWS --build-number 123 --buildbot-worker ews126 --buildbot-master {EWS_BUILD_HOSTNAMES[0]} --report https://results.webkit.org/ 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         env={'RESULTS_SERVER_API_KEY': 'test-api-key'}
                         )
             + ExpectShell.log('stdio', stdout='9 failures found.')
@@ -2549,7 +2550,7 @@ class TestRunWebKit1Tests(BuildStepMixinAdditions, unittest.TestCase):
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --debug --dump-render-tree --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --debug --dump-render-tree --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + 0,
         )
@@ -2565,7 +2566,7 @@ class TestRunWebKit1Tests(BuildStepMixinAdditions, unittest.TestCase):
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --dump-render-tree --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --dump-render-tree --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 60 --skip-failing-tests 2>&1 | Tools/Scripts/filter-test-logs layout'],
                         )
             + ExpectShell.log('stdio', stdout='9 failures found.')
             + 2,
@@ -2839,7 +2840,7 @@ class TestRunWebKitTestsRedTree(BuildStepMixinAdditions, unittest.TestCase):
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --wpe --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 500 --skip-failing-tests --enable-core-dumps-nolimit 2>&1 | Tools/Scripts/filter-test-logs layout']
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --wpe --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 500 --skip-failing-tests --enable-core-dumps-nolimit 2>&1 | Tools/Scripts/filter-test-logs layout']
                         )
             + 0,
         )
@@ -2855,7 +2856,7 @@ class TestRunWebKitTestsRedTree(BuildStepMixinAdditions, unittest.TestCase):
                         logfiles={'json': self.jsonFileName},
                         logEnviron=False,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --wpe --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 500 --skip-failing-tests --enable-core-dumps-nolimit 2>&1 | Tools/Scripts/filter-test-logs layout']
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --wpe --results-directory layout-test-results --debug-rwt-logging --exit-after-n-failures 500 --skip-failing-tests --enable-core-dumps-nolimit 2>&1 | Tools/Scripts/filter-test-logs layout']
                         )
             + 2
         )
@@ -2926,7 +2927,7 @@ class TestRunWebKitTestsRepeatFailuresRedTree(BuildStepMixinAdditions, unittest.
                         logEnviron=False,
                         maxTime=18000,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --wpe --results-directory layout-test-results --debug-rwt-logging --skip-failing-tests --fully-parallel --repeat-each=10 fast/css/test1.html fast/svg/test3.svg imported/test/test2.html 2>&1 | Tools/Scripts/filter-test-logs layout']
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --wpe --results-directory layout-test-results --debug-rwt-logging --skip-failing-tests --fully-parallel --repeat-each=10 fast/css/test1.html fast/svg/test3.svg imported/test/test2.html 2>&1 | Tools/Scripts/filter-test-logs layout']
                         )
             + 0,
         )
@@ -2970,7 +2971,7 @@ class TestRunWebKitTestsRepeatFailuresRedTree(BuildStepMixinAdditions, unittest.
                         logEnviron=False,
                         maxTime=18000,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --wpe --results-directory layout-test-results --debug-rwt-logging --skip-failing-tests --fully-parallel --repeat-each=10 fast/css/test1.html fast/svg/test3.svg imported/test/test2.html 2>&1 | Tools/Scripts/filter-test-logs layout']
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --wpe --results-directory layout-test-results --debug-rwt-logging --skip-failing-tests --fully-parallel --repeat-each=10 fast/css/test1.html fast/svg/test3.svg imported/test/test2.html 2>&1 | Tools/Scripts/filter-test-logs layout']
                         )
             + 2
         )
@@ -3052,7 +3053,7 @@ class TestRunWebKitTestsRepeatFailuresWithoutChangeRedTree(BuildStepMixinAdditio
                         logEnviron=False,
                         maxTime=10800,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --wpe --results-directory layout-test-results --debug-rwt-logging --skip-failing-tests --fully-parallel --repeat-each=10 --skipped=always fast/css/test1.html 2>&1 | Tools/Scripts/filter-test-logs layout']
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --wpe --results-directory layout-test-results --debug-rwt-logging --skip-failing-tests --fully-parallel --repeat-each=10 --skipped=always fast/css/test1.html 2>&1 | Tools/Scripts/filter-test-logs layout']
                         )
             + 0,
         )
@@ -3078,7 +3079,7 @@ class TestRunWebKitTestsRepeatFailuresWithoutChangeRedTree(BuildStepMixinAdditio
                         logEnviron=False,
                         maxTime=10800,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --wpe --results-directory layout-test-results --debug-rwt-logging --skip-failing-tests --fully-parallel --repeat-each=10 --skipped=always fast/css/test1.html fast/svg/test3.svg imported/test/test2.html 2>&1 | Tools/Scripts/filter-test-logs layout']
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --wpe --results-directory layout-test-results --debug-rwt-logging --skip-failing-tests --fully-parallel --repeat-each=10 --skipped=always fast/css/test1.html fast/svg/test3.svg imported/test/test2.html 2>&1 | Tools/Scripts/filter-test-logs layout']
                         )
             + 0,
         )
@@ -3104,7 +3105,7 @@ class TestRunWebKitTestsRepeatFailuresWithoutChangeRedTree(BuildStepMixinAdditio
                         logEnviron=False,
                         maxTime=10800,
                         timeout=19800,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --wpe --results-directory layout-test-results --debug-rwt-logging --skip-failing-tests --fully-parallel --repeat-each=10 --skipped=always fast/css/test1.html 2>&1 | Tools/Scripts/filter-test-logs layout']
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --no-build --no-show-results --no-new-test-results --clobber-old-results --release --wpe --results-directory layout-test-results --debug-rwt-logging --skip-failing-tests --fully-parallel --repeat-each=10 --skipped=always fast/css/test1.html 2>&1 | Tools/Scripts/filter-test-logs layout']
                         )
             + 2
         )
@@ -3532,7 +3533,7 @@ class TestUpdateWorkingDirectory(BuildStepMixinAdditions, unittest.TestCase):
                 command=['git', 'checkout', 'remotes/origin/main', '-f'],
             ) + 0, ExpectShell(workdir='wkdir',
                 logEnviron=False,
-                command=['/bin/sh', '-o', 'pipefail', '-c', 'git branch -D main || true'],
+                command=['/bin/sh', '-c', 'git branch -D main || true'],
             ) + 0, ExpectShell(workdir='wkdir',
                 logEnviron=False,
                 command=['git', 'checkout', '-b', 'main'],
@@ -3551,13 +3552,13 @@ class TestUpdateWorkingDirectory(BuildStepMixinAdditions, unittest.TestCase):
                 command=['git', 'checkout', 'remotes/origin/safari-xxx-branch', '-f'],
             ) + 0, ExpectShell(workdir='wkdir',
                 logEnviron=False,
-                command=['/bin/sh', '-o', 'pipefail', '-c', 'git branch -D safari-xxx-branch || true'],
+                command=['/bin/sh', '-c', 'git branch -D safari-xxx-branch || true'],
             ) + 0, ExpectShell(workdir='wkdir',
                 logEnviron=False,
                 command=['git', 'checkout', '-b', 'safari-xxx-branch'],
             ) + 0, ExpectShell(workdir='wkdir',
                 logEnviron=False,
-                command=['/bin/sh', '-o', 'pipefail', '-c', 'git branch -D main || true'],
+                command=['/bin/sh', '-c', 'git branch -D main || true'],
             ) + 0, ExpectShell(workdir='wkdir',
                 logEnviron=False,
                 command=['git', 'branch', '--track', 'main', 'remotes/origin/main'],
@@ -3576,7 +3577,7 @@ class TestUpdateWorkingDirectory(BuildStepMixinAdditions, unittest.TestCase):
                 command=['git', 'checkout', 'remotes/security/main', '-f'],
             ) + 0, ExpectShell(workdir='wkdir',
                 logEnviron=False,
-                command=['/bin/sh', '-o', 'pipefail', '-c', 'git branch -D main || true'],
+                command=['/bin/sh', '-c', 'git branch -D main || true'],
             ) + 0, ExpectShell(workdir='wkdir',
                 logEnviron=False,
                 command=['git', 'checkout', '-b', 'main'],
@@ -3596,13 +3597,13 @@ class TestUpdateWorkingDirectory(BuildStepMixinAdditions, unittest.TestCase):
                 command=['git', 'checkout', 'remotes/security/safari-xxx-branch', '-f'],
             ) + 0, ExpectShell(workdir='wkdir',
                 logEnviron=False,
-                command=['/bin/sh', '-o', 'pipefail', '-c', 'git branch -D safari-xxx-branch || true'],
+                command=['/bin/sh', '-c', 'git branch -D safari-xxx-branch || true'],
             ) + 0, ExpectShell(workdir='wkdir',
                 logEnviron=False,
                 command=['git', 'checkout', '-b', 'safari-xxx-branch'],
             ) + 0, ExpectShell(workdir='wkdir',
                 logEnviron=False,
-                command=['/bin/sh', '-o', 'pipefail', '-c', 'git branch -D main || true'],
+                command=['/bin/sh', '-c', 'git branch -D main || true'],
             ) + 0, ExpectShell(workdir='wkdir',
                 logEnviron=False,
                 command=['git', 'branch', '--track', 'main', 'remotes/origin/main'],
@@ -3841,7 +3842,7 @@ class TestCheckOutPullRequest(BuildStepMixinAdditions, unittest.TestCase):
                 timeout=600,
                 logEnviron=False,
                 env=self.ENV,
-                command=['/bin/sh', '-o', 'pipefail', '-c', 'git remote add Contributor https://github.com/Contributor/WebKit.git || true'],
+                command=['/bin/sh', '-c', 'git remote add Contributor https://github.com/Contributor/WebKit.git || true'],
             ) + 0, ExpectShell(
                 workdir='wkdir',
                 timeout=600,
@@ -3893,7 +3894,7 @@ class TestCheckOutPullRequest(BuildStepMixinAdditions, unittest.TestCase):
                 timeout=600,
                 logEnviron=False,
                 env=self.ENV,
-                command=['/bin/sh', '-o', 'pipefail', '-c', 'git remote add Contributor-apple https://github.com/Contributor/WebKit-apple.git || true'],
+                command=['/bin/sh', '-c', 'git remote add Contributor-apple https://github.com/Contributor/WebKit-apple.git || true'],
             ) + 0, ExpectShell(
                 workdir='wkdir',
                 timeout=600,
@@ -3945,7 +3946,7 @@ class TestCheckOutPullRequest(BuildStepMixinAdditions, unittest.TestCase):
                 timeout=600,
                 logEnviron=False,
                 env=self.ENV,
-                command=['/bin/sh', '-o', 'pipefail', '-c', 'git remote add WebKit-integration https://github.com/WebKit/WebKit-integration.git || true'],
+                command=['/bin/sh', '-c', 'git remote add WebKit-integration https://github.com/WebKit/WebKit-integration.git || true'],
             ) + 0, ExpectShell(
                 workdir='wkdir',
                 timeout=600,
@@ -3997,7 +3998,7 @@ class TestCheckOutPullRequest(BuildStepMixinAdditions, unittest.TestCase):
                 timeout=600,
                 logEnviron=False,
                 env=self.ENV,
-                command=['sh', '-o', 'pipefail', '-c', 'git remote add Contributor https://github.com/Contributor/WebKit.git || exit 0'],
+                command=['sh', '-c', 'git remote add Contributor https://github.com/Contributor/WebKit.git || exit 0'],
             ) + 0, ExpectShell(
                 workdir='wkdir',
                 timeout=600,
@@ -4048,7 +4049,7 @@ class TestCheckOutPullRequest(BuildStepMixinAdditions, unittest.TestCase):
                 timeout=600,
                 logEnviron=False,
                 env=self.ENV,
-                command=['/bin/sh', '-o', 'pipefail', '-c', 'git remote add Contributor https://github.com/Contributor/WebKit.git || true'],
+                command=['/bin/sh', '-c', 'git remote add Contributor https://github.com/Contributor/WebKit.git || true'],
             ) + 0, ExpectShell(
                 workdir='wkdir',
                 timeout=600,
@@ -4348,7 +4349,7 @@ class TestGetTestExpectationsBaseline(BuildStepMixinAdditions, unittest.TestCase
         self.setupStep(GetTestExpectationsBaseline())
         self.setProperty('configuration', 'debug')
         self.expectRemoteCommands(
-            ExpectShell(workdir='wkdir', logEnviron=True, command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --print-expectations --debug > base-expectations.txt']) + 0
+            ExpectShell(workdir='wkdir', logEnviron=True, command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --print-expectations --debug > base-expectations.txt']) + 0
         )
         self.expectOutcome(result=SUCCESS, state_string='Found baseline expectations for layout tests')
         return self.runStep()
@@ -4358,7 +4359,7 @@ class TestGetTestExpectationsBaseline(BuildStepMixinAdditions, unittest.TestCase
         self.setProperty('configuration', 'release')
         self.setProperty('additionalArguments', ["--child-processes=6", "--exclude-tests", "imported/w3c/web-platform-tests"])
         self.expectRemoteCommands(
-            ExpectShell(workdir='wkdir', logEnviron=True, command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --print-expectations --release --child-processes=6 --exclude-tests imported/w3c/web-platform-tests > base-expectations.txt']) + 0
+            ExpectShell(workdir='wkdir', logEnviron=True, command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --print-expectations --release --child-processes=6 --exclude-tests imported/w3c/web-platform-tests > base-expectations.txt']) + 0
         )
         self.expectOutcome(result=SUCCESS, state_string='Found baseline expectations for layout tests')
         return self.runStep()
@@ -4378,11 +4379,11 @@ class TestGetUpdatedTestExpectations(BuildStepMixinAdditions, unittest.TestCase)
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=True,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --print-expectations --debug > new-expectations.txt'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --print-expectations --debug > new-expectations.txt'],
                         )
             + 0,
-            ExpectShell(workdir='wkdir', command=['/bin/sh', '-o', 'pipefail', '-c', "perl -p -i -e 's/\\].*/\\]/' base-expectations.txt"]) + 0,
-            ExpectShell(workdir='wkdir', command=['/bin/sh', '-o', 'pipefail', '-c', "perl -p -i -e 's/\\].*/\\]/' new-expectations.txt"]) + 0,
+            ExpectShell(workdir='wkdir', command=['/bin/sh', '-c', "perl -p -i -e 's/\\].*/\\]/' base-expectations.txt"]) + 0,
+            ExpectShell(workdir='wkdir', command=['/bin/sh', '-c', "perl -p -i -e 's/\\].*/\\]/' new-expectations.txt"]) + 0,
         )
         self.expectOutcome(result=SUCCESS, state_string='Found updated expectations for layout tests')
         rc = self.runStep()
@@ -4395,11 +4396,11 @@ class TestGetUpdatedTestExpectations(BuildStepMixinAdditions, unittest.TestCase)
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=True,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', 'python3 Tools/Scripts/run-webkit-tests --print-expectations --release --child-processes=6 --exclude-tests imported/w3c/web-platform-tests > new-expectations.txt'],
+                        command=['/bin/sh', '-c', 'python3 Tools/Scripts/run-webkit-tests --print-expectations --release --child-processes=6 --exclude-tests imported/w3c/web-platform-tests > new-expectations.txt'],
                         )
             + 0,
-            ExpectShell(workdir='wkdir', command=['/bin/sh', '-o', 'pipefail', '-c', "perl -p -i -e 's/\\].*/\\]/' base-expectations.txt"]) + 0,
-            ExpectShell(workdir='wkdir', command=['/bin/sh', '-o', 'pipefail', '-c', "perl -p -i -e 's/\\].*/\\]/' new-expectations.txt"]) + 0,
+            ExpectShell(workdir='wkdir', command=['/bin/sh', '-c', "perl -p -i -e 's/\\].*/\\]/' base-expectations.txt"]) + 0,
+            ExpectShell(workdir='wkdir', command=['/bin/sh', '-c', "perl -p -i -e 's/\\].*/\\]/' new-expectations.txt"]) + 0,
         )
         self.expectOutcome(result=SUCCESS, state_string='Found updated expectations for layout tests')
         rc = self.runStep()
@@ -4421,7 +4422,7 @@ class TestFindModifiedLayoutTests(BuildStepMixinAdditions, unittest.TestCase):
         FindModifiedLayoutTests._get_patch = lambda x: b'+++ LayoutTests/http/tests/events/device-orientation-motion-insecure-context.html'
         self.expectOutcome(result=SUCCESS, state_string='Patch contains relevant changes')
         self.expectRemoteCommands(
-            ExpectShell(workdir='wkdir', logEnviron=True, command=['diff', '-u', 'base-expectations.txt', 'new-expectations.txt']) + 0
+            ExpectShell(workdir='wkdir', logEnviron=False, command=['diff', '-u', 'base-expectations.txt', 'new-expectations.txt']) + 0
         )
         rc = self.runStep()
         self.assertEqual(self.getProperty('modified_tests'), ['LayoutTests/http/tests/events/device-orientation-motion-insecure-context.html'])
@@ -4434,7 +4435,7 @@ class TestFindModifiedLayoutTests(BuildStepMixinAdditions, unittest.TestCase):
         FindModifiedLayoutTests._get_patch = lambda x: b'+++ LayoutTests/svg/filters/feConvolveMatrix-clipped.svg'
         self.expectOutcome(result=SUCCESS, state_string='Patch contains relevant changes')
         self.expectRemoteCommands(
-            ExpectShell(workdir='wkdir', logEnviron=True, command=['diff', '-u', 'base-expectations.txt', 'new-expectations.txt']) + 0
+            ExpectShell(workdir='wkdir', logEnviron=False, command=['diff', '-u', 'base-expectations.txt', 'new-expectations.txt']) + 0
         )
         rc = self.runStep()
         self.assertEqual(self.getProperty('modified_tests'), ['LayoutTests/svg/filters/feConvolveMatrix-clipped.svg'])
@@ -4447,7 +4448,7 @@ class TestFindModifiedLayoutTests(BuildStepMixinAdditions, unittest.TestCase):
         FindModifiedLayoutTests._get_patch = lambda x: b'+++ LayoutTests/fast/table/037.xml'
         self.expectOutcome(result=SUCCESS, state_string='Patch contains relevant changes')
         self.expectRemoteCommands(
-            ExpectShell(workdir='wkdir', logEnviron=True, command=['diff', '-u', 'base-expectations.txt', 'new-expectations.txt']) + 0
+            ExpectShell(workdir='wkdir', logEnviron=False, command=['diff', '-u', 'base-expectations.txt', 'new-expectations.txt']) + 0
         )
         rc = self.runStep()
         self.assertEqual(self.getProperty('modified_tests'), ['LayoutTests/fast/table/037.xml'])
@@ -4459,7 +4460,7 @@ class TestFindModifiedLayoutTests(BuildStepMixinAdditions, unittest.TestCase):
         FindModifiedLayoutTests._get_patch = lambda x: f'+++ LayoutTests/reference/test-name.html'.encode('utf-8')
         self.expectOutcome(result=SKIPPED, state_string='Patch doesn\'t have relevant changes')
         self.expectRemoteCommands(
-            ExpectShell(workdir='wkdir', logEnviron=True, command=['diff', '-u', 'base-expectations.txt', 'new-expectations.txt']) + 0
+            ExpectShell(workdir='wkdir', logEnviron=False, command=['diff', '-u', 'base-expectations.txt', 'new-expectations.txt']) + 0
         )
         rc = self.runStep()
         self.assertEqual(self.getProperty('modified_tests'), None)
@@ -4471,7 +4472,7 @@ class TestFindModifiedLayoutTests(BuildStepMixinAdditions, unittest.TestCase):
         FindModifiedLayoutTests._get_patch = lambda x: f'+++ LayoutTests/reference/test-name.svg'.encode('utf-8')
         self.expectOutcome(result=SKIPPED, state_string='Patch doesn\'t have relevant changes')
         self.expectRemoteCommands(
-            ExpectShell(workdir='wkdir', logEnviron=True, command=['diff', '-u', 'base-expectations.txt', 'new-expectations.txt']) + 0
+            ExpectShell(workdir='wkdir', logEnviron=False, command=['diff', '-u', 'base-expectations.txt', 'new-expectations.txt']) + 0
         )
         rc = self.runStep()
         self.assertEqual(self.getProperty('modified_tests'), None)
@@ -4483,7 +4484,7 @@ class TestFindModifiedLayoutTests(BuildStepMixinAdditions, unittest.TestCase):
         FindModifiedLayoutTests._get_patch = lambda x: f'+++ LayoutTests/reference/test-name.xml'.encode('utf-8')
         self.expectOutcome(result=SKIPPED, state_string='Patch doesn\'t have relevant changes')
         self.expectRemoteCommands(
-            ExpectShell(workdir='wkdir', logEnviron=True, command=['diff', '-u', 'base-expectations.txt', 'new-expectations.txt']) + 0
+            ExpectShell(workdir='wkdir', logEnviron=False, command=['diff', '-u', 'base-expectations.txt', 'new-expectations.txt']) + 0
         )
         rc = self.runStep()
         self.assertEqual(self.getProperty('modified_tests'), None)
@@ -4494,7 +4495,7 @@ class TestFindModifiedLayoutTests(BuildStepMixinAdditions, unittest.TestCase):
         FindModifiedLayoutTests._get_patch = lambda x: f'+++ LayoutTests/http/tests/events/device-motion-expected-mismatch.html'.encode('utf-8')
         self.expectOutcome(result=SKIPPED, state_string='Patch doesn\'t have relevant changes')
         self.expectRemoteCommands(
-            ExpectShell(workdir='wkdir', logEnviron=True, command=['diff', '-u', 'base-expectations.txt', 'new-expectations.txt']) + 0
+            ExpectShell(workdir='wkdir', logEnviron=False, command=['diff', '-u', 'base-expectations.txt', 'new-expectations.txt']) + 0
         )
         rc = self.runStep()
         self.assertEqual(self.getProperty('modified_tests'), None)
@@ -4505,7 +4506,7 @@ class TestFindModifiedLayoutTests(BuildStepMixinAdditions, unittest.TestCase):
         FindModifiedLayoutTests._get_patch = lambda x: '+++ LayoutTests/html/test.txt'.encode('utf-8')
         self.expectOutcome(result=SKIPPED, state_string='Patch doesn\'t have relevant changes')
         self.expectRemoteCommands(
-            ExpectShell(workdir='wkdir', logEnviron=True, command=['diff', '-u', 'base-expectations.txt', 'new-expectations.txt']) + 0
+            ExpectShell(workdir='wkdir', logEnviron=False, command=['diff', '-u', 'base-expectations.txt', 'new-expectations.txt']) + 0
         )
         rc = self.runStep()
         self.assertEqual(self.getProperty('modified_tests'), None)
@@ -4516,7 +4517,7 @@ class TestFindModifiedLayoutTests(BuildStepMixinAdditions, unittest.TestCase):
         FindModifiedLayoutTests._get_patch = lambda x: b'Sample patch which does not modify any layout test'
         self.expectOutcome(result=SKIPPED, state_string='Patch doesn\'t have relevant changes')
         self.expectRemoteCommands(
-            ExpectShell(workdir='wkdir', logEnviron=True, command=['diff', '-u', 'base-expectations.txt', 'new-expectations.txt']) + 0
+            ExpectShell(workdir='wkdir', logEnviron=False, command=['diff', '-u', 'base-expectations.txt', 'new-expectations.txt']) + 0
         )
         rc = self.runStep()
         self.assertEqual(self.getProperty('modified_tests'), None)
@@ -4527,7 +4528,7 @@ class TestFindModifiedLayoutTests(BuildStepMixinAdditions, unittest.TestCase):
         FindModifiedLayoutTests._get_patch = lambda x: b''
         self.expectOutcome(result=WARNINGS, state_string='Patch could not be accessed')
         self.expectRemoteCommands(
-            ExpectShell(workdir='wkdir', logEnviron=True, command=['diff', '-u', 'base-expectations.txt', 'new-expectations.txt']) + 0
+            ExpectShell(workdir='wkdir', logEnviron=False, command=['diff', '-u', 'base-expectations.txt', 'new-expectations.txt']) + 0
         )
         rc = self.runStep()
         self.assertEqual(self.getProperty('modified_tests'), None)
@@ -5017,7 +5018,7 @@ class TestRunAPITests(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'python3 Tools/Scripts/run-api-tests --no-build --release --verbose --json-output={self.jsonFileName} > logs.txt 2>&1 ; grep "Ran " logs.txt'],
+                        command=['/bin/sh', '-c', f'python3 Tools/Scripts/run-api-tests --no-build --release --verbose --json-output={self.jsonFileName} > logs.txt 2>&1 ; grep "Ran " logs.txt'],
                         logfiles={'json': self.jsonFileName},
                         timeout=3 * 60 * 60
                         )
@@ -5046,7 +5047,7 @@ All tests successfully passed!
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'python3 Tools/Scripts/run-api-tests --no-build --debug --verbose --json-output={self.jsonFileName} --ios-simulator > logs.txt 2>&1 ; grep "Ran " logs.txt'],
+                        command=['/bin/sh', '-c', f'python3 Tools/Scripts/run-api-tests --no-build --debug --verbose --json-output={self.jsonFileName} --ios-simulator > logs.txt 2>&1 ; grep "Ran " logs.txt'],
                         logfiles={'json': self.jsonFileName},
                         timeout=3 * 60 * 60
                         )
@@ -5075,7 +5076,7 @@ All tests successfully passed!
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'python3 Tools/Scripts/run-gtk-tests --release --json-output={self.jsonFileName} > logs.txt 2>&1 ; grep "Ran " logs.txt'],
+                        command=['/bin/sh', '-c', f'python3 Tools/Scripts/run-gtk-tests --release --json-output={self.jsonFileName} > logs.txt 2>&1 ; grep "Ran " logs.txt'],
                         logfiles={'json': self.jsonFileName},
                         timeout=3 * 60 * 60
                         )
@@ -5109,7 +5110,7 @@ Ran 1316 tests of 1318 with 1316 successful
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'python3 Tools/Scripts/run-wpe-tests --release --json-output={self.jsonFileName} > logs.txt 2>&1 ; grep "Ran " logs.txt'],
+                        command=['/bin/sh', '-c', f'python3 Tools/Scripts/run-wpe-tests --release --json-output={self.jsonFileName} > logs.txt 2>&1 ; grep "Ran " logs.txt'],
                         logfiles={'json': self.jsonFileName},
                         timeout=3 * 60 * 60
                         )
@@ -5143,7 +5144,7 @@ Ran 1316 tests of 1318 with 1316 successful
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'python3 Tools/Scripts/run-api-tests --no-build --debug --verbose --json-output={self.jsonFileName} > logs.txt 2>&1 ; grep "Ran " logs.txt'],
+                        command=['/bin/sh', '-c', f'python3 Tools/Scripts/run-api-tests --no-build --debug --verbose --json-output={self.jsonFileName} > logs.txt 2>&1 ; grep "Ran " logs.txt'],
                         logfiles={'json': self.jsonFileName},
                         timeout=3 * 60 * 60
                         )
@@ -5186,7 +5187,7 @@ Testing completed, Exit status: 3
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'python3 Tools/Scripts/run-api-tests --no-build --debug --verbose --json-output={self.jsonFileName} > logs.txt 2>&1 ; grep "Ran " logs.txt'],
+                        command=['/bin/sh', '-c', f'python3 Tools/Scripts/run-api-tests --no-build --debug --verbose --json-output={self.jsonFileName} > logs.txt 2>&1 ; grep "Ran " logs.txt'],
                         logfiles={'json': self.jsonFileName},
                         timeout=3 * 60 * 60
                         )
@@ -5243,7 +5244,7 @@ Testing completed, Exit status: 3
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'python3 Tools/Scripts/run-api-tests --no-build --debug --verbose --json-output={self.jsonFileName} > logs.txt 2>&1 ; grep "Ran " logs.txt'],
+                        command=['/bin/sh', '-c', f'python3 Tools/Scripts/run-api-tests --no-build --debug --verbose --json-output={self.jsonFileName} > logs.txt 2>&1 ; grep "Ran " logs.txt'],
                         logfiles={'json': self.jsonFileName},
                         timeout=3 * 60 * 60
                         )
@@ -5262,7 +5263,7 @@ Testing completed, Exit status: 3
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'python3 Tools/Scripts/run-api-tests --no-build --debug --verbose --json-output={self.jsonFileName} > logs.txt 2>&1 ; grep "Ran " logs.txt'],
+                        command=['/bin/sh', '-c', f'python3 Tools/Scripts/run-api-tests --no-build --debug --verbose --json-output={self.jsonFileName} > logs.txt 2>&1 ; grep "Ran " logs.txt'],
                         logfiles={'json': self.jsonFileName},
                         timeout=3 * 60 * 60
                         )
@@ -5305,7 +5306,7 @@ class TestRunAPITestsWithoutChange(BuildStepMixinAdditions, unittest.TestCase):
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'python3 Tools/Scripts/run-api-tests --no-build --release --verbose --json-output={self.jsonFileName} > logs.txt 2>&1 ; grep "Ran " logs.txt'],
+                        command=['/bin/sh', '-c', f'python3 Tools/Scripts/run-api-tests --no-build --release --verbose --json-output={self.jsonFileName} > logs.txt 2>&1 ; grep "Ran " logs.txt'],
                         logfiles={'json': self.jsonFileName},
                         timeout=3 * 60 * 60
                         )
@@ -5337,7 +5338,7 @@ All tests successfully passed!
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'python3 Tools/Scripts/run-api-tests --no-build --debug --verbose --json-output={self.jsonFileName} > logs.txt 2>&1 ; grep "Ran " logs.txt'],
+                        command=['/bin/sh', '-c', f'python3 Tools/Scripts/run-api-tests --no-build --debug --verbose --json-output={self.jsonFileName} > logs.txt 2>&1 ; grep "Ran " logs.txt'],
                         logfiles={'json': self.jsonFileName},
                         timeout=3 * 60 * 60
                         )
@@ -5383,7 +5384,7 @@ Testing completed, Exit status: 3
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'python3 Tools/Scripts/run-gtk-tests --debug --json-output={self.jsonFileName} > logs.txt 2>&1 ; grep "Ran " logs.txt'],
+                        command=['/bin/sh', '-c', f'python3 Tools/Scripts/run-gtk-tests --debug --json-output={self.jsonFileName} > logs.txt 2>&1 ; grep "Ran " logs.txt'],
                         logfiles={'json': self.jsonFileName},
                         timeout=3 * 60 * 60
                         )
@@ -5425,7 +5426,7 @@ Ran 1296 tests of 1298 with 1293 successful
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', f'python3 Tools/Scripts/run-wpe-tests --debug --json-output={self.jsonFileName} > logs.txt 2>&1 ; grep "Ran " logs.txt'],
+                        command=['/bin/sh', '-c', f'python3 Tools/Scripts/run-wpe-tests --debug --json-output={self.jsonFileName} > logs.txt 2>&1 ; grep "Ran " logs.txt'],
                         logfiles={'json': self.jsonFileName},
                         timeout=3 * 60 * 60
                         )
@@ -5641,107 +5642,110 @@ class TestPrintConfiguration(BuildStepMixinAdditions, unittest.TestCase):
     def tearDown(self):
         return self.tearDownBuildStep()
 
-        def test_success_mac(self):
-            self.setupStep(PrintConfiguration())
-            self.setProperty('buildername', 'macOS-Monterey-Release-WK2-Tests-EWS')
-            self.setProperty('platform', 'mac-monterey')
+    def test_success_mac(self):
+        self.setupStep(PrintConfiguration())
+        self.setProperty('buildername', 'macOS-Monterey-Release-WK2-Tests-EWS')
+        self.setProperty('platform', 'mac-monterey')
 
-            self.expectRemoteCommands(
-                ExpectShell(command=['hostname'], workdir='wkdir', timeout=60, logEnviron=False) + 0
-                + ExpectShell.log('stdio', stdout='ews150.apple.com'),
-                ExpectShell(command=['df', '-hl'], workdir='wkdir', timeout=60, logEnviron=False) + 0
-                + ExpectShell.log('stdio', stdout='''Filesystem     Size   Used  Avail Capacity iused  ifree %iused  Mounted on
-    /dev/disk1s1  119Gi   95Gi   23Gi    81%  937959 9223372036853837848    0%   /
-    /dev/disk1s4  119Gi   20Ki   23Gi     1%       0 9223372036854775807    0%   /private/var/vm
-    /dev/disk0s3  119Gi   22Gi   97Gi    19%  337595          4294629684    0%   /Volumes/Data'''),
-                ExpectShell(command=['date'], workdir='wkdir', timeout=60, logEnviron=False) + 0
-                + ExpectShell.log('stdio', stdout='Tue Apr  9 15:30:52 PDT 2019'),
-                ExpectShell(command=['sw_vers'], workdir='wkdir', timeout=60, logEnviron=False) + 0
-                + ExpectShell.log('stdio', stdout='''ProductName:	macOS
-    ProductVersion:	12.0.1
-    BuildVersion:	21A558'''),
-                ExpectShell(command=['system_profiler', 'SPSoftwareDataType', 'SPHardwareDataType'], workdir='wkdir', timeout=60, logEnviron=False) + 0
-                + ExpectShell.log('stdio', stdout='Configuration version: Software: System Software Overview: System Version: macOS 11.4 (20F71) Kernel Version: Darwin 20.5.0 Boot Volume: Macintosh HD Boot Mode: Normal Computer Name: bot1020 User Name: WebKit Build Worker (buildbot) Secure Virtual Memory: Enabled System Integrity Protection: Enabled Time since boot: 27 seconds Hardware: Hardware Overview: Model Name: Mac mini Model Identifier: Macmini8,1 Processor Name: 6-Core Intel Core i7 Processor Speed: 3.2 GHz Number of Processors: 1 Total Number of Cores: 6 L2 Cache (per Core): 256 KB L3 Cache: 12 MB Hyper-Threading Technology: Enabled Memory: 32 GB System Firmware Version: 1554.120.19.0.0 (iBridge: 18.16.14663.0.0,0) Serial Number (system): C07DXXXXXXXX Hardware UUID: F724DE6E-706A-5A54-8D16-000000000000 Provisioning UDID: E724DE6E-006A-5A54-8D16-000000000000 Activation Lock Status: Disabled Xcode 12.5 Build version 12E262'),
-                ExpectShell(command=['xcodebuild', '-sdk', '-version'], workdir='wkdir', timeout=60, logEnviron=False)
-                + ExpectShell.log('stdio', stdout='''MacOSX12.0.sdk - macOS 12.0 (macosx12.0)
-    SDKVersion: 12.0
-    Path: /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX12.0.sdk
-    PlatformVersion: 12.0
-    PlatformPath: /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform
-    ProductBuildVersion: 21A344
-    ProductCopyright: 1983-2021 Apple Inc.
-    ProductName: macOS
-    ProductUserVisibleVersion: 12.0
-    ProductVersion: 12.0
-    iOSSupportVersion: 15.0
+        self.expectRemoteCommands(
+            ExpectShell(command=['hostname'], workdir='wkdir', timeout=60, logEnviron=False) + 0
+            + ExpectShell.log('stdio', stdout='ews150.apple.com'),
+            ExpectShell(command=['df', '-hl'], workdir='wkdir', timeout=60, logEnviron=False) + 0
+            + ExpectShell.log('stdio', stdout='''Filesystem     Size   Used  Avail Capacity iused  ifree %iused  Mounted on
+/dev/disk1s1  119Gi   95Gi   23Gi    81%  937959 9223372036853837848    0%   /
+/dev/disk1s4  119Gi   20Ki   23Gi     1%       0 9223372036854775807    0%   /private/var/vm
+/dev/disk0s3  119Gi   22Gi   97Gi    19%  337595          4294629684    0%   /Volumes/Data'''),
+            ExpectShell(command=['date'], workdir='wkdir', timeout=60, logEnviron=False) + 0
+            + ExpectShell.log('stdio', stdout='Tue Apr  9 15:30:52 PDT 2019'),
+            ExpectShell(command=['sw_vers'], workdir='wkdir', timeout=60, logEnviron=False) + 0
+            + ExpectShell.log('stdio', stdout='''ProductName:	macOS
+ProductVersion:	12.0.1
+BuildVersion:	21A558'''),
+            ExpectShell(command=['system_profiler', 'SPSoftwareDataType', 'SPHardwareDataType'], workdir='wkdir', timeout=60, logEnviron=False) + 0
+            + ExpectShell.log('stdio', stdout='Configuration version: Software: System Software Overview: System Version: macOS 11.4 (20F71) Kernel Version: Darwin 20.5.0 Boot Volume: Macintosh HD Boot Mode: Normal Computer Name: bot1020 User Name: WebKit Build Worker (buildbot) Secure Virtual Memory: Enabled System Integrity Protection: Enabled Time since boot: 27 seconds Hardware: Hardware Overview: Model Name: Mac mini Model Identifier: Macmini8,1 Processor Name: 6-Core Intel Core i7 Processor Speed: 3.2 GHz Number of Processors: 1 Total Number of Cores: 6 L2 Cache (per Core): 256 KB L3 Cache: 12 MB Hyper-Threading Technology: Enabled Memory: 32 GB System Firmware Version: 1554.120.19.0.0 (iBridge: 18.16.14663.0.0,0) Serial Number (system): C07DXXXXXXXX Hardware UUID: F724DE6E-706A-5A54-8D16-000000000000 Provisioning UDID: E724DE6E-006A-5A54-8D16-000000000000 Activation Lock Status: Disabled Xcode 12.5 Build version 12E262'),
+            ExpectShell(command=['/bin/sh', '-c', 'echo TimezoneVers: $(cat /usr/share/zoneinfo/+VERSION)'], workdir='wkdir', timeout=60, logEnviron=False) + 0,
+            ExpectShell(command=['xcodebuild', '-sdk', '-version'], workdir='wkdir', timeout=60, logEnviron=False)
+            + ExpectShell.log('stdio', stdout='''MacOSX12.0.sdk - macOS 12.0 (macosx12.0)
+SDKVersion: 12.0
+Path: /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX12.0.sdk
+PlatformVersion: 12.0
+PlatformPath: /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform
+ProductBuildVersion: 21A344
+ProductCopyright: 1983-2021 Apple Inc.
+ProductName: macOS
+ProductUserVisibleVersion: 12.0
+ProductVersion: 12.0
+iOSSupportVersion: 15.0
 
-    Xcode 13.1
-    Build version 13A1030d''')
-                + 0,
-            )
-            self.expectOutcome(result=SUCCESS, state_string='OS: Monterey (12.0.1), Xcode: 13.1')
-            return self.runStep()
+Xcode 13.1
+Build version 13A1030d''')
+            + 0,
+        )
+        self.expectOutcome(result=SUCCESS, state_string='OS: Monterey (12.0.1), Xcode: 13.1')
+        return self.runStep()
 
-        def test_success_ios_simulator(self):
-            self.setupStep(PrintConfiguration())
-            self.setProperty('buildername', 'Apple-iOS-15-Simulator-Release-WK2-Tests')
-            self.setProperty('platform', 'ios-simulator-15')
+    def test_success_ios_simulator(self):
+        self.setupStep(PrintConfiguration())
+        self.setProperty('buildername', 'Apple-iOS-15-Simulator-Release-WK2-Tests')
+        self.setProperty('platform', 'ios-simulator-15')
 
-            self.expectRemoteCommands(
-                ExpectShell(command=['hostname'], workdir='wkdir', timeout=60, logEnviron=False) + 0
-                + ExpectShell.log('stdio', stdout='ews152.apple.com'),
-                ExpectShell(command=['df', '-hl'], workdir='wkdir', timeout=60, logEnviron=False) + 0
-                + ExpectShell.log('stdio', stdout='''Filesystem     Size   Used  Avail Capacity iused  ifree %iused  Mounted on
-    /dev/disk1s1  119Gi   95Gi   23Gi    81%  937959 9223372036853837848    0%   /
-    /dev/disk1s4  119Gi   20Ki   23Gi     1%       0 9223372036854775807    0%   /private/var/vm
-    /dev/disk0s3  119Gi   22Gi   97Gi    19%  337595          4294629684    0%   /Volumes/Data'''),
-                ExpectShell(command=['date'], workdir='wkdir', timeout=60, logEnviron=False) + 0
-                + ExpectShell.log('stdio', stdout='Tue Apr  9 15:30:52 PDT 2019'),
-                ExpectShell(command=['sw_vers'], workdir='wkdir', timeout=60, logEnviron=False) + 0
-                + ExpectShell.log('stdio', stdout='''ProductName:	macOS
-    ProductVersion:	11.6
-    BuildVersion:	20G165'''),
-                ExpectShell(command=['system_profiler', 'SPSoftwareDataType', 'SPHardwareDataType'], workdir='wkdir', timeout=60, logEnviron=False) + 0
-                + ExpectShell.log('stdio', stdout='Sample system information'),
-                ExpectShell(command=['xcodebuild', '-sdk', '-version'], workdir='wkdir', timeout=60, logEnviron=False)
-                + ExpectShell.log('stdio', stdout='''iPhoneSimulator15.0.sdk - Simulator - iOS 15.0 (iphonesimulator15.0)
-    SDKVersion: 15.0
-    Path: /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator15.0.sdk
-    PlatformVersion: 15.0
-    PlatformPath: /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform
-    BuildID: 84856584-0587-11EC-B99C-6807972BB3D4
-    ProductBuildVersion: 19A339
-    ProductCopyright: 1983-2021 Apple Inc.
-    ProductName: iPhone OS
-    ProductVersion: 15.0
+        self.expectRemoteCommands(
+            ExpectShell(command=['hostname'], workdir='wkdir', timeout=60, logEnviron=False) + 0
+            + ExpectShell.log('stdio', stdout='ews152.apple.com'),
+            ExpectShell(command=['df', '-hl'], workdir='wkdir', timeout=60, logEnviron=False) + 0
+            + ExpectShell.log('stdio', stdout='''Filesystem     Size   Used  Avail Capacity iused  ifree %iused  Mounted on
+/dev/disk1s1  119Gi   95Gi   23Gi    81%  937959 9223372036853837848    0%   /
+/dev/disk1s4  119Gi   20Ki   23Gi     1%       0 9223372036854775807    0%   /private/var/vm
+/dev/disk0s3  119Gi   22Gi   97Gi    19%  337595          4294629684    0%   /Volumes/Data'''),
+            ExpectShell(command=['date'], workdir='wkdir', timeout=60, logEnviron=False) + 0
+            + ExpectShell.log('stdio', stdout='Tue Apr  9 15:30:52 PDT 2019'),
+            ExpectShell(command=['sw_vers'], workdir='wkdir', timeout=60, logEnviron=False) + 0
+            + ExpectShell.log('stdio', stdout='''ProductName:	macOS
+ProductVersion:	11.6
+BuildVersion:	20G165'''),
+            ExpectShell(command=['system_profiler', 'SPSoftwareDataType', 'SPHardwareDataType'], workdir='wkdir', timeout=60, logEnviron=False) + 0
+            + ExpectShell.log('stdio', stdout='Sample system information'),
+            ExpectShell(command=['/bin/sh', '-c', 'echo TimezoneVers: $(cat /usr/share/zoneinfo/+VERSION)'], workdir='wkdir', timeout=60, logEnviron=False) + 0,
+            ExpectShell(command=['xcodebuild', '-sdk', '-version'], workdir='wkdir', timeout=60, logEnviron=False)
+            + ExpectShell.log('stdio', stdout='''iPhoneSimulator15.0.sdk - Simulator - iOS 15.0 (iphonesimulator15.0)
+SDKVersion: 15.0
+Path: /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator15.0.sdk
+PlatformVersion: 15.0
+PlatformPath: /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform
+BuildID: 84856584-0587-11EC-B99C-6807972BB3D4
+ProductBuildVersion: 19A339
+ProductCopyright: 1983-2021 Apple Inc.
+ProductName: iPhone OS
+ProductVersion: 15.0
 
-    Xcode 13.0
-    Build version 13A233''')
-                + 0,
-            )
-            self.expectOutcome(result=SUCCESS, state_string='OS: Big Sur (11.6), Xcode: 13.0')
-            return self.runStep()
+Xcode 13.0
+Build version 13A233''')
+            + 0,
+        )
+        self.expectOutcome(result=SUCCESS, state_string='OS: Big Sur (11.6), Xcode: 13.0')
+        return self.runStep()
 
-        def test_success_webkitpy(self):
-            self.setupStep(PrintConfiguration())
-            self.setProperty('platform', '*')
+    def test_success_webkitpy(self):
+        self.setupStep(PrintConfiguration())
+        self.setProperty('platform', '*')
 
-            self.expectRemoteCommands(
-                ExpectShell(command=['hostname'], workdir='wkdir', timeout=60, logEnviron=False) + 0,
-                ExpectShell(command=['df', '-hl'], workdir='wkdir', timeout=60, logEnviron=False) + 0,
-                ExpectShell(command=['date'], workdir='wkdir', timeout=60, logEnviron=False) + 0,
-                ExpectShell(command=['sw_vers'], workdir='wkdir', timeout=60, logEnviron=False) + 0
-                + ExpectShell.log('stdio', stdout='''ProductName:	macOS
-    ProductVersion:	11.6
-    BuildVersion:	20G165'''),
-                ExpectShell(command=['system_profiler', 'SPSoftwareDataType', 'SPHardwareDataType'], workdir='wkdir', timeout=60, logEnviron=False) + 0
-                + ExpectShell.log('stdio', stdout='Sample system information'),
-                ExpectShell(command=['xcodebuild', '-sdk', '-version'], workdir='wkdir', timeout=60,
-                            logEnviron=False) + 0
-                + ExpectShell.log('stdio', stdout='''Xcode 13.0\nBuild version 13A233'''),
-            )
-            self.expectOutcome(result=SUCCESS, state_string='OS: Big Sur (11.6), Xcode: 13.0')
-            return self.runStep()
+        self.expectRemoteCommands(
+            ExpectShell(command=['hostname'], workdir='wkdir', timeout=60, logEnviron=False) + 0,
+            ExpectShell(command=['df', '-hl'], workdir='wkdir', timeout=60, logEnviron=False) + 0,
+            ExpectShell(command=['date'], workdir='wkdir', timeout=60, logEnviron=False) + 0,
+            ExpectShell(command=['sw_vers'], workdir='wkdir', timeout=60, logEnviron=False) + 0
+            + ExpectShell.log('stdio', stdout='''ProductName:	macOS
+ProductVersion:	11.6
+BuildVersion:	20G165'''),
+            ExpectShell(command=['system_profiler', 'SPSoftwareDataType', 'SPHardwareDataType'], workdir='wkdir', timeout=60, logEnviron=False) + 0
+            + ExpectShell.log('stdio', stdout='Sample system information'),
+            ExpectShell(command=['/bin/sh', '-c', 'echo TimezoneVers: $(cat /usr/share/zoneinfo/+VERSION)'], workdir='wkdir', timeout=60, logEnviron=False) + 0,
+            ExpectShell(command=['xcodebuild', '-sdk', '-version'], workdir='wkdir', timeout=60,
+                        logEnviron=False) + 0
+            + ExpectShell.log('stdio', stdout='''Xcode 13.0\nBuild version 13A233'''),
+        )
+        self.expectOutcome(result=SUCCESS, state_string='OS: Big Sur (11.6), Xcode: 13.0')
+        return self.runStep()
 
     def test_success_linux_wpe(self):
         self.setupStep(PrintConfiguration())
@@ -5829,13 +5833,13 @@ class TestCleanGitRepo(BuildStepMixinAdditions, unittest.TestCase):
         self.setProperty('buildername', 'Style-EWS')
 
         self.expectRemoteCommands(
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', 'rm -f .git/gc.log || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', 'rm -f .git/gc.log || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', 'git rebase --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', 'git rebase --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', 'git am --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', 'git am --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', 'git cherry-pick --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', 'git cherry-pick --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
             ExpectShell(command=['git', 'clean', '-f', '-d'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
@@ -5845,9 +5849,9 @@ class TestCleanGitRepo(BuildStepMixinAdditions, unittest.TestCase):
             + ExpectShell.log('stdio', stdout='Deleted branch main (was 57015967fef9).'),
             ExpectShell(command=['git', 'branch', 'main'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout="Switched to a new branch 'main'"),
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', "git branch | grep -v ' main$' | grep -v 'HEAD detached at' | xargs git branch -D || true"], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', "git branch | grep -v ' main$' | grep -v 'HEAD detached at' | xargs git branch -D || true"], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', "git remote | grep -v 'origin$' | xargs -L 1 git remote rm || true"], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', "git remote | grep -v 'origin$' | xargs -L 1 git remote rm || true"], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
             ExpectShell(command=['git', 'prune'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
@@ -5861,13 +5865,13 @@ class TestCleanGitRepo(BuildStepMixinAdditions, unittest.TestCase):
         self.setProperty('platform', 'wincairo')
 
         self.expectRemoteCommands(
-            ExpectShell(command=['sh', '-o', 'pipefail', '-c', r'del .git\gc.log || exit 0'], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['sh', '-c', r'del .git\gc.log || exit 0'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
-            ExpectShell(command=['sh', '-o', 'pipefail', '-c', 'git rebase --abort || exit 0'], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['sh', '-c', 'git rebase --abort || exit 0'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
-            ExpectShell(command=['sh', '-o', 'pipefail', '-c', 'git am --abort || exit 0'], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['sh', '-c', 'git am --abort || exit 0'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
-            ExpectShell(command=['sh', '-o', 'pipefail', '-c', 'git cherry-pick --abort || exit 0'], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['sh', '-c', 'git cherry-pick --abort || exit 0'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
             ExpectShell(command=['git', 'clean', '-f', '-d'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
@@ -5877,9 +5881,9 @@ class TestCleanGitRepo(BuildStepMixinAdditions, unittest.TestCase):
             + ExpectShell.log('stdio', stdout='Deleted branch main (was 57015967fef9).'),
             ExpectShell(command=['git', 'branch', 'main'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout="Switched to a new branch 'main'"),
-            ExpectShell(command=['sh', '-o', 'pipefail', '-c', "git branch | grep -v ' main$' | grep -v 'HEAD detached at' | xargs git branch -D || exit 0"], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['sh', '-c', "git branch | grep -v ' main$' | grep -v 'HEAD detached at' | xargs git branch -D || exit 0"], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
-            ExpectShell(command=['sh', '-o', 'pipefail', '-c', "git remote | grep -v 'origin$' | xargs -L 1 git remote rm || exit 0"], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['sh', '-c', "git remote | grep -v 'origin$' | xargs -L 1 git remote rm || exit 0"], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
             ExpectShell(command=['git', 'prune'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
@@ -5892,13 +5896,13 @@ class TestCleanGitRepo(BuildStepMixinAdditions, unittest.TestCase):
         self.setProperty('buildername', 'Commit-Queue')
 
         self.expectRemoteCommands(
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', 'rm -f .git/gc.log || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', 'rm -f .git/gc.log || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', 'git rebase --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', 'git rebase --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', 'git am --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', 'git am --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', 'git cherry-pick --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', 'git cherry-pick --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
             ExpectShell(command=['git', 'clean', '-f', '-d'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
@@ -5908,9 +5912,9 @@ class TestCleanGitRepo(BuildStepMixinAdditions, unittest.TestCase):
             + ExpectShell.log('stdio', stdout='Deleted branch master (was 57015967fef9).'),
             ExpectShell(command=['git', 'branch', 'master'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout="Switched to a new branch 'master'"),
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', "git branch | grep -v ' master$' | grep -v 'HEAD detached at' | xargs git branch -D || true"], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', "git branch | grep -v ' master$' | grep -v 'HEAD detached at' | xargs git branch -D || true"], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', "git remote | grep -v 'origin$' | xargs -L 1 git remote rm || true"], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', "git remote | grep -v 'origin$' | xargs -L 1 git remote rm || true"], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
             ExpectShell(command=['git', 'prune'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
@@ -5923,13 +5927,13 @@ class TestCleanGitRepo(BuildStepMixinAdditions, unittest.TestCase):
         self.setProperty('buildername', 'Commit-Queue')
 
         self.expectRemoteCommands(
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', 'rm -f .git/gc.log || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', 'rm -f .git/gc.log || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', 'git rebase --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', 'git rebase --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', 'git am --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', 'git am --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', 'git cherry-pick --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', 'git cherry-pick --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
             ExpectShell(command=['git', 'clean', '-f', '-d'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
@@ -5939,9 +5943,9 @@ class TestCleanGitRepo(BuildStepMixinAdditions, unittest.TestCase):
             + ExpectShell.log('stdio', stdout='Deleted branch main (was 57015967fef9).'),
             ExpectShell(command=['git', 'branch', 'main'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout="Switched to a new branch 'main'"),
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', "git branch | grep -v ' main$' | grep -v 'HEAD detached at' | xargs git branch -D || true"], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', "git branch | grep -v ' main$' | grep -v 'HEAD detached at' | xargs git branch -D || true"], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', "git remote | grep -v 'origin$' | xargs -L 1 git remote rm || true"], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', "git remote | grep -v 'origin$' | xargs -L 1 git remote rm || true"], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
             ExpectShell(command=['git', 'prune'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
@@ -5955,13 +5959,13 @@ class TestCleanGitRepo(BuildStepMixinAdditions, unittest.TestCase):
         self.setProperty('basename', 'safari-612-branch')
 
         self.expectRemoteCommands(
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', 'rm -f .git/gc.log || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', 'rm -f .git/gc.log || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', 'git rebase --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', 'git rebase --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', 'git am --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', 'git am --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', 'git cherry-pick --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', 'git cherry-pick --abort || true'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
             ExpectShell(command=['git', 'clean', '-f', '-d'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
@@ -5971,9 +5975,9 @@ class TestCleanGitRepo(BuildStepMixinAdditions, unittest.TestCase):
             + ExpectShell.log('stdio', stdout='Deleted branch main (was 57015967fef9).'),
             ExpectShell(command=['git', 'branch', 'main'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout="Switched to a new branch 'main'"),
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', "git branch | grep -v ' main$' | grep -v 'HEAD detached at' | xargs git branch -D || true"], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', "git branch | grep -v ' main$' | grep -v 'HEAD detached at' | xargs git branch -D || true"], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
-            ExpectShell(command=['/bin/sh', '-o', 'pipefail', '-c', "git remote | grep -v 'origin$' | xargs -L 1 git remote rm || true"], workdir='wkdir', timeout=300, logEnviron=False) + 0
+            ExpectShell(command=['/bin/sh', '-c', "git remote | grep -v 'origin$' | xargs -L 1 git remote rm || true"], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
             ExpectShell(command=['git', 'prune'], workdir='wkdir', timeout=300, logEnviron=False) + 0
             + ExpectShell.log('stdio', stdout=''),
@@ -6531,7 +6535,7 @@ class TestValidateCommitterAndReviewer(BuildStepMixinAdditions, unittest.TestCas
         self.assertEqual(ValidateCommitterAndReviewer.haltOnFailure, False)
         self.expectOutcome(result=SUCCESS, state_string='Validated committer and reviewer')
         rc = self.runStep()
-        self.assertEqual(self.getProperty('reviewers_full_names'), ['WebKit Reviewer'])
+        self.assertEqual(self.getProperty('valid_reviewers'), ['WebKit Reviewer'])
         return rc
 
     def test_success_pr(self):
@@ -6543,7 +6547,7 @@ class TestValidateCommitterAndReviewer(BuildStepMixinAdditions, unittest.TestCas
         self.assertEqual(ValidateCommitterAndReviewer.haltOnFailure, False)
         self.expectOutcome(result=SUCCESS, state_string='Validated committer and reviewer')
         rc = self.runStep()
-        self.assertEqual(self.getProperty('reviewers_full_names'), ['WebKit Reviewer'])
+        self.assertEqual(self.getProperty('valid_reviewers'), ['WebKit Reviewer'])
         return rc
 
     def test_success_pr_duplicate(self):
@@ -6555,7 +6559,7 @@ class TestValidateCommitterAndReviewer(BuildStepMixinAdditions, unittest.TestCas
         self.assertEqual(ValidateCommitterAndReviewer.haltOnFailure, False)
         self.expectOutcome(result=SUCCESS, state_string='Validated committer and reviewer')
         rc = self.runStep()
-        self.assertEqual(self.getProperty('reviewers_full_names'), ['WebKit Reviewer'])
+        self.assertEqual(self.getProperty('valid_reviewers'), ['WebKit Reviewer'])
         return rc
 
     def test_success_no_reviewer_patch(self):
@@ -6563,7 +6567,7 @@ class TestValidateCommitterAndReviewer(BuildStepMixinAdditions, unittest.TestCas
         self.setProperty('patch_id', '1234')
         self.setProperty('patch_committer', 'reviewer@apple.com')
         self.expectHidden(False)
-        self.expectOutcome(result=SUCCESS, state_string='Validated committer, reviewer not found')
+        self.expectOutcome(result=SUCCESS, state_string='Validated committer, valid reviewer not found')
         return self.runStep()
 
     def test_success_no_reviewer_pr(self):
@@ -6572,7 +6576,7 @@ class TestValidateCommitterAndReviewer(BuildStepMixinAdditions, unittest.TestCas
         self.setProperty('github.number', '1234')
         self.setProperty('owners', ['webkit-reviewer'])
         self.expectHidden(False)
-        self.expectOutcome(result=SUCCESS, state_string='Validated committer, reviewer not found')
+        self.expectOutcome(result=SUCCESS, state_string='Validated committer, valid reviewer not found')
         return self.runStep()
 
     def test_failure_load_contributors_patch(self):
@@ -6609,23 +6613,29 @@ class TestValidateCommitterAndReviewer(BuildStepMixinAdditions, unittest.TestCas
         self.expectOutcome(result=FAILURE, state_string='abc does not have committer permissions')
         return self.runStep()
 
-    def test_failure_invalid_reviewer_patch(self):
+    def test_success_invalid_reviewer_patch(self):
         self.setupStep(ValidateCommitterAndReviewer())
         self.setProperty('patch_id', '1234')
         self.setProperty('patch_committer', 'reviewer@apple.com')
         self.setProperty('reviewer', 'committer@webkit.org')
         self.expectHidden(False)
-        self.expectOutcome(result=FAILURE, state_string='committer@webkit.org does not have reviewer permissions')
-        return self.runStep()
+        self.expectOutcome(result=SUCCESS, state_string='Validated committer, valid reviewer not found')
+        rc = self.runStep()
+        self.assertEqual(self.getProperty('valid_reviewers'), [])
+        self.assertEqual(self.getProperty('invalid_reviewers'), ['WebKit Committer'])
+        return rc
 
-    def test_failure_invalid_reviewer_pr(self):
+    def test_success_invalid_reviewer_pr(self):
         self.setupStep(ValidateCommitterAndReviewer())
         ValidateCommitterAndReviewer.get_reviewers = lambda x, pull_request, repository_url=None: ['webkit-commit-queue']
         self.setProperty('github.number', '1234')
         self.setProperty('owners', ['webkit-reviewer'])
         self.expectHidden(False)
-        self.expectOutcome(result=FAILURE, state_string='webkit-commit-queue does not have reviewer permissions')
-        return self.runStep()
+        self.expectOutcome(result=SUCCESS, state_string='Validated committer, valid reviewer not found')
+        rc = self.runStep()
+        self.assertEqual(self.getProperty('valid_reviewers'), [])
+        self.assertEqual(self.getProperty('invalid_reviewers'), ['WebKit Committer'])
+        return rc
 
     def test_load_contributors_from_disk(self):
         contributors = filter(lambda element: element.get('name') == 'Aakash Jain', Contributors().load_from_disk()[0])
@@ -6641,7 +6651,7 @@ class TestValidateCommitterAndReviewer(BuildStepMixinAdditions, unittest.TestCas
         self.assertEqual(ValidateCommitterAndReviewer.haltOnFailure, False)
         self.expectOutcome(result=SUCCESS, state_string='Validated committer and reviewer')
         rc = self.runStep()
-        self.assertEqual(self.getProperty('reviewers_full_names'), ['WebKit Reviewer'])
+        self.assertEqual(self.getProperty('valid_reviewers'), ['WebKit Reviewer'])
         return rc
 
     def test_success_pr_validators_case(self):
@@ -6654,7 +6664,7 @@ class TestValidateCommitterAndReviewer(BuildStepMixinAdditions, unittest.TestCas
         self.assertEqual(ValidateCommitterAndReviewer.haltOnFailure, False)
         self.expectOutcome(result=SUCCESS, state_string='Validated committer and reviewer')
         rc = self.runStep()
-        self.assertEqual(self.getProperty('reviewers_full_names'), ['WebKit Reviewer'])
+        self.assertEqual(self.getProperty('valid_reviewers'), ['WebKit Reviewer'])
         return rc
 
     def test_success_pr_validators_not_reviewer(self):
@@ -6665,9 +6675,9 @@ class TestValidateCommitterAndReviewer(BuildStepMixinAdditions, unittest.TestCas
         self.setProperty('remote', 'apple')
         self.expectHidden(False)
         self.assertEqual(ValidateCommitterAndReviewer.haltOnFailure, False)
-        self.expectOutcome(result=SUCCESS, state_string='Validated committer, reviewer not found')
+        self.expectOutcome(result=SUCCESS, state_string='Validated committer, valid reviewer not found')
         rc = self.runStep()
-        self.assertEqual(self.getProperty('reviewers_full_names'), None)
+        self.assertEqual(self.getProperty('valid_reviewers'), [])
         return rc
 
     def test_success_no_pr_validators(self):
@@ -6680,7 +6690,7 @@ class TestValidateCommitterAndReviewer(BuildStepMixinAdditions, unittest.TestCas
         self.assertEqual(ValidateCommitterAndReviewer.haltOnFailure, False)
         self.expectOutcome(result=SUCCESS, state_string='Validated committer and reviewer')
         rc = self.runStep()
-        self.assertEqual(self.getProperty('reviewers_full_names'), ['WebKit Reviewer'])
+        self.assertEqual(self.getProperty('valid_reviewers'), ['WebKit Reviewer'])
         return rc
 
     def test_failure_pr_validators(self):
@@ -7521,7 +7531,7 @@ class TestFetchBranches(BuildStepMixinAdditions, unittest.TestCase):
                 timeout=300,
                 logEnviron=False,
                 env=env,
-                command=['/bin/sh', '-o', 'pipefail', '-c', 'git remote add security https://github.com/WebKit/WebKit-security.git || true'],
+                command=['/bin/sh', '-c', 'git remote add security https://github.com/WebKit/WebKit-security.git || true'],
             ) + 0, ExpectShell(
                 workdir='wkdir',
                 timeout=300,
@@ -7952,7 +7962,7 @@ class TestAddReviewerToCommitMessage(BuildStepMixinAdditions, unittest.TestCase)
         self.setProperty('github.number', '1234')
         self.setProperty('github.base.ref', 'main')
         self.setProperty('github.head.ref', 'eng/pull-request-branch')
-        self.setProperty('reviewers_full_names', ['WebKit Reviewer', 'Other Reviewer'])
+        self.setProperty('valid_reviewers', ['WebKit Reviewer', 'Other Reviewer'])
         self.setProperty('owners', ['webkit-commit-queue'])
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
@@ -7971,6 +7981,35 @@ class TestAddReviewerToCommitMessage(BuildStepMixinAdditions, unittest.TestCase)
         self.expectOutcome(result=SUCCESS, state_string='Reviewed by WebKit Reviewer and Other Reviewer')
         return self.runStep()
 
+    def test_success_more_than_two_reviewers(self):
+        gmtoffset = int(time.localtime().tm_gmtoff * 100 / (60 * 60))
+        fixed_time = int(time.time())
+        date = f'{int(time.time())} {gmtoffset}'
+        time.time = lambda: fixed_time
+
+        self.setupStep(AddReviewerToCommitMessage())
+        self.setProperty('github.number', '1234')
+        self.setProperty('github.base.ref', 'main')
+        self.setProperty('github.head.ref', 'eng/pull-request-branch')
+        self.setProperty('valid_reviewers', ['WebKit Reviewer', 'Other Reviewer', 'Another Reviewer'])
+        self.setProperty('owners', ['webkit-commit-queue'])
+        self.expectRemoteCommands(
+            ExpectShell(workdir='wkdir',
+                        logEnviron=False,
+                        env=self.ENV,
+                        timeout=60,
+                        command=[
+                            'git', 'filter-branch', '-f',
+                            '--env-filter', "GIT_AUTHOR_DATE='{date}';GIT_COMMITTER_DATE='{date}'".format(date=date),
+                            '--msg-filter', 'sed "s/NOBODY (OO*PP*S!*)/WebKit Reviewer, Other Reviewer, and Another Reviewer/g"',
+                            'eng/pull-request-branch...main',
+                        ])
+            + 0
+            + ExpectShell.log('stdio', stdout="Ref 'refs/heads/eng/pull-request-branch' was rewritten\n"),
+        )
+        self.expectOutcome(result=SUCCESS, state_string='Reviewed by WebKit Reviewer, Other Reviewer, and Another Reviewer')
+        return self.runStep()
+
     def test_failure(self):
         gmtoffset = int(time.localtime().tm_gmtoff * 100 / (60 * 60))
         fixed_time = int(time.time())
@@ -7981,7 +8020,7 @@ class TestAddReviewerToCommitMessage(BuildStepMixinAdditions, unittest.TestCase)
         self.setProperty('github.number', '1234')
         self.setProperty('github.base.ref', 'main')
         self.setProperty('github.head.ref', 'eng/pull-request-branch')
-        self.setProperty('reviewers_full_names', ['WebKit Reviewer', 'Other Reviewer'])
+        self.setProperty('valid_reviewers', ['WebKit Reviewer', 'Other Reviewer'])
         self.setProperty('owners', ['webkit-commit-queue'])
         self.expectRemoteCommands(
             ExpectShell(workdir='wkdir',
@@ -8005,7 +8044,7 @@ class TestAddReviewerToCommitMessage(BuildStepMixinAdditions, unittest.TestCase)
         self.setProperty('github.number', '1234')
         self.setProperty('github.base.ref', 'main')
         self.setProperty('github.head.ref', 'eng/pull-request-branch')
-        self.setProperty('reviewers_full_names', [])
+        self.setProperty('valid_reviewers', [])
         self.expectOutcome(result=SKIPPED, state_string='finished (skipped)')
         return self.runStep()
 
@@ -8014,7 +8053,7 @@ class TestAddReviewerToCommitMessage(BuildStepMixinAdditions, unittest.TestCase)
         self.setProperty('github.number', '1234')
         self.setProperty('github.base.ref', 'main')
         self.setProperty('github.head.ref', 'eng/pull-request-branch')
-        self.setProperty('reviewers_full_names', ['WebKit Reviewer', 'Other Reviewer'])
+        self.setProperty('valid_reviewers', ['WebKit Reviewer', 'Other Reviewer'])
         self.setProperty('owners', ['webkit-commit-queue'])
         self.setProperty('classification', ['Cherry-pick'])
         self.expectOutcome(result=SKIPPED, state_string='finished (skipped)')
@@ -8027,17 +8066,17 @@ class TestValidateCommitMessage(BuildStepMixinAdditions, unittest.TestCase):
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
                         timeout=60,
-                        command=['/bin/sh', '-o', 'pipefail', '-c',
-                                 "git log eng/pull-request-branch ^main | grep -q 'OO*PP*S!' && echo 'Commit message contains (OOPS!) and no reviewer found' || test $? -eq 1"])
+                        command=['/bin/sh', '-c',
+                                 "git log eng/pull-request-branch ^main | grep -q 'OO*PP*S!' && echo 'Commit message contains (OOPS!) and no valid reviewer found' || test $? -eq 1"])
             + 0, ExpectShell(workdir='wkdir',
                              logEnviron=False,
                              timeout=60,
-                             command=['/bin/sh', '-o', 'pipefail', '-c',
+                             command=['/bin/sh', '-c',
                                       "git log eng/pull-request-branch ^main | grep -q '\\(Reviewed by\\|Rubber-stamped by\\|Rubber stamped by\\|Unreviewed\\|Versioning.\\)' || echo 'No reviewer information in commit message'"])
             + 0, ExpectShell(workdir='wkdir',
                              logEnviron=False,
                              timeout=60,
-                             command=['/bin/sh', '-o', 'pipefail', '-c',
+                             command=['/bin/sh', '-c',
                                       "git log eng/pull-request-branch ^main | grep '\\(Reviewed by\\|Rubber-stamped by\\|Rubber stamped by\\)' || true"])
             + 0
             + ExpectShell.log('stdio', stdout=expected_remote_command_output),
@@ -8049,6 +8088,7 @@ class TestValidateCommitMessage(BuildStepMixinAdditions, unittest.TestCase):
         return self.setUpBuildStep()
 
     def setUpCommonProperties(self):
+        self.setProperty('buildnumber', '2345')
         self.setProperty('github.number', '1234')
         self.setProperty('github.base.ref', 'main')
         self.setProperty('github.head.ref', 'eng/pull-request-branch')
@@ -8063,15 +8103,15 @@ class TestValidateCommitMessage(BuildStepMixinAdditions, unittest.TestCase):
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
                         timeout=60,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', "git log HEAD ^origin/main | grep -q 'OO*PP*S!' && echo 'Commit message contains (OOPS!) and no reviewer found' || test $? -eq 1"])
+                        command=['/bin/sh', '-c', "git log HEAD ^origin/main | grep -q 'OO*PP*S!' && echo 'Commit message contains (OOPS!) and no valid reviewer found' || test $? -eq 1"])
             + 0, ExpectShell(workdir='wkdir',
                         logEnviron=False,
                         timeout=60,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', "git log HEAD ^origin/main | grep -q '\\(Reviewed by\\|Rubber-stamped by\\|Rubber stamped by\\|Unreviewed\\|Versioning.\\)' || echo 'No reviewer information in commit message'"])
+                        command=['/bin/sh', '-c', "git log HEAD ^origin/main | grep -q '\\(Reviewed by\\|Rubber-stamped by\\|Rubber stamped by\\|Unreviewed\\|Versioning.\\)' || echo 'No reviewer information in commit message'"])
             + 0, ExpectShell(workdir='wkdir',
                         logEnviron=False,
                         timeout=60,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', "git log HEAD ^origin/main | grep '\\(Reviewed by\\|Rubber-stamped by\\|Rubber stamped by\\)' || true"])
+                        command=['/bin/sh', '-c', "git log HEAD ^origin/main | grep '\\(Reviewed by\\|Rubber-stamped by\\|Rubber stamped by\\)' || true"])
             + 0
             + ExpectShell.log('stdio', stdout='    Reviewed by WebKit Reviewer.\n'),
         )
@@ -8096,6 +8136,48 @@ class TestValidateCommitMessage(BuildStepMixinAdditions, unittest.TestCase):
         self.expectOutcome(result=SUCCESS, state_string='Validated commit message')
         return self.runStep()
 
+    def test_success_two_reviewers(self):
+        self.setupStep(ValidateCommitMessage())
+        ValidateCommitMessage._files = lambda x: ['+++ Tools/CISupport/ews-build/steps.py']
+        self.setUpCommonProperties()
+        expected_remote_command_output = '    Reviewed by WebKit Reviewer and Abrar Protyasha.\n'
+        self.expectCommonRemoteCommandsWithOutput(expected_remote_command_output)
+        self.expectOutcome(result=SUCCESS, state_string='Validated commit message')
+        return self.runStep()
+
+    def test_success_more_than_two_reviewers(self):
+        self.setupStep(ValidateCommitMessage())
+        ValidateCommitMessage._files = lambda x: ['+++ Tools/CISupport/ews-build/steps.py']
+        self.setUpCommonProperties()
+        expected_remote_command_output = '    Reviewed by WebKit Reviewer, Abrar Protyasha, and Myles C. Maxfield.\n'
+        self.expectCommonRemoteCommandsWithOutput(expected_remote_command_output)
+        self.expectOutcome(result=SUCCESS, state_string='Validated commit message')
+        return self.runStep()
+
+    def test_success_with_invalid(self):
+        self.setupStep(ValidateCommitMessage())
+        ValidateCommitMessage._files = lambda x: ['+++ Tools/CISupport/ews-build/steps.py']
+        self.setUpCommonProperties()
+        self.setProperty('invalid_reviewers', ['Web Kit'])
+        self.expectRemoteCommands(
+            ExpectShell(workdir='wkdir',
+                        logEnviron=False,
+                        timeout=60,
+                        command=['/bin/sh', '-c', "git log eng/pull-request-branch ^main | grep -q 'OO*PP*S!' && echo 'Commit message contains (OOPS!) and Web Kit is not a reviewer' || test $? -eq 1"])
+            + 0, ExpectShell(workdir='wkdir',
+                        logEnviron=False,
+                        timeout=60,
+                        command=['/bin/sh', '-c', "git log eng/pull-request-branch ^main | grep -q '\\(Reviewed by\\|Rubber-stamped by\\|Rubber stamped by\\|Unreviewed\\|Versioning.\\)' || echo 'No reviewer information in commit message'"])
+            + 0, ExpectShell(workdir='wkdir',
+                        logEnviron=False,
+                        timeout=60,
+                        command=['/bin/sh', '-c', "git log eng/pull-request-branch ^main | grep '\\(Reviewed by\\|Rubber-stamped by\\|Rubber stamped by\\)' || true"])
+            + 0
+            + ExpectShell.log('stdio', stdout='    Reviewed by Myles C. Maxfield.\n'),
+        )
+        self.expectOutcome(result=SUCCESS, state_string='Validated commit message')
+        return self.runStep()
+
     def test_failure_oops(self):
         self.setupStep(ValidateCommitMessage())
         ValidateCommitMessage._files = lambda x: ['+++ Tools/CISupport/ews-build/steps.py']
@@ -8104,14 +8186,30 @@ class TestValidateCommitMessage(BuildStepMixinAdditions, unittest.TestCase):
             ExpectShell(workdir='wkdir',
                         logEnviron=False,
                         timeout=60,
-                        command=['/bin/sh', '-o', 'pipefail', '-c', "git log eng/pull-request-branch ^main | grep -q 'OO*PP*S!' && echo 'Commit message contains (OOPS!) and no reviewer found' || test $? -eq 1"])
+                        command=['/bin/sh', '-c', "git log eng/pull-request-branch ^main | grep -q 'OO*PP*S!' && echo 'Commit message contains (OOPS!) and no valid reviewer found' || test $? -eq 1"])
             + 1
-            + ExpectShell.log('stdio', stdout='Commit message contains (OOPS!) and no reviewer found\n'),
+            + ExpectShell.log('stdio', stdout='Commit message contains (OOPS!) and no valid reviewer found\n'),
         )
-        self.expectOutcome(result=FAILURE, state_string='Commit message contains (OOPS!) and no reviewer found')
+        self.expectOutcome(result=FAILURE, state_string='Commit message contains (OOPS!) and no valid reviewer found')
         rc = self.runStep()
-        self.assertEqual(self.getProperty('comment_text'), 'Commit message contains (OOPS!) and no reviewer found, blocking PR #1234')
+        self.assertRegex(self.getProperty('comment_text'), r'Commit message contains \(OOPS!\) and no valid reviewer found, blocking PR #1234. Details: \[Build #2345\]\(http.*/#/builders/1/builds/13\)')
         return rc
+
+    def test_unoffical_reviewers(self):
+        self.setupStep(ValidateCommitMessage())
+        ValidateCommitMessage._files = lambda x: ['+++ Tools/CISupport/ews-build/steps.py']
+        self.setUpCommonProperties()
+        self.setProperty('invalid_reviewers', ['Web Kit', 'Kit Web'])
+        self.expectRemoteCommands(
+            ExpectShell(workdir='wkdir',
+                        logEnviron=False,
+                        timeout=60,
+                        command=['/bin/sh', '-c', "git log eng/pull-request-branch ^main | grep -q 'OO*PP*S!' && echo 'Commit message contains (OOPS!) and Web Kit, Kit Web are not reviewers' || test $? -eq 1"])
+            + 1
+            + ExpectShell.log('stdio', stdout='Commit message contains (OOPS!) and Web Kit, Kit Web are not reviewers\n'),
+        )
+        self.expectOutcome(result=FAILURE, state_string="Commit message contains (OOPS!) and Web Kit, Kit Web are not reviewers")
+        return self.runStep()
 
     def test_failure_multiple(self):
         self.setupStep(ValidateCommitMessage())
@@ -8120,7 +8218,7 @@ class TestValidateCommitMessage(BuildStepMixinAdditions, unittest.TestCase):
         self.expectCommonRemoteCommandsWithOutput('No reviewer information in commit message\nFailed to access https://raw.githubusercontent.com/WebKit/WebKit/main/metadata/contributors.json\n')
         self.expectOutcome(result=FAILURE, state_string='No reviewer information in commit message')
         rc = self.runStep()
-        self.assertEqual(self.getProperty('comment_text'), 'No reviewer information in commit message, blocking PR #1234')
+        self.assertRegex(self.getProperty('comment_text'), r'No reviewer information in commit message, blocking PR #1234. Details: \[Build #2345\]\(http.*/#/builders/1/builds/13\)')
         return rc
 
     def test_failure_no_reviewer(self):
@@ -8130,7 +8228,7 @@ class TestValidateCommitMessage(BuildStepMixinAdditions, unittest.TestCase):
         self.expectCommonRemoteCommandsWithOutput('No reviewer information in commit message\n')
         self.expectOutcome(result=FAILURE, state_string='No reviewer information in commit message')
         rc = self.runStep()
-        self.assertEqual(self.getProperty('comment_text'), 'No reviewer information in commit message, blocking PR #1234')
+        self.assertRegex(self.getProperty('comment_text'), r'No reviewer information in commit message, blocking PR #1234. Details: \[Build #2345\]\(http.*/#/builders/1/builds/13\)')
         return rc
 
     def test_failure_no_changelog(self):
@@ -8207,7 +8305,7 @@ class TestCanonicalize(BuildStepMixinAdditions, unittest.TestCase):
                 timeout=300,
                 logEnviron=False,
                 env=self.ENV,
-                command=['/bin/sh', '-o', 'pipefail', '-c', 'rm .git/identifiers.json || true'],
+                command=['/bin/sh', '-c', 'rm .git/identifiers.json || true'],
             ) + 0, ExpectShell(
                 workdir='wkdir',
                 timeout=300,
@@ -8259,7 +8357,7 @@ class TestCanonicalize(BuildStepMixinAdditions, unittest.TestCase):
                 timeout=300,
                 logEnviron=False,
                 env=self.ENV,
-                command=['/bin/sh', '-o', 'pipefail', '-c', 'rm .git/identifiers.json || true'],
+                command=['/bin/sh', '-c', 'rm .git/identifiers.json || true'],
             ) + 0, ExpectShell(
                 workdir='wkdir',
                 timeout=300,
@@ -8318,7 +8416,7 @@ class TestCanonicalize(BuildStepMixinAdditions, unittest.TestCase):
                 timeout=300,
                 logEnviron=False,
                 env=self.ENV,
-                command=['/bin/sh', '-o', 'pipefail', '-c', 'rm .git/identifiers.json || true'],
+                command=['/bin/sh', '-c', 'rm .git/identifiers.json || true'],
             ) + 0, ExpectShell(
                 workdir='wkdir',
                 timeout=300,
@@ -8376,7 +8474,7 @@ class TestCanonicalize(BuildStepMixinAdditions, unittest.TestCase):
                 timeout=300,
                 logEnviron=False,
                 env=self.ENV,
-                command=['/bin/sh', '-o', 'pipefail', '-c', 'rm .git/identifiers.json || true'],
+                command=['/bin/sh', '-c', 'rm .git/identifiers.json || true'],
             ) + 0, ExpectShell(
                 workdir='wkdir',
                 timeout=300,
@@ -8434,7 +8532,7 @@ class TestCanonicalize(BuildStepMixinAdditions, unittest.TestCase):
                 timeout=300,
                 logEnviron=False,
                 env=self.ENV,
-                command=['/bin/sh', '-o', 'pipefail', '-c', 'rm .git/identifiers.json || true'],
+                command=['/bin/sh', '-c', 'rm .git/identifiers.json || true'],
             ) + 0, ExpectShell(
                 workdir='wkdir',
                 timeout=300,
@@ -8469,7 +8567,7 @@ class TestCanonicalize(BuildStepMixinAdditions, unittest.TestCase):
                 timeout=300,
                 logEnviron=False,
                 env=self.ENV,
-                command=['/bin/sh', '-o', 'pipefail', '-c', 'rm .git/identifiers.json || true'],
+                command=['/bin/sh', '-c', 'rm .git/identifiers.json || true'],
             ) + 0, ExpectShell(
                 workdir='wkdir',
                 timeout=300,

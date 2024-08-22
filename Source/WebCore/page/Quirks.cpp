@@ -34,6 +34,7 @@
 #include "DocumentLoader.h"
 #include "DocumentStorageAccess.h"
 #include "ElementInlines.h"
+#include "ElementTargetingTypes.h"
 #include "EventNames.h"
 #include "FrameLoader.h"
 #include "HTMLBodyElement.h"
@@ -71,6 +72,7 @@
 #include <JavaScriptCore/SourceCode.h>
 #include <JavaScriptCore/SourceProvider.h>
 #include <JavaScriptCore/StackVisitor.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/MakeString.h>
 
 #if PLATFORM(IOS_FAMILY)
@@ -82,6 +84,8 @@
 #endif
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(Quirks);
 
 static inline OptionSet<AutoplayQuirk> allowedAutoplayQuirks(Document& document)
 {
@@ -229,19 +233,6 @@ bool Quirks::hasBrokenEncryptedMediaAPISupportQuirk() const
 
     return m_hasBrokenEncryptedMediaAPISupportQuirk.value();
 #endif
-}
-
-// covid.cdc.gov https://bugs.webkit.org/show_bug.cgi?id=223620
-bool Quirks::shouldTooltipPreventFromProceedingWithClick(const Element& element) const
-{
-    if (!needsQuirks())
-        return false;
-
-    if (!isDomain("covid.cdc.gov"_s))
-        return false;
-
-    static MainThreadNeverDestroyed<const AtomString> tooltipClass("tooltip"_s);
-    return element.hasClassName(tooltipClass.get());
 }
 
 // google.com https://bugs.webkit.org/show_bug.cgi?id=223700
@@ -1741,6 +1732,18 @@ bool Quirks::shouldPreventOrientationMediaQueryFromEvaluatingToLandscape() const
     return shouldPreventOrientationMediaQueryFromEvaluatingToLandscapeInternal(m_document->topDocument().url());
 }
 
+bool Quirks::shouldFlipScreenDimensions() const
+{
+#if ENABLE(FLIP_SCREEN_DIMENSIONS_QUIRKS)
+    if (!needsQuirks())
+        return false;
+
+    return shouldFlipScreenDimensionsInternal(m_document->topDocument().url());
+#else
+    return false;
+#endif
+}
+
 // This section is dedicated to UA override for iPad. iPads (but iPad Mini) are sending a desktop user agent
 // to websites. In some cases, the website breaks in some ways, not expecting a touch interface for the website.
 // Controls not active or too small, form factor, etc. In this case it is better to send the iPad Mini UA.
@@ -1927,5 +1930,15 @@ bool Quirks::shouldIgnoreTextAutoSizing() const
     return m_document->topDocument().url().host() == "news.ycombinator.com"_s;
 }
 #endif
+
+std::optional<TargetedElementSelectors> Quirks::defaultVisibilityAdjustmentSelectors(const URL& requestURL)
+{
+#if ENABLE(VISIBILITY_ADJUSTMENT_QUIRKS)
+    return defaultVisibilityAdjustmentSelectorsInternal(requestURL);
+#else
+    UNUSED_PARAM(requestURL);
+    return { };
+#endif
+}
 
 }

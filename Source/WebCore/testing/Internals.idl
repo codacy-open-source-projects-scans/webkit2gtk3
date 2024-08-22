@@ -551,6 +551,7 @@ enum RenderingMode {
     DOMRect absoluteLineRectFromPoint(long x, long y);
 
     DOMRect absoluteCaretBounds();
+    boolean isCaretVisible();
 
     // isCaretBlinkingSuspended() returns whether the frame selection of the context document
     // is suspended, while the parameterized method returns the state for a particular document
@@ -632,6 +633,8 @@ enum RenderingMode {
     Range? rangeForDictionaryLookupAtLocation(long x, long y);
     Range? rangeOfStringNearLocation(Range range, DOMString text, long targetOffset);
     sequence<TextIteratorState> statesOfTextIterator(Range range);
+
+    DOMString textFragmentDirectiveForRange(Range range);
 
     undefined setDelegatesScrolling(boolean enabled);
 
@@ -817,7 +820,6 @@ enum RenderingMode {
     DOMString pageProperty(DOMString propertyName, long pageNumber);
     DOMString pageSizeAndMarginsInPixels(long pageIndex, long width, long height, long marginTop, long marginRight, long marginBottom, long marginLeft);
 
-    undefined setPageScaleFactor(unrestricted float scaleFactor, long x, long y);
     float pageScaleFactor();
 
     undefined setPageZoomFactor(unrestricted float zoomFactor);
@@ -1045,6 +1047,7 @@ enum RenderingMode {
     undefined disableCORSForURL(DOMString url);
 
     File? createFile(DOMString url);
+    Promise<File> asyncCreateFile(DOMString url);
     DOMString createTemporaryFile(DOMString name, DOMString contents);
 
     undefined queueMicroTask(long testNumber);

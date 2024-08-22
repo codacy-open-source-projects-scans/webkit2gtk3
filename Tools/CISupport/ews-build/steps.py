@@ -46,8 +46,8 @@ import socket
 import sys
 import time
 
-if sys.version_info < (3, 5):
-    print('ERROR: Please use Python 3. This code is not compatible with Python 2.')
+if sys.version_info < (3, 9):
+    print('ERROR: Minimum supported Python version for this code is Python 3.9')
     sys.exit(1)
 
 custom_suffix = get_custom_suffix()
@@ -541,19 +541,10 @@ class ShellMixin(object):
     def has_windows_shell(self):
         return self.getProperty('platform', '*') in self.WINDOWS_SHELL_PLATFORMS
 
-    def shell_command(self, command, pipefail=True):
+    def shell_command(self, command):
         if self.has_windows_shell():
-            shell = 'sh'
-        else:
-            shell = '/bin/sh'
-
-        if pipefail:
-            # -o pipefail is new in POSIX 2024, but commonly `sh` is provided by `bash`
-            # or `zsh` which have long supported the `pipefail` option, even when
-            # invoked as `sh` (and in POSIX-compliant mode).
-            return [shell, '-o', 'pipefail', '-c', command]
-        else:
-            return [shell, '-c', command]
+            return ['sh', '-c', command]
+        return ['/bin/sh', '-c', command]
 
     def shell_exit_0(self):
         if self.has_windows_shell():
@@ -1430,7 +1421,7 @@ class FindModifiedLayoutTests(shell.ShellCommandNewStyle, AnalyzeChange):
 
     def __init__(self, skipBuildIfNoResult=True):
         self.skipBuildIfNoResult = skipBuildIfNoResult
-        super().__init__()
+        super().__init__(logEnviron=False)
 
     @defer.inlineCallbacks
     def run(self):
@@ -1940,7 +1931,7 @@ class ValidateChange(buildstep.BuildStep, BugzillaMixin, GitHubMixin):
         pr_json = yield self.get_pr_json(pr_number, repository_url, retry=3)
 
         if pr_json:
-            # Only track acionable labels, since bug category labels may reveal information about security bugs
+            # Only track actionable labels, since bug category labels may reveal information about security bugs
             self.setProperty('github_labels', [
                 data.get('name')
                 for data in pr_json.get('labels', [])
@@ -2022,7 +2013,7 @@ class ValidateChange(buildstep.BuildStep, BugzillaMixin, GitHubMixin):
 
 
 class ValidateCommitterAndReviewer(buildstep.BuildStep, GitHubMixin, AddToLogMixin):
-    name = 'validate-commiter-and-reviewer'
+    name = 'validate-committer-and-reviewer'
     descriptionDone = ['Validated committer and reviewer']
     VALIDATORS_FOR = {
         # FIXME: Remove manual validators once bot is finished
@@ -2155,24 +2146,25 @@ class ValidateCommitterAndReviewer(buildstep.BuildStep, GitHubMixin, AddToLogMix
             return self.is_reviewer(candidate)
         reviewers = list(filter(filter_out_non_reviewer_validators, reviewers))
 
-        if any([self.is_reviewer(reviewer) for reviewer in reviewers]):
-            reviewers = list(filter(self.is_reviewer, reviewers))
-        reviewers = set(reviewers)
-
-        if not reviewers:
-            # Change has not been reviewed in bug tracker. This is acceptable, since the ChangeLog might have 'Reviewed by' in it.
-            yield self._addToLog('stdio', f'Reviewer not found. Commit message  will be checked for reviewer name in later steps\n')
-            self.descriptionDone = 'Validated committer, reviewer not found'
-            defer.returnValue(SUCCESS)
-            return
-
+        valid_reviewers = set()
+        invalid_reviewers = set()
         for reviewer in reviewers:
             if not self.is_reviewer(reviewer):
-                rc = yield self.fail_build_due_to_invalid_status(reviewer, 'reviewer')
-                defer.returnValue(rc)
-                return
-            yield self._addToLog('stdio', f'{reviewer} is a valid reviewer.\n')
-        self.setProperty('reviewers_full_names', [self.full_name_from_email(reviewer) for reviewer in reviewers])
+                invalid_reviewers.add(reviewer)
+                yield self._addToLog('stdio', f'{reviewer} is not a valid reviewer, ignoring their review.\n')
+            else:
+                valid_reviewers.add(reviewer)
+                yield self._addToLog('stdio', f'{reviewer} is a valid reviewer.\n')
+
+        self.setProperty('valid_reviewers', [self.full_name_from_email(reviewer) for reviewer in valid_reviewers])
+        self.setProperty('invalid_reviewers', [self.full_name_from_email(reviewer) for reviewer in invalid_reviewers])
+
+        if not valid_reviewers:
+            # Change has not been reviewed in bug tracker. This is acceptable, since the ChangeLog might have 'Reviewed by' in it.
+            yield self._addToLog('stdio', f'Valid reviewer not found. Commit message will be checked for reviewer name in later steps\n')
+            self.descriptionDone = 'Validated committer, valid reviewer not found'
+            defer.returnValue(SUCCESS)
+            return
 
         defer.returnValue(SUCCESS)
 
@@ -5899,9 +5891,10 @@ class PrintConfiguration(steps.ShellSequence):
         self.setProperty('xcode_version', xcode_version)
         os_version_builder = self.getProperty('os_version_builder', '')
         xcode_version_builder = self.getProperty('xcode_version_builder', '')
+        os_major_version_mismatch = os_version and os_version_builder and (os_version.split('.')[:2] != os_version_builder.split('.')[:2])
+        xcode_version_mismatch = xcode_version and xcode_version_builder and (xcode_version != xcode_version_builder)
 
-        if ((os_version and os_version_builder and os_version != os_version_builder) or
-                (xcode_version and xcode_version_builder and xcode_version != xcode_version_builder)):
+        if os_major_version_mismatch or xcode_version_mismatch:
             message = f'Error: OS/SDK version mismatch, please inform an admin.'
             detailed_message = message + f' Builder: OS={os_version_builder}, Xcode={xcode_version_builder}; Tester: OS={os_version}, Xcode={xcode_version}'
             print(f'\n{detailed_message}')
@@ -5996,7 +5989,8 @@ class SetBuildSummary(buildstep.BuildStep):
     flunkOnFailure = False
 
     def doStepIf(self, step):
-        return self.getProperty('build_summary', False)
+        # FIXME: Re-enable merged-blocked on mac-Intel-WK2 after we see results and can clean up this new queue
+        return self.getProperty('github.number') and 'Intel' not in self.getProperty('buildername', '')
 
     def hideStepIf(self, results, step):
         return not self.doStepIf(step)
@@ -6470,11 +6464,12 @@ class AddReviewerMixin(object):
         )
 
     def reviewers(self):
-        reviewers = self.getProperty('reviewers_full_names', [])
+        reviewers = self.getProperty('valid_reviewers', [])
         if len(reviewers) == 1:
             return reviewers[0]
         if reviewers:
-            return f'{", ".join(reviewers[:-1])} and {reviewers[-1]}'
+            conjunction = f'{"," if len(reviewers) > 2 else ""} and '
+            return f'{", ".join(reviewers[:-1])}{conjunction}{reviewers[-1]}'
         return 'NOBODY (OOPS!)'
 
 
@@ -6517,7 +6512,7 @@ class AddReviewerToCommitMessage(shell.ShellCommand, AddReviewerMixin):
         classification = self.getProperty('classification', [])
         if not isinstance(classification, list):
             classification = []
-        return self.getProperty('reviewers_full_names') and ['Cherry-pick'] != classification
+        return self.getProperty('valid_reviewers') and ['Cherry-pick'] != classification
 
     def hideStepIf(self, results, step):
         return not self.doStepIf(step)
@@ -6537,7 +6532,7 @@ class ValidateCommitMessage(steps.ShellSequence, ShellMixin, AddToLogMixin):
     )
     RE_CHANGELOG = br'^(\+\+\+)\s+(.*/ChangeLog.*)'
     BY_RE = re.compile(r'.+\s+by\s+(.+)$')
-    SPLIT_RE = re.compile(r'(,\s*)|( and )')
+    SPLIT_RE = re.compile(r'\s+and\s+|,\s*and\s*|,\s*')
 
     def __init__(self, **kwargs):
         super().__init__(logEnviron=False, timeout=60, **kwargs)
@@ -6578,8 +6573,12 @@ class ValidateCommitMessage(steps.ShellSequence, ShellMixin, AddToLogMixin):
     def run(self, BufferLogObserverClass=logobserver.BufferLogObserver):
         base_ref = self.getProperty('github.base.ref', f'{DEFAULT_REMOTE}/{DEFAULT_BRANCH}')
         head_ref = self.getProperty('github.head.ref', 'HEAD')
-        reviewers = self.getProperty('reviewers_full_names', None)
-        reviewer_error_msg = '' if reviewers else ' and no reviewer found'
+        valid_reviewers = self.getProperty('valid_reviewers', [])
+        invalid_reviewers = self.getProperty('invalid_reviewers', [])
+        reviewer_error_msg = '' if valid_reviewers else ' and no valid reviewer found'
+        invalid_msg = ' and {} are not reviewers' if len(invalid_reviewers) > 1 else ' and {} is not a reviewer'
+        if invalid_reviewers:
+            reviewer_error_msg = invalid_msg.format(', '.join(invalid_reviewers))
 
         self.commands = []
         commands = [
@@ -6641,7 +6640,9 @@ class ValidateCommitMessage(steps.ShellSequence, ShellMixin, AddToLogMixin):
             rc = FAILURE
 
         if rc == FAILURE:
-            self.setProperty('comment_text', f"{self.summary}, blocking PR #{self.getProperty('github.number')}")
+            build_url = f'{self.master.config.buildbotURL}#/builders/{self.build._builderid}/builds/{self.build.number}'
+            url_to_show = f'[Build #{self.getProperty("buildnumber", "")}]({build_url})'
+            self.setProperty('comment_text', f"{self.summary}, blocking PR #{self.getProperty('github.number')}. Details: {url_to_show}")
             self.setProperty('build_finish_summary', 'Commit message validation failed')
             self.build.addStepsAfterCurrentStep([LeaveComment(), SetCommitQueueMinusFlagOnPatch(), BlockPullRequest()])
         defer.returnValue(rc)

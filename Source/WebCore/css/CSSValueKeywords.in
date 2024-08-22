@@ -938,6 +938,7 @@ round
 // border-box/content-box/padding-box should be used instead.
 //
 border
+border-area
 border-box
 content
 content-box
@@ -1607,6 +1608,9 @@ AA
 AA-large
 AAA
 AAA-large
+
+// color-layers()
+color-layers
 
 // color-mix()
 color-mix

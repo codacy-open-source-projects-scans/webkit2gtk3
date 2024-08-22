@@ -89,6 +89,7 @@
 #include <WebCore/ResourceLoadStatistics.h>
 #include <WebCore/ResourceRequest.h>
 #include <WebCore/SameSiteInfo.h>
+#include <WebCore/SecurityOriginData.h>
 #include <WebCore/SecurityPolicy.h>
 #include <optional>
 #include <wtf/HashSet.h>
@@ -121,9 +122,9 @@
 #define CONNECTION_RELEASE_LOG(channel, fmt, ...) RELEASE_LOG(channel, "%p - [webProcessIdentifier=%" PRIu64 "] NetworkConnectionToWebProcess::" fmt, this, webProcessIdentifier().toUInt64(), ##__VA_ARGS__)
 #define CONNECTION_RELEASE_LOG_ERROR(channel, fmt, ...) RELEASE_LOG_ERROR(channel, "%p - [webProcessIdentifier=%" PRIu64 "] NetworkConnectionToWebProcess::" fmt, this, webProcessIdentifier().toUInt64(), ##__VA_ARGS__)
 
-#define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, &this->connection())
-#define MESSAGE_CHECK_COMPLETION(assertion, completion) MESSAGE_CHECK_COMPLETION_BASE(assertion, &this->connection(), completion)
-#define MESSAGE_CHECK_WITH_RETURN_VALUE(assertion, returnValue) MESSAGE_CHECK_WITH_RETURN_VALUE_BASE(assertion, &this->connection(), returnValue)
+#define MESSAGE_CHECK(assertion) MESSAGE_CHECK_BASE(assertion, this->connection())
+#define MESSAGE_CHECK_COMPLETION(assertion, completion) MESSAGE_CHECK_COMPLETION_BASE(assertion, this->connection(), completion)
+#define MESSAGE_CHECK_WITH_RETURN_VALUE(assertion, returnValue) MESSAGE_CHECK_WITH_RETURN_VALUE_BASE(assertion, this->connection(), returnValue)
 
 namespace WebKit {
 using namespace WebCore;
@@ -263,13 +264,13 @@ void NetworkConnectionToWebProcess::didReceiveMessage(IPC::Connection& connectio
     if (decoder.messageReceiverName() == Messages::NetworkResourceLoader::messageReceiverName()) {
         RELEASE_ASSERT(RunLoop::isMain());
         MESSAGE_CHECK(decoder.destinationID());
-        if (auto* loader = m_networkResourceLoaders.get(AtomicObjectIdentifier<WebCore::ResourceLoader>(decoder.destinationID())))
+        if (auto* loader = m_networkResourceLoaders.get(LegacyNullableAtomicObjectIdentifier<WebCore::ResourceLoader>(decoder.destinationID())))
             loader->didReceiveNetworkResourceLoaderMessage(connection, decoder);
         return;
     }
 
     if (decoder.messageReceiverName() == Messages::NetworkSocketChannel::messageReceiverName()) {
-        if (auto* channel = m_networkSocketChannels.get(AtomicObjectIdentifier<WebSocketIdentifierType>(decoder.destinationID())))
+        if (auto* channel = m_networkSocketChannels.get(LegacyNullableAtomicObjectIdentifier<WebSocketIdentifierType>(decoder.destinationID())))
             channel->didReceiveMessage(connection, decoder);
         return;
     }
@@ -410,6 +411,15 @@ bool NetworkConnectionToWebProcess::didReceiveSyncMessage(IPC::Connection& conne
         return false;
     }
 
+#if ENABLE(WEB_PUSH_NOTIFICATIONS)
+    if (decoder.messageReceiverName() == Messages::NotificationManagerMessageHandler::messageReceiverName()) {
+        MESSAGE_CHECK_WITH_RETURN_VALUE(m_networkProcess->builtInNotificationsEnabled(), false);
+        if (auto* networkSession = this->networkSession())
+            return networkSession->notificationManager().didReceiveSyncMessage(connection, decoder, reply);
+        return false;
+    }
+#endif
+
 #if ENABLE(APPLE_PAY_REMOTE_UI)
     if (decoder.messageReceiverName() == Messages::WebPaymentCoordinatorProxy::messageReceiverName())
         return paymentCoordinator().didReceiveSyncMessage(connection, decoder, reply);
@@ -483,7 +493,7 @@ void NetworkConnectionToWebProcess::didClose(IPC::Connection& connection)
 #endif
 }
 
-void NetworkConnectionToWebProcess::didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName messageName)
+void NetworkConnectionToWebProcess::didReceiveInvalidMessage(IPC::Connection&, IPC::MessageName messageName, int32_t)
 {
     RELEASE_LOG_FAULT(IPC, "Received an invalid message '%" PUBLIC_LOG_STRING "' from WebContent process %" PRIu64 ", requesting for it to be terminated.", description(messageName).characters(), m_webProcessIdentifier.toUInt64());
     m_networkProcess->parentProcessConnection()->send(Messages::NetworkProcessProxy::TerminateWebProcess(m_webProcessIdentifier), 0);
@@ -878,7 +888,7 @@ void NetworkConnectionToWebProcess::cookiesForDOMAsync(const URL& firstParty, co
 
 void NetworkConnectionToWebProcess::setCookieFromDOMAsync(const URL& firstParty, const SameSiteInfo& sameSiteInfo, const URL& url, std::optional<WebCore::FrameIdentifier> frameID, std::optional<WebCore::PageIdentifier> pageID, ApplyTrackingPrevention applyTrackingPrevention, WebCore::Cookie&& cookie, ShouldRelaxThirdPartyCookieBlocking shouldRelaxThirdPartyCookieBlocking, CompletionHandler<void(bool)>&& completionHandler)
 {
-    MESSAGE_CHECK(m_networkProcess->allowsFirstPartyForCookies(m_webProcessIdentifier, firstParty));
+    MESSAGE_CHECK_COMPLETION(m_networkProcess->allowsFirstPartyForCookies(m_webProcessIdentifier, firstParty), completionHandler(false));
 
     auto* networkStorageSession = storageSession();
     if (!networkStorageSession)
@@ -949,6 +959,19 @@ void NetworkConnectionToWebProcess::cookieEnabledStateMayHaveChanged()
     protectedConnection()->send(Messages::NetworkProcessConnection::UpdateCachedCookiesEnabled(), 0);
 }
 
+bool NetworkConnectionToWebProcess::isFilePathAllowed(NetworkSession& session, String path)
+{
+    path = FileSystem::lexicallyNormal(path);
+    auto parentPath = FileSystem::parentPath(path);
+    while (parentPath != path) {
+        if (m_allowedFilePaths.contains(path) || parentPath == session.storageManager().path() || parentPath == session.storageManager().customIDBStoragePath())
+            return true;
+        path = parentPath;
+        parentPath = FileSystem::parentPath(path);
+    }
+    return false;
+}
+
 void NetworkConnectionToWebProcess::registerInternalFileBlobURL(const URL& url, const String& path, const String& replacementPath, SandboxExtension::Handle&& extensionHandle, const String& contentType)
 {
     MESSAGE_CHECK(!url.isEmpty());
@@ -956,6 +979,8 @@ void NetworkConnectionToWebProcess::registerInternalFileBlobURL(const URL& url, 
     auto* session = networkSession();
     if (!session)
         return;
+    if (blobFileAccessEnforcementEnabled())
+        MESSAGE_CHECK(isFilePathAllowed(*session, path));
 
     m_blobURLs.add({ url, std::nullopt });
     session->blobRegistry().registerInternalFileBlobURL(url, BlobDataFileReferenceWithSandboxExtension::create(path, replacementPath, SandboxExtension::create(WTFMove(extensionHandle))), contentType);
@@ -981,13 +1006,14 @@ void NetworkConnectionToWebProcess::registerBlobURL(const URL& url, const URL& s
     session->blobRegistry().registerBlobURL(url, srcURL, WTFMove(policyContainer), topOrigin);
 }
 
-void NetworkConnectionToWebProcess::registerInternalBlobURLOptionallyFileBacked(const URL& url, const URL& srcURL, const String& fileBackedPath, const String& contentType)
+void NetworkConnectionToWebProcess::registerInternalBlobURLOptionallyFileBacked(URL&& url, URL&& srcURL, const String& fileBackedPath, String&& contentType)
 {
     MESSAGE_CHECK(!url.isEmpty() && !srcURL.isEmpty() && !fileBackedPath.isEmpty());
-
     auto* session = networkSession();
     if (!session)
         return;
+    if (blobFileAccessEnforcementEnabled())
+        MESSAGE_CHECK(isFilePathAllowed(*session, fileBackedPath));
 
     m_blobURLs.add({ url, std::nullopt });
     session->blobRegistry().registerInternalBlobURLOptionallyFileBacked(url, srcURL, BlobDataFileReferenceWithSandboxExtension::create(fileBackedPath), contentType, { });
@@ -1067,6 +1093,26 @@ void NetworkConnectionToWebProcess::writeBlobsToTemporaryFilesForIndexedDB(const
 
         completionHandler(WTFMove(filePaths));
     });
+}
+
+void NetworkConnectionToWebProcess::registerBlobPathForTesting(const String& path, CompletionHandler<void()>&& completion)
+{
+    if (!allowTestOnlyIPC())
+        return completion();
+    allowAccessToFile(path);
+    completion();
+}
+
+void NetworkConnectionToWebProcess::allowAccessToFile(const String& path)
+{
+    m_allowedFilePaths.add(FileSystem::lexicallyNormal(path));
+}
+
+
+void NetworkConnectionToWebProcess::allowAccessToFiles(const Vector<String>& filePaths)
+{
+    for (auto& filePath : filePaths)
+        m_allowedFilePaths.add(FileSystem::lexicallyNormal(filePath));
 }
 
 void NetworkConnectionToWebProcess::setCaptureExtraNetworkLoadMetricsEnabled(bool enabled)
@@ -1371,7 +1417,7 @@ void NetworkConnectionToWebProcess::establishSWContextConnection(WebPageProxyIde
 {
     auto* session = networkSession();
     if (auto* swServer = session ? session->swServer() : nullptr) {
-        MESSAGE_CHECK(session->networkProcess().allowsFirstPartyForCookies(webProcessIdentifier(), registrableDomain));
+        MESSAGE_CHECK_COMPLETION(session->networkProcess().allowsFirstPartyForCookies(webProcessIdentifier(), registrableDomain), completionHandler());
         m_swContextConnection = makeUnique<WebSWServerToContextConnection>(*this, webPageProxyID, WTFMove(registrableDomain), serviceWorkerPageIdentifier, *swServer);
     }
     completionHandler();
@@ -1602,7 +1648,9 @@ void NetworkConnectionToWebProcess::navigatorGetPushPermissionState(URL&& scopeU
         return;
     }
 
-    session->notificationManager().getPushPermissionState(WTFMove(scopeURL), WTFMove(completionHandler));
+    session->notificationManager().getPermissionState(SecurityOriginData::fromURL(scopeURL), [completionHandler = WTFMove(completionHandler)](WebCore::PushPermissionState state) mutable {
+        completionHandler(static_cast<uint8_t>(state));
+    });
 }
 #endif // ENABLE(DECLARATIVE_WEB_PUSH)
 

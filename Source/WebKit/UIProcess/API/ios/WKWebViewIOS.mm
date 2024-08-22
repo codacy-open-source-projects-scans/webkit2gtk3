@@ -1139,7 +1139,8 @@ static void changeContentOffsetBoundedInValidRange(UIScrollView *scrollView, Web
     }
 
 #if ENABLE(OVERLAY_REGIONS_IN_EVENT_REGION)
-    [self _updateOverlayRegions:layerTreeTransaction.changedLayerProperties() destroyedLayers:layerTreeTransaction.destroyedLayers()];
+    if ([_configuration _overlayRegionsEnabled])
+        [self _updateOverlayRegions:layerTreeTransaction.changedLayerProperties() destroyedLayers:layerTreeTransaction.destroyedLayers()];
 #endif
 }
 
@@ -1192,6 +1193,8 @@ static CGRect snapRectToScrollViewEdges(CGRect rect, CGRect viewport)
 static void configureScrollViewWithOverlayRegionsIDs(WKBaseScrollView* scrollView, const WebKit::RemoteLayerTreeHost& host, const HashSet<WebCore::PlatformLayerIdentifier>& overlayRegionsIDs)
 {
     HashSet<WebCore::IntRect> overlayRegionRects;
+    Vector<WebCore::IntRect> fullWidthRects;
+    Vector<WebCore::IntRect> fullHeightRects;
 
     for (auto layerID : overlayRegionsIDs) {
         const auto* node = host.nodeForID(layerID);
@@ -1246,7 +1249,7 @@ static void configureScrollViewWithOverlayRegionsIDs(WKBaseScrollView* scrollVie
 
         // Overlay regions are positioned relative to the viewport of the scrollview,
         // not the frame (external) nor the bounds (origin moves while scrolling).
-        CGRect rect = [overlayView.superview convertRect:overlayView.frame toView:scrollView.superview];
+        CGRect rect = [overlayView convertRect:node->eventRegion().region().bounds() toView:scrollView.superview];
         CGRect offsetRect = CGRectOffset(rect, -scrollView.frame.origin.x, -scrollView.frame.origin.y);
         CGRect viewport = CGRectOffset(scrollView.frame, -scrollView.frame.origin.x, -scrollView.frame.origin.y);
         CGRect snappedRect = snapRectToScrollViewEdges(offsetRect, viewport);
@@ -1254,10 +1257,45 @@ static void configureScrollViewWithOverlayRegionsIDs(WKBaseScrollView* scrollVie
         if (CGRectIsEmpty(snappedRect))
             continue;
 
-        overlayRegionRects.add(WebCore::enclosingIntRect(snappedRect));
+        constexpr float mergeCandidateEpsilon = 0.5;
+        if (std::abs(CGRectGetWidth(snappedRect) - CGRectGetWidth(viewport)) <= mergeCandidateEpsilon)
+            fullWidthRects.append(WebCore::enclosingIntRect(snappedRect));
+        else if (std::abs(CGRectGetHeight(snappedRect) - CGRectGetHeight(viewport)) <= mergeCandidateEpsilon)
+            fullHeightRects.append(WebCore::enclosingIntRect(snappedRect));
+        else
+            overlayRegionRects.add(WebCore::enclosingIntRect(snappedRect));
     }
 
-    [scrollView _updateOverlayRegionsBehavior:true];
+    auto mergeAndAdd = [&](auto& vec, const auto& sort, const auto& shouldMerge) {
+        std::sort(vec.begin(), vec.end(), sort);
+
+        std::optional<WebCore::IntRect> current;
+        for (auto rect : vec) {
+            if (!current)
+                current = rect;
+            else if (shouldMerge(rect, *current))
+                current->unite(rect);
+            else
+                overlayRegionRects.add(*std::exchange(current, rect));
+        }
+
+        if (current)
+            overlayRegionRects.add(*current);
+    };
+
+    mergeAndAdd(fullWidthRects, [](const auto& a, const auto& b) {
+        return a.y() < b.y();
+    }, [](const auto& rect, const auto& current) {
+        return rect.y() <= current.maxY();
+    });
+
+    mergeAndAdd(fullHeightRects, [](const auto& a, const auto& b) {
+        return a.x() < b.x();
+    }, [](const auto& rect, const auto& current) {
+        return rect.x() <= current.maxX();
+    });
+
+    [scrollView _updateOverlayRegionsBehavior:YES];
     [scrollView _updateOverlayRegionRects:overlayRegionRects];
 }
 
@@ -1282,7 +1320,7 @@ static void configureScrollViewWithOverlayRegionsIDs(WKBaseScrollView* scrollVie
     if ([self _scrollViewCanHaveOverlayRegions:_scrollView.get()])
         overlayRegionScrollView = _scrollView.get();
     else
-        [_scrollView _updateOverlayRegionsBehavior:false];
+        [_scrollView _updateOverlayRegionsBehavior:NO];
 
     auto candidates = coordinatorProxy->overlayRegionScrollViewCandidates();
     std::sort(candidates.begin(), candidates.end(), [] (auto& first, auto& second) {
@@ -1293,7 +1331,7 @@ static void configureScrollViewWithOverlayRegionsIDs(WKBaseScrollView* scrollVie
         if (!overlayRegionScrollView && [self _scrollViewCanHaveOverlayRegions:scrollView])
             overlayRegionScrollView = scrollView;
         else
-            [scrollView _updateOverlayRegionsBehavior:false];
+            [scrollView _updateOverlayRegionsBehavior:NO];
     }
 
     return overlayRegionScrollView;
@@ -1322,6 +1360,20 @@ static void configureScrollViewWithOverlayRegionsIDs(WKBaseScrollView* scrollVie
     configureScrollViewWithOverlayRegionsIDs(overlayRegionScrollView, layerTreeHost, overlayRegionsIDs);
 
     scrollingCoordinatorProxy->updateOverlayRegionLayerIDs(overlayRegionsIDs);
+}
+
+- (void)_updateOverlayRegionsForCustomContentView
+{
+    if (![_configuration _overlayRegionsEnabled])
+        return;
+
+    if (![self _scrollViewCanHaveOverlayRegions:_scrollView.get()]) {
+        [_scrollView _updateOverlayRegionsBehavior:NO];
+        return;
+    }
+
+    [_scrollView _updateOverlayRegionsBehavior:YES];
+    [_scrollView _updateOverlayRegionRects: { }];
 }
 #endif // ENABLE(OVERLAY_REGIONS_IN_EVENT_REGION)
 
@@ -4394,7 +4446,7 @@ static bool isLockdownModeWarningNeeded()
         return;
     }
 
-    _page->takeSnapshot(WebCore::enclosingIntRect(snapshotRectInContentCoordinates), WebCore::expandedIntSize(WebCore::FloatSize(imageSize)), WebKit::SnapshotOptionsExcludeDeviceScaleFactor, [completionHandler = makeBlockPtr(completionHandler)](std::optional<WebCore::ShareableBitmap::Handle>&& imageHandle) {
+    _page->takeSnapshot(WebCore::enclosingIntRect(snapshotRectInContentCoordinates), WebCore::expandedIntSize(WebCore::FloatSize(imageSize)), WebKit::SnapshotOption::ExcludeDeviceScaleFactor, [completionHandler = makeBlockPtr(completionHandler)](std::optional<WebCore::ShareableBitmap::Handle>&& imageHandle) {
         if (!imageHandle)
             return completionHandler(nil);
 

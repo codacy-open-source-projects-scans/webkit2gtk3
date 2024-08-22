@@ -26,6 +26,7 @@
 #include "RenderReplaced.h"
 
 #include "BackgroundPainter.h"
+#include "BorderShape.h"
 #include "DocumentInlines.h"
 #include "DocumentMarkerController.h"
 #include "ElementRuleCollector.h"
@@ -54,13 +55,13 @@
 #include "RenderedDocumentMarker.h"
 #include "Settings.h"
 #include "VisiblePosition.h"
-#include <wtf/IsoMallocInlines.h>
 #include <wtf/StackStats.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/TypeCasts.h>
 
 namespace WebCore {
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(RenderReplaced);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderReplaced);
 
 const int cDefaultWidth = 300;
 const int cDefaultHeight = 150;
@@ -94,7 +95,7 @@ RenderReplaced::~RenderReplaced() = default;
 void RenderReplaced::willBeDestroyed()
 {
     if (!renderTreeBeingDestroyed() && parent())
-        parent()->dirtyLinesFromChangedChild(*this);
+        parent()->dirtyLineFromChangedChild();
 
     RenderBox::willBeDestroyed();
 }
@@ -235,8 +236,8 @@ void RenderReplaced::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
         if (visibleToHitTesting()) {
 #endif
             auto borderRect = LayoutRect(adjustedPaintOffset, size());
-            auto borderRoundedRect = style().getRoundedBorderFor(borderRect);
-            paintInfo.eventRegionContext()->unite(FloatRoundedRect(borderRoundedRect), *this, style());
+            auto borderShape = BorderShape::shapeForBorderRect(style(), borderRect);
+            paintInfo.eventRegionContext()->unite(borderShape.deprecatedPixelSnappedRoundedRect(document().deviceScaleFactor()), *this, style());
         }
         return;
     }
@@ -304,7 +305,7 @@ void RenderReplaced::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
             // Push a clip if we have a border radius, since we want to round the foreground content that gets painted.
             paintInfo.context().save();
             auto pixelSnappedRoundedRect = roundedContentBoxRect(paintRect).pixelSnappedRoundedRectForPainting(document().deviceScaleFactor());
-            BackgroundPainter::clipRoundedInnerRect(paintInfo.context(), paintRect, pixelSnappedRoundedRect);
+            BackgroundPainter::clipRoundedInnerRect(paintInfo.context(), pixelSnappedRoundedRect);
         }
     }
 

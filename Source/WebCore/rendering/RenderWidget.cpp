@@ -39,13 +39,13 @@
 #include "RenderLayerScrollableArea.h"
 #include "RenderView.h"
 #include "SecurityOrigin.h"
-#include <wtf/IsoMallocInlines.h>
-#include <wtf/StackStats.h>
 #include <wtf/Ref.h>
+#include <wtf/StackStats.h>
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(RenderWidget);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderWidget);
 
 static HashMap<SingleThreadWeakRef<const Widget>, SingleThreadWeakRef<RenderWidget>>& widgetRendererMap()
 {
@@ -328,7 +328,7 @@ void RenderWidget::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
         // Push a clip if we have a border radius, since we want to round the foreground content that gets painted.
         paintInfo.context().save();
         auto roundedInnerRect = FloatRoundedRect(roundedContentBoxRect(borderRect));
-        BackgroundPainter::clipRoundedInnerRect(paintInfo.context(), borderRect, roundedInnerRect);
+        BackgroundPainter::clipRoundedInnerRect(paintInfo.context(), roundedInnerRect);
     }
 
     if (m_widget && !isSkippedContentRoot())

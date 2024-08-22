@@ -34,6 +34,7 @@
 #include "Timer.h"
 #include <wtf/MonotonicTime.h>
 #include <wtf/OptionSet.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakHashSet.h>
 
 namespace WebCore {
@@ -46,7 +47,7 @@ enum class RenderingUpdateStep : uint32_t;
 struct GapRects;
 
 class ServicesOverlayController : private DataDetectorHighlightClient, private PageOverlayClient {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(ServicesOverlayController);
 public:
     explicit ServicesOverlayController(Page&);
     ~ServicesOverlayController();
@@ -99,7 +100,7 @@ private:
     Page& page() const { return m_page; }
     Ref<Page> protectedPage() const { return m_page.get(); }
 
-    SingleThreadWeakRef<Page> m_page;
+    WeakRef<Page> m_page;
     WeakPtr<PageOverlay> m_servicesOverlay;
 
     RefPtr<DataDetectorHighlight> m_activeHighlight;

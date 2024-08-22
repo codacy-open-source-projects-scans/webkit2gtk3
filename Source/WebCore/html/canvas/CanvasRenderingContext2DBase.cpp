@@ -38,7 +38,6 @@
 #include "CSSMarkup.h"
 #include "CSSParser.h"
 #include "CSSPropertyNames.h"
-#include "CSSPropertyParserWorkerSafe.h"
 #include "CSSStyleImageValue.h"
 #include "CachedImage.h"
 #include "CanvasFilterContextSwitcher.h"
@@ -76,8 +75,8 @@
 #include "TextRun.h"
 #include "WebCodecsVideoFrame.h"
 #include <wtf/CheckedArithmetic.h>
-#include <wtf/IsoMallocInlines.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/MakeString.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/TextStream.h>
@@ -86,7 +85,7 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(CanvasRenderingContext2DBase);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(CanvasRenderingContext2DBase);
 
 static constexpr ImageSmoothingQuality defaultSmoothingQuality = ImageSmoothingQuality::Low;
 

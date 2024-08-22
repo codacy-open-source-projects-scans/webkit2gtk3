@@ -115,9 +115,9 @@ InByStatus InByStatus::computeFor(
 #endif // ENABLE(JIT)
 
 #if ENABLE(DFG_JIT)
-InByStatus InByStatus::computeForStubInfoWithoutExitSiteFeedback(const ConcurrentJSLocker& locker, CodeBlock* profiledBlock, StructureStubInfo* stubInfo, CallLinkStatus::ExitSiteData callExitSiteData, CodeOrigin codeOrigin)
+InByStatus InByStatus::computeForStubInfoWithoutExitSiteFeedback(const ConcurrentJSLocker& locker, CodeBlock* profiledBlock, StructureStubInfo* stubInfo, CallLinkStatus::ExitSiteData callExitSiteData, CodeOrigin)
 {
-    StubInfoSummary summary = StructureStubInfo::summary(profiledBlock->vm(), stubInfo);
+    StubInfoSummary summary = StructureStubInfo::summary(locker, profiledBlock->vm(), stubInfo);
     if (!isInlineable(summary))
         return InByStatus(summary);
     
@@ -150,21 +150,13 @@ InByStatus InByStatus::computeForStubInfoWithoutExitSiteFeedback(const Concurren
     }
 
     case CacheType::Stub: {
-        PolymorphicAccess* list = stubInfo->m_stub.get();
-        if (list->size() == 1) {
-            const AccessCase& access = list->at(0);
+        auto list = stubInfo->listedAccessCases(locker);
+        if (list.size() == 1) {
+            const AccessCase& access = *list.at(0);
             switch (access.type()) {
             case AccessCase::InMegamorphic:
             case AccessCase::IndexedMegamorphicIn: {
-                // Emitting InMegamorphic means that we give up polymorphic IC optimization. So this needs very careful handling.
-                // It is possible that one function can be inlined from the other function, and then it gets limited # of structures.
-                // In this case, continue using IC is better than falling back to megamorphic case. But if the function gets compiled before,
-                // and even optimizing JIT saw the megamorphism, then this is likely that this function continues having megamorphic behavior,
-                // and inlined megamorphic code is faster. Currently, we use InMegamorphic only when the exact same form of CodeOrigin gets
-                // this megamorphic GetById before (same level of inlining etc.). This is very conservative but effective since IC is very fast
-                // when it worked well (but costly if it doesn't work and get megamorphic). Once this cost-benefit tradeoff gets changed (via
-                // handler IC), we can revisit this condition.
-                if (isSameStyledCodeOrigin(stubInfo->codeOrigin, codeOrigin) && !stubInfo->tookSlowPath)
+                if (!stubInfo->tookSlowPath)
                     return InByStatus(Megamorphic);
                 break;
             }
@@ -182,8 +174,8 @@ InByStatus InByStatus::computeForStubInfoWithoutExitSiteFeedback(const Concurren
             }
         }
 
-        for (unsigned listIndex = 0; listIndex < list->size(); ++listIndex) {
-            const AccessCase& access = list->at(listIndex);
+        for (unsigned listIndex = 0; listIndex < list.size(); ++listIndex) {
+            const AccessCase& access = *list.at(listIndex);
             if (access.viaGlobalProxy())
                 return InByStatus(TakesSlowPath);
 

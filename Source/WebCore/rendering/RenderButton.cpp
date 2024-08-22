@@ -35,7 +35,7 @@
 #include "RenderTheme.h"
 #include "RenderTreeBuilder.h"
 #include "StyleInheritedData.h"
-#include <wtf/IsoMallocInlines.h>
+#include <wtf/TZoneMallocInlines.h>
 
 #if PLATFORM(IOS_FAMILY)
 #include "RenderThemeIOS.h"
@@ -45,7 +45,7 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(RenderButton);
+WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderButton);
 
 RenderButton::RenderButton(HTMLFormControlElement& element, RenderStyle&& style)
     : RenderFlexibleBox(Type::Button, element, WTFMove(style))
@@ -80,7 +80,7 @@ void RenderButton::setInnerRenderer(RenderBlock& innerRenderer)
         if (auto* inlineFormattingContextRoot = dynamicDowncast<RenderBlockFlow>(*m_inner); inlineFormattingContextRoot && inlineFormattingContextRoot->modernLineLayout())
             inlineFormattingContextRoot->modernLineLayout()->rootStyleWillChange(*inlineFormattingContextRoot, inlineFormattingContextRoot->style());
         if (auto* lineLayout = LayoutIntegration::LineLayout::containing(*m_inner))
-            lineLayout->styleWillChange(*m_inner, m_inner->style());
+            lineLayout->styleWillChange(*m_inner, m_inner->style(), StyleDifference::Layout);
         LayoutIntegration::LineLayout::updateStyle(*m_inner);
         for (auto& child : childrenOfType<RenderText>(*m_inner))
             LayoutIntegration::LineLayout::updateStyle(child);
