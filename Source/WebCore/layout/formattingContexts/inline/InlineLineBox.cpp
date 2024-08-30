@@ -31,9 +31,12 @@
 #include "LayoutBoxGeometry.h"
 #include "LayoutElementBox.h"
 #include "RenderStyleInlines.h"
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 namespace Layout {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(LineBox);
 
 LineBox::LineBox(const Box& rootLayoutBox, InlineLayoutUnit contentLogicalLeft, InlineLayoutUnit contentLogicalWidth, size_t lineIndex, size_t nonSpanningInlineLevelBoxCount)
     : m_lineIndex(lineIndex)
@@ -106,9 +109,9 @@ InlineRect LineBox::logicalRectForInlineLevelBox(const Box& layoutBox) const
     return InlineRect { inlineLevelBoxAbsoluteTop(*inlineBox), inlineBoxLogicalRect.left(), inlineBoxLogicalRect.width(), inlineBoxLogicalRect.height() };
 }
 
-InlineRect LineBox::logicalBorderBoxForAtomicInlineLevelBox(const Box& layoutBox, const BoxGeometry& boxGeometry) const
+InlineRect LineBox::logicalBorderBoxForAtomicInlineBox(const Box& layoutBox, const BoxGeometry& boxGeometry) const
 {
-    ASSERT(layoutBox.isAtomicInlineLevelBox());
+    ASSERT(layoutBox.isAtomicInlineBox());
     auto logicalRect = logicalRectForInlineLevelBox(layoutBox);
     // Inline level boxes use their margin box for vertical alignment. Let's covert them to border boxes.
     logicalRect.moveVertically(boxGeometry.marginBefore());

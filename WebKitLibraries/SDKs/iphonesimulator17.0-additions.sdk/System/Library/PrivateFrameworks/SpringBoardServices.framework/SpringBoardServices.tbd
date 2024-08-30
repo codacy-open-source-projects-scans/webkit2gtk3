@@ -5,5 +5,4 @@ install-name: /System/Library/PrivateFrameworks/SpringBoardServices.framework/Sp
 exports:
 -       targets: [i386-ios-simulator, x86_64-ios-simulator, arm64-ios-simulator]
         symbols: [_SBSCreateOpenApplicationService]
-        objc-classes: [BSAction, BSActionResponder, BSActionResponse, BSMutableSettings]
 ...

@@ -42,6 +42,8 @@ namespace WebCore {
 namespace Layout {
 
 WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(Box);
+WTF_MAKE_TZONE_ALLOCATED_IMPL_NESTED(BoxBoxRareData, Box::BoxRareData);
+
 
 Box::Box(ElementAttributes&& elementAttributes, RenderStyle&& style, std::unique_ptr<RenderStyle>&& firstLineStyle, OptionSet<BaseTypeFlag> baseTypeFlags)
     : m_nodeType(elementAttributes.nodeType)
@@ -265,7 +267,7 @@ bool Box::isInlineBox() const
     return (display == DisplayType::Inline || display == DisplayType::Ruby || display == DisplayType::RubyBase) && !isReplacedBox();
 }
 
-bool Box::isAtomicInlineLevelBox() const
+bool Box::isAtomicInlineBox() const
 {
     // Inline-level boxes that are not inline boxes (such as replaced inline-level elements, inline-block elements, and inline-table elements)
     // are called atomic inline-level boxes because they participate in their inline formatting context as a single opaque box.
@@ -301,7 +303,7 @@ bool Box::isLayoutContainmentBox() const
         if (isInternalRubyBox())
             return false;
         if (isInlineLevelBox())
-            return isAtomicInlineLevelBox();
+            return isAtomicInlineBox();
         return true;
     };
     return m_style.usedContain().contains(Containment::Layout) && supportsLayoutContainment();
@@ -333,7 +335,7 @@ bool Box::isSizeContainmentBox() const
         if (isInternalRubyBox())
             return false;
         if (isInlineLevelBox())
-            return isAtomicInlineLevelBox();
+            return isAtomicInlineBox();
         return true;
     };
     return m_style.usedContain().contains(Containment::Size) && supportsSizeContainment();

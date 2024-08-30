@@ -31,6 +31,7 @@
 #include <mutex>
 #include <wtf/HashSet.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/TZoneMallocInlines.h>
 
 #if PLATFORM(WIN)
 #include "PlatformDisplayWin.h"
@@ -44,6 +45,8 @@
 #endif
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(PlatformDisplay);
 
 #if PLATFORM(WIN)
 PlatformDisplay& PlatformDisplay::sharedDisplay()
@@ -67,6 +70,11 @@ PlatformDisplay& PlatformDisplay::sharedDisplay()
 {
     RELEASE_ASSERT(s_sharedDisplay);
     return *s_sharedDisplay;
+}
+
+PlatformDisplay* PlatformDisplay::sharedDisplayIfExists()
+{
+    return s_sharedDisplay.get();
 }
 #endif
 
@@ -123,7 +131,7 @@ void PlatformDisplay::clearSharingGLContext()
 #if USE(SKIA)
     invalidateSkiaGLContexts();
 #endif
-#if ENABLE(VIDEO) && USE(GSTREAMER_GL)
+#if ENABLE(VIDEO) && USE(GSTREAMER)
     m_gstGLContext = nullptr;
 #endif
 #if ENABLE(WEBGL) && !PLATFORM(WIN)
@@ -149,7 +157,7 @@ const GLDisplay::Extensions& PlatformDisplay::eglExtensions() const
 
 void PlatformDisplay::terminateEGLDisplay()
 {
-#if ENABLE(VIDEO) && USE(GSTREAMER_GL)
+#if ENABLE(VIDEO) && USE(GSTREAMER)
     m_gstGLDisplay = nullptr;
 #endif
     clearSharingGLContext();

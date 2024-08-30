@@ -95,6 +95,20 @@ Ref<CSSCalcValue> CSSCalcValue::create(CSSCalc::Tree&& tree)
     return adoptRef(*new CSSCalcValue(WTFMove(tree)));
 }
 
+Ref<CSSCalcValue> CSSCalcValue::copySimplified(const CSSToLengthConversionData& conversionData, const CSSCalcSymbolTable& symbolTable) const
+{
+    auto simplificationOptions = CSSCalc::SimplificationOptions {
+        .category = m_tree.category,
+        .conversionData = conversionData,
+        .symbolTable = symbolTable,
+        .allowZeroValueLengthRemovalFromSum = true,
+        .allowUnresolvedUnits = false,
+        .allowNonMatchingUnits = false
+    };
+
+    return create(copyAndSimplify(m_tree, simplificationOptions));
+}
+
 CSSCalcValue::CSSCalcValue(CSSCalc::Tree&& tree)
     : CSSValue(CalculationClass)
     , m_tree(WTFMove(tree))
@@ -141,6 +155,11 @@ CSSUnitType CSSCalcValue::primitiveType() const
     return CSSUnitType::CSS_NUMBER;
 }
 
+bool CSSCalcValue::requiresConversionData() const
+{
+    return m_tree.requiresConversionData;
+}
+
 void CSSCalcValue::collectComputedStyleDependencies(ComputedStyleDependencies& dependencies) const
 {
     CSSCalc::collectComputedStyleDependencies(m_tree, dependencies);
@@ -148,7 +167,7 @@ void CSSCalcValue::collectComputedStyleDependencies(ComputedStyleDependencies& d
 
 String CSSCalcValue::customCSSText() const
 {
-    return CSSCalc::serializeForCSS(m_tree);
+    return CSSCalc::serializationForCSS(m_tree);
 }
 
 bool CSSCalcValue::equals(const CSSCalcValue& other) const
@@ -170,11 +189,8 @@ inline double CSSCalcValue::clampToPermittedRange(double value) const
     return m_tree.range == ValueRange::NonNegative && value < 0 ? 0 : value;
 }
 
-double CSSCalcValue::doubleValueDeprecated(const CSSCalcSymbolTable& symbolTable) const
+double CSSCalcValue::doubleValueNoConversionDataRequired(const CSSCalcSymbolTable& symbolTable) const
 {
-    if (m_tree.requiresConversionData)
-        ALWAYS_LOG_WITH_STREAM(stream << "ERROR: The value returned from CSSCalcValue::doubleValueDeprecated is likely incorrect as the calculation tree has unresolved units that require CSSToLengthConversionData to interpret. Update caller to use non-deprecated variant of this function.");
-
     auto options = CSSCalc::EvaluationOptions {
         .conversionData = std::nullopt,
         .symbolTable = symbolTable,
@@ -182,6 +198,14 @@ double CSSCalcValue::doubleValueDeprecated(const CSSCalcSymbolTable& symbolTable
         .allowNonMatchingUnits = true
     };
     return clampToPermittedRange(CSSCalc::evaluateDouble(m_tree, options).value_or(0));
+}
+
+double CSSCalcValue::doubleValueDeprecated(const CSSCalcSymbolTable& symbolTable) const
+{
+    if (m_tree.requiresConversionData)
+        ALWAYS_LOG_WITH_STREAM(stream << "ERROR: The value returned from CSSCalcValue::doubleValueDeprecated is likely incorrect as the calculation tree has unresolved units that require CSSToLengthConversionData to interpret. Update caller to use non-deprecated variant of this function.");
+
+    return doubleValueNoConversionDataRequired(symbolTable);
 }
 
 double CSSCalcValue::doubleValue(const CSSToLengthConversionData& conversionData, const CSSCalcSymbolTable& symbolTable) const
@@ -291,7 +315,7 @@ void CSSCalcValue::dump(TextStream& ts) const
     multilineStream.setIndent(ts.indent() + 2);
 
     multilineStream.dumpProperty("should clamp non-negative", m_tree.range == ValueRange::NonNegative);
-    multilineStream.dumpProperty("expression", CSSCalc::serializeForCSS(m_tree));
+    multilineStream.dumpProperty("expression", CSSCalc::serializationForCSS(m_tree));
 
     ts << multilineStream.release();
     ts << ")\n";

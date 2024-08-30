@@ -5,5 +5,4 @@ install-name: /System/Library/PrivateFrameworks/SpringBoardServices.framework/Sp
 exports:
 -       targets: [armv7-ios, armv7s-ios, arm64-ios, arm64e-ios]
         symbols: [_SBSCreateOpenApplicationService]
-        objc-classes: [BSAction, BSActionResponder, BSActionResponse, BSMutableSettings]
 ...

@@ -1369,11 +1369,6 @@ framework module WebKit_Private [system] {
     export *
   }
 
-  explicit module WKMediaFormatReader {
-    header "WKMediaFormatReader.h"
-    export *
-  }
-
   explicit module WKMediaKeySystemPermissionCallback {
     header "WKMediaKeySystemPermissionCallback.h"
     export *
@@ -3128,6 +3123,11 @@ framework module WebKit_Private [system] {
 
   explicit module _WKWebExtensionAction {
     header "_WKWebExtensionAction.h"
+    export *
+  }
+
+  explicit module _WKWebExtensionSidebar {
+    header "_WKWebExtensionSidebar.h"
     export *
   }
 

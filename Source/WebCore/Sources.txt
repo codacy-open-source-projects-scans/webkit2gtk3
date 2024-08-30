@@ -976,6 +976,7 @@ css/calc/CSSCalcSymbolTable.cpp
 css/calc/CSSCalcSymbolsAllowed.cpp
 css/calc/CSSCalcTree+CalculationValue.cpp
 css/calc/CSSCalcTree+ComputedStyleDependencies.cpp
+css/calc/CSSCalcTree+Copy.cpp
 css/calc/CSSCalcTree+Evaluation.cpp
 css/calc/CSSCalcTree+Parser.cpp
 css/calc/CSSCalcTree+Serialization.cpp
@@ -987,13 +988,13 @@ css/color/CSSColorLayersResolver.cpp
 css/color/CSSColorMixResolver.cpp
 css/color/CSSColorMixSerialization.cpp
 css/color/CSSRelativeColorSerialization.cpp
-css/color/CSSUnresolvedAbsoluteColor.cpp
+css/color/CSSUnresolvedAbsoluteResolvedColor.cpp
 css/color/CSSUnresolvedColor.cpp
 css/color/CSSUnresolvedColorHex.cpp
 css/color/CSSUnresolvedColorKeyword.cpp
 css/color/CSSUnresolvedColorLayers.cpp
 css/color/CSSUnresolvedColorMix.cpp
-css/color/CSSUnresolvedColorResolutionContext.cpp
+css/color/CSSUnresolvedColorResolutionState.cpp
 css/color/CSSUnresolvedLightDark.cpp
 css/color/CSSUnresolvedRelativeColor.cpp
 css/color/StyleAbsoluteColor.cpp
@@ -1170,6 +1171,7 @@ dom/Element.cpp
 dom/ElementData.cpp
 dom/ElementInternals.cpp
 dom/ElementRareData.cpp
+dom/ElementTextDirection.cpp
 dom/ErrorEvent.cpp
 dom/Event.cpp
 dom/EventContext.cpp
@@ -1851,6 +1853,7 @@ layout/integration/inline/InlineIteratorBox.cpp
 layout/integration/inline/InlineIteratorInlineBox.cpp
 layout/integration/inline/InlineIteratorLineBox.cpp
 layout/integration/inline/InlineIteratorLogicalOrderTraversal.cpp
+layout/integration/inline/InlineIteratorSVGTextBox.cpp
 layout/integration/inline/InlineIteratorTextBox.cpp
 layout/integration/inline/LayoutIntegrationInlineContentBuilder.cpp
 layout/integration/inline/LayoutIntegrationInlineContent.cpp
@@ -1861,6 +1864,7 @@ layout/integration/inline/LayoutIntegrationBoxGeometryUpdater.cpp
 layout/integration/LayoutIntegrationBoxTree.cpp
 layout/integration/LayoutIntegrationCoverage.cpp
 layout/integration/LayoutIntegrationFormattingContextLayout.cpp
+layout/integration/LayoutIntegrationUtils.cpp
 layout/layouttree/LayoutBox.cpp
 layout/layouttree/LayoutBoxGeometry.cpp
 layout/layouttree/LayoutElementBox.cpp

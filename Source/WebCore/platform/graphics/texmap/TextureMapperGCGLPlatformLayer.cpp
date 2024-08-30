@@ -26,12 +26,16 @@
 #include "ANGLEHeaders.h"
 #include "BitmapTexture.h"
 #include "GLContext.h"
+#include "TextureMapper.h"
 #include "TextureMapperFlags.h"
 #include "TextureMapperGLHeaders.h"
 #include "TextureMapperPlatformLayerBuffer.h"
 #include "TextureMapperPlatformLayerProxy.h"
+#include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(TextureMapperGCGLPlatformLayer);
 
 TextureMapperGCGLPlatformLayer::TextureMapperGCGLPlatformLayer(GraphicsContextGLTextureMapperANGLE& context)
     : m_context(context)

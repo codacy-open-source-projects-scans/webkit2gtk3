@@ -360,16 +360,17 @@ void Queue::writeBuffer(Buffer& buffer, uint64_t bufferOffset, std::span<uint8_t
     }
 
     buffer.indirectBufferInvalidated();
+    auto bufferSpan = std::span { static_cast<uint8_t*>(buffer.buffer().contents), buffer.buffer().length };
     // FIXME(PERFORMANCE): Instead of checking whether or not the whole queue is idle,
     // we could detect whether this specific resource is idle, if we tracked every resource.
     if (isIdle()) {
         switch (buffer.buffer().storageMode) {
         case MTLStorageModeShared:
-            memcpySpan(std::span { static_cast<uint8_t*>(buffer.buffer().contents) + bufferOffset, data.size() }, data);
+            memcpySpan(bufferSpan.subspan(bufferOffset, data.size()), data);
             return;
 #if PLATFORM(MAC) || PLATFORM(MACCATALYST)
         case MTLStorageModeManaged:
-            memcpySpan(std::span { static_cast<uint8_t*>(buffer.buffer().contents) + bufferOffset, data.size() }, data);
+            memcpySpan(bufferSpan.subspan(bufferOffset, data.size()), data);
             [buffer.buffer() didModifyRange:NSMakeRange(bufferOffset, data.size())];
             return;
 #endif
@@ -689,11 +690,12 @@ void Queue::writeTexture(const WGPUImageCopyTexture& destination, std::span<uint
             }
         }
 
+        auto newDataSpan = newData.mutableSpan();
         for (size_t z = 0; z < maxZ; ++z) {
             for (size_t y = 0; y < maxY; ++y) {
-                auto sourceBytes = data.data() + y * bytesPerRow + z * bytesPerImage + dataLayout.offset;
-                auto destBytes = &newData[0] + y * newBytesPerRow + z * newBytesPerImage;
-                memcpy(destBytes, sourceBytes, newBytesPerRow);
+                auto sourceBytesSpan = data.subspan(y * bytesPerRow + z * bytesPerImage + dataLayout.offset, newBytesPerRow);
+                auto destBytesSpan = newDataSpan.subspan(y * newBytesPerRow + z * newBytesPerImage, newBytesPerRow);
+                memcpySpan(destBytesSpan, sourceBytesSpan);
             }
         }
 

@@ -95,10 +95,8 @@ RenderMenuList::RenderMenuList(HTMLSelectElement& element, RenderStyle&& style)
     ASSERT(isRenderMenuList());
 }
 
-RenderMenuList::~RenderMenuList()
-{
-    // Do not add any code here. Add it to willBeDestroyed() instead.
-}
+// Do not add any code in below destructor. Add it to willBeDestroyed() instead.
+RenderMenuList::~RenderMenuList() = default;
 
 void RenderMenuList::willBeDestroyed()
 {
@@ -300,7 +298,7 @@ void RenderMenuList::setText(const String& s)
 
     if (m_buttonText) {
         m_buttonText->setText(textToUse.impl(), true);
-        m_buttonText->dirtyLineBoxes(false);
+        m_buttonText->dirtyLegacyLineBoxes(false);
     } else {
         auto newButtonText = createRenderer<RenderText>(Type::Text, document(), textToUse);
         m_buttonText = *newButtonText;

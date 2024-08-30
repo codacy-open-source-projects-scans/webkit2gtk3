@@ -903,16 +903,6 @@ void NetworkProcessProxy::setTimeToLiveUserInteraction(PAL::SessionID sessionID,
     sendWithAsyncReply(Messages::NetworkProcess::SetTimeToLiveUserInteraction(sessionID, seconds), WTFMove(completionHandler));
 }
 
-void NetworkProcessProxy::setNotifyPagesWhenDataRecordsWereScanned(PAL::SessionID sessionID, bool value, CompletionHandler<void()>&& completionHandler)
-{
-    if (!canSendMessage()) {
-        completionHandler();
-        return;
-    }
-    
-    sendWithAsyncReply(Messages::NetworkProcess::SetNotifyPagesWhenDataRecordsWereScanned(sessionID, value), WTFMove(completionHandler));
-}
-
 void NetworkProcessProxy::setResourceLoadStatisticsTimeAdvanceForTesting(PAL::SessionID sessionID, Seconds time, CompletionHandler<void()>&& completionHandler)
 {
     if (!canSendMessage()) {
@@ -1204,16 +1194,6 @@ void NetworkProcessProxy::logTestingEvent(PAL::SessionID sessionID, const String
 {
     if (auto* websiteDataStore = websiteDataStoreFromSessionID(sessionID))
         websiteDataStore->logTestingEvent(event);
-}
-
-void NetworkProcessProxy::notifyResourceLoadStatisticsProcessed()
-{
-    WebProcessProxy::notifyPageStatisticsAndDataRecordsProcessed();
-}
-
-void NetworkProcessProxy::notifyWebsiteDataScanForRegistrableDomainsFinished()
-{
-    WebProcessProxy::notifyWebsiteDataScanForRegistrableDomainsFinished();
 }
 
 void NetworkProcessProxy::didCommitCrossSiteLoadWithDataTransfer(PAL::SessionID sessionID, const RegistrableDomain& fromDomain, const RegistrableDomain& toDomain, OptionSet<WebCore::CrossSiteNavigationDataTransfer::Flag> navigationDataTransfer, WebPageProxyIdentifier webPageProxyID, PageIdentifier webPageID, DidFilterKnownLinkDecoration didFilterKnownLinkDecoration)
@@ -1814,18 +1794,26 @@ void NetworkProcessProxy::getPendingPushMessages(PAL::SessionID sessionID, Compl
 
 void NetworkProcessProxy::processPushMessage(PAL::SessionID sessionID, const WebPushMessage& pushMessage, CompletionHandler<void(bool wasProcessed, std::optional<WebCore::NotificationPayload>&&)>&& callback)
 {
-    auto permission = PushPermissionState::Prompt;
-    HashMap<String, bool> permissions;
+    auto permission = PushPermissionState::Granted;
 
-    if (auto *dataStore = websiteDataStoreFromSessionID(sessionID))
-        permissions = dataStore->client().notificationPermissions();
+#if ENABLE(WEB_PUSH_NOTIFICATIONS)
+    // When built-in notifications are disabled, the source of permissions is the UIProcess.
+    // Since we're already in UIProcess, we look up the permissions here to remove a round trip.
+    if (!DeprecatedGlobalSettings::builtInNotificationsEnabled()) {
+        permission = PushPermissionState::Prompt;
+        HashMap<String, bool> permissions;
 
-    if (permissions.isEmpty())
-        permissions = WebNotificationManagerProxy::sharedServiceWorkerManager().notificationPermissions();
+        if (auto *dataStore = websiteDataStoreFromSessionID(sessionID))
+            permissions = dataStore->client().notificationPermissions();
 
-    auto origin = SecurityOriginData::fromURL(pushMessage.registrationURL).toString();
-    if (auto it = permissions.find(origin); it != permissions.end())
-        permission = it->value ? PushPermissionState::Granted : PushPermissionState::Denied;
+        if (permissions.isEmpty())
+            permissions = WebNotificationManagerProxy::sharedServiceWorkerManager().notificationPermissions();
+
+        auto origin = SecurityOriginData::fromURL(pushMessage.registrationURL).toString();
+        if (auto it = permissions.find(origin); it != permissions.end())
+            permission = it->value ? PushPermissionState::Granted : PushPermissionState::Denied;
+    }
+#endif
 
     RefPtr<ProcessAssertion> assertion = ProcessAssertion::create(getCurrentProcessID(), "WebKit Process Push Event"_s, ProcessAssertionType::UnboundedNetworking);
 

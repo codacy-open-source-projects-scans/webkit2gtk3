@@ -102,7 +102,7 @@ ServiceWorkerFetchTask::ServiceWorkerFetchTask(WebSWServerConnection& swServerCo
     , m_serviceWorkerRegistrationIdentifier(registration.identifier())
     , m_shouldSoftUpdate(registration.shouldSoftUpdate(loader.parameters().options))
 {
-    SWFETCH_RELEASE_LOG("ServiceWorkerFetchTask: (serverConnectionIdentifier=%" PRIu64 ", serviceWorkerRegistrationIdentifier=%" PRIu64 ", serviceWorkerIdentifier=%" PRIu64 ", %d)", m_serverConnectionIdentifier.toUInt64(), m_serviceWorkerRegistrationIdentifier.toUInt64(), m_serviceWorkerIdentifier.toUInt64(), isWorkerReady);
+    SWFETCH_RELEASE_LOG("ServiceWorkerFetchTask: (serverConnectionIdentifier=%" PRIu64 ", serviceWorkerRegistrationIdentifier=%" PRIu64 ", serviceWorkerIdentifier=%" PRIu64 ", %d)", m_serverConnectionIdentifier.toUInt64(), m_serviceWorkerRegistrationIdentifier->toUInt64(), m_serviceWorkerIdentifier.toUInt64(), isWorkerReady);
 
     // We only do the timeout logic for main document navigations because it is not Web-compatible to do so for subresources.
     if (loader.parameters().request.requester() == WebCore::ResourceRequestRequester::Main) {
@@ -203,6 +203,9 @@ void ServiceWorkerFetchTask::startFetch()
 
     bool isSent = sendToServiceWorker(Messages::WebSWContextManagerConnection::StartFetch { m_serverConnectionIdentifier, m_serviceWorkerIdentifier, m_fetchIdentifier, request, options, IPC::FormDataReference { m_currentRequest.httpBody() }, referrer, m_preloader && m_preloader->isServiceWorkerNavigationPreloadEnabled(), clientIdentifier, resultingClientIdentifier });
     ASSERT_UNUSED(isSent, isSent);
+
+    if (m_preloader && m_preloader->didReceiveResponseOrError())
+        sendNavigationPreloadUpdate();
 }
 
 void ServiceWorkerFetchTask::didReceiveRedirectResponse(WebCore::ResourceResponse&& response)
@@ -456,7 +459,7 @@ void ServiceWorkerFetchTask::softUpdateIfNeeded()
     CheckedPtr swConnection = loader->connectionToWebProcess().swConnection();
     if (!swConnection)
         return;
-    if (RefPtr registration = swConnection->server().getRegistration(m_serviceWorkerRegistrationIdentifier))
+    if (RefPtr registration = swConnection->server().getRegistration(*m_serviceWorkerRegistrationIdentifier))
         registration->scheduleSoftUpdate(loader->isAppInitiated() ? WebCore::IsAppInitiated::Yes : WebCore::IsAppInitiated::No);
 }
 
@@ -477,12 +480,8 @@ void ServiceWorkerFetchTask::loadResponseFromPreloader()
 void ServiceWorkerFetchTask::preloadResponseIsReady()
 {
     if (!m_isLoadingFromPreloader) {
-        if (m_preloader && m_preloader->isServiceWorkerNavigationPreloadEnabled()) {
-            if (!m_preloader->error().isNull())
-                sendToServiceWorker(Messages::WebSWContextManagerConnection::NavigationPreloadFailed { m_serverConnectionIdentifier, m_serviceWorkerIdentifier, m_fetchIdentifier, m_preloader->error() });
-            else
-                sendToServiceWorker(Messages::WebSWContextManagerConnection::NavigationPreloadIsReady { m_serverConnectionIdentifier, m_serviceWorkerIdentifier, m_fetchIdentifier, m_preloader->response() });
-        }
+        if (m_preloader && m_preloader->isServiceWorkerNavigationPreloadEnabled() && m_serviceWorkerConnection)
+            sendNavigationPreloadUpdate();
         return;
     }
 
@@ -500,6 +499,16 @@ void ServiceWorkerFetchTask::preloadResponseIsReady()
 
     bool needsContinueDidReceiveResponseMessage = true;
     processResponse(WTFMove(response), needsContinueDidReceiveResponseMessage, ShouldSetSource::No);
+}
+
+void ServiceWorkerFetchTask::sendNavigationPreloadUpdate()
+{
+    ASSERT(!!m_serviceWorkerConnection);
+
+    if (!m_preloader->error().isNull())
+        sendToServiceWorker(Messages::WebSWContextManagerConnection::NavigationPreloadFailed { m_serverConnectionIdentifier, m_serviceWorkerIdentifier, m_fetchIdentifier, m_preloader->error() });
+    else
+        sendToServiceWorker(Messages::WebSWContextManagerConnection::NavigationPreloadIsReady { m_serverConnectionIdentifier, m_serviceWorkerIdentifier, m_fetchIdentifier, m_preloader->response() });
 }
 
 void ServiceWorkerFetchTask::loadBodyFromPreloader()

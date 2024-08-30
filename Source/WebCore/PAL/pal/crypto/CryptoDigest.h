@@ -26,17 +26,17 @@
 #pragma once
 
 #include <wtf/Noncopyable.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/Vector.h>
 #include <wtf/text/WTFString.h>
 
 namespace PAL {
 
 struct CryptoDigestContext;
-enum class UseCryptoKit : bool { No, Yes };
 
 class CryptoDigest {
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(CryptoDigest);
     WTF_MAKE_NONCOPYABLE(CryptoDigest);
-    WTF_MAKE_FAST_ALLOCATED;
 public:
     enum class Algorithm {
         SHA_1,

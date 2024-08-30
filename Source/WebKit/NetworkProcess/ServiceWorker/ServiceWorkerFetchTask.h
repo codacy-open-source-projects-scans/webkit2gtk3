@@ -124,6 +124,7 @@ private:
     template<typename Message> bool sendToClient(Message&&);
 
     RefPtr<NetworkResourceLoader> protectedLoader() const;
+    void sendNavigationPreloadUpdate();
 
     WeakPtr<WebSWServerConnection> m_swServerConnection;
     WeakPtr<NetworkResourceLoader> m_loader;
@@ -133,7 +134,7 @@ private:
     WebCore::ServiceWorkerIdentifier m_serviceWorkerIdentifier;
     WebCore::ResourceRequest m_currentRequest;
     std::unique_ptr<WebCore::Timer> m_timeoutTimer;
-    WebCore::ServiceWorkerRegistrationIdentifier m_serviceWorkerRegistrationIdentifier;
+    Markable<WebCore::ServiceWorkerRegistrationIdentifier> m_serviceWorkerRegistrationIdentifier;
     std::unique_ptr<ServiceWorkerNavigationPreloader> m_preloader;
     bool m_wasHandled { false };
     bool m_isDone { false };

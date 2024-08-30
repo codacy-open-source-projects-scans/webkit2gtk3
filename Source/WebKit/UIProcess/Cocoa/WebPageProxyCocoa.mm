@@ -38,7 +38,12 @@
 #import "InsertTextOptions.h"
 #import "LoadParameters.h"
 #import "MessageSenderInlines.h"
+#import "NativeWebGestureEvent.h"
+#import "NativeWebKeyboardEvent.h"
+#import "NativeWebMouseEvent.h"
+#import "NavigationState.h"
 #import "PageClient.h"
+#import "PlatformXRSystem.h"
 #import "PlaybackSessionManagerProxy.h"
 #import "QuickLookThumbnailLoader.h"
 #import "RemoteLayerTreeTransaction.h"
@@ -73,8 +78,10 @@
 #import <WebCore/PlatformPlaybackSessionInterface.h>
 #import <WebCore/PlaybackSessionInterfaceAVKit.h>
 #import <WebCore/PlaybackSessionInterfaceMac.h>
+#import <WebCore/PlaybackSessionInterfaceTVOS.h>
 #import <WebCore/RunLoopObserver.h>
 #import <WebCore/SearchPopupMenuCocoa.h>
+#import <WebCore/SleepDisabler.h>
 #import <WebCore/TextAlternativeWithRange.h>
 #import <WebCore/TextAnimationTypes.h>
 #import <WebCore/ValidationBubble.h>
@@ -137,6 +144,12 @@ using namespace WebCore;
 
 constexpr IntSize iconSize = IntSize(400, 400);
 
+void WebPageProxy::didGeneratePageLoadTiming(const WebPageLoadTiming& timing)
+{
+    if (auto* state = NavigationState::fromWebPage(*this))
+        state->didGeneratePageLoadTiming(timing);
+}
+
 static bool exceedsRenderTreeSizeSizeThreshold(uint64_t thresholdSize, uint64_t committedSize)
 {
     const double thesholdSizeFraction = 0.5; // Empirically-derived.
@@ -163,7 +176,7 @@ void WebPageProxy::didCommitLayerTree(const WebKit::RemoteLayerTreeTransaction& 
     if (internals().observedLayoutMilestones.contains(WebCore::LayoutMilestone::ReachedSessionRestorationRenderTreeSizeThreshold) && !m_hitRenderTreeSizeThreshold
         && exceedsRenderTreeSizeSizeThreshold(m_sessionRestorationRenderTreeSize, layerTreeTransaction.renderTreeSize())) {
         m_hitRenderTreeSizeThreshold = true;
-        didReachLayoutMilestone(WebCore::LayoutMilestone::ReachedSessionRestorationRenderTreeSizeThreshold);
+        didReachLayoutMilestone(WebCore::LayoutMilestone::ReachedSessionRestorationRenderTreeSizeThreshold, WallTime::now());
     }
 }
 
@@ -448,6 +461,8 @@ ResourceError WebPageProxy::errorForUnpermittedAppBoundDomainNavigation(const UR
 {
     return { WKErrorDomain, WKErrorNavigationAppBoundDomain, url, localizedDescriptionForErrorCode(WKErrorNavigationAppBoundDomain) };
 }
+
+WebPageProxy::Internals::~Internals() = default;
 
 #if ENABLE(APPLE_PAY)
 
@@ -1236,9 +1251,17 @@ void WebPageProxy::enableTextAnimationTypeForElementWithID(const String& element
     legacyMainFrameProcess().send(Messages::WebPage::EnableTextAnimationTypeForElementWithID(elementID), webPageIDInMainFrameProcess());
 }
 
-void WebPageProxy::addTextAnimationForAnimationID(IPC::Connection& connection, const WTF::UUID& uuid, const WebCore::TextAnimationData& styleData, const WebCore::TextIndicatorData& indicatorData, CompletionHandler<void(WebCore::TextAnimationRunMode)>&& completionHandler)
+void WebPageProxy::addTextAnimationForAnimationID(IPC::Connection& connection, const WTF::UUID& uuid, const WebCore::TextAnimationData& styleData, const WebCore::TextIndicatorData& indicatorData)
 {
-    MESSAGE_CHECK_COMPLETION(uuid.isValid(), connection, completionHandler({ }));
+    addTextAnimationForAnimationIDWithCompletionHandler(connection, uuid, styleData, indicatorData, { });
+}
+
+void WebPageProxy::addTextAnimationForAnimationIDWithCompletionHandler(IPC::Connection& connection, const WTF::UUID& uuid, const WebCore::TextAnimationData& styleData, const WebCore::TextIndicatorData& indicatorData, CompletionHandler<void(WebCore::TextAnimationRunMode)>&& completionHandler)
+{
+    if (completionHandler)
+        MESSAGE_CHECK_COMPLETION(uuid.isValid(), connection, completionHandler({ }));
+    else
+        MESSAGE_CHECK(uuid.isValid(), connection);
 
     internals().textIndicatorDataForAnimationID.add(uuid, indicatorData);
 
@@ -1295,16 +1318,17 @@ void WebPageProxy::didEndPartialIntelligenceTextPonderingAnimation(IPC::Connecti
     didEndPartialIntelligenceTextPonderingAnimationImpl();
 }
 
-void WebPageProxy::showSelectionForActiveWritingToolsSessionIfNeeded()
+bool WebPageProxy::writingToolsTextReplacementsFinished()
+{
+    return protectedPageClient()->writingToolsTextReplacementsFinished();
+}
+
+void WebPageProxy::showSelectionForActiveWritingToolsSession()
 {
     if (!hasRunningProcess())
         return;
 
-    if (protectedPageClient()->intelligenceTextPonderingAnimationIsComplete()) {
-        // If the entire replacement has already been completed, and this is the end of the last animation,
-        // then reveal the selection.
-        legacyMainFrameProcess().send(Messages::WebPage::ShowSelectionForActiveWritingToolsSession(), webPageIDInMainFrameProcess());
-    }
+    legacyMainFrameProcess().send(Messages::WebPage::ShowSelectionForActiveWritingToolsSession(), webPageIDInMainFrameProcess());
 }
 
 void WebPageProxy::removeTextAnimationForAnimationID(IPC::Connection& connection, const WTF::UUID& uuid)

@@ -49,6 +49,7 @@
 
 #include "AccessibilityRegionContext.h"
 #include "BitmapImage.h"
+#include "BorderShape.h"
 #include "BoxShape.h"
 #include "CSSFilter.h"
 #include "CSSPropertyNames.h"
@@ -161,7 +162,7 @@ namespace WebCore {
 using namespace HTMLNames;
 
 class ClipRects : public RefCounted<ClipRects> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(ClipRects);
 public:
     static Ref<ClipRects> create()
     {
@@ -238,7 +239,7 @@ private:
 };
 
 class ClipRectsCache {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(ClipRectsCache);
 public:
     ClipRectsCache()
     {
@@ -827,14 +828,19 @@ void RenderLayer::rebuildZOrderLists(std::unique_ptr<Vector<RenderLayer*>>& posZ
     }
 }
 
-void RenderLayer::removeSelfAndDescendantsFromCompositor()
+void RenderLayer::removeSelfFromCompositor()
 {
     if (parent())
         compositor().layerWillBeRemoved(*parent(), *this);
     clearBacking();
+}
 
-    for (RenderLayer* child = firstChild(); child; child = child->nextSibling())
-        child->removeSelfAndDescendantsFromCompositor();
+void RenderLayer::removeDescendantsFromCompositor()
+{
+    for (RenderLayer* child = firstChild(); child; child = child->nextSibling()) {
+        child->removeSelfFromCompositor();
+        child->removeDescendantsFromCompositor();
+    }
 }
 
 void RenderLayer::setWasOmittedFromZOrderTree()
@@ -842,7 +848,13 @@ void RenderLayer::setWasOmittedFromZOrderTree()
     if (m_wasOmittedFromZOrderTree)
         return;
 
-    removeSelfAndDescendantsFromCompositor();
+    ASSERT(!isNormalFlowOnly());
+    removeSelfFromCompositor();
+
+    // Omitting a stacking context removes the whole subtree, otherwise collectLayers will
+    // visit and omit/include descendants separately.
+    if (isStackingContext())
+        removeDescendantsFromCompositor();
 
     if (compositor().hasContentCompositingLayers() && parent())
         parent()->setDescendantsNeedCompositingRequirementsTraversal();
@@ -858,10 +870,10 @@ void RenderLayer::collectLayers(std::unique_ptr<Vector<RenderLayer*>>& positiveZ
 
     bool isStacking = isStackingContext();
     // Overflow layers are just painted by their enclosing layers, so they don't get put in zorder lists.
-    bool includeHiddenLayer = (m_hasVisibleContent || m_intrinsicallyComposited) || ((m_hasVisibleDescendant || m_hasIntrinsicallyCompositedDescendants) && isStacking);
-    includeHiddenLayer |= page().hasEverSetVisibilityAdjustment();
+    bool layerOrDescendantsAreVisible = (m_hasVisibleContent || m_intrinsicallyComposited) || ((m_hasVisibleDescendant || m_hasIntrinsicallyCompositedDescendants) && isStacking);
+    layerOrDescendantsAreVisible |= page().hasEverSetVisibilityAdjustment();
     if (!isNormalFlowOnly()) {
-        if (includeHiddenLayer) {
+        if (layerOrDescendantsAreVisible) {
             auto& layerList = (zIndex() >= 0) ? positiveZOrderList : negativeZOrderList;
             if (!layerList)
                 layerList = makeUnique<Vector<RenderLayer*>>();
@@ -874,7 +886,7 @@ void RenderLayer::collectLayers(std::unique_ptr<Vector<RenderLayer*>>& positiveZ
 
     // Recur into our children to collect more layers, but only if we don't establish
     // a stacking context/container.
-    if ((m_hasIntrinsicallyCompositedDescendants || m_hasVisibleDescendant) && !isStacking) {
+    if (!isStacking) {
         for (RenderLayer* child = firstChild(); child; child = child->nextSibling()) {
             // Ignore reflections.
             if (!isReflectionLayer(*child))
@@ -2877,11 +2889,11 @@ void RenderLayer::clipToRect(GraphicsContext& context, GraphicsContextStateSaver
             if (layer->renderer().hasNonVisibleOverflow() && layer->renderer().style().hasBorderRadius() && ancestorLayerIsInContainingBlockChain(*layer)) {
                 LayoutRect adjustedClipRect = LayoutRect(toLayoutPoint(layer->offsetFromAncestor(paintingInfo.rootLayer, AdjustForColumns)), layer->size());
                 adjustedClipRect.move(paintingInfo.subpixelOffset);
-                FloatRoundedRect roundedRect = layer->renderer().style().getRoundedInnerBorderFor(adjustedClipRect).pixelSnappedRoundedRectForPainting(deviceScaleFactor);
-                if (roundedRect.intersectionIsRectangular(paintingInfo.paintDirtyRect))
+                auto borderShape = BorderShape::shapeForBorderRect(layer->renderer().style(), adjustedClipRect);
+                if (borderShape.innerShapeContains(paintingInfo.paintDirtyRect))
                     context.clip(snapRectToDevicePixels(intersection(paintingInfo.paintDirtyRect, adjustedClipRect), deviceScaleFactor));
                 else
-                    context.clipRoundedRect(roundedRect);
+                    borderShape.clipToInnerShape(context, deviceScaleFactor);
             }
             
             if (layer == paintingInfo.rootLayer)
@@ -3093,7 +3105,7 @@ bool RenderLayer::setupFontSubpixelQuantization(GraphicsContext& context, bool& 
 
     bool scrollingOnMainThread = true;
 #if ENABLE(ASYNC_SCROLLING)
-    if (auto* scrollingCoordinator = page().scrollingCoordinator())
+    if (RefPtr scrollingCoordinator = page().scrollingCoordinator())
         scrollingOnMainThread = scrollingCoordinator->shouldUpdateScrollLayerPositionSynchronously(renderer().view().frameView());
 #endif
 
@@ -6114,7 +6126,7 @@ static void outputPaintOrderTreeRecursive(TextStream& stream, const WebCore::Ren
 
     if (layer.isComposited()) {
         auto& backing = *layer.backing();
-        stream << " (layerID "_s << backing.graphicsLayer()->primaryLayerID().object() << ")"_s;
+        stream << " (layerID "_s << (backing.graphicsLayer()->primaryLayerID() ? backing.graphicsLayer()->primaryLayerID()->object().toUInt64() : 0) << ")"_s;
         
         if (layer.indirectCompositingReason() != WebCore::IndirectCompositingReason::None)
             stream << " "_s << layer.indirectCompositingReason();

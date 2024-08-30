@@ -500,6 +500,16 @@
    },
    {
       "emails" : [
+         "alexbdamac@gmail.com"
+      ],
+      "github" : "AlexsanderDamaceno",
+      "name" : "Alexsander Borges Damaceno",
+      "nicks" : [
+         "alexbdamac"
+      ]
+   },
+   {
+      "emails" : [
          "ajuma@chromium.org"
       ],
       "github" : "alijuma",
@@ -2301,6 +2311,16 @@
       "name" : "Dean Johnson",
       "nicks" : [
          "deanj"
+      ]
+   },
+   {
+      "emails" : [
+         "codesculptures@gmail.com"
+      ],
+      "github" : "codesculpture",
+      "name" : "Deepak Aravind",
+      "nicks" : [
+         "codesculpture"
       ]
    },
    {
@@ -6055,6 +6075,16 @@
       "nicks" : [
          "japhet",
          "natechapin"
+      ]
+   },
+   {
+      "emails" : [
+         "nathan_solomon@apple.com"
+      ],
+      "github" : "NathanSolomon733",
+      "name" : "Nathan Solomon",
+      "nicks" : [
+         "NathanSolomon733"
       ]
    },
    {

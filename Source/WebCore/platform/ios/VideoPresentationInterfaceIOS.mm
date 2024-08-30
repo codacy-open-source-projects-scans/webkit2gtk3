@@ -44,6 +44,7 @@
 #import <wtf/BlockPtr.h>
 #import <wtf/RefPtr.h>
 #import <wtf/RetainPtr.h>
+#import <wtf/TZoneMallocInlines.h>
 #import <wtf/WeakObjCPtr.h>
 #import <wtf/text/CString.h>
 #import <wtf/text/WTFString.h>
@@ -59,6 +60,8 @@
 @end
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(VideoPresentationInterfaceIOS);
 
 static UIColor *clearUIColor()
 {
@@ -158,6 +161,10 @@ std::optional<MediaPlayerIdentifier>VideoPresentationInterfaceIOS::playerIdentif
     return m_playbackSessionInterface->playerIdentifier();
 }
 
+void VideoPresentationInterfaceIOS::setSpatialVideoMetadata(const std::optional<SpatialVideoMetadata>&)
+{
+}
+
 void VideoPresentationInterfaceIOS::setPlayerIdentifier(std::optional<MediaPlayerIdentifier> identifier)
 {
     m_playbackSessionInterface->setPlayerIdentifier(WTFMove(identifier));
@@ -249,25 +256,25 @@ void VideoPresentationInterfaceIOS::doSetup()
 
     setupPlayerViewController();
 
-    UIViewController *playerViewController = this->playerViewController();
+    if (UIViewController *playerViewController = this->playerViewController()) {
+        if (m_viewController) {
+            [m_viewController addChildViewController:playerViewController];
+            [[m_viewController view] addSubview:playerViewController.view];
+            [playerViewController didMoveToParentViewController:m_viewController.get()];
+        } else
+            [m_parentView addSubview:playerViewController.view];
 
-    if (m_viewController) {
-        [m_viewController addChildViewController:playerViewController];
-        [[m_viewController view] addSubview:playerViewController.view];
-        [playerViewController didMoveToParentViewController:m_viewController.get()];
-    } else
-        [m_parentView addSubview:playerViewController.view];
+        playerViewController.view.frame = [m_parentView convertRect:m_inlineRect toView:playerViewController.view.superview];
+        playerViewController.view.backgroundColor = clearUIColor();
+        playerViewController.view.autoresizingMask = (UIViewAutoresizingFlexibleBottomMargin | UIViewAutoresizingFlexibleRightMargin);
 
-    playerViewController.view.frame = [m_parentView convertRect:m_inlineRect toView:playerViewController.view.superview];
-    playerViewController.view.backgroundColor = clearUIColor();
-    playerViewController.view.autoresizingMask = (UIViewAutoresizingFlexibleBottomMargin | UIViewAutoresizingFlexibleRightMargin);
+        [playerViewController.view setNeedsLayout];
+        [playerViewController.view layoutIfNeeded];
 
-    [playerViewController.view setNeedsLayout];
-    [playerViewController.view layoutIfNeeded];
-
-    if (m_targetStandby && !m_currentMode.hasVideo() && !m_returningToStandby) {
-        [m_window setHidden:YES];
-        [playerViewController.view setHidden:YES];
+        if (m_targetStandby && !m_currentMode.hasVideo() && !m_returningToStandby) {
+            [m_window setHidden:YES];
+            [playerViewController.view setHidden:YES];
+        }
     }
 
     [CATransaction commit];

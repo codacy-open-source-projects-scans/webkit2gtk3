@@ -34,8 +34,8 @@
 #include "Scrollbar.h"
 #include "ScrollbarColor.h"
 #include <wtf/CheckedPtr.h>
-#include <wtf/FastMalloc.h>
 #include <wtf/Forward.h>
+#include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
 
 namespace WebCore {
@@ -81,7 +81,7 @@ inline int offsetForOrientation(ScrollOffset offset, ScrollbarOrientation orient
 }
 
 class ScrollableArea : public CanMakeWeakPtr<ScrollableArea> {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_TZONE_ALLOCATED(ScrollableArea);
 public:
     // CheckedPtr interface
     virtual uint32_t ptrCount() const = 0;
@@ -414,6 +414,8 @@ public:
 
     virtual bool shouldPlaceVerticalScrollbarOnLeft() const = 0;
     
+    virtual bool isHorizontalWritingMode() const { return false; }
+
     virtual String debugDescription() const = 0;
 
     virtual float pageScaleFactor() const
@@ -439,6 +441,9 @@ public:
 
     WEBCORE_EXPORT void setScrollbarsController(std::unique_ptr<ScrollbarsController>&&);
     WEBCORE_EXPORT virtual void scrollbarWidthChanged(ScrollbarWidth) { }
+
+    virtual IntSize totalScrollbarSpace() const { return { }; }
+    virtual int insetForLeftScrollbarSpace() const { return 0; }
 
 protected:
     WEBCORE_EXPORT ScrollableArea();

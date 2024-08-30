@@ -613,7 +613,6 @@ enum {
     WillEndSwipeCallbackID,
     DidEndSwipeCallbackID,
     DidRemoveSwipeSnapshotCallbackID,
-    StatisticsDidScanDataRecordsCallbackID,
     TextDidChangeInTextFieldCallbackID,
     TextFieldDidBeginEditingCallbackID,
     TextFieldDidEndEditingCallbackID,
@@ -1413,20 +1412,6 @@ void TestRunner::setStatisticsTimeToLiveUserInteraction(double seconds)
     postSynchronousMessage("SetStatisticsTimeToLiveUserInteraction", seconds);
 }
 
-void TestRunner::installStatisticsDidScanDataRecordsCallback(JSContextRef context, JSValueRef callback)
-{
-    if (!!callback) {
-        cacheTestRunnerCallback(context, StatisticsDidScanDataRecordsCallbackID, callback);
-        // Setting a callback implies we expect to receive callbacks. So register for them.
-        setStatisticsNotifyPagesWhenDataRecordsWereScanned(true);
-    }
-}
-
-void TestRunner::statisticsDidScanDataRecordsCallback()
-{
-    callTestRunnerCallback(StatisticsDidScanDataRecordsCallbackID);
-}
-
 void TestRunner::statisticsNotifyObserver(JSContextRef context, JSValueRef callback)
 {
     auto globalContext = JSContextGetGlobalContext(context);
@@ -1446,11 +1431,6 @@ void TestRunner::statisticsProcessStatisticsAndDataRecords(JSContextRef context,
 void TestRunner::statisticsUpdateCookieBlocking(JSContextRef context, JSValueRef completionHandler)
 {
     postMessageWithAsyncReply(context, "StatisticsUpdateCookieBlocking", completionHandler);
-}
-
-void TestRunner::setStatisticsNotifyPagesWhenDataRecordsWereScanned(bool value)
-{
-    postSynchronousMessage("StatisticsNotifyPagesWhenDataRecordsWereScanned", value);
 }
 
 void TestRunner::setStatisticsTimeAdvanceForTesting(double value)
@@ -1719,6 +1699,15 @@ void TestRunner::triggerMockCaptureConfigurationChange(bool forMicrophone, bool 
     postSynchronousMessage("TriggerMockCaptureConfigurationChange", createWKDictionary({
         { "microphone", adoptWK(WKBooleanCreate(forMicrophone)) },
         { "display", adoptWK(WKBooleanCreate(forDisplay)) },
+    }));
+}
+
+void TestRunner::setCaptureState(bool cameraState, bool microphoneState, bool displayState)
+{
+    postSynchronousMessage("SetCaptureState", createWKDictionary({
+        { "camera", adoptWK(WKBooleanCreate(cameraState)) },
+        { "microphone", adoptWK(WKBooleanCreate(microphoneState)) },
+        { "display", adoptWK(WKBooleanCreate(displayState)) },
     }));
 }
 

@@ -32,6 +32,7 @@
 
 #include "AnimationMalloc.h"
 #include "AnimationUtilities.h"
+#include "BlockEllipsis.h"
 #include "CSSCustomPropertyValue.h"
 #include "CSSPrimitiveValue.h"
 #include "CSSPropertyBlendingClient.h"
@@ -4097,7 +4098,8 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         new DiscretePropertyWrapper<std::optional<Style::ScopedName>>(CSSPropertyViewTransitionName, &RenderStyle::viewTransitionName, &RenderStyle::setViewTransitionName),
         new DiscretePropertyWrapper<FieldSizing>(CSSPropertyFieldSizing, &RenderStyle::fieldSizing, &RenderStyle::setFieldSizing),
         new DiscretePropertyWrapper<const Vector<AtomString>&>(CSSPropertyAnchorName, &RenderStyle::anchorNames, &RenderStyle::setAnchorNames),
-        new DiscretePropertyWrapper<const AtomString&>(CSSPropertyPositionAnchor, &RenderStyle::positionAnchor, &RenderStyle::setPositionAnchor)
+        new DiscretePropertyWrapper<const AtomString&>(CSSPropertyPositionAnchor, &RenderStyle::positionAnchor, &RenderStyle::setPositionAnchor),
+        new DiscretePropertyWrapper<const BlockEllipsis&>(CSSPropertyBlockEllipsis, &RenderStyle::blockEllipsis, &RenderStyle::setBlockEllipsis)
     };
     const unsigned animatableLonghandPropertiesCount = std::size(animatableLonghandPropertyWrappers);
 
@@ -4110,6 +4112,14 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         CSSPropertyWebkitMask, // for mask-position
         CSSPropertyMaskPosition,
         CSSPropertyWebkitMaskPosition,
+        CSSPropertyBorderBlock,
+        CSSPropertyBorderBlockColor,
+        CSSPropertyBorderBlockStyle,
+        CSSPropertyBorderBlockWidth,
+        CSSPropertyBorderInline,
+        CSSPropertyBorderInlineColor,
+        CSSPropertyBorderInlineStyle,
+        CSSPropertyBorderInlineWidth,
         CSSPropertyBorderTop, CSSPropertyBorderRight, CSSPropertyBorderBottom, CSSPropertyBorderLeft,
         CSSPropertyBorderBlockStart, CSSPropertyBorderBlockEnd, CSSPropertyBorderInlineStart, CSSPropertyBorderInlineEnd,
         CSSPropertyBorderColor,
@@ -4127,6 +4137,7 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         CSSPropertyGridColumn,
         CSSPropertyGridRow,
         CSSPropertyGridTemplate,
+        CSSPropertyInsetBlock, // logical shorthand
         CSSPropertyListStyle, // for list-style-image
         CSSPropertyMargin,
         CSSPropertyMarginBlock, // logical shorthand
@@ -4204,19 +4215,10 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         // property should be animatable, make sure to file a bug.
 
         // To be fixed / untriaged:
-        case CSSPropertyBorderBlock: // logical shorthand
-        case CSSPropertyBorderBlockColor: // logical shorthand
-        case CSSPropertyBorderBlockStyle: // logical shorthand
-        case CSSPropertyBorderBlockWidth: // logical shorthand
-        case CSSPropertyBorderInline: // logical shorthand
-        case CSSPropertyBorderInlineColor: // logical shorthand
-        case CSSPropertyBorderInlineStyle: // logical shorthand
-        case CSSPropertyBorderInlineWidth: // logical shorthand
         case CSSPropertyBorderStyle:
         case CSSPropertyInlineSize:
         case CSSPropertyInputSecurity:
         case CSSPropertyInset:
-        case CSSPropertyInsetBlock:
         case CSSPropertyInsetBlockEnd:
         case CSSPropertyInsetBlockStart:
         case CSSPropertyInsetInline:

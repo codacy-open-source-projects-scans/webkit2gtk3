@@ -4532,6 +4532,8 @@ storage/indexeddb/modern/deleteindex-4-private.html [ Pass Crash ]
 # rdar://104694723 ([ iOS16+ debug ] media/vp9.html is a consistent timeout)
 [ Debug ] media/vp9.html [ Timeout ]
 
+# Requires specific encoder behavior.
+http/wpt/webcodecs/encoder-task-failing.html [ Failure ]
 
 # rdar://105103818 ([OOP] WebKit tests can timeout due to UIHelper.activateAndWaitForInputSession)
 editing/caret/ios/emoji.html [ Skip ] # TODO: marked failure below. Uncomment that line when this is resolved.
@@ -7497,6 +7499,7 @@ imported/w3c/web-platform-tests/css/css-content/quotes-026.html [ ImageOnlyFailu
 imported/w3c/web-platform-tests/css/css-content/quotes-027.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-text/text-transform/text-transform-fullwidth-004.xht [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-text/text-transform/text-transform-fullwidth-005.xht [ ImageOnlyFailure ]
+fast/text/text-underline-position-under.html [ ImageOnlyFailure ]
 
 # webkit.org/b/269496 [ iOS17 ] fast/forms/datalist/datalist-option-labels.html is a flaky timeout
 fast/forms/datalist/datalist-option-labels.html [ Pass Timeout ]
@@ -7521,20 +7524,11 @@ imported/w3c/web-platform-tests/screen-orientation/lock-sandboxed-iframe.html [ 
 # webkit.org/b/278330 [ iOS ] imported/w3c/web-platform-tests/scroll-to-text-fragment/scroll-to-text-fragment.html is a flaky text failure
 imported/w3c/web-platform-tests/scroll-to-text-fragment/scroll-to-text-fragment.html [ Pass Failure ]
 
-# webkit.org/b/277903 [ iOS Release ] imported/w3c/web-platform-tests/trusted-types/trusted-types-eval-reporting.html is a flaky failure
-imported/w3c/web-platform-tests/trusted-types/trusted-types-eval-reporting.html [ Pass Failure ] 
-
 # webkit.org/b/278332 [ iOS ] imported/w3c/web-platform-tests/websockets/basic-auth.any.worker.html?wss is a flaky text failure
 imported/w3c/web-platform-tests/websockets/basic-auth.any.worker.html?wss [ Pass Failure ]
 
 # webkit.org/b/278333 [ iOS ] media/remove-video-best-media-element-in-main-frame-crash.html is a flaky timeout
 media/remove-video-best-media-element-in-main-frame-crash.html [ Pass Timeout ]
-
-# webkit.org/b/278325 New-test(282375@main): [ iOS ] http/tests/scroll-to-text-fragment/generation-does-not-emit-empty-prefix.html is a constant text failure
-http/tests/scroll-to-text-fragment/generation-does-not-emit-empty-prefix.html [ Failure ]
-
-# webkit.org/b/278324 [ iOS ] editing/selection/ios/look-up-selected-text.html is a constant timeout
-editing/selection/ios/look-up-selected-text.html [ Timeout ]
 
 # webkit.org/b/278340 [ iOS ] compositing/geometry/fixed-position-composited-page-scale-smaller-than-viewport.html is a flaky image failure
 compositing/geometry/fixed-position-composited-page-scale-smaller-than-viewport.html [ Pass ImageOnlyFailure ]
@@ -7551,5 +7545,11 @@ imported/w3c/web-platform-tests/css/css-inline/text-box-trim/text-box-trim-block
 # webkit.org/b/278352 [ iOS MacOS ] imported/w3c/web-platform-tests/css/css-view-transitions/capture-with-opacity-zero-child.html is a flaky image failure
 imported/w3c/web-platform-tests/css/css-view-transitions/capture-with-opacity-zero-child.html [ Pass ImageOnlyFailure ]
 
-# webkit.org/b/278500 REGRESSION (282564@main): [ macOS iOS wk2 debug arm64 ] imported/w3c/web-platform-tests/navigation-api/navigate-event/replaceState-inside-back-handler.html is a constant crash with a  assertion failure.
-[ Debug arm64 ] imported/w3c/web-platform-tests/navigation-api/navigate-event/replaceState-inside-back-handler.html [ Skip ]
+# webkit.org/b/278233 imported/w3c/web-platform-tests/websockets/basic-auth.any.sharedworker.html?wss is flakey failure on iOS Sim
+imported/w3c/web-platform-tests/websockets/basic-auth.any.sharedworker.html?wss [ Pass Failure ]
+
+# webkit.org/b/278323 REGRESSION(282170@main): [ iOS ] css3/filters/backdrop-filter-page-scale.html is a flaky image failure
+css3/filters/backdrop-filter-page-scale.html [ Pass ImageOnlyFailure ]
+
+# webkit.org/b/277841 REGRESSION (281870@main): [ macOS iOS wk2 ] imported/w3c/web-platform-tests/css/css-view-transitions/new-content-intrinsic-aspect-ratio.html is a flaky failure
+imported/w3c/web-platform-tests/css/css-view-transitions/new-content-intrinsic-aspect-ratio.html [ Pass ImageOnlyFailure ]

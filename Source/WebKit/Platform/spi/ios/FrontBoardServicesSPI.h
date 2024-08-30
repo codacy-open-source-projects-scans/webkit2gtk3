@@ -54,10 +54,11 @@ typedef void(^FBSOpenApplicationCompletion)(BSProcessHandle *process, NSError *e
 - (void)openApplication:(NSString *)bundleID withOptions:(FBSOpenApplicationOptions *)options completion:(FBSOpenApplicationCompletion)completion;
 @end
 
+#endif // USE(APPLE_INTERNAL_SDK)
+
+// Forward declare this for all SDKs to get the extern C linkage
 WTF_EXTERN_C_BEGIN
 extern FBSOpenApplicationService *SBSCreateOpenApplicationService(void);
 WTF_EXTERN_C_END
-
-#endif // USE(APPLE_INTERNAL_SDK)
 
 #endif // PLATFORM(IOS_FAMILY)

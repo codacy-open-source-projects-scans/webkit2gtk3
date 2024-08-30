@@ -21,6 +21,7 @@
 
 #include "GraphicsContextGL.h"
 #include "Logging.h"
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/Vector.h>
 #include <wtf/text/StringToIntegerConversion.h>
 
@@ -35,6 +36,8 @@
 #endif
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(GLContext);
 
 const char* GLContext::errorString(int statusCode)
 {
@@ -164,6 +167,9 @@ std::unique_ptr<GLContext> GLContext::createWindowContext(GLNativeWindowType win
 #endif // USE(WPE_RENDERER)
 #if USE(GBM)
     case PlatformDisplay::Type::GBM:
+#endif
+#if PLATFORM(GTK)
+    case PlatformDisplay::Type::Default:
 #endif
     case PlatformDisplay::Type::Surfaceless:
         RELEASE_ASSERT_NOT_REACHED();

@@ -42,6 +42,7 @@
 #include <gst/pbutils/pbutils.h>
 #include <gst/video/video.h>
 #include <wtf/Condition.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/glib/RunLoopSourcePriority.h>
 #include <wtf/text/MakeString.h>
 
@@ -49,6 +50,9 @@ GST_DEBUG_CATEGORY_EXTERN(webkit_mse_debug);
 #define GST_CAT_DEFAULT webkit_mse_debug
 
 namespace WebCore {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(AppendPipeline);
+WTF_MAKE_TZONE_ALLOCATED_IMPL_NESTED(AppendPipelineTrack, AppendPipeline::Track);
 
 GType AppendPipeline::s_endOfAppendMetaType = 0;
 const GstMetaInfo* AppendPipeline::s_webKitEndOfAppendMetaInfo = nullptr;
@@ -245,18 +249,12 @@ AppendPipeline::~AppendPipeline()
 void AppendPipeline::handleErrorConditionFromStreamingThread()
 {
     ASSERT(!isMainThread());
-    // Notify the main thread that the append has a decode error.
-    auto response = m_taskQueue.enqueueTaskAndWait<AbortableTaskQueue::Void>([this]() {
+    m_taskQueue.enqueueTaskAndWait<AbortableTaskQueue::Void>([this]() {
         m_errorReceived = true;
         // appendParsingFailed() will cause resetParserState() to be called.
         m_sourceBufferPrivate.appendParsingFailed();
         return AbortableTaskQueue::Void();
     });
-#if !ASSERT_ENABLED
-    UNUSED_VARIABLE(response);
-#endif
-    // The streaming thread has now been unblocked because we are aborting in the main thread.
-    ASSERT(!response);
 }
 
 void AppendPipeline::handleErrorSyncMessage(GstMessage* message)

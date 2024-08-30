@@ -31,6 +31,7 @@
 #import "WKWebViewInternal.h"
 #import <WebCore/AlternativeTextUIController.h>
 #import <WebCore/TextAnimationTypes.h>
+#import <WebCore/WritingToolsTypes.h>
 #import <WebKit/WKWebViewConfigurationPrivate.h>
 #import <WebKit/WKWebViewPrivateForTesting.h>
 #import <pal/spi/ios/BrowserEngineKitSPI.h>
@@ -303,9 +304,9 @@ void PageClientImplCocoa::didEndPartialIntelligenceTextPonderingAnimation()
     [m_webView _didEndPartialIntelligenceTextPonderingAnimation];
 }
 
-bool PageClientImplCocoa::intelligenceTextPonderingAnimationIsComplete()
+bool PageClientImplCocoa::writingToolsTextReplacementsFinished()
 {
-    return [m_webView _intelligenceTextPonderingAnimationIsComplete];
+    return [m_webView _writingToolsTextReplacementsFinished];
 }
 
 void PageClientImplCocoa::addTextAnimationForAnimationID(const WTF::UUID& uuid, const WebCore::TextAnimationData& data)
@@ -348,6 +349,7 @@ void PageClientImplCocoa::hasActiveNowPlayingSessionChanged(bool hasActiveNowPla
 
 void PageClientImplCocoa::videoControlsManagerDidChange()
 {
+    RELEASE_LOG(ViewState, "%p PageClientImplCocoa::videoControlsManagerDidChange %d", m_webView.get().get(), [m_webView _canEnterFullscreen]);
     [m_webView willChangeValueForKey:@"_canEnterFullscreen"];
     [m_webView didChangeValueForKey:@"_canEnterFullscreen"];
 }

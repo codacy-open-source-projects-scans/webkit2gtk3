@@ -61,6 +61,7 @@
 #include "StyleAdjuster.h"
 #include "StylePendingResources.h"
 #include "StyleProperties.h"
+#include "StylePropertyShorthand.h"
 #include "StyleResolver.h"
 #include "StyleScope.h"
 #include "StyledElement.h"
@@ -253,22 +254,53 @@ static inline ExceptionOr<KeyframeEffect::KeyframeLikeObject> processKeyframeLik
     PropertyNameArray inputProperties(vm, PropertyNameMode::Strings, PrivateSymbolMode::Exclude);
     JSObject::getOwnPropertyNames(keyframesInput.get(), &lexicalGlobalObject, inputProperties, DontEnumPropertiesMode::Exclude);
 
+    auto isDirectionAwareShorthand = [](CSSPropertyID property) {
+        for (auto longhand : shorthandForProperty(property)) {
+            if (CSSProperty::isDirectionAwareProperty(longhand))
+                return true;
+        }
+        return false;
+    };
+
     // 4. Make up a new list animation properties that consists of all of the properties that are in both input properties and animatable
     //    properties, or which are in input properties and conform to the <custom-property-name> production.
-    Vector<JSC::Identifier> animationProperties;
+    Vector<JSC::Identifier> logicalShorthands;
+    Vector<JSC::Identifier> physicalShorthands;
+    Vector<JSC::Identifier> logicalLonghands;
+    Vector<JSC::Identifier> physicalLonghands;
     for (auto& inputProperty : inputProperties) {
         auto cssProperty = IDLAttributeNameToAnimationPropertyName(inputProperty.string());
         if (!isExposed(cssProperty, &document.settings()))
             cssProperty = CSSPropertyInvalid;
         auto resolvedCSSProperty = CSSProperty::resolveDirectionAwareProperty(cssProperty, RenderStyle::initialDirection(), RenderStyle::initialWritingMode());
-        if (CSSPropertyAnimation::isPropertyAnimatable(resolvedCSSProperty))
-            animationProperties.append(inputProperty);
+        if (CSSPropertyAnimation::isPropertyAnimatable(resolvedCSSProperty)) {
+            if (isDirectionAwareShorthand(cssProperty))
+                logicalShorthands.append(inputProperty);
+            else if (isShorthand(cssProperty))
+                physicalShorthands.append(inputProperty);
+            else if (resolvedCSSProperty != cssProperty)
+                logicalLonghands.append(inputProperty);
+            else
+                physicalLonghands.append(inputProperty);
+        }
     }
 
     // 5. Sort animation properties in ascending order by the Unicode codepoints that define each property name.
-    std::sort(animationProperties.begin(), animationProperties.end(), [](auto& lhs, auto& rhs) {
-        return codePointCompareLessThan(lhs.string().string(), rhs.string().string());
-    });
+    auto sortPropertiesInAscendingOrder = [](auto& properties) {
+        std::sort(properties.begin(), properties.end(), [](auto& lhs, auto& rhs) {
+            return codePointCompareLessThan(lhs.string().string(), rhs.string().string());
+        });
+    };
+    sortPropertiesInAscendingOrder(logicalShorthands);
+    sortPropertiesInAscendingOrder(physicalShorthands);
+    sortPropertiesInAscendingOrder(logicalLonghands);
+    sortPropertiesInAscendingOrder(physicalLonghands);
+
+    Vector<JSC::Identifier> animationProperties;
+    animationProperties.appendVector(logicalShorthands);
+    animationProperties.appendVector(physicalShorthands);
+    animationProperties.appendVector(logicalLonghands);
+    animationProperties.appendVector(physicalLonghands);
 
     // 6. For each property name in animation properties,
     size_t numberOfAnimationProperties = animationProperties.size();
@@ -1331,7 +1363,7 @@ OptionSet<AnimationImpact> KeyframeEffect::apply(RenderStyle& targetStyle, const
         return impact;
 
     ASSERT(computedTiming.currentIteration);
-    setAnimatedPropertiesInStyle(targetStyle, *computedTiming.progress, *computedTiming.currentIteration);
+    setAnimatedPropertiesInStyle(targetStyle, computedTiming);
     return impact;
 }
 
@@ -1497,11 +1529,18 @@ void KeyframeEffect::getAnimatedStyle(std::unique_ptr<RenderStyle>& animatedStyl
     }
 
     ASSERT(computedTiming.currentIteration);
-    setAnimatedPropertiesInStyle(*animatedStyle.get(), *computedTiming.progress, *computedTiming.currentIteration);
+    setAnimatedPropertiesInStyle(*animatedStyle.get(), computedTiming);
 }
 
-void KeyframeEffect::setAnimatedPropertiesInStyle(RenderStyle& targetStyle, double iterationProgress,  double currentIteration)
+void KeyframeEffect::setAnimatedPropertiesInStyle(RenderStyle& targetStyle, const ComputedEffectTiming& computedTiming)
 {
+    ASSERT(computedTiming.progress);
+    ASSERT(computedTiming.currentIteration);
+
+    auto iterationProgress = *computedTiming.progress;
+    auto currentIteration = *computedTiming.currentIteration;
+    auto before = computedTiming.before;
+
     auto& properties = m_blendingKeyframes.properties();
 
     // In the case of CSS Transitions we already know that there are only two keyframes, one where offset=0 and one where offset=1,
@@ -1574,7 +1613,7 @@ void KeyframeEffect::setAnimatedPropertiesInStyle(RenderStyle& targetStyle, doub
             return CSSPropertyAnimation::propertyRequiresBlendingForAccumulativeIteration(*this, property, startKeyframeStyle, endKeyframeStyle);
         };
 
-        interpolateKeyframes(property, interval, iterationProgress, currentIteration, iterationDuration(), composeProperty, accumulateProperty, interpolateProperty, requiresBlendingForAccumulativeIterationCallback);
+        interpolateKeyframes(property, interval, iterationProgress, currentIteration, iterationDuration(), before, composeProperty, accumulateProperty, interpolateProperty, requiresBlendingForAccumulativeIterationCallback);
     }
 
     // In case one of the animated properties has its value set to "inherit" in one of the keyframes,
@@ -2019,10 +2058,8 @@ void KeyframeEffect::applyPendingAcceleratedActions()
             if (this == effect.get())
                 break;
             auto computedTiming = effect->getComputedTiming();
-            if (computedTiming.progress) {
-                ASSERT(computedTiming.currentIteration);
-                effect->setAnimatedPropertiesInStyle(*underlyingStyle, *computedTiming.progress, *computedTiming.currentIteration);
-            }
+            if (computedTiming.progress)
+                effect->setAnimatedPropertiesInStyle(*underlyingStyle, computedTiming);
         }
 
         BlendingKeyframes explicitKeyframes(m_blendingKeyframes.animationName());

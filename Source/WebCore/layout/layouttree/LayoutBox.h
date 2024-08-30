@@ -114,7 +114,7 @@ public:
     bool isBlockContainer() const;
     bool isInlineLevelBox() const;
     bool isInlineBox() const;
-    bool isAtomicInlineLevelBox() const;
+    bool isAtomicInlineBox() const;
     bool isInlineBlockBox() const;
     bool isInlineTableBox() const;
     bool isInitialContainingBlock() const { return baseTypeFlags().contains(InitialContainingBlockFlag); }
@@ -206,7 +206,7 @@ private:
     friend class LayoutState;
 
     class BoxRareData {
-        WTF_MAKE_FAST_ALLOCATED;
+        WTF_MAKE_TZONE_ALLOCATED(BoxRareData);
     public:
         BoxRareData() = default;
 
