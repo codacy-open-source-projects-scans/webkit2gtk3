@@ -327,9 +327,9 @@ void GPUProcess::updateGPUProcessPreferences(GPUProcessPreferences&& preferences
         DeprecatedGlobalSettings::setMediaSourceInlinePaintingEnabled(*m_preferences.mediaSourceInlinePaintingEnabled);
 #endif
 
-#if HAVE(AVCONTENTKEYSPECIFIER)
-    if (updatePreference(m_preferences.sampleBufferContentKeySessionSupportEnabled, preferences.sampleBufferContentKeySessionSupportEnabled))
-        MediaSessionManagerCocoa::setSampleBufferContentKeySessionSupportEnabled(*m_preferences.sampleBufferContentKeySessionSupportEnabled);
+#if USE(MODERN_AVCONTENTKEYSESSION)
+    if (updatePreference(m_preferences.shouldUseModernAVContentKeySession, preferences.shouldUseModernAVContentKeySession))
+        MediaSessionManagerCocoa::setShouldUseModernAVContentKeySession(*m_preferences.shouldUseModernAVContentKeySession);
 #endif
 
 #if ENABLE(ALTERNATE_WEBM_PLAYER)
@@ -517,6 +517,20 @@ void GPUProcess::setMockCaptureDevicesInterrupted(bool isCameraInterrupted, bool
 void GPUProcess::triggerMockCaptureConfigurationChange(bool forMicrophone, bool forDisplay)
 {
     MockRealtimeMediaSourceCenter::singleton().triggerMockCaptureConfigurationChange(forMicrophone, forDisplay);
+}
+
+void GPUProcess::setShouldListenToVoiceActivity(bool shouldListen)
+{
+#if PLATFORM(COCOA)
+    if (!shouldListen) {
+        RealtimeMediaSourceCenter::singleton().audioCaptureFactory().disableMutedSpeechActivityEventListener();
+        return;
+    }
+
+    RealtimeMediaSourceCenter::singleton().audioCaptureFactory().enableMutedSpeechActivityEventListener([] {
+        GPUProcess::singleton().protectedParentProcessConnection()->send(Messages::GPUProcessProxy::VoiceActivityDetected { }, 0);
+    });
+#endif
 }
 #endif // ENABLE(MEDIA_STREAM)
 

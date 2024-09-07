@@ -644,7 +644,6 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     , m_textAnimationController(makeUniqueRef<TextAnimationController>(*this))
 #endif
 {
-    ASSERT(m_identifier);
     WEBPAGE_RELEASE_LOG(Loading, "constructor:");
 
 #if PLATFORM(IOS) || PLATFORM(VISION)
@@ -2515,14 +2514,14 @@ String WebPage::dumpHistoryForTesting(const String& directory)
     if (!m_page)
         return { };
 
-    auto& list = m_page->backForward();
+    CheckedRef list = m_page->backForward();
     
     StringBuilder builder;
-    int begin = -list.backCount();
-    if (list.itemAtIndex(begin)->url() == aboutBlankURL())
+    int begin = -list->backCount();
+    if (list->itemAtIndex(begin)->url() == aboutBlankURL())
         ++begin;
-    for (int i = begin; i <= static_cast<int>(list.forwardCount()); ++i)
-        dumpHistoryItem(*list.itemAtIndex(i), 8, !i, builder, directory);
+    for (int i = begin; i <= static_cast<int>(list->forwardCount()); ++i)
+        dumpHistoryItem(*list->itemAtIndex(i), 8, !i, builder, directory);
     return builder.toString();
 }
 
@@ -3444,11 +3443,11 @@ public:
 
     ~CurrentEvent()
     {
-        g_currentEvent = m_previousCurrentEvent;
+        g_currentEvent = m_previousCurrentEvent.get();
     }
 
 private:
-    const WebEvent* m_previousCurrentEvent;
+    CheckedPtr<const WebEvent> m_previousCurrentEvent;
 };
 
 #if ENABLE(CONTEXT_MENUS)
@@ -5826,6 +5825,11 @@ void WebPage::captureDevicesChanged()
     m_userMediaPermissionRequestManager->captureDevicesChanged();
 }
 
+void WebPage::voiceActivityDetected()
+{
+    corePage()->voiceActivityDetected();
+}
+
 #if USE(GSTREAMER)
 void WebPage::setOrientationForMediaCapture(uint64_t rotation)
 {
@@ -6632,12 +6636,15 @@ void WebPage::drawPagesForPrinting(FrameIdentifier frameID, const PrintInfo& pri
 }
 #endif
 
-void WebPage::addResourceRequest(WebCore::ResourceLoaderIdentifier identifier, const WebCore::ResourceRequest& request)
+void WebPage::addResourceRequest(WebCore::ResourceLoaderIdentifier identifier, const WebCore::ResourceRequest& request, LocalFrame* frame)
 {
-    ASSERT(!m_networkResourceRequestIdentifiersForPageLoadTiming.contains(identifier));
-    if (m_networkResourceRequestIdentifiersForPageLoadTiming.isEmpty())
-        send(Messages::WebPageProxy::StartNetworkRequestsForPageLoadTiming());
-    m_networkResourceRequestIdentifiersForPageLoadTiming.add(identifier);
+    if (frame) {
+        auto frameID = frame->frameID();
+        auto addResult = m_networkResourceRequestCountForPageLoadTiming.add(frameID, 0);
+        if (!addResult.iterator->value)
+            send(Messages::WebPageProxy::StartNetworkRequestsForPageLoadTiming(frameID));
+        ++addResult.iterator->value;
+    }
 
     if (!request.url().protocolIsInHTTPFamily())
         return;
@@ -6652,12 +6659,16 @@ void WebPage::addResourceRequest(WebCore::ResourceLoaderIdentifier identifier, c
         send(Messages::WebPageProxy::SetNetworkRequestsInProgress(true));
 }
 
-void WebPage::removeResourceRequest(WebCore::ResourceLoaderIdentifier identifier)
+void WebPage::removeResourceRequest(WebCore::ResourceLoaderIdentifier identifier, LocalFrame* frame)
 {
-    auto didRemove = m_networkResourceRequestIdentifiersForPageLoadTiming.remove(identifier);
-    ASSERT_UNUSED(didRemove, didRemove);
-    if (m_networkResourceRequestIdentifiersForPageLoadTiming.isEmpty())
-        send(Messages::WebPageProxy::EndNetworkRequestsForPageLoadTiming(WallTime::now()));
+    if (frame) {
+        auto frameID = frame->frameID();
+        auto it = m_networkResourceRequestCountForPageLoadTiming.find(frameID);
+        ASSERT(it != m_networkResourceRequestCountForPageLoadTiming.end());
+        --it->value;
+        if (!it->value)
+            send(Messages::WebPageProxy::EndNetworkRequestsForPageLoadTiming(frameID, WallTime::now()));
+    }
 
     if (!m_trackedNetworkResourceRequestIdentifiers.remove(identifier))
         return;
@@ -7882,6 +7893,7 @@ void WebPage::loadAndDecodeImage(WebCore::ResourceRequest&& request, std::option
     });
 }
 
+#if PLATFORM(MAC)
 void WebPage::flushPendingThemeColorChange()
 {
     if (!m_pendingThemeColorChange)
@@ -7891,6 +7903,7 @@ void WebPage::flushPendingThemeColorChange()
 
     send(Messages::WebPageProxy::ThemeColorChanged(m_page->themeColor()));
 }
+#endif
 
 void WebPage::flushPendingPageExtendedBackgroundColorChange()
 {
@@ -8375,7 +8388,11 @@ void WebPage::requestStorageAccess(RegistrableDomain&& subFrameDomain, Registrab
 
 void WebPage::setLoginStatus(RegistrableDomain&& domain, IsLoggedIn loggedInStatus, CompletionHandler<void()>&& completionHandler)
 {
-    WebProcess::singleton().ensureNetworkProcessConnection().protectedConnection()->sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::SetLoginStatus(WTFMove(domain), loggedInStatus), WTFMove(completionHandler));
+    RefPtr page = corePage();
+    if (!page)
+        return completionHandler();
+    auto lastAuthentication = page->lastAuthentication();
+    WebProcess::singleton().ensureNetworkProcessConnection().protectedConnection()->sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::SetLoginStatus(WTFMove(domain), loggedInStatus, lastAuthentication), WTFMove(completionHandler));
 }
 
 void WebPage::isLoggedIn(RegistrableDomain&& domain, CompletionHandler<void(bool)>&& completionHandler)
@@ -9978,9 +9995,18 @@ void WebPage::simulateClickOverFirstMatchingTextInViewportWithUserInteraction(co
 }
 
 #if ENABLE(MEDIA_STREAM)
-void WebPage::updateCaptureState(bool isActive, WebCore::MediaProducerMediaCaptureKind kind, CompletionHandler<void(std::optional<WebCore::Exception>&&)>&& completionHandler)
+void WebPage::updateCaptureState(const WebCore::Document& document, bool isActive, WebCore::MediaProducerMediaCaptureKind kind, CompletionHandler<void(std::optional<WebCore::Exception>&&)>&& completionHandler)
 {
-    sendWithAsyncReply(Messages::WebPageProxy::ValidateCaptureStateUpdate(isActive, kind), [weakThis = WeakPtr { *this }, isActive, kind, completionHandler = WTFMove(completionHandler)] (auto&& error) mutable {
+    RefPtr frame = document.frame();
+    if (!frame) {
+        completionHandler(WebCore::Exception { ExceptionCode::InvalidStateError, "no frame available"_s });
+        return;
+    }
+
+    RefPtr webFrame = WebFrame::fromCoreFrame(*frame);
+    ASSERT(webFrame);
+
+    sendWithAsyncReply(Messages::WebPageProxy::ValidateCaptureStateUpdate(UserMediaRequestIdentifier::generate(), document.clientOrigin(), webFrame->frameID(), isActive, kind), [weakThis = WeakPtr { *this }, isActive, kind, completionHandler = WTFMove(completionHandler)] (auto&& error) mutable {
         completionHandler(WTFMove(error));
         if (error)
             return;

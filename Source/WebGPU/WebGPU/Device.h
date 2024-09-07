@@ -127,7 +127,7 @@ public:
     void generateAnOutOfMemoryError(String&& message);
     void generateAnInternalError(String&& message);
 
-    Instance& instance() const { return m_adapter->instance(); }
+    RefPtr<Instance> instance() const { return m_adapter->instance(); }
     bool hasUnifiedMemory() const { return m_device.hasUnifiedMemory; }
 
     uint32_t maxBuffersPlusVertexBuffersForVertexStage() const;
@@ -165,6 +165,7 @@ public:
     };
     ExternalTextureData createExternalTextureFromPixelBuffer(CVPixelBufferRef, WGPUColorSpace) const;
     RefPtr<XRSubImage> getXRViewSubImage(WGPUXREye);
+    const std::optional<const MachSendRight> webProcessID() const;
 
 private:
     Device(id<MTLDevice>, id<MTLCommandQueue> defaultQueue, HardwareCapabilities&&, Adapter&);
@@ -177,7 +178,7 @@ private:
 
     bool validateRenderPipeline(const WGPURenderPipelineDescriptor&);
 
-    void makeInvalid() { m_device = nil; }
+    void makeInvalid();
     NSString* addPipelineLayouts(Vector<Vector<WGPUBindGroupLayoutEntry>>&, const std::optional<WGSL::PipelineLayout>&);
     Ref<PipelineLayout> generatePipelineLayout(const Vector<Vector<WGPUBindGroupLayoutEntry>> &bindGroupEntries);
 

@@ -104,6 +104,7 @@ public:
     bool isGridAutoRepeatValue() const { return m_classType == GridAutoRepeatClass; }
     bool isGridIntegerRepeatValue() const { return m_classType == GridIntegerRepeatClass; }
     bool isGridLineNamesValue() const { return m_classType == GridLineNamesClass; }
+    bool isGridLineValue() const { return m_classType == GridLineValueClass; }
     bool isGridTemplateAreasValue() const { return m_classType == GridTemplateAreasClass; }
     bool isImageSetOptionValue() const { return m_classType == ImageSetOptionClass; }
     bool isImageSetValue() const { return m_classType == ImageSetClass; }
@@ -166,6 +167,12 @@ public:
     // What properties does this value rely on (eg, font-size for em units)
     ComputedStyleDependencies computedStyleDependencies() const;
     void collectComputedStyleDependencies(ComputedStyleDependencies&) const;
+
+    // Checks to see if the provided conversion data is sufficient to resolve the provided dependencies.
+    static bool canResolveDependenciesWithConversionData(const ComputedStyleDependencies&, const CSSToLengthConversionData&);
+
+    // Checks to see if the provided conversion data is sufficient to resolve the dependencies of the CSSValue.
+    bool canResolveDependenciesWithConversionData(const CSSToLengthConversionData&) const;
 
     bool equals(const CSSValue&) const;
     bool operator==(const CSSValue& other) const { return equals(other); }
@@ -262,6 +269,7 @@ protected:
         FontVariantAlternatesClass,
         FontVariationClass,
         GridLineNamesClass,
+        GridLineValueClass,
         GridTemplateAreasClass,
         InsetShapeClass,
         LineBoxContainClass,

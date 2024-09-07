@@ -42,6 +42,7 @@
 #include "CSSGridAutoRepeatValue.h"
 #include "CSSGridIntegerRepeatValue.h"
 #include "CSSGridLineNamesValue.h"
+#include "CSSGridLineValue.h"
 #include "CSSImageSetValue.h"
 #include "CSSImageValue.h"
 #include "CSSOffsetRotateValue.h"
@@ -52,6 +53,7 @@
 #include "CSSRayValue.h"
 #include "CSSReflectValue.h"
 #include "CSSSubgridValue.h"
+#include "CSSTimingFunctionValue.h"
 #include "CSSValuePair.h"
 #include "CalculationValue.h"
 #include "FontPalette.h"
@@ -59,6 +61,7 @@
 #include "FontSizeAdjust.h"
 #include "FrameDestructionObserverInlines.h"
 #include "GridPositionsResolver.h"
+#include "LineClampValue.h"
 #include "LocalFrame.h"
 #include "QuotesData.h"
 #include "RenderStyleInlines.h"
@@ -77,7 +80,7 @@
 #include "TabSize.h"
 #include "TextSpacing.h"
 #include "TouchAction.h"
-#include "TransformFunctions.h"
+#include "TransformOperationsBuilder.h"
 #include "ViewTimeline.h"
 #include "WillChangeData.h"
 #include <wtf/text/MakeString.h>
@@ -149,13 +152,14 @@ public:
     static ScrollbarGutter convertScrollbarGutter(BuilderState&, const CSSValue&);
     static GridTrackSize convertGridTrackSize(BuilderState&, const CSSValue&);
     static Vector<GridTrackSize> convertGridTrackSizeList(BuilderState&, const CSSValue&);
-    static std::optional<GridPosition> convertGridPosition(BuilderState&, const CSSValue&);
+    static std::optional<GridTrackList> convertGridTrackList(BuilderState&, const CSSValue&);
+    static GridPosition convertGridPosition(BuilderState&, const CSSValue&);
     static GridAutoFlow convertGridAutoFlow(BuilderState&, const CSSValue&);
     static Vector<StyleContentAlignmentData> convertContentAlignmentDataList(BuilderState&, const CSSValue&);
     static MasonryAutoFlow convertMasonryAutoFlow(BuilderState&, const CSSValue&);
     static std::optional<float> convertPerspective(BuilderState&, const CSSValue&);
     static std::optional<Length> convertMarqueeIncrement(BuilderState&, const CSSValue&);
-    static std::optional<FilterOperations> convertFilterOperations(BuilderState&, const CSSValue&);
+    static FilterOperations convertFilterOperations(BuilderState&, const CSSValue&);
     static ListStyleType convertListStyleType(const BuilderState&, const CSSValue&);
 #if PLATFORM(IOS_FAMILY)
     static bool convertTouchCallout(BuilderState&, const CSSValue&);
@@ -228,11 +232,16 @@ public:
     static Vector<AtomString> convertAnchorName(BuilderState&, const CSSValue&);
 
     static BlockEllipsis convertBlockEllipsis(BuilderState&, const CSSValue&);
+    static size_t convertMaxLines(BuilderState&, const CSSValue&);
+
+    static LineClampValue convertLineClamp(BuilderState&, const CSSValue&);
+
+    static RefPtr<TimingFunction> convertTimingFunction(BuilderState&, const CSSValue&);
 
 private:
     friend class BuilderCustom;
 
-    static Length convertToRadiusLength(const CSSToLengthConversionData&, const CSSPrimitiveValue&);
+    static Length convertToRadiusLength(BuilderState&, const CSSPrimitiveValue&);
     static Length parseSnapCoordinate(BuilderState&, const CSSValue&);
 
 #if ENABLE(DARK_MODE_CSS)
@@ -241,11 +250,12 @@ private:
 
     template<CSSValueID, CSSValueID> static Length convertPositionComponent(BuilderState&, const CSSValue&);
 
-    static GridLength createGridTrackBreadth(const CSSPrimitiveValue&, BuilderState&);
-    static GridTrackSize createGridTrackSize(const CSSValue&, BuilderState&);
-    static bool createGridTrackList(const CSSValue&, GridTrackList&, BuilderState&);
-    static bool createGridPosition(const CSSValue&, GridPosition&);
-    static void createImplicitNamedGridLinesFromGridArea(const NamedGridAreaMap&, NamedGridLinesMap&, GridTrackSizingDirection);
+    static GridLength createGridTrackBreadth(BuilderState&, const CSSPrimitiveValue&);
+    static GridTrackSize createGridTrackSize(BuilderState&, const CSSValue&);
+    static std::optional<GridTrackList> createGridTrackList(BuilderState&, const CSSValue&);
+    static GridPosition createGridPosition(BuilderState&, const CSSValue&);
+    static NamedGridLinesMap createImplicitNamedGridLinesFromGridArea(BuilderState&, const NamedGridAreaMap&, GridTrackSizingDirection);
+
     static CSSToLengthConversionData cssToLengthConversionDataWithTextZoomFactor(BuilderState&);
 };
 
@@ -395,8 +405,9 @@ inline T BuilderConverter::convertLineWidth(BuilderState& builderState, const CS
     }
 }
 
-inline Length BuilderConverter::convertToRadiusLength(const CSSToLengthConversionData& conversionData, const CSSPrimitiveValue& value)
+inline Length BuilderConverter::convertToRadiusLength(BuilderState& builderState, const CSSPrimitiveValue& value)
 {
+    auto& conversionData = builderState.cssToLengthConversionData();
     if (value.isPercentage())
         return Length(value.resolveAsPercentage(conversionData), LengthType::Percent);
     if (value.isCalculatedPercentageWithLength())
@@ -412,8 +423,10 @@ inline LengthSize BuilderConverter::convertRadius(BuilderState& builderState, co
     if (!value.isPair())
         return { { 0, LengthType::Fixed }, { 0, LengthType::Fixed } };
 
-    auto& conversionData = builderState.cssToLengthConversionData();
-    LengthSize radius { convertToRadiusLength(conversionData, downcast<CSSPrimitiveValue>(value.first())), convertToRadiusLength(conversionData, downcast<CSSPrimitiveValue>(value.second())) };
+    LengthSize radius {
+        convertToRadiusLength(builderState, downcast<CSSPrimitiveValue>(value.first())),
+        convertToRadiusLength(builderState, downcast<CSSPrimitiveValue>(value.second()))
+    };
 
     ASSERT(!radius.width.isNegative());
     ASSERT(!radius.height.isNegative());
@@ -554,10 +567,7 @@ inline TransformOperations BuilderConverter::convertTransform(BuilderState& buil
     CSSToLengthConversionData conversionData = builderState.useSVGZoomRulesForLength() ?
         builderState.cssToLengthConversionData().copyWithAdjustedZoom(1.0f)
         : builderState.cssToLengthConversionData();
-    auto operations = transformsForValue(value, conversionData);
-    if (!operations)
-        return TransformOperations { };
-    return *operations;
+    return createTransformOperations(value, conversionData);
 }
 
 inline RefPtr<TranslateTransformOperation> BuilderConverter::convertTranslate(BuilderState& builderState, const CSSValue& value)
@@ -565,7 +575,7 @@ inline RefPtr<TranslateTransformOperation> BuilderConverter::convertTranslate(Bu
     CSSToLengthConversionData conversionData = builderState.useSVGZoomRulesForLength() ?
         builderState.cssToLengthConversionData().copyWithAdjustedZoom(1.0f)
         : builderState.cssToLengthConversionData();
-    return translateForValue(value, conversionData);
+    return createTranslate(value, conversionData);
 }
 
 inline RefPtr<RotateTransformOperation> BuilderConverter::convertRotate(BuilderState& builderState, const CSSValue& value)
@@ -573,7 +583,7 @@ inline RefPtr<RotateTransformOperation> BuilderConverter::convertRotate(BuilderS
     CSSToLengthConversionData conversionData = builderState.useSVGZoomRulesForLength() ?
         builderState.cssToLengthConversionData().copyWithAdjustedZoom(1.0f)
         : builderState.cssToLengthConversionData();
-    return rotateForValue(value, conversionData);
+    return createRotate(value, conversionData);
 }
 
 inline RefPtr<ScaleTransformOperation> BuilderConverter::convertScale(BuilderState& builderState, const CSSValue& value)
@@ -581,7 +591,7 @@ inline RefPtr<ScaleTransformOperation> BuilderConverter::convertScale(BuilderSta
     CSSToLengthConversionData conversionData = builderState.useSVGZoomRulesForLength() ?
         builderState.cssToLengthConversionData().copyWithAdjustedZoom(1.0f)
         : builderState.cssToLengthConversionData();
-    return scaleForValue(value, conversionData);
+    return createScale(value, conversionData);
 }
 
 #if ENABLE(DARK_MODE_CSS)
@@ -934,7 +944,7 @@ inline TextDecorationThickness BuilderConverter::convertTextDecorationThickness(
         auto conversionData = builderState.cssToLengthConversionData();
 
         if (primitiveValue.isPercentage())
-            return TextDecorationThickness::createWithLength(Length(clampTo<float>(primitiveValue.resolveAsPercentage(conversionData), minValueForCssLength, static_cast<float>(maxValueForCssLength)), LengthType::Percent));
+            return TextDecorationThickness::createWithLength(Length(clampTo<float>(primitiveValue.resolveAsPercentage(conversionData), minValueForCssLength, maxValueForCssLength), LengthType::Percent));
 
         if (primitiveValue.isCalculatedPercentageWithLength())
             return TextDecorationThickness::createWithLength(Length(primitiveValue.cssCalcValue()->createCalculationValue(conversionData, CSSCalcSymbolTable { })));
@@ -1180,7 +1190,7 @@ inline ScrollbarGutter BuilderConverter::convertScrollbarGutter(BuilderState&, c
     return gutter;
 }
 
-inline GridLength BuilderConverter::createGridTrackBreadth(const CSSPrimitiveValue& primitiveValue, BuilderState& builderState)
+inline GridLength BuilderConverter::createGridTrackBreadth(BuilderState& builderState, const CSSPrimitiveValue& primitiveValue)
 {
     if (primitiveValue.valueID() == CSSValueMinContent || primitiveValue.valueID() == CSSValueWebkitMinContent)
         return Length(LengthType::MinContent);
@@ -1200,43 +1210,45 @@ inline GridLength BuilderConverter::createGridTrackBreadth(const CSSPrimitiveVal
     return Length(0.0, LengthType::Fixed);
 }
 
-inline GridTrackSize BuilderConverter::createGridTrackSize(const CSSValue& value, BuilderState& builderState)
+inline GridTrackSize BuilderConverter::createGridTrackSize(BuilderState& builderState, const CSSValue& value)
 {
     if (auto* primitiveValue = dynamicDowncast<CSSPrimitiveValue>(value))
-        return GridTrackSize(createGridTrackBreadth(*primitiveValue, builderState));
+        return GridTrackSize(createGridTrackBreadth(builderState, *primitiveValue));
 
     auto* function = dynamicDowncast<CSSFunctionValue>(value);
     if (!function)
         return GridTrackSize(GridLength(0));
 
     if (function->length() == 1)
-        return GridTrackSize(createGridTrackBreadth(downcast<CSSPrimitiveValue>(*function->itemWithoutBoundsCheck(0)), builderState), FitContentTrackSizing);
+        return GridTrackSize(createGridTrackBreadth(builderState, downcast<CSSPrimitiveValue>(*function->itemWithoutBoundsCheck(0))), FitContentTrackSizing);
 
     RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(function->length() == 2);
-    GridLength minTrackBreadth(createGridTrackBreadth(downcast<CSSPrimitiveValue>(*function->itemWithoutBoundsCheck(0)), builderState));
-    GridLength maxTrackBreadth(createGridTrackBreadth(downcast<CSSPrimitiveValue>(*function->itemWithoutBoundsCheck(1)), builderState));
+    GridLength minTrackBreadth(createGridTrackBreadth(builderState, downcast<CSSPrimitiveValue>(*function->itemWithoutBoundsCheck(0))));
+    GridLength maxTrackBreadth(createGridTrackBreadth(builderState, downcast<CSSPrimitiveValue>(*function->itemWithoutBoundsCheck(1))));
     return GridTrackSize(minTrackBreadth, maxTrackBreadth);
 }
 
-inline bool BuilderConverter::createGridTrackList(const CSSValue& value, GridTrackList& trackList, BuilderState& builderState)
+inline std::optional<GridTrackList> BuilderConverter::createGridTrackList(BuilderState& builderState, const CSSValue& value)
 {
     RefPtr<const CSSValueContainingVector> valueList;
+
+    GridTrackList trackList;
 
     auto* subgridValue = dynamicDowncast<CSSSubgridValue>(value);
     if (auto* primitiveValue = dynamicDowncast<CSSPrimitiveValue>(value)) {
         if (primitiveValue->valueID() == CSSValueMasonry) {
             trackList.list.append(GridTrackEntryMasonry());
-            return true;
+            return { WTFMove(trackList) };
         }
         if (primitiveValue->valueID() == CSSValueNone)
-            return true;
+            return { WTFMove(trackList) };
     } else if (subgridValue) {
         valueList = subgridValue;
         trackList.list.append(GridTrackEntrySubgrid());
     } else if (auto* list = dynamicDowncast<CSSValueList>(value))
         valueList = list;
     else
-        return false;
+        return std::nullopt;
 
     // https://drafts.csswg.org/css-grid-2/#computed-tracks
     // The computed track list of a non-subgrid axis is a list alternating between line name sets
@@ -1254,7 +1266,7 @@ inline bool BuilderConverter::createGridTrackList(const CSSValue& value, GridTra
                 repeatList.append(Vector<String>(namesValue->names()));
             else {
                 ensureLineNames(repeatList);
-                repeatList.append(createGridTrackSize(currentValue, builderState));
+                repeatList.append(createGridTrackSize(builderState, currentValue));
             }
         }
 
@@ -1289,7 +1301,7 @@ inline bool BuilderConverter::createGridTrackList(const CSSValue& value, GridTra
             buildRepeatList(currentValue, repeat.list);
             trackList.list.append(WTFMove(repeat));
         } else {
-            trackList.list.append(createGridTrackSize(currentValue, builderState));
+            trackList.list.append(createGridTrackSize(builderState, currentValue));
         }
     };
 
@@ -1303,59 +1315,45 @@ inline bool BuilderConverter::createGridTrackList(const CSSValue& value, GridTra
     if (!trackList.list.isEmpty())
         ensureLineNames(trackList.list);
 
-    return true;
+    return { WTFMove(trackList) };
 }
 
-inline bool BuilderConverter::createGridPosition(const CSSValue& value, GridPosition& position)
+inline GridPosition BuilderConverter::createGridPosition(BuilderState& builderState, const CSSValue& value)
 {
+    GridPosition position;
+
     // We accept the specification's grammar:
     // auto | <custom-ident> | [ <integer> && <custom-ident>? ] | [ span && [ <integer> || <custom-ident> ] ]
     if (auto* primitiveValue = dynamicDowncast<CSSPrimitiveValue>(value)) {
         if (primitiveValue->isCustomIdent()) {
             position.setNamedGridArea(primitiveValue->stringValue());
-            return true;
+            return position;
         }
 
         ASSERT(primitiveValue->valueID() == CSSValueAuto);
-        return true;
+        return position;
     }
 
-    auto& values = downcast<CSSValueList>(value);
-    ASSERT(values.length());
+    auto& gridLineValue = downcast<CSSGridLineValue>(value);
+    RefPtr uncheckedSpanValue = gridLineValue.spanValue();
+    RefPtr uncheckedNumericValue = gridLineValue.numericValue();
+    RefPtr uncheckedGridLineName = gridLineValue.gridLineName();
 
-    auto it = values.begin();
-    auto* currentValue = &downcast<CSSPrimitiveValue>(*it);
-    bool isSpanPosition = false;
-    if (currentValue->valueID() == CSSValueSpan) {
-        isSpanPosition = true;
-        ++it;
-        currentValue = it != values.end() ? &downcast<CSSPrimitiveValue>(*it) : nullptr;
-    }
+    auto gridLineNumber = uncheckedNumericValue && uncheckedNumericValue->isInteger() ? uncheckedNumericValue->resolveAsInteger(builderState.cssToLengthConversionData()) : 0;
+    auto gridLineName = uncheckedGridLineName && uncheckedGridLineName->isCustomIdent() ? uncheckedGridLineName->stringValue() : String();
 
-    int gridLineNumber = 0;
-    if (currentValue && currentValue->isInteger()) {
-        gridLineNumber = currentValue->resolveAsIntegerDeprecated();
-        ++it;
-        currentValue = it != values.end() ? &downcast<CSSPrimitiveValue>(*it) : nullptr;
-    }
-
-    String gridLineName;
-    if (currentValue && currentValue->isCustomIdent()) {
-        gridLineName = currentValue->stringValue();
-        ++it;
-    }
-
-    ASSERT(it == values.end());
-    if (isSpanPosition)
+    if (uncheckedSpanValue && uncheckedSpanValue->valueID() == CSSValueSpan)
         position.setSpanPosition(gridLineNumber ? gridLineNumber : 1, gridLineName);
     else
         position.setExplicitPosition(gridLineNumber, gridLineName);
 
-    return true;
+    return position;
 }
 
-inline void BuilderConverter::createImplicitNamedGridLinesFromGridArea(const NamedGridAreaMap& namedGridAreas, NamedGridLinesMap& namedGridLines, GridTrackSizingDirection direction)
+inline NamedGridLinesMap BuilderConverter::createImplicitNamedGridLinesFromGridArea(BuilderState&, const NamedGridAreaMap& namedGridAreas, GridTrackSizingDirection direction)
 {
+    NamedGridLinesMap namedGridLines;
+
     for (auto& area : namedGridAreas.map) {
         GridSpan areaSpan = direction == GridTrackSizingDirection::ForRows ? area.value.rows : area.value.columns;
         {
@@ -1370,6 +1368,8 @@ inline void BuilderConverter::createImplicitNamedGridLinesFromGridArea(const Nam
         }
     }
     // FIXME: For acceptable performance, should sort once at the end, not as we add each item, or at least insert in sorted order instead of using std::sort each time.
+
+    return namedGridLines;
 }
 
 inline Vector<GridTrackSize> BuilderConverter::convertGridTrackSizeList(BuilderState& builderState, const CSSValue& value)
@@ -1402,15 +1402,17 @@ inline Vector<GridTrackSize> BuilderConverter::convertGridTrackSizeList(BuilderS
 
 inline GridTrackSize BuilderConverter::convertGridTrackSize(BuilderState& builderState, const CSSValue& value)
 {
-    return createGridTrackSize(value, builderState);
+    return createGridTrackSize(builderState, value);
 }
 
-inline std::optional<GridPosition> BuilderConverter::convertGridPosition(BuilderState&, const CSSValue& value)
+inline std::optional<GridTrackList> BuilderConverter::convertGridTrackList(BuilderState& builderState, const CSSValue& value)
 {
-    GridPosition gridPosition;
-    if (createGridPosition(value, gridPosition))
-        return gridPosition;
-    return std::nullopt;
+    return createGridTrackList(builderState, value);
+}
+
+inline GridPosition BuilderConverter::convertGridPosition(BuilderState& builderState, const CSSValue& value)
+{
+    return createGridPosition(builderState, value);
 }
 
 inline GridAutoFlow BuilderConverter::convertGridAutoFlow(BuilderState&, const CSSValue& value)
@@ -1527,7 +1529,7 @@ inline Length BuilderConverter::convertTextLengthOrNormal(BuilderState& builderS
     if (primitiveValue.isLength())
         return primitiveValue.resolveAsLength<Length>(conversionData);
     if (primitiveValue.isPercentage())
-        return Length(clampTo<double>(primitiveValue.resolveAsPercentage(conversionData), minValueForCssLength, maxValueForCssLength), LengthType::Percent);
+        return Length(clampTo<float>(primitiveValue.resolveAsPercentage(conversionData), minValueForCssLength, maxValueForCssLength), LengthType::Percent);
     if (primitiveValue.isCalculatedPercentageWithLength())
         return Length(primitiveValue.cssCalcValue()->createCalculationValue(conversionData, CSSCalcSymbolTable { }));
     if (primitiveValue.isNumber())
@@ -1563,7 +1565,7 @@ inline std::optional<Length> BuilderConverter::convertMarqueeIncrement(BuilderSt
     return length;
 }
 
-inline std::optional<FilterOperations> BuilderConverter::convertFilterOperations(BuilderState& builderState, const CSSValue& value)
+inline FilterOperations BuilderConverter::convertFilterOperations(BuilderState& builderState, const CSSValue& value)
 {
     return builderState.createFilterOperations(value);
 }
@@ -1884,7 +1886,7 @@ inline Length BuilderConverter::convertLineHeight(BuilderState& builderState, co
             length = primitiveValue.resolveAsLength<Length>(conversionData);
         else {
             auto value = primitiveValue.cssCalcValue()->createCalculationValue(conversionData, CSSCalcSymbolTable { })->evaluate(builderState.style().computedFontSize());
-            length = { clampTo<float>(value, minValueForCssLength, static_cast<float>(maxValueForCssLength)), LengthType::Fixed };
+            length = { clampTo<float>(value, minValueForCssLength, maxValueForCssLength), LengthType::Fixed };
         }
         if (multiplier != 1.f)
             length = Length(length.value() * multiplier, LengthType::Fixed);
@@ -2244,6 +2246,32 @@ inline BlockEllipsis BuilderConverter::convertBlockEllipsis(BuilderState& builde
         return { BlockEllipsis::Type::Auto, { } };
     return { BlockEllipsis::Type::String, AtomString { convertString(builderState, value) } };
 
+}
+
+inline size_t BuilderConverter::convertMaxLines(BuilderState& builderState, const CSSValue& value)
+{
+    if (downcast<CSSPrimitiveValue>(value).valueID() == CSSValueNone)
+        return 0;
+    return convertNumber<size_t>(builderState, value);
+}
+
+inline LineClampValue BuilderConverter::convertLineClamp(BuilderState& builderState, const CSSValue& value)
+{
+    auto& primitiveValue = downcast<CSSPrimitiveValue>(value);
+
+    if (primitiveValue.primitiveType() == CSSUnitType::CSS_INTEGER)
+        return LineClampValue(std::max(primitiveValue.resolveAsInteger<int>(builderState.cssToLengthConversionData()), 1), LineClamp::LineCount);
+
+    if (primitiveValue.primitiveType() == CSSUnitType::CSS_PERCENTAGE)
+        return LineClampValue(std::max(primitiveValue.resolveAsPercentage<int>(builderState.cssToLengthConversionData()), 0), LineClamp::Percentage);
+
+    ASSERT(primitiveValue.valueID() == CSSValueNone);
+    return LineClampValue();
+}
+
+inline RefPtr<TimingFunction> BuilderConverter::convertTimingFunction(BuilderState&, const CSSValue& value)
+{
+    return createTimingFunction(value);
 }
 
 } // namespace Style

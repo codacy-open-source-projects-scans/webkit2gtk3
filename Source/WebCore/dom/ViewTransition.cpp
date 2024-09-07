@@ -59,15 +59,6 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(CapturedElement);
 WTF_MAKE_TZONE_ALLOCATED_IMPL(ViewTransitionParams);
 WTF_MAKE_TZONE_ALLOCATED_IMPL(ViewTransition);
 
-static std::pair<Ref<DOMPromise>, Ref<DeferredPromise>> createPromiseAndWrapper(Document& document)
-{
-    auto& globalObject = *JSC::jsCast<JSDOMGlobalObject*>(document.globalObject());
-    JSC::JSLockHolder lock(globalObject.vm());
-    RefPtr deferredPromise = DeferredPromise::create(globalObject);
-    Ref domPromise = DOMPromise::create(globalObject, *JSC::jsCast<JSC::JSPromise*>(deferredPromise->promise()));
-    return { WTFMove(domPromise), deferredPromise.releaseNonNull() };
-}
-
 ViewTransition::ViewTransition(Document& document, RefPtr<ViewTransitionUpdateCallback>&& updateCallback, Vector<AtomString>&& initialActiveTypes)
     : ActiveDOMObject(document)
     , m_updateCallback(WTFMove(updateCallback))
@@ -77,6 +68,7 @@ ViewTransition::ViewTransition(Document& document, RefPtr<ViewTransitionUpdateCa
     , m_finished(createPromiseAndWrapper(document))
     , m_types(ViewTransitionTypeSet::create(document, WTFMove(initialActiveTypes)))
 {
+    document.registerForVisibilityStateChangedCallbacks(*this);
 }
 
 ViewTransition::ViewTransition(Document& document, Vector<AtomString>&& initialActiveTypes)
@@ -102,6 +94,9 @@ Ref<ViewTransition> ViewTransition::createSamePage(Document& document, RefPtr<Vi
 RefPtr<ViewTransition> ViewTransition::resolveInboundCrossDocumentViewTransition(Document& document, std::unique_ptr<ViewTransitionParams> inboundViewTransitionParams)
 {
     if (!inboundViewTransitionParams)
+        return nullptr;
+
+    if (MonotonicTime::now() - inboundViewTransitionParams->startTime > defaultTimeout)
         return nullptr;
 
     if (document.activeViewTransition())
@@ -223,13 +218,14 @@ void ViewTransition::callUpdateCallback()
 
     ASSERT(m_phase < ViewTransitionPhase::UpdateCallbackCalled || m_phase == ViewTransitionPhase::Done);
 
+    if (m_phase != ViewTransitionPhase::Done)
+        m_phase = ViewTransitionPhase::UpdateCallbackCalled;
+
+    if (!m_shouldCallUpdateCallback)
+        return;
+
     Ref document = *this->document();
     RefPtr<DOMPromise> callbackPromise;
-    if (!m_shouldCallUpdateCallback) {
-        if (m_phase != ViewTransitionPhase::Done)
-            m_phase = ViewTransitionPhase::UpdateCallbackCalled;
-        return;
-    }
 
     if (!m_updateCallback) {
         auto promiseAndWrapper = createPromiseAndWrapper(document);
@@ -248,9 +244,6 @@ void ViewTransition::callUpdateCallback()
             callbackPromise = WTFMove(promiseAndWrapper.first);
         }
     }
-
-    if (m_phase != ViewTransitionPhase::Done)
-        m_phase = ViewTransitionPhase::UpdateCallbackCalled;
 
     callbackPromise->whenSettled([this, weakThis = WeakPtr { *this }, callbackPromise] () mutable {
         RefPtr protectedThis = weakThis.get();
@@ -277,7 +270,7 @@ void ViewTransition::callUpdateCallback()
         }
     });
 
-    m_updateCallbackTimeout = protectedDocument()->checkedEventLoop()->scheduleTask(4_s, TaskSource::DOMManipulation, [this, weakThis = WeakPtr { *this }] {
+    m_updateCallbackTimeout = protectedDocument()->checkedEventLoop()->scheduleTask(defaultTimeout, TaskSource::DOMManipulation, [this, weakThis = WeakPtr { *this }] {
         RefPtr protectedThis = weakThis.get();
         if (!protectedThis)
             return;
@@ -868,12 +861,26 @@ RenderViewTransitionCapture* ViewTransition::viewTransitionNewPseudoForCapturedE
     return nullptr;
 }
 
+// https://drafts.csswg.org/css-view-transitions/#page-visibility-change-steps
+void ViewTransition::visibilityStateChanged()
+{
+    if (!document())
+        return;
+
+    if (protectedDocument()->hidden()) {
+        if (protectedDocument()->activeViewTransition() == this)
+            skipViewTransition(Exception { ExceptionCode::InvalidStateError, "Skipping view transition because document visibility state has become hidden."_s });
+    } else
+        ASSERT(!protectedDocument()->activeViewTransition());
+}
+
 void ViewTransition::stop()
 {
     if (!document())
         return;
 
     m_phase = ViewTransitionPhase::Done;
+    document()->unregisterForVisibilityStateChangedCallbacks(*this);
 
     if (document()->activeViewTransition() == this)
         clearViewTransition();

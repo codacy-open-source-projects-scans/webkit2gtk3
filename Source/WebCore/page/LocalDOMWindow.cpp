@@ -1151,7 +1151,7 @@ void LocalDOMWindow::alert(const String& message)
         return;
 
     RefPtr document = this->document();
-    if (document->isSandboxed(SandboxModals)) {
+    if (document->isSandboxed(SandboxFlag::Modals)) {
         printErrorMessage("Use of window.alert is not allowed in a sandboxed frame when the allow-modals flag is not set."_s);
         return;
     }
@@ -1180,7 +1180,7 @@ bool LocalDOMWindow::confirmForBindings(const String& message)
         return false;
 
     RefPtr document = this->document();
-    if (document->isSandboxed(SandboxModals)) {
+    if (document->isSandboxed(SandboxFlag::Modals)) {
         printErrorMessage("Use of window.confirm is not allowed in a sandboxed frame when the allow-modals flag is not set."_s);
         return false;
     }
@@ -1209,7 +1209,7 @@ String LocalDOMWindow::prompt(const String& message, const String& defaultValue)
         return String();
 
     RefPtr document = this->document();
-    if (document->isSandboxed(SandboxModals)) {
+    if (document->isSandboxed(SandboxFlag::Modals)) {
         printErrorMessage("Use of window.prompt is not allowed in a sandboxed frame when the allow-modals flag is not set."_s);
         return String();
     }
@@ -1472,7 +1472,7 @@ void LocalDOMWindow::setStatus(const String& string)
 void LocalDOMWindow::disownOpener()
 {
     if (RefPtr frame = this->frame())
-        frame->setOpener(nullptr);
+        frame->disownOpener();
 }
 
 String LocalDOMWindow::origin() const
@@ -2504,15 +2504,15 @@ String LocalDOMWindow::crossDomainAccessErrorMessage(const LocalDOMWindow& activ
     // Sandbox errors: Use the origin of the frames' location, rather than their actual origin (since we know that at least one will be "null").
     URL activeURL = activeWindow.document()->url();
     URL targetURL = document()->url();
-    if (document()->isSandboxed(SandboxOrigin) || activeWindow.document()->isSandboxed(SandboxOrigin)) {
+    if (document()->isSandboxed(SandboxFlag::Origin) || activeWindow.document()->isSandboxed(SandboxFlag::Origin)) {
         if (includeTargetOrigin == IncludeTargetOrigin::Yes)
             message = makeString("Blocked a frame at \""_s, SecurityOrigin::create(activeURL).get().toString(), "\" from accessing a frame at \""_s, SecurityOrigin::create(targetURL).get().toString(), "\". "_s);
         else
             message = makeString("Blocked a frame at \""_s, SecurityOrigin::create(activeURL).get().toString(), "\" from accessing a cross-origin frame. "_s);
 
-        if (document()->isSandboxed(SandboxOrigin) && activeWindow.document()->isSandboxed(SandboxOrigin))
+        if (document()->isSandboxed(SandboxFlag::Origin) && activeWindow.document()->isSandboxed(SandboxFlag::Origin))
             return makeString("Sandbox access violation: "_s, message, " Both frames are sandboxed and lack the \"allow-same-origin\" flag."_s);
-        if (document()->isSandboxed(SandboxOrigin))
+        if (document()->isSandboxed(SandboxFlag::Origin))
             return makeString("Sandbox access violation: "_s, message, " The frame being accessed is sandboxed and lacks the \"allow-same-origin\" flag."_s);
         return makeString("Sandbox access violation: "_s, message, " The frame requesting access is sandboxed and lacks the \"allow-same-origin\" flag."_s);
     }
@@ -2586,16 +2586,16 @@ ExceptionOr<RefPtr<Frame>> LocalDOMWindow::createWindow(const String& urlString,
     FrameLoadRequest frameLoadRequest { *activeDocument, activeDocument->protectedSecurityOrigin(), WTFMove(resourceRequest), frameName, initiatedByMainFrame };
     frameLoadRequest.setShouldOpenExternalURLsPolicy(activeDocument->shouldOpenExternalURLsPolicyToPropagate());
 
-    // We pass the opener frame for the lookupFrame in case the active frame is different from
-    // the opener frame, and the name references a frame relative to the opener frame.
     bool created;
-    RefPtr newFrame = WebCore::createWindow(*activeFrame, openerFrame, WTFMove(frameLoadRequest), windowFeatures, created);
+    RefPtr newFrame = WebCore::createWindow(openerFrame, WTFMove(frameLoadRequest), windowFeatures, created);
     if (!newFrame)
         return RefPtr<Frame> { nullptr };
 
     bool noopener = windowFeatures.wantsNoOpener();
-    if (!noopener)
-        newFrame->setOpener(&openerFrame);
+    if (!noopener) {
+        ASSERT(newFrame->opener() == &openerFrame);
+        newFrame->page()->setOpenedByDOMWithOpener(true);
+    }
 
     if (created)
         newFrame->protectedPage()->setOpenedByDOM();

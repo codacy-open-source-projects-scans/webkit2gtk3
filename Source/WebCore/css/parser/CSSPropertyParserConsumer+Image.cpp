@@ -43,11 +43,12 @@
 #include "CSSPropertyParserConsumer+CSSPrimitiveValueResolver.h"
 #include "CSSPropertyParserConsumer+Color.h"
 #include "CSSPropertyParserConsumer+ColorInterpolationMethod.h"
+#include "CSSPropertyParserConsumer+Filter.h"
 #include "CSSPropertyParserConsumer+Ident.h"
 #include "CSSPropertyParserConsumer+Length.h"
 #include "CSSPropertyParserConsumer+LengthDefinitions.h"
 #include "CSSPropertyParserConsumer+MetaConsumer.h"
-#include "CSSPropertyParserConsumer+MetaTransformer.h"
+#include "CSSPropertyParserConsumer+MetaResolver.h"
 #include "CSSPropertyParserConsumer+Number.h"
 #include "CSSPropertyParserConsumer+NumberDefinitions.h"
 #include "CSSPropertyParserConsumer+Percent.h"
@@ -59,6 +60,7 @@
 #include "CSSPropertyParserConsumer+String.h"
 #include "CSSPropertyParserConsumer+URL.h"
 #include "CSSPropertyParserConsumer+UnevaluatedCalc.h"
+#include "CSSValue.h"
 #include "CSSValueList.h"
 #include "StyleImage.h"
 #include <wtf/SortedArrayMap.h>
@@ -894,12 +896,15 @@ static RefPtr<CSSValue> consumeCrossFade(CSSParserTokenRange& args, const CSSPar
     if (!toImageValueOrNone || !consumeCommaIncludingWhitespace(args))
         return nullptr;
 
-    auto value = consumePercentOrNumberRaw(args);
+    auto value = consumePercentDividedBy100OrNumber(args);
     if (!value)
         return nullptr;
-    auto percentage = transformRaw<PercentOrNumberDividedBy100Transformer>(*value);
-    auto percentageValue = CSSPrimitiveValue::create(clampTo<double>(percentage, 0, 1));
-    return CSSCrossfadeValue::create(fromImageValueOrNone.releaseNonNull(), toImageValueOrNone.releaseNonNull(), WTFMove(percentageValue), functionId == CSSValueWebkitCrossFade);
+
+    if (value->isNumber()) {
+        if (auto numberValue = value->resolveAsNumberIfNotCalculated(); numberValue && (*numberValue < 0 || *numberValue > 1))
+            value = CSSPrimitiveValue::create(clampTo<double>(*numberValue, 0, 1));
+    }
+    return CSSCrossfadeValue::create(fromImageValueOrNone.releaseNonNull(), toImageValueOrNone.releaseNonNull(), value.releaseNonNull(), functionId == CSSValueWebkitCrossFade);
 }
 
 // MARK: <-webkit-canvas()>
@@ -935,7 +940,7 @@ static RefPtr<CSSValue> consumeFilterImage(CSSParserTokenRange& args, const CSSP
     auto imageValueOrNone = consumeImageOrNone(args, context);
     if (!imageValueOrNone || !consumeCommaIncludingWhitespace(args))
         return nullptr;
-    auto filterValue = consumeFilter(args, context, AllowedFilterFunctions::PixelFilters);
+    auto filterValue = consumeFilterValueListOrNone(args, context, AllowedFilterFunctions::PixelFilters);
     if (!filterValue)
         return nullptr;
     return CSSFilterImageValue::create(imageValueOrNone.releaseNonNull(), filterValue.releaseNonNull());
@@ -1022,7 +1027,7 @@ static RefPtr<CSSPrimitiveValue> consumeImageSetResolutionOrTypeFunction(CSSPars
             return CSSPrimitiveValue::create(typeFunction.value);
         },
         [&](const auto& resolution) -> RefPtr<CSSPrimitiveValue> {
-            return CSSPrimitiveValueResolverBase::resolve(resolution, { }, options);
+            return CSSPrimitiveValueResolverBase::resolve(resolution, CSSCalcSymbolTable { }, options);
         }
     );
 }

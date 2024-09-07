@@ -86,21 +86,6 @@ namespace WebCore {
 #pragma mark -
 #pragma mark SourceBufferPrivateAVFObjC
 
-static bool sampleBufferRenderersSupportKeySession()
-{
-    static bool supports = false;
-#if HAVE(AVCONTENTKEYSPECIFIER)
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        supports =
-        [PAL::getAVSampleBufferAudioRendererClass() conformsToProtocol:@protocol(AVContentKeyRecipient)]
-            && [PAL::getAVSampleBufferDisplayLayerClass() conformsToProtocol:@protocol(AVContentKeyRecipient)]
-            && MediaSessionManagerCocoa::sampleBufferContentKeySessionSupportEnabled();
-    });
-#endif
-    return supports;
-}
-
 static inline bool supportsAttachContentKey()
 {
     static bool supportsAttachContentKey;
@@ -113,7 +98,7 @@ static inline bool supportsAttachContentKey()
 
 static inline bool shouldAddContentKeyRecipients()
 {
-    return sampleBufferRenderersSupportKeySession() && !supportsAttachContentKey();
+    return MediaSessionManagerCocoa::shouldUseModernAVContentKeySession() && !supportsAttachContentKey();
 }
 
 Ref<SourceBufferPrivateAVFObjC> SourceBufferPrivateAVFObjC::create(MediaSourcePrivateAVFObjC& parent, Ref<SourceBufferParser>&& parser)
@@ -244,11 +229,8 @@ void SourceBufferPrivateAVFObjC::processInitializationSegment(std::optional<Init
     ALWAYS_LOG(LOGIDENTIFIER, "initialization segment was processed");
 }
 
-void SourceBufferPrivateAVFObjC::didProvideMediaDataForTrackId(Ref<MediaSampleAVFObjC>&& mediaSample, TrackID trackID, const String& mediaType)
+void SourceBufferPrivateAVFObjC::didProvideMediaDataForTrackId(Ref<MediaSampleAVFObjC>&& mediaSample, TrackID, const String&)
 {
-    UNUSED_PARAM(mediaType);
-    UNUSED_PARAM(trackID);
-
     didReceiveSample(WTFMove(mediaSample));
 }
 
@@ -257,7 +239,26 @@ bool SourceBufferPrivateAVFObjC::isMediaSampleAllowed(const MediaSample& sample)
     // FIXME(125161): We don't handle text tracks, and passing this sample up to SourceBuffer
     // will just confuse its state. Drop this sample until we can handle text tracks properly.
     auto trackID = sample.trackID();
-    return isEnabledVideoTrackID(trackID) || m_audioRenderers.contains(trackID);
+    return isEnabledVideoTrackID(trackID) || audioRendererForTrackID(trackID);
+}
+
+void SourceBufferPrivateAVFObjC::updateTrackIds(Vector<std::pair<TrackID, TrackID>>&& trackIdPairs)
+{
+    for (auto& trackIdPair : trackIdPairs) {
+        auto oldId = trackIdPair.first;
+        auto newId = trackIdPair.second;
+        ASSERT(oldId != newId);
+        if (m_enabledVideoTrackID && *m_enabledVideoTrackID == oldId)
+            m_enabledVideoTrackID = newId;
+        if (m_protectedTrackID && *m_protectedTrackID == oldId)
+            m_protectedTrackID = newId;
+        auto audioRendererNode = m_audioRenderers.extract(oldId);
+        if (!audioRendererNode)
+            continue;
+        audioRendererNode.key() = newId;
+        m_audioRenderers.insert(WTFMove(audioRendererNode));
+    }
+    SourceBufferPrivate::updateTrackIds(WTFMove(trackIdPairs));
 }
 
 void SourceBufferPrivateAVFObjC::processFormatDescriptionForTrackId(Ref<TrackInfo>&& formatDescription, TrackID trackId)
@@ -292,7 +293,7 @@ void SourceBufferPrivateAVFObjC::didProvideContentKeyRequestInitializationDataFo
     mediaSource->sourceBufferKeyNeeded(this, *m_initData);
 
     if (auto session = player->cdmSession()) {
-        if (sampleBufferRenderersSupportKeySession()) {
+        if (MediaSessionManagerCocoa::shouldUseModernAVContentKeySession()) {
             // no-op.
         } else if (auto parser = this->streamDataParser())
             session->addParser(parser);
@@ -322,7 +323,7 @@ void SourceBufferPrivateAVFObjC::didProvideContentKeyRequestInitializationDataFo
 
     if (m_cdmInstance) {
         if (auto instanceSession = m_cdmInstance->sessionForKeyIDs(keyIDs.value())) {
-            if (sampleBufferRenderersSupportKeySession()) {
+            if (MediaSessionManagerCocoa::shouldUseModernAVContentKeySession()) {
                 // no-op.
             } else if (auto parser = this->streamDataParser())
                 [instanceSession->contentKeySession() addContentKeyRecipient:parser];
@@ -360,7 +361,7 @@ bool SourceBufferPrivateAVFObjC::needsVideoLayer() const
     // the renderers, decoding content through decompression sessions
     // will fail. In this scenario, ask the player to create a layer
     // instead.
-    return sampleBufferRenderersSupportKeySession();
+    return MediaSessionManagerCocoa::shouldUseModernAVContentKeySession();
 }
 
 Ref<MediaPromise> SourceBufferPrivateAVFObjC::appendInternal(Ref<SharedBuffer>&& data)
@@ -389,7 +390,6 @@ Ref<MediaPromise> SourceBufferPrivateAVFObjC::appendInternal(Ref<SharedBuffer>&&
             if (RefPtr protectedThis = weakThis.get(); protectedThis)
                 protectedThis->didUpdateFormatDescriptionForTrackId(WTFMove(formatDescription), trackId);
         });
-
 
         parser->setWillProvideContentKeyRequestInitializationDataForTrackIDCallback([abortSemaphore] (TrackID) mutable {
             // We must call synchronously to the main thread, as the AVStreamSession must be associated
@@ -592,19 +592,13 @@ void SourceBufferPrivateAVFObjC::trackDidChangeEnabled(AudioTrackPrivate& track,
     ALWAYS_LOG(LOGIDENTIFIER, "audio trackID = ", trackID, ", enabled = ", enabled);
 
     if (!enabled) {
-        if (auto it = m_audioRenderers.find(trackID); it != m_audioRenderers.end()) {
-ALLOW_NEW_API_WITHOUT_GUARDS_BEGIN
-            RetainPtr renderer = it->second;
-ALLOW_NEW_API_WITHOUT_GUARDS_END
+        if (RetainPtr renderer = audioRendererForTrackID(trackID)) {
             if (RefPtr player = this->player())
                 player->removeAudioRenderer(renderer.get());
         }
     } else {
-ALLOW_NEW_API_WITHOUT_GUARDS_BEGIN
-        RetainPtr<AVSampleBufferAudioRenderer> renderer;
-ALLOW_NEW_API_WITHOUT_GUARDS_END
-        auto it = m_audioRenderers.find(trackID);
-        if (it == m_audioRenderers.end()) {
+        RetainPtr renderer = audioRendererForTrackID(trackID);
+        if (!renderer) {
             renderer = adoptNS([PAL::allocAVSampleBufferAudioRendererInstance() init]);
 
             if (!renderer) {
@@ -628,8 +622,7 @@ ALLOW_NEW_API_WITHOUT_GUARDS_END
             }];
             m_audioRenderers.try_emplace(trackID, renderer);
             m_listener->beginObservingAudioRenderer(renderer.get());
-        } else
-            renderer = it->second;
+        }
 
         if (RefPtr player = this->player())
             player->addAudioRenderer(renderer.get());
@@ -721,7 +714,7 @@ void SourceBufferPrivateAVFObjC::attemptToDecrypt()
     if (!instanceSession)
         return;
 
-    if (!sampleBufferRenderersSupportKeySession()) {
+    if (!MediaSessionManagerCocoa::shouldUseModernAVContentKeySession()) {
         if (auto parser = this->streamDataParser())
             [instanceSession->contentKeySession() addContentKeyRecipient:parser];
     }
@@ -906,8 +899,8 @@ void SourceBufferPrivateAVFObjC::flush(TrackID trackID)
 
     if (isEnabledVideoTrackID(trackID)) {
         flushVideo();
-    } else if (auto it = m_audioRenderers.find(trackID); it != m_audioRenderers.end())
-        flushAudio(it->second.get());
+    } else if (auto renderer = audioRendererForTrackID(trackID))
+        flushAudio(renderer.get());
 }
 
 void SourceBufferPrivateAVFObjC::flushVideo()
@@ -932,6 +925,14 @@ void SourceBufferPrivateAVFObjC::flushVideo()
         player->setHasAvailableVideoFrame(false);
         player->flushPendingSizeChanges();
     }
+}
+
+ALLOW_NEW_API_WITHOUT_GUARDS_BEGIN
+RetainPtr<AVSampleBufferAudioRenderer> SourceBufferPrivateAVFObjC::audioRendererForTrackID(TrackID trackID) const
+ALLOW_NEW_API_WITHOUT_GUARDS_END
+{
+    auto it = m_audioRenderers.find(trackID);
+    return it != m_audioRenderers.end() ? it->second : nil;
 }
 
 ALLOW_NEW_API_WITHOUT_GUARDS_BEGIN
@@ -976,8 +977,8 @@ bool SourceBufferPrivateAVFObjC::canEnqueueSample(TrackID trackID, const MediaSa
     if (!sample.isProtected())
         return true;
 
-    // If sample buffers don't support AVContentKeySession: enqueue sample
-    if (!sampleBufferRenderersSupportKeySession())
+    // If sample buffers don't support modern AVContentKeySession: enqueue sample
+    if (!MediaSessionManagerCocoa::shouldUseModernAVContentKeySession())
         return true;
 
     // if sample is encrypted, but we are not attached to a CDM: do not enqueue sample.
@@ -1012,7 +1013,7 @@ bool SourceBufferPrivateAVFObjC::canEnqueueSample(TrackID trackID, const MediaSa
 
 void SourceBufferPrivateAVFObjC::enqueueSample(Ref<MediaSample>&& sample, TrackID trackID)
 {
-    if (!isEnabledVideoTrackID(trackID) && !m_audioRenderers.contains(trackID))
+    if (!isEnabledVideoTrackID(trackID) && !audioRendererForTrackID(trackID))
         return;
 
     ASSERT(is<MediaSampleAVFObjC>(sample));
@@ -1085,8 +1086,7 @@ void SourceBufferPrivateAVFObjC::enqueueSample(Ref<MediaSampleAVFObjC>&& sample,
 
         attachContentKeyToSampleIfNeeded(sample);
 
-        if (auto it = m_audioRenderers.find(trackID); it != m_audioRenderers.end()) {
-            RetainPtr renderer = it->second;
+        if (auto renderer = audioRendererForTrackID(trackID)) {
             [renderer enqueueSampleBuffer:platformSample.sample.cmSampleBuffer];
             if (RefPtr player = this->player(); player && !sample->isNonDisplaying())
                 player->setHasAvailableAudioSample(renderer.get(), true);
@@ -1142,7 +1142,7 @@ void SourceBufferPrivateAVFObjC::enqueueSampleBuffer(MediaSampleAVFObjC& sample)
 
 void SourceBufferPrivateAVFObjC::attachContentKeyToSampleIfNeeded(const MediaSampleAVFObjC& sample)
 {
-    if (!sampleBufferRenderersSupportKeySession() || !supportsAttachContentKey())
+    if (!MediaSessionManagerCocoa::shouldUseModernAVContentKeySession() || !supportsAttachContentKey())
         return;
 
     if (m_cdmInstance)
@@ -1163,8 +1163,8 @@ bool SourceBufferPrivateAVFObjC::isReadyForMoreSamples(TrackID trackID)
         return m_videoRenderer && m_videoRenderer->isReadyForMoreMediaData();
     }
 
-    if (auto it = m_audioRenderers.find(trackID); it != m_audioRenderers.end())
-        return [it->second isReadyForMoreMediaData];
+    if (auto renderer = audioRendererForTrackID(trackID))
+        return [renderer isReadyForMoreMediaData];
 
     return false;
 }
@@ -1208,8 +1208,8 @@ void SourceBufferPrivateAVFObjC::didBecomeReadyForMoreSamples(TrackID trackID)
             m_decompressionSession->stopRequestingMediaData();
         if (m_videoRenderer)
             m_videoRenderer->stopRequestingMediaData();
-    } else if (auto it = m_audioRenderers.find(trackID); it != m_audioRenderers.end())
-        [it->second stopRequestingMediaData];
+    } else if (auto renderer = audioRendererForTrackID(trackID))
+        [renderer stopRequestingMediaData];
     else
         return;
 
@@ -1237,9 +1237,9 @@ void SourceBufferPrivateAVFObjC::notifyClientWhenReadyForMoreSamples(TrackID tra
                     protectedThis->didBecomeReadyForMoreSamples(trackID);
             });
         }
-    } else if (auto it = m_audioRenderers.find(trackID); it != m_audioRenderers.end()) {
+    } else if (auto renderer = audioRendererForTrackID(trackID)) {
         ThreadSafeWeakPtr weakThis { *this };
-        [it->second requestMediaDataWhenReadyOnQueue:dispatch_get_main_queue() usingBlock:^{
+        [renderer requestMediaDataWhenReadyOnQueue:dispatch_get_main_queue() usingBlock:^{
             if (RefPtr protectedThis = weakThis.get())
                 protectedThis->didBecomeReadyForMoreSamples(trackID);
         }];

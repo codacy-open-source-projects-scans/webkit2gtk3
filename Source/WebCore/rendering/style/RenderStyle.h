@@ -111,7 +111,7 @@ enum class AspectRatioType : uint8_t;
 enum class AutoRepeatType : uint8_t;
 enum class BackfaceVisibility : uint8_t;
 enum class BlendMode : uint8_t;
-enum class BlockFlowDirection : uint8_t;
+enum class FlowDirection : uint8_t;
 enum class BlockStepInsert : bool;
 enum class BorderCollapse : bool;
 enum class BorderStyle : uint8_t;
@@ -181,6 +181,7 @@ enum class Order : bool;
 enum class OutlineIsAuto : bool;
 enum class Overflow : uint8_t;
 enum class OverflowAnchor : bool;
+enum class OverflowContinue : bool;
 enum class OverflowWrap : uint8_t;
 enum class OverscrollBehavior : uint8_t;
 enum class PaintBehavior : uint32_t;
@@ -194,6 +195,7 @@ enum class QuoteType : uint8_t;
 enum class Resize : uint8_t;
 enum class RubyPosition : uint8_t;
 enum class RubyAlign : uint8_t;
+enum class RubyOverhang : bool;
 enum class SVGPaintType : uint8_t;
 enum class ScrollAxis : uint8_t;
 enum class ScrollSnapStop : bool;
@@ -905,6 +907,7 @@ public:
 
     inline RubyPosition rubyPosition() const;
     inline RubyAlign rubyAlign() const;
+    inline RubyOverhang rubyOverhang() const;
 
 #if ENABLE(DARK_MODE_CSS)
     inline StyleColorScheme colorScheme() const;
@@ -1014,6 +1017,8 @@ public:
     inline OptionSet<LineBoxContain> lineBoxContain() const;
     inline const LineClampValue& lineClamp() const;
     inline const BlockEllipsis& blockEllipsis() const;
+    inline size_t maxLines() const;
+    inline OverflowContinue overflowContinue() const;
     inline const IntSize& initialLetter() const;
     inline int initialLetterDrop() const;
     inline int initialLetterHeight() const;
@@ -1079,7 +1084,7 @@ public:
     inline bool isVerticalWritingMode() const;
     inline bool isFlippedLinesWritingMode() const;
     inline bool isFlippedBlocksWritingMode() const;
-    BlockFlowDirection blockFlowDirection() const;
+    FlowDirection blockFlowDirection() const;
     TypographicMode typographicMode() const;
 
     inline ImageOrientation imageOrientation() const;
@@ -1529,6 +1534,7 @@ public:
 
     inline void setRubyPosition(RubyPosition);
     inline void setRubyAlign(RubyAlign);
+    inline void setRubyOverhang(RubyOverhang);
 
 #if ENABLE(DARK_MODE_CSS)
     inline void setColorScheme(StyleColorScheme);
@@ -1577,6 +1583,8 @@ public:
     inline void setLineBoxContain(OptionSet<LineBoxContain>);
     inline void setLineClamp(LineClampValue);
     
+    inline void setMaxLines(size_t);
+    inline void setOverflowContinue(OverflowContinue);
     inline void setBlockEllipsis(const BlockEllipsis&);
 
     inline void setInitialLetter(const IntSize&);
@@ -2016,6 +2024,7 @@ public:
     static constexpr OptionSet<TextEmphasisPosition> initialTextEmphasisPosition();
     static constexpr RubyPosition initialRubyPosition();
     static constexpr RubyAlign initialRubyAlign();
+    static constexpr RubyOverhang initialRubyOverhang();
     static constexpr OptionSet<LineBoxContain> initialLineBoxContain();
     static constexpr ImageOrientation initialImageOrientation();
     static constexpr ImageRendering initialImageRendering();
@@ -2100,6 +2109,9 @@ public:
     static inline GridPosition initialGridItemRowStart();
     static inline GridPosition initialGridItemRowEnd();
 
+    static GridTrackList initialGridColumnList();
+    static GridTrackList initialGridRowList();
+
     static constexpr TabSize initialTabSize();
 
     static inline const AtomString& initialLineGrid();
@@ -2109,6 +2121,8 @@ public:
     static constexpr IntSize initialInitialLetter();
     static constexpr LineClampValue initialLineClamp();
     static inline BlockEllipsis initialBlockEllipsis();
+    static OverflowContinue initialOverflowContinue();
+    static constexpr size_t initialMaxLines() { return 0; }
     static constexpr TextSecurity initialTextSecurity();
     static constexpr InputSecurity initialInputSecurity();
 

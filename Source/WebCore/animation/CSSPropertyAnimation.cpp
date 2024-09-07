@@ -2844,7 +2844,7 @@ private:
             auto toValue = toTextUnderlineOffset.resolve(to.computedFontSize());
 
             auto blendedValue = blendFunc(fromValue, toValue, context);
-            return TextUnderlineOffset::createWithLength(Length(clampTo<float>(blendedValue, minValueForCssLength, static_cast<float>(maxValueForCssLength)), LengthType::Fixed));
+            return TextUnderlineOffset::createWithLength(Length(clampTo<float>(blendedValue, minValueForCssLength, maxValueForCssLength), LengthType::Fixed));
         };
 
         destination.setTextUnderlineOffset(blendedTextUnderlineOffset());
@@ -2886,7 +2886,7 @@ private:
             auto toValue = toTextDecorationThickness.resolve(to.computedFontSize(), to.metricsOfPrimaryFont());
 
             auto blendedValue = blendFunc(fromValue, toValue, context);
-            return TextDecorationThickness::createWithLength(Length(clampTo<float>(blendedValue, minValueForCssLength, static_cast<float>(maxValueForCssLength)), LengthType::Fixed));
+            return TextDecorationThickness::createWithLength(Length(clampTo<float>(blendedValue, minValueForCssLength, maxValueForCssLength), LengthType::Fixed));
         };
 
         destination.setTextDecorationThickness(blendedTextDecorationThickness());
@@ -4010,6 +4010,7 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         new DiscretePropertyWrapper<Resize>(CSSPropertyResize, &RenderStyle::resize, &RenderStyle::setResize),
         new DiscretePropertyWrapper<RubyPosition>(CSSPropertyRubyPosition, &RenderStyle::rubyPosition, &RenderStyle::setRubyPosition),
         new DiscretePropertyWrapper<RubyAlign>(CSSPropertyRubyAlign, &RenderStyle::rubyAlign, &RenderStyle::setRubyAlign),
+        new DiscretePropertyWrapper<RubyOverhang>(CSSPropertyRubyOverhang, &RenderStyle::rubyOverhang, &RenderStyle::setRubyOverhang),
         new DiscretePropertyWrapper<TableLayoutType>(CSSPropertyTableLayout, &RenderStyle::tableLayout, &RenderStyle::setTableLayout),
         new DiscretePropertyWrapper<TextAlignMode>(CSSPropertyTextAlign, &RenderStyle::textAlign, &RenderStyle::setTextAlign),
         new DiscretePropertyWrapper<TextAlignLast>(CSSPropertyTextAlignLast, &RenderStyle::textAlignLast, &RenderStyle::setTextAlignLast),
@@ -4099,7 +4100,9 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         new DiscretePropertyWrapper<FieldSizing>(CSSPropertyFieldSizing, &RenderStyle::fieldSizing, &RenderStyle::setFieldSizing),
         new DiscretePropertyWrapper<const Vector<AtomString>&>(CSSPropertyAnchorName, &RenderStyle::anchorNames, &RenderStyle::setAnchorNames),
         new DiscretePropertyWrapper<const AtomString&>(CSSPropertyPositionAnchor, &RenderStyle::positionAnchor, &RenderStyle::setPositionAnchor),
-        new DiscretePropertyWrapper<const BlockEllipsis&>(CSSPropertyBlockEllipsis, &RenderStyle::blockEllipsis, &RenderStyle::setBlockEllipsis)
+        new DiscretePropertyWrapper<const BlockEllipsis&>(CSSPropertyBlockEllipsis, &RenderStyle::blockEllipsis, &RenderStyle::setBlockEllipsis),
+        new DiscretePropertyWrapper<size_t>(CSSPropertyMaxLines, &RenderStyle::maxLines, &RenderStyle::setMaxLines),
+        new DiscretePropertyWrapper<OverflowContinue>(CSSPropertyContinue, &RenderStyle::overflowContinue, &RenderStyle::setOverflowContinue)
     };
     const unsigned animatableLonghandPropertiesCount = std::size(animatableLonghandPropertyWrappers);
 
@@ -4138,6 +4141,7 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         CSSPropertyGridRow,
         CSSPropertyGridTemplate,
         CSSPropertyInsetBlock, // logical shorthand
+        CSSPropertyLineClamp,
         CSSPropertyListStyle, // for list-style-image
         CSSPropertyMargin,
         CSSPropertyMarginBlock, // logical shorthand
@@ -4639,15 +4643,9 @@ bool CSSPropertyAnimation::propertiesEqual(const AnimatableCSSProperty& property
             return true;
         }, [&] (const AtomString& customProperty) {
             auto [aCustomPropertyValue, bCustomPropertyValue] = customPropertyValuesForBlending(customProperty, a, b);
-            if (!aCustomPropertyValue && !bCustomPropertyValue)
-                return true;
-            if (!aCustomPropertyValue || !bCustomPropertyValue)
-                return false;
-            if (std::holds_alternative<CSSCustomPropertyValue::SyntaxValueList>(aCustomPropertyValue->value()) && std::holds_alternative<CSSCustomPropertyValue::SyntaxValueList>(bCustomPropertyValue->value()))
+            if (aCustomPropertyValue && bCustomPropertyValue)
                 return aCustomPropertyValue->equals(*bCustomPropertyValue);
-            if (std::holds_alternative<CSSCustomPropertyValue::SyntaxValue>(aCustomPropertyValue->value()) && std::holds_alternative<CSSCustomPropertyValue::SyntaxValue>(bCustomPropertyValue->value()))
-                return aCustomPropertyValue->equals(*bCustomPropertyValue);
-            return false;
+            return !aCustomPropertyValue && !bCustomPropertyValue;
         }
     );
 }

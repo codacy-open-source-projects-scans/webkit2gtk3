@@ -254,7 +254,7 @@ public:
 
     // The following sandbox flags will be forced, regardless of changes to
     // the sandbox attribute of any parent frames.
-    void forceSandboxFlags(SandboxFlags flags) { m_forcedSandboxFlags |= flags; }
+    void forceSandboxFlags(SandboxFlags flags) { m_forcedSandboxFlags.add(flags); }
     WEBCORE_EXPORT SandboxFlags effectiveSandboxFlags() const;
 
     bool checkIfFormActionAllowedByCSP(const URL&, bool didReceiveRedirectResponse, const URL& preRedirectURL) const;
@@ -549,6 +549,6 @@ private:
 //
 // FIXME: Consider making this function part of an appropriate class (not FrameLoader)
 // and moving it to a more appropriate location.
-RefPtr<Frame> createWindow(LocalFrame& openerFrame, LocalFrame& lookupFrame, FrameLoadRequest&&, WindowFeatures&, bool& created);
+RefPtr<Frame> createWindow(LocalFrame& openerFrame, FrameLoadRequest&&, WindowFeatures&, bool& created);
 
 } // namespace WebCore

@@ -171,6 +171,7 @@
 #include "ThermalMitigationNotifier.h"
 #include "UserContentProvider.h"
 #include "UserContentURLPattern.h"
+#include "UserMediaController.h"
 #include "UserScript.h"
 #include "UserStyleSheet.h"
 #include "ValidationMessageClient.h"
@@ -2818,6 +2819,12 @@ void Page::updateCaptureState(bool isActive, MediaProducerMediaCaptureKind kind)
         document.pageMutedStateDidChange();
     });
 }
+
+void Page::voiceActivityDetected()
+{
+    if (auto* controller = UserMediaController::from(this))
+        controller->voiceActivityDetected();
+}
 #endif
 
 void Page::stopMediaCapture(MediaProducerMediaCaptureKind kind)
@@ -5008,9 +5015,9 @@ std::optional<SimpleRange> Page::contextRangeForActiveWritingToolsSession() cons
     return m_writingToolsController->activeSessionRange();
 }
 
-void Page::showSelectionForActiveWritingToolsSession() const
+void Page::intelligenceTextAnimationsDidComplete()
 {
-    return m_writingToolsController->showSelection();
+    m_writingToolsController->intelligenceTextAnimationsDidComplete();
 }
 #endif
 
@@ -5029,5 +5036,21 @@ void Page::activeNowPlayingSessionUpdateTimerFired()
     m_hasActiveNowPlayingSession = hasActiveNowPlayingSession;
     chrome().client().hasActiveNowPlayingSessionChanged(hasActiveNowPlayingSession);
 }
+
+void Page::setLastAuthentication(LoginStatus::AuthenticationType authType)
+{
+    auto loginStatus = LoginStatus::create(RegistrableDomain(mainFrameURL()), emptyString(), LoginStatus::CredentialTokenType::HTTPStateToken, authType, LoginStatus::TimeToLiveAuthentication);
+    if (loginStatus.hasException())
+        return;
+    m_lastAuthentication = loginStatus.releaseReturnValue();
+}
+
+#if ENABLE(FULLSCREEN_API)
+bool Page::isFullscreenManagerEnabled() const
+{
+    Ref settings = protectedSettings();
+    return settings->fullScreenEnabled() || settings->videoFullscreenRequiresElementFullscreen();
+}
+#endif
 
 } // namespace WebCore

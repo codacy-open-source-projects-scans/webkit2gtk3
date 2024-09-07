@@ -226,6 +226,10 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 #if ENABLE(FULLSCREEN_DISMISSAL_GESTURES)
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(hideBanner) object:nil];
 #endif
+#if ENABLE(LINEAR_MEDIA_PLAYER)
+    [self _didCleanupFullscreen];
+#endif
+
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     _playbackClient.setParent(nullptr);
     _playbackClient.setInterface(nullptr);
@@ -367,10 +371,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 - (void)videoControlsManagerDidChange
 {
     ASSERT(_valid);
-    auto page = [self._webView _page];
-    RefPtr videoPresentationManager = page ? page->videoPresentationManager() : nullptr;
-    RefPtr videoPresentationInterface = videoPresentationManager ? videoPresentationManager->controlsManagerInterface() : nullptr;
-    RefPtr playbackSessionInterface = videoPresentationInterface ? &videoPresentationInterface->playbackSessionInterface() : nullptr;
+    RefPtr playbackSessionInterface = [self _playbackSessionInterface];
 
     _playbackClient.setInterface(playbackSessionInterface.get());
 
@@ -410,8 +411,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
         return;
     }
 
-    RefPtr playbackSessionManager = page->playbackSessionManager();
-    RefPtr playbackSessionInterface = playbackSessionManager ? playbackSessionManager->controlsManagerInterface() : nullptr;
+    RefPtr playbackSessionInterface = [self _playbackSessionInterface];
     auto* playbackSessionModel = playbackSessionInterface ? playbackSessionInterface->playbackSessionModel() : nullptr;
     if (!playbackSessionModel || !playbackSessionModel->supportsLinearMediaPlayer()) {
         [self _removeEnvironmentPickerButtonView];
@@ -420,6 +420,10 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 
     RefPtr videoPresentationManager = page->videoPresentationManager();
     RefPtr videoPresentationInterface = videoPresentationManager ? videoPresentationManager->controlsManagerInterface() : nullptr;
+
+    if (videoPresentationInterface)
+        videoPresentationInterface->setSpatialImmersive(true);
+
     LMPlayableViewController *playableViewController = videoPresentationInterface ? videoPresentationInterface->playableViewController() : nil;
     UIViewController *environmentPickerButtonViewController = playableViewController.wks_environmentPickerButtonViewController;
 
@@ -454,6 +458,18 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     [self removeChildViewController:_environmentPickerButtonViewController.get()];
 
     _environmentPickerButtonViewController = nil;
+}
+
+- (void)_didCleanupFullscreen
+{
+    RefPtr page = self._webView._page.get();
+    if (!page)
+        return;
+    RefPtr videoPresentationManager = page->videoPresentationManager();
+    if (!videoPresentationManager)
+        return;
+    if (RefPtr videoPresentationInterface = videoPresentationManager->controlsManagerInterface())
+        videoPresentationInterface->setSpatialImmersive(false);
 }
 #endif // ENABLE(LINEAR_MEDIA_PLAYER)
 
@@ -840,6 +856,19 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     return insets;
 }
 
+- (RefPtr<WebCore::PlatformPlaybackSessionInterface>) _playbackSessionInterface
+{
+    auto page = [self._webView _page];
+    if (!page)
+        return nullptr;
+
+    WebKit::PlaybackSessionManagerProxy* playbackSessionManager = page->playbackSessionManager();
+    if (!playbackSessionManager)
+        return nullptr;
+
+    return playbackSessionManager->controlsManagerInterface();
+}
+
 - (void)_cancelAction:(id)sender
 {
     ASSERT(_valid);
@@ -849,15 +878,8 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 - (void)_togglePiPAction:(id)sender
 {
     ASSERT(_valid);
-    auto page = [self._webView _page];
-    if (!page)
-        return;
 
-    WebKit::PlaybackSessionManagerProxy* playbackSessionManager = page->playbackSessionManager();
-    if (!playbackSessionManager)
-        return;
-
-    RefPtr playbackSessionInterface = playbackSessionManager->controlsManagerInterface();
+    RefPtr playbackSessionInterface = [self _playbackSessionInterface];
     if (!playbackSessionInterface)
         return;
 
@@ -900,25 +922,33 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 - (void)_showPhishingAlert
 {
     ASSERT(_valid);
+
+    RefPtr page = self._webView._page.get();
+    if (page && !page->preferences().fullScreenEnabled()) {
+        ASSERT(page->preferences().videoFullscreenRequiresElementFullscreen());
+        _secheuristic.reset();
+        return;
+    }
+
     NSString *alertTitle = WEB_UI_STRING("It looks like you are typing while in full screen", "Full Screen Deceptive Website Warning Sheet Title");
     NSString *alertMessage = [NSString stringWithFormat:WEB_UI_NSSTRING(@"Typing is not allowed in full screen websites. “%@” may be showing a fake keyboard to trick you into disclosing personal or financial information.", "Full Screen Deceptive Website Warning Sheet Content Text"), (NSString *)self.location];
     auto alert = WebKit::createUIAlertController(alertTitle, alertMessage);
 
-    if (auto page = [self._webView _page]) {
+    if (page) {
         page->suspendAllMediaPlayback([] { });
         page->suspendActiveDOMObjectsAndAnimations();
     }
 
     UIAlertAction* exitAction = [UIAlertAction actionWithTitle:WEB_UI_STRING_KEY("Exit Full Screen", "Exit Full Screen (Element Full Screen)", "Full Screen Deceptive Website Exit Action") style:UIAlertActionStyleCancel handler:^(UIAlertAction * action) {
         [self _cancelAction:action];
-        if (auto page = [self._webView _page]) {
+        if (RefPtr page = self._webView._page.get()) {
             page->resumeActiveDOMObjectsAndAnimations();
             page->resumeAllMediaPlayback([] { });
         }
     }];
 
     UIAlertAction* stayAction = [UIAlertAction actionWithTitle:WEB_UI_STRING_KEY("Stay in Full Screen", "Stay in Full Screen (Element Full Screen)", "Full Screen Deceptive Website Stay Action") style:UIAlertActionStyleDefault handler:^(UIAlertAction * action) {
-        if (auto page = [self._webView _page]) {
+        if (RefPtr page = self._webView._page.get()) {
             page->resumeActiveDOMObjectsAndAnimations();
             page->resumeAllMediaPlayback([] { });
         }

@@ -220,6 +220,7 @@ fast/images/jpegxl-as-image.html [ Pass ]
 fast/images/jpegxl-image-decoding.html [ Pass ]
 fast/images/jpegxl-with-color-profile.html [ Pass ]
 fast/images/animated-jpegxl-loop-count.html [ Pass ]
+fast/images/image-size-unsigned-overflow.html [ Skip ]
 
 # DataTransferItems is not yet implemented
 fast/events/clipboard-dataTransferItemList.html [ Skip ]
@@ -476,9 +477,6 @@ fast/events/popup-blocking-click-in-iframe.html [ Skip ]
 
 # eventSender.leapForward should be reimplemented without Sleep.
 editing/selection/mouse/click-left-of-rtl-wrapping-text.html [ Skip ] # Timeout
-
-# testScriptObjectInvoke is not a function
-imported/blink/plugins/empty-per-context-data.html [ Skip ]
 
 # WTR::TestInvocation::done should quit the message loop of WebKit::WebPopupMenuProxyWin::showPopupMenu
 webkit.org/b/275285 fast/forms/select/menulist-popup-crash.html [ Skip ] # Timeout
@@ -1002,6 +1000,8 @@ http/tests/workers/service/openwindow-from-notification-click.html [ Failure ]
 http/tests/workers/service/service-worker-download-body.https.html [ Failure ]
 http/tests/workers/service/service-worker-download-stream.https.html [ Failure ]
 http/tests/workers/service/shownotification-denied.html [ Failure ]
+
+http/wpt/service-workers/fetch-service-worker-preload-download.https.html [ Failure ]
 http/wpt/service-workers/fetch-service-worker-preload-download-through-direct-preload.https.html [ Failure ]
 http/wpt/service-workers/fetch-service-worker-preload-use-download-and-clone.https.html [ Failure ]
 http/wpt/service-workers/fetch-service-worker-preload-use-download.https.html [ Failure ]
@@ -1230,8 +1230,6 @@ webkit.org/b/182694 fast/dom/event-handler-attributes.html [ Pass Timeout ]
 webkit.org/b/182128 fast/dom/navigator-detached-no-crash.html [ Pass Failure ]
 
 webkit.org/b/257624 fast/dom/SelectorAPI/caseID.html [ Failure Pass ]
-
-webkit.org/b/238227 fast/dom/intersection-observer-document-leak.html [ Pass Failure ]
 
 webkit.org/b/265213 fast/dom/Range/detach-range-during-deletecontents.html [ Skip ] # Timeout
 

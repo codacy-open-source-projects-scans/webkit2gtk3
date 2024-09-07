@@ -60,6 +60,7 @@
 #include "CSSPropertyParserConsumer+PercentDefinitions.h"
 #include "CSSPropertyParserConsumer+RawResolver.h"
 #include "CSSPropertyParserConsumer+URL.h"
+#include "CSSPropertyParsing.h"
 #include "CSSUnicodeRangeValue.h"
 #include "CSSValuePair.h"
 #include "Document.h"
@@ -76,10 +77,12 @@
 namespace WebCore {
 namespace CSSPropertyParserHelpers {
 
+#if ENABLE(VARIATION_FONTS)
 static bool isFontStyleAngleInRange(double angleInDegrees)
 {
     return angleInDegrees >= -90 && angleInDegrees <= 90;
 }
+#endif
 
 static CSSParserMode parserMode(ScriptExecutionContext& context)
 {
@@ -133,7 +136,7 @@ static std::optional<double> consumeFontWeightNumberRaw(CSSParserTokenRange& ran
     }
 }
 
-RefPtr<CSSPrimitiveValue> consumeFontWeightNumber(CSSParserTokenRange& range)
+static RefPtr<CSSPrimitiveValue> consumeFontWeightNumber(CSSParserTokenRange& range)
 {
     if (auto result = consumeFontWeightNumberRaw(range))
         return CSSPrimitiveValue::create(*result);

@@ -994,6 +994,20 @@ CSSAnchorPositioningEnabled:
     WebCore:
       default: false
 
+CSSAppearanceBaseEnabled:
+  type: bool
+  status: testable
+  category: css
+  humanReadableName: "CSS appearance: base"
+  humanReadableDescription: "Enable base value for CSS appearance"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 CSSBackgroundClipBorderAreaEnabled:
   type: bool
   status: stable
@@ -1150,7 +1164,7 @@ CSSLightDarkEnabled:
 
 CSSLineClampEnabled:
   type: bool
-  status: testable
+  status: preview
   category: css
   humanReadableName: "CSS line-clamp"
   humanReadableDescription: "Enable CSS line-clamp"
@@ -1268,6 +1282,20 @@ CSSRubyAlignEnabled:
   category: css
   humanReadableName: "CSS ruby-align property"
   humanReadableDescription: "Enable ruby-align"
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
+    WebCore:
+      default: true
+
+CSSRubyOverhangEnabled:
+  type: bool
+  status: stable
+  category: css
+  humanReadableName: "CSS ruby-overhang property"
+  humanReadableDescription: "Enable ruby-overhang"
   defaultValue:
     WebKitLegacy:
       default: true
@@ -3966,6 +3994,21 @@ LegacyPluginQuirkForMailSignaturesEnabled:
     WebCore:
       default: false
 
+LegacyWebRTCOfferOptionsEnabled:
+  type: bool
+  status: embedder
+  humanReadableName: "WebRTC Peer Connection Legacy Offer options"
+  humanReadableDescription: "Enable RTCPeerConnection Legacy offer options (offerToReceiveAudio, offerToReceiveVideo)"
+  condition: ENABLE(WEB_RTC)
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      "PLATFORM(GTK) || PLATFORM(WPE)": true
+      default: false
+    WebCore:
+      default: false
+
 LinearMediaPlayerEnabled:
   type: bool
   status: internal
@@ -4191,6 +4234,21 @@ LoginStatusAPIEnabled:
       default: false
     WebCore:
       default: false
+
+LoginStatusAPIRequiresWebAuthnEnabled:
+  type: bool
+  status: internal
+  category: dom
+  humanReadableName: "Require WebAuthn with the Login Status API"
+  humanReadableDescription: "Require a recent WebAuthn authentication to set login status"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+  sharedPreferenceForWebProcess: true
 
 LogsPageMessagesToSystemConsoleEnabled:
   type: bool
@@ -5874,25 +5932,6 @@ SafeBrowsingEnabled:
     WebKit:
       default: true
 
-SampleBufferContentKeySessionSupportEnabled:
-  type: bool
-  status: unstable
-  category: media
-  humanReadableName: "ContentKeySession support for SampleBuffer Renderers"
-  humanReadableDescription: "ContentKeySession support for SampleBuffer Renderers Enabled"
-  webcoreOnChange: sampleBufferContentKeySessionSupportEnabledChanged
-  condition: HAVE(AVCONTENTKEYSPECIFIER)
-  defaultValue:
-    WebKitLegacy:
-      "PLATFORM(IOS_FAMILY)": true
-      default: false
-    WebKit:
-      "PLATFORM(IOS_FAMILY)": true
-      default: false
-    WebCore:
-      "PLATFORM(IOS_FAMILY)": true
-      default: false
-
 SampledPageTopColorMaxDifference:
   type: double
   status: embedder
@@ -6490,6 +6529,22 @@ ShouldTakeNearSuspendedAssertions:
     WebCore:
       default: true
 
+ShouldUseModernAVContentKeySession:
+  type: bool
+  status: internal
+  category: media
+  humanReadableName: "Modern AVContentKeySession"
+  humanReadableDescription: "Use modern AVContentKeySession"
+  webcoreOnChange: shouldUseModernAVContentKeySessionChanged
+  condition: USE(MODERN_AVCONTENTKEYSESSION)
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
+    WebCore:
+      default: true
+
 # FIXME: This is not relevent for WebKitLegacy, so should be excluded from WebKitLegacy entirely (though we should still set the default value to false when initializing settings).
 # FIXME: This is not used in WebCore, so should not have a binding to WebCore::Settings.
 ShouldUseServiceWorkerShortTimeout:
@@ -7050,6 +7105,21 @@ TouchEventsEnabled:
     WebCore:
       default: WebCore::screenHasTouchDevice()
 
+TouchInputCompatibilityEnabled:
+  type: bool
+  status: testable
+  category: dom
+  humanReadableName: "Touch Input Compatibility"
+  humanReadableDescription: "Touch Input Compatibility"
+  condition: ENABLE(WEBXR)
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 TrackConfigurationEnabled:
   type: bool
   status: testable
@@ -7485,15 +7555,16 @@ VerticalFormControlsEnabled:
 VideoFullscreenRequiresElementFullscreen:
   type: bool
   status: embedder
-  condition: PLATFORM(IOS_FAMILY)
+  condition: ENABLE(FULLSCREEN_API)
   defaultValue:
     WebKitLegacy:
       default: false
     WebKit:
-      default: false
+      default: defaultVideoFullscreenRequiresElementFullscreen()
     WebCore:
       default: false
-      
+  sharedPreferenceForWebProcess: true
+
 VideoPresentationModeAPIEnabled:
   type: bool
   status: embedder

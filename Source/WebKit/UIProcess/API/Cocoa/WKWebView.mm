@@ -330,17 +330,6 @@ static uint32_t convertSystemLayoutDirection(NSUserInterfaceLayoutDirection dire
 
 #endif // PLATFORM(MAC)
 
-#if PLATFORM(IOS_FAMILY)
-static void hardwareKeyboardAvailabilityChangedCallback(CFNotificationCenterRef, void* observer, CFStringRef, const void*, CFDictionaryRef)
-{
-    ASSERT(observer);
-    RetainPtr webView { (__bridge WKWebView *)observer };
-    if (!webView)
-        return;
-    webView->_page->hardwareKeyboardAvailabilityChanged();
-}
-#endif
-
 - (void)_initializeWithConfiguration:(WKWebViewConfiguration *)configuration
 {
     if (!configuration)
@@ -398,10 +387,6 @@ static void hardwareKeyboardAvailabilityChangedCallback(CFNotificationCenterRef,
     [self _registerForNotifications];
 
     _page->contentSizeCategoryDidChange([self _contentSizeCategory]);
-
-    auto notificationName = adoptNS([[NSString alloc] initWithCString:kGSEventHardwareKeyboardAvailabilityChangedNotification encoding:NSUTF8StringEncoding]);
-    auto notificationBehavior = static_cast<CFNotificationSuspensionBehavior>(CFNotificationSuspensionBehaviorCoalesce | _CFNotificationObserverIsObjC);
-    CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), (__bridge const void *)(self), hardwareKeyboardAvailabilityChangedCallback, (__bridge CFStringRef)notificationName.get(), nullptr, notificationBehavior);
 #endif // PLATFORM(IOS_FAMILY)
 
 #if ENABLE(META_VIEWPORT)
@@ -591,7 +576,6 @@ static void hardwareKeyboardAvailabilityChangedCallback(CFNotificationCenterRef,
 
 #if PLATFORM(IOS_FAMILY)
     pageConfiguration->preferences().setAlternateFormControlDesignEnabled(WebKit::defaultAlternateFormControlDesignEnabled());
-    pageConfiguration->preferences().setVideoFullscreenRequiresElementFullscreen(WebKit::defaultVideoFullscreenRequiresElementFullscreen());
 #endif
 
     // For SharedPreferencesForWebProcess
@@ -664,6 +648,8 @@ static void hardwareKeyboardAvailabilityChangedCallback(CFNotificationCenterRef,
     [_textFinderClient willDestroyView:self];
 #endif
 
+    [self _setResourceLoadDelegate:nil];
+
 #if PLATFORM(IOS_FAMILY)
     [_contentView _webViewDestroyed];
 
@@ -678,9 +664,6 @@ static void hardwareKeyboardAvailabilityChangedCallback(CFNotificationCenterRef,
     [_remoteObjectRegistry _invalidate];
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [_scrollView setInternalDelegate:nil];
-
-    auto notificationName = adoptNS([[NSString alloc] initWithCString:kGSEventHardwareKeyboardAvailabilityChangedNotification encoding:NSUTF8StringEncoding]);
-    CFNotificationCenterRemoveObserver(CFNotificationCenterGetDarwinNotifyCenter(), (__bridge const void *)(self), (__bridge CFStringRef)notificationName.get(), nullptr);
 #endif
 
 #if PLATFORM(MAC) && HAVE(NSWINDOW_SNAPSHOT_READINESS_HANDLER)
@@ -1824,18 +1807,6 @@ inline OptionSet<WebKit::FindOptions> toFindOptions(WKFindConfiguration *configu
 }
 #endif
 
-static inline WKTextAnimationType toWKTextAnimationType(WebCore::TextAnimationType style)
-{
-    switch (style) {
-    case WebCore::TextAnimationType::Initial:
-        return WKTextAnimationTypeInitial;
-    case WebCore::TextAnimationType::Source:
-        return WKTextAnimationTypeSource;
-    case WebCore::TextAnimationType::Final:
-        return WKTextAnimationTypeFinal;
-    }
-}
-
 - (WKPageRef)_pageForTesting
 {
     return toAPI(_page.get());
@@ -2306,8 +2277,8 @@ static _WKSelectionAttributes selectionAttributes(const WebKit::EditorState& edi
 
     if (!_partialIntelligenceTextPonderingAnimationCount && _writingToolsTextReplacementsFinished) {
         // If the entire replacement has already been completed, and this is the end of the last animation,
-        // then reveal the selection.
-        _page->showSelectionForActiveWritingToolsSession();
+        // then reveal the selection and end the session if needed.
+        _page->intelligenceTextAnimationsDidComplete();
     }
 }
 
@@ -2319,7 +2290,7 @@ static _WKSelectionAttributes selectionAttributes(const WebKit::EditorState& edi
 - (void)_addTextAnimationForAnimationID:(NSUUID *)nsUUID withData:(const WebCore::TextAnimationData&)data
 {
 #if PLATFORM(IOS_FAMILY)
-    [_contentView addTextAnimationForAnimationID:nsUUID withStyleType:toWKTextAnimationType(data.style)];
+    [_contentView addTextAnimationForAnimationID:nsUUID withData:data];
 #else
     auto uuid = WTF::UUID::fromNSUUID(nsUUID);
     if (!uuid)
@@ -4769,9 +4740,9 @@ static Vector<Ref<API::TargetedElementInfo>> elementsFromWKElements(NSArray<_WKT
     _page->enableSourceTextAnimationAfterElementWithID(elementID);
 
 #if PLATFORM(IOS_FAMILY)
-    [_contentView addTextAnimationForAnimationID:nsUUID.get() withStyleType:WKTextAnimationTypeInitial];
+    [_contentView addTextAnimationForAnimationID:nsUUID.get() withData:{ WebCore::TextAnimationType::Initial, WebCore::TextAnimationRunMode::RunAnimation }];
 #else
-    _impl->addTextAnimationForAnimationID(*uuid, { WebCore::TextAnimationType::Initial, WebCore::TextAnimationRunMode::RunAnimation, WTF::UUID(WTF::UUID::emptyValue) });
+    _impl->addTextAnimationForAnimationID(*uuid, { WebCore::TextAnimationType::Initial, WebCore::TextAnimationRunMode::RunAnimation });
 #endif
 
     return nsUUID.get();
@@ -4792,9 +4763,9 @@ static Vector<Ref<API::TargetedElementInfo>> elementsFromWKElements(NSArray<_WKT
     _page->enableTextAnimationTypeForElementWithID(elementID);
 
 #if PLATFORM(IOS_FAMILY)
-    [_contentView addTextAnimationForAnimationID:nsUUID.get() withStyleType:WKTextAnimationTypeFinal];
+    [_contentView addTextAnimationForAnimationID:nsUUID.get() withData:{ WebCore::TextAnimationType::Final, WebCore::TextAnimationRunMode::RunAnimation }];
 #else
-    _impl->addTextAnimationForAnimationID(*uuid, { WebCore::TextAnimationType::Final, WebCore::TextAnimationRunMode::RunAnimation, WTF::UUID(WTF::UUID::emptyValue) });
+    _impl->addTextAnimationForAnimationID(*uuid, { WebCore::TextAnimationType::Final, WebCore::TextAnimationRunMode::RunAnimation });
 #endif
 
     return nsUUID.get();

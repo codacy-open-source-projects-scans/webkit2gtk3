@@ -38,7 +38,6 @@
 #include "FontSizeAdjust.h"
 #include "GraphicsTypes.h"
 #include "Length.h"
-#include "LineClampValue.h"
 #include "ListStyleType.h"
 #include "RenderStyleConstants.h"
 #include "SVGRenderStyleDefs.h"
@@ -143,20 +142,6 @@ template<> constexpr TYPE fromCSSValueID(CSSValueID value) { \
     } \
     ASSERT_NOT_REACHED_UNDER_CONSTEXPR_CONTEXT(); \
     return { }; \
-}
-
-template<> inline LineClampValue fromCSSValue(const CSSValue& value)
-{
-    auto& primitiveValue = downcast<CSSPrimitiveValue>(value);
-
-    if (primitiveValue.primitiveType() == CSSUnitType::CSS_INTEGER)
-        return LineClampValue(primitiveValue.resolveAsIntegerDeprecated<int>(), LineClamp::LineCount);
-
-    if (primitiveValue.primitiveType() == CSSUnitType::CSS_PERCENTAGE)
-        return LineClampValue(primitiveValue.resolveAsPercentageDeprecated<int>(), LineClamp::Percentage);
-
-    ASSERT(primitiveValue.valueID() == CSSValueNone);
-    return LineClampValue();
 }
 
 #define TYPE ReflectionDirection
@@ -330,6 +315,8 @@ constexpr CSSValueID toCSSValueID(StyleAppearance e)
         return CSSValueNone;
     case StyleAppearance::Auto:
         return CSSValueAuto;
+    case StyleAppearance::Base:
+        return CSSValueBase;
     case StyleAppearance::Checkbox:
         return CSSValueCheckbox;
     case StyleAppearance::Radio:
@@ -406,7 +393,7 @@ template<> constexpr StyleAppearance fromCSSValueID(CSSValueID valueID)
     if (valueID == CSSValueAuto)
         return StyleAppearance::Auto;
 
-    return StyleAppearance(valueID - CSSValueCheckbox + static_cast<unsigned>(StyleAppearance::Checkbox));
+    return StyleAppearance(valueID - CSSValueBase + static_cast<unsigned>(StyleAppearance::Base));
 }
 
 #define TYPE BackfaceVisibility
@@ -1573,6 +1560,12 @@ DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
 #undef TYPE
 #undef FOR_EACH
 
+#define TYPE RubyOverhang
+#define FOR_EACH(CASE) CASE(Auto) CASE(None)
+DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
+#undef TYPE
+#undef FOR_EACH
+
 #define TYPE TextOverflow
 #define FOR_EACH(CASE) CASE(Clip) CASE(Ellipsis)
 DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
@@ -2541,6 +2534,12 @@ DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
 
 #define TYPE QuoteType
 #define FOR_EACH(CASE) CASE(OpenQuote) CASE(CloseQuote) CASE(NoOpenQuote) CASE(NoCloseQuote)
+DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
+#undef TYPE
+#undef FOR_EACH
+
+#define TYPE OverflowContinue
+#define FOR_EACH(CASE) CASE(Auto) CASE(Discard)
 DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
 #undef TYPE
 #undef FOR_EACH

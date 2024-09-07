@@ -132,7 +132,7 @@
 #include <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
 #endif
 
-#define PAGE_ID ((m_frame ? valueOrDefault(m_frame->pageID()) : PageIdentifier()).toUInt64())
+#define PAGE_ID (m_frame && m_frame->pageID() ? m_frame->pageID()->toUInt64() : 0)
 #define FRAME_ID ((m_frame ? m_frame->frameID() : FrameIdentifier()).object().toUInt64())
 #define IS_MAIN_FRAME (m_frame ? m_frame->isMainFrame() : false)
 #define DOCUMENTLOADER_RELEASE_LOG(fmt, ...) RELEASE_LOG(Network, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 ", isMainFrame=%d] DocumentLoader::" fmt, this, PAGE_ID, FRAME_ID, IS_MAIN_FRAME, ##__VA_ARGS__)
@@ -1147,7 +1147,7 @@ void DocumentLoader::continueAfterContentPolicy(PolicyAction policy)
         if (ResourceLoader* mainResourceLoader = this->mainResourceLoader())
             InspectorInstrumentation::continueWithPolicyDownload(*m_frame, mainResourceLoader->identifier(), *this, m_response);
 
-        if (!(frameLoader()->effectiveSandboxFlags() & SandboxDownloads)) {
+        if (!frameLoader()->effectiveSandboxFlags().contains(SandboxFlag::Downloads)) {
             // When starting the request, we didn't know that it would result in download and not navigation. Now we know that main document URL didn't change.
             // Download may use this knowledge for purposes unrelated to cookies, notably for setting file quarantine data.
             frameLoader()->setOriginalURLForDownloadRequest(m_request);
@@ -1321,7 +1321,7 @@ void DocumentLoader::commitData(const SharedBuffer& data)
         if (!isLoading())
             return;
 
-        if (auto* window = document.domWindow()) {
+        if (RefPtr window = document.domWindow()) {
             window->prewarmLocalStorageIfNecessary();
 
             if (m_mainResource) {
@@ -2082,7 +2082,7 @@ void DocumentLoader::loadErrorDocument()
         return;
 
     commitData(SharedBuffer::create());
-    m_frame->document()->enforceSandboxFlags(SandboxOrigin);
+    m_frame->document()->enforceSandboxFlags(SandboxFlag::Origin);
     m_writer.end();
 }
 
@@ -2232,7 +2232,7 @@ void DocumentLoader::loadMainResource(ResourceRequest&& request)
         CachingPolicy::AllowCaching);
 
     auto isSandboxingAllowingServiceWorkerFetchHandling = [](SandboxFlags flags) {
-        return !(flags & SandboxOrigin) && !(flags & SandboxScripts);
+        return !(flags.contains(SandboxFlag::Origin)) && !(flags.contains(SandboxFlag::Scripts));
     };
 
     if (!m_canUseServiceWorkers || !isSandboxingAllowingServiceWorkerFetchHandling(frameLoader()->effectiveSandboxFlags()))
@@ -2507,7 +2507,10 @@ bool DocumentLoader::navigationCanTriggerCrossDocumentViewTransition(Document& o
     if (!newOrigin->isSameOriginAs(oldDocument.securityOrigin()))
         return false;
 
-    // FIXME: If newDocument was created via cross-origin redirects, then return false.
+    if (const auto* metrics = response().deprecatedNetworkLoadMetricsOrNull()) {
+        if (metrics->crossOriginRedirect())
+            return false;
+    }
 
     if (*m_triggeringAction.navigationAPIType() == NavigationNavigationType::Traverse)
         return true;

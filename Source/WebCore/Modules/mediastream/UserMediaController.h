@@ -31,6 +31,7 @@
 #include "UserMediaClient.h"
 #include <wtf/CompletionHandler.h>
 #include <wtf/TZoneMalloc.h>
+#include <wtf/WeakHashSet.h>
 
 namespace WebCore {
 
@@ -53,17 +54,24 @@ public:
     UserMediaClient::DeviceChangeObserverToken addDeviceChangeObserver(Function<void()>&&);
     void removeDeviceChangeObserver(UserMediaClient::DeviceChangeObserverToken);
 
-    void updateCaptureState(bool isActive, MediaProducerMediaCaptureKind, CompletionHandler<void(std::optional<Exception>&&)>&&);
+    void updateCaptureState(const Document&, bool isActive, MediaProducerMediaCaptureKind, CompletionHandler<void(std::optional<Exception>&&)>&&);
 
     void logGetUserMediaDenial(Document&);
     void logGetDisplayMediaDenial(Document&);
     void logEnumerateDevicesDenial(Document&);
+
+    void setShouldListenToVoiceActivity(Document&, bool);
+    void checkDocumentForVoiceActivity(const Document*);
+    void voiceActivityDetected();
 
     WEBCORE_EXPORT static ASCIILiteral supplementName();
     static UserMediaController* from(Page* page) { return static_cast<UserMediaController*>(Supplement<Page>::from(page, supplementName())); }
 
 private:
     UserMediaClient* m_client;
+
+    WeakHashSet<Document, WeakPtrImplWithEventTargetData> m_voiceActivityDocuments;
+    bool m_shouldListenToVoiceActivity { false };
 };
 
 inline void UserMediaController::requestUserMediaAccess(UserMediaRequest& request)
@@ -92,9 +100,9 @@ inline void UserMediaController::removeDeviceChangeObserver(UserMediaClient::Dev
     m_client->removeDeviceChangeObserver(token);
 }
 
-inline void UserMediaController::updateCaptureState(bool isActive, MediaProducerMediaCaptureKind kind, CompletionHandler<void(std::optional<Exception>&&)>&& completionHandler)
+inline void UserMediaController::updateCaptureState(const Document& document, bool isActive, MediaProducerMediaCaptureKind kind, CompletionHandler<void(std::optional<Exception>&&)>&& completionHandler)
 {
-    m_client->updateCaptureState(isActive, kind, WTFMove(completionHandler));
+    m_client->updateCaptureState(document, isActive, kind, WTFMove(completionHandler));
 }
 
 } // namespace WebCore

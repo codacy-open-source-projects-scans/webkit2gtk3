@@ -129,11 +129,11 @@ bool InlineFormattingUtils::inlineLevelBoxAffectsLineBox(const InlineLevelBox& i
 InlineRect InlineFormattingUtils::flipVisualRectToLogicalForWritingMode(const InlineRect& visualRect, WritingMode writingMode)
 {
     switch (writingModeToBlockFlowDirection(writingMode)) {
-    case BlockFlowDirection::TopToBottom:
-    case BlockFlowDirection::BottomToTop:
+    case FlowDirection::TopToBottom:
+    case FlowDirection::BottomToTop:
         return visualRect;
-    case BlockFlowDirection::LeftToRight:
-    case BlockFlowDirection::RightToLeft: {
+    case FlowDirection::LeftToRight:
+    case FlowDirection::RightToLeft: {
         // FIXME: While vertical-lr and vertical-rl modes do differ in the ordering direction of line boxes
         // in a block container (see: https://drafts.csswg.org/css-writing-modes/#block-flow)
         // we ignore it for now as RenderBlock takes care of it for us.
@@ -566,12 +566,12 @@ std::pair<InlineLayoutUnit, InlineLayoutUnit> InlineFormattingUtils::textEmphasi
     // Normally we resolve visual -> logical values at pre-layout time, but emphaisis values are not part of the general box geometry.
     auto hasAboveTextEmphasis = false;
     auto hasUnderTextEmphasis = false;
-    if (style.isHorizontalWritingMode()) {
-        hasAboveTextEmphasis = emphasisPosition.contains(TextEmphasisPosition::Over);
-        hasUnderTextEmphasis = !hasAboveTextEmphasis && emphasisPosition.contains(TextEmphasisPosition::Under);
+    if (style.isVerticalWritingMode()) {
+        hasAboveTextEmphasis = !emphasisPosition.contains(TextEmphasisPosition::Left);
+        hasUnderTextEmphasis = !hasAboveTextEmphasis;
     } else {
-        hasAboveTextEmphasis = emphasisPosition.contains(TextEmphasisPosition::Right) || emphasisPosition == TextEmphasisPosition::Over;
-        hasUnderTextEmphasis = !hasAboveTextEmphasis && (emphasisPosition.contains(TextEmphasisPosition::Left) || emphasisPosition == TextEmphasisPosition::Under);
+        hasAboveTextEmphasis = !emphasisPosition.contains(TextEmphasisPosition::Under);
+        hasUnderTextEmphasis = !hasAboveTextEmphasis;
     }
 
     if (!hasAboveTextEmphasis && !hasUnderTextEmphasis)
@@ -597,15 +597,24 @@ std::pair<InlineLayoutUnit, InlineLayoutUnit> InlineFormattingUtils::textEmphasi
     return { hasAboveTextEmphasis ? annotationSize : 0.f, hasAboveTextEmphasis ? 0.f : annotationSize };
 }
 
-LineEndingEllipsisPolicy InlineFormattingUtils::lineEndingEllipsisPolicy(const RenderStyle& rootStyle, size_t numberOfLinesWithInlineContent, std::optional<size_t> numberOfVisibleLinesAllowed)
+LineEndingTruncationPolicy InlineFormattingUtils::lineEndingTruncationPolicy(const RenderStyle& rootStyle, size_t numberOfLinesWithInlineContent, std::optional<size_t> numberOfVisibleLinesAllowed)
 {
     if (numberOfVisibleLinesAllowed && *numberOfVisibleLinesAllowed == numberOfLinesWithInlineContent)
-        return LineEndingEllipsisPolicy::WhenContentOverflowsInBlockDirection;
+        return LineEndingTruncationPolicy::WhenContentOverflowsInBlockDirection;
 
     // Truncation is in effect when the block container has overflow other than visible.
     if (rootStyle.overflowX() != Overflow::Visible && rootStyle.textOverflow() == TextOverflow::Ellipsis)
-        return LineEndingEllipsisPolicy::WhenContentOverflowsInInlineDirection;
-    return LineEndingEllipsisPolicy::NoEllipsis;
+        return LineEndingTruncationPolicy::WhenContentOverflowsInInlineDirection;
+    return LineEndingTruncationPolicy::NoTruncation;
+}
+
+bool InlineFormattingUtils::shouldDiscardRemainingContentInBlockDirection(size_t numberOfLinesWithInlineContent) const
+{
+    auto lineClamp = formattingContext().layoutState().parentBlockLayoutState().lineClamp();
+    if (!lineClamp || !lineClamp->shouldDiscardOverflow)
+        return false;
+    ASSERT(!lineClamp->isLegacy);
+    return lineClamp->maximumLines == numberOfLinesWithInlineContent;
 }
 
 }

@@ -4640,6 +4640,18 @@ void WebViewImpl::removeTextPlaceholder(NSTextPlaceholder *placeholder, bool wil
 }
 
 #if ENABLE(WRITING_TOOLS)
+
+void WebViewImpl::showWritingTools()
+{
+    IntRect selectionRect;
+
+    auto& editorState = m_page->editorState();
+    if (editorState.selectionIsRange && editorState.hasPostLayoutData())
+        selectionRect = editorState.postLayoutData->selectionBoundingRect;
+
+    [[PAL::getWTWritingToolsClass() sharedInstance] showPanelForSelectionRect:selectionRect ofView:m_view.getAutoreleased() forDelegate:(NSObject<WTWritingToolsDelegate> *)m_view.getAutoreleased()];
+}
+
 void WebViewImpl::addTextAnimationForAnimationID(WTF::UUID uuid, const WebCore::TextAnimationData& data)
 {
     if (!m_page->preferences().textAnimationsEnabled())
@@ -4659,7 +4671,12 @@ void WebViewImpl::removeTextAnimationForAnimationID(WTF::UUID uuid)
     [m_textAnimationTypeManager removeTextAnimationForAnimationID:uuid];
 }
 
-#endif
+void WebViewImpl::hideTextAnimationView()
+{
+    [m_textAnimationTypeManager hideTextAnimationView];
+}
+
+#endif // ENABLE(WRITING_TOOLS)
 
 ViewGestureController& WebViewImpl::ensureGestureController()
 {

@@ -625,9 +625,19 @@ template<> unsigned CSSPrimitiveValue::resolveAsLength(const CSSToLengthConversi
     return roundForImpreciseConversion<unsigned>(resolveAsLengthDouble(conversionData));
 }
 
+template<> float CSSPrimitiveValue::resolveAsLength(const CSSToLengthConversionData& conversionData) const
+{
+    return narrowPrecisionToFloat(resolveAsLengthDouble(conversionData));
+}
+
+template<> double CSSPrimitiveValue::resolveAsLength(const CSSToLengthConversionData& conversionData) const
+{
+    return resolveAsLengthDouble(conversionData);
+}
+
 template<> Length CSSPrimitiveValue::resolveAsLength(const CSSToLengthConversionData& conversionData) const
 {
-    return Length(clampTo<double>(resolveAsLengthDouble(conversionData), minValueForCssLength, maxValueForCssLength), LengthType::Fixed);
+    return Length(clampTo<float>(resolveAsLength(conversionData), minValueForCssLength, maxValueForCssLength), LengthType::Fixed);
 }
 
 template<> short CSSPrimitiveValue::resolveAsLength(const CSSToLengthConversionData& conversionData) const
@@ -638,16 +648,6 @@ template<> short CSSPrimitiveValue::resolveAsLength(const CSSToLengthConversionD
 template<> unsigned short CSSPrimitiveValue::resolveAsLength(const CSSToLengthConversionData& conversionData) const
 {
     return roundForImpreciseConversion<unsigned short>(resolveAsLengthDouble(conversionData));
-}
-
-template<> float CSSPrimitiveValue::resolveAsLength(const CSSToLengthConversionData& conversionData) const
-{
-    return narrowPrecisionToFloat(resolveAsLengthDouble(conversionData));
-}
-
-template<> double CSSPrimitiveValue::resolveAsLength(const CSSToLengthConversionData& conversionData) const
-{
-    return resolveAsLengthDouble(conversionData);
 }
 
 template<> LayoutUnit CSSPrimitiveValue::resolveAsLength(const CSSToLengthConversionData& conversionData) const
@@ -1143,6 +1143,13 @@ std::optional<bool> CSSPrimitiveValue::isZero() const
     if (isCalculated())
         return std::nullopt;
     return !m_value.number;
+}
+
+std::optional<bool> CSSPrimitiveValue::isOne() const
+{
+    if (isCalculated())
+        return std::nullopt;
+    return m_value.number == 1;
 }
 
 std::optional<bool> CSSPrimitiveValue::isPositive() const
@@ -1901,20 +1908,7 @@ bool CSSPrimitiveValue::convertingToLengthHasRequiredConversionData(int lengthCo
     if (!isFixedNumberConversion)
         return true;
 
-    auto dependencies = computedStyleDependencies();
-    if (!dependencies.rootProperties.isEmpty() && !conversionData.rootStyle())
-        return false;
-
-    if (!dependencies.properties.isEmpty() && !conversionData.style())
-        return false;
-
-    if (dependencies.containerDimensions && !conversionData.elementForContainerUnitResolution())
-        return false;
-
-    if (dependencies.viewportDimensions && !conversionData.renderView())
-        return false;
-
-    return true;
+    return canResolveDependenciesWithConversionData(conversionData);
 }
 
 IterationStatus CSSPrimitiveValue::customVisitChildren(const Function<IterationStatus(CSSValue&)>& func) const

@@ -28,6 +28,7 @@
 #import "FrameTreeChecks.h"
 #import "HTTPServer.h"
 #import "PlatformUtilities.h"
+#import "TestCocoa.h"
 #import "TestNavigationDelegate.h"
 #import "TestUIDelegate.h"
 #import "TestURLSchemeHandler.h"
@@ -49,6 +50,21 @@
 #import <WebKit/_WKWebsiteDataStoreConfiguration.h>
 #import <wtf/BlockPtr.h>
 #import <wtf/text/MakeString.h>
+
+@interface TestObserver : NSObject
+
+@property (nonatomic, copy) void (^observeValueForKeyPath)(NSString *, id);
+
+@end
+
+@implementation TestObserver
+
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context
+{
+    _observeValueForKeyPath(keyPath, object);
+}
+
+@end
 
 namespace TestWebKitAPI {
 
@@ -441,6 +457,18 @@ TEST(SiteIsolation, NavigationAfterWindowOpen)
 
     while (processStillRunning(webKitPid))
         Util::spinRunLoop();
+}
+
+TEST(SiteIsolation, OpenWithNoopener)
+{
+    HTTPServer server({
+        { "/example"_s, { "<script>w = window.open('https://webkit.org/webkit', '_blank', 'noopener')</script>"_s } },
+        { "/webkit"_s, { "hi"_s } },
+    }, HTTPServer::Protocol::HttpsProxy);
+
+    auto [opener, opened] = openerAndOpenedViews(server);
+    checkFrameTreesInProcesses(opener.webView.get(), { { "https://example.com"_s } });
+    checkFrameTreesInProcesses(opened.webView.get(), { { "https://webkit.org"_s } });
 }
 
 TEST(SiteIsolation, PreferencesUpdatesToAllProcesses)
@@ -3114,6 +3142,35 @@ TEST(SiteIsolation, URLSchemeTask)
             { { "customscheme://webkit.org"_s } }
         },
     });
+}
+
+TEST(SiteIsolation, ThemeColor)
+{
+    HTTPServer server({
+        { "/example"_s, { "<meta name='theme-color' content='red'><iframe src='https://webkit.org/webkit'></iframe>"_s } },
+        { "/webkit"_s, { "<meta name='theme-color' content='blue'>"_s } }
+    }, HTTPServer::Protocol::HttpsProxy);
+
+    auto [webView, delegate] = siteIsolatedViewAndDelegate(server);
+    EXPECT_FALSE([webView themeColor]);
+
+    __block bool observed { false };
+    auto observer = adoptNS([TestObserver new]);
+    observer.get().observeValueForKeyPath = ^(NSString *path, id view) {
+        EXPECT_WK_STREQ(path, "themeColor");
+
+        auto sRGBColorSpace = adoptCF(CGColorSpaceCreateWithName(kCGColorSpaceSRGB));
+        auto redColor = adoptCF(CGColorCreate(sRGBColorSpace.get(), redColorComponents));
+        EXPECT_TRUE(CGColorEqualToColor([[view themeColor] CGColor], redColor.get()));
+        observed = true;
+    };
+    [webView.get() addObserver:observer.get() forKeyPath:@"themeColor" options:NSKeyValueObservingOptionNew context:nil];
+
+    [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"https://example.com/example"]]];
+    [delegate waitForDidFinishNavigation];
+    [webView waitForNextPresentationUpdate];
+    Util::run(&observed);
+    Util::runFor(0.1_s);
 }
 
 }

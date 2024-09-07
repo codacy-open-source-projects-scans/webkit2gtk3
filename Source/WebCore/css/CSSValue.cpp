@@ -55,6 +55,7 @@
 #include "CSSGridAutoRepeatValue.h"
 #include "CSSGridIntegerRepeatValue.h"
 #include "CSSGridLineNamesValue.h"
+#include "CSSGridLineValue.h"
 #include "CSSGridTemplateAreasValue.h"
 #include "CSSImageSetOptionValue.h"
 #include "CSSImageSetValue.h"
@@ -164,6 +165,8 @@ template<typename Visitor> constexpr decltype(auto) CSSValue::visitDerived(Visit
         return std::invoke(std::forward<Visitor>(visitor), uncheckedDowncast<CSSGridIntegerRepeatValue>(*this));
     case GridLineNamesClass:
         return std::invoke(std::forward<Visitor>(visitor), uncheckedDowncast<CSSGridLineNamesValue>(*this));
+    case GridLineValueClass:
+        return std::invoke(std::forward<Visitor>(visitor), uncheckedDowncast<CSSGridLineValue>(*this));
     case GridTemplateAreasClass:
         return std::invoke(std::forward<Visitor>(visitor), uncheckedDowncast<CSSGridTemplateAreasValue>(*this));
     case ImageClass:
@@ -308,6 +311,28 @@ void CSSValue::collectComputedStyleDependencies(ComputedStyleDependencies& depen
     }
     if (auto* asPrimitiveValue = dynamicDowncast<CSSPrimitiveValue>(*this))
         asPrimitiveValue->collectComputedStyleDependencies(dependencies);
+}
+
+bool CSSValue::canResolveDependenciesWithConversionData(const ComputedStyleDependencies& dependencies, const CSSToLengthConversionData& conversionData)
+{
+    if (!dependencies.rootProperties.isEmpty() && !conversionData.rootStyle())
+        return false;
+
+    if (!dependencies.properties.isEmpty() && !conversionData.style())
+        return false;
+
+    if (dependencies.containerDimensions && !conversionData.elementForContainerUnitResolution())
+        return false;
+
+    if (dependencies.viewportDimensions && !conversionData.renderView())
+        return false;
+
+    return true;
+}
+
+bool CSSValue::canResolveDependenciesWithConversionData(const CSSToLengthConversionData& conversionData) const
+{
+    return canResolveDependenciesWithConversionData(computedStyleDependencies(), conversionData);
 }
 
 bool CSSValue::equals(const CSSValue& other) const

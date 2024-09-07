@@ -480,6 +480,7 @@ struct HTMLMediaElement::CueData {
 };
 
 class PausableIntervalTimer final : public TimerBase {
+    WTF_MAKE_TZONE_ALLOCATED_INLINE(PausableIntervalTimer);
 public:
     PausableIntervalTimer(Seconds interval, Function<void()>&& function)
         : m_interval { interval }
@@ -3031,7 +3032,7 @@ Expected<void, MediaPlaybackDenialReason> HTMLMediaElement::canTransitionFromAut
         ALWAYS_LOG(LOGIDENTIFIER, "pausedForUserInteraction");
         return makeUnexpected(MediaPlaybackDenialReason::PageConsentRequired);
     }
-    if (document().isSandboxed(SandboxAutomaticFeatures)) {
+    if (document().isSandboxed(SandboxFlag::AutomaticFeatures)) {
         ALWAYS_LOG(LOGIDENTIFIER, "isSandboxed");
         return makeUnexpected(MediaPlaybackDenialReason::PageConsentRequired);
     }
@@ -4093,6 +4094,8 @@ ExceptionOr<void> HTMLMediaElement::setCurrentTimeForBindings(double time)
     if (m_mediaController)
         return Exception { ExceptionCode::InvalidStateError };
 
+    time = clampTo(time, 0.0);
+
     if (m_readyState == HAVE_NOTHING || !m_player) {
         m_defaultPlaybackStartPosition = MediaTime::createWithDouble(time);
         return { };
@@ -4861,8 +4864,11 @@ void HTMLMediaElement::scheduleTimeupdateEvent(bool periodicEvent)
     Seconds timedelta = now - m_clockTimeAtLastUpdateEvent;
 
     // throttle the periodic events
-    if (periodicEvent && timedelta < maxTimeupdateEventFrequency)
+    if (periodicEvent && timedelta < maxTimeupdateEventFrequency) {
+        // Reschedule the timer to fire at the correct time, ensuring that no full cycles are skipped
+        m_playbackProgressTimer.start(maxTimeupdateEventFrequency - timedelta, maxTimeupdateEventFrequency);
         return;
+    }
 
     // Some media engines make multiple "time changed" callbacks at the same time, but we only want one
     // event at a given time so filter here
@@ -5772,7 +5778,7 @@ void HTMLMediaElement::mediaPlayerTimeChanged()
     double playbackRate = requestedPlaybackRate();
 
     // When the current playback position reaches the end of the media resource then the user agent must follow these steps:
-    if (dur && dur.isValid() && !dur.isPositiveInfinite() && !dur.isNegativeInfinite()) {
+    if ((dur || (!dur && !now)) && dur.isValid() && !dur.isPositiveInfinite() && !dur.isNegativeInfinite()) {
         // If the media element has a loop attribute specified and does not have a current media controller,
         if (loop() && !m_mediaController && playbackRate > 0) {
             m_sentEndEvent = false;
@@ -7251,7 +7257,7 @@ void HTMLMediaElement::toggleStandardFullscreenState()
 
 bool HTMLMediaElement::videoUsesElementFullscreen() const
 {
-#if ENABLE(FULLSCREEN_API) && ENABLE(VIDEO_USES_ELEMENT_FULLSCREEN)
+#if ENABLE(FULLSCREEN_API)
 #if ENABLE(LINEAR_MEDIA_PLAYER)
     if (document().settings().linearMediaPlayerEnabled()) {
         if (RefPtr player = m_player; player && player->supportsLinearMediaPlayer())
@@ -7292,10 +7298,16 @@ void HTMLMediaElement::enterFullscreen(VideoFullscreenMode mode)
     m_changingVideoFullscreenMode = true;
 
 #if ENABLE(FULLSCREEN_API) && ENABLE(VIDEO_USES_ELEMENT_FULLSCREEN)
-    if (videoUsesElementFullscreen() && document().settings().fullScreenEnabled() && isInWindowOrStandardFullscreen(mode)) {
+    if (videoUsesElementFullscreen() && page->isFullscreenManagerEnabled() && isInWindowOrStandardFullscreen(mode)) {
         m_temporarilyAllowingInlinePlaybackAfterFullscreen = false;
         m_waitingToEnterFullscreen = true;
-        protectedDocument()->checkedFullscreenManager()->requestFullscreenForElement(*this, nullptr, FullscreenManager::ExemptIFrameAllowFullscreenRequirement, [](bool) { }, mode);
+        protectedDocument()->checkedFullscreenManager()->requestFullscreenForElement(*this, nullptr, { }, [weakThis = WeakPtr { *this }](bool success) {
+            RefPtr protectedThis = weakThis.get();
+            if (!protectedThis || success)
+                return;
+            protectedThis->m_changingVideoFullscreenMode = false;
+            protectedThis->m_waitingToEnterFullscreen = false;
+        }, mode);
         return;
     }
 #endif
@@ -7358,7 +7370,7 @@ void HTMLMediaElement::exitFullscreen()
     m_waitingToEnterFullscreen = false;
 
 #if ENABLE(FULLSCREEN_API)
-    if (document().settings().fullScreenEnabled() && document().fullscreenManager().currentFullscreenElement() == this) {
+    if (document().fullscreenManager().currentFullscreenElement() == this) {
         if (document().fullscreenManager().isFullscreen()) {
             m_changingVideoFullscreenMode = true;
             protectedDocument()->checkedFullscreenManager()->cancelFullscreen();
@@ -9866,19 +9878,6 @@ void HTMLMediaElement::watchtimeTimerFired()
         audioCodecDictionary.set(DiagnosticLoggingKeys::secondsKey(), numberOfSeconds);
         page->diagnosticLoggingClient().logDiagnosticMessageWithValueDictionary(DiagnosticLoggingKeys::mediaAudioCodecWatchTimeKey(), "Media Watchtime Interval By Audio Codec"_s, audioCodecDictionary, ShouldSample::Yes);
     }();
-}
-
-std::optional<SpatialVideoMetadata> HTMLMediaElement::spatialVideoMetadata() const
-{
-    RefPtr videoTracks = this->videoTracks();
-    if (!videoTracks)
-        return { };
-
-    RefPtr selectedVideoTrack = videoTracks->selectedItem();
-    if (!selectedVideoTrack)
-        return { };
-
-    return selectedVideoTrack->configuration().spatialVideoMetadata();
 }
 
 } // namespace WebCore
