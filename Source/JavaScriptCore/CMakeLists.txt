@@ -1049,6 +1049,7 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     runtime/JSArrayBufferView.h
     runtime/JSArrayBufferViewInlines.h
     runtime/JSArrayIterator.h
+    runtime/JSAsyncFromSyncIterator.h
     runtime/JSBigInt.h
     runtime/JSBoundFunction.h
     runtime/JSCBytecodeCacheVersion.h
@@ -1104,6 +1105,7 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     runtime/JSPromise.h
     runtime/JSPromiseConstructor.h
     runtime/JSPropertyNameEnumerator.h
+    runtime/JSRegExpStringIterator.h
     runtime/JSRemoteFunction.h
     runtime/JSRunLoopTimer.h
     runtime/JSScope.h

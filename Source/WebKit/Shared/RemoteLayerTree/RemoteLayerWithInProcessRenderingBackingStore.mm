@@ -107,7 +107,7 @@ DynamicContentScalingResourceCache RemoteLayerWithInProcessRenderingBackingStore
 void RemoteLayerWithInProcessRenderingBackingStore::createContextAndPaintContents()
 {
     if (!m_frontBuffer.imageBuffer) {
-        ASSERT(m_layer.owner()->platformCALayerDelegatesDisplay(&m_layer));
+        ASSERT(m_layer->owner()->platformCALayerDelegatesDisplay(m_layer.ptr()));
         return;
     }
 
@@ -198,7 +198,7 @@ SwapBuffersDisplayRequirement RemoteLayerWithInProcessRenderingBackingStore::pre
     if (!hasFrontBuffer() || result == SetNonVolatileResult::Empty)
         displayRequirement = SwapBuffersDisplayRequirement::NeedsFullDisplay;
 
-    LOG_WITH_STREAM(RemoteLayerBuffers, stream << "RemoteLayerBackingStore " << m_layer.layerID() << " prepareBuffers() - " << displayRequirement);
+    LOG_WITH_STREAM(RemoteLayerBuffers, stream << "RemoteLayerBackingStore " << m_layer->layerID() << " prepareBuffers() - " << displayRequirement);
     return displayRequirement;
 }
 
@@ -266,9 +266,9 @@ static RefPtr<ImageBuffer> allocateBufferInternal(RemoteLayerBackingStore::Type 
 
 RefPtr<WebCore::ImageBuffer> RemoteLayerWithInProcessRenderingBackingStore::allocateBuffer()
 {
-    auto purpose = m_layer.containsBitmapOnly() ? WebCore::RenderingPurpose::BitmapOnlyLayerBacking : WebCore::RenderingPurpose::LayerBacking;
+    auto purpose = m_layer->containsBitmapOnly() ? WebCore::RenderingPurpose::BitmapOnlyLayerBacking : WebCore::RenderingPurpose::LayerBacking;
     ImageBufferCreationContext creationContext;
-    creationContext.surfacePool = &WebCore::IOSurfacePool::sharedPool();
+    creationContext.surfacePool = &WebCore::IOSurfacePool::sharedPoolSingleton();
 
 #if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
     if (m_parameters.includeDisplayList == IncludeDisplayList::Yes) {
@@ -299,7 +299,7 @@ void RemoteLayerWithInProcessRenderingBackingStore::prepareToDisplay()
         return;
     }
 
-    LOG_WITH_STREAM(RemoteLayerBuffers, stream << "RemoteLayerBackingStore " << m_layer.layerID() << " prepareToDisplay()");
+    LOG_WITH_STREAM(RemoteLayerBuffers, stream << "RemoteLayerBackingStore " << m_layer->layerID() << " prepareToDisplay()");
 
     if (performDelegatedLayerDisplay())
         return;

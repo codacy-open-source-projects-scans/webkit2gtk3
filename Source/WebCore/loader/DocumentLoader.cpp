@@ -133,13 +133,9 @@
 #endif
 
 #define PAGE_ID (m_frame && m_frame->pageID() ? m_frame->pageID()->toUInt64() : 0)
-#define FRAME_ID ((m_frame ? m_frame->frameID() : FrameIdentifier()).object().toUInt64())
+#define FRAME_ID (m_frame ? m_frame->frameID().object().toUInt64() : 0)
 #define IS_MAIN_FRAME (m_frame ? m_frame->isMainFrame() : false)
 #define DOCUMENTLOADER_RELEASE_LOG(fmt, ...) RELEASE_LOG(Network, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 ", isMainFrame=%d] DocumentLoader::" fmt, this, PAGE_ID, FRAME_ID, IS_MAIN_FRAME, ##__VA_ARGS__)
-
-#if USE(APPLE_INTERNAL_SDK)
-#include <WebKitAdditions/DocumentLoaderAdditions.cpp>
-#endif
 
 namespace WebCore {
 
@@ -222,6 +218,9 @@ DocumentLoader::~DocumentLoader()
         ASSERT(scriptExecutionContextIdentifierToLoaderMap().contains(m_resultingClientId));
         scriptExecutionContextIdentifierToLoaderMap().remove(m_resultingClientId);
     }
+
+    if (auto createdCallback = std::exchange(m_whenDocumentIsCreatedCallback, { }))
+        createdCallback(nullptr);
 }
 
 RefPtr<FragmentedSharedBuffer> DocumentLoader::mainResourceData() const
@@ -286,6 +285,9 @@ void DocumentLoader::setMainDocumentError(const ResourceError& error)
 void DocumentLoader::mainReceivedError(const ResourceError& error, LoadWillContinueInAnotherProcess loadWillContinueInAnotherProcess)
 {
     ASSERT(!error.isNull());
+
+    if (auto createdCallback = std::exchange(m_whenDocumentIsCreatedCallback, { }))
+        createdCallback(nullptr);
 
     if (!frameLoader())
         return;
@@ -806,7 +808,7 @@ std::optional<CrossOriginOpenerPolicyEnforcementResult> DocumentLoader::doCrossO
 
     auto currentCoopEnforcementResult = CrossOriginOpenerPolicyEnforcementResult::from(m_frame->document()->url(), m_frame->document()->securityOrigin(), m_frame->document()->crossOriginOpenerPolicy(), m_triggeringAction.requester(), openerURL);
 
-    auto newCoopEnforcementResult = WebCore::doCrossOriginOpenerHandlingOfResponse(*m_frame->document(), response, m_triggeringAction.requester(), m_contentSecurityPolicy.get(), frameLoader()->effectiveSandboxFlags(), m_request.httpReferrer(), frameLoader()->stateMachine().isDisplayingInitialEmptyDocument(), currentCoopEnforcementResult);
+    auto newCoopEnforcementResult = WebCore::doCrossOriginOpenerHandlingOfResponse(*m_frame->document(), response, m_triggeringAction.requester(), m_contentSecurityPolicy.get(), m_frame->effectiveSandboxFlags(), m_request.httpReferrer(), frameLoader()->stateMachine().isDisplayingInitialEmptyDocument(), currentCoopEnforcementResult);
     if (!newCoopEnforcementResult) {
         cancelMainResourceLoad(frameLoader()->cancelledError(m_request));
         return std::nullopt;
@@ -1147,7 +1149,7 @@ void DocumentLoader::continueAfterContentPolicy(PolicyAction policy)
         if (ResourceLoader* mainResourceLoader = this->mainResourceLoader())
             InspectorInstrumentation::continueWithPolicyDownload(*m_frame, mainResourceLoader->identifier(), *this, m_response);
 
-        if (!frameLoader()->effectiveSandboxFlags().contains(SandboxFlag::Downloads)) {
+        if (!m_frame->effectiveSandboxFlags().contains(SandboxFlag::Downloads)) {
             // When starting the request, we didn't know that it would result in download and not navigation. Now we know that main document URL didn't change.
             // Download may use this knowledge for purposes unrelated to cookies, notably for setting file quarantine data.
             frameLoader()->setOriginalURLForDownloadRequest(m_request);
@@ -1267,7 +1269,13 @@ void DocumentLoader::commitData(const SharedBuffer& data)
 
         m_writer.setDocumentWasLoadedAsPartOfNavigation();
 
-        auto* documentOrNull = m_frame ? m_frame->document() : nullptr;
+        RefPtr documentOrNull = m_frame ? m_frame->document() : nullptr;
+
+        auto scope = makeScopeExit([&] {
+            if (auto createdCallback = std::exchange(m_whenDocumentIsCreatedCallback, { }))
+                createdCallback(isInFinishedLoadingOfEmptyDocument() ? nullptr : documentOrNull.get());
+        });
+
         if (!documentOrNull)
             return;
         auto& document = *documentOrNull;
@@ -1451,22 +1459,20 @@ void DocumentLoader::applyPoliciesToSettings()
 #if ENABLE(TEXT_AUTOSIZING)
     m_frame->settings().setIdempotentModeAutosizingOnlyHonorsPercentages(m_idempotentModeAutosizingOnlyHonorsPercentages);
 #endif
-#if USE(APPLE_INTERNAL_SDK)
-    updateAdditionalSettingsIfNeeded();
-#endif
-}
 
-MouseEventPolicy DocumentLoader::mouseEventPolicy() const
-{
-#if ENABLE(IOS_TOUCH_EVENTS)
-    if (m_mouseEventPolicy == MouseEventPolicy::Default) {
-        if (auto* document = this->document()) {
-            if (document->quirks().shouldSynthesizeTouchEvents())
-                return MouseEventPolicy::SynthesizeTouchEvents;
-        }
-    }
+    if (m_pushAndNotificationsEnabledPolicy != PushAndNotificationsEnabledPolicy::UseGlobalPolicy) {
+        bool enabled = m_pushAndNotificationsEnabledPolicy == PushAndNotificationsEnabledPolicy::Yes;
+        m_frame->settings().setPushAPIEnabled(enabled);
+#if ENABLE(NOTIFICATIONS)
+        m_frame->settings().setNotificationsEnabled(enabled);
 #endif
-    return m_mouseEventPolicy;
+#if ENABLE(NOTIFICATION_EVENT)
+        m_frame->settings().setNotificationEventEnabled(enabled);
+#endif
+#if PLATFORM(IOS)
+        m_frame->settings().setAppBadgeEnabled(enabled);
+#endif
+    }
 }
 
 ColorSchemePreference DocumentLoader::colorSchemePreference() const
@@ -2235,7 +2241,7 @@ void DocumentLoader::loadMainResource(ResourceRequest&& request)
         return !(flags.contains(SandboxFlag::Origin)) && !(flags.contains(SandboxFlag::Scripts));
     };
 
-    if (!m_canUseServiceWorkers || !isSandboxingAllowingServiceWorkerFetchHandling(frameLoader()->effectiveSandboxFlags()))
+    if (!m_canUseServiceWorkers || !isSandboxingAllowingServiceWorkerFetchHandling(m_frame->effectiveSandboxFlags()))
         mainResourceLoadOptions.serviceWorkersMode = ServiceWorkersMode::None;
     else {
         // The main navigation load will trigger the registration of the client.
@@ -2682,6 +2688,19 @@ void DocumentLoader::setHTTPSByDefaultMode(HTTPSByDefaultMode mode)
 Ref<CachedResourceLoader> DocumentLoader::protectedCachedResourceLoader() const
 {
     return m_cachedResourceLoader;
+}
+
+void DocumentLoader::whenDocumentIsCreated(Function<void(Document*)>&& callback)
+{
+    ASSERT(!m_canUseServiceWorkers || !!m_resultingClientId);
+
+    if (auto previousCallback = std::exchange(m_whenDocumentIsCreatedCallback, { })) {
+        callback = [previousCallback = WTFMove(previousCallback), newCallback = WTFMove(callback)] (auto* document) mutable {
+            previousCallback(document);
+            newCallback(document);
+        };
+    }
+    m_whenDocumentIsCreatedCallback = WTFMove(callback);
 }
 
 } // namespace WebCore

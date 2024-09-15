@@ -1527,7 +1527,8 @@
       "name" : "Carlos Bentzen",
       "nicks" : [
          "cadubentzen"
-      ]
+      ],
+      "status" : "committer"
    },
    {
       "emails" : [
@@ -8344,7 +8345,8 @@
       "name" : "Zak Ridouh",
       "nicks" : [
          "zakr"
-      ]
+      ],
+      "status" : "committer"
    },
    {
       "emails" : [
