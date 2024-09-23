@@ -166,14 +166,14 @@ public:
         WebExtensionContentWorldType contentWorldType { WebExtensionContentWorldType::ContentScript };
         WebCore::UserStyleLevel styleLevel { WebCore::UserStyleLevel::Author };
 
-        RetainPtr<NSArray> scriptPaths;
-        RetainPtr<NSArray> styleSheetPaths;
+        Vector<String> scriptPaths;
+        Vector<String> styleSheetPaths;
 
-        RetainPtr<NSArray> includeGlobPatternStrings;
-        RetainPtr<NSArray> excludeGlobPatternStrings;
+        Vector<String> includeGlobPatternStrings;
+        Vector<String> excludeGlobPatternStrings;
 
-        NSArray *expandedIncludeMatchPatternStrings() const;
-        NSArray *expandedExcludeMatchPatternStrings() const;
+        Vector<String> expandedIncludeMatchPatternStrings() const;
+        Vector<String> expandedExcludeMatchPatternStrings() const;
     };
 
     struct WebAccessibleResourceData {
@@ -230,7 +230,7 @@ public:
     const String& displayDescription();
     const String& version();
 
-    NSString *contentSecurityPolicy();
+    const String& contentSecurityPolicy();
 
     CocoaImage *icon(CGSize idealSize);
 
@@ -243,7 +243,9 @@ public:
     bool hasPageAction();
 
 #if ENABLE(WK_WEB_EXTENSIONS_SIDEBAR)
-    bool hasSidebar();
+    bool hasSidebarAction();
+    bool hasSidePanel();
+    bool hasAnySidebar();
     CocoaImage *sidebarIcon(CGSize idealSize);
     NSString *sidebarDocumentPath();
     NSString *sidebarTitle();
@@ -277,8 +279,8 @@ public:
     bool hasOptionsPage();
     bool hasOverrideNewTabPage();
 
-    NSString *optionsPagePath();
-    NSString *overrideNewTabPagePath();
+    const String& optionsPagePath();
+    const String& overrideNewTabPagePath();
 
     const CommandsVector& commands();
     bool hasCommands();
@@ -288,7 +290,7 @@ public:
     bool hasContentModificationRules() { return !declarativeNetRequestRulesets().isEmpty(); }
 
     const InjectedContentVector& staticInjectedContents();
-    bool hasStaticInjectedContentForURL(NSURL *);
+    bool hasStaticInjectedContentForURL(const URL&);
     bool hasStaticInjectedContent();
 
     // Permissions requested by the extension in their manifest.
@@ -310,7 +312,7 @@ public:
     // Combined pattern set that includes permission patterns and injected content patterns from the manifest.
     MatchPatternSet allRequestedMatchPatterns();
 
-    NSError *createError(Error, NSString *customLocalizedDescription = nil, NSError *underlyingError = nil);
+    NSError *createError(Error, String customLocalizedDescription = { }, NSError *underlyingError = nil);
     void recordErrorIfNeeded(NSError *error) { if (error) recordError(error); }
     void recordError(NSError *);
 
@@ -390,7 +392,7 @@ private:
     RetainPtr<NSString> m_sidebarTitle;
 #endif
 
-    RetainPtr<NSString> m_contentSecurityPolicy;
+    String m_contentSecurityPolicy;
 
     RetainPtr<NSArray> m_backgroundScriptPaths;
     RetainPtr<NSString> m_backgroundPagePath;
@@ -400,8 +402,8 @@ private:
 
     RetainPtr<NSString> m_inspectorBackgroundPagePath;
 
-    RetainPtr<NSString> m_optionsPagePath;
-    RetainPtr<NSString> m_overrideNewTabPagePath;
+    String m_optionsPagePath;
+    String m_overrideNewTabPagePath;
 
     bool m_backgroundContentIsPersistent : 1 { false };
     bool m_backgroundContentUsesModules : 1 { false };

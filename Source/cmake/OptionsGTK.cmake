@@ -18,7 +18,6 @@ find_package(LibXml2 2.8.0 REQUIRED)
 find_package(PNG REQUIRED)
 find_package(SQLite3 REQUIRED)
 find_package(Threads REQUIRED)
-find_package(Unifdef REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(WebP REQUIRED COMPONENTS demux)
 find_package(ATSPI 2.5.3)
@@ -33,13 +32,6 @@ SET_AND_EXPOSE_TO_BUILD(USE_XDGMIME TRUE)
 
 if (WTF_CPU_ARM OR WTF_CPU_MIPS)
     SET_AND_EXPOSE_TO_BUILD(USE_CAPSTONE ${DEVELOPER_MODE})
-endif ()
-
-# TODO(277627): Remove once the SDKs include the package.
-if (DEVELOPER_MODE)
-    set(USE_SYSTEM_SYSPROF_CAPTURE_DEFAULT OFF)
-else ()
-    set(USE_SYSTEM_SYSPROF_CAPTURE_DEFAULT ON)
 endif ()
 
 # Public options specific to the GTK port. Do not add any options here unless
@@ -58,6 +50,7 @@ WEBKIT_OPTION_DEFINE(USE_LIBDRM "Whether to enable usage of libdrm." PUBLIC ON)
 WEBKIT_OPTION_DEFINE(USE_LIBHYPHEN "Whether to enable the default automatic hyphenation implementation." PUBLIC ON)
 WEBKIT_OPTION_DEFINE(USE_LIBSECRET "Whether to enable the persistent credential storage using libsecret." PUBLIC ON)
 WEBKIT_OPTION_DEFINE(USE_SOUP2 "Whether to enable usage of Soup 2 instead of Soup 3." PUBLIC OFF)
+WEBKIT_OPTION_DEFINE(USE_SYSTEM_SYSPROF_CAPTURE "Whether to use a system-provided libsysprof-capture" PUBLIC ON)
 
 WEBKIT_OPTION_DEPEND(ENABLE_DOCUMENTATION ENABLE_INTROSPECTION)
 WEBKIT_OPTION_DEPEND(USE_GBM USE_LIBDRM)
@@ -67,7 +60,7 @@ WEBKIT_OPTION_CONFLICT(USE_GTK4 USE_SOUP2)
 # Private options specific to the GTK port. Changing these options is
 # completely unsupported. They are intended for use only by WebKit developers.
 WEBKIT_OPTION_DEFINE(USE_SYSPROF_CAPTURE "Whether to use libsysprof-capture for tracing." PRIVATE ON)
-WEBKIT_OPTION_DEFINE(USE_SYSTEM_SYSPROF_CAPTURE "Whether to use a system-provided libsysprof-capture" PRIVATE ${USE_SYSTEM_SYSPROF_CAPTURE_DEFAULT})
+WEBKIT_OPTION_DEFINE(USE_SYSTEM_UNIFDEF "Whether to use a system-provided unifdef" PRIVATE ON)
 
 WEBKIT_OPTION_DEPEND(USE_SYSTEM_SYSPROF_CAPTURE USE_SYSPROF_CAPTURE)
 
@@ -359,7 +352,6 @@ if (USE_GBM)
     WEBKIT_CHECK_HAVE_FUNCTION(HAVE_GBM_BO_GET_FD_FOR_PLANE gbm_bo_get_fd_for_plane gbm.h)
     WEBKIT_CHECK_HAVE_FUNCTION(HAVE_GBM_BO_CREATE_WITH_MODIFIERS2 gbm_bo_create_with_modifiers2 gbm.h)
     unset(CMAKE_REQUIRED_LIBRARIES)
-    SET_AND_EXPOSE_TO_BUILD(USE_TEXTURE_MAPPER_DMABUF ON)
 endif ()
 
 if (ENABLE_SPEECH_SYNTHESIS)
