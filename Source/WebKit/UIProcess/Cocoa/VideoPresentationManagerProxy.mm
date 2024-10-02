@@ -481,12 +481,12 @@ void VideoPresentationModelContext::setTextTrackRepresentationBounds(const IntRe
 }
 
 #if !RELEASE_LOG_DISABLED
-const void* VideoPresentationModelContext::logIdentifier() const
+uint64_t VideoPresentationModelContext::logIdentifier() const
 {
     return m_playbackSessionModel->logIdentifier();
 }
 
-const void* VideoPresentationModelContext::nextChildIdentifier() const
+uint64_t VideoPresentationModelContext::nextChildIdentifier() const
 {
     return LoggerHelper::childLogIdentifier(m_playbackSessionModel->logIdentifier(), ++m_childIdentifierSeed);
 }
@@ -886,6 +886,11 @@ RetainPtr<WKVideoView> VideoPresentationManagerProxy::createViewWithID(PlaybackS
 void VideoPresentationManagerProxy::willRemoveLayerForID(PlaybackSessionContextIdentifier contextId)
 {
     removeClientForContext(contextId);
+}
+
+const SharedPreferencesForWebProcess& VideoPresentationManagerProxy::sharedPreferencesForWebProcess() const
+{
+    return m_page->legacyMainFrameProcess().sharedPreferencesForWebProcess();
 }
 
 #pragma mark Messages from VideoPresentationManager
@@ -1425,7 +1430,7 @@ const Logger& VideoPresentationManagerProxy::logger() const
     return m_playbackSessionManagerProxy->logger();
 }
 
-const void* VideoPresentationManagerProxy::logIdentifier() const
+uint64_t VideoPresentationManagerProxy::logIdentifier() const
 {
     return m_playbackSessionManagerProxy->logIdentifier();
 }

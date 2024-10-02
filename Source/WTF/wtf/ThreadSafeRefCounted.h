@@ -51,12 +51,6 @@ public:
 
     void ref() const
     {
-        refAllowingPartiallyDestroyed();
-    }
-
-    // Deprecated, and will be removed. Use ref() instead.
-    void refAllowingPartiallyDestroyed() const
-    {
         applyRefDuringDestructionCheck();
 
         ++m_refCount;
@@ -156,30 +150,26 @@ public:
         }
     }
 
-    void derefAllowingPartiallyDestroyed() const
-    {
-        if (!derefBaseWithoutDeletionCheck())
-            return;
-
-        if constexpr (destructionThread == DestructionThread::Any) {
-            delete static_cast<const T*>(this);
-        } else if constexpr (destructionThread == DestructionThread::Main) {
-            ensureOnMainThread([this] {
-                delete static_cast<const T*>(this);
-            });
-        } else if constexpr (destructionThread == DestructionThread::MainRunLoop) {
-            ensureOnMainRunLoop([this] {
-                delete static_cast<const T*>(this);
-            });
-        } else {
-            STATIC_ASSERT_NOT_REACHED_FOR_VALUE(destructionThread, "Unexpected destructionThread enumerator value");
-        }
-    }
-
 protected:
     ThreadSafeRefCounted() = default;
 };
 
 } // namespace WTF
+
+template<typename T>
+inline void retainThreadSafeRefCounted(T* obj)
+{
+    RELEASE_ASSERT(obj != nullptr);
+    static_assert(std::derived_from<T, WTF::ThreadSafeRefCounted<T>>);
+    static_cast<WTF::ThreadSafeRefCounted<T>*>(obj)->ref();
+}
+
+template<typename T>
+inline void releaseThreadSafeRefCounted(T* obj)
+{
+    RELEASE_ASSERT(obj != nullptr);
+    static_assert(std::derived_from<T, WTF::ThreadSafeRefCounted<T>>);
+    static_cast<WTF::ThreadSafeRefCounted<T>*>(obj)->deref();
+}
 
 using WTF::ThreadSafeRefCounted;

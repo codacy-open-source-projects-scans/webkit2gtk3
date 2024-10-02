@@ -561,7 +561,7 @@ void FrameLoader::submitForm(Ref<FormSubmission>&& submission)
 
 void FrameLoader::stopLoading(UnloadEventPolicy unloadEventPolicy)
 {
-    RefAllowingPartiallyDestroyed<LocalFrame> protectedFrame { m_frame.get() };
+    Ref<LocalFrame> protectedFrame { m_frame.get() };
 
     if (RefPtr parser = m_frame->document() ? m_frame->document()->parser() : nullptr)
         parser->stopParsing();
@@ -679,7 +679,7 @@ void FrameLoader::clear(RefPtr<Document>&& newDocument, bool clearWindowProperti
     bool neededClear = m_needsClear;
     m_needsClear = false;
 
-    RefAllowingPartiallyDestroyed<LocalFrame> frame = m_frame.get();
+    Ref<LocalFrame> frame = m_frame.get();
 
     if (neededClear)
         frame->document()->transferViewTransitionParams(*newDocument);
@@ -859,7 +859,7 @@ void FrameLoader::finishedParsing()
 {
     LOG(Loading, "WebCoreLoading frame %" PRIu64 ": Finished parsing", m_frame->frameID().object().toUInt64());
 
-    RefAllowingPartiallyDestroyed<LocalFrame> frame = m_frame.get();
+    Ref<LocalFrame> frame = m_frame.get();
 
     frame->injectUserScripts(UserScriptInjectionTime::DocumentEnd);
 
@@ -927,8 +927,8 @@ void FrameLoader::checkCompleted()
     if (m_isComplete)
         return;
 
-    RefAllowingPartiallyDestroyed<LocalFrame> frame = m_frame.get();
-    RefAllowingPartiallyDestroyed<Document> document = *frame->document();
+    Ref<LocalFrame> frame = m_frame.get();
+    Ref<Document> document = *frame->document();
 
     // FIXME: It would be better if resource loads were kicked off after render tree update (or didn't complete synchronously).
     //        https://bugs.webkit.org/show_bug.cgi?id=171729
@@ -1216,8 +1216,8 @@ void FrameLoader::updateURLAndHistory(const URL& newURL, RefPtr<SerializedScript
 
     // https://html.spec.whatwg.org/multipage/browsing-the-web.html#restore-the-history-object-state
     // FIXME: Implement "restore the history object state" deserializing (step 2).
-    if (!stateObject)
-        stateObject = history->currentItem()->stateObject();
+    // Note: Implement "otherwise activeEntry's classic history API state" (step 3) if a caller needs that (so far
+    // callers always set stateObject explicitly).
 
     m_frame->protectedDocument()->updateURLForPushOrReplaceState(newURL);
 
@@ -1917,9 +1917,8 @@ bool FrameLoader::willLoadMediaElementURL(URL& url, Node& initiatorNode)
     if (m_documentLoader)
         request.setIsAppInitiated(m_documentLoader->lastNavigationWasAppInitiated());
 
-    ResourceLoaderIdentifier identifier;
     ResourceError error;
-    requestFromDelegate(request, IsMainResourceLoad::No, identifier, error);
+    auto identifier = requestFromDelegate(request, IsMainResourceLoad::No, error);
     notifier().sendRemainingDelegateMessages(protectedDocumentLoader().get(), IsMainResourceLoad::No, identifier, request, ResourceResponse(url, String(), -1, String()), nullptr, -1, -1, error);
 
     url = request.url();
@@ -2344,9 +2343,8 @@ void FrameLoader::commitProvisionalLoad()
         // Start request for the main resource and dispatch didReceiveResponse before the load is committed for
         // consistency with all other loads. See https://bugs.webkit.org/show_bug.cgi?id=150927.
         ResourceError mainResouceError;
-        ResourceLoaderIdentifier mainResourceIdentifier;
         ResourceRequest mainResourceRequest(cachedPage->documentLoader()->request());
-        requestFromDelegate(mainResourceRequest, IsMainResourceLoad::Yes, mainResourceIdentifier, mainResouceError);
+        auto mainResourceIdentifier = requestFromDelegate(mainResourceRequest, IsMainResourceLoad::Yes, mainResouceError);
         notifier().dispatchDidReceiveResponse(cachedPage->protectedDocumentLoader().get(), mainResourceIdentifier, cachedPage->documentLoader()->response());
 
         auto hasInsecureContent = cachedPage->cachedMainFrame()->hasInsecureContent();
@@ -2413,10 +2411,9 @@ void FrameLoader::commitProvisionalLoad()
             const auto& response = documentLoader->responses()[i];
             // FIXME: If the WebKit client changes or cancels the request, this is not respected.
             ResourceError error;
-            ResourceLoaderIdentifier identifier;
             ResourceRequest request(response.url());
             request.setIsAppInitiated(documentLoader->lastNavigationWasAppInitiated());
-            requestFromDelegate(request, IsMainResourceLoad::Yes, identifier, error);
+            auto identifier = requestFromDelegate(request, IsMainResourceLoad::Yes, error);
             // FIXME: If we get a resource with more than 2B bytes, this code won't do the right thing.
             // However, with today's computers and networking speeds, this won't happen in practice.
             // Could be an issue with a giant local file.
@@ -3542,9 +3539,8 @@ ResourceLoaderIdentifier FrameLoader::loadResourceSynchronously(const ResourceRe
 
     applyUserAgentIfNeeded(initialRequest);
 
-    ResourceLoaderIdentifier identifier;    
     ResourceRequest newRequest(initialRequest);
-    requestFromDelegate(newRequest, IsMainResourceLoad::No, identifier, error);
+    auto identifier = requestFromDelegate(newRequest, IsMainResourceLoad::No, error);
 
 #if ENABLE(CONTENT_EXTENSIONS)
     if (error.isNull()) {
@@ -4075,11 +4071,11 @@ void FrameLoader::continueLoadAfterNewWindowPolicy(const ResourceRequest& reques
     mainFrameLoader->loadWithNavigationAction(request, WTFMove(newAction), FrameLoadType::Standard, formState, allowNavigationToInvalidURL, ShouldTreatAsContinuingLoad::No);
 }
 
-void FrameLoader::requestFromDelegate(ResourceRequest& request, IsMainResourceLoad isMainResourceLoad, ResourceLoaderIdentifier& identifier, ResourceError& error)
+ResourceLoaderIdentifier FrameLoader::requestFromDelegate(ResourceRequest& request, IsMainResourceLoad isMainResourceLoad, ResourceError& error)
 {
     ASSERT(!request.isNull());
 
-    identifier = ResourceLoaderIdentifier::generate();
+    auto identifier = ResourceLoaderIdentifier::generate();
     RefPtr documentLoader = m_documentLoader;
     notifier().assignIdentifierToInitialRequest(identifier, isMainResourceLoad, documentLoader.get(), request);
 
@@ -4092,6 +4088,7 @@ void FrameLoader::requestFromDelegate(ResourceRequest& request, IsMainResourceLo
         error = ResourceError();
 
     request = newRequest;
+    return identifier;
 }
 
 void FrameLoader::loadedResourceFromMemoryCache(CachedResource& resource, ResourceRequest& newRequest, ResourceError& error)
@@ -4122,8 +4119,7 @@ void FrameLoader::loadedResourceFromMemoryCache(CachedResource& resource, Resour
         return;
     }
 
-    ResourceLoaderIdentifier identifier;
-    requestFromDelegate(newRequest, IsMainResourceLoad::No, identifier, error);
+    auto identifier = requestFromDelegate(newRequest, IsMainResourceLoad::No, error);
 
     ResourceResponse response = resource.response();
     response.setSource(ResourceResponse::Source::MemoryCache);
@@ -4483,7 +4479,7 @@ ResourceError FrameLoader::blockedByContentFilterError(const ResourceRequest& re
 #if PLATFORM(IOS_FAMILY)
 RetainPtr<CFDictionaryRef> FrameLoader::connectionProperties(ResourceLoader* loader)
 {
-    return m_client->connectionProperties(loader->documentLoader(), loader->identifier());
+    return m_client->connectionProperties(loader->documentLoader(), *loader->identifier());
 }
 #endif
 

@@ -140,7 +140,7 @@ public:
     virtual ~GPUConnectionToWebProcess();
 
     const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const { return m_sharedPreferencesForWebProcess; }
-    void updateSharedPreferencesForWebProcess(SharedPreferencesForWebProcess&& sharedPreferencesForWebProcess) { m_sharedPreferencesForWebProcess = WTFMove(sharedPreferencesForWebProcess); }
+    void updateSharedPreferencesForWebProcess(SharedPreferencesForWebProcess&&);
 
 #if ENABLE(WEBXR)
     bool isWebXREnabled() const { return sharedPreferencesForWebProcess().webXREnabled; }
@@ -152,9 +152,7 @@ public:
     bool isDynamicContentScalingEnabled() const { return sharedPreferencesForWebProcess().useCGDisplayListsForDOMRendering; }
 #endif
 
-    using WebCore::NowPlayingManagerClient::weakPtrFactory;
-    using WebCore::NowPlayingManagerClient::WeakValueType;
-    using WebCore::NowPlayingManagerClient::WeakPtrImplType;
+    USING_CAN_MAKE_WEAKPTR(WebCore::NowPlayingManagerClient);
 
     IPC::Connection& connection() { return m_connection.get(); }
     Ref<IPC::Connection> protectedConnection() { return m_connection; }
@@ -185,6 +183,9 @@ public:
 
 #if ENABLE(MEDIA_STREAM)
     void setOrientationForMediaCapture(WebCore::IntDegrees);
+    void rotationAngleForCaptureDeviceChanged(const String&, WebCore::VideoFrameRotation);
+    void startMonitoringCaptureDeviceRotation(WebCore::PageIdentifier, const String&);
+    void stopMonitoringCaptureDeviceRotation(WebCore::PageIdentifier, const String&);
     void updateCaptureAccess(bool allowAudioCapture, bool allowVideoCapture, bool allowDisplayCapture);
     void updateCaptureOrigin(const WebCore::SecurityOriginData&);
     bool setCaptureAttributionString();

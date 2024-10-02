@@ -150,11 +150,7 @@ if (COMPILER_IS_GCC_OR_CLANG)
     # clang-cl.exe impersonates cl.exe so some clang arguments like -fno-rtti are
     # represented using cl.exe's options and should not be passed as flags, so
     # we do not add -fno-rtti or -fno-exceptions for clang-cl
-    if (COMPILER_IS_CLANG_CL)
-        # FIXME: These warnings should be addressed
-        WEBKIT_PREPEND_GLOBAL_COMPILER_FLAGS(-Wno-sign-compare
-                                             -Wno-deprecated-declarations)
-    else ()
+    if (NOT COMPILER_IS_CLANG_CL)
         WEBKIT_APPEND_GLOBAL_COMPILER_FLAGS(-fno-exceptions)
         WEBKIT_APPEND_GLOBAL_CXX_FLAGS(-fno-rtti)
         WEBKIT_APPEND_GLOBAL_CXX_FLAGS(-fcoroutines)
@@ -231,6 +227,9 @@ if (COMPILER_IS_GCC_OR_CLANG)
     # Makes builds faster. The GCC manual warns about the possibility that the assembler being
     # used may not support input from a pipe, but in practice the toolchains we support all do.
     WEBKIT_PREPEND_GLOBAL_COMPILER_FLAGS(-pipe)
+
+    WEBKIT_PREPEND_GLOBAL_COMPILER_FLAGS(-Werror=undefined-inline
+                                         -Werror=undefined-internal)
 endif ()
 
 if (COMPILER_IS_GCC_OR_CLANG AND NOT MSVC)

@@ -849,11 +849,6 @@ void Document::removedLastRef()
 
         commonTeardown();
 
-#if ASSERT_ENABLED
-        // We need to do this right now since selfOnlyDeref() can delete this.
-        m_inRemovedLastRefFunction = false;
-#endif
-
         // Node::removedLastRef doesn't set refCount() to zero because it's not observable.
         // But we need to remember that our refCount reached zero in subsequent calls to decrementReferencingNodeCount().
         m_refCountAndParentBit = 0;
@@ -861,9 +856,6 @@ void Document::removedLastRef()
         decrementReferencingNodeCount();
     } else {
         commonTeardown();
-#if ASSERT_ENABLED
-        m_inRemovedLastRefFunction = false;
-#endif
         setStateFlag(StateFlag::HasStartedDeletion);
         delete this;
     }
@@ -3217,7 +3209,7 @@ void Document::willBeRemovedFromFrame()
     if (auto* pluginDocument = dynamicDowncast<PluginDocument>(*this))
         pluginDocument->detachFromPluginElement();
 
-    if (RefPtrAllowingPartiallyDestroyed<Page> page = this->page()) {
+    if (RefPtr<Page> page = this->page()) {
 #if ENABLE(POINTER_LOCK)
         page->pointerLockController().documentDetached(*this);
 #endif
@@ -3232,11 +3224,11 @@ void Document::willBeRemovedFromFrame()
     commonTeardown();
 
 #if ENABLE(TOUCH_EVENTS)
-    if (m_touchEventTargets && m_touchEventTargets->computeSize() && parentDocument())
+    if (m_touchEventTargets && m_touchEventTargets->size() && parentDocument())
         protectedParentDocument()->didRemoveEventTargetNode(*this);
 #endif
 
-    if (m_wheelEventTargets && m_wheelEventTargets->computeSize() && parentDocument())
+    if (m_wheelEventTargets && m_wheelEventTargets->size() && parentDocument())
         protectedParentDocument()->didRemoveEventTargetNode(*this);
 
     if (RefPtr mediaQueryMatcher = m_mediaQueryMatcher)
@@ -4643,12 +4635,12 @@ void Document::processMetaHttpEquiv(const String& equiv, const AtomString& conte
     case HTTPHeaderName::XFrameOptions:
         if (frame) {
             CheckedRef frameLoader = frame->loader();
-            ResourceLoaderIdentifier requestIdentifier;
+            std::optional<ResourceLoaderIdentifier> requestIdentifier;
             if (frameLoader->activeDocumentLoader() && frameLoader->activeDocumentLoader()->mainResourceLoader())
                 requestIdentifier = frameLoader->activeDocumentLoader()->mainResourceLoader()->identifier();
 
             auto message = makeString("The X-Frame-Option '"_s, content, "' supplied in a <meta> element was ignored. X-Frame-Options may only be provided by an HTTP header sent with the document."_s);
-            addConsoleMessage(MessageSource::Security, MessageLevel::Error, message, requestIdentifier.toUInt64());
+            addConsoleMessage(MessageSource::Security, MessageLevel::Error, message, requestIdentifier ? requestIdentifier->toUInt64() : 0);
         }
         break;
 
@@ -8482,7 +8474,7 @@ void Document::wheelEventHandlersChanged(Node* node)
     }
 
 #if ENABLE(WHEEL_EVENT_REGIONS)
-    if (RefPtrAllowingPartiallyDestroyed<Element> element = dynamicDowncast<Element>(node)) {
+    if (RefPtr<Element> element = dynamicDowncast<Element>(node)) {
         // Style is affected via eventListenerRegionTypes().
         element->invalidateStyle();
     }
@@ -8492,7 +8484,7 @@ void Document::wheelEventHandlersChanged(Node* node)
     UNUSED_PARAM(node);
 #endif
 
-    bool haveHandlers = m_wheelEventTargets && !m_wheelEventTargets->isEmptyIgnoringNullReferences();
+    bool haveHandlers = m_wheelEventTargets && !m_wheelEventTargets->isEmpty();
     page->chrome().client().wheelEventHandlersChanged(haveHandlers);
 }
 
@@ -8501,7 +8493,7 @@ void Document::didAddWheelEventHandler(Node& node)
     if (!m_wheelEventTargets)
         m_wheelEventTargets = makeUnique<EventTargetSet>();
 
-    m_wheelEventTargets->add(node);
+    m_wheelEventTargets->add(&node);
     wheelEventHandlersChanged(&node);
 
     if (RefPtr frame = this->frame())
@@ -8512,9 +8504,9 @@ static bool removeHandlerFromSet(EventTargetSet& handlerSet, Node& node, EventHa
 {
     switch (removal) {
     case EventHandlerRemoval::One:
-        return handlerSet.remove(node);
+        return handlerSet.remove(&node);
     case EventHandlerRemoval::All:
-        return handlerSet.removeAll(node);
+        return handlerSet.removeAll(&node);
     }
     return false;
 }
@@ -8551,7 +8543,7 @@ void Document::didAddTouchEventHandler(Node& handler)
     if (!m_touchEventTargets)
         m_touchEventTargets = makeUnique<EventTargetSet>();
 
-    m_touchEventTargets->add(handler);
+    m_touchEventTargets->add(&handler);
 
     if (RefPtr parent = parentDocument()) {
         parent->didAddTouchEventHandler(*this);
@@ -8582,15 +8574,15 @@ void Document::didRemoveEventTargetNode(Node& handler)
 {
 #if ENABLE(TOUCH_EVENTS)
     if (m_touchEventTargets) {
-        m_touchEventTargets->removeAll(handler);
-        if ((&handler == this || m_touchEventTargets->isEmptyIgnoringNullReferences()) && parentDocument())
+        m_touchEventTargets->removeAll(&handler);
+        if ((&handler == this || m_touchEventTargets->isEmpty()) && parentDocument())
             protectedParentDocument()->didRemoveEventTargetNode(*this);
     }
 #endif
 
     if (m_wheelEventTargets) {
-        m_wheelEventTargets->removeAll(handler);
-        if ((&handler == this || m_wheelEventTargets->isEmptyIgnoringNullReferences()) && parentDocument())
+        m_wheelEventTargets->removeAll(&handler);
+        if ((&handler == this || m_wheelEventTargets->isEmpty()) && parentDocument())
             protectedParentDocument()->didRemoveEventTargetNode(*this);
     }
 }
@@ -8675,7 +8667,7 @@ Document::RegionFixedPair Document::absoluteRegionForEventTargets(const EventTar
     bool insideFixedPosition = false;
 
     for (auto keyValuePair : *targets) {
-        Ref node = keyValuePair.key;
+        Ref node = *keyValuePair.key;
         auto targetRegionFixedPair = absoluteEventRegionForNode(node);
         targetRegion.unite(targetRegionFixedPair.first);
         insideFixedPosition |= targetRegionFixedPair.second;

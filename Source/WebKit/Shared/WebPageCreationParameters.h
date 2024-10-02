@@ -137,7 +137,7 @@ struct WebPageCreationParameters {
     String userAgent { };
 
     bool itemStatesWereRestoredByAPIRequest { false };
-    Vector<BackForwardListItemState> itemStates { };
+    Vector<FrameState> itemStates { };
 
     VisitedLinkTableIdentifier visitedLinkTableID;
     bool canRunBeforeUnloadConfirmPanel { false };
@@ -323,8 +323,8 @@ struct WebPageCreationParameters {
     WebCore::ContentSecurityPolicyModeForExtension contentSecurityPolicyModeForExtension { WebCore::ContentSecurityPolicyModeForExtension::None };
 
     std::optional<RemotePageParameters> remotePageParameters { };
-    std::optional<WebCore::FrameIdentifier> openerFrameIdentifier { };
     WebCore::FrameIdentifier mainFrameIdentifier;
+    std::optional<WebCore::FrameIdentifier> mainFrameOpenerIdentifier { };
     WebCore::SandboxFlags initialSandboxFlags;
 
 #if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)

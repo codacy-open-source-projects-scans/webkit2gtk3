@@ -2407,7 +2407,7 @@ void LocalDOMWindow::removeAllEventListeners()
 #endif
 
 #if ENABLE(TOUCH_EVENTS)
-    if (RefPtrAllowingPartiallyDestroyed<Document> document = this->document())
+    if (RefPtr<Document> document = this->document())
         document->didRemoveEventTargetNode(*document);
 #endif
 
@@ -2593,7 +2593,7 @@ ExceptionOr<RefPtr<Frame>> LocalDOMWindow::createWindow(const String& urlString,
 
     bool noopener = windowFeatures.wantsNoOpener();
     if (!noopener) {
-        ASSERT(newFrame->opener() == &openerFrame);
+        ASSERT(!newFrame->opener() || newFrame->opener() == &openerFrame);
         newFrame->page()->setOpenedByDOMWithOpener(true);
     }
 

@@ -38,7 +38,12 @@ ControlPart::ControlPart(StyleAppearance type)
 
 ControlFactory& ControlPart::controlFactory() const
 {
-    return m_controlFactory ? *m_controlFactory : ControlFactory::shared();
+    return m_overrideControlFactory ? *m_overrideControlFactory : ControlFactory::shared();
+}
+
+void ControlPart::setOverrideControlFactory(ControlFactory* controlFactory)
+{
+    m_overrideControlFactory = controlFactory;
 }
 
 PlatformControl* ControlPart::platformControl() const

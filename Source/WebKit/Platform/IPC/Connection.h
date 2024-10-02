@@ -223,7 +223,7 @@ struct ConnectionAsyncReplyHandler {
 };
 
 enum class ConnectionSyncRequestIDType { };
-using ConnectionSyncRequestID = LegacyNullableAtomicObjectIdentifier<ConnectionSyncRequestIDType>;
+using ConnectionSyncRequestID = AtomicObjectIdentifier<ConnectionSyncRequestIDType>;
 
 class Connection : public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<Connection, WTF::DestructionThread::MainRunLoop> {
 public:
@@ -309,7 +309,7 @@ public:
     Client* client() const { return m_client.get(); }
 
     enum UniqueIDType { };
-    using UniqueID = LegacyNullableAtomicObjectIdentifier<UniqueIDType>;
+    using UniqueID = AtomicObjectIdentifier<UniqueIDType>;
     using DecoderOrError = Expected<UniqueRef<Decoder>, Error>;
 
     static RefPtr<Connection> connection(UniqueID);
@@ -431,9 +431,11 @@ public:
 
     using AsyncReplyHandler = ConnectionAsyncReplyHandler;
     Error sendMessageWithAsyncReply(UniqueRef<Encoder>&&, AsyncReplyHandler, OptionSet<SendOption> sendOptions, std::optional<Thread::QOS> = std::nullopt);
-    UniqueRef<Encoder> createSyncMessageEncoder(MessageName, uint64_t destinationID, SyncRequestID&);
+    std::pair<UniqueRef<Encoder>, SyncRequestID> createSyncMessageEncoder(MessageName, uint64_t destinationID);
     DecoderOrError sendSyncMessage(SyncRequestID, UniqueRef<Encoder>&&, Timeout, OptionSet<SendSyncOption> sendSyncOptions);
     Error sendSyncReply(UniqueRef<Encoder>&&);
+    template<typename T, typename... Arguments>
+    void sendAsyncReply(AsyncReplyID, Arguments&&...);
 
     void wakeUpRunLoop();
 
@@ -678,6 +680,7 @@ private:
 
     OSObjectPtr<xpc_connection_t> m_xpcConnection;
     std::atomic<bool> m_didRequestProcessTermination { false };
+    std::optional<audit_token_t> m_auditToken;
 #elif OS(WINDOWS)
     // Called on the connection queue.
     void readEventHandler();
@@ -774,8 +777,7 @@ Ref<Promise> Connection::sendWithPromisedReply(T&& message, uint64_t destination
 template<typename T> Connection::SendSyncResult<T> Connection::sendSync(T&& message, uint64_t destinationID, Timeout timeout, OptionSet<SendSyncOption> sendSyncOptions)
 {
     static_assert(T::isSync, "Sync message expected");
-    SyncRequestID syncRequestID;
-    auto encoder = createSyncMessageEncoder(T::name(), destinationID, syncRequestID);
+    auto [encoder, syncRequestID] = createSyncMessageEncoder(T::name(), destinationID);
 
     if (sendSyncOptions.contains(SendSyncOption::UseFullySynchronousModeForTesting)) {
         encoder->setFullySynchronousModeForTesting();
@@ -798,6 +800,14 @@ template<typename T> Connection::SendSyncResult<T> Connection::sendSync(T&& mess
         return { Error::FailedToDecodeReplyArguments };
 
     return SendSyncResult<T> { WTFMove(replyDecoderOrError.value()), WTFMove(*replyArguments) };
+}
+
+template<typename T, typename... Arguments>
+void Connection::sendAsyncReply(AsyncReplyID asyncReplyID, Arguments&&... arguments)
+{
+    auto encoder = makeUniqueRef<Encoder>(T::asyncMessageReplyName(), asyncReplyID.toUInt64());
+    (encoder.get() << ... << std::forward<Arguments>(arguments));
+    sendSyncReply(WTFMove(encoder));
 }
 
 template<typename T> Error Connection::waitForAndDispatchImmediately(uint64_t destinationID, Timeout timeout, OptionSet<WaitForOption> waitForOptions)

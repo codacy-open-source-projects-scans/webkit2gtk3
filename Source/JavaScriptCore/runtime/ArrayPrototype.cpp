@@ -1725,7 +1725,7 @@ JSC_DEFINE_HOST_FUNCTION(arrayProtoPrivateFuncAppendMemcpy, (JSGlobalObject* glo
     return JSValue::encode(jsUndefined());
 }
 
-JSC_DEFINE_HOST_FUNCTION(arrayProtoPrivateFuncFromFast, (JSGlobalObject* globalObject, CallFrame* callFrame))
+JSC_DEFINE_HOST_FUNCTION(arrayProtoPrivateFuncFromFastFillWithUndefined, (JSGlobalObject* globalObject, CallFrame* callFrame))
 {
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
@@ -1738,12 +1738,46 @@ JSC_DEFINE_HOST_FUNCTION(arrayProtoPrivateFuncFromFast, (JSGlobalObject* globalO
     if (UNLIKELY(!isJSArray(arrayValue)))
         return JSValue::encode(jsUndefined());
 
-    JSArray* array = tryCloneArrayFromFast(globalObject, arrayValue);
+    JSArray* array = tryCloneArrayFromFast<ArrayFillMode::Undefined>(globalObject, arrayValue);
     RETURN_IF_EXCEPTION(scope, { });
     if (array)
         return JSValue::encode(array);
 
     return JSValue::encode(jsUndefined());
+}
+
+JSC_DEFINE_HOST_FUNCTION(arrayProtoPrivateFuncFromFastFillWithEmpty, (JSGlobalObject* globalObject, CallFrame* callFrame))
+{
+    VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    JSValue constructor = callFrame->uncheckedArgument(0);
+    if (UNLIKELY(constructor != globalObject->arrayConstructor() && constructor.isObject()))
+        return JSValue::encode(jsUndefined());
+
+    JSValue arrayValue = callFrame->uncheckedArgument(1);
+    if (UNLIKELY(!isJSArray(arrayValue)))
+        return JSValue::encode(jsUndefined());
+
+    JSArray* array = tryCloneArrayFromFast<ArrayFillMode::Empty>(globalObject, arrayValue);
+    RETURN_IF_EXCEPTION(scope, { });
+    if (array)
+        return JSValue::encode(array);
+
+    return JSValue::encode(jsUndefined());
+}
+
+JSC_DEFINE_HOST_FUNCTION(arrayPrototPrivateFuncArraySpeciesWatchpointIsValid, (JSGlobalObject* globalObject, CallFrame* callFrame))
+{
+    ASSERT(callFrame->argumentCount() == 1);
+
+    VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    bool isValidSpecies = arraySpeciesWatchpointIsValid(vm, jsCast<JSArray*>(callFrame->uncheckedArgument(0)));
+    RETURN_IF_EXCEPTION(scope, { });
+
+    return JSValue::encode(jsBoolean(isValidSpecies));
 }
 
 } // namespace JSC

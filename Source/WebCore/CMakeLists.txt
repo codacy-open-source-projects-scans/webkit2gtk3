@@ -98,6 +98,7 @@ set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/css/typedom/color"
     "${WEBCORE_DIR}/css/typedom/numeric"
     "${WEBCORE_DIR}/css/typedom/transform"
+    "${WEBCORE_DIR}/css/values"
     "${WEBCORE_DIR}/cssjit"
     "${WEBCORE_DIR}/dom"
     "${WEBCORE_DIR}/dom/messageports"
@@ -180,6 +181,7 @@ set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/replay"
     "${WEBCORE_DIR}/storage"
     "${WEBCORE_DIR}/style"
+    "${WEBCORE_DIR}/style/values"
     "${WEBCORE_DIR}/svg"
     "${WEBCORE_DIR}/svg/animation"
     "${WEBCORE_DIR}/svg/graphics"
@@ -880,6 +882,7 @@ set(WebCore_NON_SVG_IDL_FILES
     animation/ScrollAxis.idl
     animation/ScrollTimeline.idl
     animation/ScrollTimelineOptions.idl
+    animation/TimelineRangeOffset.idl
     animation/ViewTimeline.idl
     animation/ViewTimelineOptions.idl
     animation/WebAnimation.idl

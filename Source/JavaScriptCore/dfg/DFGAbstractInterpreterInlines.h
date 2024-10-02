@@ -2794,7 +2794,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         break;
     }
 
-    case ArraySpliceExtract:
+    case ArraySplice:
         clobberWorld();
         makeBytecodeTopForNode(node);
         break;
@@ -4031,6 +4031,12 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         
         if (value.m_structure.isSubsetOf(set))
             m_state.setShouldTryConstantFolding(true);
+        else if (value.m_type) {
+            if (set.onlyStructure().get() == m_vm.stringStructure.get()
+                || set.onlyStructure().get() == m_vm.symbolStructure.get()
+                || set.onlyStructure().get() == m_vm.bigIntStructure.get())
+                m_state.setShouldTryConstantFolding(true);
+        }
 
         SpeculatedType admittedTypes = SpecNone;
         switch (node->child1().useKind()) {

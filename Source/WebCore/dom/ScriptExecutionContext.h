@@ -213,8 +213,6 @@ public:
 
     WEBCORE_EXPORT void ref();
     WEBCORE_EXPORT void deref();
-    WEBCORE_EXPORT void refAllowingPartiallyDestroyed();
-    WEBCORE_EXPORT void derefAllowingPartiallyDestroyed();
 
     WEBCORE_EXPORT bool requiresScriptExecutionTelemetry(ScriptTelemetryCategory);
 
@@ -349,7 +347,7 @@ public:
     WEBCORE_EXPORT HasResourceAccess canAccessResource(ResourceType) const;
 
     enum NotificationCallbackIdentifierType { };
-    using NotificationCallbackIdentifier = LegacyNullableAtomicObjectIdentifier<NotificationCallbackIdentifierType>;
+    using NotificationCallbackIdentifier = AtomicObjectIdentifier<NotificationCallbackIdentifierType>;
 
     WEBCORE_EXPORT NotificationCallbackIdentifier addNotificationCallback(CompletionHandler<void()>&&);
     WEBCORE_EXPORT CompletionHandler<void()> takeNotificationCallback(NotificationCallbackIdentifier);

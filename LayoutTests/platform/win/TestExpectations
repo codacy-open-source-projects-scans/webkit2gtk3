@@ -660,23 +660,11 @@ webkit.org/b/133151 js/cached-window-properties.html [ Skip ] # Slow
 # Needs JIT
 js/slow-stress [ Skip ]
 
-# Web Assembly is't supported yet
-imported/w3c/web-platform-tests/wasm [ Skip ]
-js/dom/webassembly-memory-normal-fail.html [ Skip ]
-js/dom/webassembly-memory-shared-basic.html [ Skip ]
-js/dom/webassembly-memory-shared-fail.html [ Skip ]
-storage/indexeddb/wasm-exceptions.html [ Skip ]
-wasm [ Skip ]
-webgl/2.0.y/conformance2/wasm [ Skip ]
-workers/wasm-long-compile-many.html [ Skip ]
-workers/wasm-long-compile.html [ Skip ]
-workers/wasm-mem-post-message.html [ Skip ]
-
+# "RangeError: Out of memory" only on Buildbot
 workers/wasm-hashset-many-2.html [ Skip ] # Timeout
 workers/wasm-hashset-many.html [ Skip ] # Timeout
-workers/wasm-hashset.html [ Skip ] # Timeout
-workers/wasm-references.html [ Skip ] # Timeout
 
+webkit.org/b/280498 workers/wasm-hashset.html [ Skip ] # Crash
 
 #//////////////////////////////////////////////////////////////////////////////////////////
 # http
@@ -1041,6 +1029,8 @@ webkit.org/b/191584 fast/animation/css-animation-resuming-when-visible-with-styl
 #//////////////////////////////////////////////////////////////////////////////////////////
 # Compositing
 #//////////////////////////////////////////////////////////////////////////////////////////
+
+compositing/blend-mode [ Skip ]
 
 # TODO LAYER_TREE_INCLUDES_VISIBLE_RECTS option to layerTreeAsText is only applicable to Mac.
 compositing/visible-rect/  [ Skip ]

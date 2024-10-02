@@ -27,20 +27,11 @@
 
 namespace WebCore {
 
-Ref<Nicosia::Buffer> CoordinatedGraphicsLayer::paintTile(const IntRect& tileRect, const IntRect& mappedTileRect, float contentsScale)
+Ref<Nicosia::Buffer> CoordinatedGraphicsLayer::paintTile(const TiledBackingStore& tiledBackingStore, const IntRect& dirtyRect)
 {
-    auto buffer = Nicosia::UnacceleratedBuffer::create(tileRect.size(), contentsOpaque() ? Nicosia::Buffer::NoFlags : Nicosia::Buffer::SupportsAlpha);
-    m_coordinator->paintingEngine().paint(*this, buffer.get(), tileRect, mappedTileRect, IntRect { { 0, 0 }, tileRect.size() }, contentsScale);
-    return buffer;
-}
-
-Ref<Nicosia::Buffer> CoordinatedGraphicsLayer::paintImage(Image& image)
-{
-    auto buffer = Nicosia::UnacceleratedBuffer::create(IntSize(image.size()), !image.currentFrameKnownToBeOpaque() ? Nicosia::Buffer::SupportsAlpha : Nicosia::Buffer::NoFlags);
-    Nicosia::PaintingContext::paint(buffer, [&image](GraphicsContext& context) {
-        IntRect rect { { }, IntSize { image.size() } };
-        context.drawImage(image, rect, rect, ImagePaintingOptions(CompositeOperator::Copy));
-    });
+    auto mappedDirtyRect = tiledBackingStore.mapToContents(dirtyRect);
+    auto buffer = Nicosia::UnacceleratedBuffer::create(dirtyRect.size(), contentsOpaque() ? Nicosia::Buffer::NoFlags : Nicosia::Buffer::SupportsAlpha);
+    m_coordinator->paintingEngine().paint(*this, buffer.get(), dirtyRect, mappedDirtyRect, IntRect { { 0, 0 }, dirtyRect.size() }, tiledBackingStore.contentsScale());
     return buffer;
 }
 

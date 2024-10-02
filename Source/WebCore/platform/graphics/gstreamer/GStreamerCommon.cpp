@@ -69,10 +69,6 @@
 #include "GStreamerMediaStreamSource.h"
 #endif
 
-#if ENABLE(SPEECH_SYNTHESIS)
-#include "WebKitFliteSourceGStreamer.h"
-#endif
-
 #if ENABLE(ENCRYPTED_MEDIA) && ENABLE(THUNDER)
 #include "CDMThunder.h"
 #include "WebKitThunderDecryptorGStreamer.h"
@@ -385,10 +381,6 @@ void registerWebKitGStreamerElements()
 
 #if ENABLE(MEDIA_SOURCE)
         gst_element_register(nullptr, "webkitmediasrc", GST_RANK_PRIMARY, WEBKIT_TYPE_MEDIA_SRC);
-#endif
-
-#if ENABLE(SPEECH_SYNTHESIS)
-        gst_element_register(nullptr, "webkitflitesrc", GST_RANK_NONE, WEBKIT_TYPE_FLITE_SRC);
 #endif
 
 #if ENABLE(VIDEO)
@@ -1099,6 +1091,38 @@ StringView gstStructureGetName(const GstStructure* structure)
 
     return StringView::fromLatin1(gst_structure_get_name(structure));
 }
+
+template<typename T>
+Vector<T> gstStructureGetArray(const GstStructure* structure, ASCIILiteral key)
+{
+    static_assert(std::is_same_v<T, int> || std::is_same_v<T, int64_t> || std::is_same_v<T, unsigned>
+        || std::is_same_v<T, uint64_t> || std::is_same_v<T, double> || std::is_same_v<T, const GstStructure*>);
+    Vector<T> result;
+    if (!structure)
+        return result;
+    const GValue* array = gst_structure_get_value(structure, key.characters());
+    if (!GST_VALUE_HOLDS_ARRAY (array))
+        return result;
+    unsigned size = gst_value_array_get_size(array);
+    for (unsigned i = 0; i < size; i++) {
+        const GValue* item = gst_value_array_get_value(array, i);
+        if constexpr(std::is_same_v<T, int>)
+            result.append(g_value_get_int(item));
+        else if constexpr(std::is_same_v<T, int64_t>)
+            result.append(g_value_get_int64(item));
+        else if constexpr(std::is_same_v<T, unsigned>)
+            result.append(g_value_get_uint(item));
+        else if constexpr(std::is_same_v<T, uint64_t>)
+            result.append(g_value_get_uint64(item));
+        else if constexpr(std::is_same_v<T, double>)
+            result.append(g_value_get_double(item));
+        else if constexpr(std::is_same_v<T, const GstStructure*>)
+            result.append(gst_value_get_structure(item));
+    }
+    return result;
+}
+
+template Vector<const GstStructure*> gstStructureGetArray(const GstStructure*, ASCIILiteral key);
 
 static RefPtr<JSON::Value> gstStructureToJSON(const GstStructure*);
 
