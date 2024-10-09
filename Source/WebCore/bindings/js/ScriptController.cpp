@@ -49,7 +49,6 @@
 #include "PaymentCoordinator.h"
 #include "Quirks.h"
 #include "RunJavaScriptParameters.h"
-#include "RuntimeApplicationChecks.h"
 #include "ScriptDisallowedScope.h"
 #include "ScriptSourceCode.h"
 #include "ScriptableDocumentParser.h"
@@ -76,6 +75,7 @@
 #include <JavaScriptCore/SyntheticModuleRecord.h>
 #include <JavaScriptCore/WeakGCMapInlines.h>
 #include <JavaScriptCore/WebAssemblyModuleRecord.h>
+#include <wtf/RuntimeApplicationChecks.h>
 #include <wtf/SetForScope.h>
 #include <wtf/SharedTask.h>
 #include <wtf/TZoneMallocInlines.h>
@@ -318,7 +318,7 @@ void ScriptController::initScriptForWindowProxy(JSWindowProxy& windowProxy)
         windowProxy.window()->setConsoleClient(page->console());
     }
 
-    protectedFrame()->checkedLoader()->dispatchDidClearWindowObjectInWorld(world);
+    protectedFrame()->protectedLoader()->dispatchDidClearWindowObjectInWorld(world);
 }
 
 Ref<LocalFrame> ScriptController::protectedFrame() const

@@ -440,19 +440,6 @@ static UGPRPair entryOSR(CodeBlock* codeBlock, const char*, EntryKind)
 }
 #endif // ENABLE(JIT)
 
-#if LLINT_TRACING
-extern "C" void SYSV_ABI logWasmPrologue(uint64_t i, uint64_t* fp, uint64_t* sp)
-{
-    if (!Options::traceLLIntExecution())
-        return;
-    dataLogLn("logWasmPrologue ", i, " ", RawPointer(fp), " ", RawPointer(sp));
-    dataLogLn("FP[+Callee] ", RawHex(fp[static_cast<int>(CallFrameSlot::callee)]));
-    dataLogLn("FP[+CodeBlock] ", RawHex(fp[static_cast<int>(CallFrameSlot::codeBlock)]));
-    dataLogLn("FP[+returnpc] ", RawHex(fp[static_cast<int>(OBJECT_OFFSETOF(CallerFrameAndPC, returnPC) / 8)]));
-    dataLogLn("FP[+callerFrame] ", RawHex(fp[static_cast<int>(OBJECT_OFFSETOF(CallerFrameAndPC, callerFrame) / 8)]));
-}
-#endif
-
 LLINT_SLOW_PATH_DECL(entry_osr)
 {
     UNUSED_PARAM(pc);
@@ -1073,17 +1060,16 @@ LLINT_SLOW_PATH_DECL(slow_path_instanceof)
 
     bool result = false;
     JSValue hasInstance = performLLIntGetByID(codeBlock->bytecodeIndex(pc).withCheckpoint(OpInstanceof::getHasInstance), codeBlock, globalObject, constructor, vm.propertyNames->hasInstanceSymbol, metadata.m_hasInstanceModeMetadata);
-    RETURN_IF_EXCEPTION(throwScope, { });
+    LLINT_CHECK_EXCEPTION();
     if (hasInstance != globalObject->functionProtoHasInstanceSymbolFunction() || !constructor.getObject()->structure()->typeInfo().implementsDefaultHasInstance()) {
         result = constructor.getObject()->hasInstance(globalObject, value, hasInstance);
-        RETURN_IF_EXCEPTION(throwScope, { });
     } else if (!value.isObject())
         result = false;
     else {
         JSValue prototype = performLLIntGetByID(codeBlock->bytecodeIndex(pc).withCheckpoint(OpInstanceof::getPrototype), codeBlock, globalObject, constructor, vm.propertyNames->prototype, metadata.m_prototypeModeMetadata);
-        RETURN_IF_EXCEPTION(throwScope, { });
+        LLINT_CHECK_EXCEPTION();
         bool hasInstanceResult = JSObject::defaultHasInstance(globalObject, value, prototype);
-        RETURN_IF_EXCEPTION(throwScope, { });
+        LLINT_CHECK_EXCEPTION();
         result = hasInstanceResult;
     }
 
@@ -1892,11 +1878,11 @@ LLINT_SLOW_PATH_DECL(slow_path_switch_imm)
     ASSERT(scrutinee.isDouble());
     double value = scrutinee.asDouble();
     int32_t intValue = static_cast<int32_t>(value);
-    int defaultOffset = JUMP_OFFSET(bytecode.m_defaultOffset);
+    auto& unlinkedTable = codeBlock->unlinkedSwitchJumpTable(bytecode.m_tableIndex);
     if (value == intValue)
-        JUMP_TO(codeBlock->unlinkedSwitchJumpTable(bytecode.m_tableIndex).offsetForValue(intValue, defaultOffset));
+        JUMP_TO(unlinkedTable.offsetForValue(intValue));
     else
-        JUMP_TO(defaultOffset);
+        JUMP_TO(unlinkedTable.defaultOffset());
     LLINT_END();
 }
 
@@ -1908,9 +1894,9 @@ LLINT_SLOW_PATH_DECL(slow_path_switch_char)
     ASSERT(scrutinee.isString());
     JSString* string = asString(scrutinee);
     ASSERT(string->length() == 1);
-    int defaultOffset = JUMP_OFFSET(bytecode.m_defaultOffset);
+    auto& unlinkedTable = codeBlock->unlinkedSwitchJumpTable(bytecode.m_tableIndex);
     auto str = string->value(globalObject);
-    JUMP_TO(codeBlock->unlinkedSwitchJumpTable(bytecode.m_tableIndex).offsetForValue(str.data[0], defaultOffset));
+    JUMP_TO(unlinkedTable.offsetForValue(str.data[0]));
     LLINT_END();
 }
 
@@ -1919,11 +1905,11 @@ LLINT_SLOW_PATH_DECL(slow_path_switch_string)
     LLINT_BEGIN();
     auto bytecode = pc->as<OpSwitchString>();
     JSValue scrutinee = getOperand(callFrame, bytecode.m_scrutinee);
-    int defaultOffset = JUMP_OFFSET(bytecode.m_defaultOffset);
+    auto& unlinkedTable = codeBlock->unlinkedStringSwitchJumpTable(bytecode.m_tableIndex);
+    int32_t defaultOffset = unlinkedTable.defaultOffset();
     if (!scrutinee.isString())
         JUMP_TO(defaultOffset);
     else {
-        auto& unlinkedTable = codeBlock->unlinkedStringSwitchJumpTable(bytecode.m_tableIndex);
         auto* string = asString(scrutinee);
 
         unsigned length = string->length();
@@ -1933,7 +1919,7 @@ LLINT_SLOW_PATH_DECL(slow_path_switch_string)
             auto scrutineeString = string->value(globalObject);
             LLINT_CHECK_EXCEPTION();
 
-            JUMP_TO(unlinkedTable.offsetForValue(scrutineeString.data.impl(), defaultOffset));
+            JUMP_TO(unlinkedTable.offsetForValue(scrutineeString.data.impl()));
         }
     }
     LLINT_END();

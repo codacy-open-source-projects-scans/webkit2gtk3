@@ -92,7 +92,7 @@ public:
     void willModifyChildren() override;
     void setEventRegion(EventRegion&&) override;
 #if ENABLE(SCROLLING_THREAD)
-    void setScrollingNodeID(ScrollingNodeID) override;
+    void setScrollingNodeID(std::optional<ScrollingNodeID>) override;
 #endif
     void setPosition(const FloatPoint&) override;
     void syncPosition(const FloatPoint&) override;
@@ -149,6 +149,7 @@ public:
     void computePixelAlignment(FloatPoint& position, FloatSize&, FloatPoint3D& anchorPoint, FloatSize& alignmentOffset);
 
     IntRect transformedVisibleRect();
+    IntRect transformedVisibleRectIncludingFuture();
 
     void invalidateCoordinator();
     void setCoordinatorIncludingSubLayersIfNeeded(CoordinatedGraphicsLayerClient*);
@@ -186,7 +187,9 @@ public:
 
     Vector<std::pair<String, double>> acceleratedAnimationsForTesting(const Settings&) const final;
 
-    void paintIntoGraphicsContext(GraphicsContext&, const TiledBackingStore&, const IntRect& dirtyRect) const;
+#if USE(SKIA)
+    void paintIntoGraphicsContext(GraphicsContext&, const IntRect&) const;
+#endif
 
 private:
     enum class FlushNotification {
@@ -212,16 +215,16 @@ private:
     bool checkPendingStateChanges();
     bool checkContentLayerUpdated();
 
-    Ref<Nicosia::Buffer> paintTile(const TiledBackingStore&, const IntRect& dirtyRect);
+    Ref<Nicosia::Buffer> paintTile(const IntRect& dirtyRect);
 
     void notifyFlushRequired();
 
     bool shouldHaveBackingStore() const;
     bool selfOrAncestorHasActiveTransformAnimation() const;
-    bool selfOrAncestorHaveNonAffineTransforms();
+    bool selfOrAncestorHaveNonAffineTransforms() const;
 
     void setShouldUpdateVisibleRect();
-    float effectiveContentsScale();
+    float effectiveContentsScale() const;
 
     void animationStartedTimerFired();
     void requestPendingTileCreationTimerFired();
@@ -230,7 +233,9 @@ private:
 
     Nicosia::PlatformLayer::LayerID m_id;
     GraphicsLayerTransform m_layerTransform;
+    GraphicsLayerTransform m_layerFutureTransform;
     TransformationMatrix m_cachedInverseTransform;
+    TransformationMatrix m_cachedFutureInverseTransform;
     TransformationMatrix m_cachedCombinedTransform;
     FloatSize m_pixelAlignmentOffset;
     FloatSize m_adjustedSize;

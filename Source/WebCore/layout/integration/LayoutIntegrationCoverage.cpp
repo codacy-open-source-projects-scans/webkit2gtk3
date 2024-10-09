@@ -27,7 +27,6 @@
 #include "LayoutIntegrationCoverage.h"
 
 #include "Document.h"
-#include "GapLength.h"
 #include "InlineWalker.h"
 #include "RenderBlockFlow.h"
 #include "RenderDeprecatedFlexibleBox.h"
@@ -57,12 +56,12 @@ enum class AvoidanceReason : uint32_t {
     FlexBoxIsVertical                   = 1U << 3,
     FlexBoxIsRTL                        = 1U << 4,
     FlexBoxHasColumnDirection           = 1U << 5,
-    FlexBoxHeightIsPercent              = 1U << 6,
+    // Unused                           = 1U << 6,
     FlexBoxHasUnsupportedOverflow       = 1U << 7,
-    FlexBoxHasUnsupportedAlignItems     = 1U << 8,
-    FlexBoxHasUnsupportedAlignContent   = 1U << 9,
-    FlexBoxHasUnsupportedRowGap         = 1U << 10,
-    FlexBoxHasUnsupportedColumnGap      = 1U << 11,
+    // Unused                           = 1U << 8,
+    // Unused                           = 1U << 9,
+    // Unused                           = 1U << 10,
+    // Unused                           = 1U << 11,
     FlexBoxHasUnsupportedTypeOfRenderer = 1U << 12,
     FlexBoxHasMarginTrim                = 1U << 13,
     FlexBoxHasOutOfFlowChild            = 1U << 14,
@@ -71,13 +70,13 @@ enum class AvoidanceReason : uint32_t {
     FlexItemIsVertical                  = 1U << 17,
     FlexItemIsRTL                       = 1U << 18,
     FlexItemHasNonFixedHeight           = 1U << 19,
-    FlexItemHasUnsupportedFlexBasis     = 1U << 20,
-    FlexItemHasUnsupportedFlexShrink    = 1U << 21,
-    FlexItemHasUnsupportedFlexGrow      = 1U << 22,
+    // Unused                           = 1U << 20,
+    // Unused                           = 1U << 21,
+    // Unused                           = 1U << 22,
     FlexItemHasContainsSize             = 1U << 23,
     FlexItemHasUnsupportedOverflow      = 1U << 24,
     FlexItemHasAspectRatio              = 1U << 25,
-    FlexItemHasUnsupportedAlignSelf     = 1U << 26,
+    FlexItemHasBaselineAlign            = 1U << 26,
     EndOfReasons                        = 1U << 27
 };
 
@@ -128,24 +127,8 @@ static OptionSet<AvoidanceReason> canUseForFlexLayoutWithReason(const RenderFlex
     if (flexBoxStyle.flexDirection() == FlexDirection::Column || flexBoxStyle.flexDirection() == FlexDirection::ColumnReverse)
         ADD_REASON_AND_RETURN_IF_NEEDED(FlexBoxHasColumnDirection, reasons, includeReasons);
 
-    if (flexBoxStyle.logicalHeight().isPercent())
-        ADD_REASON_AND_RETURN_IF_NEEDED(FlexBoxHeightIsPercent, reasons, includeReasons);
-
     if (mayHaveScrollbarOrScrollableOverflow(flexBoxStyle))
         ADD_REASON_AND_RETURN_IF_NEEDED(FlexBoxHasUnsupportedOverflow, reasons, includeReasons);
-
-    auto alignItemValue = flexBoxStyle.alignItems().position();
-    if (alignItemValue == ItemPosition::Baseline || alignItemValue == ItemPosition::LastBaseline || alignItemValue == ItemPosition::SelfStart || alignItemValue == ItemPosition::SelfEnd)
-        ADD_REASON_AND_RETURN_IF_NEEDED(FlexBoxHasUnsupportedAlignItems, reasons, includeReasons);
-
-    if (flexBoxStyle.alignContent().position() != ContentPosition::Normal || flexBoxStyle.alignContent().distribution() != ContentDistribution::Default || flexBoxStyle.alignContent().overflow() != OverflowAlignment::Default)
-        ADD_REASON_AND_RETURN_IF_NEEDED(FlexBoxHasUnsupportedAlignContent, reasons, includeReasons);
-
-    if (!flexBoxStyle.rowGap().isNormal())
-        ADD_REASON_AND_RETURN_IF_NEEDED(FlexBoxHasUnsupportedRowGap, reasons, includeReasons);
-
-    if (!flexBoxStyle.columnGap().isNormal())
-        ADD_REASON_AND_RETURN_IF_NEEDED(FlexBoxHasUnsupportedColumnGap, reasons, includeReasons);
 
     if (flexBoxStyle.marginTrim() != RenderStyle::initialMarginTrim())
         ADD_REASON_AND_RETURN_IF_NEEDED(FlexBoxHasMarginTrim, reasons, includeReasons);
@@ -173,15 +156,6 @@ static OptionSet<AvoidanceReason> canUseForFlexLayoutWithReason(const RenderFlex
         if (!flexItemStyle.height().isFixed())
             ADD_REASON_AND_RETURN_IF_NEEDED(FlexItemHasNonFixedHeight, reasons, includeReasons);
 
-        if (!flexItemStyle.flexBasis().isAuto() && !flexItemStyle.flexBasis().isFixed())
-            ADD_REASON_AND_RETURN_IF_NEEDED(FlexItemHasUnsupportedFlexBasis, reasons, includeReasons);
-
-        if (flexItemStyle.flexShrink() > 0 && flexItemStyle.flexShrink() < 1)
-            ADD_REASON_AND_RETURN_IF_NEEDED(FlexItemHasUnsupportedFlexShrink, reasons, includeReasons);
-
-        if (flexItemStyle.flexGrow() > 0 && flexItemStyle.flexGrow() < 1)
-            ADD_REASON_AND_RETURN_IF_NEEDED(FlexItemHasUnsupportedFlexGrow, reasons, includeReasons);
-
         if (flexItemStyle.containsSize())
             ADD_REASON_AND_RETURN_IF_NEEDED(FlexItemHasContainsSize, reasons, includeReasons);
 
@@ -191,9 +165,9 @@ static OptionSet<AvoidanceReason> canUseForFlexLayoutWithReason(const RenderFlex
         if (flexItem.hasIntrinsicAspectRatio() || flexItemStyle.hasAspectRatio())
             ADD_REASON_AND_RETURN_IF_NEEDED(FlexItemHasAspectRatio, reasons, includeReasons);
 
-        auto alignSelfValue = flexItemStyle.alignSelf().position();
-        if (alignSelfValue == ItemPosition::Baseline || alignSelfValue == ItemPosition::LastBaseline || alignSelfValue == ItemPosition::SelfStart || alignSelfValue == ItemPosition::SelfEnd)
-            ADD_REASON_AND_RETURN_IF_NEEDED(FlexItemHasUnsupportedAlignSelf, reasons, includeReasons);
+        auto alignValue = flexItemStyle.alignSelf().position() != ItemPosition::Auto ? flexItemStyle.alignSelf().position() : flexBoxStyle.alignItems().position();
+        if (alignValue == ItemPosition::Baseline || alignValue == ItemPosition::LastBaseline)
+            ADD_REASON_AND_RETURN_IF_NEEDED(FlexItemHasBaselineAlign, reasons, includeReasons);
     }
     return reasons;
 }
@@ -249,23 +223,8 @@ static void printReason(AvoidanceReason reason, TextStream& stream)
     case AvoidanceReason::FlexBoxHasColumnDirection:
         stream << "flex box has column direction";
         break;
-    case AvoidanceReason::FlexBoxHeightIsPercent:
-        stream << "flex box's height is percent";
-        break;
     case AvoidanceReason::FlexBoxHasUnsupportedOverflow:
         stream << "flex box has non-hidden overflow";
-        break;
-    case AvoidanceReason::FlexBoxHasUnsupportedAlignItems:
-        stream << "flex box has unsupported align-items value";
-        break;
-    case AvoidanceReason::FlexBoxHasUnsupportedAlignContent:
-        stream << "flex box has unsupported align-content value";
-        break;
-    case AvoidanceReason::FlexBoxHasUnsupportedRowGap:
-        stream << "flex box has unsupported row-gap value";
-        break;
-    case AvoidanceReason::FlexBoxHasUnsupportedColumnGap:
-        stream << "flex box has unsupported column-gap value";
         break;
     case AvoidanceReason::FlexBoxHasUnsupportedTypeOfRenderer:
         stream << "flex box has unsupported flex item renderer e.g. fieldset";
@@ -291,15 +250,6 @@ static void printReason(AvoidanceReason reason, TextStream& stream)
     case AvoidanceReason::FlexItemHasNonFixedHeight:
         stream << "flex item has non-fixed height value";
         break;
-    case AvoidanceReason::FlexItemHasUnsupportedFlexBasis:
-        stream << "flex item has unsupported flex-basis value";
-        break;
-    case AvoidanceReason::FlexItemHasUnsupportedFlexShrink:
-        stream << "flex item has unsupported flex-shrink value";
-        break;
-    case AvoidanceReason::FlexItemHasUnsupportedFlexGrow:
-        stream << "flex item has unsupported flex-grow value";
-        break;
     case AvoidanceReason::FlexItemHasContainsSize:
         stream << "flex item has contains: size";
         break;
@@ -309,8 +259,8 @@ static void printReason(AvoidanceReason reason, TextStream& stream)
     case AvoidanceReason::FlexItemHasAspectRatio:
         stream << "flex item has aspect-ratio ";
         break;
-    case AvoidanceReason::FlexItemHasUnsupportedAlignSelf:
-        stream << "flex item has unsupported align-self value";
+    case AvoidanceReason::FlexItemHasBaselineAlign:
+        stream << "flex item has (last)baseline align";
         break;
     default:
         break;

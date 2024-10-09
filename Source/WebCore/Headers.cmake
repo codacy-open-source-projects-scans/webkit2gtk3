@@ -598,6 +598,11 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     Modules/system-preview/ARKitBadgeSystemImage.h
 
+    Modules/url-pattern/URLPattern.h
+    Modules/url-pattern/URLPatternInit.h
+    Modules/url-pattern/URLPatternOptions.h
+    Modules/url-pattern/URLPatternResult.h
+
     Modules/web-locks/WebLock.h
     Modules/web-locks/WebLockIdentifier.h
     Modules/web-locks/WebLockManagerSnapshot.h
@@ -606,14 +611,20 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     Modules/webauthn/AttestationConveyancePreference.h
     Modules/webauthn/AuthenticationExtensionsClientInputs.h
+    Modules/webauthn/AuthenticationExtensionsClientInputsJSON.h
     Modules/webauthn/AuthenticationExtensionsClientOutputs.h
+    Modules/webauthn/AuthenticationExtensionsClientOutputsJSON.h
     Modules/webauthn/AuthenticatorCoordinator.h
     Modules/webauthn/AuthenticatorCoordinatorClient.h
     Modules/webauthn/AuthenticatorResponseData.h
     Modules/webauthn/AuthenticatorTransport.h
     Modules/webauthn/PublicKeyCredentialCreationOptions.h
+    Modules/webauthn/PublicKeyCredentialCreationOptionsJSON.h
     Modules/webauthn/PublicKeyCredentialDescriptor.h
+    Modules/webauthn/PublicKeyCredentialDescriptorJSON.h
+    Modules/webauthn/PublicKeyCredentialParameters.h
     Modules/webauthn/PublicKeyCredentialRequestOptions.h
+    Modules/webauthn/PublicKeyCredentialRequestOptionsJSON.h
     Modules/webauthn/PublicKeyCredentialType.h
     Modules/webauthn/UserVerificationRequirement.h
     Modules/webauthn/WebAuthenticationConstants.h
@@ -713,6 +724,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     animation/ScrollAxis.h
     animation/ScrollTimeline.h
     animation/ScrollTimelineOptions.h
+    animation/TimelineRange.h
     animation/TimelineScope.h
     animation/ViewTimeline.h
     animation/ViewTimelineOptions.h
@@ -1811,7 +1823,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/ReferrerPolicy.h
     platform/RegistrableDomain.h
     platform/RemoteCommandListener.h
-    platform/RuntimeApplicationChecks.h
     platform/ScreenOrientationManager.h
     platform/ScreenProperties.h
     platform/ScriptExecutionContextIdentifier.h
@@ -1947,6 +1958,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/ColorTypes.h
     platform/graphics/ColorUtilities.h
     platform/graphics/ComplexTextController.h
+    platform/graphics/ContentsFormat.h
     platform/graphics/ContentTypeUtilities.h
     platform/graphics/Damage.h
     platform/graphics/DashArray.h

@@ -51,8 +51,10 @@ RemoteMediaRecorderManager::~RemoteMediaRecorderManager()
 
 void RemoteMediaRecorderManager::didReceiveRemoteMediaRecorderMessage(IPC::Connection& connection, IPC::Decoder& decoder)
 {
-    if (auto* recorder = m_recorders.get(LegacyNullableObjectIdentifier<MediaRecorderIdentifierType>(decoder.destinationID())))
-        recorder->didReceiveMessage(connection, decoder);
+    if (ObjectIdentifier<MediaRecorderIdentifierType>::isValidIdentifier(decoder.destinationID())) {
+        if (auto* recorder = m_recorders.get(ObjectIdentifier<MediaRecorderIdentifierType>(decoder.destinationID())))
+            recorder->didReceiveMessage(connection, decoder);
+    }
 }
 
 void RemoteMediaRecorderManager::createRecorder(MediaRecorderIdentifier identifier, bool recordAudio, bool recordVideo, const MediaRecorderPrivateOptions& options, CompletionHandler<void(std::optional<ExceptionData>&&, String&&, unsigned, unsigned)>&& completionHandler)
@@ -83,12 +85,12 @@ bool RemoteMediaRecorderManager::allowsExitUnderMemoryPressure() const
     return m_recorders.isEmpty();
 }
 
-const SharedPreferencesForWebProcess& RemoteMediaRecorderManager::sharedPreferencesForWebProcess() const
+std::optional<SharedPreferencesForWebProcess> RemoteMediaRecorderManager::sharedPreferencesForWebProcess() const
 {
-    RefPtr gpuConnectionToWebProcess = m_gpuConnectionToWebProcess.get();
-    RELEASE_ASSERT(gpuConnectionToWebProcess);
+    if (RefPtr gpuConnectionToWebProcess = m_gpuConnectionToWebProcess.get())
+        return gpuConnectionToWebProcess->sharedPreferencesForWebProcess();
 
-    return gpuConnectionToWebProcess->sharedPreferencesForWebProcess();
+    return std::nullopt;
 }
 
 }

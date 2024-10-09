@@ -30,9 +30,9 @@
 #include "MessageArgumentDescriptions.h"
 #include "MessageNames.h"
 #include "StreamServerConnection.h"
-#include <WebCore/RuntimeApplicationChecks.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/ProcessID.h>
+#include <wtf/RuntimeApplicationChecks.h>
 #include <wtf/StdLibExtras.h>
 
 namespace IPC {
@@ -62,10 +62,10 @@ inline TextStream textStreamForLogging(const C& connection, MessageName messageN
 
     switch (forReply) {
     case ForReply::No:
-        stream << "-> "_s << WebCore::processTypeDescription(WebCore::processType()) << ' ' << getCurrentProcessID() << " receiver "_s << object << "] "_s << description(messageName);
+        stream << "-> "_s << processTypeDescription(processType()) << ' ' << getCurrentProcessID() << " receiver "_s << object << "] "_s << description(messageName);
         break;
     case ForReply::Yes:
-        stream << "<- "_s << WebCore::processTypeDescription(WebCore::processType()) << ' ' << getCurrentProcessID() << "] "_s << description(messageName) << " Reply"_s;
+        stream << "<- "_s << processTypeDescription(processType()) << ' ' << getCurrentProcessID() << "] "_s << description(messageName) << " Reply"_s;
         break;
     }
 
@@ -254,7 +254,7 @@ bool handleMessageSynchronous(Connection& connection, Decoder& decoder, UniqueRe
 
     auto arguments = decoder.decode<typename MessageType::Arguments>();
     if (UNLIKELY(!arguments))
-        return false;
+        return true; // Message handler found, but decode failed.
 
     static_assert(std::is_same_v<typename ValidationType::CompletionHandlerArguments, typename MessageType::ReplyArguments>);
     using CompletionHandlerType = typename ValidationType::CompletionHandlerType;
@@ -280,26 +280,18 @@ void handleMessageSynchronous(StreamServerConnection& connection, Decoder& decod
     using ValidationType = MethodSignatureValidation<MF>;
     static_assert(std::is_same_v<typename ValidationType::MessageArguments, typename MessageType::Arguments>);
 
-    auto syncRequestID = decoder.decode<Connection::SyncRequestID>();
-    if (UNLIKELY(!syncRequestID))
-        return;
-
     auto arguments = decoder.decode<typename MessageType::Arguments>();
-    if (UNLIKELY(!arguments)) {
-#if ENABLE(IPC_TESTING_API)
-        connection.sendDeserializationErrorSyncReply(*syncRequestID);
-#endif
+    if (UNLIKELY(!arguments))
         return;
-    }
 
     static_assert(std::is_same_v<typename ValidationType::CompletionHandlerArguments, typename MessageType::ReplyArguments>);
     using CompletionHandlerType = typename ValidationType::CompletionHandlerType;
 
     logMessage(connection, MessageType::name(), object, *arguments);
     callMemberFunction(object, function, WTFMove(*arguments),
-        CompletionHandlerType([syncRequestID, connection = Ref { connection }] (auto&&... args) mutable {
+        CompletionHandlerType([syncRequestID = decoder.syncRequestID(), connection = Ref { connection }] (auto&&... args) mutable {
             logReply(connection, MessageType::name(), args...);
-            connection->sendSyncReply<MessageType>(*syncRequestID, std::forward<decltype(args)>(args)...);
+            connection->sendSyncReply<MessageType>(syncRequestID, std::forward<decltype(args)>(args)...);
         }));
 }
 

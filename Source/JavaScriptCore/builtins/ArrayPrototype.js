@@ -345,75 +345,6 @@ function includes(searchElement /*, fromIndex*/)
 }
 
 @linkTimeConstant
-function concatSlowPath()
-{
-    "use strict";
-
-    var currentElement = @toObject(this, "Array.prototype.concat requires that |this| not be null or undefined");
-    var argCount = arguments.length;
-
-    var result = @newArrayWithSpecies(0, currentElement);
-    var resultIsArray = @isJSArray(result);
-
-    var resultIndex = 0;
-    var argIndex = 0;
-
-    do {
-        var spreadable = @isObject(currentElement) && currentElement.@@isConcatSpreadable;
-        if ((spreadable === @undefined && @isArray(currentElement)) || spreadable) {
-            var length = @toLength(currentElement.length);
-            if (length + resultIndex > @MAX_SAFE_INTEGER)
-                @throwTypeError("Length exceeded the maximum array length");
-            if (resultIsArray && @isJSArray(currentElement) && length + resultIndex <= @MAX_ARRAY_INDEX) {
-                @appendMemcpy(result, currentElement, resultIndex);
-                resultIndex += length;
-            } else {
-                for (var i = 0; i < length; i++) {
-                    if (i in currentElement)
-                        @putByValDirect(result, resultIndex, currentElement[i]);
-                    resultIndex++;
-                }
-            }
-        } else {
-            if (resultIndex >= @MAX_SAFE_INTEGER)
-                @throwTypeError("Length exceeded the maximum array length");
-            @putByValDirect(result, resultIndex++, currentElement);
-        }
-        currentElement = arguments[argIndex];
-    } while (argIndex++ < argCount);
-
-    result.length = resultIndex;
-    return result;
-}
-
-function concat(first)
-{
-    "use strict";
-
-    if (@argumentCount() === 1
-        && @isJSArray(this)
-        && @tryGetByIdWithWellKnownSymbol(this, "isConcatSpreadable") === @undefined
-        && (!@isObject(first) || @tryGetByIdWithWellKnownSymbol(first, "isConcatSpreadable") === @undefined)) {
-
-        var result = @concatMemcpy(this, first);
-        if (result !== null)
-            return result;
-    }
-
-    if (@argumentCount() === 0
-        && @isJSArray(this)
-        && @tryGetByIdWithWellKnownSymbol(this, "isConcatSpreadable") === @undefined
-        && @arraySpeciesWatchpointIsValid(this)) {
-
-        var result = @arrayFromFastFillWithEmpty(@Array, this);
-        if (result)
-            return result;
-    }
-
-    return @tailCallForwardArguments(@concatSlowPath, this);
-}
-
-@linkTimeConstant
 function maxWithPositives(a, b)
 {
     "use strict";
@@ -637,12 +568,13 @@ function toSpliced(start, deleteCount /*, ...items */)
     var actualDeleteCount;
 
     // Step 8-10.
-    if (arguments.length === 0)
+    var argCount = @argumentCount();
+    if (argCount === 0)
         actualDeleteCount = 0;
-    else if (arguments.length === 1)
+    else if (argCount === 1)
         actualDeleteCount = length - actualStart;
     else {
-        insertCount = arguments.length - 2;
+        insertCount = argCount - 2;
         var tempDeleteCount = @toIntegerOrInfinity(deleteCount);
         tempDeleteCount = tempDeleteCount > 0 ? tempDeleteCount : 0;
         actualDeleteCount = @min(tempDeleteCount, length - actualStart);

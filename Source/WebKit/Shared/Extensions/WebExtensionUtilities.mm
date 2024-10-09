@@ -368,8 +368,8 @@ JSObjectRef toJSRejectedPromise(JSContextRef context, NSString *callingAPIName, 
 
 NSString *toWebAPI(NSLocale *locale)
 {
-    if (!locale.languageCode)
-        return nil;
+    if (!locale.languageCode.length)
+        return @"und";
 
     if (locale.countryCode.length)
         return [NSString stringWithFormat:@"%@-%@", locale.languageCode, locale.countryCode];
@@ -414,6 +414,15 @@ bool anyItemsExceedQuota(NSDictionary *items, size_t quota, NSString **outKeyWit
         *outKeyWithError = keyWithError;
 
     return itemExceededQuota;
+}
+
+Markable<WTF::UUID> toDocumentIdentifier(WebFrame& frame)
+{
+    RefPtr coreFrame = frame.coreLocalFrame();
+    RefPtr document = coreFrame ? coreFrame->document() : nullptr;
+    if (!document)
+        return { };
+    return document->identifier().object();
 }
 
 } // namespace WebKit

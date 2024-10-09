@@ -732,7 +732,7 @@ Internals::Internals(Document& document)
     auto* frame = document.frame();
     if (frame && frame->page() && frame->isMainFrame()) {
         auto mockPaymentCoordinator = makeUniqueRef<MockPaymentCoordinator>(*frame->page());
-        frame->page()->setPaymentCoordinator(makeUnique<PaymentCoordinator>(WTFMove(mockPaymentCoordinator)));
+        frame->page()->setPaymentCoordinator(PaymentCoordinator::create(WTFMove(mockPaymentCoordinator)));
     }
 #endif
 
@@ -2191,7 +2191,7 @@ ExceptionOr<void> Internals::scrollBySimulatingWheelEvent(Element& element, doub
     if (!scrollingCoordinator)
         return Exception { ExceptionCode::InvalidAccessError };
 
-    scrollingCoordinator->scrollBySimulatingWheelEventForTesting(scrollingNodeID, FloatSize(deltaX, deltaY));
+    scrollingCoordinator->scrollBySimulatingWheelEventForTesting(*scrollingNodeID, FloatSize(deltaX, deltaY));
 
     return { };
 }
@@ -2560,7 +2560,8 @@ ExceptionOr<uint64_t> Internals::lastSpellCheckRequestSequence()
     if (!document || !document->frame())
         return Exception { ExceptionCode::InvalidAccessError };
 
-    return document->editor().spellChecker().lastRequestIdentifier().toUInt64();
+    auto lastRequestIdentifier = document->editor().spellChecker().lastRequestIdentifier();
+    return lastRequestIdentifier ? lastRequestIdentifier->toUInt64() : 0;
 }
 
 ExceptionOr<uint64_t> Internals::lastSpellCheckProcessedSequence()
@@ -2569,7 +2570,8 @@ ExceptionOr<uint64_t> Internals::lastSpellCheckProcessedSequence()
     if (!document || !document->frame())
         return Exception { ExceptionCode::InvalidAccessError };
 
-    return document->editor().spellChecker().lastProcessedIdentifier().toUInt64();
+    auto lastProcessedIdentifier = document->editor().spellChecker().lastProcessedIdentifier();
+    return lastProcessedIdentifier ? lastProcessedIdentifier->toUInt64() : 0;
 }
 
 void Internals::advanceToNextMisspelling()
@@ -3224,8 +3226,8 @@ static OptionSet<LayerTreeAsTextOptions> toLayerTreeAsTextOptions(unsigned short
         layerTreeFlags.add(LayerTreeAsTextOptions::IncludeRootLayerProperties);
     if (flags & Internals::LAYER_TREE_INCLUDES_EVENT_REGION)
         layerTreeFlags.add(LayerTreeAsTextOptions::IncludeEventRegion);
-    if (flags & Internals::LAYER_TREE_INCLUDES_DEEP_COLOR)
-        layerTreeFlags.add(LayerTreeAsTextOptions::IncludeDeepColor);
+    if (flags & Internals::LAYER_TREE_INCLUDES_EXTENDED_COLOR)
+        layerTreeFlags.add(LayerTreeAsTextOptions::IncludeExtendedColor);
     if (flags & Internals::LAYER_TREE_INCLUDES_DEVICE_SCALE)
         layerTreeFlags.add(LayerTreeAsTextOptions::IncludeDeviceScale);
 
@@ -3267,9 +3269,11 @@ ExceptionOr<Vector<uint64_t>> Internals::scrollingNodeIDForNode(Node* node)
     auto areaOrException = scrollableAreaForNode(node);
     if (areaOrException.hasException())
         return areaOrException.releaseException();
-    auto* scrollableArea = areaOrException.releaseReturnValue();
-    Vector<uint64_t> returnNodeID = { scrollableArea->scrollingNodeID().object().toUInt64(), scrollableArea->scrollingNodeID().processIdentifier().toUInt64() };
-    return returnNodeID;
+
+    auto scrollingNodeID = areaOrException.returnValue()->scrollingNodeID();
+    if (!scrollingNodeID)
+        return Vector<uint64_t>({ 0, 0 });
+    return Vector({ scrollingNodeID->object().toUInt64(), scrollingNodeID->processIdentifier().toUInt64() });
 }
 
 ExceptionOr<unsigned> Internals::scrollableAreaWidth(Node& node)

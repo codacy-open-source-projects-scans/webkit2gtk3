@@ -146,12 +146,24 @@ void RenderTable::styleDidChange(StyleDifference diff, const RenderStyle* oldSty
     m_columnPos[0] = m_hSpacing;
 
     if (!m_tableLayout || style().isFixedTableLayout() != oldFixedTableLayout) {
-        // According to the CSS2 spec, you only use fixed table layout if an
-        // explicit width is specified on the table.  Auto width implies auto table layout.
+        // According to the CSS2 spec, you only use fixed table layout if an explicit width is specified on the table. Auto width implies auto table layout.
         if (style().isFixedTableLayout())
             m_tableLayout = makeUnique<FixedTableLayout>(this);
-        else
+        else {
+            auto resetTableCellPreferredLogicalWidths = [&] {
+                if (!m_tableLayout)
+                    return;
+                // Fixed table layout sets min/max preferred widths to clean without actually computing them (see FixedTableLayout::calcWidthArray).
+                for (auto& section : childrenOfType<RenderTableSection>(*this)) {
+                    for (CheckedPtr row = section.firstRow(); row; row = row->nextRow()) {
+                        for (CheckedPtr cell = row->firstCell(); cell; cell = cell->nextCell())
+                            cell->setPreferredLogicalWidthsDirty(true);
+                    }
+                }
+            };
+            resetTableCellPreferredLogicalWidths();
             m_tableLayout = makeUnique<AutoTableLayout>(this);
+        }
     }
 
     // If border was changed, invalidate collapsed borders cache.
@@ -620,7 +632,7 @@ void RenderTable::layout()
     }
 
     bool paginated = layoutState && layoutState->isPaginated();
-    if (sectionMoved && paginated) {
+    if (sectionCount && sectionMoved && paginated) {
         // FIXME: Table layout should always stabilize even when section moves (see webkit.org/b/174412).
         if (m_recursiveSectionMovedWithPaginationLevel < sectionCount) {
             SetForScope recursiveSectionMovedWithPaginationLevel(m_recursiveSectionMovedWithPaginationLevel, m_recursiveSectionMovedWithPaginationLevel + 1);
@@ -837,12 +849,12 @@ void RenderTable::paintBoxDecorations(PaintInfo& paintInfo, const LayoutPoint& p
 
     BackgroundPainter backgroundPainter { *this, paintInfo };
 
-    BackgroundBleedAvoidance bleedAvoidance = determineBackgroundBleedAvoidance(paintInfo.context());
+    auto bleedAvoidance = determineBleedAvoidance(paintInfo.context());
     if (!BackgroundPainter::boxShadowShouldBeAppliedToBackground(*this, rect.location(), bleedAvoidance, { }))
         backgroundPainter.paintBoxShadow(rect, style(), ShadowStyle::Normal);
 
     GraphicsContextStateSaver stateSaver(paintInfo.context(), false);
-    if (bleedAvoidance == BackgroundBleedUseTransparencyLayer) {
+    if (bleedAvoidance == BleedAvoidance::UseTransparencyLayer) {
         // To avoid the background color bleeding out behind the border, we'll render background and border
         // into a transparency layer, and then clip that in one go (which requires setting up the clip before
         // beginning the layer).
@@ -858,7 +870,7 @@ void RenderTable::paintBoxDecorations(PaintInfo& paintInfo, const LayoutPoint& p
     if (style().hasVisibleBorderDecoration() && !collapseBorders())
         BorderPainter { *this, paintInfo }.paintBorder(rect, style());
 
-    if (bleedAvoidance == BackgroundBleedUseTransparencyLayer)
+    if (bleedAvoidance == BleedAvoidance::UseTransparencyLayer)
         paintInfo.context().endTransparencyLayer();
 }
 

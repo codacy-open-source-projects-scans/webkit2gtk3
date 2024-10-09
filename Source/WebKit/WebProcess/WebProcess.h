@@ -162,7 +162,7 @@ struct WebsiteDataStoreParameters;
 enum class RemoteWorkerType : uint8_t;
 enum class WebsiteDataType : uint32_t;
 
-using WebTransportSessionIdentifier = LegacyNullableObjectIdentifier<WebTransportSessionIdentifierType>;
+using WebTransportSessionIdentifier = ObjectIdentifier<WebTransportSessionIdentifierType>;
 
 #if PLATFORM(IOS_FAMILY)
 class LayerHostingContext;
@@ -180,7 +180,7 @@ public:
     using SubResourceDomain = WebCore::RegistrableDomain;
 
     static WebProcess& singleton();
-    static constexpr WebCore::AuxiliaryProcessType processType = WebCore::AuxiliaryProcessType::WebContent;
+    static constexpr WTF::AuxiliaryProcessType processType = WTF::AuxiliaryProcessType::WebContent;
 
     template <typename T>
     T* supplement()

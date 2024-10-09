@@ -194,7 +194,7 @@ void RemoteLayerTreeDrawingArea::updateGeometry(const IntSize& viewSize, bool fl
 
 bool RemoteLayerTreeDrawingArea::shouldUseTiledBackingForFrameView(const LocalFrameView& frameView) const
 {
-    return frameView.frame().isRootFrame()
+    return frameView.frame().isMainFrame()
         || m_webPage->corePage()->settings().asyncFrameScrollingEnabled();
 }
 
@@ -472,6 +472,15 @@ auto RemoteLayerTreeDrawingArea::rootLayerInfoWithFrameIdentifier(WebCore::Frame
     }
     return &m_rootLayers[index];
 }
+
+#if HAVE(HDR_SUPPORT)
+bool RemoteLayerTreeDrawingArea::hdrForImagesEnabled() const
+{
+    if (auto corePage = m_webPage->corePage())
+        return corePage->settings().hdrForImagesEnabled();
+    return false;
+}
+#endif
 
 void RemoteLayerTreeDrawingArea::mainFrameContentSizeChanged(WebCore::FrameIdentifier frameID, const IntSize& contentsSize)
 {

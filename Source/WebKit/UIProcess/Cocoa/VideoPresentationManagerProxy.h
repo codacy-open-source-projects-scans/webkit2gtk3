@@ -202,7 +202,7 @@ public:
     PlatformLayerContainer createLayerWithID(PlaybackSessionContextIdentifier, WebKit::LayerHostingContextID videoLayerID, const WebCore::FloatSize& initialSize, const WebCore::FloatSize& nativeSize, float hostingScaleFactor);
 
     void willRemoveLayerForID(PlaybackSessionContextIdentifier);
-    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const;
+    std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess() const;
 
 private:
     friend class VideoPresentationModelContext;
@@ -276,6 +276,8 @@ private:
 
     bool m_mockVideoPresentationModeEnabled { false };
     WebCore::FloatSize m_mockPictureInPictureWindowSize { DefaultMockPictureInPictureWindowWidth, DefaultMockPictureInPictureWindowHeight };
+
+    Ref<PlaybackSessionManagerProxy> protectedPlaybackSessionManagerProxy() const;
 
     WeakPtr<WebPageProxy> m_page;
     Ref<PlaybackSessionManagerProxy> m_playbackSessionManagerProxy;

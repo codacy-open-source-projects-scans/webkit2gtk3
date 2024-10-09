@@ -248,9 +248,6 @@ fast/workers/worker-storagequota-query-usage.html
 fast/events/autoscroll-with-software-keyboard.html [ Skip ]
 fast/events/autoscroll-when-input-is-offscreen.html [ Skip ]
 
-# HTTP 204 (No Content) should be ignored
-webkit.org/b/60206 http/tests/navigation/response204.html
-
 # JSC does not support setIsolatedWorldSecurityOrigin
 webkit.org/b/61540 http/tests/security/isolatedWorld/cross-origin-xhr.html
 
@@ -1505,7 +1502,7 @@ webkit.org/b/206604 animations/animation-welcome-safari.html [ Pass Failure ]
 
 webkit.org/b/207062 imported/w3c/web-platform-tests/media-source/mediasource-replay.html [ Pass Failure ]
 
-webkit.org/b/206484 imported/w3c/web-platform-tests/websockets/cookies/007.html [ Pass Failure ]
+webkit.org/b/206484 imported/w3c/web-platform-tests/websockets/cookies/007.html?default [ Pass Failure ]
 
 webkit.org/b/206285 inspector/worker/debugger-pause.html [ Pass Failure ]
 
@@ -2083,8 +2080,6 @@ webkit.org/b/237415 webgl/1.0.x/conformance/rendering/clipping-wide-points.html 
 [ Ventura+ arm64 ] imported/w3c/web-platform-tests/webaudio/the-audio-api/the-audioparam-interface/k-rate-audiobuffersource-connections.html [ Failure ]
 [ Ventura+ arm64 ] imported/w3c/web-platform-tests/webaudio/the-audio-api/the-audioparam-interface/k-rate-dynamics-compressor-connections.html [ Failure ]
 [ Ventura+ arm64 ] webaudio/ScriptProcessor/scriptprocessor-offlineaudiocontext.html [ Failure ]
-[ Ventura+ arm64 ] imported/mozilla/svg/smil/style/anim-css-fontsize-1-from-by-pct-pct.svg [ ImageOnlyFailure ]
-[ Ventura+ arm64 ] imported/mozilla/svg/smil/style/anim-css-fontsize-1-from-to-pct-pct.svg [ ImageOnlyFailure ]
 [ Ventura+ x86_64 ] fast/shrink-wrap/rect-shrink-wrap.html [ Pass ImageOnlyFailure ]
 
 # webkit.org/b/275963 -- these tests have slight differences on x86_64 and arm64
@@ -2376,7 +2371,7 @@ imported/w3c/web-platform-tests/navigation-api/navigation-history-entry/key-id-l
 
 webkit.org/b/275713 fast/text/international/system-language/declarative-language.html [ Failure ]
 
-webkit.org/b/275962 imported/w3c/web-platform-tests/navigation-api/navigation-history-entry/no-referrer-dynamic-url-censored.html [ Failure ]
+webkit.org/b/275962 imported/w3c/web-platform-tests/navigation-api/navigation-history-entry/no-referrer-dynamic-url-censored.html [ Timeout ]
 
 # rdar://124307254 ([ Sequoia+ ]: Bad rendering of EmojiImage)
 [ Sequoia+ ] fast/css/font-fallback-private-use-area-apple-logo-exception.html [ ImageOnlyFailure ]
@@ -2412,27 +2407,31 @@ imported/w3c/web-platform-tests/html/semantics/embedded-content/the-img-element/
 [ Sequoia ] fast/ruby/ruby-expansion-cjk-4.html [ ImageOnlyFailure ]
 
 # webkit.org/b/280378 [ Sequoia arm64 ] 14x http/tests/media/fairplay/* are constant failures
-[ Sequoia arm64 Release ] http/tests/media/fairplay/fps-hls-key-rotation.html [ Failure ]
-[ Sequoia arm64 Release ] http/tests/media/fairplay/fps-hls-update-reject.html [ Failure ]
-[ Sequoia arm64 Release ] http/tests/media/fairplay/fps-hls.html [ Failure ]
-[ Sequoia arm64 Release ] http/tests/media/fairplay/fps-init-data-cenc.html [ Failure ]
-[ Sequoia arm64 Release ] http/tests/media/fairplay/fps-init-data-sinf.html [ Failure ]
-[ Sequoia arm64 Release ] http/tests/media/fairplay/fps-init-data-skd.html [ Failure ]
-[ Sequoia arm64 Release ] http/tests/media/fairplay/fps-mse-play-while-not-in-dom.html [ Failure ]
-[ Sequoia arm64 Release ] http/tests/media/fairplay/fps-mse-unmuxed-audio-only.html [ Failure ]
-[ Sequoia arm64 Release ] http/tests/media/fairplay/fps-mse-unmuxed-key-renewal.html [ Failure ]
-[ Sequoia arm64 Release ] http/tests/media/fairplay/fps-mse-unmuxed-multiple-keys.html [ Failure ]
-[ Sequoia arm64 Release ] http/tests/media/fairplay/fps-mse-unmuxed-same-key.html [ Failure ]
+[ Sequoia arm64 ] http/tests/media/fairplay/fps-hls-key-rotation.html [ Failure ]
+[ Sequoia arm64 ] http/tests/media/fairplay/fps-hls-update-reject.html [ Failure ]
+[ Sequoia arm64 ] http/tests/media/fairplay/fps-hls.html [ Failure ]
+[ Sequoia arm64 ] http/tests/media/fairplay/fps-init-data-cenc.html [ Failure ]
+[ Sequoia arm64 ] http/tests/media/fairplay/fps-init-data-sinf.html [ Failure ]
+[ Sequoia arm64 ] http/tests/media/fairplay/fps-init-data-skd.html [ Failure ]
+[ Sequoia arm64 ] http/tests/media/fairplay/fps-mse-play-while-not-in-dom.html [ Failure ]
+[ Sequoia arm64 ] http/tests/media/fairplay/fps-mse-unmuxed-audio-only.html [ Failure ]
+[ Sequoia arm64 ] http/tests/media/fairplay/fps-mse-unmuxed-key-renewal.html [ Failure ]
+[ Sequoia arm64 ] http/tests/media/fairplay/fps-mse-unmuxed-multiple-keys.html [ Failure ]
+[ Sequoia arm64 ] http/tests/media/fairplay/fps-mse-unmuxed-same-key.html [ Failure ]
 http/tests/media/fairplay/fps-mse-multi-key-renewal.html [ Pass Failure ] 
 
 # webkit.org/b/280424 [ Sequoia ] fast/table/col-and-colgroup-offsets.html is a constant failure.
 [ Sequoia+ ] fast/table/col-and-colgroup-offsets.html [ Failure ]
 
-# webkit.org/b/280490 REGRESSION (284225@main) : [ macOS iOS ] 2x imported/w3c/web-platform-t ests/mathml/presentation-markup/operators/* are constant failures 
-imported/w3c/web-platform-tests/mathml/presentation-markup/operators/size-and-position-of-stretchy-fences-with-default-font-001.html [ Failure ]
-imported/w3c/web-platform-tests/mathml/presentation-markup/operators/stretchy-largeop-with-default-font-2.html [ Failure ]
-
 webkit.org/b/257011 imported/w3c/web-platform-tests/css/css-text/hyphens/hyphenate-character-002.html [ ImageOnlyFailure ]
 
 # webkit.org/b/280646 [macOS Debug EWS] media/video-webkit-playsinline.html is a flaky crash
 [ Debug ] media/video-webkit-playsinline.html [ Skip ]
+
+webkit.org/b/280792 inspector/worker/debugger-pause-subworker.html [ Skip ]
+
+# webkit.org/b/280985 [macOS Debug]: media/track/track-text-track-destructor-crash.html is a flaky crash (failure in EWS)
+[ Debug ] media/track/track-text-track-destructor-crash.html [ Pass Crash ]
+
+# webkit.org/b/281097 [ Sequoia ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/mime-types/canPlayType.html is a constant failure. 
+[ Sequoia+ ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/mime-types/canPlayType.html [ Failure ]

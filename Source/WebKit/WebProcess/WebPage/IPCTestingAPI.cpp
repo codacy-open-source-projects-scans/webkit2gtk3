@@ -1227,7 +1227,7 @@ JSValueRef JSIPCStreamClientConnection::sendIPCStreamTesterSyncCrashOnZero(JSCon
 
     auto& streamConnection = jsStreamConnection->connection();
     enum JSIPCStreamTesterIdentifierType { };
-    auto destination = LegacyNullableObjectIdentifier<JSIPCStreamTesterIdentifierType>(*destinationID);
+    auto destination = ObjectIdentifier<JSIPCStreamTesterIdentifierType>(*destinationID);
 
     auto sendResult = streamConnection.sendSync(Messages::IPCStreamTester::SyncCrashOnZero(value), destination);
     if (!sendResult.succeeded()) {
@@ -2363,11 +2363,11 @@ static bool encodeArgument(IPC::Encoder& encoder, JSContextRef context, JSValueR
     if (type == "FrameID"_s) {
         uint64_t frameIdentifier = jsValue.get(globalObject, 0u).toBigUInt64(globalObject);
         uint64_t processIdentifier = jsValue.get(globalObject, 1u).toBigUInt64(globalObject);
-        if (!frameIdentifier || !processIdentifier)
+        if (!ObjectIdentifier<WebCore::FrameIdentifierType>::isValidIdentifier(frameIdentifier) || !ObjectIdentifier<WebCore::ProcessIdentifierType>::isValidIdentifier(processIdentifier))
             return false;
         encoder << WebCore::FrameIdentifier {
             ObjectIdentifier<WebCore::FrameIdentifierType>(frameIdentifier),
-            LegacyNullableObjectIdentifier<WebCore::ProcessIdentifierType>(processIdentifier)
+            ObjectIdentifier<WebCore::ProcessIdentifierType>(processIdentifier)
         };
         return true;
     }
@@ -2422,8 +2422,8 @@ static JSC::JSObject* jsResultFromReplyDecoder(JSC::JSGlobalObject* globalObject
     auto& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
 
-    if (decoder.hasSyncMessageDeserializationFailure()) {
-        throwException(globalObject, scope, JSC::createTypeError(globalObject, "Failed to successfully deserialize the message"_s));
+    if (decoder.messageName() == IPC::MessageName::CancelSyncMessageReply) {
+        throwException(globalObject, scope, JSC::createTypeError(globalObject, "Receiver cancelled the reply due to invalid destination or deserialization error"_s));
         return nullptr;
     }
 

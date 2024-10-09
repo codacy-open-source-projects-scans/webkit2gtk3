@@ -62,7 +62,7 @@ public:
     PlatformXRSystem(WebPageProxy&);
     virtual ~PlatformXRSystem();
 
-    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const;
+    std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess() const;
 
     USING_CAN_MAKE_WEAKPTR(PlatformXRCoordinatorSessionEventClient);
 
@@ -110,7 +110,7 @@ private:
     void invalidateImmersiveSessionState(ImmersiveSessionState nextSessionState = ImmersiveSessionState::Idle);
 
     WeakRef<WebPageProxy> m_page;
-    std::unique_ptr<ProcessThrottler::ForegroundActivity> m_immersiveSessionActivity;
+    RefPtr<ProcessThrottler::ForegroundActivity> m_immersiveSessionActivity;
 };
 
 } // namespace WebKit

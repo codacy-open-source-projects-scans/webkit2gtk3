@@ -161,8 +161,8 @@
 #endif
 
 #if PLATFORM(IOS_FAMILY)
-#include "RuntimeApplicationChecks.h"
 #include "VideoPresentationInterfaceIOS.h"
+#include <wtf/RuntimeApplicationChecks.h>
 #endif
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
@@ -7783,8 +7783,10 @@ void HTMLMediaElement::privateBrowsingStateDidChange(PAL::SessionID sessionID)
 
 bool HTMLMediaElement::shouldForceControlsDisplay() const
 {
+#if PLATFORM(APPLETV)
     if (isFullscreen() && videoUsesElementFullscreen())
         return true;
+#endif
 
     // Always create controls for autoplay video that requires user gesture due to being in low power mode.
     return isVideo() && autoplay() && mediaSession().hasBehaviorRestriction(MediaElementSession::RequireUserGestureForVideoDueToLowPowerMode);

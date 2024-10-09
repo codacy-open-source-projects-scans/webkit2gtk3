@@ -45,7 +45,6 @@
 #include "ParsedContentType.h"
 #include "ResourceError.h"
 #include "ResourceRequest.h"
-#include "RuntimeApplicationChecks.h"
 #include "SecurityOriginPolicy.h"
 #include "Settings.h"
 #include "StringAdaptors.h"
@@ -62,6 +61,7 @@
 #include <JavaScriptCore/JSLock.h>
 #include <pal/text/TextCodecUTF8.h>
 #include <wtf/RefCountedLeakCounter.h>
+#include <wtf/RuntimeApplicationChecks.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/CString.h>
@@ -895,7 +895,7 @@ void XMLHttpRequest::handleCancellation()
     }));
 }
 
-void XMLHttpRequest::didFail(ScriptExecutionContextIdentifier, const ResourceError& error)
+void XMLHttpRequest::didFail(std::optional<ScriptExecutionContextIdentifier>, const ResourceError& error)
 {
     // If we are already in an error state, for instance we called abort(), bail out early.
     if (m_error)

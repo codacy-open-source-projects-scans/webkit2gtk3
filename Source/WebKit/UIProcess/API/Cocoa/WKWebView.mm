@@ -153,7 +153,6 @@
 #import <WebCore/Permissions.h>
 #import <WebCore/PlatformScreen.h>
 #import <WebCore/RunJavaScriptParameters.h>
-#import <WebCore/RuntimeApplicationChecks.h>
 #import <WebCore/Settings.h>
 #import <WebCore/SharedBuffer.h>
 #import <WebCore/StringUtilities.h>
@@ -170,6 +169,7 @@
 #import <wtf/MathExtras.h>
 #import <wtf/NeverDestroyed.h>
 #import <wtf/RetainPtr.h>
+#import <wtf/RuntimeApplicationChecks.h>
 #import <wtf/SystemTracing.h>
 #import <wtf/TZoneMallocInlines.h>
 #import <wtf/UUID.h>
@@ -285,7 +285,7 @@ static bool shouldAllowPictureInPictureMediaPlayback()
 
 static bool shouldAllowSettingAnyXHRHeaderFromFileURLs()
 {
-    static bool shouldAllowSettingAnyXHRHeaderFromFileURLs = (WebCore::IOSApplication::isCardiogram() || WebCore::IOSApplication::isNike()) && !linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::DisallowsSettingAnyXHRHeaderFromFileURLs);
+    static bool shouldAllowSettingAnyXHRHeaderFromFileURLs = (WTF::IOSApplication::isCardiogram() || WTF::IOSApplication::isNike()) && !linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::DisallowsSettingAnyXHRHeaderFromFileURLs);
     return shouldAllowSettingAnyXHRHeaderFromFileURLs;
 }
 
@@ -548,6 +548,10 @@ static uint32_t convertSystemLayoutDirection(NSUserInterfaceLayoutDirection dire
 
 #if ENABLE(APPLE_PAY)
     pageConfiguration->preferences().setApplePayEnabled(!![_configuration _applePayEnabled]);
+#endif
+
+#if ENABLE(CSS_TRANSFORM_STYLE_SEPARATED)
+    pageConfiguration->preferences().setCSSTransformStyleSeparatedEnabled(!![_configuration _cssTransformStyleSeparatedEnabled]);
 #endif
 
     pageConfiguration->preferences().setNeedsStorageAccessFromFileURLsQuirk(!![_configuration _needsStorageAccessFromFileURLsQuirk]);
@@ -1842,6 +1846,11 @@ inline OptionSet<WebKit::FindOptions> toFindOptions(WKFindConfiguration *configu
     return _page.get();
 }
 
+- (RefPtr<WebKit::WebPageProxy>)_protectedPage
+{
+    return _page.get();
+}
+
 - (std::optional<BOOL>)_resolutionForShareSheetImmediateCompletionForTesting
 {
     return _resolutionForShareSheetImmediateCompletionForTesting;
@@ -2668,7 +2677,7 @@ static RetainPtr<NSDictionary<NSString *, id>> createUserInfo(const std::optiona
                 [wkToken setUserInfo:createUserInfo(token.info).get()];
                 return wkToken;
             });
-            auto identifier = makeString(item.frameID ? item.frameID->processIdentifier().toUInt64() : 0, '-', item.frameID ? item.frameID->object().toUInt64() : 0, '-', item.identifier);
+            auto identifier = makeString(item.frameID ? item.frameID->processIdentifier().toUInt64() : 0, '-', item.frameID ? item.frameID->object().toUInt64() : 0, '-', item.identifier ? item.identifier->toUInt64() : 0);
             return adoptNS([[_WKTextManipulationItem alloc] initWithIdentifier:identifier tokens:tokens.get() isSubframe:item.isSubframe isCrossSiteSubframe:item.isCrossSiteSubframe]);
         };
 
@@ -2714,14 +2723,20 @@ static std::optional<ItemIdentifiers> coreTextManipulationItemIdentifierFromStri
     if (!processID || !*processID || !frameID || !*frameID || !itemID || !*itemID)
         return std::nullopt;
 
+    if (!ObjectIdentifier<WebCore::ProcessIdentifierType>::isValidIdentifier(*processID))
+        return std::nullopt;
+
+    if (!ObjectIdentifier<WebCore::TextManipulationItemIdentifierType>::isValidIdentifier(*itemID))
+        return std::nullopt;
+
     return ItemIdentifiers { WebCore::ProcessQualified(ObjectIdentifier<WebCore::FrameIdentifierType>(*frameID),
-        LegacyNullableObjectIdentifier<WebCore::ProcessIdentifierType>(*processID)),
-        LegacyNullableObjectIdentifier<WebCore::TextManipulationItemIdentifierType>(*itemID) };
+        ObjectIdentifier<WebCore::ProcessIdentifierType>(*processID)),
+        ObjectIdentifier<WebCore::TextManipulationItemIdentifierType>(*itemID) };
 }
 
 static WebCore::TextManipulationTokenIdentifier coreTextManipulationTokenIdentifierFromString(NSString *identifier)
 {
-    return LegacyNullableObjectIdentifier<WebCore::TextManipulationTokenIdentifierType>(identifier.longLongValue);
+    return ObjectIdentifier<WebCore::TextManipulationTokenIdentifierType>(identifier.longLongValue);
 }
 
 - (void)_completeTextManipulation:(_WKTextManipulationItem *)item completion:(void(^)(BOOL success))completionHandler
@@ -2808,7 +2823,7 @@ static RetainPtr<NSArray> wkTextManipulationErrors(NSArray<_WKTextManipulationIt
         });
         auto identifiers = coreTextManipulationItemIdentifierFromString(wkItem.identifier);
         std::optional<WebCore::FrameIdentifier> frameID;
-        WebCore::TextManipulationItemIdentifier itemID;
+        std::optional<WebCore::TextManipulationItemIdentifier> itemID;
         if (identifiers) {
             frameID = identifiers->frameID;
             itemID = identifiers->itemID;

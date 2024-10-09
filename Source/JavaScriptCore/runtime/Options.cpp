@@ -381,6 +381,8 @@ bool Options::isAvailable(Options::ID id, Options::Availability availability)
         return !!LLINT_TRACING;
     if (id == traceLLIntSlowPathID)
         return !!LLINT_TRACING;
+    if (id == traceWasmLLIntExecutionID)
+        return !!LLINT_TRACING;
     return false;
 }
 
@@ -757,9 +759,6 @@ void Options::notifyOptionsChanged()
 #if !CPU(ARM_THUMB2)
     Options::useBBQJIT() = false;
 #endif
-#if CPU(ARM_THUMB2)
-    Options::useBBQTierUpChecks() = false;
-#endif
 #endif
 
 #if !CPU(ARM64)
@@ -865,13 +864,6 @@ void Options::notifyOptionsChanged()
 
         if (Options::forceAllFunctionsToUseSIMD() && !Options::useWasmSIMD())
             Options::forceAllFunctionsToUseSIMD() = false;
-
-#if USE(JSVALUE32_64)
-        if (Options::useWasmTailCalls()) {
-            Options::useBBQJIT() = false;
-            Options::useWasmLLInt() = true;
-        }
-#endif
 
         if (Options::useWasmSIMD() && !(Options::useWasmLLInt() || Options::useWasmIPInt())) {
             // The LLInt is responsible for discovering if functions use SIMD.

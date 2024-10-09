@@ -78,6 +78,7 @@ MSG_FOR_EXCESSIVE_LOGS = f'Stopped due to excessive logging, limit: {THRESHOLD_F
 SCAN_BUILD_OUTPUT_DIR = 'scan-build-output'
 LLVM_DIR = 'llvm-project'
 STATIC_ANALYSIS_ARCHIVE_PATH = '/tmp/static-analysis.zip'
+LLVM_REVISION = '9d9287b4d5a2554b195074ae93e48fcd87178554'
 
 if CURRENT_HOSTNAME in EWS_BUILD_HOSTNAMES:
     CURRENT_HOSTNAME = 'ews-build.webkit.org'
@@ -1282,12 +1283,23 @@ class CheckChangeRelevance(AnalyzeChange):
         re.compile(rb'Source/', re.IGNORECASE),
         re.compile(rb'Tools/', re.IGNORECASE),
     ]
+
     webkitpy_path_regexes = [
         re.compile(rb'Tools/Scripts/webkitpy', re.IGNORECASE),
         re.compile(rb'Tools/Scripts/libraries', re.IGNORECASE),
         re.compile(rb'Tools/Scripts/commit-log-editor', re.IGNORECASE),
         re.compile(rb'Source/WebKit/Scripts', re.IGNORECASE),
         re.compile(rb'metadata/contributors.json', re.IGNORECASE),
+    ]
+
+    safer_cpp_path_regexes = [
+        re.compile(rb'Source/WebKit', re.IGNORECASE),
+        re.compile(rb'Source/WebCore', re.IGNORECASE),
+        re.compile(rb'Tools/Scripts/build-and-analyze', re.IGNORECASE),
+        re.compile(rb'Tools/Scripts/generate-dirty-files', re.IGNORECASE),
+        re.compile(rb'Tools/Scripts/compare-static-analysis-results', re.IGNORECASE),
+        re.compile(rb'Tools/Scripts/generate-dirty-files', re.IGNORECASE),
+        re.compile(rb'Tools/CISupport/Shared/download-and-install-build-tools', re.IGNORECASE),
     ]
 
     group_to_paths_mapping = {
@@ -1297,6 +1309,7 @@ class CheckChangeRelevance(AnalyzeChange):
         'jsc': jsc_path_regexes,
         'webkitpy': webkitpy_path_regexes,
         'wk1-tests': wk1_path_regexes,
+        'safer-cpp': safer_cpp_path_regexes,
     }
 
     def _patch_is_relevant(self, patch, builderName, timeout=30):
@@ -2521,7 +2534,7 @@ class CheckStatusOfPR(buildstep.BuildStep, GitHubMixin, AddToLogMixin):
     flunkOnFailure = False
     haltOnFailure = False
     EMBEDDED_CHECKS = ['ios', 'ios-sim', 'ios-wk2', 'ios-wk2-wpt', 'api-ios', 'vision', 'vision-sim', 'vision-wk2', 'tv', 'tv-sim', 'watch', 'watch-sim']
-    MACOS_CHECKS = ['mac', 'mac-AS-debug', 'api-mac', 'mac-wk1', 'mac-wk2', 'mac-AS-debug-wk2', 'mac-wk2-stress', 'mac-safer-cpp', 'jsc', 'jsc-arm64']
+    MACOS_CHECKS = ['mac', 'mac-AS-debug', 'api-mac', 'mac-wk1', 'mac-wk2', 'mac-AS-debug-wk2', 'mac-wk2-stress', 'jsc', 'jsc-arm64']
     LINUX_CHECKS = ['gtk', 'gtk-wk2', 'api-gtk', 'wpe', 'wpe-cairo', 'wpe-wk2', 'api-wpe']
     WINDOWS_CHECKS = ['win']
     EWS_WEBKIT_FAILED = 0
@@ -5930,6 +5943,97 @@ class PrintConfiguration(steps.ShellSequence):
         return {'step': configuration}
 
 
+class CheckOutLLVMProject(git.Git, AddToLogMixin):
+    name = 'checkout-llvm-project'
+    directory = 'llvm-project'
+    branch = 'webkit'
+    CHECKOUT_DELAY_AND_MAX_RETRIES_PAIR = (0, 2)
+    GIT_HASH_LENGTH = 40
+    haltOnFailure = False
+
+    def __init__(self, **kwargs):
+        repourl = f'{GITHUB_URL}rniwa/llvm-project.git'
+        super().__init__(
+            repourl=repourl,
+            workdir=self.directory,
+            retry=self.CHECKOUT_DELAY_AND_MAX_RETRIES_PAIR,
+            timeout=5 * 60,
+            branch=self.branch,
+            alwaysUseLatest=False,
+            logEnviron=False,
+            progress=True,
+            **kwargs
+        )
+
+    @defer.inlineCallbacks
+    def run_vc(self, branch, revision, patch):
+        rc = yield super().run_vc(self.branch, LLVM_REVISION, None)
+        return rc
+
+    @defer.inlineCallbacks
+    def parseGotRevision(self, _=None):
+        stdout = yield self._dovccmd(['rev-parse', 'HEAD'], collectStdout=True)
+        revision = stdout.strip()
+        if len(revision) != self.GIT_HASH_LENGTH:
+            raise buildstep.BuildStepFailed()
+        return SUCCESS
+
+    def doStepIf(self, step):
+        return self.build.getProperty('llvm_revision', '') != LLVM_REVISION
+
+    def getResultSummary(self):
+        if self.results == SKIPPED:
+            return {'step': 'llvm-project is already up to date'}
+        elif self.results != SUCCESS:
+            return {'step': 'Failed to update llvm-project directory'}
+        else:
+            return {'step': 'Cleaned and updated llvm-project directory'}
+
+
+class UpdateClang(steps.ShellSequence, ShellMixin):
+    name = 'update-clang'
+    description = 'updating clang'
+    descriptionDone = 'Successfully updated clang'
+    flunkOnFailure = False
+    warnOnFailure = False
+
+    def __init__(self, **kwargs):
+        super().__init__(logEnviron=True, workdir=LLVM_DIR, **kwargs)
+        self.commands = []
+        self.summary = ''
+
+    @defer.inlineCallbacks
+    def run(self):
+        self.env['PATH'] = f"/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Applications/CMake.app/Contents/bin/:{self.getProperty('builddir')}"
+        self.commands = [
+            util.ShellArg(command=self.shell_command('rm -r build-new; mkdir build-new'), logname='stdio', flunkOnFailure=False),
+            util.ShellArg(command=self.shell_command('cd build-new; xcrun cmake -DLLVM_ENABLE_PROJECTS=clang -DCMAKE_BUILD_TYPE=Release -G Ninja ../llvm -DCMAKE_MAKE_PROGRAM=$(xcrun --sdk macosx --find ninja)'), logname='stdio', haltOnFailure=True),
+            util.ShellArg(command=self.shell_command('cd build-new; ninja clang'), logname='stdio', haltOnFailure=True),
+            util.ShellArg(command=['rm', '-r', '../build/WebKitBuild'], logname='stdio', flunkOnFailure=False),  # Need a clean build after complier update
+        ]
+
+        rc = yield super().runShellSequence(self.commands)
+        if rc != SUCCESS:
+            if self.getProperty('llvm_revision', ''):
+                self.summary = 'Failed to update clang, using previous build'
+                return WARNINGS
+            self.summary = 'Failed to update clang'
+            self.build.buildFinished(['Failed to set up analyzer, retrying build'], RETRY)
+            return defer.returnValue(rc)
+
+        self.summary = 'Successfully updated clang'
+        self.build.addStepsAfterCurrentStep([PrintClangVersionAfterUpdate()])
+        defer.returnValue(rc)
+
+    def doStepIf(self, step):
+        return self.build.getProperty('llvm_revision', '') != LLVM_REVISION
+
+    def getResultSummary(self):
+        if self.results == SKIPPED:
+            return {'step': 'Clang is already up to date'}
+        return {'step': self.summary}
+
+
 class PrintClangVersion(shell.ShellCommandNewStyle):
     name = 'print-clang-version'
     haltOnFailure = False
@@ -5940,10 +6044,10 @@ class PrintClangVersion(shell.ShellCommandNewStyle):
 
     def __init__(self, **kwargs):
         super().__init__(logEnviron=False, workdir=LLVM_DIR, timeout=60, **kwargs)
+        self.command = ['./build/bin/clang', '--version']
 
     @defer.inlineCallbacks
     def run(self):
-        self.command = ['./build/bin/clang', '--version']
         self.log_observer = logobserver.BufferLogObserver(wantStderr=True)
         self.addLogObserver('stdio', self.log_observer)
         rc = yield super().run()
@@ -5961,6 +6065,23 @@ class PrintClangVersion(shell.ShellCommandNewStyle):
         if self.results != SUCCESS:
             return {'step': 'Failed to print clang version'}
         return {'step': self.summary}
+
+
+class PrintClangVersionAfterUpdate(PrintClangVersion, ShellMixin):
+    name = 'print-clang-version-after-update'
+    haltOnFailure = True
+
+    @defer.inlineCallbacks
+    def run(self):
+        command = './build-new/bin/clang --version; rm -r build; mv build-new build'
+        self.command = self.shell_command(command)
+        rc = yield super().run()
+        return defer.returnValue(rc)
+
+    def getResultSummary(self):
+        if self.results != SUCCESS:
+            self.build.buildFinished(['Failed to set up analyzer, retrying build'], RETRY)
+        return super().getResultSummary()
 
 
 # FIXME: We should be able to remove this step once abandoning patch workflows
@@ -6916,9 +7037,85 @@ class UpdatePullRequest(shell.ShellCommandNewStyle, GitHubMixin, AddToLogMixin):
         return not self.doStepIf(step)
 
 
-# FIXME: Share smart pointer steps with build-webkit-org since they have a lot of similarities
-class ScanBuildSmartPointer(steps.ShellSequence, ShellMixin):
-    name = "scan-build-smart-pointer"
+class InstallCMake(shell.ShellCommandNewStyle):
+    name = 'install-cmake'
+    haltOnFailure = True
+    summary = 'Successfully installed CMake'
+
+    def __init__(self, **kwargs):
+        super().__init__(logEnviron=True, **kwargs)
+
+    @defer.inlineCallbacks
+    def run(self):
+        self.env['PATH'] = f'/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Applications/CMake.app/Contents/bin/'
+        self.command = ['python3', 'Tools/CISupport/Shared/download-and-install-build-tools', 'cmake']
+
+        self.log_observer = logobserver.BufferLogObserver()
+        self.addLogObserver('stdio', self.log_observer)
+
+        rc = yield super().run()
+        if rc != SUCCESS:
+            return defer.returnValue(rc)
+
+        log_text = self.log_observer.getStdout()
+        index_skipped = log_text.rfind('skipping download and installation')
+        if index_skipped != -1:
+            self.summary = 'CMake is already installed'
+        return defer.returnValue(rc)
+
+    def evaluateCommand(self, cmd):
+        if cmd.rc != 0:
+            self.commandFailed = True
+            return FAILURE
+        return SUCCESS
+
+    def getResultSummary(self):
+        if self.results != SUCCESS:
+            self.summary = f'Failed to install CMake'
+        return {u'step': self.summary}
+
+
+class InstallNinja(shell.ShellCommandNewStyle, ShellMixin):
+    name = 'install-ninja'
+    haltOnFailure = True
+    summary = 'Successfully installed Ninja'
+
+    def __init__(self, **kwargs):
+        super().__init__(logEnviron=True, **kwargs)
+
+    @defer.inlineCallbacks
+    def run(self):
+        self.env['PATH'] = f"/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:{self.getProperty('builddir')}"
+        self.command = self.shell_command('cd ../; python3 build/Tools/CISupport/Shared/download-and-install-build-tools ninja')
+
+        self.log_observer = logobserver.BufferLogObserver()
+        self.addLogObserver('stdio', self.log_observer)
+
+        rc = yield super().run()
+        if rc != SUCCESS:
+            return defer.returnValue(rc)
+
+        log_text = self.log_observer.getStdout()
+        index_skipped = log_text.rfind('skipping download and installation')
+        if index_skipped != -1:
+            self.summary = 'Ninja is already installed'
+        return defer.returnValue(rc)
+
+    def evaluateCommand(self, cmd):
+        if cmd.rc != 0:
+            self.commandFailed = True
+            return FAILURE
+        return SUCCESS
+
+    def getResultSummary(self):
+        if self.results != SUCCESS:
+            self.summary = f'Failed to install Ninja'
+        return {u'step': self.summary}
+
+
+# FIXME: Share static analyzer steps with build-webkit-org since they have a lot of similarities
+class ScanBuild(steps.ShellSequence, ShellMixin):
+    name = "scan-build"
     description = ["scanning with static analyzer"]
     descriptionDone = ["scanned with static analyzer"]
     flunkOnFailure = True
@@ -6992,8 +7189,8 @@ class ScanBuildSmartPointer(steps.ShellSequence, ShellMixin):
         return {'step': status}
 
 
-class ScanBuildSmartPointerWithoutChange(ScanBuildSmartPointer):
-    name = 'scan-build-smart-pointer-without-change'
+class ScanBuildWithoutChange(ScanBuild):
+    name = 'scan-build-without-change'
     output_directory = SCAN_BUILD_OUTPUT_DIR + '-baseline'
 
     def addResultsSteps(self):
@@ -7029,7 +7226,7 @@ class ParseStaticAnalyzerResults(shell.ShellCommandNewStyle):
 
         log_text = self.log_observer.getStdout()
         index = log_text.rfind('Total')
-        self.result_message = log_text[index:]
+        self.result_message = log_text[index:].strip()
 
         return defer.returnValue(rc)
 
@@ -7088,10 +7285,10 @@ class FindUnexpectedStaticAnalyzerResults(shell.ShellCommandNewStyle):
         unexpected_results = self.getProperty('unexpected_failing_files', 0) or self.getProperty('unexpected_new_issues', 0) or self.getProperty('unexpected_passing_files', 0)
         if self.expectations and unexpected_results:
             # If there are unexpected results, rebuild without changes to verify causation
-            self.build.addStepsAfterCurrentStep([RevertAppliedChanges(exclude=['new*', 'scan-build-output*']), ScanBuildSmartPointerWithoutChange()])
+            self.build.addStepsAfterCurrentStep([RevertAppliedChanges(exclude=['new*', 'scan-build-output*']), ScanBuildWithoutChange()])
         elif unexpected_results:
             # Only save the results if there are failures and it is not the first run
-            self.build.addStepsAfterCurrentStep([ArchiveStaticAnalyzerResults(), UploadStaticAnalyzerResults(), ExtractStaticAnalyzerTestResults(), DisplaySmartPointerResults()])
+            self.build.addStepsAfterCurrentStep([ArchiveStaticAnalyzerResults(), UploadStaticAnalyzerResults(), ExtractStaticAnalyzerTestResults(), DisplaySaferCPPResults()])
         return defer.returnValue(rc)
 
     def createResultMessage(self):
@@ -7129,10 +7326,13 @@ class FindUnexpectedStaticAnalyzerResults(shell.ShellCommandNewStyle):
         return {u'step': status}
 
 
-class DisplaySmartPointerResults(buildstep.BuildStep, AddToLogMixin):
-    name = 'display-smart-pointer-results'
+class DisplaySaferCPPResults(buildstep.BuildStep, AddToLogMixin):
+    name = 'display-safer-cpp-results'
     resultDirectory = ''
     NUM_TO_DISPLAY = 10
+    UPDATE_COMMAND = 'Tools/Scripts/update-safer-cpp-expectations -p {project} '
+    CHECKER_ARGS = '--{checker} {files} '
+    commands = set()
 
     def __init___(self, **kwargs):
         super().__init__(logEnviron=False, **kwargs)
@@ -7163,15 +7363,19 @@ class DisplaySmartPointerResults(buildstep.BuildStep, AddToLogMixin):
         total_file_list = set()
         is_log = 0
         for project, data in unexpected_results_data[type].items():
+            command = self.UPDATE_COMMAND.format(project=project)
             log_content = ''
             for checker, files in data.items():
                 if files:
                     total_file_list.update(files)
                     file_str = '\n'.join(files)
                     log_content += f'=> {checker}\n\n{file_str}\n\n'
+                    command += self.CHECKER_ARGS.format(checker=checker, files=' '.join(files))
             if log_content:
                 yield self._addToLog(f'{project}-unexpected-{type}', log_content)
                 is_log += 1
+                if type == 'passes':
+                    self.commands.add(command)
         self.setProperty(f'{type}', list(total_file_list))
         return defer.returnValue(is_log)
 
@@ -7198,10 +7402,11 @@ class DisplaySmartPointerResults(buildstep.BuildStep, AddToLogMixin):
 
         if num_failures:
             pluralSuffix = 's' if num_issues > 1 else ''
-            comment = f"Smart Pointer Build {formatted_build_link}: Found [{num_issues} new failure{pluralSuffix}]({results_link}), blocking PR #{self.getProperty('github.number')}.\n"
+            comment = f"Safer C++ Build {formatted_build_link}: Found [{num_issues} new failure{pluralSuffix}]({results_link}).\n"
             comment += 'Please address these issues before landing. See [WebKit Guidelines for Safer C++ Programming](https://github.com/WebKit/WebKit/wiki/Safer-CPP-Guidelines).\n(cc @rniwa)'
             self.setProperty('comment_text', comment)
-            self.build.addStepsAfterCurrentStep([LeaveComment(), SetCommitQueueMinusFlagOnPatch(), BlockPullRequest()])
+            # FIXME: Add merging blocked after initial deployment period
+            self.build.addStepsAfterCurrentStep([LeaveComment()])
             results_summary = f'Found {num_issues} new failure{pluralSuffix} in {failing_files}'
             if num_failures > self.NUM_TO_DISPLAY:
                 results_summary += ' ...'
@@ -7214,14 +7419,16 @@ class DisplaySmartPointerResults(buildstep.BuildStep, AddToLogMixin):
         elif num_passes:
             # FIXME: Add link to unexpected passes file
             pluralSuffix = 's' if num_passes > 1 else ''
-            comment = f'Smart Pointer Build {formatted_build_link}: Found {num_passes} fixed file{pluralSuffix}!\n'
-            comment += 'Please update expectations using `smart-pointer-tool --update-expectations` before landing.'
+            comment = f'Safer C++ Build {formatted_build_link}: Found {num_passes} fixed file{pluralSuffix}!\n'
+            pluralCommand = 's' if len(self.commands) > 1 else ''
+            comment += f'Please update expectations in Source/[WebKit/WebCore]/SaferCPPExpectations manually or by running the following command{pluralCommand}:\n'
+            comment += '\n'.join(self.commands)
             self.setProperty('comment_text', comment)
-            self.build.addStepsAfterCurrentStep([LeaveComment()])
             results_summary = f'Found {num_passes} fixed file{pluralSuffix}: {passing_files}'
             if num_passes > self.NUM_TO_DISPLAY:
                 results_summary += ' ...'
             self.setProperty('build_summary', results_summary)
+            self.build.addStepsAfterCurrentStep([LeaveComment(), SetBuildSummary()])
 
         if num_passes and num_failures:
             pluralSuffix = 's' if num_passes > 1 else ''

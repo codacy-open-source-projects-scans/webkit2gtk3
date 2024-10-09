@@ -58,6 +58,10 @@
 
 #import <pal/cocoa/WritingToolsUISoftLink.h>
 
+#if PLATFORM(VISION)
+asm(".linker_option \"-framework\", \"WritingTools\"");
+#endif
+
 #if PLATFORM(MAC)
 
 @interface NSMenu (Extras)
@@ -126,6 +130,16 @@
 
 @end
 #endif
+
+@interface WKWebViewConfiguration (Staging_135210076)
+
+#if PLATFORM(IOS_FAMILY)
+@property (nonatomic) UIWritingToolsBehavior writingToolsBehavior;
+#else
+@property (nonatomic) NSWritingToolsBehavior writingToolsBehavior;
+#endif
+
+@end
 
 #if PLATFORM(IOS_FAMILY)
 using PlatformTextPlaceholder = UITextPlaceholder;
@@ -613,6 +627,65 @@ TEST(WritingTools, ProofreadingRevertWithSuggestionAtEndOfText)
 
         [[webView writingToolsDelegate] didEndWritingToolsSession:session.get() accepted:NO];
         EXPECT_WK_STREQ(originalText, [webView contentsAsString]);
+
+        finished = true;
+    }];
+
+    TestWebKitAPI::Util::run(&finished);
+}
+
+TEST(WritingTools, ProofreadingRevertWithMultiwordSuggestions)
+{
+    RetainPtr session = adoptNS([[WTSession alloc] initWithType:WTSessionTypeProofreading textViewDelegate:nil]);
+
+    NSString *originalText = @"Hey do you wanna hang out this weekend and go see a movie it could be a really fun day and maybe get food after we are done";
+    NSString *proofreadText = @"Hey, do you want to hang out this weekend and go see a movie? It could be a really fun day, and maybe we can get food after we are done.";
+
+    NSString *signature = @"Sent from my iPhone";
+
+    RetainPtr webView = adoptNS([[WritingToolsWKWebView alloc] initWithHTMLString:[NSString stringWithFormat:@"<html><head></head><body>%@<br><div id='AppleMailSignature' dir='ltr'>%@</div></body></html>", originalText, signature]]);
+    [webView _setEditable:YES];
+    [webView focusDocumentBodyAndSelectAll];
+
+    NSString *setSelectionJavaScript = @""
+        "(() => {"
+        "  const range = document.createRange();"
+        "  range.setStart(document.querySelector('body').childNodes[0], 0);"
+        "  range.setEnd(document.querySelector('body').childNodes[0], 123);"
+        "  "
+        "  var selection = window.getSelection();"
+        "  selection.removeAllRanges();"
+        "  selection.addRange(range);"
+        "})();";
+    [webView stringByEvaluatingJavaScript:setSelectionJavaScript];
+
+    __block bool finished = false;
+
+    [[webView writingToolsDelegate] willBeginWritingToolsSession:session.get() requestContexts:^(NSArray<WTContext *> *contexts) {
+        EXPECT_EQ(1UL, contexts.count);
+
+        EXPECT_WK_STREQ(originalText, contexts.firstObject.attributedText.string);
+
+        RetainPtr suggestions = @[
+            adoptNS([[WTTextSuggestion alloc] initWithOriginalRange:NSMakeRange(0, 3) replacement:@"Hey,"]).get(),
+            adoptNS([[WTTextSuggestion alloc] initWithOriginalRange:NSMakeRange(11, 5) replacement:@"want to"]).get(),
+            adoptNS([[WTTextSuggestion alloc] initWithOriginalRange:NSMakeRange(52, 8) replacement:@"movie? It"]).get(),
+            adoptNS([[WTTextSuggestion alloc] initWithOriginalRange:NSMakeRange(83, 3) replacement:@"day,"]).get(),
+            adoptNS([[WTTextSuggestion alloc] initWithOriginalRange:NSMakeRange(91, 5) replacement:@"maybe we can"]).get(),
+            adoptNS([[WTTextSuggestion alloc] initWithOriginalRange:NSMakeRange(119, 4) replacement:@"done."]).get()
+        ];
+
+        [[webView writingToolsDelegate] proofreadingSession:session.get() didReceiveSuggestions:suggestions.get() processedRange:NSMakeRange(0, originalText.length) inContext:contexts.firstObject finished:YES];
+
+        [webView waitForNextPresentationUpdate];
+
+        RetainPtr proofreadContents = [NSString stringWithFormat:@"%@\n%@", proofreadText, signature];
+        EXPECT_WK_STREQ(proofreadContents.get(), [webView contentsAsString]);
+
+        [[webView writingToolsDelegate] didEndWritingToolsSession:session.get() accepted:NO];
+
+        RetainPtr originalContents = [NSString stringWithFormat:@"%@\n%@", originalText, signature];
+        EXPECT_WK_STREQ(originalContents.get(), [webView contentsAsString]);
 
         finished = true;
     }];
@@ -3041,8 +3114,10 @@ TEST(WritingTools, SuggestedTextIsSelectedAfterSmartReply)
 
 #if PLATFORM(MAC)
         id<NSTextInputClient_Async> contentView = (id<NSTextInputClient_Async>)webView.get();
-#else
+#elif USE(BROWSERENGINEKIT)
         id<BETextInput> contentView = [webView asyncTextInput];
+#else
+        id<UIWKInteractionViewProtocol> contentView = [webView textInputContentView];
 #endif
 
         [contentView insertTextPlaceholderWithSize:CGSizeMake(50, 100) completionHandler:^(PlatformTextPlaceholder *placeholder) {
@@ -3171,7 +3246,7 @@ TEST(WritingTools, CompositionWithOmittedTrailingWhitespaceContent)
 
     RetainPtr session = adoptNS([[WTSession alloc] initWithType:WTSessionTypeComposition textViewDelegate:nil]);
     RetainPtr webView = adoptNS([[WritingToolsWKWebView alloc] initWithHTMLString:htmlString]);
-    [webView focusDocumentBodyAndSelectAll];
+    [webView selectAll:nil];
 
     __block bool finished = false;
     [[webView writingToolsDelegate] willBeginWritingToolsSession:session.get() requestContexts:^(NSArray<WTContext *> *contexts) {

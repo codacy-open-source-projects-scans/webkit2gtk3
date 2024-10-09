@@ -102,7 +102,6 @@
 #include <WebCore/ProcessWarming.h>
 #include <WebCore/RegistrableDomain.h>
 #include <WebCore/ResourceRequest.h>
-#include <WebCore/RuntimeApplicationChecks.h>
 #include <WebCore/Site.h>
 #include <pal/SessionID.h>
 #include <wtf/CallbackAggregator.h>
@@ -260,9 +259,9 @@ WebProcessPool::WebProcessPool(API::ProcessPoolConfiguration& configuration)
 #if PLATFORM(COCOA)
         // This can be removed once Safari calls _setLinkedOnOrAfterEverything everywhere that WebKit deploys.
 #if PLATFORM(IOS_FAMILY)
-        bool isSafari = WebCore::IOSApplication::isMobileSafari();
+        bool isSafari = WTF::IOSApplication::isMobileSafari();
 #elif PLATFORM(MAC)
-        bool isSafari = WebCore::MacApplication::isSafari();
+        bool isSafari = WTF::MacApplication::isSafari();
 #endif
         if (isSafari)
             enableAllSDKAlignedBehaviors();
@@ -307,7 +306,7 @@ WebProcessPool::WebProcessPool(API::ProcessPoolConfiguration& configuration)
     updateBackForwardCacheCapacity();
 
 #if PLATFORM(IOS) || PLATFORM(VISION)
-    if (WebCore::IOSApplication::isLutron() && !linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::SharedNetworkProcess)) {
+    if (WTF::IOSApplication::isLutron() && !linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::SharedNetworkProcess)) {
         callOnMainRunLoop([] {
             if (WebsiteDataStore::defaultDataStoreExists())
                 WebsiteDataStore::defaultDataStore()->terminateNetworkProcess();
@@ -588,8 +587,8 @@ ModelProcessProxy& WebProcessPool::ensureModelProcess()
 
 Ref<ModelProcessProxy> WebProcessPool::ensureProtectedModelProcess(WebProcessProxy& requestingWebProcess)
 {
-    RELEASE_ASSERT(requestingWebProcess.sharedPreferencesForWebProcess().modelElementEnabled);
-    RELEASE_ASSERT(requestingWebProcess.sharedPreferencesForWebProcess().modelProcessEnabled);
+    RELEASE_ASSERT(requestingWebProcess.sharedPreferencesForWebProcessValue().modelElementEnabled);
+    RELEASE_ASSERT(requestingWebProcess.sharedPreferencesForWebProcessValue().modelProcessEnabled);
 
     return ensureModelProcess();
 }
@@ -1254,7 +1253,7 @@ Ref<WebPageProxy> WebProcessPool::createWebPage(PageClient& pageClient, Ref<API:
 
     bool enableProcessSwapOnCrossSiteNavigation = pagePreference->processSwapOnCrossSiteNavigationEnabled();
 #if PLATFORM(IOS_FAMILY)
-    if (WebCore::IOSApplication::isFirefox() && !linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::ProcessSwapOnCrossSiteNavigation))
+    if (WTF::IOSApplication::isFirefox() && !linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::ProcessSwapOnCrossSiteNavigation))
         enableProcessSwapOnCrossSiteNavigation = false;
 #endif
 
@@ -1702,9 +1701,10 @@ WebProcessProxy* WebProcessPool::webProcessProxyFromConnection(const IPC::Connec
     return nullptr;
 }
 
-const SharedPreferencesForWebProcess& WebProcessPool::sharedPreferencesForWebProcess(const IPC::Connection& connection) const
+std::optional<SharedPreferencesForWebProcess> WebProcessPool::sharedPreferencesForWebProcess(const IPC::Connection& connection) const
 {
-    return webProcessProxyFromConnection(connection)->sharedPreferencesForWebProcess();
+    // FIXME: Remove SUPPRESS_UNCOUNTED_ARG once https://github.com/llvm/llvm-project/pull/111198 lands.
+    SUPPRESS_UNCOUNTED_ARG return webProcessProxyFromConnection(connection)->sharedPreferencesForWebProcess();
 }
 
 void WebProcessPool::handleMessage(IPC::Connection& connection, const String& messageName, const WebKit::UserData& messageBody)
@@ -1961,7 +1961,7 @@ void WebProcessPool::processForNavigation(WebPageProxy& page, WebFrameProxy& fra
     Site site { navigation.currentRequest().url() };
     bool siteIsolationEnabled = page.protectedPreferences()->siteIsolationEnabled();
     if (siteIsolationEnabled && !site.isEmpty()) {
-        auto mainFrameSite = frameInfo.isMainFrame ? site : Site(URL(page.pageLoadState().activeURL()));
+        auto mainFrameSite = frameInfo.isMainFrame ? site : Site(URL(page.protectedPageLoadState()->activeURL()));
         if (!frame.isMainFrame() && site == mainFrameSite) {
             Ref mainFrameProcess = page.protectedMainFrame()->protectedProcess();
             if (!mainFrameProcess->isInProcessCache())

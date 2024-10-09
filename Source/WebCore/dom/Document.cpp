@@ -226,7 +226,6 @@
 #include "ResizeObserverEntry.h"
 #include "ResolvedStyle.h"
 #include "ResourceLoadObserver.h"
-#include "RuntimeApplicationChecks.h"
 #include "SVGDocumentExtensions.h"
 #include "SVGElementFactory.h"
 #include "SVGElementTypeHelpers.h"
@@ -320,6 +319,7 @@
 #include <wtf/HexNumber.h>
 #include <wtf/Language.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/RuntimeApplicationChecks.h>
 #include <wtf/SetForScope.h>
 #include <wtf/SystemTracing.h>
 #include <wtf/TZoneMallocInlines.h>
@@ -601,7 +601,7 @@ static inline IntDegrees currentOrientation(LocalFrame* frame)
     return 0;
 }
 
-Document::Document(LocalFrame* frame, const Settings& settings, const URL& url, DocumentClasses documentClasses, OptionSet<ConstructionFlag> constructionFlags, ScriptExecutionContextIdentifier identifier)
+Document::Document(LocalFrame* frame, const Settings& settings, const URL& url, DocumentClasses documentClasses, OptionSet<ConstructionFlag> constructionFlags, std::optional<ScriptExecutionContextIdentifier> identifier)
     : ContainerNode(*this, DOCUMENT_NODE)
     , TreeScope(*this)
     , ScriptExecutionContext(Type::Document, identifier)
@@ -1905,7 +1905,7 @@ void Document::removeVisualUpdatePreventedReasons(OptionSet<VisualUpdatesPrevent
             if (frame()->isMainFrame()) {
                 frameView->addPaintPendingMilestones(LayoutMilestone::DidFirstPaintAfterSuppressedIncrementalRendering);
                 if (page->requestedLayoutMilestones() & LayoutMilestone::DidFirstLayoutAfterSuppressedIncrementalRendering)
-                    protectedFrame()->checkedLoader()->didReachLayoutMilestone(LayoutMilestone::DidFirstLayoutAfterSuppressedIncrementalRendering);
+                    protectedFrame()->protectedLoader()->didReachLayoutMilestone(LayoutMilestone::DidFirstLayoutAfterSuppressedIncrementalRendering);
             }
         }
         m_visualUpdatesAllowedChangeRequiresLayoutMilestones = false;
@@ -1915,7 +1915,7 @@ void Document::removeVisualUpdatePreventedReasons(OptionSet<VisualUpdatesPrevent
         renderView->repaintViewAndCompositedLayers();
 
     if (RefPtr frame = this->frame(); frame && m_visualUpdatesAllowedChangeCompletesPageTransition)
-        frame->checkedLoader()->completePageTransitionIfNeeded();
+        frame->protectedLoader()->completePageTransitionIfNeeded();
     m_visualUpdatesAllowedChangeCompletesPageTransition = false;
     scheduleRenderingUpdate({ });
 }
@@ -3224,11 +3224,11 @@ void Document::willBeRemovedFromFrame()
     commonTeardown();
 
 #if ENABLE(TOUCH_EVENTS)
-    if (m_touchEventTargets && m_touchEventTargets->size() && parentDocument())
+    if (m_touchEventTargets && !m_touchEventTargets->isEmptyIgnoringNullReferences() && parentDocument())
         protectedParentDocument()->didRemoveEventTargetNode(*this);
 #endif
 
-    if (m_wheelEventTargets && m_wheelEventTargets->size() && parentDocument())
+    if (m_wheelEventTargets && !m_wheelEventTargets->isEmptyIgnoringNullReferences() && parentDocument())
         protectedParentDocument()->didRemoveEventTargetNode(*this);
 
     if (RefPtr mediaQueryMatcher = m_mediaQueryMatcher)
@@ -3562,7 +3562,7 @@ ExceptionOr<void> Document::open(Document* entryDocument)
             frame->loader().policyChecker().stopCheck();
         // Null-checking m_frame again as `policyChecker().stopCheck()` may have cleared it.
         if (isNavigating && m_frame)
-            protectedFrame()->checkedLoader()->stopAllLoaders();
+            protectedFrame()->protectedLoader()->stopAllLoaders();
     }
 
     removeAllEventListeners();
@@ -3586,7 +3586,7 @@ ExceptionOr<void> Document::open(Document* entryDocument)
     if (RefPtr frame = this->frame()) {
         // Set document's is initial about:blank to false.
         // https://html.spec.whatwg.org/multipage/dynamic-markup-insertion.html#document-open-steps (step 13)
-        CheckedRef frameLoader = frame->loader();
+        Ref frameLoader = frame->loader();
         frameLoader->advanceStatePastInitialEmptyDocument();
         frameLoader->didExplicitOpen();
     }
@@ -3804,7 +3804,7 @@ void Document::implicitClose()
     dispatchPageshowEvent(PageshowEventPersistence::NotPersisted);
 
     if (frame)
-        frame->checkedLoader()->dispatchOnloadEvents();
+        frame->protectedLoader()->dispatchOnloadEvents();
 
     // An event handler may have removed the frame
     frame = this->frame();
@@ -3813,7 +3813,7 @@ void Document::implicitClose()
         return;
     }
 
-    frame->checkedLoader()->checkCallImplicitClose();
+    frame->protectedLoader()->checkCallImplicitClose();
 
     // We used to force a synchronous display and flush here. This really isn't
     // necessary and can in fact be actively harmful if pages are loading at a rate of > 60fps
@@ -4291,7 +4291,7 @@ void Document::processBaseElement()
 String Document::userAgent(const URL& url) const
 {
     RefPtr frame = this->frame();
-    return frame ? frame->checkedLoader()->userAgent(url) : String();
+    return frame ? frame->protectedLoader()->userAgent(url) : String();
 }
 
 void Document::disableEval(const String& errorMessage)
@@ -4616,7 +4616,7 @@ void Document::processMetaHttpEquiv(const String& equiv, const AtomString& conte
 
     case HTTPHeaderName::Refresh:
         if (frame)
-            frame->checkedLoader()->scheduleRefreshIfNeeded(*this, content, IsMetaRefresh::Yes);
+            frame->protectedLoader()->scheduleRefreshIfNeeded(*this, content, IsMetaRefresh::Yes);
         break;
 
     case HTTPHeaderName::SetCookie:
@@ -4634,7 +4634,7 @@ void Document::processMetaHttpEquiv(const String& equiv, const AtomString& conte
 
     case HTTPHeaderName::XFrameOptions:
         if (frame) {
-            CheckedRef frameLoader = frame->loader();
+            Ref frameLoader = frame->loader();
             std::optional<ResourceLoaderIdentifier> requestIdentifier;
             if (frameLoader->activeDocumentLoader() && frameLoader->activeDocumentLoader()->mainResourceLoader())
                 requestIdentifier = frameLoader->activeDocumentLoader()->mainResourceLoader()->identifier();
@@ -7471,7 +7471,7 @@ void Document::finishedParsing()
         // See https://bugs.webkit.org/show_bug.cgi?id=36864 starting around comment 35.
         updateStyleIfNeeded();
 
-        frame->checkedLoader()->finishedParsing();
+        frame->protectedLoader()->finishedParsing();
         InspectorInstrumentation::domContentLoadedEventFired(*frame);
     }
 
@@ -8337,13 +8337,13 @@ void Document::loadEventDelayTimerFired()
     Ref protectedThis { *this };
     checkCompleted();
     if (RefPtr frame = this->frame())
-        frame->checkedLoader()->checkLoadComplete();
+        frame->protectedLoader()->checkLoadComplete();
 }
 
 void Document::checkCompleted()
 {
     if (RefPtr frame = this->frame())
-        frame->checkedLoader()->checkCompleted();
+        frame->protectedLoader()->checkCompleted();
 }
 
 double Document::monotonicTimestamp() const
@@ -8484,7 +8484,7 @@ void Document::wheelEventHandlersChanged(Node* node)
     UNUSED_PARAM(node);
 #endif
 
-    bool haveHandlers = m_wheelEventTargets && !m_wheelEventTargets->isEmpty();
+    bool haveHandlers = m_wheelEventTargets && !m_wheelEventTargets->isEmptyIgnoringNullReferences();
     page->chrome().client().wheelEventHandlersChanged(haveHandlers);
 }
 
@@ -8493,7 +8493,7 @@ void Document::didAddWheelEventHandler(Node& node)
     if (!m_wheelEventTargets)
         m_wheelEventTargets = makeUnique<EventTargetSet>();
 
-    m_wheelEventTargets->add(&node);
+    m_wheelEventTargets->add(node);
     wheelEventHandlersChanged(&node);
 
     if (RefPtr frame = this->frame())
@@ -8504,9 +8504,9 @@ static bool removeHandlerFromSet(EventTargetSet& handlerSet, Node& node, EventHa
 {
     switch (removal) {
     case EventHandlerRemoval::One:
-        return handlerSet.remove(&node);
+        return handlerSet.remove(node);
     case EventHandlerRemoval::All:
-        return handlerSet.removeAll(&node);
+        return handlerSet.removeAll(node);
     }
     return false;
 }
@@ -8543,7 +8543,7 @@ void Document::didAddTouchEventHandler(Node& handler)
     if (!m_touchEventTargets)
         m_touchEventTargets = makeUnique<EventTargetSet>();
 
-    m_touchEventTargets->add(&handler);
+    m_touchEventTargets->add(handler);
 
     if (RefPtr parent = parentDocument()) {
         parent->didAddTouchEventHandler(*this);
@@ -8574,15 +8574,15 @@ void Document::didRemoveEventTargetNode(Node& handler)
 {
 #if ENABLE(TOUCH_EVENTS)
     if (m_touchEventTargets) {
-        m_touchEventTargets->removeAll(&handler);
-        if ((&handler == this || m_touchEventTargets->isEmpty()) && parentDocument())
+        m_touchEventTargets->removeAll(handler);
+        if ((&handler == this || m_touchEventTargets->isEmptyIgnoringNullReferences()) && parentDocument())
             protectedParentDocument()->didRemoveEventTargetNode(*this);
     }
 #endif
 
     if (m_wheelEventTargets) {
-        m_wheelEventTargets->removeAll(&handler);
-        if ((&handler == this || m_wheelEventTargets->isEmpty()) && parentDocument())
+        m_wheelEventTargets->removeAll(handler);
+        if ((&handler == this || m_wheelEventTargets->isEmptyIgnoringNullReferences()) && parentDocument())
             protectedParentDocument()->didRemoveEventTargetNode(*this);
     }
 }
@@ -8667,7 +8667,7 @@ Document::RegionFixedPair Document::absoluteRegionForEventTargets(const EventTar
     bool insideFixedPosition = false;
 
     for (auto keyValuePair : *targets) {
-        Ref node = *keyValuePair.key;
+        Ref node = keyValuePair.key;
         auto targetRegionFixedPair = absoluteEventRegionForNode(node);
         targetRegion.unite(targetRegionFixedPair.first);
         insideFixedPosition |= targetRegionFixedPair.second;
@@ -8845,7 +8845,7 @@ void Document::decrementActiveParserCount()
     // FIXME: We should call DocumentLoader::checkLoadComplete as well here,
     // but it seems to cause http/tests/security/feed-urls-from-remote.html
     // to timeout on Mac WK1; see http://webkit.org/b/110554 and http://webkit.org/b/110401.
-    frame->checkedLoader()->checkLoadComplete();
+    frame->protectedLoader()->checkLoadComplete();
 }
 
 DocumentParserYieldToken::DocumentParserYieldToken(Document& document)

@@ -45,7 +45,6 @@ class WebScreenOrientationManagerProxy final : public IPC::MessageReceiver {
 public:
     WebScreenOrientationManagerProxy(WebPageProxy&, WebCore::ScreenOrientationType);
     ~WebScreenOrientationManagerProxy();
-    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const;
 
     // IPC::MessageReceiver
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;

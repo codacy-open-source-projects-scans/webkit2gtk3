@@ -75,8 +75,7 @@ public:
         return adoptRef(*new WebExtension(std::forward<Args>(args)...));
     }
 
-    explicit WebExtension(NSBundle *appExtensionBundle, NSError ** = nullptr);
-    explicit WebExtension(NSURL *resourceBaseURL, NSError ** = nullptr);
+    explicit WebExtension(NSBundle *appExtensionBundle, NSURL *resourceBaseURL, RefPtr<API::Error>&);
     explicit WebExtension(NSDictionary *manifest, NSDictionary *resources);
     explicit WebExtension(NSDictionary *resources);
 
@@ -107,6 +106,18 @@ public:
         InvalidURLOverrides,
         InvalidVersion,
         InvalidWebAccessibleResources,
+    };
+
+    // Keep in sync with WKWebExtensionError values.
+    enum class APIError : uint8_t {
+        Unknown = 1,
+        ResourceNotFound,
+        InvalidResourceCodeSignature,
+        InvalidManifest,
+        UnsupportedManifestVersion,
+        InvalidManifestEntry,
+        InvalidDeclarativeNetRequestEntry,
+        InvalidBackgroundPersistence,
     };
 
     enum class InjectionTime : uint8_t {
@@ -218,8 +229,8 @@ public:
 
     UTType *resourceTypeForPath(NSString *);
 
-    NSString *resourceStringForPath(NSString *, NSError **, CacheResult = CacheResult::No, SuppressNotFoundErrors = SuppressNotFoundErrors::No);
-    NSData *resourceDataForPath(NSString *, NSError **, CacheResult = CacheResult::No, SuppressNotFoundErrors = SuppressNotFoundErrors::No);
+    NSString *resourceStringForPath(NSString *, RefPtr<API::Error>&, CacheResult = CacheResult::No, SuppressNotFoundErrors = SuppressNotFoundErrors::No);
+    NSData *resourceDataForPath(NSString *, RefPtr<API::Error>&, CacheResult = CacheResult::No, SuppressNotFoundErrors = SuppressNotFoundErrors::No);
 
     _WKWebExtensionLocalization *localization();
     NSLocale *defaultLocale();
@@ -251,17 +262,17 @@ public:
     NSString *sidebarTitle();
 #endif
 
-    CocoaImage *imageForPath(NSString *, NSError **, CGSize sizeForResizing = CGSizeZero);
+    CocoaImage *imageForPath(NSString *, RefPtr<API::Error>&, CGSize sizeForResizing = CGSizeZero);
 
     size_t bestSizeInIconsDictionary(NSDictionary *, size_t idealPixelSize);
     NSString *pathForBestImageInIconsDictionary(NSDictionary *, size_t idealPixelSize);
 
-    CocoaImage *bestImageInIconsDictionary(NSDictionary *, CGSize idealSize, const Function<void(NSError *)>&);
+    CocoaImage *bestImageInIconsDictionary(NSDictionary *, CGSize idealSize, const Function<void(Ref<API::Error>)>&);
     CocoaImage *bestImageForIconsDictionaryManifestKey(NSDictionary *, NSString *manifestKey, CGSize idealSize, RetainPtr<NSMutableDictionary>& cacheLocation, Error, NSString *customLocalizedDescription);
 
 #if ENABLE(WK_WEB_EXTENSIONS_ICON_VARIANTS)
     NSDictionary *iconsDictionaryForBestIconVariant(NSArray *, size_t idealPixelSize, ColorScheme);
-    CocoaImage *bestImageForIconVariants(NSArray *, CGSize idealSize, const Function<void(NSError *)>&);
+    CocoaImage *bestImageForIconVariants(NSArray *, CGSize idealSize, const Function<void(Ref<API::Error>)>&);
     CocoaImage *bestImageForIconVariantsManifestKey(NSDictionary *, NSString *manifestKey, CGSize idealSize, RetainPtr<NSMutableDictionary>& cacheLocation, Error, NSString *customLocalizedDescription);
 #endif
 
@@ -298,7 +309,7 @@ public:
     const PermissionsSet& requestedPermissions();
     const PermissionsSet& optionalPermissions();
 
-    bool hasRequestedPermission(String) const;
+    bool hasRequestedPermission(String);
 
     // Match patterns requested by the extension in their manifest.
     // These are not the currently allowed permission patterns.
@@ -312,11 +323,15 @@ public:
     // Combined pattern set that includes permission patterns and injected content patterns from the manifest.
     MatchPatternSet allRequestedMatchPatterns();
 
-    NSError *createError(Error, String customLocalizedDescription = { }, NSError *underlyingError = nil);
-    void recordErrorIfNeeded(NSError *error) { if (error) recordError(error); }
-    void recordError(NSError *);
+    Ref<API::Error> createError(Error error, const String& customLocalizedDescription = { }, RefPtr<API::Error> underlyingError = nullptr);
+    void recordError(Ref<API::Error>);
+    void recordErrorIfNeeded(RefPtr<API::Error> error)
+    {
+        if (error)
+            recordError(*error);
+    }
 
-    NSArray *errors();
+    Vector<Ref<API::Error>> errors();
 
 #ifdef __OBJC__
     WKWebExtension *wrapper() const { return (WKWebExtension *)API::ObjectImpl<API::Object::Type::WebExtension>::wrapper(); }
@@ -348,7 +363,7 @@ private:
 
     NSURL *resourceFileURLForPath(NSString *);
 
-    std::optional<WebExtension::DeclarativeNetRequestRulesetData> parseDeclarativeNetRequestRulesetDictionary(NSDictionary *, NSError **);
+    std::optional<WebExtension::DeclarativeNetRequestRulesetData> parseDeclarativeNetRequestRulesetDictionary(NSDictionary *, RefPtr<API::Error>&);
 
     InjectedContentVector m_staticInjectedContents;
     WebAccessibleResourcesVector m_webAccessibleResources;
@@ -373,7 +388,7 @@ private:
     RetainPtr<NSLocale> m_defaultLocale;
     RetainPtr<_WKWebExtensionLocalization> m_localization;
 
-    RetainPtr<NSMutableArray> m_errors;
+    Vector<Ref<API::Error>> m_errors;
 
     String m_displayName;
     String m_displayShortName;
@@ -408,6 +423,9 @@ private:
     String m_optionsPagePath;
     String m_overrideNewTabPagePath;
 
+#if PLATFORM(MAC)
+    bool m_shouldValidateResourceData : 1 { true };
+#endif
     bool m_backgroundContentIsPersistent : 1 { false };
     bool m_backgroundContentUsesModules : 1 { false };
     bool m_parsedManifest : 1 { false };

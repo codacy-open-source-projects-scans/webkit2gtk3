@@ -133,10 +133,6 @@
 #include <wtf/text/MakeString.h>
 #include <wtf/text/TextStream.h>
 
-#if USE(COORDINATED_GRAPHICS)
-#include "TiledBackingStore.h"
-#endif
-
 #if PLATFORM(IOS_FAMILY)
 #include "DocumentLoader.h"
 #include "LegacyTileCache.h"
@@ -772,22 +768,22 @@ void LocalFrameView::willRecalcStyle()
 void LocalFrameView::styleAndRenderTreeDidChange()
 {
     ScrollView::styleAndRenderTreeDidChange();
-    auto* renderView = this->renderView();
-    if (!renderView)
+    if (!renderView())
         return;
 
     checkAndDispatchDidReachVisuallyNonEmptyState();
-    auto* layerTreeMutationRoot = renderView->takeStyleChangeLayerTreeMutationRoot();
-    if (layerTreeMutationRoot && !needsLayout())
-        layerTreeMutationRoot->updateLayerPositionsAfterStyleChange();
 }
 
 bool LocalFrameView::updateCompositingLayersAfterStyleChange()
 {
     // If we expect to update compositing after an incipient layout, don't do so here.
-    if (!renderView() || needsLayout() || layoutContext().isInLayout())
+    auto* renderView = this->renderView();
+    if (!renderView)
         return false;
-    return renderView()->compositor().didRecalcStyleWithNoPendingLayout();
+    if (needsLayout() || layoutContext().isInLayout())
+        return false;
+    renderView->layer()->updateLayerPositionsAfterStyleChange();
+    return renderView->compositor().didRecalcStyleWithNoPendingLayout();
 }
 
 void LocalFrameView::updateCompositingLayersAfterLayout()
@@ -858,15 +854,15 @@ TiledBacking* LocalFrameView::tiledBacking() const
     return backing->tiledBacking();
 }
 
-ScrollingNodeID LocalFrameView::scrollingNodeID() const
+std::optional<ScrollingNodeID> LocalFrameView::scrollingNodeID() const
 {
     RenderView* renderView = this->renderView();
     if (!renderView)
-        return { };
+        return std::nullopt;
 
     RenderLayerBacking* backing = renderView->layer()->backing();
     if (!backing)
-        return { };
+        return std::nullopt;
 
     return backing->scrollingNodeIDForRole(ScrollCoordinationRole::Scrolling);
 }
@@ -1313,13 +1309,8 @@ void LocalFrameView::flushUpdateLayerPositions()
 
     UpdateLayerPositions updateLayerPositions = *std::exchange(m_pendingUpdateLayerPositions, std::nullopt);
 
-    WeakPtr layoutRoot = updateLayerPositions.layoutRoot;
-    if (!layoutRoot)
-        layoutRoot = renderView();
-
-    if (layoutRoot) {
-        CheckedPtr enclosingLayer = layoutRoot->enclosingLayer();
-        enclosingLayer->updateLayerPositionsAfterLayout(updateLayerPositions.layoutIdentifier, !is<RenderView>(*layoutRoot), updateLayerPositions.needsFullRepaint, updateLayerPositions.didRunSimplifiedLayout ? RenderLayer::CanUseSimplifiedRepaintPass::Yes : RenderLayer::CanUseSimplifiedRepaintPass::No);
+    if (CheckedPtr view = renderView()) {
+        view->layer()->updateLayerPositionsAfterLayout(updateLayerPositions.layoutIdentifier, updateLayerPositions.needsFullRepaint, updateLayerPositions.didRunSimplifiedLayout ? RenderLayer::CanUseSimplifiedRepaintPass::Yes : RenderLayer::CanUseSimplifiedRepaintPass::No);
         m_renderLayerPositionUpdateCount++;
     }
 }
@@ -1329,11 +1320,11 @@ void LocalFrameView::didLayout(SingleThreadWeakPtr<RenderElement> layoutRoot, bo
     ScriptDisallowedScope::InMainThread scriptDisallowedScope;
     m_layoutUpdateCount++;
 
-    UpdateLayerPositions updateLayerPositions { layoutRoot, layoutContext().layoutIdentifier(), layoutContext().needsFullRepaint(), didRunSimplifiedLayout };
-    if (!m_pendingUpdateLayerPositions || !m_pendingUpdateLayerPositions->merge(updateLayerPositions)) {
-        flushUpdateLayerPositions();
+    UpdateLayerPositions updateLayerPositions { layoutContext().layoutIdentifier(), layoutContext().needsFullRepaint(), didRunSimplifiedLayout };
+    if (m_pendingUpdateLayerPositions)
+        m_pendingUpdateLayerPositions->merge(updateLayerPositions);
+    else
         m_pendingUpdateLayerPositions = updateLayerPositions;
-    }
 
     if (!canDeferUpdateLayerPositions)
         flushUpdateLayerPositions();
@@ -1345,6 +1336,8 @@ void LocalFrameView::didLayout(SingleThreadWeakPtr<RenderElement> layoutRoot, bo
 #if PLATFORM(COCOA) || PLATFORM(WIN) || PLATFORM(GTK)
     if (CheckedPtr cache = document->existingAXObjectCache())
         cache->postNotification(layoutRoot.get(), AXObjectCache::AXLayoutComplete);
+#else
+    UNUSED_PARAM(layoutRoot);
 #endif
 
     m_frame->invalidateContentEventRegionsIfNeeded(LocalFrame::InvalidateContentEventRegionsReason::Layout);
@@ -5522,7 +5515,7 @@ bool LocalFrameView::handleWheelEventForScrolling(const PlatformWheelEvent& whee
 #if ENABLE(ASYNC_SCROLLING)
     if (RefPtr scrollingCoordinator = this->scrollingCoordinator()) {
         if (scrollingCoordinator->coordinatesScrollingForFrameView(*this)) {
-            auto result = scrollingCoordinator->handleWheelEventForScrolling(wheelEvent, scrollingNodeID(), gestureState);
+            auto result = scrollingCoordinator->handleWheelEventForScrolling(wheelEvent, *scrollingNodeID(), gestureState);
             if (!result.needsMainThreadProcessing())
                 return result.wasHandled;
         }

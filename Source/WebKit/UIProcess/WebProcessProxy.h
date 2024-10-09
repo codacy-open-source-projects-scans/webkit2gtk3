@@ -186,7 +186,8 @@ public:
     WebProcessPool& processPool() const;
     Ref<WebProcessPool> protectedProcessPool() const;
 
-    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const { return m_sharedPreferencesForWebProcess; }
+    std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess() const { return m_sharedPreferencesForWebProcess; }
+    SharedPreferencesForWebProcess sharedPreferencesForWebProcessValue() const { return m_sharedPreferencesForWebProcess; }
     std::optional<SharedPreferencesForWebProcess> updateSharedPreferencesForWebProcess(const WebPreferencesStore&);
     void didSyncSharedPreferencesForWebProcessWithNetworkProcess(uint64_t syncedPreferencesVersion);
 #if ENABLE(GPU_PROCESS)
@@ -560,7 +561,7 @@ private:
     void platformDestroy();
 
     // IPC message handlers.
-    void updateBackForwardItem(FrameState&&);
+    void updateBackForwardItem(Ref<FrameState>&&);
     void didDestroyFrame(IPC::Connection&, WebCore::FrameIdentifier, WebPageProxyIdentifier);
     void didDestroyUserGestureToken(WebCore::PageIdentifier, uint64_t);
 
@@ -731,7 +732,7 @@ private:
 #endif
 
 #if PLATFORM(WATCHOS)
-    std::unique_ptr<ProcessThrottler::BackgroundActivity> m_backgroundActivityForFullscreenFormControls;
+    RefPtr<ProcessThrottler::BackgroundActivity> m_backgroundActivityForFullscreenFormControls;
 #endif
 
 #if PLATFORM(COCOA)
@@ -743,7 +744,7 @@ private:
         WebPageProxyIdentifier remoteWorkerPageProxyID;
         WebCore::PageIdentifier remoteWorkerPageID;
         RemoteWorkerInitializationData initializationData;
-        ProcessThrottler::ActivityVariant activity;
+        RefPtr<ProcessThrottler::Activity> activity;
         WeakHashSet<WebProcessProxy> clientProcesses;
     };
     std::optional<RemoteWorkerInformation> m_serviceWorkerInformation;

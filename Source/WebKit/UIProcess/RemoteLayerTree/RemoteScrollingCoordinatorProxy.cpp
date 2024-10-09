@@ -39,11 +39,14 @@
 #include "WebPageProxy.h"
 #include "WebProcessProxy.h"
 #include <WebCore/PerformanceLoggingClient.h>
-#include <WebCore/RuntimeApplicationChecks.h>
 #include <WebCore/ScrollingStateTree.h>
 #include <WebCore/ScrollingTreeFrameScrollingNode.h>
+#include <wtf/RuntimeApplicationChecks.h>
 #include <wtf/TZoneMallocInlines.h>
+
+#if PLATFORM(IOS_FAMILY)
 #include <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
+#endif
 
 namespace WebKit {
 using namespace WebCore;
@@ -73,11 +76,11 @@ Ref<WebPageProxy> RemoteScrollingCoordinatorProxy::protectedWebPageProxy() const
     return m_webPageProxy.get();
 }
 
-ScrollingNodeID RemoteScrollingCoordinatorProxy::rootScrollingNodeID() const
+std::optional<ScrollingNodeID> RemoteScrollingCoordinatorProxy::rootScrollingNodeID() const
 {
     // FIXME: Locking
     if (!m_scrollingTree->rootNode())
-        return { };
+        return std::nullopt;
 
     return m_scrollingTree->rootNode()->scrollingNodeID();
 }
@@ -350,7 +353,7 @@ bool RemoteScrollingCoordinatorProxy::hasScrollableOrZoomedMainFrame() const
         return false;
 
 #if PLATFORM(IOS_FAMILY)
-    if (WebCore::IOSApplication::isEventbrite() && !linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::SupportsOverflowHiddenOnMainFrame))
+    if (WTF::IOSApplication::isEventbrite() && !linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::SupportsOverflowHiddenOnMainFrame))
         return true;
 #endif
 
@@ -428,7 +431,7 @@ bool RemoteScrollingCoordinatorProxy::overlayScrollbarsEnabled()
     return m_scrollingTree->overlayScrollbarsEnabled();
 }
 
-String RemoteScrollingCoordinatorProxy::scrollbarStateForScrollingNodeID(WebCore::ScrollingNodeID scrollingNodeID, bool isVertical)
+String RemoteScrollingCoordinatorProxy::scrollbarStateForScrollingNodeID(std::optional<WebCore::ScrollingNodeID> scrollingNodeID, bool isVertical)
 {
     if (auto node = m_scrollingTree->nodeForID(scrollingNodeID)) {
         if (auto* scrollingNode = dynamicDowncast<ScrollingTreeScrollingNode>(*node))

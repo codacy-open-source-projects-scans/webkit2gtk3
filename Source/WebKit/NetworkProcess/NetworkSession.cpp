@@ -55,9 +55,9 @@
 #include "WebSocketTask.h"
 #include <WebCore/CookieJar.h>
 #include <WebCore/ResourceRequest.h>
-#include <WebCore/RuntimeApplicationChecks.h>
 #include <WebCore/SWServer.h>
 #include <numeric>
+#include <wtf/RuntimeApplicationChecks.h>
 #include <wtf/TZoneMallocInlines.h>
 
 #if PLATFORM(COCOA)
@@ -401,7 +401,7 @@ void NetworkSession::handlePrivateClickMeasurementConversion(WebCore::PCM::Attri
     String appBundleID = WTFMove(attributedBundleIdentifier);
 #if PLATFORM(COCOA)
     if (appBundleID.isEmpty())
-        appBundleID = WebCore::applicationBundleIdentifier();
+        appBundleID = applicationBundleIdentifier();
 #endif
 
     if (!m_ephemeralMeasurement && m_sessionID.isEphemeral())
@@ -535,10 +535,10 @@ void NetworkSession::allowTLSCertificateChainForLocalPCMTesting(const WebCore::C
 void NetworkSession::setPrivateClickMeasurementAppBundleIDForTesting(String&& appBundleIDForTesting)
 {
 #if PLATFORM(COCOA)
-    auto appBundleID = WebCore::applicationBundleIdentifier();
+    auto appBundleID = applicationBundleIdentifier();
     if (!isRunningTest(appBundleID))
         WTFLogAlways("isRunningTest() returned false. appBundleID is %s.", appBundleID.isEmpty() ? "empty" : appBundleID.utf8().data());
-    RELEASE_ASSERT(isRunningTest(WebCore::applicationBundleIdentifier()));
+    RELEASE_ASSERT(isRunningTest(applicationBundleIdentifier()));
 #endif
     privateClickMeasurement().setPrivateClickMeasurementAppBundleIDForTesting(WTFMove(appBundleIDForTesting));
 }
@@ -693,6 +693,11 @@ SWServer& NetworkSession::ensureSWServer()
     return *m_swServer;
 }
 
+Ref<SWServer> NetworkSession::ensureProtectedSWServer()
+{
+    return ensureSWServer();
+}
+
 bool NetworkSession::hasServiceWorkerDatabasePath() const
 {
     return m_serviceWorkerInfo && !m_serviceWorkerInfo->databasePath.isEmpty();
@@ -804,12 +809,12 @@ void NetworkSession::addAllowedFirstPartyForCookies(WebCore::ProcessIdentifier w
     m_networkProcess->addAllowedFirstPartyForCookies(webProcessIdentifier, WTFMove(firstPartyForCookies), LoadedWebArchive::No, [] { });
 }
 
-std::unique_ptr<SWRegistrationStore> NetworkSession::createUniqueRegistrationStore(WebCore::SWServer& server)
+RefPtr<SWRegistrationStore> NetworkSession::createRegistrationStore(WebCore::SWServer& server)
 {
     if (m_sessionID.isEphemeral())
         return nullptr;
 
-    return makeUnique<WebSWRegistrationStore>(server, m_storageManager.get());
+    return WebSWRegistrationStore::create(server, m_storageManager.get());
 }
 
 RefPtr<BackgroundFetchRecordLoader> NetworkSession::createBackgroundFetchRecordLoader(BackgroundFetchRecordLoaderClient& client, const WebCore::BackgroundFetchRequest& request, size_t responseDataSize, const ClientOrigin& clientOrigin)

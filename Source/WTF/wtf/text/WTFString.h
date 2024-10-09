@@ -96,15 +96,15 @@ public:
     bool isNull() const { return !m_impl; }
     bool isEmpty() const { return !m_impl || m_impl->isEmpty(); }
 
-    StringImpl* impl() const { return m_impl.get(); }
+    StringImpl* impl() const LIFETIME_BOUND { return m_impl.get(); }
     RefPtr<StringImpl> releaseImpl() { return WTFMove(m_impl); }
 
     unsigned length() const { return m_impl ? m_impl->length() : 0; }
-    std::span<const LChar> span8() const { return m_impl ? m_impl->span8() : std::span<const LChar>(); }
-    std::span<const UChar> span16() const { return m_impl ? m_impl->span16() : std::span<const UChar>(); }
+    std::span<const LChar> span8() const LIFETIME_BOUND { return m_impl ? m_impl->span8() : std::span<const LChar>(); }
+    std::span<const UChar> span16() const LIFETIME_BOUND { return m_impl ? m_impl->span16() : std::span<const UChar>(); }
 
     // Return span8() or span16() depending on CharacterType.
-    template<typename CharacterType> std::span<const CharacterType> span() const;
+    template<typename CharacterType> std::span<const CharacterType> span() const LIFETIME_BOUND;
 
     bool is8Bit() const { return !m_impl || m_impl->is8Bit(); }
 
@@ -556,12 +556,15 @@ inline bool startsWithLettersIgnoringASCIICase(const String& string, ASCIILitera
 
 inline namespace StringLiterals {
 
+#ifndef __swift__
+// Swift will import this as global and then all literals will be WTF.String
+// instead of Swift.String
 inline String operator"" _str(const char* characters, size_t)
 {
     return ASCIILiteral::fromLiteralUnsafe(characters);
 }
 
-#ifndef __swift__ // FIXME: rdar://136156228
+// FIXME: rdar://136156228
 inline String operator"" _str(const UChar* characters, size_t length)
 {
     return String({ characters, length });

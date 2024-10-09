@@ -86,11 +86,11 @@ void RemoteCDMProxy::getSupportedConfiguration(WebCore::CDMKeySystemConfiguratio
     m_private->getSupportedConfiguration(WTFMove(configuration), access, WTFMove(callback));
 }
 
-void RemoteCDMProxy::createInstance(CompletionHandler<void(RemoteCDMInstanceIdentifier, RemoteCDMInstanceConfiguration&&)>&& completion)
+void RemoteCDMProxy::createInstance(CompletionHandler<void(std::optional<RemoteCDMInstanceIdentifier>, RemoteCDMInstanceConfiguration&&)>&& completion)
 {
     auto privateInstance = m_private->createInstance();
     if (!privateInstance || !m_factory) {
-        completion({ }, { });
+        completion(std::nullopt, { });
         return;
     }
     auto identifier = RemoteCDMInstanceIdentifier::generate();
@@ -116,9 +116,13 @@ void RemoteCDMProxy::setLogIdentifier(uint64_t logIdentifier)
 #endif
 }
 
-const SharedPreferencesForWebProcess& RemoteCDMProxy::sharedPreferencesForWebProcess() const
+std::optional<SharedPreferencesForWebProcess> RemoteCDMProxy::sharedPreferencesForWebProcess() const
 {
-    return protectedFactory()->sharedPreferencesForWebProcess();
+    if (!m_factory)
+        return std::nullopt;
+
+    // FIXME: Remove SUPPRESS_UNCOUNTED_ARG once https://github.com/llvm/llvm-project/pull/111198 lands.
+    SUPPRESS_UNCOUNTED_ARG return m_factory->sharedPreferencesForWebProcess();
 }
 
 }

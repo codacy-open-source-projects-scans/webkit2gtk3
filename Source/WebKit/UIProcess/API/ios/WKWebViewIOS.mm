@@ -65,11 +65,11 @@
 #import "_WKActivatedElementInfoInternal.h"
 #import "_WKWarningView.h"
 #import <WebCore/ColorCocoa.h>
+#import <WebCore/ContentsFormatCocoa.h>
 #import <WebCore/GraphicsContextCG.h>
 #import <WebCore/IOSurfacePool.h>
 #import <WebCore/LocalCurrentTraitCollection.h>
 #import <WebCore/MIMETypeRegistry.h>
-#import <WebCore/RuntimeApplicationChecks.h>
 #import <WebCore/UserInterfaceLayoutDirection.h>
 #import <pal/spi/cocoa/QuartzCoreSPI.h>
 #import <pal/spi/ios/GraphicsServicesSPI.h>
@@ -79,6 +79,7 @@
 #import <wtf/FixedVector.h>
 #import <wtf/NeverDestroyed.h>
 #import <wtf/RefCounted.h>
+#import <wtf/RuntimeApplicationChecks.h>
 #import <wtf/SystemTracing.h>
 #import <wtf/cf/TypeCastsCF.h>
 #import <wtf/cocoa/Entitlements.h>
@@ -1448,16 +1449,13 @@ static void configureScrollViewWithOverlayRegionsIDs(WKBaseScrollView* scrollVie
     if (snapshotSize.isEmpty())
         return nullptr;
 
-    CATransform3D transform = CATransform3DMakeScale(deviceScale, deviceScale, 1);
+    auto transform = CATransform3DMakeScale(deviceScale, deviceScale, 1);
 
-#if HAVE(IOSURFACE_RGB10)
-    WebCore::IOSurface::Format snapshotFormat = WebCore::screenSupportsExtendedColor() ? WebCore::IOSurface::Format::RGB10 : WebCore::IOSurface::Format::BGRA;
-#else
-    WebCore::IOSurface::Format snapshotFormat = WebCore::IOSurface::Format::BGRA;
-#endif
+    auto snapshotFormat = WebCore::convertToIOSurfaceFormat(WebCore::screenContentsFormat());
     auto surface = WebCore::IOSurface::create(nullptr, WebCore::expandedIntSize(snapshotSize), WebCore::DestinationColorSpace::SRGB(), WebCore::IOSurface::Name::Snapshot, snapshotFormat);
     if (!surface)
         return nullptr;
+
     CARenderServerRenderLayerWithTransform(MACH_PORT_NULL, self.layer.context.contextId, reinterpret_cast<uint64_t>(self.layer), surface->surface(), 0, 0, &transform);
 
 #if HAVE(IOSURFACE_ACCELERATOR)
@@ -3633,7 +3631,7 @@ static bool isLockdownModeWarningNeeded()
 {
     // Only present the alert if the app is not Safari
     // and we've never presented the alert before
-    if (WebCore::IOSApplication::isMobileSafari())
+    if (WTF::IOSApplication::isMobileSafari())
         return false;
 
     if (![WKProcessPool _lockdownModeEnabledGloballyForTesting] || [[NSUserDefaults standardUserDefaults] boolForKey:WebKitLockdownModeAlertShownKey])
@@ -3860,7 +3858,7 @@ static bool isLockdownModeWarningNeeded()
             WebCore::PrivateClickMeasurement::SourceID(attribution.sourceIdentifier),
             WebCore::PCM::SourceSite(attribution.reportEndpoint),
             WebCore::PCM::AttributionDestinationSite(attribution.destinationURL),
-            WebCore::applicationBundleIdentifier(),
+            applicationBundleIdentifier(),
             WallTime::now(),
             WebCore::PCM::AttributionEphemeral::No
         );

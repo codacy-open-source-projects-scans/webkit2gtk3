@@ -72,13 +72,13 @@
 #import <WebCore/NotImplemented.h>
 #import <WebCore/PlatformScreen.h>
 #import <WebCore/Quirks.h>
-#import <WebCore/RuntimeApplicationChecks.h>
 #import <WebCore/ShareableResource.h>
 #import <WebCore/SharedBuffer.h>
 #import <WebCore/UserAgent.h>
 #import <WebCore/ValidationBubble.h>
 #import <pal/spi/ios/MobileGestaltSPI.h>
 #import <pal/system/ios/UserInterfaceIdiom.h>
+#import <wtf/RuntimeApplicationChecks.h>
 #import <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
 #import <wtf/cocoa/SpanCocoa.h>
 #import <wtf/text/TextStream.h>
@@ -268,13 +268,13 @@ void WebPageProxy::scrollingNodeScrollViewWillStartPanGesture(ScrollingNodeID no
 void WebPageProxy::scrollingNodeScrollWillStartScroll(std::optional<ScrollingNodeID> nodeID)
 {
     if (RefPtr pageClient = this->pageClient())
-        pageClient->scrollingNodeScrollWillStartScroll(nodeID.value_or(ScrollingNodeID { }));
+        pageClient->scrollingNodeScrollWillStartScroll(nodeID);
 }
 
 void WebPageProxy::scrollingNodeScrollDidEndScroll(std::optional<ScrollingNodeID> nodeID)
 {
     if (RefPtr pageClient = this->pageClient())
-        pageClient->scrollingNodeScrollDidEndScroll(nodeID.value_or(ScrollingNodeID { }));
+        pageClient->scrollingNodeScrollDidEndScroll(nodeID);
 }
 
 void WebPageProxy::dynamicViewportSizeUpdate(const DynamicViewportSizeUpdate& target)

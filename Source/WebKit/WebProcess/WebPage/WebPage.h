@@ -1519,7 +1519,7 @@ public:
     void getTextFragmentMatch(CompletionHandler<void(const String&)>&&);
 
 #if USE(WPE_RENDERER)
-    int hostFileDescriptor() const { return m_hostFileDescriptor.value(); }
+    UnixFileDescriptor hostFileDescriptor() const { return m_hostFileDescriptor.duplicate(); }
 #endif
 
     void updateCurrentModifierState(OptionSet<WebCore::PlatformEvent::Modifier> modifiers);
@@ -2005,11 +2005,11 @@ private:
     void loadDataInFrame(std::span<const uint8_t>, String&& MIMEType, String&& encodingName, URL&& baseURL, WebCore::FrameIdentifier);
 
     enum class WasRestoredByAPIRequest : bool { No, Yes };
-    void restoreSessionInternal(const Vector<FrameState>&, WasRestoredByAPIRequest, WebBackForwardListProxy::OverwriteExistingItem);
-    void restoreSession(const Vector<FrameState>&);
+    void restoreSessionInternal(const Vector<Ref<FrameState>>&, WasRestoredByAPIRequest, WebBackForwardListProxy::OverwriteExistingItem);
+    void restoreSession(const Vector<Ref<FrameState>>&);
     void didRemoveBackForwardItem(const WebCore::BackForwardItemIdentifier&);
-    void updateBackForwardListForReattach(const Vector<FrameState>&);
-    void setCurrentHistoryItemForReattach(FrameState&&);
+    void updateBackForwardListForReattach(const Vector<Ref<FrameState>>&);
+    void setCurrentHistoryItemForReattach(Ref<FrameState>&&);
 
     void requestFontAttributesAtSelectionStart(CompletionHandler<void(const WebCore::FontAttributes&)>&&);
 
@@ -2332,6 +2332,7 @@ private:
 
     void remotePostMessage(WebCore::FrameIdentifier source, const String& sourceOrigin, WebCore::FrameIdentifier target, std::optional<WebCore::SecurityOriginData>&& targetOrigin, const WebCore::MessageWithMessagePorts&);
     void renderTreeAsTextForTesting(WebCore::FrameIdentifier, size_t baseIndent, OptionSet<WebCore::RenderAsTextFlag>, CompletionHandler<void(String&&)>&&);
+    void layerTreeAsTextForTesting(WebCore::FrameIdentifier, size_t baseIndent, OptionSet<WebCore::LayerTreeAsTextOptions>, CompletionHandler<void(String&&)>&&);
     void frameTextForTesting(WebCore::FrameIdentifier, CompletionHandler<void(String&&)>&&);
     void bindRemoteAccessibilityFrames(int processIdentifier, WebCore::FrameIdentifier, Vector<uint8_t>, CompletionHandler<void(Vector<uint8_t>, int)>&&);
     void updateRemotePageAccessibilityOffset(WebCore::FrameIdentifier, WebCore::IntPoint);

@@ -1089,20 +1089,20 @@ bool WebProcessProxy::isAllowedToUpdateBackForwardItem(WebBackForwardListItem& i
     return false;
 }
 
-void WebProcessProxy::updateBackForwardItem(FrameState&& mainFrameState)
+void WebProcessProxy::updateBackForwardItem(Ref<FrameState>&& mainFrameState)
 {
-    RefPtr item = WebBackForwardListItem::itemForID(mainFrameState.identifier);
+    RefPtr item = mainFrameState->identifier ? WebBackForwardListItem::itemForID(*mainFrameState->identifier) : nullptr;
     if (!item || !isAllowedToUpdateBackForwardItem(*item))
         return;
 
-    if (!!item->backForwardCacheEntry() != mainFrameState.hasCachedPage) {
-        if (mainFrameState.hasCachedPage)
+    if (!!item->backForwardCacheEntry() != mainFrameState->hasCachedPage) {
+        if (mainFrameState->hasCachedPage)
             protectedProcessPool()->checkedBackForwardCache()->addEntry(*item, coreProcessIdentifier());
         else if (!item->suspendedPage())
             protectedProcessPool()->checkedBackForwardCache()->removeEntry(*item);
     }
 
-    item->setMainFrameState(WTFMove(mainFrameState));
+    item->setRootFrameState(WTFMove(mainFrameState));
 }
 
 void WebProcessProxy::getNetworkProcessConnection(CompletionHandler<void(NetworkProcessConnectionInfo&&)>&& reply)
@@ -1168,7 +1168,7 @@ void WebProcessProxy::createModelProcessConnection(IPC::Connection::Handle&& con
         anyPageHasModelProcessEnabled |= page->preferences().modelElementEnabled() && page->preferences().modelProcessEnabled();
     MESSAGE_CHECK(anyPageHasModelProcessEnabled);
 
-    parameters.sharedPreferencesForWebProcess = sharedPreferencesForWebProcess();
+    parameters.sharedPreferencesForWebProcess = m_sharedPreferencesForWebProcess;
     MESSAGE_CHECK(parameters.sharedPreferencesForWebProcess.modelElementEnabled);
     MESSAGE_CHECK(parameters.sharedPreferencesForWebProcess.modelProcessEnabled);
 
@@ -1228,13 +1228,8 @@ bool WebProcessProxy::dispatchSyncMessage(IPC::Connection& connection, IPC::Deco
     if (protectedProcessPool()->dispatchSyncMessage(connection, decoder, replyEncoder))
         return true;
     // WebProcessProxy will receive messages to instances that were removed from
-    // the message receiver map. Filter these out by sending the cancel reply.
-#if ENABLE(IPC_TESTING_API)
-    if (!decoder.isValid())
-        replyEncoder->setSyncMessageDeserializationFailure();
-#endif
-    connection.sendSyncReply(WTFMove(replyEncoder));
-
+    // the message receiver map. Mark all messages as handled. Unreplied messages
+    // will be cancelled by the caller.
     return true;
 }
 
@@ -1304,7 +1299,7 @@ void WebProcessProxy::processDidTerminateOrFailedToLaunch(ProcessTerminationReas
     }
 
     for (auto& page : pages)
-        page->dispatchProcessDidTerminate(reason);
+        page->dispatchProcessDidTerminate(*this, reason);
 
     for (auto& remotePage : m_remotePages)
         remotePage.processDidTerminate(coreProcessIdentifier());
@@ -2072,14 +2067,14 @@ void WebProcessProxy::didExceedMemoryFootprintThreshold(size_t footprint)
     bool wasPrivateRelayed = false;
     bool hasAllowedToRunInTheBackgroundActivity = false;
 
-    for (auto& page : this->pages()) {
+    for (Ref page : this->pages()) {
         auto pageDomain = PublicSuffixStore::singleton().topPrivatelyControlledDomain(URL({ }, page->currentURL()).host());
         if (domain.isEmpty())
             domain = WTFMove(pageDomain);
         else if (domain != pageDomain)
             domain = "multiple"_s;
 
-        wasPrivateRelayed = wasPrivateRelayed || page->pageLoadState().wasPrivateRelayed();
+        wasPrivateRelayed = wasPrivateRelayed || page->protectedPageLoadState()->wasPrivateRelayed();
         hasAllowedToRunInTheBackgroundActivity = hasAllowedToRunInTheBackgroundActivity || page->hasAllowedToRunInTheBackgroundActivity();
     }
 
@@ -2440,7 +2435,7 @@ void WebProcessProxy::startBackgroundActivityForFullscreenInput()
     if (m_backgroundActivityForFullscreenFormControls)
         return;
 
-    m_backgroundActivityForFullscreenFormControls = throttler().backgroundActivity("Fullscreen input"_s).moveToUniquePtr();
+    m_backgroundActivityForFullscreenFormControls = throttler().backgroundActivity("Fullscreen input"_s);
     WEBPROCESSPROXY_RELEASE_LOG(ProcessSuspension, "startBackgroundActivityForFullscreenInput: UIProcess is taking a background assertion because it is presenting fullscreen UI for form controls.");
 }
 
@@ -2501,7 +2496,7 @@ void WebProcessProxy::updateRemoteWorkerProcessAssertion(RemoteWorkerType worker
         return &process != this && !!process.m_foregroundToken;
     });
     if (shouldTakeForegroundActivity) {
-        if (!ProcessThrottler::isValidForegroundActivity(workerInformation->activity))
+        if (!ProcessThrottler::isValidForegroundActivity(workerInformation->activity.get()))
             workerInformation->activity = protectedThrottler()->foregroundActivity("Worker for foreground view(s)"_s);
         return;
     }
@@ -2510,14 +2505,14 @@ void WebProcessProxy::updateRemoteWorkerProcessAssertion(RemoteWorkerType worker
         return &process != this && !!process.m_backgroundToken;
     });
     if (shouldTakeBackgroundActivity) {
-        if (!ProcessThrottler::isValidBackgroundActivity(workerInformation->activity))
+        if (!ProcessThrottler::isValidBackgroundActivity(workerInformation->activity.get()))
             workerInformation->activity = protectedThrottler()->backgroundActivity("Worker for background view(s)"_s);
         return;
     }
 
     if (workerType == RemoteWorkerType::ServiceWorker && m_hasServiceWorkerBackgroundProcessing) {
         WEBPROCESSPROXY_RELEASE_LOG(ProcessSuspension, "Service Worker for background processing");
-        if (!ProcessThrottler::isValidBackgroundActivity(workerInformation->activity))
+        if (!ProcessThrottler::isValidBackgroundActivity(workerInformation->activity.get()))
             workerInformation->activity = protectedThrottler()->backgroundActivity("Service Worker for background processing"_s);
         return;
     }
@@ -2549,12 +2544,12 @@ void WebProcessProxy::unregisterRemoteWorkerClientProcess(RemoteWorkerType worke
 
 bool WebProcessProxy::hasServiceWorkerForegroundActivityForTesting() const
 {
-    return m_serviceWorkerInformation ? ProcessThrottler::isValidForegroundActivity(m_serviceWorkerInformation->activity) : false;
+    return m_serviceWorkerInformation && ProcessThrottler::isValidForegroundActivity(m_serviceWorkerInformation->activity.get());
 }
 
 bool WebProcessProxy::hasServiceWorkerBackgroundActivityForTesting() const
 {
-    return m_serviceWorkerInformation ? ProcessThrottler::isValidBackgroundActivity(m_serviceWorkerInformation->activity) : false;
+    return m_serviceWorkerInformation && ProcessThrottler::isValidBackgroundActivity(m_serviceWorkerInformation->activity.get());
 }
 
 void WebProcessProxy::startServiceWorkerBackgroundProcessing()

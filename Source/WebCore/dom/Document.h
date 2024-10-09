@@ -360,9 +360,7 @@ enum class NodeListInvalidationType : uint8_t {
 const auto numNodeListInvalidationTypes = enumToUnderlyingType(NodeListInvalidationType::InvalidateOnAnyAttrChange) + 1;
 
 enum class EventHandlerRemoval : bool { One, All };
-
-// Not using a WeakHashCountedSet for performance reasons (rdar://136905905).
-using EventTargetSet = HashCountedSet<CheckedPtr<Node>>;
+using EventTargetSet = WeakHashCountedSet<Node, WeakPtrImplWithEventTargetData>;
 
 enum class DocumentCompatibilityMode : uint8_t {
     NoQuirksMode = 1,
@@ -1489,8 +1487,8 @@ public:
     WEBCORE_EXPORT unsigned styleRecalcCount() const;
 
 #if ENABLE(TOUCH_EVENTS)
-    bool hasTouchEventHandlers() const { return m_touchEventTargets && m_touchEventTargets->size(); }
-    bool touchEventTargetsContain(Node& node) const { return m_touchEventTargets && m_touchEventTargets->contains(&node); }
+    bool hasTouchEventHandlers() const { return m_touchEventTargets && !m_touchEventTargets->isEmptyIgnoringNullReferences(); }
+    bool touchEventTargetsContain(Node& node) const { return m_touchEventTargets && m_touchEventTargets->contains(node); }
 #else
     bool hasTouchEventHandlers() const { return false; }
     bool touchEventTargetsContain(Node&) const { return false; }
@@ -1524,7 +1522,7 @@ public:
 #endif
     }
 
-    bool hasWheelEventHandlers() const { return m_wheelEventTargets && m_wheelEventTargets->size(); }
+    bool hasWheelEventHandlers() const { return m_wheelEventTargets && !m_wheelEventTargets->isEmptyIgnoringNullReferences(); }
     const EventTargetSet* wheelEventTargets() const { return m_wheelEventTargets.get(); }
 
     using RegionFixedPair = std::pair<Region, bool>;
@@ -1988,7 +1986,7 @@ protected:
         Synthesized = 1 << 0,
         NonRenderedPlaceholder = 1 << 1
     };
-    WEBCORE_EXPORT Document(LocalFrame*, const Settings&, const URL&, DocumentClasses = { }, OptionSet<ConstructionFlag> = { }, ScriptExecutionContextIdentifier = { });
+    WEBCORE_EXPORT Document(LocalFrame*, const Settings&, const URL&, DocumentClasses = { }, OptionSet<ConstructionFlag> = { }, std::optional<ScriptExecutionContextIdentifier> = std::nullopt);
 
     void clearXMLVersion() { m_xmlVersion = String(); }
 

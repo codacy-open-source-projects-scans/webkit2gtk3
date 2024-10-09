@@ -165,7 +165,7 @@
 #if PLATFORM(IOS_FAMILY)
 #include "DocumentType.h"
 #include "ResourceLoader.h"
-#include "RuntimeApplicationChecks.h"
+#include <wtf/RuntimeApplicationChecks.h>
 #endif
 
 #define PAGE_ID (pageID() ? pageID()->toUInt64() : 0)
@@ -361,9 +361,9 @@ private:
     bool m_inProgress { false };
 };
 
-FrameLoader::FrameLoader(LocalFrame& frame, UniqueRef<LocalFrameLoaderClient>&& client)
+FrameLoader::FrameLoader(LocalFrame& frame, CompletionHandler<UniqueRef<LocalFrameLoaderClient>(LocalFrame&, FrameLoader&)>&& clientCreator)
     : m_frame(frame)
-    , m_client(WTFMove(client))
+    , m_client(clientCreator(frame, *this))
     , m_policyChecker(makeUnique<PolicyChecker>(frame))
     , m_notifier(frame)
     , m_subframeLoader(makeUnique<SubframeLoader>(frame))
@@ -380,6 +380,16 @@ FrameLoader::~FrameLoader()
 
     if (RefPtr networkingContext = m_networkingContext)
         networkingContext->invalidate();
+}
+
+void FrameLoader::ref() const
+{
+    m_frame->ref();
+}
+
+void FrameLoader::deref() const
+{
+    m_frame->deref();
 }
 
 LocalFrame& FrameLoader::frame() const
@@ -473,7 +483,7 @@ void FrameLoader::checkContentPolicy(const ResourceResponse& response, ContentPo
     }
 
     // FIXME: Validate the policy check identifier.
-    client().dispatchDecidePolicyForResponse(response, activeDocumentLoader()->request(), activeDocumentLoader()->downloadAttribute(), WTFMove(function));
+    protectedClient()->dispatchDecidePolicyForResponse(response, activeDocumentLoader()->request(), activeDocumentLoader()->downloadAttribute(), WTFMove(function));
 }
 
 void FrameLoader::changeLocation(const URL& url, const AtomString& passedTarget, Event* triggeringEvent, const ReferrerPolicy& referrerPolicy, ShouldOpenExternalURLsPolicy shouldOpenExternalURLsPolicy, std::optional<NewFrameOpenerPolicy> openerPolicy, const AtomString& downloadAttribute, std::optional<PrivateClickMeasurement>&& privateClickMeasurement, NavigationHistoryBehavior historyBehavior)
@@ -1037,7 +1047,7 @@ void FrameLoader::loadURLIntoChildFrame(const URL& url, const String& referer, L
 #if ENABLE(WEB_ARCHIVE) || ENABLE(MHTML)
     if (RefPtr activeLoader = activeDocumentLoader()) {
         if (RefPtr subframeArchive = activeLoader->popArchiveForSubframe(childFrame->tree().uniqueName(), url)) {
-            childFrame->checkedLoader()->loadArchive(subframeArchive.releaseNonNull());
+            childFrame->protectedLoader()->loadArchive(subframeArchive.releaseNonNull());
             return;
         }
     }
@@ -1048,7 +1058,7 @@ void FrameLoader::loadURLIntoChildFrame(const URL& url, const String& referer, L
     RefPtr parentItem = m_frame->history().currentItem();
     if (parentItem && parentItem->children().size() && isBackForwardLoadType(loadType()) && !m_frame->document()->loadEventFinished()) {
         if (RefPtr childItem = parentItem->childItemWithTarget(childFrame->tree().uniqueName())) {
-            CheckedRef childLoader = childFrame->loader();
+            Ref childLoader = childFrame->loader();
             childLoader->m_requestedHistoryItem = childItem;
             childLoader->loadDifferentDocumentItem(*childItem, nullptr, loadType(), MayAttemptCacheOnlyLoadForFormSubmissionItem, ShouldTreatAsContinuingLoad::No);
             return;
@@ -1062,7 +1072,7 @@ void FrameLoader::loadURLIntoChildFrame(const URL& url, const String& referer, L
     frameLoadRequest.setNewFrameOpenerPolicy(NewFrameOpenerPolicy::Suppress);
     frameLoadRequest.setLockBackForwardList(LockBackForwardList::Yes);
     frameLoadRequest.setIsInitialFrameSrcLoad(true);
-    childFrame->checkedLoader()->loadURL(WTFMove(frameLoadRequest), referer, FrameLoadType::RedirectWithLockedBackForwardList, nullptr, { }, std::nullopt, [] { });
+    childFrame->protectedLoader()->loadURL(WTFMove(frameLoadRequest), referer, FrameLoadType::RedirectWithLockedBackForwardList, nullptr, { }, std::nullopt, [] { });
 }
 
 #if ENABLE(WEB_ARCHIVE) || ENABLE(MHTML)
@@ -1223,10 +1233,10 @@ void FrameLoader::updateURLAndHistory(const URL& newURL, RefPtr<SerializedScript
 
     if (historyHandling == NavigationHistoryBehavior::Replace) {
         history->replaceState(WTFMove(stateObject), newURL.string());
-        client().dispatchDidReplaceStateWithinPage();
+        protectedClient()->dispatchDidReplaceStateWithinPage();
     } else {
         history->pushState(WTFMove(stateObject), newURL.string());
-        client().dispatchDidPushStateWithinPage();
+        protectedClient()->dispatchDidPushStateWithinPage();
     }
 }
 
@@ -1338,7 +1348,7 @@ void FrameLoader::completed()
 
     if (RefPtr parent = frame->tree().parent()) {
         if (RefPtr localParent = dynamicDowncast<LocalFrame>(parent.releaseNonNull()))
-            localParent->checkedLoader()->checkCompleted();
+            localParent->protectedLoader()->checkCompleted();
     }
 
     if (RefPtr view = frame->view())
@@ -1443,9 +1453,9 @@ void FrameLoader::loadFrameRequest(FrameLoadRequest&& request, Event* event, Ref
 
     auto finishLoadFrameRequest = [referrer, event, loadType] (Ref<LocalFrame>&& frame, FrameLoadRequest&& request, RefPtr<FormState>&& formState, std::optional<PrivateClickMeasurement>&& privateClickMeasurement, CompletionHandler<void()>&& completionHandler) mutable {
         if (request.resourceRequest().httpMethod() == "POST"_s)
-            frame->checkedLoader()->loadPostRequest(WTFMove(request), referrer, loadType, event, WTFMove(formState), WTFMove(completionHandler));
+            frame->protectedLoader()->loadPostRequest(WTFMove(request), referrer, loadType, event, WTFMove(formState), WTFMove(completionHandler));
         else
-            frame->checkedLoader()->loadURL(WTFMove(request), referrer, loadType, event, WTFMove(formState), WTFMove(privateClickMeasurement), WTFMove(completionHandler));
+            frame->protectedLoader()->loadURL(WTFMove(request), referrer, loadType, event, WTFMove(formState), WTFMove(privateClickMeasurement), WTFMove(completionHandler));
     };
 
     if (loadType == FrameLoadType::Reload) {
@@ -1534,7 +1544,7 @@ void FrameLoader::loadURL(FrameLoadRequest&& frameLoadRequest, const String& ref
     RefPtr targetFrame = isFormSubmission ? nullptr : dynamicDowncast<LocalFrame>(effectiveTargetFrame);
     if (targetFrame && targetFrame != frame.ptr()) {
         frameLoadRequest.setFrameName(selfTargetFrameName());
-        targetFrame->checkedLoader()->loadURL(WTFMove(frameLoadRequest), referrer, newLoadType, event, WTFMove(formState), WTFMove(privateClickMeasurement), completionHandlerCaller.release());
+        targetFrame->protectedLoader()->loadURL(WTFMove(frameLoadRequest), referrer, newLoadType, event, WTFMove(formState), WTFMove(privateClickMeasurement), completionHandlerCaller.release());
         return;
     }
 
@@ -1670,7 +1680,7 @@ void FrameLoader::load(FrameLoadRequest&& request)
         if (RefPtr frame = dynamicDowncast<LocalFrame>(findFrameForNavigation(request.frameName()))) {
             request.setShouldCheckNewWindowPolicy(false);
             if (&frame->loader() != this) {
-                frame->checkedLoader()->load(WTFMove(request));
+                frame->protectedLoader()->load(WTFMove(request));
                 return;
             }
         }
@@ -1908,7 +1918,7 @@ bool FrameLoader::willLoadMediaElementURL(URL& url, Node& initiatorNode)
 #if PLATFORM(IOS_FAMILY)
     // MobileStore depends on the iOS 4.0 era client delegate method because webView:resource:willSendRequest:redirectResponse:fromDataSource
     // doesn't let them tell when a load request is coming from a media element. See <rdar://problem/8266916> for more details.
-    if (IOSApplication::isMobileStore())
+    if (WTF::IOSApplication::isMobileStore())
         return m_client->shouldLoadMediaElementURL(url);
 #endif
 
@@ -2053,7 +2063,7 @@ void FrameLoader::stopAllLoaders(ClearProvisionalItem clearProvisionalItem, Stop
 
     for (RefPtr child = frame->tree().firstChild(); child; child = child->tree().nextSibling()) {
         if (RefPtr localChild = dynamicDowncast<LocalFrame>(child.get()))
-            localChild->checkedLoader()->stopAllLoaders(clearProvisionalItem);
+            localChild->protectedLoader()->stopAllLoaders(clearProvisionalItem);
     }
 
     FRAMELOADER_RELEASE_LOG(ResourceLoading, "stopAllLoaders: m_provisionalDocumentLoader=%p, m_documentLoader=%p", m_provisionalDocumentLoader.get(), m_documentLoader.get());
@@ -2089,7 +2099,7 @@ void FrameLoader::stopForBackForwardCache()
 
     for (RefPtr child = m_frame->tree().firstChild(); child; child = child->tree().nextSibling()) {
         if (RefPtr localChild = dynamicDowncast<LocalFrame>(child.get()))
-            localChild->checkedLoader()->stopForBackForwardCache();
+            localChild->protectedLoader()->stopForBackForwardCache();
     }
 
     // We cancel pending navigations & policy checks *after* cancelling loads because cancelling loads might end up
@@ -2251,7 +2261,7 @@ void FrameLoader::provisionalLoadFailedInAnotherProcess()
 {
     m_provisionalLoadHappeningInAnotherProcess = false;
     if (RefPtr localParent = dynamicDowncast<LocalFrame>(m_frame->tree().parent()))
-        localParent->checkedLoader()->checkLoadComplete();
+        localParent->protectedLoader()->checkLoadComplete();
 }
 
 void FrameLoader::commitProvisionalLoad()
@@ -2378,7 +2388,7 @@ void FrameLoader::commitProvisionalLoad()
         }
 
         for (auto& frame : targetFrames)
-            frame->checkedLoader()->checkCompleted();
+            frame->protectedLoader()->checkCompleted();
     } else
         didOpenURL();
 
@@ -2574,7 +2584,7 @@ void FrameLoader::closeOldDataSources()
     // use a recursive algorithm here.
     for (RefPtr child = m_frame->tree().firstChild(); child; child = child->tree().nextSibling()) {
         if (RefPtr localChild = dynamicDowncast<LocalFrame>(child))
-            localChild->checkedLoader()->closeOldDataSources();
+            localChild->protectedLoader()->closeOldDataSources();
     }
     
     if (m_documentLoader)
@@ -2672,7 +2682,7 @@ bool FrameLoader::subframeIsLoading() const
                 return true;
             continue;
         }
-        CheckedRef childLoader = localChild->loader();
+        Ref childLoader = localChild->loader();
         RefPtr documentLoader = childLoader->documentLoader();
         if (documentLoader && documentLoader->isLoadingInAPISense())
             return true;
@@ -3067,7 +3077,7 @@ void FrameLoader::detachChildren()
             childrenToDetach.append(localChild.releaseNonNull());
     }
     for (auto& child : childrenToDetach)
-        child->checkedLoader()->detachFromParent();
+        child->protectedLoader()->detachFromParent();
 }
 
 void FrameLoader::closeAndRemoveChild(LocalFrame& child)
@@ -3102,7 +3112,7 @@ void FrameLoader::checkLoadComplete(LoadWillContinueInAnotherProcess loadWillCon
     // To process children before their parents, iterate the vector backwards.
     for (auto frame = frames.rbegin(); frame != frames.rend(); ++frame) {
         if ((*frame)->page())
-            (*frame)->checkedLoader()->checkLoadCompleteForThisFrame(loadWillContinueInAnotherProcess);
+            (*frame)->protectedLoader()->checkLoadCompleteForThisFrame(loadWillContinueInAnotherProcess);
     }
 }
 
@@ -3203,7 +3213,7 @@ void FrameLoader::detachFromParent()
     m_progressTracker = nullptr;
 
     if (RefPtr parent = dynamicDowncast<LocalFrame>(frame->tree().parent())) {
-        CheckedRef parentLoader = parent->loader();
+        Ref parentLoader = parent->loader();
         parentLoader->closeAndRemoveChild(frame);
         parentLoader->scheduleCheckCompleted();
         parentLoader->scheduleCheckLoadComplete();
@@ -3436,6 +3446,16 @@ void FrameLoader::addSameSiteInfoToRequestIfNeeded(ResourceRequest& request, con
     request.setIsSameSite(initiator->isSameSiteForCookies(request.url()));
 }
 
+Ref<const LocalFrameLoaderClient> FrameLoader::protectedClient() const
+{
+    return m_client.get();
+}
+
+Ref<LocalFrameLoaderClient> FrameLoader::protectedClient()
+{
+    return m_client.get();
+}
+
 void FrameLoader::loadPostRequest(FrameLoadRequest&& request, const String& referrer, FrameLoadType loadType, Event* event, RefPtr<FormState>&& formState, CompletionHandler<void()>&& completionHandler)
 {
     FRAMELOADER_RELEASE_LOG(ResourceLoading, "loadPostRequest: frame load started");
@@ -3479,7 +3499,7 @@ void FrameLoader::loadPostRequest(FrameLoadRequest&& request, const String& refe
     if (!frameName.isEmpty()) {
         // The search for a target frame is done earlier in the case of form submission.
         if (targetFrame) {
-            targetFrame->checkedLoader()->loadWithNavigationAction(workingResourceRequest, WTFMove(action), loadType, WTFMove(formState), allowNavigationToInvalidURL, request.shouldTreatAsContinuingLoad(), WTFMove(completionHandler));
+            targetFrame->protectedLoader()->loadWithNavigationAction(workingResourceRequest, WTFMove(action), loadType, WTFMove(formState), allowNavigationToInvalidURL, request.shouldTreatAsContinuingLoad(), WTFMove(completionHandler));
             return;
         }
 
@@ -3721,7 +3741,7 @@ bool FrameLoader::shouldClose()
         for (i = 0; i < targetFrames.size(); i++) {
             if (!targetFrames[i]->tree().isDescendantOf(frame.ptr()))
                 continue;
-            if (!targetFrames[i]->checkedLoader()->dispatchBeforeUnloadEvent(page->chrome(), this))
+            if (!targetFrames[i]->protectedLoader()->dispatchBeforeUnloadEvent(page->chrome(), this))
                 break;
         }
 
@@ -4053,7 +4073,7 @@ void FrameLoader::continueLoadAfterNewWindowPolicy(const ResourceRequest& reques
     if (!mainFrame)
         return;
 
-    CheckedRef mainFrameLoader = mainFrame->loader();
+    Ref mainFrameLoader = mainFrame->loader();
 
     if (!isBlankTargetFrameName(frameName))
         mainFrame->tree().setSpecifiedName(frameName);
@@ -4679,6 +4699,10 @@ RefPtr<Frame> createWindow(LocalFrame& openerFrame, FrameLoadRequest&& request, 
     if (!oldPage)
         return nullptr;
 
+#if PLATFORM(GTK)
+    features.oldWindowRect = oldPage->chrome().windowRect();
+#endif
+
     ShouldOpenExternalURLsPolicy shouldOpenExternalURLsPolicy = shouldOpenExternalURLsPolicyToApply(openerFrame, request);
     NavigationAction action { request.requester(), request.resourceRequest(), request.initiatedByMainFrame(), request.isRequestFromClientOrUserInput(), NavigationType::Other, shouldOpenExternalURLsPolicy };
     action.setNewFrameOpenerPolicy(features.wantsNoOpener() ? NewFrameOpenerPolicy::Suppress : NewFrameOpenerPolicy::Allow);
@@ -4690,73 +4714,6 @@ RefPtr<Frame> createWindow(LocalFrame& openerFrame, FrameLoadRequest&& request, 
 
     if (!isBlankTargetFrameName(request.frameName()))
         frame->tree().setSpecifiedName(request.frameName());
-
-    page->chrome().setToolbarsVisible(features.toolBarVisible || features.locationBarVisible);
-
-    if (!frame->page())
-        return nullptr;
-    if (features.statusBarVisible)
-        page->chrome().setStatusbarVisible(*features.statusBarVisible);
-
-    if (!frame->page())
-        return nullptr;
-    if (features.scrollbarsVisible)
-        page->chrome().setScrollbarsVisible(*features.scrollbarsVisible);
-
-    if (!frame->page())
-        return nullptr;
-    if (features.menuBarVisible)
-        page->chrome().setMenubarVisible(*features.menuBarVisible);
-
-    if (!frame->page())
-        return nullptr;
-    if (features.resizable)
-        page->chrome().setResizable(*features.resizable);
-
-    // 'x' and 'y' specify the location of the window, while 'width' and 'height'
-    // specify the size of the viewport. We can only resize the window, so adjust
-    // for the difference between the window size and the viewport size.
-
-    // FIXME: We should reconcile the initialization of viewport arguments between iOS and non-IOS.
-#if !PLATFORM(IOS_FAMILY)
-    FloatSize viewportSize = page->chrome().pageRect().size();
-    FloatRect windowRect = page->chrome().windowRect();
-    if (features.x)
-        windowRect.setX(*features.x);
-    if (features.y)
-        windowRect.setY(*features.y);
-    // Zero width and height mean using default size, not minimum one.
-    if (features.width && *features.width)
-        windowRect.setWidth(*features.width + (windowRect.width() - viewportSize.width()));
-    if (features.height && *features.height)
-        windowRect.setHeight(*features.height + (windowRect.height() - viewportSize.height()));
-
-#if PLATFORM(GTK)
-    FloatRect oldWindowRect = oldPage->chrome().windowRect();
-    // Use the size of the previous window if there is no default size.
-    if (!windowRect.width())
-        windowRect.setWidth(oldWindowRect.width());
-    if (!windowRect.height())
-        windowRect.setHeight(oldWindowRect.height());
-#endif
-
-    // Ensure non-NaN values, minimum size as well as being within valid screen area.
-    FloatRect newWindowRect = LocalDOMWindow::adjustWindowRect(*page, windowRect);
-
-    if (!frame->page())
-        return nullptr;
-    page->chrome().setWindowRect(newWindowRect);
-#else
-    // On iOS, width and height refer to the viewport dimensions.
-    ViewportArguments arguments;
-    // Zero width and height mean using default size, not minimum one.
-    if (features.width && *features.width)
-        arguments.width = *features.width;
-    if (features.height && *features.height)
-        arguments.height = *features.height;
-    if (RefPtr localFrame = dynamicDowncast<LocalFrame>(frame))
-        localFrame->setViewportArguments(arguments);
-#endif
 
     if (!frame->page())
         return nullptr;

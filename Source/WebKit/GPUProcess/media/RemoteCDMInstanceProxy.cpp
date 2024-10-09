@@ -108,11 +108,11 @@ void RemoteCDMInstanceProxy::setStorageDirectory(const String& directory)
         protectedInstance()->setStorageDirectory(directory);
 }
 
-void RemoteCDMInstanceProxy::createSession(uint64_t logIdentifier, CompletionHandler<void(const RemoteCDMInstanceSessionIdentifier&)>&& completion)
+void RemoteCDMInstanceProxy::createSession(uint64_t logIdentifier, CompletionHandler<void(std::optional<RemoteCDMInstanceSessionIdentifier>)>&& completion)
 {
     auto privSession = protectedInstance()->createSession();
     if (!privSession || !m_cdm || !m_cdm->factory()) {
-        completion({ });
+        completion(std::nullopt);
         return;
     }
 
@@ -131,9 +131,13 @@ Ref<WebCore::CDMInstance> RemoteCDMInstanceProxy::protectedInstance() const
     return m_instance;
 }
 
-const SharedPreferencesForWebProcess& RemoteCDMInstanceProxy::sharedPreferencesForWebProcess() const
+std::optional<SharedPreferencesForWebProcess> RemoteCDMInstanceProxy::sharedPreferencesForWebProcess() const
 {
-    return protectedCdm()->sharedPreferencesForWebProcess();
+    if (!m_cdm)
+        return std::nullopt;
+
+    // FIXME: Remove SUPPRESS_UNCOUNTED_ARG once https://github.com/llvm/llvm-project/pull/111198 lands.
+    SUPPRESS_UNCOUNTED_ARG return m_cdm->sharedPreferencesForWebProcess();
 }
 
 RefPtr<RemoteCDMProxy> RemoteCDMInstanceProxy::protectedCdm() const

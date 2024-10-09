@@ -66,7 +66,7 @@ public:
     virtual void animationDidChangeTimingProperties() { };
     virtual void animationWasCanceled() { };
     virtual void animationSuspensionStateDidChange(bool) { };
-    virtual void animationTimelineDidChange(AnimationTimeline*) { };
+    virtual void animationTimelineDidChange(const AnimationTimeline*);
     virtual void animationDidFinish() { };
 
     AnimationEffectTiming timing() const { return m_timing; }
@@ -89,7 +89,7 @@ public:
     double iterations() const { return m_timing.iterations; }
     ExceptionOr<void> setIterations(double);
 
-    Seconds iterationDuration() const { return m_timing.iterationDuration; }
+    CSSNumberishTime iterationDuration() const { return m_timing.iterationDuration; }
     void setIterationDuration(const Seconds&);
 
     PlaybackDirection direction() const { return m_timing.direction; }
@@ -98,8 +98,8 @@ public:
     TimingFunction* timingFunction() const { return m_timing.timingFunction.get(); }
     void setTimingFunction(const RefPtr<TimingFunction>&);
 
-    Seconds activeDuration() const { return m_timing.activeDuration; }
-    Seconds endTime() const { return m_timing.endTime; }
+    CSSNumberishTime activeDuration() const { return m_timing.activeDuration; }
+    CSSNumberishTime endTime() const { return m_timing.endTime; }
 
     void updateStaticTimingProperties();
 
@@ -116,9 +116,11 @@ protected:
 private:
     std::optional<CSSNumberishTime> localTime(std::optional<CSSNumberishTime>) const;
     double playbackRate() const;
+    void normalizeSpecifiedTiming(std::variant<double, String>);
 
     AnimationEffectTiming m_timing;
     WeakPtr<WebAnimation, WeakPtrImplWithEventTargetData> m_animation;
+    bool m_hasAutoDuration { true };
 };
 
 } // namespace WebCore

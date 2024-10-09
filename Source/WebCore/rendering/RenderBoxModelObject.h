@@ -34,28 +34,22 @@ namespace WebCore {
 enum LinePositionMode { PositionOnContainingLine, PositionOfInteriorLineBoxes };
 enum LineDirectionMode { HorizontalLine, VerticalLine };
 
-enum BackgroundBleedAvoidance {
-    BackgroundBleedNone,
-    BackgroundBleedShrinkBackground,
-    BackgroundBleedUseTransparencyLayer,
-    BackgroundBleedBackgroundOverBorder
+enum class BleedAvoidance : uint8_t {
+    None,
+    ShrinkBackground,
+    UseTransparencyLayer,
+    BackgroundOverBorder
 };
 
-enum BaseBackgroundColorUsage {
-    BaseBackgroundColorUse,
-    BaseBackgroundColorOnly,
-    BaseBackgroundColorSkip
-};
-
-enum ContentChangeType {
-    ImageChanged,
-    MaskImageChanged,
-    BackgroundImageChanged,
-    CanvasChanged,
-    CanvasPixelsChanged,
-    VideoChanged,
-    FullScreenChanged,
-    ModelChanged
+enum class ContentChangeType : uint8_t {
+    Image,
+    MaskImage,
+    BackgroundIImage,
+    Canvas,
+    CanvasPixels,
+    Video,
+    FullScreen,
+    Model
 };
 
 class BorderEdge;
@@ -215,6 +209,8 @@ public:
 
     void applyTransform(TransformationMatrix&, const RenderStyle&, const FloatRect& boundingBox, OptionSet<RenderStyle::TransformOperationOption>) const override;
 
+    enum class UpdatePercentageHeightDescendants : bool { No, Yes };
+
 protected:
     RenderBoxModelObject(Type, Element&, RenderStyle&&, OptionSet<TypeFlag>, TypeSpecificFlags);
     RenderBoxModelObject(Type, Document&, RenderStyle&&, OptionSet<TypeFlag>, TypeSpecificFlags);
@@ -227,7 +223,6 @@ protected:
     bool borderObscuresBackgroundEdge(const FloatSize& contextScale) const;
     bool borderObscuresBackground() const;
 
-    enum class UpdatePercentageHeightDescendants : bool { No, Yes };
     bool hasAutoHeightOrContainingBlockWithAutoHeight(UpdatePercentageHeightDescendants = UpdatePercentageHeightDescendants::Yes) const;
 
 public:

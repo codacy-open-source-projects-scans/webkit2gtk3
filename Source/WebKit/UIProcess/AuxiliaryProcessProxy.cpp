@@ -128,8 +128,6 @@ void AuxiliaryProcessProxy::populateOverrideLanguagesLaunchOptions(ProcessLaunch
 
 void AuxiliaryProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& launchOptions)
 {
-    launchOptions.processIdentifier = m_processIdentifier;
-
     if (const char* userDirectorySuffix = getenv("DIRHELPER_USER_DIR_SUFFIX")) {
         if (auto userDirectorySuffixString = String::fromUTF8(userDirectorySuffix); !userDirectorySuffixString.isNull())
             launchOptions.extraInitializationData.add<HashTranslatorASCIILiteral>("user-directory-suffix"_s, userDirectorySuffixString);
@@ -177,7 +175,7 @@ void AuxiliaryProcessProxy::connect()
 {
     ASSERT(!m_processLauncher);
     m_processStart = MonotonicTime::now();
-    ProcessLauncher::LaunchOptions launchOptions;
+    ProcessLauncher::LaunchOptions launchOptions { m_processIdentifier };
     getLaunchOptions(launchOptions);
     m_processLauncher = ProcessLauncher::create(this, WTFMove(launchOptions));
 }
@@ -328,7 +326,7 @@ void AuxiliaryProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::C
         return;
 
 #if PLATFORM(MAC) && USE(RUNNINGBOARD)
-    m_lifetimeActivity = throttler().foregroundActivity("Lifetime Activity"_s).moveToUniquePtr();
+    m_lifetimeActivity = throttler().foregroundActivity("Lifetime Activity"_s);
     m_boostedJetsamAssertion = ProcessAssertion::create(*this, "Jetsam Boost"_s, ProcessAssertionType::BoostedJetsam);
 #endif
 

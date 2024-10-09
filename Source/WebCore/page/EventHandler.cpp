@@ -106,7 +106,6 @@
 #include "RenderView.h"
 #include "RenderWidget.h"
 #include "ResourceLoadObserver.h"
-#include "RuntimeApplicationChecks.h"
 #include "SVGDocument.h"
 #include "SVGElementTypeHelpers.h"
 #include "SVGNames.h"
@@ -133,6 +132,7 @@
 #include "WindowsKeyboardCodes.h"
 #include <wtf/Assertions.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/RuntimeApplicationChecks.h>
 #include <wtf/Scope.h>
 #include <wtf/SetForScope.h>
 #include <wtf/StdLibExtras.h>
@@ -1830,7 +1830,7 @@ HandleUserInputEventResult EventHandler::handleMousePressEvent(const PlatformMou
     UserGestureIndicator gestureIndicator(IsProcessingUserGesture::Yes, frame->protectedDocument().get(), userGestureTypeForPlatformEvent(platformMouseEvent));
 
     // FIXME (bug 68185): this call should be made at another abstraction layer
-    frame->checkedLoader()->resetMultipleFormSubmissionProtection();
+    frame->protectedLoader()->resetMultipleFormSubmissionProtection();
 
 #if !ENABLE(IOS_TOUCH_EVENTS)
     cancelFakeMouseMoveEvent();
@@ -3853,7 +3853,7 @@ bool EventHandler::internalKeyEvent(const PlatformKeyboardEvent& initialKeyEvent
     UserTypingGestureIndicator typingGestureIndicator(frame);
 
     // FIXME (bug 68185): this call should be made at another abstraction layer
-    frame->checkedLoader()->resetMultipleFormSubmissionProtection();
+    frame->protectedLoader()->resetMultipleFormSubmissionProtection();
 
     // In IE, access keys are special, they are handled after default keydown processing, but cannot be canceled - this is hard to match.
     // On Mac OS X, we process them before dispatching keydown, as the default keydown handler implements Emacs key bindings, which may conflict

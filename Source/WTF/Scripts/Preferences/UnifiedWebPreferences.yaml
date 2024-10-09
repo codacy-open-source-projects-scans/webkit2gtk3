@@ -188,6 +188,8 @@ AccessibilityThreadTextApisEnabled:
   status: embedder
   humanReadableName: "Off Main-Thread Accessibility Text APIs"
   humanReadableDescription: "Serve accessibility text APIs off the main-thread"
+  webcoreBinding: DeprecatedGlobalSettings
+  condition: ENABLE(AX_THREAD_TEXT_APIS)
   defaultValue:
     WebKitLegacy:
       default: false
@@ -606,6 +608,7 @@ ApplePayEnabled:
       "ENABLE(APPLE_PAY_REMOTE_UI)": true
       default: false
   sharedPreferenceForWebProcess: true
+  richJavaScript: true
 
 # FIXME: This is on by default in WebKit2 PLATFORM(COCOA). Perhaps we should consider turning it on for WebKitLegacy as well.
 AsyncClipboardAPIEnabled:
@@ -945,6 +948,19 @@ BlockOpenDirectoryInWebContentSandbox:
   humanReadableDescription: "Block OpenDirectory service in the WebContent sandbox"
   webcoreBinding: none
   condition: HAVE(SANDBOX_STATE_FLAGS) && PLATFORM(MAC)
+  exposed: [ WebKit ]
+  defaultValue:
+    WebKit:
+      default: false
+
+BlockWebInspectorInWebContentSandbox:
+  type: bool
+  status: internal
+  category: networking
+  humanReadableName: "Block WebInspector service in the WebContent sandbox"
+  humanReadableDescription: "Block WebInspector service in the WebContent sandbox"
+  webcoreBinding: none
+  condition: HAVE(SANDBOX_STATE_FLAGS)
   exposed: [ WebKit ]
   defaultValue:
     WebKit:
@@ -1540,12 +1556,12 @@ CSSTextJustifyEnabled:
     WebCore:
       default: false
 
-CSSTextSpacingEnabled:
+CSSTextSpacingTrimEnabled:
   type: bool
   status: testable
   category: css
-  humanReadableName: "CSS text-spacing property"
-  humanReadableDescription: "Enable the property text-spacing, defined in CSS Text 4"
+  humanReadableName: "CSS text-spacing-trim property"
+  humanReadableDescription: "Enable the property text-spacing-trim, defined in CSS Text 4"
   defaultValue:
     WebKitLegacy:
       default: false
@@ -1596,13 +1612,13 @@ CSSTextWrapStyleEnabled:
     WebCore:
       default: true
 
-CSSTransformStyleOptimized3DEnabled:
+CSSTransformStyleSeparatedEnabled:
   type: bool
   status: unstable
   category: css
-  humanReadableName: "CSS transform-style: optimized-3d"
-  humanReadableDescription: "Enable transform-style: optimized-3d property to access the separated graphics layer"
-  condition: ENABLE(CSS_TRANSFORM_STYLE_OPTIMIZED_3D)
+  humanReadableName: "CSS transform-style: separated"
+  humanReadableDescription: "Enable transform-style: separated property to access the separated graphics layer"
+  condition: ENABLE(CSS_TRANSFORM_STYLE_SEPARATED)
   defaultValue:
     WebKitLegacy:
       default: false
@@ -2129,20 +2145,6 @@ CustomPasteboardDataEnabled:
     WebKit:
       "PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WIN)": true
       default: false
-
-CustomStateSetEnabled:
-  type: bool
-  status: stable
-  category: dom
-  humanReadableName: "CustomStateSet and :state() pseudo class"
-  humanReadableDescription: "Support for CustomStateSet in custom elements"
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
 
 DNSPrefetchingEnabled:
   type: bool
@@ -2716,7 +2718,7 @@ EnumeratingVisibleNetworkInterfacesEnabled:
   exposed: [ WebKit ]
   defaultValue:
     WebKit:
-      default: false
+      default: true
 
 EventHandlerDrivenSmoothKeyboardScrollingEnabled:
   type: bool
@@ -2887,17 +2889,17 @@ FileSystemAccessEnabled:
 
 FilterLinkDecorationByDefaultEnabled:
   type: bool
-  status: testable
+  status: stable
   category: networking
   humanReadableName: "Filter Link Decoration"
   humanReadableDescription: "Enable Filtering Link Decoration"
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 FixedFontFamily:
   type: String
@@ -3100,6 +3102,7 @@ GamepadsEnabled:
       default: false
   disableInLockdownMode: true
   sharedPreferenceForWebProcess: true
+  richJavaScript: true
 
 # FIXME: This is on by default in WebKit2. Perhaps we should consider turning it on for WebKitLegacy as well.
 GenericCueAPIEnabled:
@@ -3129,6 +3132,7 @@ GeolocationAPIEnabled:
     WebCore:
       default: true
   sharedPreferenceForWebProcess: true
+  richJavaScript: true
 
 GetCoalescedEventsEnabled:
   type: bool
@@ -3186,20 +3190,6 @@ GoogleAntiFlickerOptimizationQuirkEnabled:
     WebCore:
       default: true
 
-GrammarAndSpellingPseudoElementsEnabled:
-  type: bool
-  status: stable
-  category: css
-  humanReadableName: "::grammar-error and ::spelling-error pseudo-elements"
-  humanReadableDescription: "Enable the ::grammar-error and ::spelling-error CSS pseudo-elements"
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
-
 GraphicsContextFiltersEnabled:
    type: bool
    status: stable
@@ -3215,6 +3205,22 @@ GraphicsContextFiltersEnabled:
        default: true
      WebCore:
        default: true
+
+HDRForImagesEnabled:
+  type: bool
+  status: unstable
+  category: media
+  webcoreOnChange: setNeedsRelayoutAllFrames
+  humanReadableName: "HDR for Images Support"
+  humanReadableDescription: "HDR for Images Support"
+  condition: HAVE(HDR_SUPPORT)
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
 
 HTTPEquivEnabled:
   type: bool
@@ -3285,20 +3291,6 @@ HiddenPageDOMTimerThrottlingEnabled:
       default: false
     WebCore:
       default: false
-
-HighlightAPIEnabled:
-  type: bool
-  status: stable
-  category: css
-  humanReadableName: "Highlight API"
-  humanReadableDescription: "Highlight API support"
-  defaultValue:
-    WebKitLegacy:
-      default: false
-    WebKit:
-      default: true
-    WebCore:
-      default: true
 
 HyperlinkAuditingEnabled:
   type: bool
@@ -5189,6 +5181,7 @@ NotificationEventEnabled:
     WebKit:
       "ENABLE(NOTIFICATION_EVENT) && !PLATFORM(IOS_FAMILY)": true
       default: false
+  sharedPreferenceForWebProcess: true
 
 NotificationsEnabled:
   type: bool
@@ -5491,6 +5484,7 @@ PeerConnectionEnabled:
       default: true
   disableInLockdownMode: true
   sharedPreferenceForWebProcess: true
+  richJavaScript: true
 
 PeerConnectionVideoScalingAdaptationDisabled:
   type: bool
@@ -6134,7 +6128,6 @@ ScreenOrientationAPIEnabled:
       default: WebKit::defaultShouldEnableScreenOrientationAPI()
     WebCore:
       default: false
-  sharedPreferenceForWebProcess: true
 
 ScreenOrientationLockingAPIEnabled:
   type: bool
@@ -6893,6 +6886,7 @@ SpeechRecognitionEnabled:
       default: false
   disableInLockdownMode: true
   sharedPreferenceForWebProcess: true
+  richJavaScript: true
 
 SpeechSynthesisAPIEnabled:
   type: bool
@@ -6908,6 +6902,7 @@ SpeechSynthesisAPIEnabled:
       default: true
   disableInLockdownMode: true
   sharedPreferenceForWebProcess: true
+  richJavaScript: true
 
 SpringTimingFunctionEnabled:
   type: bool
@@ -7050,6 +7045,7 @@ SystemPreviewEnabled:
     WebCore:
       default: false
   disableInLockdownMode: true
+  sharedPreferenceForWebProcess: true
 
 TabsToLinks:
   type: bool
@@ -7347,6 +7343,20 @@ UAVisualTransitionDetectionEnabled:
       default: true
     WebCore:
       default: true
+
+URLPatternAPIEnabled:
+  type: bool
+  category: dom
+  status: unstable
+  humanReadableName: "URL Pattern API"
+  humanReadableDescription: "Enable URL Pattern API"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
 
 # FIXME: Is this implemented for WebKitLegacy? If not, this should be excluded from WebKitLegacy entirely.
 UndoManagerAPIEnabled:
@@ -8039,6 +8049,7 @@ WebAudioEnabled:
       default: false
   sharedPreferenceForWebProcess: true
   disableInLockdownMode: true
+  richJavaScript: true
 
 WebAuthenticationASEnabled:
   type: bool
@@ -8144,6 +8155,7 @@ WebCodecsVideoEnabled:
       default: false
   disableInLockdownMode: true
   sharedPreferenceForWebProcess: true
+  richJavaScript: true
 
 WebCryptoSafeCurvesEnabled:
   type: bool
@@ -8219,6 +8231,7 @@ WebGLEnabled:
       default: false
   disableInLockdownMode: true
   sharedPreferenceForWebProcess: true
+  richJavaScript: true
 
 WebGLTimerQueriesEnabled:
   type: bool
@@ -8252,10 +8265,11 @@ WebGPUEnabled:
       default: false
   disableInLockdownMode: true
   sharedPreferenceForWebProcess: true
+  richJavaScript: true
 
 WebGPUHDREnabled:
   type: bool
-  status: internal
+  status: unstable
   category: dom
   humanReadableName: "WebGPU support for HDR"
   humanReadableDescription: "WebGPU High Dynamic Range through canvas configuration tone mapping mode"
@@ -8301,6 +8315,7 @@ WebLocksAPIEnabled:
       default: true
   disableInLockdownMode: true
   sharedPreferenceForWebProcess: true
+  richJavaScript: true
 
 # FIXME: Is this implemented for WebKitLegacy? If not, this should be excluded from WebKitLegacy entirely.
 WebMParserEnabled:
@@ -8651,6 +8666,7 @@ WebXREnabled:
       default: true
   disableInLockdownMode: true
   sharedPreferenceForWebProcess: true
+  richJavaScript: true
 
 WebXRGamepadsModuleEnabled:
   type: bool

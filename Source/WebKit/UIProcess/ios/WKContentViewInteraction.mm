@@ -83,6 +83,7 @@
 #import "WKTimePickerViewController.h"
 #import "WKTouchEventsGestureRecognizer.h"
 #import "WKUIDelegatePrivate.h"
+#import "WKVelocityTrackingScrollView.h"
 #import "WKWebViewConfiguration.h"
 #import "WKWebViewConfigurationPrivate.h"
 #import "WKWebViewIOS.h"
@@ -130,7 +131,6 @@
 #import <WebCore/PathUtilities.h>
 #import <WebCore/PlatformTextAlternatives.h>
 #import <WebCore/PromisedAttachmentInfo.h>
-#import <WebCore/RuntimeApplicationChecks.h>
 #import <WebCore/ScrollTypes.h>
 #import <WebCore/Scrollbar.h>
 #import <WebCore/ShareData.h>
@@ -161,6 +161,7 @@
 #import <wtf/BlockObjCExceptions.h>
 #import <wtf/BlockPtr.h>
 #import <wtf/CallbackAggregator.h>
+#import <wtf/RuntimeApplicationChecks.h>
 #import <wtf/Scope.h>
 #import <wtf/SetForScope.h>
 #import <wtf/StdLibExtras.h>
@@ -2658,12 +2659,12 @@ static inline WebCore::FloatSize tapHighlightBorderRadius(WebCore::FloatSize bor
     [self _cancelInteraction];
 }
 
-- (void)_scrollingNodeScrollingWillBegin:(WebCore::ScrollingNodeID)scrollingNodeID
+- (void)_scrollingNodeScrollingWillBegin:(std::optional<WebCore::ScrollingNodeID>)scrollingNodeID
 {
     [_textInteractionWrapper willStartScrollingOverflow];
 }
 
-- (void)_scrollingNodeScrollingDidEnd:(WebCore::ScrollingNodeID)scrollingNodeID
+- (void)_scrollingNodeScrollingDidEnd:(std::optional<WebCore::ScrollingNodeID>)scrollingNodeID
 {
     // If scrolling ends before we've received a selection update,
     // we postpone showing the selection until the update is received.
@@ -3246,7 +3247,16 @@ ALLOW_DEPRECATED_DECLARATIONS_END
         if (outBoundingRect)
             outBoundingRect->unite(rect);
     }
-    return pointIsInSelectionRect;
+
+    if (!pointIsInSelectionRect)
+        return NO;
+
+    RetainPtr hitView = [self hitTest:point withEvent:nil];
+    if (!hitView)
+        return NO;
+
+    RetainPtr selectionContainer = [self _selectionContainerScrollView];
+    return hitView == selectionContainer || [selectionContainer _wk_isAncestorOf:hitView.get()];
 }
 
 - (BOOL)_shouldToggleSelectionCommandsAfterTapAt:(CGPoint)point
@@ -9711,7 +9721,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     if (!_focusedElementInformation.shouldUseLegacySelectPopoverDismissalBehaviorInDataActivation)
         return NO;
 
-    return WebCore::IOSApplication::isDataActivation();
+    return WTF::IOSApplication::isDataActivation();
 }
 
 #if ENABLE(IMAGE_ANALYSIS)
@@ -10749,14 +10759,21 @@ static Vector<WebCore::IntSize> sizesOfPlaceholderElementsToInsertWhenDroppingIt
 {
     _isAnimatingDragCancel = YES;
     RELEASE_LOG(DragAndDrop, "Drag interaction willAnimateCancelWithAnimator");
-    auto previewView = _dragDropInteractionState.takePreviewViewForDragCancel();
-    [previewView setAlpha:0];
-    [animator addCompletion:[protectedSelf = retainPtr(self), previewView = WTFMove(previewView), page = _page] (UIViewAnimatingPosition finalPosition) {
+    auto previewViews = _dragDropInteractionState.takePreviewViewsForDragCancel();
+    for (auto& previewView : previewViews)
+        [previewView setAlpha:0];
+
+    [animator addCompletion:[protectedSelf = retainPtr(self), previewViews = WTFMove(previewViews), page = _page] (UIViewAnimatingPosition finalPosition) {
         RELEASE_LOG(DragAndDrop, "Drag interaction willAnimateCancelWithAnimator (animation completion block fired)");
-        [previewView setAlpha:1];
+        for (auto& previewView : previewViews)
+            [previewView setAlpha:1];
+
         page->dragCancelled();
-        page->callAfterNextPresentationUpdate([previewView = WTFMove(previewView), protectedSelf = WTFMove(protectedSelf)] {
-            [previewView removeFromSuperview];
+
+        page->callAfterNextPresentationUpdate([previewViews = WTFMove(previewViews), protectedSelf = WTFMove(protectedSelf)] {
+            for (auto& previewView : previewViews)
+                [previewView removeFromSuperview];
+
             protectedSelf->_isAnimatingDragCancel = NO;
         });
     }];
@@ -11542,28 +11559,28 @@ static BOOL applicationIsKnownToIgnoreMouseEvents(const char* &warningVersion)
     // check them before the linked-on-or-after.
 
     // <rdar://problem/59521967> iAd Video does not respond to mouse events, only touch events
-    if (WebCore::IOSApplication::isNews() || WebCore::IOSApplication::isStocks()) {
+    if (WTF::IOSApplication::isNews() || WTF::IOSApplication::isStocks()) {
         warningVersion = nullptr;
         return YES;
     }
 
     if (!linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::SupportsiOSAppsOnMacOS)) {
-        if (WebCore::IOSApplication::isFIFACompanion() // <rdar://problem/67093487>
-            || WebCore::IOSApplication::isNoggin() // <rdar://problem/64830335>
-            || WebCore::IOSApplication::isOKCupid() // <rdar://problem/65698496>
-            || WebCore::IOSApplication::isJWLibrary() // <rdar://problem/68104852>
-            || WebCore::IOSApplication::isPaperIO() // <rdar://problem/68738585>
-            || WebCore::IOSApplication::isCrunchyroll()) { // <rdar://problem/66362029>
+        if (WTF::IOSApplication::isFIFACompanion() // <rdar://problem/67093487>
+            || WTF::IOSApplication::isNoggin() // <rdar://problem/64830335>
+            || WTF::IOSApplication::isOKCupid() // <rdar://problem/65698496>
+            || WTF::IOSApplication::isJWLibrary() // <rdar://problem/68104852>
+            || WTF::IOSApplication::isPaperIO() // <rdar://problem/68738585>
+            || WTF::IOSApplication::isCrunchyroll()) { // <rdar://problem/66362029>
             warningVersion = "14.2";
             return YES;
         }
     }
 
     if (!linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::SendsNativeMouseEvents)) {
-        if (WebCore::IOSApplication::isPocketCity() // <rdar://problem/62273077>
-            || WebCore::IOSApplication::isEssentialSkeleton() // <rdar://problem/62694519>
-            || WebCore::IOSApplication::isESPNFantasySports() // <rdar://problem/64671543>
-            || WebCore::IOSApplication::isDoubleDown()) { // <rdar://problem/64668138>
+        if (WTF::IOSApplication::isPocketCity() // <rdar://problem/62273077>
+            || WTF::IOSApplication::isEssentialSkeleton() // <rdar://problem/62694519>
+            || WTF::IOSApplication::isESPNFantasySports() // <rdar://problem/64671543>
+            || WTF::IOSApplication::isDoubleDown()) { // <rdar://problem/64668138>
             warningVersion = "13.4";
             return YES;
         }
@@ -13619,27 +13636,29 @@ static inline WKTextAnimationType toWKTextAnimationType(WebCore::TextAnimationTy
     return self._selectionContainerViewInternal;
 }
 
-- (UIView *)_selectionContainerViewInternal
+- (WKBaseScrollView *)_selectionContainerScrollView
 {
     if (!self.selectionHonorsOverflowScrolling)
-        return self;
+        return [_webView _scrollViewInternal];
 
     if (!_page->editorState().hasVisualData())
-        return self;
+        return [_webView _scrollViewInternal];
 
     auto scrollingNodeID = _page->editorState().visualData->enclosingScrollingNodeID;
     if (!scrollingNodeID)
-        return self;
+        return [_webView _scrollViewInternal];
 
     WeakPtr coordinator = _page->scrollingCoordinatorProxy();
     if (UNLIKELY(!coordinator))
-        return self;
+        return [_webView _scrollViewInternal];
 
     RetainPtr scrollView = downcast<WebKit::RemoteScrollingCoordinatorProxyIOS>(*coordinator).scrollViewForScrollingNodeID(*scrollingNodeID);
-    if (scrollView == self._scroller)
-        return self;
+    return dynamic_objc_cast<WKBaseScrollView>(scrollView.get());
+}
 
-    return dynamic_objc_cast<WKBaseScrollView>(scrollView.get()).scrolledContentView ?: self;
+- (UIView *)_selectionContainerViewInternal
+{
+    return self._selectionContainerScrollView.scrolledContentView ?: self;
 }
 
 @end

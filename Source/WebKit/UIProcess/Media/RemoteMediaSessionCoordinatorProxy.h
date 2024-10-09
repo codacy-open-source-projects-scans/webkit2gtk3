@@ -51,7 +51,7 @@ public:
     static Ref<RemoteMediaSessionCoordinatorProxy> create(WebPageProxy&, Ref<MediaSessionCoordinatorProxyPrivate>&&);
     ~RemoteMediaSessionCoordinatorProxy();
 
-    const SharedPreferencesForWebProcess& sharedPreferencesForWebProcess() const;
+    std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess() const;
 
     void seekTo(double, CompletionHandler<void(bool)>&&);
     void play(CompletionHandler<void(bool)>&&);
@@ -85,6 +85,7 @@ private:
     void setSessionTrack(const String&, CompletionHandler<void(bool)>&&) final;
     void coordinatorStateChanged(WebCore::MediaSessionCoordinatorState) final;
 
+    Ref<MediaSessionCoordinatorProxyPrivate> protectedPrivateCoordinator() { return m_privateCoordinator; }
     Ref<WebPageProxy> protectedWebPageProxy();
 
 #if !RELEASE_LOG_DISABLED

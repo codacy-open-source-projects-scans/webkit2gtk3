@@ -21,7 +21,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 messages -> WebProcessProxy WantsDispatchMessage {
-    UpdateBackForwardItem(WebKit::FrameState mainFrameState)
+    UpdateBackForwardItem(Ref<WebKit::FrameState> mainFrameState)
     DidDestroyFrame(WebCore::FrameIdentifier frameID, WebKit::WebPageProxyIdentifier pageID) 
 
     DidDestroyUserGestureToken(WebCore::PageIdentifier pageID, uint64_t userGestureTokenID) 
@@ -85,7 +85,9 @@ messages -> WebProcessProxy WantsDispatchMessage {
     SetCaptionLanguage(String language)
 #endif
 
-    GetNotifications(URL registrationURL, String tag) -> (Vector<WebCore::NotificationData> result)
+#if ENABLE(NOTIFICATION_EVENT)
+    [EnabledBy=NotificationEventEnabled] GetNotifications(URL registrationURL, String tag) -> (Vector<WebCore::NotificationData> result)
+#endif
     [EnabledBy=AppBadgeEnabled] SetAppBadge(std::optional<WebKit::WebPageProxyIdentifier> pageIdentifier, WebCore::SecurityOriginData origin, std::optional<uint64_t> badge)
     [EnabledBy=AppBadgeEnabled] SetClientBadge(WebKit::WebPageProxyIdentifier pageIdentifier, WebCore::SecurityOriginData origin, std::optional<uint64_t> badge)
 

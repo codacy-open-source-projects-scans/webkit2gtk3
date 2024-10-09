@@ -50,6 +50,9 @@
 namespace API {
 using namespace WebKit;
 
+PageConfiguration::Data::Data()
+    : openedSite(aboutBlankURL()) { }
+
 Ref<WebKit::BrowsingContextGroup> PageConfiguration::Data::createBrowsingContextGroup()
 {
     return BrowsingContextGroup::create();
@@ -109,6 +112,26 @@ BrowsingContextGroup& PageConfiguration::browsingContextGroup() const
 void PageConfiguration::setBrowsingContextGroup(RefPtr<BrowsingContextGroup>&& group)
 {
     m_data.browsingContextGroup = WTFMove(group);
+}
+
+const std::optional<WebCore::WindowFeatures>& PageConfiguration::windowFeatures() const
+{
+    return m_data.windowFeatures;
+}
+
+void PageConfiguration::setWindowFeatures(WebCore::WindowFeatures&& windowFeatures)
+{
+    m_data.windowFeatures = WTFMove(windowFeatures);
+}
+
+const WebCore::Site& PageConfiguration::openedSite() const
+{
+    return m_data.openedSite;
+}
+
+void PageConfiguration::setOpenedSite(const WebCore::Site& site)
+{
+    m_data.openedSite = site;
 }
 
 auto PageConfiguration::openerInfo() const -> const std::optional<OpenerInfo>&

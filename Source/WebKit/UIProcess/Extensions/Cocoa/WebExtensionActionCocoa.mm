@@ -33,6 +33,7 @@
 #if ENABLE(WK_WEB_EXTENSIONS)
 
 #import "CocoaHelpers.h"
+#import "WKNSError.h"
 #import "WKNavigationActionPrivate.h"
 #import "WKNavigationDelegatePrivate.h"
 #import "WKUIDelegatePrivate.h"
@@ -78,6 +79,8 @@ constexpr auto popoverStableSizeDuration = 75_ms;
 constexpr auto popoverShowTimeout = 750_ms;
 constexpr auto popoverStableSizeDuration = 225_ms;
 #endif
+
+constexpr auto updateThrottleDuration = 15_ms;
 
 using namespace WebKit;
 
@@ -639,8 +642,58 @@ void WebExtensionAction::clearBlockedResourceCount()
 
 void WebExtensionAction::propertiesDidChange()
 {
-    dispatch_async(dispatch_get_main_queue(), makeBlockPtr([this, protectedThis = Ref { *this }]() {
-        [NSNotificationCenter.defaultCenter postNotificationName:WKWebExtensionActionPropertiesDidChangeNotification object:wrapper() userInfo:nil];
+    if (m_updatePending)
+        return;
+
+    m_updatePending = true;
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, updateThrottleDuration.nanosecondsAs<int64_t>()), dispatch_get_main_queue(), makeBlockPtr([this, protectedThis = Ref { *this }]() {
+        m_updatePending = false;
+
+        RefPtr extensionContext = m_extensionContext.get();
+        if (!extensionContext)
+            return;
+
+        RefPtr extensionController = extensionContext->extensionController();
+        if (!extensionController)
+            return;
+
+        auto *delegate = extensionController->delegate();
+        if (![delegate respondsToSelector:@selector(webExtensionController:didUpdateAction:forExtensionContext:)])
+            return;
+
+        if (isTabAction()) {
+            // Tab actions are not inherited by other actions, so just call the delegate directly.
+            [delegate webExtensionController:extensionController->wrapper() didUpdateAction:wrapper() forExtensionContext:extensionContext->wrapper()];
+            return;
+        }
+
+        auto callDelegateForTabs = [=](auto&& tabs) {
+            for (Ref tab : tabs) {
+                Ref tabAction = extensionContext->getAction(tab.ptr());
+
+                // Skip tabs with no custom action (i.e., default or window action).
+                if (!tabAction->isTabAction())
+                    continue;
+
+                [delegate webExtensionController:extensionController->wrapper() didUpdateAction:tabAction->wrapper() forExtensionContext:extensionContext->wrapper()];
+            }
+        };
+
+        if (isWindowAction()) {
+            // Call the delegate about tab-specific actions that inherit from the window.
+            RefPtr window = protectedThis->window();
+            callDelegateForTabs(window->tabs());
+            return;
+        }
+
+        ASSERT(isDefaultAction());
+
+        // Call the delegate about the default action, since it is retrievable via the API.
+        [delegate webExtensionController:extensionController->wrapper() didUpdateAction:wrapper() forExtensionContext:extensionContext->wrapper()];
+
+        // Call the delegate about tab-specific actions inheriting from the default.
+        callDelegateForTabs(extensionContext->openTabs());
     }).get());
 }
 
@@ -684,14 +737,14 @@ CocoaImage *WebExtensionAction::icon(CGSize idealSize)
 
 #if ENABLE(WK_WEB_EXTENSIONS_ICON_VARIANTS)
         if (m_customIconVariants) {
-            result = extensionContext()->extension().bestImageForIconVariants(m_customIconVariants.get(), idealSize, [&](auto *error) {
-                extensionContext()->recordError(error);
+            result = extensionContext()->extension().bestImageForIconVariants(m_customIconVariants.get(), idealSize, [&](Ref<API::Error> error) {
+                extensionContext()->recordError(::WebKit::wrapper(error));
             });
         } else
 #endif // ENABLE(WK_WEB_EXTENSIONS_ICON_VARIANTS)
         if (m_customIcons) {
-            result = extensionContext()->extension().bestImageInIconsDictionary(m_customIcons.get(), idealSize, [&](auto *error) {
-                extensionContext()->recordError(error);
+            result = extensionContext()->extension().bestImageInIconsDictionary(m_customIcons.get(), idealSize, [&](Ref<API::Error> error) {
+                extensionContext()->recordError(::WebKit::wrapper(error));
             });
         }
 

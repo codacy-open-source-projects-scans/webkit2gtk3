@@ -1397,7 +1397,6 @@ http/tests/misc/favicon-loads-with-icon-loading-override.html [ Failure ]
 http/tests/misc/link-rel-icon-beforeload.html [ Failure ]
 http/tests/misc/object-embedding-svg-delayed-size-negotiation.xhtml [ Failure ]
 http/tests/misc/willCacheResponse-delegate-callback.html [ Failure ]
-http/tests/navigation/response204.html [ Failure ]
 http/tests/security/cross-frame-access-put.html [ Failure ]
 http/tests/security/local-user-CSS-from-remote.html [ Failure ]
 http/tests/security/svg-image-with-css-cross-domain.html [ ImageOnlyFailure ]
@@ -3223,10 +3222,10 @@ webkit.org/b/207703 imported/w3c/web-platform-tests/service-workers/service-work
 
 webkit.org/b/207705 imported/w3c/web-platform-tests/service-workers/service-worker/websocket.https.html [ Pass Failure ]
 
-webkit.org/b/202003 imported/w3c/web-platform-tests/websockets/bufferedAmount-unchanged-by-sync-xhr.any.worker.html [ Pass Failure ]
+webkit.org/b/202003 imported/w3c/web-platform-tests/websockets/bufferedAmount-unchanged-by-sync-xhr.any.worker.html?default [ Pass Failure ]
 
-webkit.org/b/213516 imported/w3c/web-platform-tests/websockets/Close-reason-unpaired-surrogates.any.html [ Pass Failure ]
-webkit.org/b/213516 imported/w3c/web-platform-tests/websockets/Close-reason-unpaired-surrogates.any.worker.html [ Pass Failure ]
+webkit.org/b/213516 imported/w3c/web-platform-tests/websockets/Close-reason-unpaired-surrogates.any.html?default [ Pass Failure ]
+webkit.org/b/213516 imported/w3c/web-platform-tests/websockets/Close-reason-unpaired-surrogates.any.worker.html?default [ Pass Failure ]
 
 webkit.org/b/207762 http/wpt/service-workers/check-service-worker-header.https.html [ Pass Failure ]
 
@@ -6479,7 +6478,7 @@ webkit.org/b/238954 imported/w3c/web-platform-tests/css/selectors/invalidation/u
 
 webkit.org/b/231780 [ Debug ] imported/w3c/web-platform-tests/webrtc/simulcast/basic.https.html [ Pass Failure ]
 
-webkit.org/b/232099 imported/w3c/web-platform-tests/websockets/Close-1000.any.html [ Pass Crash ]
+webkit.org/b/232099 imported/w3c/web-platform-tests/websockets/Close-1000.any.html?default [ Pass Crash ]
 
 webkit.org/b/225528 http/wpt/fetch/fetch-response-body-stop-in-worker.html [ Pass Crash ]
 
@@ -7247,7 +7246,7 @@ webkit.org/b/275963 [ x86_64 ] imported/w3c/web-platform-tests/svg/import/metada
 webkit.org/b/275963 [ x86_64 ] svg/W3C-SVG-1.1/metadata-example-01-b.svg [ Failure ]
 webkit.org/b/275963 [ x86_64 ] svg/custom/use-on-symbol-inside-pattern.svg [ Failure ]
 
-webkit.org/b/275962 imported/w3c/web-platform-tests/navigation-api/navigation-history-entry/no-referrer-dynamic-url-censored.html [ Failure ]
+webkit.org/b/275962 imported/w3c/web-platform-tests/navigation-api/navigation-history-entry/no-referrer-dynamic-url-censored.html [ Timeout ]
 
 # rdar://130594018 (REGRESSION (278344@main?): [ iOS 18 Release ] 2 http/tests/xmlhttprequest/* layout tests are constantly failing.)
 [ Release ] http/tests/xmlhttprequest/resetting-timeout-to-zero.html [ Failure ]
@@ -7332,6 +7331,7 @@ imported/w3c/web-platform-tests/mathml/presentation-markup/operators/embellished
 imported/w3c/web-platform-tests/mathml/presentation-markup/operators/embellished-op-4-3.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/mathml/presentation-markup/operators/mo-minsize-maxsize-legacy-length-values.html [ Failure ]
 imported/w3c/web-platform-tests/mathml/relations/css-styling/padding-border-margin/padding-border-margin-003.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/mathml/relations/html5-tree/tabindex-002.tentative.html [ Skip ]
 
 webkit.org/b/277195 imported/w3c/web-platform-tests/html/semantics/interactive-elements/the-dialog-element/inert-label-focus.html [ Failure ]
 
@@ -7397,6 +7397,10 @@ imported/w3c/web-platform-tests/mediacapture-insertable-streams/VideoTrackGenera
 # webkit.org/b/277432 (REGRESSION (281139@main): [ Ventura iOS18 ] 2 WebCrypto layout tests failing after CryptoKit enablement.)
 imported/w3c/web-platform-tests/WebCryptoAPI/import_export/ec_importKey.https.any.html [ Failure ]
 imported/w3c/web-platform-tests/WebCryptoAPI/import_export/ec_importKey.https.any.worker.html [ Failure ]
+imported/w3c/web-platform-tests/WebCryptoAPI/derive_bits_keys/cfrg_curves_bits_curve25519.https.any.html [ Failure ]
+imported/w3c/web-platform-tests/WebCryptoAPI/derive_bits_keys/cfrg_curves_bits_curve25519.https.any.worker.html [ Failure ]
+imported/w3c/web-platform-tests/WebCryptoAPI/sign_verify/eddsa_small_order_points.https.any.html [ Failure ]
+imported/w3c/web-platform-tests/WebCryptoAPI/sign_verify/eddsa_small_order_points.https.any.worker.html [ Failure ]
 
 webkit.org/b/278353 http/tests/privateClickMeasurement/send-attribution-conversion-request.https.html [ Failure ]
 
@@ -7476,10 +7480,6 @@ imported/w3c/web-platform-tests/navigation-api/scroll-behavior/manual-scroll-rep
 
 webkit.org/b/107356 fast/css/sticky/sticky-top-zoomed.html [ ImageOnlyFailure ]
 
-# webkit.org/b/280490 REGRESSION (284225@main) : [ macOS iOS ] 2x imported/w3c/web-platform-t ests/mathml/presentation-markup/operators/* are constant failures 
-imported/w3c/web-platform-tests/mathml/presentation-markup/operators/size-and-position-of-stretchy-fences-with-default-font-001.html [ Failure ]
-imported/w3c/web-platform-tests/mathml/presentation-markup/operators/stretchy-largeop-with-default-font-2.html [ Failure ]
-
 webkit.org/b/257011 imported/w3c/web-platform-tests/css/css-text/hyphens/hyphenate-character-002.html [ ImageOnlyFailure ]
 
 # webkit.org/b/280553 [ Sequoia+ iOS wk2 release ] 2x http/tests/resourceLoadStatistics/* are flaky failures.
@@ -7488,3 +7488,6 @@ webkit.org/b/257011 imported/w3c/web-platform-tests/css/css-text/hyphens/hyphena
 
 # webkit.org/b/280556 [ macOS iOS wk2 release ] webrtc/stats-timestamp-increases.html is a flaky failure.
 [ Release ] webrtc/stats-timestamp-increases.html  [ Pass Failure ]
+
+# webkit.org/b/281089 REGRESSION(284750@main): [macOS iOS Debug] ASSERTION FAILED: !child->frameID() in http/tests/site-isolation/draw-after-cross-origin-navigation-between-two-remote-frames.html
+[ Debug ] http/tests/site-isolation/draw-after-cross-origin-navigation-between-two-remote-frames.html [ Pass Timeout ImageOnlyFailure ]

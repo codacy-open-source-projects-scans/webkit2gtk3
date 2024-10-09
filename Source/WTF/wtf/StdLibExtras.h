@@ -742,37 +742,6 @@ constexpr auto constructFixedSizeArrayWithArguments(Args&&... args) -> decltype(
     return constructFixedSizeArrayWithArgumentsImpl<ResultType>(tuple, std::forward<Args>(args)...);
 }
 
-// FIXME: Use std::is_sorted instead of this and remove it, once we require C++20.
-template<typename Iterator, typename Predicate> constexpr bool isSortedConstExpr(Iterator first, Iterator last, Predicate predicate)
-{
-    if (first == last)
-        return true;
-    auto current = first;
-    auto previous = current;
-    while (++current != last) {
-        if (!predicate(*previous, *current))
-            return false;
-        previous = current;
-    }
-    return true;
-}
-
-// FIXME: Use std::is_sorted instead of this and remove it, once we require C++20.
-template<typename Iterator> constexpr bool isSortedConstExpr(Iterator first, Iterator last)
-{
-    return isSortedConstExpr(first, last, [] (auto& a, auto& b) { return a < b; });
-}
-
-// FIXME: Use std::all_of instead of this and remove it, once we require C++20.
-template<typename Iterator, typename Predicate> constexpr bool allOfConstExpr(Iterator first, Iterator last, Predicate predicate)
-{
-    for (; first != last; ++first) {
-        if (!predicate(*first))
-            return false;
-    }
-    return true;
-}
-
 template<typename OptionalType, class Callback> typename OptionalType::value_type valueOrCompute(OptionalType optional, Callback callback) 
 {
     return optional ? *optional : callback();
@@ -783,6 +752,8 @@ template<typename OptionalType> auto valueOrDefault(OptionalType&& optionalValue
     return optionalValue ? *std::forward<OptionalType>(optionalValue) : std::remove_reference_t<decltype(*optionalValue)> { };
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcast-align"
 template<typename T, typename U, std::size_t Extent>
 std::span<T, Extent == std::dynamic_extent ? std::dynamic_extent : (sizeof(U) * Extent) / sizeof(T)> spanReinterpretCast(std::span<U, Extent> span)
 {
@@ -797,6 +768,7 @@ std::span<T, Extent == std::dynamic_extent ? std::dynamic_extent : (sizeof(U) * 
     using ReturnType = std::span<T, Extent == std::dynamic_extent ? std::dynamic_extent : (sizeof(U) * Extent) / sizeof(T)>;
     return ReturnType { reinterpret_cast<T*>(const_cast<std::remove_const_t<U>*>(span.data())), span.size_bytes() / sizeof(T) };
 }
+#pragma GCC diagnostic pop
 
 template<typename T, std::size_t Extent>
 std::span<T, Extent> spanConstCast(std::span<const T, Extent> span)

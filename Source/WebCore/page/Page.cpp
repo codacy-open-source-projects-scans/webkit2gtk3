@@ -185,6 +185,7 @@
 #include "WheelEventTestMonitor.h"
 #include "Widget.h"
 #include "WindowEventLoop.h"
+#include "WindowFeatures.h"
 #include "WorkerOrWorkletScriptController.h"
 #include <JavaScriptCore/VM.h>
 #include <wtf/FileSystem.h>
@@ -399,7 +400,7 @@ Page::Page(PageConfiguration&& pageConfiguration)
     , m_recentWheelEventDeltaFilter(WheelEventDeltaFilter::create())
     , m_pageOverlayController(makeUnique<PageOverlayController>(*this))
 #if ENABLE(APPLE_PAY)
-    , m_paymentCoordinator(makeUnique<PaymentCoordinator>(WTFMove(pageConfiguration.paymentCoordinatorClient)))
+    , m_paymentCoordinator(PaymentCoordinator::create(WTFMove(pageConfiguration.paymentCoordinatorClient)))
 #endif
 #if ENABLE(WEB_AUTHN)
     , m_authenticatorCoordinator(makeUniqueRef<AuthenticatorCoordinator>(WTFMove(pageConfiguration.authenticatorCoordinatorClient)))
@@ -796,18 +797,18 @@ void Page::setOpenedByDOM()
     m_openedByDOM = true;
 }
 
-void Page::goToItem(Frame& mainFrame, HistoryItem& item, FrameLoadType type, ShouldTreatAsContinuingLoad shouldTreatAsContinuingLoad)
+void Page::goToItem(Frame& frame, HistoryItem& item, FrameLoadType type, ShouldTreatAsContinuingLoad shouldTreatAsContinuingLoad)
 {
     // stopAllLoaders may end up running onload handlers, which could cause further history traversals that may lead to the passed in HistoryItem
     // being deref()-ed. Make sure we can still use it with HistoryController::goToItem later.
     Ref protectedItem { item };
 
-    ASSERT(mainFrame.isMainFrame());
-    if (RefPtr localMainFrame = dynamicDowncast<LocalFrame>(mainFrame)) {
-        if (localMainFrame->checkedHistory()->shouldStopLoadingForHistoryItem(item))
-            localMainFrame->checkedLoader()->stopAllLoadersAndCheckCompleteness();
+    ASSERT(frame.isRootFrame());
+    if (RefPtr localFrame = dynamicDowncast<LocalFrame>(frame)) {
+        if (localFrame->checkedHistory()->shouldStopLoadingForHistoryItem(item))
+            localFrame->protectedLoader()->stopAllLoadersAndCheckCompleteness();
     }
-    mainFrame.checkedHistory()->goToItem(item, type, shouldTreatAsContinuingLoad);
+    frame.checkedHistory()->goToItem(item, type, shouldTreatAsContinuingLoad);
 }
 
 void Page::setGroupName(const String& name)
@@ -1365,7 +1366,7 @@ void Page::setDefersLoading(bool defers)
     m_defersLoading = defers;
     for (auto* frame = &mainFrame(); frame; frame = frame->tree().traverseNext()) {
         if (RefPtr localFrame = dynamicDowncast<LocalFrame>(frame))
-            localFrame->checkedLoader()->setDefersLoading(defers);
+            localFrame->protectedLoader()->setDefersLoading(defers);
     }
 }
 
@@ -1923,7 +1924,7 @@ void Page::updateRendering()
 
     runProcessingStep(RenderingUpdateStep::RestoreScrollPositionAndViewState, [] (Document& document) {
         if (RefPtr frame = document.frame())
-            frame->checkedLoader()->restoreScrollPositionAndViewStateNowIfNeeded();
+            frame->protectedLoader()->restoreScrollPositionAndViewStateNowIfNeeded();
     });
 
 #if ENABLE(ASYNC_SCROLLING)
@@ -2610,7 +2611,7 @@ void Page::setMemoryCacheClientCallsEnabled(bool enabled)
 
     for (RefPtr frame = &mainFrame(); frame; frame = frame->tree().traverseNext()) {
         if (RefPtr localFrame = dynamicDowncast<LocalFrame>(frame))
-            localFrame->checkedLoader()->tellClientAboutPastMemoryCacheLoads();
+            localFrame->protectedLoader()->tellClientAboutPastMemoryCacheLoads();
     }
     m_hasPendingMemoryCacheLoadNotifications = false;
 }
@@ -3393,7 +3394,7 @@ void Page::addRelevantRepaintedObject(const RenderObject& object, const LayoutRe
         m_isCountingRelevantRepaintedObjects = false;
         resetRelevantPaintedObjectCounter();
         if (RefPtr frame = dynamicDowncast<LocalFrame>(mainFrame()))
-            frame->checkedLoader()->didReachLayoutMilestone(LayoutMilestone::DidHitRelevantRepaintedObjectsAreaThreshold);
+            frame->protectedLoader()->didReachLayoutMilestone(LayoutMilestone::DidHitRelevantRepaintedObjectsAreaThreshold);
     }
 }
 
@@ -4264,7 +4265,7 @@ void Page::dispatchAfterPrintEvent()
 }
 
 #if ENABLE(APPLE_PAY)
-void Page::setPaymentCoordinator(std::unique_ptr<PaymentCoordinator>&& paymentCoordinator)
+void Page::setPaymentCoordinator(Ref<PaymentCoordinator>&& paymentCoordinator)
 {
     m_paymentCoordinator = WTFMove(paymentCoordinator);
 }
@@ -4458,12 +4459,12 @@ void Page::injectUserStyleSheet(UserStyleSheet& userStyleSheet)
 {
 #if ENABLE(APP_BOUND_DOMAINS)
     if (RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_mainFrame.get())) {
-        if (localMainFrame->checkedLoader()->client().shouldEnableInAppBrowserPrivacyProtections()) {
+        if (localMainFrame->protectedLoader()->client().shouldEnableInAppBrowserPrivacyProtections()) {
             if (RefPtr document = localMainFrame->document())
                 document->addConsoleMessage(MessageSource::Security, MessageLevel::Warning, "Ignoring user style sheet for non-app bound domain."_s);
             return;
         }
-        localMainFrame->checkedLoader()->client().notifyPageOfAppBoundBehavior();
+        localMainFrame->protectedLoader()->client().notifyPageOfAppBoundBehavior();
     }
 #endif
 
@@ -4686,7 +4687,7 @@ void Page::setupForRemoteWorker(const URL& scriptURL, const SecurityOriginData& 
     if (!localMainFrame)
         return;
     // FIXME: <rdar://117922051> Investigate if the correct origins are set here with site isolation enabled.
-    localMainFrame->checkedLoader()->initForSynthesizedDocument({ });
+    localMainFrame->protectedLoader()->initForSynthesizedDocument({ });
     Ref document = Document::createNonRenderedPlaceholder(*localMainFrame, scriptURL);
     document->createDOMWindow();
     document->storageBlockingStateDidChange();
@@ -4696,7 +4697,7 @@ void Page::setupForRemoteWorker(const URL& scriptURL, const SecurityOriginData& 
     document->setSiteForCookies(originAsURL);
     document->setFirstPartyForCookies(originAsURL);
 
-    if (RefPtr documentLoader = localMainFrame->checkedLoader()->documentLoader())
+    if (RefPtr documentLoader = localMainFrame->protectedLoader()->documentLoader())
         documentLoader->setAdvancedPrivacyProtections(advancedPrivacyProtections);
 
     if (document->settings().storageBlockingPolicy() != StorageBlockingPolicy::BlockThirdParty)
@@ -5084,6 +5085,76 @@ bool Page::requiresScriptTelemetryForURL(const URL& scriptURL) const
         return false;
 
     return chrome().client().requiresScriptTelemetryForURL(scriptURL, mainFrameOrigin());
+}
+
+void Page::applyWindowFeatures(const WindowFeatures& features)
+{
+    Ref frame = mainFrame();
+    chrome().setToolbarsVisible(features.toolBarVisible || features.locationBarVisible);
+
+    if (!frame->page())
+        return;
+    if (features.statusBarVisible)
+        chrome().setStatusbarVisible(*features.statusBarVisible);
+
+    if (!frame->page())
+        return;
+    if (features.scrollbarsVisible)
+        chrome().setScrollbarsVisible(*features.scrollbarsVisible);
+
+    if (!frame->page())
+        return;
+    if (features.menuBarVisible)
+        chrome().setMenubarVisible(*features.menuBarVisible);
+
+    if (!frame->page())
+        return;
+    if (features.resizable)
+        chrome().setResizable(*features.resizable);
+
+    // 'x' and 'y' specify the location of the window, while 'width' and 'height'
+    // specify the size of the viewport. We can only resize the window, so adjust
+    // for the difference between the window size and the viewport size.
+
+    // FIXME: We should reconcile the initialization of viewport arguments between iOS and non-IOS.
+#if !PLATFORM(IOS_FAMILY)
+    FloatSize viewportSize = chrome().pageRect().size();
+    FloatRect windowRect = chrome().windowRect();
+    if (features.x)
+        windowRect.setX(*features.x);
+    if (features.y)
+        windowRect.setY(*features.y);
+    // Zero width and height mean using default size, not minimum one.
+    if (features.width && *features.width)
+        windowRect.setWidth(*features.width + (windowRect.width() - viewportSize.width()));
+    if (features.height && *features.height)
+        windowRect.setHeight(*features.height + (windowRect.height() - viewportSize.height()));
+
+#if PLATFORM(GTK)
+    // Use the size of the previous window if there is no default size.
+    if (!windowRect.width())
+        windowRect.setWidth(features.oldWindowRect.width());
+    if (!windowRect.height())
+        windowRect.setHeight(features.oldWindowRect.height());
+#endif
+
+    // Ensure non-NaN values, minimum size as well as being within valid screen area.
+    FloatRect newWindowRect = LocalDOMWindow::adjustWindowRect(*this, windowRect);
+
+    if (!frame->page())
+        return;
+    chrome().setWindowRect(newWindowRect);
+#else
+    // On iOS, width and height refer to the viewport dimensions.
+    ViewportArguments arguments;
+    // Zero width and height mean using default size, not minimum one.
+    if (features.width && *features.width)
+        arguments.width = *features.width;
+    if (features.height && *features.height)
+        arguments.height = *features.height;
+    if (RefPtr localFrame = dynamicDowncast<LocalFrame>(frame))
+        localFrame->setViewportArguments(arguments);
+#endif
 }
 
 } // namespace WebCore

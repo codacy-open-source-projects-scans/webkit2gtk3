@@ -82,7 +82,6 @@ class JSGlobalObject;
     v(repeatCharacter, nullptr) \
     v(isArray, nullptr) \
     v(isArraySlow, nullptr) \
-    v(concatMemcpy, nullptr) \
     v(appendMemcpy, nullptr) \
     v(hostPromiseRejectionTracker, nullptr) \
     v(Set, nullptr) \
@@ -154,6 +153,7 @@ class JSGlobalObject;
     v(wrapForValidIteratorCreate, nullptr) \
     v(asyncFromSyncIteratorCreate, nullptr) \
     v(regExpStringIteratorCreate, nullptr) \
+    v(iteratorHelperCreate, nullptr) \
 
 
 #define DECLARE_LINK_TIME_CONSTANT(name, code) name,
