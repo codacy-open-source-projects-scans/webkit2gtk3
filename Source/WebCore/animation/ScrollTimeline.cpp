@@ -31,7 +31,6 @@
 #include "CSSScrollValue.h"
 #include "CSSValuePool.h"
 #include "Document.h"
-#include "DocumentInlines.h"
 #include "Element.h"
 #include "RenderLayerScrollableArea.h"
 #include "RenderView.h"
@@ -139,7 +138,7 @@ Ref<CSSValue> ScrollTimeline::toCSSValue(const RenderStyle&) const
 AnimationTimelinesController* ScrollTimeline::controller() const
 {
     if (m_source)
-        return &m_source->protectedDocument()->ensureTimelinesController();
+        return &m_source->document().ensureTimelinesController();
     return nullptr;
 }
 
@@ -162,7 +161,14 @@ ScrollableArea* ScrollTimeline::scrollableAreaForSourceRenderer(RenderElement* r
     return (renderBox->canBeScrolledAndHasScrollableArea() && renderBox->hasLayer()) ? renderBox->layer()->scrollableArea() : nullptr;
 }
 
-ScrollTimeline::Data ScrollTimeline::computeScrollTimelineData(const TimelineRange& range) const
+float ScrollTimeline::floatValueForOffset(const Length& offset, float maxValue)
+{
+    if (offset.isNormal() || offset.isAuto())
+        return 0.f;
+    return floatValueForLength(offset, maxValue);
+}
+
+ScrollTimeline::Data ScrollTimeline::computeTimelineData(const TimelineRange& range) const
 {
     ASSERT(range.start.name == SingleTimelineRange::Name::Normal || range.start.name == SingleTimelineRange::Name::Omitted);
     ASSERT(range.end.name == SingleTimelineRange::Name::Normal || range.end.name == SingleTimelineRange::Name::Omitted);
@@ -174,15 +180,24 @@ ScrollTimeline::Data ScrollTimeline::computeScrollTimelineData(const TimelineRan
     if (!sourceScrollableArea)
         return { };
 
-    // https://drafts.csswg.org/scroll-animations-1/#scroll-timeline-progress
-    // Progress (the current time) for a scroll progress timeline is calculated as:
-    // scroll offset ÷ (scrollable overflow size − scroll container size)
-    // TODO: progress calculation now (scrollOffset - rangeStart) / (rangeEnd - rangeStart)
-
     float maxScrollOffset = axis() == ScrollAxis::Block ? sourceScrollableArea->maximumScrollOffset().y() : sourceScrollableArea->maximumScrollOffset().x();
     float scrollOffset = axis() == ScrollAxis::Block ? sourceScrollableArea->scrollOffset().y() : sourceScrollableArea->scrollOffset().x();
 
-    return { scrollOffset, maxScrollOffset - floatValueForLength(range.end.offset, maxScrollOffset), floatValueForLength(range.start.offset, maxScrollOffset) };
+    return { scrollOffset, floatValueForOffset(range.start.offset, maxScrollOffset), maxScrollOffset - floatValueForOffset(range.end.offset, maxScrollOffset) };
+}
+
+std::optional<CSSNumberishTime> ScrollTimeline::currentTime()
+{
+    // https://drafts.csswg.org/scroll-animations-1/#scroll-timeline-progress
+    // Progress (the current time) for a scroll progress timeline is calculated as:
+    // scroll offset ÷ (scrollable overflow size − scroll container size)
+    auto data = computeTimelineData();
+    auto range = data.rangeEnd - data.rangeStart;
+    if (!range)
+        return std::nullopt;
+    auto distance = data.scrollOffset - data.rangeStart;
+    auto progress = distance / range;
+    return CSSNumberishTime::fromPercentage(progress * 100);
 }
 
 } // namespace WebCore

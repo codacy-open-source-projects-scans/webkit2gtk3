@@ -608,6 +608,7 @@ animation/ScrollAxis.cpp
 animation/ScrollTimeline.cpp
 animation/StyleOriginatedAnimation.cpp
 animation/StyleOriginatedAnimationEvent.cpp
+animation/TimelineRange.cpp
 animation/ViewTimeline.cpp
 animation/WebAnimation.cpp
 animation/WebAnimationUtilities.cpp
@@ -1117,10 +1118,12 @@ css/typedom/transform/CSSSkewY.cpp
 css/typedom/transform/CSSTransformComponent.cpp
 css/typedom/transform/CSSTransformValue.cpp
 css/typedom/transform/CSSTranslate.cpp
+css/values/CSSGradient.cpp
 css/values/CSSPosition.cpp
 css/values/CSSPrimitiveNumericTypes+ComputedStyleDependencies.cpp
 css/values/CSSPrimitiveNumericTypes+Serialization.cpp
 css/values/CSSPrimitiveNumericTypes+SymbolReplacement.cpp
+css/values/CSSPrimitiveNumericTypes.cpp
 css/values/CSSUnevaluatedCalc.cpp
 cssjit/SelectorCompiler.cpp
 dom/AbortController.cpp
@@ -3052,8 +3055,8 @@ style/StyleUpdate.cpp
 style/Styleable.cpp
 style/TransformOperationsBuilder.cpp
 style/UserAgentStyle.cpp
+style/values/StyleGradient.cpp
 style/values/StylePosition.cpp
-style/values/StylePrimitiveNumericTypes.cpp
 style/values/StylePrimitiveNumericTypes+Conversions.cpp
 svg/DocumentSVG.cpp
 svg/SVGAElement.cpp

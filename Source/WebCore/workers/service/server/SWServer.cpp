@@ -744,7 +744,7 @@ void SWServer::matchAll(SWServerWorker& worker, const ServiceWorkerClientQueryOp
             auto registrationIdentifier = m_clientToControllingRegistration.get(clientData.identifier);
             if (worker.data().registrationIdentifier != registrationIdentifier)
                 return;
-            if (&worker != this->activeWorkerFromRegistrationID(registrationIdentifier))
+            if (&worker != this->activeWorkerFromRegistrationID(worker.data().registrationIdentifier))
                 return;
         }
         if (options.type != ServiceWorkerClientType::All && options.type != clientData.type)
@@ -986,7 +986,7 @@ void SWServer::runServiceWorkerIfNecessary(SWServerWorker& worker, RunServiceWor
 
     if (!contextConnection) {
         auto& serviceWorkerRunRequestsForOrigin = m_serviceWorkerRunRequests.ensure(worker.topRegistrableDomain(), [] {
-            return HashMap<ServiceWorkerIdentifier, Vector<RunServiceWorkerCallback>> { };
+            return UncheckedKeyHashMap<ServiceWorkerIdentifier, Vector<RunServiceWorkerCallback>> { };
         }).iterator->value;
         serviceWorkerRunRequestsForOrigin.ensure(worker.identifier(), [&] {
             return Vector<RunServiceWorkerCallback> { };

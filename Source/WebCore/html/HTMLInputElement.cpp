@@ -2272,17 +2272,16 @@ ExceptionOr<void> HTMLInputElement::setSelectionRangeForBindings(unsigned start,
 static Ref<StyleGradientImage> autoFillStrongPasswordMaskImage()
 {
     return StyleGradientImage::create(
-        StyleGradientImage::LinearData {
-            {
-                Style::Angle { 90 }
-            },
-            CSSGradientRepeat::NonRepeating,
-            {
-                { Color::black,            Style::LengthPercentage { Style::Percentage { 50 } } },
-                { Color::transparentBlack, Style::LengthPercentage { Style::Percentage { 100 } } }
+        Style::FunctionNotation<CSSValueLinearGradient, Style::LinearGradient> {
+            .parameters = {
+                .colorInterpolationMethod = Style::GradientColorInterpolationMethod::legacyMethod(AlphaPremultiplication::Unpremultiplied),
+                .gradientLine = { Style::Angle<> { 90 } },
+                .stops = {
+                    { Color::black,            Style::LengthPercentage<> { Style::Percentage<> { 50 } } },
+                    { Color::transparentBlack, Style::LengthPercentage<> { Style::Percentage<> { 100 } } }
+                }
             }
-        },
-        CSSGradientColorInterpolationMethod::legacyMethod(AlphaPremultiplication::Unpremultiplied)
+        }
     );
 }
 

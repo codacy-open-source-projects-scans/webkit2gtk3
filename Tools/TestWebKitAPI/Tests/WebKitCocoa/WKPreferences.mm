@@ -26,6 +26,8 @@
 #import "config.h"
 
 #import "DeprecatedGlobalValues.h"
+#import "PlatformUtilities.h"
+#import "Test.h"
 #import <WebKit/WKFoundation.h>
 #import <WebKit/WKPreferencesPrivate.h>
 
@@ -86,7 +88,6 @@ TEST(WKPreferencesPrivate, DisableRichJavaScriptFeatures)
     result = (NSString *)[getNextMessage() body];
     EXPECT_WK_STREQ(@"Web Audio Disabled", result.get());
 
-
     [webView evaluateJavaScript:@"log(window.RTCPeerConnection ? 'Web RTC Enabled' : 'Web RTC Disabled');" completionHandler:^(id, NSError *error) {
         EXPECT_NULL(error);
     }];
@@ -116,4 +117,40 @@ TEST(WKPreferencesPrivate, DisableRichJavaScriptFeatures)
     }];
     result = (NSString *)[getNextMessage() body];
     EXPECT_WK_STREQ(@"Geolocation Disabled", result.get());
+
+    [webView evaluateJavaScript:@"log(window.ApplePaySession ? 'ApplePay Enabled' : 'ApplePay Disabled');" completionHandler:^(id, NSError *error) {
+        EXPECT_NULL(error);
+    }];
+    result = (NSString *)[getNextMessage() body];
+    EXPECT_WK_STREQ(@"ApplePay Disabled", result.get());
+
+    [webView evaluateJavaScript:@"log(navigator.credentials ? 'Web Authentication Enabled' : 'Web Authentication Disabled');" completionHandler:^(id, NSError *error) {
+        EXPECT_NULL(error);
+    }];
+    result = (NSString *)[getNextMessage() body];
+    EXPECT_WK_STREQ(@"Web Authentication Disabled", result.get());
+
+    [webView evaluateJavaScript:@"log(navigator.setAppBadge ? 'Badging Enabled' : 'Badging Disabled');" completionHandler:^(id, NSError *error) {
+        EXPECT_NULL(error);
+    }];
+    result = (NSString *)[getNextMessage() body];
+    EXPECT_WK_STREQ(@"Badging Disabled", result.get());
+
+    [webView evaluateJavaScript:@"log(window.BarcodeDetector ? 'Shape Detection Enabled' : 'Shape Detection Disabled');" completionHandler:^(id, NSError *error) {
+        EXPECT_NULL(error);
+    }];
+    result = (NSString *)[getNextMessage() body];
+    EXPECT_WK_STREQ(@"Shape Detection Disabled", result.get());
+
+    [webView evaluateJavaScript:@"log(window.screen && screen.orientation ? 'Screen Orientation Enabled' : 'Screen Orientation Disabled');" completionHandler:^(id, NSError *error) {
+        EXPECT_NULL(error);
+    }];
+    result = (NSString *)[getNextMessage() body];
+    EXPECT_WK_STREQ(@"Screen Orientation Disabled", result.get());
+
+    [webView evaluateJavaScript:@"log(window.Notification ? 'Notifications Enabled' : 'Notifications Disabled');" completionHandler:^(id, NSError *error) {
+        EXPECT_NULL(error);
+    }];
+    result = (NSString *)[getNextMessage() body];
+    EXPECT_WK_STREQ(@"Notifications Disabled", result.get());
 }

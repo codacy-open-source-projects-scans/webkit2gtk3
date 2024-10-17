@@ -551,6 +551,7 @@ AppBadgeEnabled:
     WebCore:
       default: false
   sharedPreferenceForWebProcess: true
+  richJavaScript: true
 
 AppHighlightsEnabled:
   type: bool
@@ -899,6 +900,19 @@ BlockIOKitInWebContentSandbox:
     WebKit:
       default: true
 
+BlockIconServicesInWebContentSandbox:
+  type: bool
+  status: internal
+  category: networking
+  humanReadableName: "Block Icon services in the WebContent sandbox"
+  humanReadableDescription: "Block Icon services in the WebContent sandbox"
+  webcoreBinding: none
+  condition: HAVE(SANDBOX_STATE_FLAGS) && PLATFORM(MAC)
+  exposed: [ WebKit ]
+  defaultValue:
+    WebKit:
+      default: false
+
 BlockMediaLayerRehostingInWebContentProcess:
   type: bool
   status: internal
@@ -925,7 +939,7 @@ BlockMobileAssetInWebContentSandbox:
   exposed: [ WebKit ]
   defaultValue:
     WebKit:
-      default: false
+      default: true
 
 BlockMobileGestaltInWebContentSandbox:
   type: bool
@@ -2617,6 +2631,20 @@ DownloadAttributeEnabled:
       default: false
     WebKit:
       default: true
+    WebCore:
+      default: false
+
+DynamicSiteInterventionsEnabled:
+  type: bool
+  status: unstable
+  category: none
+  humanReadableName: "Dynamic Site Interventions"
+  humanReadableDescription: "Enable dynamic site interventions for broken websites"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
     WebCore:
       default: false
 
@@ -4678,6 +4706,8 @@ MediaDevicesEnabled:
 MediaEnabled:
   type: bool
   status: embedder
+  humanReadableName: "HTML Media Elements"
+  humanReadableDescription: "Enable HTML media elements <audio>, <video> and <track>"
   condition: ENABLE(VIDEO)
   defaultValue:
     WebKitLegacy:
@@ -4686,6 +4716,20 @@ MediaEnabled:
       default: true
     WebCore:
       default: true
+
+MediaPlaybackEnabled:
+  type: bool
+  status: embedder
+  humanReadableName: "Media Playback Functionalities"
+  humanReadableDescription: "Enable media playback functionalities"
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
+    WebCore:
+      default: true
+  sharedPreferenceForWebProcess: true
 
 MediaPreferredFullscreenWidth:
   type: double
@@ -4728,9 +4772,25 @@ MediaRecorderEnabled:
       default: false
   sharedPreferenceForWebProcess: true
 
-MediaSessionCaptureToggleAPIEnabled:
+MediaRecorderEnabledWebM:
   type: bool
   status: testable
+  category: media
+  humanReadableName: "MediaRecorder WebM"
+  humanReadableDescription: "Enable WebM support with MediaRecorder"
+  condition: ENABLE(MEDIA_RECORDER_WEBM)
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+  sharedPreferenceForWebProcess: true
+
+MediaSessionCaptureToggleAPIEnabled:
+  type: bool
+  status: stable
   category: media
   humanReadableName: "MediaSession capture related API"
   humanReadableDescription: "Enable MediaSession capture related API"
@@ -4738,6 +4798,7 @@ MediaSessionCaptureToggleAPIEnabled:
     WebKitLegacy:
       default: false
     WebKit:
+      "PLATFORM(COCOA)": true
       default: false
     WebCore:
       default: false
@@ -5201,6 +5262,8 @@ NotificationsEnabled:
       "PLATFORM(IOS_FAMILY)": false
       default: true
   disableInLockdownMode: true
+  sharedPreferenceForWebProcess: true
+  richJavaScript: true
 
 ObservableEnabled:
   type: bool
@@ -6128,6 +6191,8 @@ ScreenOrientationAPIEnabled:
       default: WebKit::defaultShouldEnableScreenOrientationAPI()
     WebCore:
       default: false
+  sharedPreferenceForWebProcess: true
+  richJavaScript: true
 
 ScreenOrientationLockingAPIEnabled:
   type: bool
@@ -6482,6 +6547,7 @@ ShapeDetection:
     WebCore:
       default: false
   sharedPreferenceForWebProcess: true
+  richJavaScript: true
 
 SharedWorkerEnabled:
   type: bool
@@ -7584,13 +7650,14 @@ UseImageDocumentForSubframePDF:
 
 UseMicrophoneMuteStatusAPI:
   type: bool
-  status: preview
+  status: stable
   category: media
   humanReadableName: "Use Microphone Mute Status API"
   humanReadableDescription: "Use Microphone Mute Status API"
   condition: ENABLE(MEDIA_STREAM)
   defaultValue:
     WebKit:
+      "PLATFORM(COCOA)": true
       default: false
     WebCore:
       default: false
@@ -7911,6 +7978,20 @@ VisualViewportEnabled:
     WebCore:
       default: true
 
+VisuallyContiguousBidiTextSelectionEnabled:
+  type: bool
+  status: internal
+  humanReadableName: "Visually Contiguous Bidi Selection"
+  humanReadableDescription: "Visually contiguous bidi selection"
+  conditional: PLATFORM(IOS_FAMILY)
+  defaultValue:
+    WebKit:
+      default: false
+    WebKitLegacy:
+      default: false
+    WebCore:
+      default: false
+
 VorbisDecoderEnabled:
   type: bool
   status: mature
@@ -8080,6 +8161,7 @@ WebAuthenticationEnabled:
     WebCore:
       default: true
   sharedPreferenceForWebProcess: true
+  richJavaScript: true
 
 WebCodecsAV1Enabled:
   type: bool
@@ -8269,7 +8351,7 @@ WebGPUEnabled:
 
 WebGPUHDREnabled:
   type: bool
-  status: unstable
+  status: testable
   category: dom
   humanReadableName: "WebGPU support for HDR"
   humanReadableDescription: "WebGPU High Dynamic Range through canvas configuration tone mapping mode"
@@ -8518,6 +8600,21 @@ WebRTCSocketsProxyingEnabled:
       default: true
     WebCore:
       default: false
+
+WebRTCUDPPortRange:
+  type: String
+  status: embedder
+  category: media
+  humanReadableName: "WebRTC UDP Port Range"
+  humanReadableDescription: "Set a UDP port range for WebRTC. If set to 0:0, the port range is determined by the OS"
+  condition: ENABLE(WEB_RTC)
+  defaultValue:
+    WebKitLegacy:
+      default: '"0:0"_str'
+    WebKit:
+      default: '"0:0"_str'
+    WebCore:
+      default: '"0:0"_str'
 
 WebRTCVP9Profile0CodecEnabled:
   type: bool

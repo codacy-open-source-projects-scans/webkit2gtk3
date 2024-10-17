@@ -1490,6 +1490,9 @@ static WebCore::ApplicationCacheStorage& webApplicationCacheStorage()
         if (WTF::IOSApplication::isMobileSafari())
             WebCore::DeprecatedGlobalSettings::setShouldManageAudioSessionCategory(true);
 #endif
+#if USE(AUDIO_SESSION)
+        WebCore::AudioSession::enableMediaPlayback();
+#endif
 
 #if ENABLE(VIDEO)
         WebCore::HTMLMediaElement::setMediaCacheDirectory(FileSystem::pathByAppendingComponent(String(NSTemporaryDirectory()), "MediaCache/"_s));
@@ -4704,6 +4707,10 @@ IGNORE_WARNINGS_END
 
 + (void)_setLoadResourcesSerially:(BOOL)serialize
 {
+#if PLATFORM(IOS_FAMILY)
+    WebThreadLock();
+#endif
+
     WebPlatformStrategies::initializeIfNecessary();
 
     webResourceLoadScheduler().setSerialLoadingEnabled(serialize);
@@ -8978,7 +8985,7 @@ FORWARD(toggleUnderline)
 {
     for (auto& alternativeWithRange : alternativesWithRange) {
         if (auto dictationContext = _private->m_alternativeTextUIController->addAlternatives(alternativeWithRange.alternatives.get()))
-            alternatives.append({ alternativeWithRange.range, dictationContext });
+            alternatives.append({ alternativeWithRange.range, *dictationContext });
     }
 }
 

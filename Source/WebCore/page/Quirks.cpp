@@ -95,10 +95,10 @@ static inline OptionSet<AutoplayQuirk> allowedAutoplayQuirks(Document& document)
     return loader->allowedAutoplayQuirks();
 }
 
-static HashMap<RegistrableDomain, String>& updatableStorageAccessUserAgentStringQuirks()
+static UncheckedKeyHashMap<RegistrableDomain, String>& updatableStorageAccessUserAgentStringQuirks()
 {
     // FIXME: Make this a member of Quirks.
-    static MainThreadNeverDestroyed<HashMap<RegistrableDomain, String>> map;
+    static MainThreadNeverDestroyed<UncheckedKeyHashMap<RegistrableDomain, String>> map;
     return map.get();
 }
 
@@ -336,7 +336,7 @@ bool Quirks::shouldDisableWritingSuggestionsByDefault() const
     return url.host() == "mail.google.com"_s;
 }
 
-void Quirks::updateStorageAccessUserAgentStringQuirks(HashMap<RegistrableDomain, String>&& userAgentStringQuirks)
+void Quirks::updateStorageAccessUserAgentStringQuirks(UncheckedKeyHashMap<RegistrableDomain, String>&& userAgentStringQuirks)
 {
     auto& quirks = updatableStorageAccessUserAgentStringQuirks();
     quirks.clear();
@@ -634,6 +634,22 @@ bool Quirks::needsYouTubeOverflowScrollQuirk() const
         m_needsYouTubeOverflowScrollQuirk = m_document->url().host() == "www.youtube.com"_s;
 
     return *m_needsYouTubeOverflowScrollQuirk;
+#else
+    return false;
+#endif
+}
+
+// amazon.com rdar://128962002
+bool Quirks::needsPrimeVideoUserSelectNoneQuirk() const
+{
+#if PLATFORM(MAC)
+    if (!needsQuirks())
+        return false;
+
+    if (!m_needsPrimeVideoUserSelectNoneQuirk)
+        m_needsPrimeVideoUserSelectNoneQuirk = m_document->url().host() == "www.amazon.com"_s;
+
+    return *m_needsPrimeVideoUserSelectNoneQuirk;
 #else
     return false;
 #endif
@@ -1620,6 +1636,12 @@ bool Quirks::shouldFlipScreenDimensions() const
 #endif
 }
 
+bool Quirks::shouldAllowDownloadsInSpiteOfCSP() const
+{
+    // FIXME: Remove this when rdar://137625935 is resolved.
+    return isDomain("apple.com"_s);
+}
+
 // This section is dedicated to UA override for iPad. iPads (but iPad Mini) are sending a desktop user agent
 // to websites. In some cases, the website breaks in some ways, not expecting a touch interface for the website.
 // Controls not active or too small, form factor, etc. In this case it is better to send the iPad Mini UA.
@@ -1830,6 +1852,20 @@ String Quirks::scriptToEvaluateBeforeRunningScriptFromURL(const URL& scriptURL)
     UNUSED_PARAM(scriptURL);
 #endif
     return { };
+}
+
+bool Quirks::shouldHideCoarsePointerCharacteristics() const
+{
+#if ENABLE(DESKTOP_CONTENT_MODE_QUIRKS)
+    if (!needsQuirks())
+        return false;
+
+    auto topDomain = RegistrableDomain(m_document->topDocument().url()).string();
+    if (topDomain == "disneyplus.com"_s)
+        return true;
+#endif
+
+    return false;
 }
 
 }

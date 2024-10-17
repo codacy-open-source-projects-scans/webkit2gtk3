@@ -38,6 +38,10 @@ namespace WebGPU {
 static id<MTLComputePipelineState> createComputePipelineState(id<MTLDevice> device, id<MTLFunction> function, const PipelineLayout& pipelineLayout, const MTLSize& size, NSString *label)
 {
     auto computePipelineDescriptor = [MTLComputePipelineDescriptor new];
+#if ENABLE(WEBGPU_BY_DEFAULT)
+    computePipelineDescriptor.shaderValidation = MTLShaderValidationEnabled;
+#endif
+
     computePipelineDescriptor.computeFunction = function;
     computePipelineDescriptor.maxTotalThreadsPerThreadgroup = size.width * size.height * size.depth;
     for (size_t i = 0; i < pipelineLayout.numberOfBindGroupLayouts(); ++i)
@@ -54,7 +58,7 @@ static id<MTLComputePipelineState> createComputePipelineState(id<MTLDevice> devi
     return computePipelineState;
 }
 
-static std::optional<MTLSize> metalSize(auto workgroupSize, const HashMap<String, WGSL::ConstantValue>& wgslConstantValues)
+static std::optional<MTLSize> metalSize(auto workgroupSize, const UncheckedKeyHashMap<String, WGSL::ConstantValue>& wgslConstantValues)
 {
     auto width = WGSL::evaluate(*workgroupSize.width, wgslConstantValues);
     auto height = workgroupSize.height ? WGSL::evaluate(*workgroupSize.height, wgslConstantValues) : 1;

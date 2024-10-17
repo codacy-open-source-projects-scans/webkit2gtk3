@@ -214,8 +214,7 @@ TEST(IPCTestingAPI, CanSendInvalidAsyncMessageToUIProcessWithoutTermination)
     EXPECT_STREQ([alertMessage UTF8String], "hi");
 }
 
-// #Fixme rdar://137215517
-TEST(IPCTestingAPI, DISABLED_CanSendInvalidSyncMessageToUIProcessWithoutTermination)
+TEST(IPCTestingAPI, CanSendInvalidSyncMessageToUIProcessWithoutTermination)
 {
     auto webView = createWebViewWithIPCTestingAPI();
 
@@ -228,7 +227,7 @@ TEST(IPCTestingAPI, DISABLED_CanSendInvalidSyncMessageToUIProcessWithoutTerminat
         "</script>"];
     TestWebKitAPI::Util::run(&done);
 
-    EXPECT_STREQ([alertMessage UTF8String], "Failed to successfully deserialize the message");
+    EXPECT_STREQ([alertMessage UTF8String], "Receiver cancelled the reply due to invalid destination or deserialization error");
 }
 
 #if ENABLE(GPU_PROCESS)
@@ -395,8 +394,7 @@ TEST(IPCTestingAPI, DescribesArguments)
     EXPECT_STREQ([[webView stringByEvaluatingJavaScript:@"args[2].type"] UTF8String], "String");
 }
 
-// #Fixme rdar://137215517
-TEST(IPCTestingAPI, DISABLED_CanInterceptAlert)
+TEST(IPCTestingAPI, CanInterceptAlert)
 {
     auto webView = createWebViewWithIPCTestingAPI();
 
@@ -493,7 +491,7 @@ static NSSet<NSString *> *splitTypeFromList(NSString *container, NSString *list)
         || [container isEqualToString:@"Vector"]
         || [container isEqualToString:@"std::array"]
         || [container isEqualToString:@"HashSet"];
-    bool firstTwoTypesOnly = [container isEqualToString:@"HashMap"];
+    bool firstTwoTypesOnly = [container isEqualToString:@"UncheckedKeyHashMap"];
 
     NSMutableSet *set = NSMutableSet.set;
     size_t nestedTypeDepth { 0 };
@@ -530,7 +528,7 @@ static NSMutableSet<NSString *> *extractTypesFromContainers(NSSet<NSString *> *i
         BOOL foundContainer = NO;
         NSArray<NSString *> *containerTypes = @[
             @"Expected",
-            @"HashMap",
+            @"UncheckedKeyHashMap",
             @"MemoryCompactRobinHoodHashMap",
             @"MemoryCompactLookupOnlyRobinHoodHashSet",
             @"std::pair",
@@ -697,8 +695,9 @@ TEST(IPCTestingAPI, SerializedTypeInfo)
 #if !HAVE(WK_SECURE_CODING_DATA_DETECTORS)
         @"WKDDActionContext",
 #endif
-        @"WebCore::ContextMenuAction"
+        @"WebCore::ContextMenuAction",
 #endif
+        @"WebCore::FromDownloadAttribute"
     ]];
     if (![expectedTypesNeedingDescriptions isEqual:typesNeedingDescriptions]) {
         EXPECT_TRUE(false);

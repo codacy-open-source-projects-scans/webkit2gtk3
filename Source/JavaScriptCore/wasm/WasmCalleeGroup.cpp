@@ -195,6 +195,7 @@ void CalleeGroup::compileAsync(VM& vm, AsyncCompilationCallback&& task)
     task->run(Ref { *this }, isAsync);
 }
 
+#if ENABLE(WEBASSEMBLY_BBQJIT)
 BBQCallee* CalleeGroup::tryGetBBQCalleeForLoopOSR(const AbstractLocker&, VM& vm, FunctionCodeIndex functionIndex)
 {
     if (m_bbqCallees.isEmpty())
@@ -231,6 +232,7 @@ void CalleeGroup::releaseBBQCallee(const AbstractLocker&, FunctionCodeIndex func
 
     bbqCallee->reportToVMsForDestruction();
 }
+#endif
 
 #if ENABLE(WEBASSEMBLY_OMGJIT) || ENABLE(WEBASSEMBLY_BBQJIT)
 void CalleeGroup::updateCallsitesToCallUs(const AbstractLocker& locker, CodeLocationLabel<WasmEntryPtrTag> entrypoint, FunctionCodeIndex functionIndex)
@@ -243,10 +245,10 @@ void CalleeGroup::updateCallsitesToCallUs(const AbstractLocker& locker, CodeLoca
     };
 
     // This is necessary since Callees are released under `Heap::stopThePeriphery()`, but that only stops JS compiler
-    // threads and not wasm ones. So the OSREntryCallee could die between the time we collect the callsites and when
+    // threads and not wasm ones. So the OMGOSREntryCallee could die between the time we collect the callsites and when
     // we actually repatch its callsites.
     // FIXME: These inline capacities were picked semi-randomly. We should figure out if there's a better number.
-    Vector<RefPtr<OSREntryCallee>, 4> keepAliveOSREntryCallees;
+    Vector<RefPtr<OMGOSREntryCallee>, 4> keepAliveOSREntryCallees;
     Vector<Callsite, 16> callsites;
 
     auto functionSpaceIndex = toSpaceIndex(functionIndex);
@@ -254,7 +256,7 @@ void CalleeGroup::updateCallsitesToCallUs(const AbstractLocker& locker, CodeLoca
         if (!caller)
             return;
 
-        // FIXME: This should probably be a variant of FixedVector<UnlinkedWasmToWasmCall> and HashMap<FunctionIndex, FixedVector<UnlinkedWasmToWasmCall>> for big functions.
+        // FIXME: This should probably be a variant of FixedVector<UnlinkedWasmToWasmCall> and UncheckedKeyHashMap<FunctionIndex, FixedVector<UnlinkedWasmToWasmCall>> for big functions.
         for (UnlinkedWasmToWasmCall& callsite : caller->wasmToWasmCallsites()) {
             if (callsite.functionIndexSpace == functionSpaceIndex) {
                 dataLogLnIf(verbose, "Repatching call [", toCodeIndex(caller->index()), "] at: ", RawPointer(callsite.callLocation.dataLocation()), " to ", RawPointer(entrypoint.taggedPtr()));
@@ -332,34 +334,37 @@ TriState CalleeGroup::calleeIsReferenced(const AbstractLocker&, Wasm::Callee* ca
     case CompilationMode::LLIntMode:
     case CompilationMode::IPIntMode:
         return TriState::True;
+#if ENABLE(WEBASSEMBLY_BBQJIT)
     case CompilationMode::BBQMode: {
         FunctionCodeIndex index = toCodeIndex(callee->index());
         if (m_bbqCallees.at(index).isWeak())
             return m_bbqCallees.at(index).get() ? TriState::Indeterminate : TriState::False;
         return triState(m_bbqCallees.at(index).ptr());
     }
+#endif
+#if ENABLE(WEBASSEMBLY_OMGJIT)
     case CompilationMode::OMGMode:
         return triState(m_omgCallees.at(toCodeIndex(callee->index())).get());
     case CompilationMode::OMGForOSREntryMode: {
         FunctionCodeIndex index = toCodeIndex(callee->index());
         if (m_osrEntryCallees.get(index).get()) {
-            // The BBQCallee really owns the OSREntryCallee so as long as that's around the OSREntryCallee is referenced.
+            // The BBQCallee really owns the OMGOSREntryCallee so as long as that's around the OMGOSREntryCallee is referenced.
             if (m_bbqCallees.at(index).get())
                 return TriState::True;
             return TriState::Indeterminate;
         }
         return TriState::False;
     }
+#endif
     // FIXME: This doesn't record the index its associated with so we can't validate anything here.
     case CompilationMode::JSToWasmEntrypointMode:
     // FIXME: These are owned by JS, it's not clear how to verify they're still alive here.
     case CompilationMode::JSToWasmICMode:
     case CompilationMode::WasmToJSMode:
         return TriState::True;
-    case CompilationMode::BBQForOSREntryMode:
+    default:
         RELEASE_ASSERT_NOT_REACHED();
     }
-    return TriState::False;
 }
 
 bool CalleeGroup::isSafeToRun(MemoryMode memoryMode)

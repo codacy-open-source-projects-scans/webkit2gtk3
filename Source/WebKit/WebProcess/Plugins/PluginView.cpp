@@ -1100,6 +1100,13 @@ void PluginView::openWithPreview(CompletionHandler<void(const String&, FrameInfo
     protectedPlugin()->openWithPreview(WTFMove(completionHandler));
 }
 
+#if PLATFORM(IOS_FAMILY)
+void PluginView::pluginDidInstallPDFDocument(double initialScale)
+{
+    protectedWebPage()->pluginDidInstallPDFDocument(initialScale);
+}
+#endif
+
 } // namespace WebKit
 
 #endif

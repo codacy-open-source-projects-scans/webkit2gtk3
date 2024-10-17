@@ -51,25 +51,20 @@ class ViewTimeline final : public ScrollTimeline {
 public:
     static Ref<ViewTimeline> create(ViewTimelineOptions&& = { });
     static Ref<ViewTimeline> create(const AtomString&, ScrollAxis, ViewTimelineInsets&&);
-    static Ref<ViewTimeline> createFromCSSValue(Style::BuilderState&, const CSSViewValue&);
+    static Ref<ViewTimeline> createFromCSSValue(const Style::BuilderState&, const CSSViewValue&);
 
     Element* subject() const { return m_subject.get(); }
-    const CSSNumericValue& startOffset() const;
-    const CSSNumericValue& endOffset() const;
+    const CSSNumericValue& startOffset();
+    const CSSNumericValue& endOffset();
     const ViewTimelineInsets& insets() const { return m_insets; }
     AnimationTimeline::ShouldUpdateAnimationsAndSendEvents documentWillUpdateAnimationsAndSendEvents() override;
     AnimationTimelinesController* controller() const override;
 
-    RenderBox* sourceRenderer() const;
+    RenderBox* sourceScrollerRenderer() const;
     Element* source() const override;
 
 private:
-    struct Data {
-        float scrollOffset { 0 };
-        float rangeStart { 0 };
-        float rangeEnd { 0 };
-    };
-    Data computeViewTimelineData(const TimelineRange& = { }) const;
+    ScrollTimeline::Data computeTimelineData(const TimelineRange& = { }) const override;
 
     explicit ViewTimeline(ViewTimelineOptions&& = { });
     explicit ViewTimeline(const AtomString&, ScrollAxis, ViewTimelineInsets&&);
@@ -80,6 +75,8 @@ private:
 
     WeakPtr<Element, WeakPtrImplWithEventTargetData> m_subject;
     ViewTimelineInsets m_insets;
+    Ref<CSSNumericValue> m_startOffset;
+    Ref<CSSNumericValue> m_endOffset;
 };
 
 } // namespace WebCore

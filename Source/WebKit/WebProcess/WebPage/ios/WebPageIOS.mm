@@ -4210,6 +4210,10 @@ void WebPage::resetViewportDefaultConfiguration(WebFrame* frame, bool hasMobileD
             m_viewportConfiguration.setDefaultConfiguration(ViewportConfiguration::imageDocumentParameters());
         else if (document->isTextDocument())
             m_viewportConfiguration.setDefaultConfiguration(ViewportConfiguration::textDocumentParameters());
+#if ENABLE(PDF_PLUGIN)
+        else if (m_page->settings().unifiedPDFEnabled() && document->isPluginDocument())
+            m_viewportConfiguration.setDefaultConfiguration(ViewportConfiguration::pluginDocumentParameters());
+#endif
         else
             configureWithParametersForStandardFrame = true;
     }
@@ -4616,6 +4620,13 @@ void WebPage::updateVisibleContentRects(const VisibleContentRectUpdateInfo& visi
         return transactionIdBeforeScalingPage >= visibleContentRectUpdateInfo.lastLayerTreeTransactionID();
     })();
 
+    bool pluginHandlesScaleFactor = [&]() -> bool {
+#if ENABLE(PDF_PLUGIN)
+        return mainFramePlugIn();
+#endif
+        return false;
+    }();
+
     if (!pageHasBeenScaledSinceLastLayerTreeCommitThatChangedPageScale) {
         bool hasSetPageScale = false;
         if (scaleFromUIProcess) {
@@ -4624,11 +4635,7 @@ void WebPage::updateVisibleContentRects(const VisibleContentRectUpdateInfo& visi
 
             m_dynamicSizeUpdateHistory.clear();
 
-#if ENABLE(PDF_PLUGIN)
-            if (RefPtr pluginView = mainFramePlugIn())
-                pluginView->setPageScaleFactor(scaleFromUIProcess.value(), scrollPosition);
-            else
-#endif
+            if (!pluginHandlesScaleFactor)
                 m_page->setPageScaleFactor(scaleFromUIProcess.value(), scrollPosition, m_isInStableState);
 
             hasSetPageScale = true;

@@ -243,10 +243,10 @@ struct MotionEvent {
 };
 
 #if !USE(GTK4)
-typedef HashMap<GtkWidget*, IntRect> WebKitWebViewChildrenMap;
-typedef HashMap<uint32_t, GUniquePtr<GdkEvent>> TouchEventsMap;
+typedef UncheckedKeyHashMap<GtkWidget*, IntRect> WebKitWebViewChildrenMap;
+typedef UncheckedKeyHashMap<uint32_t, GUniquePtr<GdkEvent>> TouchEventsMap;
 #else
-typedef HashMap<uint32_t, GRefPtr<GdkEvent>> TouchEventsMap;
+typedef UncheckedKeyHashMap<uint32_t, GRefPtr<GdkEvent>> TouchEventsMap;
 #endif
 
 struct _WebKitWebViewBasePrivate {
@@ -2550,7 +2550,7 @@ void webkitWebViewBaseCreateWebPage(WebKitWebViewBase* webkitWebViewBase, Ref<AP
     // We attach this here, because changes in scale factor are passed directly to the page proxy.
     g_signal_connect(webkitWebViewBase, "notify::scale-factor", G_CALLBACK(deviceScaleFactorChanged), nullptr);
 
-    WebCore::SystemSettings::singleton().addObserver([&webkitWebViewBase](const SystemSettings::State& state) mutable {
+    SystemSettings::singleton().addObserver([webkitWebViewBase](const SystemSettings::State& state) mutable {
         if (state.xftDPI)
             refreshInternalScaling(webkitWebViewBase);
         if (state.themeName || state.darkMode)
@@ -3463,7 +3463,13 @@ void webkitWebViewBaseSetPlugID(WebKitWebViewBase* webViewBase, const String& pl
     RELEASE_ASSERT(tokens.size() == 2);
 
     GUniqueOutPtr<GError> error;
-    GUniquePtr<char> busName(g_strdup_printf(":%s", tokens[0].utf8().data()));
+
+    auto plugBusName = tokens[0].utf8();
+    RELEASE_ASSERT(g_dbus_is_name(plugBusName.data()));
+
+    auto* busNamePrefix = !g_dbus_is_unique_name(plugBusName.data()) ? "" : ":";
+
+    GUniquePtr<char> busName(g_strdup_printf("%s%s", busNamePrefix, plugBusName.data()));
 
     priv->socketAccessible = adoptGRef(gtk_at_spi_socket_new(busName.get(), tokens[1].utf8().data(), &error.outPtr()));
 

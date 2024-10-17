@@ -217,6 +217,7 @@ void UnifiedPDFPlugin::teardown()
 #endif
 
     setActiveAnnotation({ nullptr, IsInPluginCleanup::Yes });
+    m_annotationContainer = nullptr;
 }
 
 GraphicsLayer* UnifiedPDFPlugin::graphicsLayer() const
@@ -272,8 +273,12 @@ void UnifiedPDFPlugin::installPDFDocument()
     if (isLocked())
         createPasswordEntryForm();
 
-    if (m_view)
+    if (m_view) {
         m_view->layerHostingStrategyDidChange();
+#if PLATFORM(IOS_FAMILY)
+        m_view->pluginDidInstallPDFDocument(pageScaleFactor());
+#endif
+    }
 
     [[NSNotificationCenter defaultCenter] addObserver:m_pdfMutationObserver.get() selector:@selector(formChanged:) name:mutationObserverNotificationString() object:m_pdfDocument.get()];
 
@@ -355,6 +360,12 @@ void UnifiedPDFPlugin::createPasswordEntryForm()
     auto passwordField = PDFPluginPasswordField::create(this);
     m_passwordField = passwordField.ptr();
     passwordField->attach(m_annotationContainer.get());
+}
+
+void UnifiedPDFPlugin::teardownPasswordEntryForm()
+{
+    m_passwordForm = nullptr;
+    m_passwordField = nullptr;
 }
 
 void UnifiedPDFPlugin::attemptToUnlockPDF(const String& password)
@@ -759,11 +770,11 @@ void UnifiedPDFPlugin::paintPDFContent(const WebCore::GraphicsLayer* layer, Grap
             context.clip(pageBoundsInPaintingCoordinates);
 
             ASSERT(layer);
-            bool paintedPageContent = asyncRenderer->paintTilesForPage(layer, context, documentScale, clipRect, pageBoundsInPaintingCoordinates, pageInfo.pageIndex);
-            LOG_WITH_STREAM(PDFAsyncRendering, stream << "UnifiedPDFPlugin::paintPDFContent - painting tiles for page " << pageInfo.pageIndex << " dest rect " << pageBoundsInPaintingCoordinates << " clip " << clipRect << " - painted cached tile " << paintedPageContent);
 
-            if (!paintedPageContent && showDebugIndicators)
+            if (showDebugIndicators)
                 context.fillRect(pageBoundsInPaintingCoordinates, Color::yellow.colorWithAlphaByte(128));
+
+            asyncRenderer->paintTilesForPage(layer, context, documentScale, clipRect, pageInfo.rectInPageLayoutCoordinates, pageBoundsInPaintingCoordinates, pageInfo.pageIndex);
         }
 
         bool currentPageHasAnnotation = pageWithAnnotation && *pageWithAnnotation == pageInfo.pageIndex;
@@ -983,12 +994,16 @@ double UnifiedPDFPlugin::scaleForFitToView() const
 
 double UnifiedPDFPlugin::initialScale() const
 {
+#if PLATFORM(MAC)
     auto actualSizeScale = scaleForActualSize();
     auto fitToViewScale = scaleForFitToView();
     auto initialScale = std::max(actualSizeScale, fitToViewScale);
     // Only let actual size scaling scale down, not up.
     initialScale = std::min(initialScale, 1.0);
     return initialScale;
+#else
+    return 1.0;
+#endif
 }
 
 void UnifiedPDFPlugin::computeNormalizationFactor()
@@ -1054,7 +1069,6 @@ void UnifiedPDFPlugin::setScaleFactor(double scale, std::optional<WebCore::IntPo
     if (!page)
         return;
 
-#if PLATFORM(MAC)
     IntPoint originInPluginCoordinates;
     if (originInRootViewCoordinates)
         originInPluginCoordinates = convertFromRootViewToPlugin(*originInRootViewCoordinates);
@@ -1079,7 +1093,6 @@ void UnifiedPDFPlugin::setScaleFactor(double scale, std::optional<WebCore::IntPo
     };
 
     auto zoomContentsOrigin = computeOriginInContentsCoordinates();
-#endif
 
     std::exchange(m_scaleFactor, scale);
 
@@ -1094,17 +1107,11 @@ void UnifiedPDFPlugin::setScaleFactor(double scale, std::optional<WebCore::IntPo
 #if PLATFORM(MAC)
     if (m_activeAnnotation)
         m_activeAnnotation->updateGeometry();
+#endif
 
     auto scrolledContentsPoint = roundedIntPoint(convertUp(CoordinateSpace::Contents, CoordinateSpace::ScrolledContents, FloatPoint { zoomContentsOrigin }));
     auto newScrollPosition = IntPoint { scrolledContentsPoint - originInPluginCoordinates };
     newScrollPosition = newScrollPosition.expandedTo({ 0, 0 });
-#else
-    FloatPoint newScrollPosition;
-    if (originInRootViewCoordinates)
-        newScrollPosition = convertUp(CoordinateSpace::Contents, CoordinateSpace::ScrolledContents, FloatPoint { originInRootViewCoordinates.value() });
-    else
-        newScrollPosition = convertUp(CoordinateSpace::Plugin, CoordinateSpace::Contents, FloatRect({ }, size())).center();
-#endif
 
     scrollToPointInContentsSpace(newScrollPosition);
 

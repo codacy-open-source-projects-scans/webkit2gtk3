@@ -162,7 +162,8 @@ void WorkerGlobalScope::prepareForDestruction()
 {
     WorkerOrWorkletGlobalScope::prepareForDestruction();
 
-    removeSupplement(WindowOrWorkerGlobalScopeTrustedTypes::workerGlobalSupplementName());
+    if (auto* trustedTypes = static_cast<WorkerGlobalScopeTrustedTypes*>(requireSupplement(WorkerGlobalScopeTrustedTypes::supplementName())))
+        trustedTypes->prepareForDestruction();
 
     if (settingsValues().serviceWorkersEnabled)
         swClientConnection().unregisterServiceWorkerClient(identifier());
@@ -708,7 +709,7 @@ bool WorkerGlobalScope::crossOriginIsolated() const
     return ScriptExecutionContext::crossOriginMode() == CrossOriginMode::Isolated;
 }
 
-void WorkerGlobalScope::updateSourceProviderBuffers(const ScriptBuffer& mainScript, const HashMap<URL, ScriptBuffer>& importedScripts)
+void WorkerGlobalScope::updateSourceProviderBuffers(const ScriptBuffer& mainScript, const UncheckedKeyHashMap<URL, ScriptBuffer>& importedScripts)
 {
     ASSERT(isContextThread());
 

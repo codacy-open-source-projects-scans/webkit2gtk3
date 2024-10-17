@@ -551,7 +551,7 @@ static RefPtr<CSSValue> consumeAutoOrLengthPercentage(CSSParserTokenRange& range
 {
     if (range.peek().id() == CSSValueAuto)
         return consumeIdent(range);
-    return consumeLengthPercentage(range, context, ValueRange::All, unitless, UnitlessZeroQuirk::Allow, NegativePercentagePolicy::Forbid, anchorPolicy, anchorSizePolicy);
+    return consumeLengthPercentage(range, context, ValueRange::All, unitless, UnitlessZeroQuirk::Allow, anchorPolicy, anchorSizePolicy);
 }
 
 RefPtr<CSSValue> consumeMarginSide(CSSParserTokenRange& range, const CSSParserContext& context, CSSPropertyID currentShorthand)
@@ -1167,10 +1167,10 @@ RefPtr<CSSValue> consumeTextBoxEdge(CSSParserTokenRange& range, const CSSParserC
 RefPtr<CSSValue> consumeWebKitRubyPosition(CSSParserTokenRange& range, const CSSParserContext&)
 {
     if (range.peek().id() == CSSValueInterCharacter) {
-        consumeIdent(range);
+        range.consumeIncludingWhitespace();
         return CSSPrimitiveValue::create(CSSValueLegacyInterCharacter);
     }
-    return consumeIdent(range);
+    return consumeIdent<CSSValueBefore, CSSValueAfter>(range);
 }
 
 RefPtr<CSSValue> consumeBorderRadiusCorner(CSSParserTokenRange& range, const CSSParserContext& context)
@@ -2375,18 +2375,6 @@ RefPtr<CSSValue> consumeOffsetRotate(CSSParserTokenRange& range, const CSSParser
 RefPtr<CSSValue> consumeDeclarationValue(CSSParserTokenRange& range, const CSSParserContext& context)
 {
     return CSSVariableParser::parseDeclarationValue(nullAtom(), range.consumeAll(), context);
-}
-
-RefPtr<CSSValue> consumeTextSpacingTrim(CSSParserTokenRange& range, const CSSParserContext&)
-{
-    // auto | space-all |  trim-all | [ allow-end || space-first ]
-    // FIXME: add remaining values;
-    if (auto value = consumeIdent<CSSValueAuto, CSSValueSpaceAll>(range)) {
-        if (!range.atEnd())
-            return nullptr;
-        return value;
-    }
-    return nullptr;
 }
 
 RefPtr<CSSValue> consumeTextAutospace(CSSParserTokenRange& range, const CSSParserContext&)

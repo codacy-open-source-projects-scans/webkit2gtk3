@@ -249,7 +249,7 @@ struct WebPageCreationParameters {
     String overrideContentSecurityPolicy { };
     std::optional<double> cpuLimit { };
 
-    HashMap<String, WebURLSchemeHandlerIdentifier> urlSchemeHandlers { };
+    UncheckedKeyHashMap<String, WebURLSchemeHandlerIdentifier> urlSchemeHandlers { };
     Vector<String> urlSchemesWithLegacyCustomProtocolHandlers { };
 
 #if ENABLE(APPLICATION_MANIFEST)
@@ -325,6 +325,7 @@ struct WebPageCreationParameters {
 
     std::optional<RemotePageParameters> remotePageParameters { };
     WebCore::FrameIdentifier mainFrameIdentifier;
+    String openedMainFrameName;
     std::optional<WebCore::FrameIdentifier> mainFrameOpenerIdentifier { };
     WebCore::SandboxFlags initialSandboxFlags;
     std::optional<WebCore::WindowFeatures> windowFeatures { };

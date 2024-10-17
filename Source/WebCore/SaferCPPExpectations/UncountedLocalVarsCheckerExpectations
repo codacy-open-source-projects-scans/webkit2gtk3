@@ -544,6 +544,7 @@ animation/AnimationTimeline.cpp
 animation/AnimationTimelinesController.cpp
 animation/BlendingKeyframes.cpp
 animation/CSSAnimation.cpp
+animation/CSSNumberishTime.cpp
 animation/CSSPropertyAnimation.cpp
 animation/CSSTransition.cpp
 animation/DocumentTimeline.cpp
@@ -681,7 +682,6 @@ css/CSSFontFace.cpp
 css/CSSFontFaceSet.cpp
 css/CSSFontFaceSource.cpp
 css/CSSFontSelector.cpp
-css/CSSGradientValue.cpp
 css/CSSGroupingRule.cpp
 css/CSSImageSetValue.cpp
 css/CSSImageValue.cpp
@@ -1027,7 +1027,6 @@ page/OpportunisticTaskScheduler.cpp
 page/Page.cpp
 page/PageColorSampler.cpp
 page/PageConsoleClient.cpp
-page/PageDebuggable.cpp
 page/PageGroup.cpp
 page/PageGroupLoadDeferrer.cpp
 page/PageOverlayController.cpp
@@ -1145,17 +1144,20 @@ platform/graphics/filters/FilterOperations.cpp
 platform/graphics/filters/software/FEBlendSoftwareApplier.cpp
 platform/graphics/filters/software/FEColorMatrixSoftwareApplier.cpp
 platform/graphics/filters/software/FEComponentTransferSoftwareApplier.cpp
+platform/graphics/filters/software/FECompositeSoftwareApplier.cpp
 platform/graphics/filters/software/FECompositeSoftwareArithmeticApplier.cpp
 platform/graphics/filters/software/FEConvolveMatrixSoftwareApplier.cpp
 platform/graphics/filters/software/FEDisplacementMapSoftwareApplier.cpp
 platform/graphics/filters/software/FEDropShadowSoftwareApplier.cpp
 platform/graphics/filters/software/FEGaussianBlurSoftwareApplier.cpp
 platform/graphics/filters/software/FEImageSoftwareApplier.cpp
+platform/graphics/filters/software/FELightingSoftwareApplier.cpp
 platform/graphics/filters/software/FEMorphologySoftwareApplier.cpp
 platform/graphics/filters/software/FEOffsetSoftwareApplier.cpp
 platform/graphics/filters/software/FETileSoftwareApplier.cpp
 platform/graphics/filters/software/FETurbulenceSoftwareApplier.cpp
 platform/graphics/filters/software/SourceAlphaSoftwareApplier.cpp
+platform/graphics/filters/software/SourceGraphicSoftwareApplier.cpp
 platform/graphics/mac/controls/ImageControlsButtonMac.mm
 platform/graphics/mac/controls/MeterMac.mm
 platform/graphics/mac/controls/ProgressBarMac.mm
@@ -1171,7 +1173,6 @@ platform/mock/MockRealtimeMediaSourceCenter.cpp
 platform/mock/MockRealtimeVideoSource.cpp
 platform/network/BlobRegistryImpl.cpp
 platform/network/FormData.cpp
-platform/network/cocoa/ResourceRequestCocoa.mm
 platform/text/BidiContext.cpp
 platform/text/BidiResolver.h
 plugins/DOMPluginArray.cpp

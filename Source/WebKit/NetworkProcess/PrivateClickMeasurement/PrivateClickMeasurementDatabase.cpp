@@ -36,6 +36,8 @@
 #include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/MakeString.h>
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
 namespace WebKit::PCM {
 
 constexpr auto setUnattributedPrivateClickMeasurementAsExpiredQuery = "UPDATE UnattributedPrivateClickMeasurement SET timeOfAdClick = -1.0"_s;
@@ -84,6 +86,11 @@ static WeakHashSet<Database>& allDatabases()
 }
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(Database);
+
+Ref<Database> Database::create(const String& storageDirectory)
+{
+    return adoptRef(*new Database(storageDirectory));
+}
 
 Database::Database(const String& storageDirectory)
     : DatabaseUtilities(FileSystem::pathByAppendingComponent(storageDirectory, "pcm.db"_s))
@@ -728,3 +735,5 @@ void Database::addDestinationTokenColumnsIfNecessary()
 }
 
 } // namespace WebKit::PCM
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

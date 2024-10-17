@@ -2315,6 +2315,13 @@ void Editor::setWritingSuggestion(const String& fullTextWithPrediction, const Ch
     auto range = document->selection().selection().firstRange();
     if (!range)
         return;
+
+    if (!range->collapsed())
+        return;
+
+    if (!is<Text>(range->startContainer()))
+        return;
+
     range->start.offset = 0;
 
     m_isHandlingAcceptedCandidate = true;
@@ -2327,7 +2334,7 @@ void Editor::setWritingSuggestion(const String& fullTextWithPrediction, const Ch
     ASSERT(newText.isEmpty() || newText.startsWith(currentText));
     auto textDelta = newText.isEmpty() ? emptyString() : newText.substring(currentText.length());
 
-    auto offset = WebCore::characterCount(*range);
+    auto offset = range->endOffset();
     auto offsetWithDelta = currentText.isEmpty() ? offset : offset + textDelta.length();
 
     if (!suggestionText.isEmpty()) {
@@ -2353,7 +2360,7 @@ void Editor::setWritingSuggestion(const String& fullTextWithPrediction, const Ch
 }
 #endif
 
-void Editor::setComposition(const String& text, const Vector<CompositionUnderline>& underlines, const Vector<CompositionHighlight>& highlights, const HashMap<String, Vector<CharacterRange>>& annotations, unsigned selectionStart, unsigned selectionEnd)
+void Editor::setComposition(const String& text, const Vector<CompositionUnderline>& underlines, const Vector<CompositionHighlight>& highlights, const UncheckedKeyHashMap<String, Vector<CharacterRange>>& annotations, unsigned selectionStart, unsigned selectionEnd)
 {
     Ref document = protectedDocument();
     SetCompositionScope setCompositionScope(document.copyRef());

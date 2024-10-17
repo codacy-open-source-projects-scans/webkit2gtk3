@@ -66,6 +66,12 @@ LibWebRTCProvider::LibWebRTCProvider(WebPage& webPage)
 #else
     m_supportsMDNS = true;
 #endif
+
+    auto* page = webPage.corePage();
+    if (!page || !page->settings().webRTCUDPPortRange())
+        return;
+
+    setPortAllocatorRange(page->settings().webRTCUDPPortRange());
 }
 
 LibWebRTCProvider::~LibWebRTCProvider() = default;
@@ -76,7 +82,7 @@ rtc::scoped_refptr<webrtc::PeerConnectionInterface> LibWebRTCProvider::createPee
     LibWebRTCCodecs::initializeIfNeeded();
 #endif
 
-    auto* networkManager = LibWebRTCNetworkManager::getOrCreate(identifier);
+    RefPtr networkManager = LibWebRTCNetworkManager::getOrCreate(identifier);
     if (!networkManager)
         return nullptr;
 

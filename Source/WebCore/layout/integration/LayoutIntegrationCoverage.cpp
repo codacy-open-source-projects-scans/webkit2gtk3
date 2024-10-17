@@ -51,7 +51,7 @@ namespace LayoutIntegration {
 
 enum class AvoidanceReason : uint32_t {
     FeatureIsDisabled                   = 1U << 0,
-    FlexBoxHasNoFlexItem                = 1U << 1,
+    // Unused                           = 1U << 1,
     FlexBoxNeedsBaseline                = 1U << 2,
     FlexBoxIsVertical                   = 1U << 3,
     FlexBoxIsRTL                        = 1U << 4,
@@ -70,7 +70,7 @@ enum class AvoidanceReason : uint32_t {
     FlexItemIsVertical                  = 1U << 17,
     FlexItemIsRTL                       = 1U << 18,
     FlexItemHasNonFixedHeight           = 1U << 19,
-    // Unused                           = 1U << 20,
+    FlexItemHasIntrinsicFlexBasis       = 1U << 20,
     // Unused                           = 1U << 21,
     // Unused                           = 1U << 22,
     FlexItemHasContainsSize             = 1U << 23,
@@ -106,13 +106,12 @@ static inline bool mayHaveScrollbarOrScrollableOverflow(const RenderStyle& style
 
 static OptionSet<AvoidanceReason> canUseForFlexLayoutWithReason(const RenderFlexibleBox& flexBox, IncludeReasons includeReasons)
 {
+    ASSERT(flexBox.firstInFlowChild());
+
     auto reasons = OptionSet<AvoidanceReason> { };
 
     if (!flexBox.document().settings().flexFormattingContextIntegrationEnabled())
         ADD_REASON_AND_RETURN_IF_NEEDED(FeatureIsDisabled, reasons, includeReasons);
-
-    if (!flexBox.firstInFlowChild())
-        ADD_REASON_AND_RETURN_IF_NEEDED(FlexBoxHasNoFlexItem, reasons, includeReasons);
 
     auto& flexBoxStyle = flexBox.style();
     if (flexBoxStyle.display() == DisplayType::InlineFlex)
@@ -155,6 +154,9 @@ static OptionSet<AvoidanceReason> canUseForFlexLayoutWithReason(const RenderFlex
 
         if (!flexItemStyle.height().isFixed())
             ADD_REASON_AND_RETURN_IF_NEEDED(FlexItemHasNonFixedHeight, reasons, includeReasons);
+
+        if (flexItemStyle.flexBasis().isIntrinsic())
+            ADD_REASON_AND_RETURN_IF_NEEDED(FlexItemHasIntrinsicFlexBasis, reasons, includeReasons);
 
         if (flexItemStyle.containsSize())
             ADD_REASON_AND_RETURN_IF_NEEDED(FlexItemHasContainsSize, reasons, includeReasons);
@@ -208,9 +210,6 @@ static void printReason(AvoidanceReason reason, TextStream& stream)
     case AvoidanceReason::FeatureIsDisabled:
         stream << "modern flex layout is disabled";
         break;
-    case AvoidanceReason::FlexBoxHasNoFlexItem:
-        stream << "flex box has no flex item";
-        break;
     case AvoidanceReason::FlexBoxNeedsBaseline:
         stream << "inline flex box needs baseline";
         break;
@@ -249,6 +248,9 @@ static void printReason(AvoidanceReason reason, TextStream& stream)
         break;
     case AvoidanceReason::FlexItemHasNonFixedHeight:
         stream << "flex item has non-fixed height value";
+        break;
+    case AvoidanceReason::FlexItemHasIntrinsicFlexBasis:
+        stream << "flex item has intrinsic flex basis value (e.g. min-content";
         break;
     case AvoidanceReason::FlexItemHasContainsSize:
         stream << "flex item has contains: size";

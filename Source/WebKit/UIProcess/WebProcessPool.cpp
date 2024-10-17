@@ -256,16 +256,6 @@ WebProcessPool::WebProcessPool(API::ProcessPoolConfiguration& configuration)
         WTF::setProcessPrivileges(allPrivileges());
         WebCore::NetworkStorageSession::permitProcessToUseCookieAPI(true);
         Process::setIdentifier(WebCore::ProcessIdentifier::generate());
-#if PLATFORM(COCOA)
-        // This can be removed once Safari calls _setLinkedOnOrAfterEverything everywhere that WebKit deploys.
-#if PLATFORM(IOS_FAMILY)
-        bool isSafari = WTF::IOSApplication::isMobileSafari();
-#elif PLATFORM(MAC)
-        bool isSafari = WTF::MacApplication::isSafari();
-#endif
-        if (isSafari)
-            enableAllSDKAlignedBehaviors();
-#endif
     }
 
     for (auto& scheme : m_configuration->alwaysRevalidatedURLSchemes())
@@ -317,7 +307,6 @@ WebProcessPool::WebProcessPool(API::ProcessPoolConfiguration& configuration)
 #if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
     Ref storageAccessUserAgentStringQuirkController = StorageAccessUserAgentStringQuirkController::sharedSingleton();
     Ref storageAccessPromptQuirkController = StorageAccessPromptQuirkController::sharedSingleton();
-    Ref scriptTelemetryController = ScriptTelemetryController::sharedSingleton();
 
     m_storageAccessUserAgentStringQuirksDataUpdateObserver = storageAccessUserAgentStringQuirkController->observeUpdates([weakThis = WeakPtr { *this }] {
         // FIXME: Filter by process's site when site isolation is enabled
@@ -342,16 +331,6 @@ WebProcessPool::WebProcessPool(API::ProcessPoolConfiguration& configuration)
     });
     storageAccessPromptQuirkController->initializeIfNeeded();
     storageAccessUserAgentStringQuirkController->initializeIfNeeded();
-
-    m_scriptTelemetryDataUpdateObserver = scriptTelemetryController->observeUpdates([weakThis = WeakPtr { *this }] {
-        RefPtr protectedThis = weakThis.get();
-        if (!protectedThis)
-            return;
-
-        if (auto data = ScriptTelemetryController::sharedSingleton().cachedListData(); !data.isEmpty())
-            protectedThis->sendToAllProcesses(Messages::WebProcess::UpdateScriptTelemetryFilter(WTFMove(data)));
-    });
-    scriptTelemetryController->initializeIfNeeded();
 #endif // ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
 }
 
@@ -1105,7 +1084,7 @@ void WebProcessPool::processDidFinishLaunching(WebProcessProxy& process)
 
 #if ENABLE(EXTENSION_CAPABILITIES)
     for (auto& page : process.pages()) {
-        if (auto& mediaCapability = page->mediaCapability()) {
+        if (RefPtr mediaCapability = page->mediaCapability()) {
             WEBPROCESSPOOL_RELEASE_LOG(ProcessCapabilities, "processDidFinishLaunching[envID=%{public}s]: updating media capability", mediaCapability->environmentIdentifier().utf8().data());
             page->updateMediaCapability();
         }
@@ -2265,7 +2244,7 @@ void WebProcessPool::setDomainsWithUserInteraction(HashSet<WebCore::RegistrableD
     m_domainsWithUserInteraction = WTFMove(domains);
 }
 
-void WebProcessPool::setDomainsWithCrossPageStorageAccess(HashMap<TopFrameDomain, Vector<SubResourceDomain>>&& domains, CompletionHandler<void()>&& completionHandler)
+void WebProcessPool::setDomainsWithCrossPageStorageAccess(UncheckedKeyHashMap<TopFrameDomain, Vector<SubResourceDomain>>&& domains, CompletionHandler<void()>&& completionHandler)
 {    
     Ref callbackAggregator = CallbackAggregator::create(WTFMove(completionHandler));
 
@@ -2492,5 +2471,26 @@ void WebProcessPool::setPagesControlledByAutomation(bool controlled)
 }
 #endif
 #endif
+
+#if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
+
+void WebProcessPool::observeScriptTelemetryUpdatesIfNeeded()
+{
+    if (m_scriptTelemetryDataUpdateObserver)
+        return;
+
+    Ref controller = ScriptTelemetryController::sharedSingleton();
+    m_scriptTelemetryDataUpdateObserver = controller->observeUpdates([weakThis = WeakPtr { *this }] {
+        RefPtr protectedThis = weakThis.get();
+        if (!protectedThis)
+            return;
+
+        if (auto data = ScriptTelemetryController::sharedSingleton().cachedListData(); !data.isEmpty())
+            protectedThis->sendToAllProcesses(Messages::WebProcess::UpdateScriptTelemetryFilter(WTFMove(data)));
+    });
+    controller->initializeIfNeeded();
+}
+
+#endif // ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
 
 } // namespace WebKit

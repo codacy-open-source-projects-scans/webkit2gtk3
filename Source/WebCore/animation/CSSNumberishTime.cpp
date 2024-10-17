@@ -67,7 +67,7 @@ CSSNumberishTime::CSSNumberishTime(const CSSNumberish& value)
 
     ASSERT(std::holds_alternative<RefPtr<CSSNumericValue>>(value));
     auto numericValue = std::get<RefPtr<CSSNumericValue>>(value);
-    if (RefPtr unitValue = dynamicDowncast<CSSUnitValue>(numericValue.get())) {
+    if (auto* unitValue = dynamicDowncast<CSSUnitValue>(numericValue.get())) {
         if (unitValue->unitEnum() == CSSUnitType::CSS_NUMBER) {
             m_type = Type::Time;
             m_value = unitValue->value() / 1000;
@@ -126,12 +126,33 @@ bool CSSNumberishTime::isZero() const
     return !m_value;
 }
 
+CSSNumberishTime CSSNumberishTime::matchingZero() const
+{
+    return { m_type, 0 };
+}
+
 bool CSSNumberishTime::approximatelyEqualTo(const CSSNumberishTime& other) const
 {
     ASSERT(m_type == other.m_type);
     if (m_type == Type::Time)
         return std::abs(time()->microseconds() - other.time()->microseconds()) < timeEpsilon.microseconds();
     return m_value == other.m_value;
+}
+
+bool CSSNumberishTime::approximatelyLessThan(const CSSNumberishTime& other) const
+{
+    ASSERT(m_type == other.m_type);
+    if (m_type == Type::Time)
+        return (*time() + timeEpsilon) < *other.time();
+    return m_value < other.m_value;
+}
+
+bool CSSNumberishTime::approximatelyGreaterThan(const CSSNumberishTime& other) const
+{
+    ASSERT(m_type == other.m_type);
+    if (m_type == Type::Time)
+        return (*time() - timeEpsilon) > *other.time();
+    return m_value > other.m_value;
 }
 
 CSSNumberishTime CSSNumberishTime::operator+(const CSSNumberishTime& other) const

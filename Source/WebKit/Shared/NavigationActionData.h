@@ -40,6 +40,7 @@
 #include <WebCore/ResourceResponse.h>
 #include <WebCore/SandboxFlags.h>
 #include <WebCore/SecurityOriginData.h>
+#include <WebCore/UserGestureTokenIdentifier.h>
 
 namespace WebKit {
 
@@ -48,7 +49,7 @@ struct NavigationActionData {
     OptionSet<WebEventModifier> modifiers;
     WebMouseEventButton mouseButton { WebMouseEventButton::None };
     WebMouseEventSyntheticClickType syntheticClickType { WebMouseEventSyntheticClickType::NoTap };
-    uint64_t userGestureTokenIdentifier { 0 };
+    std::optional<WebCore::UserGestureTokenIdentifier> userGestureTokenIdentifier;
     std::optional<WTF::UUID> userGestureAuthorizationToken;
     bool canHandleRequest { false };
     WebCore::ShouldOpenExternalURLsPolicy shouldOpenExternalURLsPolicy { WebCore::ShouldOpenExternalURLsPolicy::ShouldNotAllow };
@@ -61,6 +62,7 @@ struct NavigationActionData {
     bool openedByDOMWithOpener { false };
     bool hasOpener { false };
     bool isPerformingHTTPFallback { false };
+    String openedMainFrameName;
     WebCore::SecurityOriginData requesterOrigin;
     WebCore::SecurityOriginData requesterTopOrigin;
     std::optional<WebCore::BackForwardItemIdentifier> targetBackForwardItemIdentifier;

@@ -107,7 +107,7 @@ public:
 
     void releaseMemory();
 
-    bool paintTilesForPage(const WebCore::GraphicsLayer*, WebCore::GraphicsContext&, float documentScale, const WebCore::FloatRect& clipRect, const WebCore::FloatRect& pageBoundsInPaintingCoordinates, PDFDocumentLayout::PageIndex);
+    bool paintTilesForPage(const WebCore::GraphicsLayer*, WebCore::GraphicsContext&, float documentScale, const WebCore::FloatRect& clipRect, const WebCore::FloatRect& clipRectInPageCoordinates, const WebCore::FloatRect& pageBoundsInPaintingCoordinates, PDFDocumentLayout::PageIndex);
     void paintPagePreview(WebCore::GraphicsContext&, const WebCore::FloatRect& clipRect, const WebCore::FloatRect& pageBoundsInPaintingCoordinates, PDFDocumentLayout::PageIndex);
 
     // Throws away existing tiles. Can result in flashing.
@@ -148,13 +148,19 @@ private:
     void willRepaintAllTiles(WebCore::TiledBacking&, WebCore::TileGridIdentifier) final;
 
     void coverageRectDidChange(WebCore::TiledBacking&, const WebCore::FloatRect&) final;
-    void tilingScaleFactorDidChange(WebCore::TiledBacking&, float) final;
+
+    void willRevalidateTiles(WebCore::TiledBacking&, WebCore::TileGridIdentifier, WebCore::TileRevalidationType) final;
+    void didRevalidateTiles(WebCore::TiledBacking&, WebCore::TileGridIdentifier, WebCore::TileRevalidationType, const HashSet<WebCore::TileIndex>& tilesNeedingDisplay) final;
+
+    void willRepaintTilesAfterScaleFactorChange(WebCore::TiledBacking&, WebCore::TileGridIdentifier) final;
+    void didRepaintTilesAfterScaleFactorChange(WebCore::TiledBacking&, WebCore::TileGridIdentifier) final;
 
     void didAddGrid(WebCore::TiledBacking&, WebCore::TileGridIdentifier) final;
     void willRemoveGrid(WebCore::TiledBacking&, WebCore::TileGridIdentifier) final;
 
-    void enqueueTilePaintIfNecessary(const WebCore::TiledBacking&, const TileForGrid&, const WebCore::FloatRect& tileRect, const std::optional<WebCore::FloatRect>& clipRect = { });
-    void enqueuePaintWithClip(const TileForGrid&, const TileRenderInfo&);
+    std::optional<PDFTileRenderIdentifier> enqueueTilePaintForTileGridRepaint(WebCore::TiledBacking&, WebCore::TileGridIdentifier, WebCore::TileIndex, const WebCore::FloatRect& tileRect, const WebCore::FloatRect& tileDirtyRect);
+    std::optional<PDFTileRenderIdentifier> enqueueTilePaintIfNecessary(const WebCore::TiledBacking&, const TileForGrid&, const WebCore::FloatRect& tileRect, const std::optional<WebCore::FloatRect>& clipRect = { });
+    std::optional<PDFTileRenderIdentifier> enqueuePaintWithClip(const TileForGrid&, const TileRenderInfo&);
 
     void serviceRequestQueue();
 
@@ -163,6 +169,17 @@ private:
     void transferBufferToMainThread(RefPtr<WebCore::ImageBuffer>&&, const TileForGrid&, const TileRenderInfo&, PDFTileRenderIdentifier);
 
     void didCompleteTileRender(RefPtr<WebCore::ImageBuffer>&&, const TileForGrid&, const TileRenderInfo&, PDFTileRenderIdentifier, const WebCore::GraphicsLayer* tileGridLayer);
+
+    struct RevalidationStateForGrid {
+        WTF_MAKE_STRUCT_FAST_ALLOCATED;
+        bool inFullTileRevalidation { false };
+        bool inScaleChangeRepaint { false };
+        HashSet<PDFTileRenderIdentifier> renderIdentifiersForCurrentRevalidation;
+    };
+
+    RevalidationStateForGrid& revalidationStateForGrid(WebCore::TileGridIdentifier);
+    void trackRendersForStaleTileMaintenance(WebCore::TileGridIdentifier, HashSet<PDFTileRenderIdentifier>&&);
+    void trackRenderCompletionForStaleTileMaintenance(WebCore::TileGridIdentifier, PDFTileRenderIdentifier);
 
     void clearRequestsAndCachedTiles();
 
@@ -186,8 +203,8 @@ private:
 
     ThreadSafeWeakPtr<PDFPresentationController> m_presentationController;
 
-    HashMap<WebCore::PlatformLayerIdentifier, Ref<WebCore::GraphicsLayer>> m_layerIDtoLayerMap;
-    HashMap<WebCore::TileGridIdentifier, WebCore::PlatformLayerIdentifier> m_tileGridToLayerIDMap;
+    UncheckedKeyHashMap<WebCore::PlatformLayerIdentifier, Ref<WebCore::GraphicsLayer>> m_layerIDtoLayerMap;
+    UncheckedKeyHashMap<WebCore::TileGridIdentifier, WebCore::PlatformLayerIdentifier> m_tileGridToLayerIDMap;
 
     Ref<ConcurrentWorkQueue> m_paintingWorkQueue;
 
@@ -195,7 +212,7 @@ private:
         PDFTileRenderIdentifier renderIdentifier;
         TileRenderInfo renderInfo;
     };
-    HashMap<TileForGrid, TileRenderData> m_currentValidTileRenders;
+    UncheckedKeyHashMap<TileForGrid, TileRenderData> m_currentValidTileRenders;
 
     const int m_maxConcurrentTileRenders { 4 };
     int m_numConcurrentTileRenders { 0 };
@@ -207,11 +224,14 @@ private:
 
         RefPtr<WebCore::ImageBuffer> protectedBuffer() { return buffer; }
     };
-    HashMap<TileForGrid, RenderedTile> m_rendereredTiles;
+    UncheckedKeyHashMap<TileForGrid, RenderedTile> m_rendereredTiles;
+    UncheckedKeyHashMap<TileForGrid, RenderedTile> m_rendereredTilesForOldState;
+
+    UncheckedKeyHashMap<WebCore::TileGridIdentifier, std::unique_ptr<RevalidationStateForGrid>> m_gridRevalidationState;
 
     using PDFPageIndexSet = HashSet<PDFDocumentLayout::PageIndex, IntHash<PDFDocumentLayout::PageIndex>, WTF::UnsignedWithZeroKeyHashTraits<PDFDocumentLayout::PageIndex>>;
-    using PDFPageIndexToPreviewHash = HashMap<PDFDocumentLayout::PageIndex, PagePreviewRequest, IntHash<PDFDocumentLayout::PageIndex>, WTF::UnsignedWithZeroKeyHashTraits<PDFDocumentLayout::PageIndex>>;
-    using PDFPageIndexToBufferHash = HashMap<PDFDocumentLayout::PageIndex, RefPtr<WebCore::ImageBuffer>, IntHash<PDFDocumentLayout::PageIndex>, WTF::UnsignedWithZeroKeyHashTraits<PDFDocumentLayout::PageIndex>>;
+    using PDFPageIndexToPreviewHash = UncheckedKeyHashMap<PDFDocumentLayout::PageIndex, PagePreviewRequest, IntHash<PDFDocumentLayout::PageIndex>, WTF::UnsignedWithZeroKeyHashTraits<PDFDocumentLayout::PageIndex>>;
+    using PDFPageIndexToBufferHash = UncheckedKeyHashMap<PDFDocumentLayout::PageIndex, RefPtr<WebCore::ImageBuffer>, IntHash<PDFDocumentLayout::PageIndex>, WTF::UnsignedWithZeroKeyHashTraits<PDFDocumentLayout::PageIndex>>;
 
     PDFPageIndexToPreviewHash m_enqueuedPagePreviews;
     PDFPageIndexToBufferHash m_pagePreviews;

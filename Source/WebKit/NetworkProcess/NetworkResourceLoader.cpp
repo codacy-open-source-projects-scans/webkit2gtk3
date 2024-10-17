@@ -496,6 +496,8 @@ ResourceLoadInfo NetworkResourceLoader::resourceLoadInfo()
             return ResourceLoadInfo::Type::Document;
         case WebCore::FetchOptions::Destination::Embed:
             return ResourceLoadInfo::Type::Object;
+        case WebCore::FetchOptions::Destination::Environmentmap:
+            return ResourceLoadInfo::Type::Media;
         case WebCore::FetchOptions::Destination::Font:
             return ResourceLoadInfo::Type::Font;
         case WebCore::FetchOptions::Destination::Image:
@@ -1602,7 +1604,7 @@ void NetworkResourceLoader::didReceiveMainResourceResponse(const WebCore::Resour
 {
     LOADER_RELEASE_LOG("didReceiveMainResourceResponse:");
 #if ENABLE(NETWORK_CACHE_SPECULATIVE_REVALIDATION)
-    if (auto* speculativeLoadManager = m_cache ? m_cache->speculativeLoadManager() : nullptr)
+    if (CheckedPtr speculativeLoadManager = m_cache ? m_cache->speculativeLoadManager() : nullptr)
         speculativeLoadManager->registerMainResourceLoadResponse(globalFrameID(), originalRequest(), response);
 #endif
 #if ENABLE(WEB_ARCHIVE)

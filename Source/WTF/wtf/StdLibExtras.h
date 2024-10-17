@@ -43,6 +43,8 @@
 #include <wtf/IterationStatus.h>
 #include <wtf/TypeCasts.h>
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
 #define SINGLE_ARG(...) __VA_ARGS__ // useful when a macro argument includes a comma
 
 // Use this macro to declare and define a debug-only global variable that may have a
@@ -430,6 +432,11 @@ bool findBitInWord(T word, size_t& startOrResultIndex, size_t endIndex, bool val
     return false;
 }
 
+// Used to check if a variadic list of compile time predicates are all true.
+template<bool... Bs> inline constexpr bool all =
+    std::is_same_v<std::integer_sequence<bool, true, Bs...>,
+                   std::integer_sequence<bool, Bs..., true>>;
+
 // Visitor adapted from http://stackoverflow.com/questions/25338795/is-there-a-name-for-this-tuple-creation-idiom
 
 template<class A, class... B> struct Visitor : Visitor<A>, Visitor<B...> {
@@ -816,6 +823,26 @@ void memsetSpan(std::span<T, Extent> destination, uint8_t byte)
     memset(destination.data(), byte, destination.size_bytes());
 }
 
+// Preferred helper function for converting an imported C++ API into a span.
+template<typename T>
+inline auto makeSpan(const T& source)
+{
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+    return std::span { source.begin(), source.end() };
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
+}
+
+// Less preferred helper function for converting an imported API into a span.
+// Use this when we can't edit the imported API and it doesn't offer
+// begin() / end() or a span accessor.
+template<typename T, std::size_t Extent = std::dynamic_extent>
+inline auto unsafeForgeSpan(T* ptr, size_t size)
+{
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+    return std::span<T, Extent> { ptr, size };
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
+}
+
 template<typename T> concept ByteType = sizeof(T) == 1 && ((std::is_integral_v<T> && !std::same_as<T, bool>) || std::same_as<T, std::byte>) && !std::is_const_v<T>;
 
 template<typename> struct ByteCastTraits;
@@ -846,11 +873,31 @@ template<ByteType T, typename U> constexpr auto byteCast(const U& value)
 }
 
 // This is like std::invocable but it takes the expected signature rather than just the arguments.
-template<typename Functor, typename Signature>
-concept Invocable = requires(std::decay_t<Functor>&& f, std::function<Signature> expected)
-{
+template<typename Functor, typename Signature> concept Invocable = requires(std::decay_t<Functor>&& f, std::function<Signature> expected) {
     { expected = std::move(f) };
 };
+
+// Concept for constraining to user-defined "Tuple-like" types.
+//
+// Based on exposition-only text in https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2021/p2165r3.pdf
+// and https://stackoverflow.com/questions/68443804/c20-concept-to-check-tuple-like-types.
+
+template<class T, std::size_t N> concept HasTupleElement = requires(T t) {
+    typename std::tuple_element_t<N, std::remove_const_t<T>>;
+    { get<N>(t) } -> std::convertible_to<std::tuple_element_t<N, T>&>;
+};
+
+template<class T> concept TupleLike = !std::is_reference_v<T>
+    && requires(T t) {
+        typename std::tuple_size<T>::type;
+        requires std::derived_from<
+          std::tuple_size<T>,
+          std::integral_constant<std::size_t, std::tuple_size_v<T>>
+        >;
+      }
+    && []<std::size_t... N>(std::index_sequence<N...>) {
+        return (HasTupleElement<T, N> && ...);
+    }(std::make_index_sequence<std::tuple_size_v<T>>());
 
 // This is like std::apply, but works with user-defined "Tuple-like" types as well as the
 // standard ones. The only real difference between its implementation and the standard one
@@ -995,6 +1042,7 @@ using WTF::is8ByteAligned;
 using WTF::isCompilationThread;
 using WTF::isPointerAligned;
 using WTF::isStatelessLambda;
+using WTF::makeSpan;
 using WTF::makeUnique;
 using WTF::makeUniqueWithoutFastMallocCheck;
 using WTF::makeUniqueWithoutRefCountedCheck;
@@ -1008,7 +1056,10 @@ using WTF::safeCast;
 using WTF::spanConstCast;
 using WTF::spanReinterpretCast;
 using WTF::tryBinarySearch;
+using WTF::unsafeForgeSpan;
 using WTF::valueOrCompute;
 using WTF::valueOrDefault;
 using WTF::toTwosComplement;
 using WTF::Invocable;
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

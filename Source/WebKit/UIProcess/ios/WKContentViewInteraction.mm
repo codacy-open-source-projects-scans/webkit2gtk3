@@ -216,6 +216,8 @@
 #define UIWKDocumentRequestAutocorrectedRanges (1 << 7)
 #endif
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
 #if USE(BROWSERENGINEKIT)
 
 @interface WKUITextSelectionRect : UITextSelectionRect
@@ -2798,7 +2800,7 @@ static inline WebCore::FloatSize tapHighlightBorderRadius(WebCore::FloatSize bor
     });
 
 #if USE(UICONTEXTMENU)
-    [_fileUploadPanel repositionContextMenuIfNeeded];
+    [_fileUploadPanel repositionContextMenuIfNeeded:WebKit::KeyboardIsDismissing::No];
 #endif
 }
 
@@ -4750,6 +4752,10 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 {
     if (_isEditable && [self isFirstResponder])
         _keyboardDidRequestDismissal = YES;
+
+#if USE(UICONTEXTMENU)
+    [_fileUploadPanel repositionContextMenuIfNeeded:WebKit::KeyboardIsDismissing::Yes];
+#endif
 }
 
 - (void)copyForWebView:(id)sender
@@ -11066,6 +11072,23 @@ static RetainPtr<UITargetedPreview> createTargetedPreview(UIImage *image, UIView
     return adoptNS([[UITargetedPreview alloc] initWithView:imageView.get() parameters:parameters.get() target:target.get()]);
 }
 
+- (UITargetedPreview *)_createTargetedPreviewFromTextIndicator:(WebCore::TextIndicatorData)textIndicatorData previewContainer:(UIView *)previewContainer
+{
+    RetainPtr textIndicatorImage = uiImageForImage(textIndicatorData.contentImage.get());
+
+    RetainPtr preview = createTargetedPreview(textIndicatorImage.get(), self, previewContainer, textIndicatorData.textBoundingRectInRootViewCoordinates, textIndicatorData.textRectsInBoundingRectCoordinates, ^{
+        if (textIndicatorData.estimatedBackgroundColor != WebCore::Color::transparentBlack)
+            return cocoaColor(textIndicatorData.estimatedBackgroundColor).autorelease();
+
+        // In the case where background color estimation fails, it doesn't make sense to
+        // show a text indicator preview with a clear background in light mode. Default
+        // to the system background color instead.
+        return UIColor.systemBackgroundColor;
+    }());
+
+    return preview.autorelease();
+}
+
 static RetainPtr<UITargetedPreview> createFallbackTargetedPreview(UIView *rootView, UIView *containerView, const WebCore::FloatRect& frameInRootViewCoordinates, UIColor *backgroundColor)
 {
     if (!containerView.window)
@@ -11168,15 +11191,8 @@ static RetainPtr<UITargetedPreview> createFallbackTargetedPreview(UIView *rootVi
     if (_positionInformation.isLink && _positionInformation.linkIndicator.contentImage) {
         auto indicator = _positionInformation.linkIndicator;
         _positionInformationLinkIndicator = indicator;
-        auto textIndicatorImage = uiImageForImage(indicator.contentImage.get());
-        targetedPreview = createTargetedPreview(textIndicatorImage.get(), self, self.containerForContextMenuHintPreviews, indicator.textBoundingRectInRootViewCoordinates, indicator.textRectsInBoundingRectCoordinates, ^{
-            if (indicator.estimatedBackgroundColor != WebCore::Color::transparentBlack)
-                return cocoaColor(indicator.estimatedBackgroundColor).autorelease();
-            // In the case where background color estimation fails, it doesn't make sense to
-            // show a text indicator preview with a clear background in light mode. Default
-            // to the system background color instead.
-            return UIColor.systemBackgroundColor;
-        }());
+
+        targetedPreview = [self _createTargetedPreviewFromTextIndicator:indicator previewContainer:self.containerForContextMenuHintPreviews];
     } else if ((_positionInformation.isAttachment || _positionInformation.isImage) && _positionInformation.image) {
         auto cgImage = _positionInformation.image->makeCGImageCopy();
         auto image = adoptNS([[UIImage alloc] initWithCGImage:cgImage.get()]);
@@ -12727,9 +12743,11 @@ static BOOL shouldUseMachineReadableCodeMenuFromImageAnalysisResult(CocoaImageAn
 - (CGRect)contentsRectForImageAnalysisInteraction:(VKCImageAnalysisInteraction *)interaction
 {
     auto unitInteractionRect = _imageAnalysisInteractionBounds;
-    WebCore::FloatRect unobscuredRect = self.bounds;
-    unitInteractionRect.moveBy(-unobscuredRect.location());
-    unitInteractionRect.scale(1 / unobscuredRect.size());
+    WebCore::FloatRect contentViewBounds = self.bounds;
+    auto obscuredInset = self.webView._computedObscuredInset;
+    unitInteractionRect.move(obscuredInset.left, obscuredInset.top);
+    unitInteractionRect.moveBy(-contentViewBounds.location());
+    unitInteractionRect.scale(1 / contentViewBounds.size());
     return unitInteractionRect;
 }
 
@@ -13373,30 +13391,15 @@ inline static NSString *extendSelectionCommand(UITextLayoutDirection direction)
 #if ENABLE(WRITING_TOOLS)
 - (void)targetedPreviewForID:(NSUUID *)uuid completionHandler:(void (^)(UITargetedPreview *))completionHandler
 {
-    auto textUUID = WTF::UUID::fromNSUUID(uuid);
-    _page->getTextIndicatorForID(*textUUID, [protectedSelf = retainPtr(self), completionHandler = makeBlockPtr(completionHandler)] (std::optional<WebCore::TextIndicatorData> indicatorData) {
+    auto animationID = WTF::UUID::fromNSUUID(uuid);
 
+    _page->getTextIndicatorForID(*animationID, [protectedSelf = retainPtr(self), completionHandler = makeBlockPtr(completionHandler)] (auto&& indicatorData) {
         if (!indicatorData) {
             completionHandler(nil);
             return;
         }
 
-        auto snapshot = indicatorData->contentImage;
-        if (!snapshot) {
-            completionHandler(nil);
-            return;
-        }
-
-        auto snapshotImage = snapshot->nativeImage();
-        if (!snapshotImage) {
-            completionHandler(nil);
-            return;
-        }
-
-        RetainPtr image = adoptNS([[UIImage alloc] initWithCGImage:snapshotImage->platformImage().get() scale:protectedSelf->_page->deviceScaleFactor() orientation:UIImageOrientationUp]);
-
-        RetainPtr targetedPreview = createTargetedPreview(image.get(), protectedSelf.get(), [protectedSelf containerForContextMenuHintPreviews], indicatorData->textBoundingRectInRootViewCoordinates, indicatorData->textRectsInBoundingRectCoordinates, nil);
-
+        RetainPtr targetedPreview = [protectedSelf _createTargetedPreviewFromTextIndicator:*indicatorData previewContainer:[protectedSelf containerForContextMenuHintPreviews]];
         completionHandler(targetedPreview.get());
     });
 }
@@ -13436,33 +13439,17 @@ inline static NSString *extendSelectionCommand(UITextLayoutDirection direction)
     // Store this completion handler so that it can be called after the execution of the next
     // call to replace the text and eventually use this completion handler to pass the
     // text indicator to UIKit.
-    _page->storeDestinationCompletionHandlerForAnimationID(*animationUUID, [protectedSelf = retainPtr(self),  completionHandler = makeBlockPtr(completionHandler)] (std::optional<WebCore::TextIndicatorData> textIndicatorData) {
-        if (!textIndicatorData) {
+    _page->storeDestinationCompletionHandlerForAnimationID(*animationUUID, [protectedSelf = retainPtr(self), completionHandler = makeBlockPtr(completionHandler)] (auto&& indicatorData) {
+        if (!indicatorData) {
             completionHandler(nil);
             return;
         }
 
-        auto snapshot = textIndicatorData->contentImage;
-        if (!snapshot) {
-            completionHandler(nil);
-            return;
-        }
-
-        auto snapshotImage = snapshot->nativeImage();
-        if (!snapshotImage) {
-            completionHandler(nil);
-            return;
-        }
-
-        RetainPtr image = adoptNS([[UIImage alloc] initWithCGImage:snapshotImage->platformImage().get() scale:protectedSelf->_page->deviceScaleFactor() orientation:UIImageOrientationUp]);
-
-        RetainPtr targetedPreview = createTargetedPreview(image.get(), protectedSelf.get(), [protectedSelf containerForContextMenuHintPreviews], textIndicatorData->textBoundingRectInRootViewCoordinates, textIndicatorData->textRectsInBoundingRectCoordinates, nil);
-
+        RetainPtr targetedPreview = [protectedSelf _createTargetedPreviewFromTextIndicator:*indicatorData previewContainer:[protectedSelf containerForContextMenuHintPreviews]];
         completionHandler(targetedPreview.get());
     });
 
     _page->callCompletionHandlerForAnimationID(*animationUUID, WebCore::TextAnimationRunMode::RunAnimation);
-
 }
 
 - (void)replacementEffectDidComplete
@@ -15300,5 +15287,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 }
 
 @end
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 #endif // PLATFORM(IOS_FAMILY)

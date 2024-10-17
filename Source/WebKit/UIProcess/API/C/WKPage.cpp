@@ -2166,6 +2166,11 @@ void WKPageSetPageUIClient(WKPageRef pageRef, const WKPageUIClientBase* wkClient
         {
             class PanelClient final : public API::WebAuthenticationPanelClient {
             public:
+                static Ref<PanelClient> create()
+                {
+                    return adoptRef(*new PanelClient);
+                }
+
                 void selectAssertionResponse(Vector<Ref<WebCore::AuthenticatorAssertionResponse>>&& responses, WebKit::WebAuthenticationSource, CompletionHandler<void(WebCore::AuthenticatorAssertionResponse*)>&& completionHandler) const final
                 {
                     ASSERT(!responses.isEmpty());
@@ -2176,6 +2181,9 @@ void WKPageSetPageUIClient(WKPageRef pageRef, const WKPageUIClientBase* wkClient
                 {
                     completionHandler(WebKit::LocalAuthenticatorPolicy::Allow);
                 }
+
+            private:
+                PanelClient() = default;
             };
 
             if (!m_client.runWebAuthenticationPanel) {
@@ -2183,7 +2191,7 @@ void WKPageSetPageUIClient(WKPageRef pageRef, const WKPageUIClientBase* wkClient
                 return;
             }
 
-            panel.setClient(WTF::makeUniqueRef<PanelClient>());
+            panel.setClient(PanelClient::create());
             completionHandler(WebKit::WebAuthenticationPanelResult::Presented);
         }
 #endif
@@ -2452,7 +2460,8 @@ public:
         return adoptRef(*new StateClient(client));
     }
 
-    DEFINE_VIRTUAL_REFCOUNTED;
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
 
 private:
     explicit StateClient(const WKPageStateClientBase* client)

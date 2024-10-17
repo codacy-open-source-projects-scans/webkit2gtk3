@@ -20,10 +20,16 @@
 
 #pragma once
 
+#include <wtf/Compiler.h>
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
 #include <initializer_list>
 #include <wtf/Forward.h>
 #include <wtf/HashTable.h>
 #include <wtf/IteratorRange.h>
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 namespace WTF {
 
@@ -166,7 +172,7 @@ public:
 
     MappedTakeType take(const KeyType&); // efficient combination of get with remove
     MappedTakeType take(iterator);
-    std::optional<MappedTakeType> takeOptional(const KeyType&);
+    std::optional<MappedType> takeOptional(const KeyType&);
     MappedTakeType takeFirst();
 
     // Alternate versions of find() / contains() / get() / remove() that find the object
@@ -567,7 +573,7 @@ auto HashMap<T, U, V, W, MappedTraits, Y>::take(iterator it) -> MappedTakeType
 }
 
 template<typename T, typename U, typename V, typename W, typename MappedTraits, typename Y>
-auto HashMap<T, U, V, W, MappedTraits, Y>::takeOptional(const KeyType& key) -> std::optional<MappedTakeType>
+auto HashMap<T, U, V, W, MappedTraits, Y>::takeOptional(const KeyType& key) -> std::optional<MappedType>
 {
     auto it = find(key);
     if (it == end())
