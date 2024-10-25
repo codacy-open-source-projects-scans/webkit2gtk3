@@ -105,12 +105,12 @@ CaptureSourceOrError CoreAudioCaptureSource::createForTesting(String&& deviceID,
 
 CoreAudioCaptureSourceFactory::CoreAudioCaptureSourceFactory()
 {
-    AudioSession::sharedSession().addInterruptionObserver(*this);
+    AudioSession::protectedSharedSession()->addInterruptionObserver(*this);
 }
 
 CoreAudioCaptureSourceFactory::~CoreAudioCaptureSourceFactory()
 {
-    AudioSession::sharedSession().removeInterruptionObserver(*this);
+    AudioSession::protectedSharedSession()->removeInterruptionObserver(*this);
 }
 
 void CoreAudioCaptureSourceFactory::beginInterruption()
@@ -180,11 +180,6 @@ void CoreAudioCaptureSourceFactory::unregisterSpeakerSamplesProducer(CoreAudioSp
 bool CoreAudioCaptureSourceFactory::isAudioCaptureUnitRunning()
 {
     return CoreAudioSharedUnit::singleton().isRunning();
-}
-
-void CoreAudioCaptureSourceFactory::whenAudioCaptureUnitIsNotRunning(Function<void()>&& callback)
-{
-    return CoreAudioSharedUnit::singleton().whenAudioCaptureUnitIsNotRunning(WTFMove(callback));
 }
 
 bool CoreAudioCaptureSourceFactory::shouldAudioCaptureUnitRenderAudio()

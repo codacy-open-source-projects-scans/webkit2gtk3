@@ -30,16 +30,6 @@
 #include "AuthenticatorManager.h"
 #include "VirtualAuthenticatorConfiguration.h"
 #include "VirtualCredential.h"
-#include <wtf/WeakPtr.h>
-
-namespace WebKit {
-class VirtualAuthenticatorManager;
-}
-
-namespace WTF {
-template<typename T> struct IsDeprecatedWeakRefSmartPointerException;
-template<> struct IsDeprecatedWeakRefSmartPointerException<WebKit::VirtualAuthenticatorManager> : std::true_type { };
-}
 
 namespace WebKit {
 struct VirtualCredential;
@@ -64,12 +54,12 @@ protected:
 private:
     VirtualAuthenticatorManager();
 
-    UniqueRef<AuthenticatorTransportService> createService(WebCore::AuthenticatorTransport, AuthenticatorTransportServiceObserver&) const final;
+    Ref<AuthenticatorTransportService> createService(WebCore::AuthenticatorTransport, AuthenticatorTransportServiceObserver&) const final;
     void runPanel() override;
     void filterTransports(TransportSet&) const override { };
 
-    UncheckedKeyHashMap<String, UniqueRef<VirtualAuthenticatorConfiguration>> m_virtualAuthenticators;
-    UncheckedKeyHashMap<String, Vector<VirtualCredential>> m_credentialsByAuthenticator;
+    HashMap<String, UniqueRef<VirtualAuthenticatorConfiguration>> m_virtualAuthenticators;
+    HashMap<String, Vector<VirtualCredential>> m_credentialsByAuthenticator;
 };
 
 } // namespace WebKit

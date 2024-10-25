@@ -327,16 +327,18 @@ bool Quirks::needsYouTubeMouseOutQuirk() const
 }
 
 // mail.google.com rdar://128360054
-// FIXME (rdar://130624461): Remove this quirk once Gmail adopts the `writingsuggestions` attribute.
+// safe.menlosecurity.com rdar://135114489
+// FIXME (rdar://130624461): Remove this quirk for mail.google.com once Gmail adopts the `writingsuggestions` attribute.
+// FIXME (rdar://138585709): Remove this quirk for safe.menlosecurity.com once investigation into text corruption on the site is completed and the issue is resolved.
 bool Quirks::shouldDisableWritingSuggestionsByDefault() const
 {
     if (!needsQuirks())
         return false;
     auto& url = m_document->topDocument().url();
-    return url.host() == "mail.google.com"_s;
+    return url.host() == "mail.google.com"_s || url.host() == "safe.menlosecurity.com"_s;
 }
 
-void Quirks::updateStorageAccessUserAgentStringQuirks(UncheckedKeyHashMap<RegistrableDomain, String>&& userAgentStringQuirks)
+void Quirks::updateStorageAccessUserAgentStringQuirks(HashMap<RegistrableDomain, String>&& userAgentStringQuirks)
 {
     auto& quirks = updatableStorageAccessUserAgentStringQuirks();
     quirks.clear();
@@ -395,11 +397,12 @@ bool Quirks::shouldDisableElementFullscreenQuirk() const
 #endif
 }
 
-#if ENABLE(TOUCH_EVENTS)
 bool Quirks::isAmazon() const
 {
     return PublicSuffixStore::singleton().topPrivatelyControlledDomain(m_document->topDocument().url().host()).startsWith("amazon."_s);
 }
+
+#if ENABLE(TOUCH_EVENTS)
 
 bool Quirks::isGoogleMaps() const
 {
@@ -647,7 +650,7 @@ bool Quirks::needsPrimeVideoUserSelectNoneQuirk() const
         return false;
 
     if (!m_needsPrimeVideoUserSelectNoneQuirk)
-        m_needsPrimeVideoUserSelectNoneQuirk = m_document->url().host() == "www.amazon.com"_s;
+        m_needsPrimeVideoUserSelectNoneQuirk = isAmazon();
 
     return *m_needsPrimeVideoUserSelectNoneQuirk;
 #else
@@ -656,15 +659,16 @@ bool Quirks::needsPrimeVideoUserSelectNoneQuirk() const
 }
 
 // youtube.com rdar://135886305
-bool Quirks::needsYouTubeDarkModeQuirk() const
+// NOTE: Also remove `BuilderConverter::convertScrollbarWidth` and related code when removing this quirk.
+bool Quirks::needsScrollbarWidthThinDisabledQuirk() const
 {
     if (!needsQuirks())
         return false;
 
-    if (!m_needsYouTubeDarkModeQuirk)
-        m_needsYouTubeDarkModeQuirk = isDomain("youtube.com"_s);
+    if (!m_needsScrollbarWidthThinDisabledQuirk)
+        m_needsScrollbarWidthThinDisabledQuirk = isDomain("youtube.com"_s);
 
-    return *m_needsYouTubeDarkModeQuirk;
+    return *m_needsScrollbarWidthThinDisabledQuirk;
 }
 
 // gizmodo.com rdar://102227302
@@ -871,6 +875,7 @@ bool Quirks::needsPreloadAutoQuirk() const
 
 // vimeo.com rdar://56996057
 // docs.google.com rdar://59893415
+// bing.com rdar://133223599
 bool Quirks::shouldBypassBackForwardCache() const
 {
     if (!needsQuirks())
@@ -888,6 +893,13 @@ bool Quirks::shouldBypassBackForwardCache() const
     if (topURL.protocolIs("https"_s) && host == "vimeo.com"_s) {
         if (auto* documentLoader = document->frame() ? document->frame()->loader().documentLoader() : nullptr)
             return documentLoader->response().cacheControlContainsNoStore();
+    }
+
+    // Spinner issue from image search for bing.com.
+    if (registrableDomain == "bing.com"_s) {
+        static MainThreadNeverDestroyed<const AtomString> imageSearchDialogID("sb_sbidialog"_s);
+        if (RefPtr element = document->getElementById(imageSearchDialogID.get()))
+            return element->renderer();
     }
 
     // Login issue on bankofamerica.com (rdar://104938789).
@@ -1867,5 +1879,14 @@ bool Quirks::shouldHideCoarsePointerCharacteristics() const
 
     return false;
 }
+
+#if ENABLE(TOUCH_EVENTS)
+
+bool Quirks::shouldOmitTouchEventDOMAttributesForDesktopWebsite(const URL& requestURL)
+{
+    return requestURL.host() == "secure.chase.com"_s;
+}
+
+#endif
 
 }

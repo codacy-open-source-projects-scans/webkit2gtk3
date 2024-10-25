@@ -27,7 +27,6 @@
 
 #include "CSSNumericValue.h"
 #include "ScrollTimeline.h"
-#include "TimelineRange.h"
 #include "ViewTimelineOptions.h"
 #include <wtf/Ref.h>
 #include <wtf/WeakPtr.h>
@@ -40,6 +39,8 @@ class BuilderState;
 
 class CSSViewValue;
 class Element;
+
+struct TimelineRange;
 
 struct ViewTimelineInsets {
     std::optional<Length> start;
@@ -54,17 +55,23 @@ public:
     static Ref<ViewTimeline> createFromCSSValue(const Style::BuilderState&, const CSSViewValue&);
 
     Element* subject() const { return m_subject.get(); }
-    const CSSNumericValue& startOffset();
-    const CSSNumericValue& endOffset();
+    void setSubject(const Element*);
+
     const ViewTimelineInsets& insets() const { return m_insets; }
+    void setInsets(ViewTimelineInsets&& insets) { m_insets = WTFMove(insets); }
+
+    Ref<CSSNumericValue> startOffset();
+    Ref<CSSNumericValue> endOffset();
+
     AnimationTimeline::ShouldUpdateAnimationsAndSendEvents documentWillUpdateAnimationsAndSendEvents() override;
     AnimationTimelinesController* controller() const override;
 
     RenderBox* sourceScrollerRenderer() const;
     Element* source() const override;
+    TimelineRange defaultRange() const final;
 
 private:
-    ScrollTimeline::Data computeTimelineData(const TimelineRange& = { }) const override;
+    ScrollTimeline::Data computeTimelineData(const TimelineRange&) const final;
 
     explicit ViewTimeline(ViewTimelineOptions&& = { });
     explicit ViewTimeline(const AtomString&, ScrollAxis, ViewTimelineInsets&&);
@@ -75,8 +82,6 @@ private:
 
     WeakPtr<Element, WeakPtrImplWithEventTargetData> m_subject;
     ViewTimelineInsets m_insets;
-    Ref<CSSNumericValue> m_startOffset;
-    Ref<CSSNumericValue> m_endOffset;
 };
 
 } // namespace WebCore

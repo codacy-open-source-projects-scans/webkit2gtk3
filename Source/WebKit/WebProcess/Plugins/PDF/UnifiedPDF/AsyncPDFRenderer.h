@@ -58,6 +58,25 @@ struct TileForGrid {
 
 WTF::TextStream& operator<<(WTF::TextStream&, const TileForGrid&);
 
+struct PDFTileRenderType;
+using PDFTileRenderIdentifier = ObjectIdentifier<PDFTileRenderType>;
+
+struct TileRenderInfo {
+    WebCore::FloatRect tileRect;
+    std::optional<WebCore::FloatRect> clipRect; // If set, represents the portion of the tile that needs repaint (in the same coordinate system as tileRect).
+    PDFPageCoverageAndScales pageCoverage;
+
+    bool equivalentForPainting(const TileRenderInfo& other) const
+    {
+        return tileRect == other.tileRect && pageCoverage == other.pageCoverage;
+    }
+};
+
+struct TileRenderData {
+    PDFTileRenderIdentifier renderIdentifier;
+    TileRenderInfo renderInfo;
+};
+
 } // namespace WebKit
 
 namespace WTF {
@@ -83,14 +102,18 @@ template<> struct HashTraits<WebKit::TileForGrid> : GenericHashTraits<WebKit::Ti
 };
 template<> struct DefaultHash<WebKit::TileForGrid> : TileForGridHash { };
 
+template<> struct HashTraits<WebKit::TileRenderData> : SimpleClassHashTraits<WebKit::TileRenderData> {
+    static constexpr bool emptyValueIsZero = false;
+    static constexpr bool hasIsEmptyValueFunction = true;
+    static WebKit::TileRenderData emptyValue() { return { HashTraits<WebKit::PDFTileRenderIdentifier>::emptyValue(), { } }; }
+    static bool isEmptyValue(const WebKit::TileRenderData& data) { return HashTraits<WebKit::PDFTileRenderIdentifier>::isEmptyValue(data.renderIdentifier); }
+};
+
 } // namespace WTF
 
 namespace WebKit {
 
 class PDFPresentationController;
-
-struct PDFTileRenderType;
-using PDFTileRenderIdentifier = LegacyNullableObjectIdentifier<PDFTileRenderType>;
 
 class AsyncPDFRenderer final : public WebCore::TiledBackingClient,
     public ThreadSafeRefCountedAndCanMakeThreadSafeWeakPtr<AsyncPDFRenderer> {
@@ -114,7 +137,7 @@ public:
     void invalidateTilesForPaintingRect(float pageScaleFactor, const WebCore::FloatRect& paintingRect);
 
     // Updates existing tiles. Can result in temporarily stale content.
-    void pdfContentChangedInRect(const WebCore::GraphicsLayer*, float pageScaleFactor, const WebCore::FloatRect& paintingRect, std::optional<PDFLayoutRow>);
+    void pdfContentChangedInRect(const WebCore::GraphicsLayer*, const WebCore::FloatRect& paintingRect, std::optional<PDFLayoutRow>);
 
     void generatePreviewImageForPage(PDFDocumentLayout::PageIndex, float scale);
     RefPtr<WebCore::ImageBuffer> previewImageForPage(PDFDocumentLayout::PageIndex) const;
@@ -126,17 +149,6 @@ private:
     AsyncPDFRenderer(PDFPresentationController&);
 
     WebCore::GraphicsLayer* layerForTileGrid(WebCore::TileGridIdentifier) const;
-
-    struct TileRenderInfo {
-        WebCore::FloatRect tileRect;
-        std::optional<WebCore::FloatRect> clipRect; // If set, represents the portion of the tile that needs repaint (in the same coordinate system as tileRect).
-        PDFPageCoverageAndScales pageCoverage;
-
-        bool equivalentForPainting(const TileRenderInfo& other) const
-        {
-            return tileRect == other.tileRect && pageCoverage == other.pageCoverage;
-        }
-    };
 
     TileRenderInfo renderInfoForTile(const WebCore::TiledBacking&, const TileForGrid& tileInfo, const WebCore::FloatRect& tileRect, const std::optional<WebCore::FloatRect>& clipRect = { }) const;
 
@@ -203,16 +215,12 @@ private:
 
     ThreadSafeWeakPtr<PDFPresentationController> m_presentationController;
 
-    UncheckedKeyHashMap<WebCore::PlatformLayerIdentifier, Ref<WebCore::GraphicsLayer>> m_layerIDtoLayerMap;
-    UncheckedKeyHashMap<WebCore::TileGridIdentifier, WebCore::PlatformLayerIdentifier> m_tileGridToLayerIDMap;
+    HashMap<WebCore::PlatformLayerIdentifier, Ref<WebCore::GraphicsLayer>> m_layerIDtoLayerMap;
+    HashMap<WebCore::TileGridIdentifier, WebCore::PlatformLayerIdentifier> m_tileGridToLayerIDMap;
 
     Ref<ConcurrentWorkQueue> m_paintingWorkQueue;
 
-    struct TileRenderData {
-        PDFTileRenderIdentifier renderIdentifier;
-        TileRenderInfo renderInfo;
-    };
-    UncheckedKeyHashMap<TileForGrid, TileRenderData> m_currentValidTileRenders;
+    HashMap<TileForGrid, TileRenderData> m_currentValidTileRenders;
 
     const int m_maxConcurrentTileRenders { 4 };
     int m_numConcurrentTileRenders { 0 };
@@ -224,14 +232,14 @@ private:
 
         RefPtr<WebCore::ImageBuffer> protectedBuffer() { return buffer; }
     };
-    UncheckedKeyHashMap<TileForGrid, RenderedTile> m_rendereredTiles;
-    UncheckedKeyHashMap<TileForGrid, RenderedTile> m_rendereredTilesForOldState;
+    HashMap<TileForGrid, RenderedTile> m_rendereredTiles;
+    HashMap<TileForGrid, RenderedTile> m_rendereredTilesForOldState;
 
-    UncheckedKeyHashMap<WebCore::TileGridIdentifier, std::unique_ptr<RevalidationStateForGrid>> m_gridRevalidationState;
+    HashMap<WebCore::TileGridIdentifier, std::unique_ptr<RevalidationStateForGrid>> m_gridRevalidationState;
 
     using PDFPageIndexSet = HashSet<PDFDocumentLayout::PageIndex, IntHash<PDFDocumentLayout::PageIndex>, WTF::UnsignedWithZeroKeyHashTraits<PDFDocumentLayout::PageIndex>>;
-    using PDFPageIndexToPreviewHash = UncheckedKeyHashMap<PDFDocumentLayout::PageIndex, PagePreviewRequest, IntHash<PDFDocumentLayout::PageIndex>, WTF::UnsignedWithZeroKeyHashTraits<PDFDocumentLayout::PageIndex>>;
-    using PDFPageIndexToBufferHash = UncheckedKeyHashMap<PDFDocumentLayout::PageIndex, RefPtr<WebCore::ImageBuffer>, IntHash<PDFDocumentLayout::PageIndex>, WTF::UnsignedWithZeroKeyHashTraits<PDFDocumentLayout::PageIndex>>;
+    using PDFPageIndexToPreviewHash = HashMap<PDFDocumentLayout::PageIndex, PagePreviewRequest, IntHash<PDFDocumentLayout::PageIndex>, WTF::UnsignedWithZeroKeyHashTraits<PDFDocumentLayout::PageIndex>>;
+    using PDFPageIndexToBufferHash = HashMap<PDFDocumentLayout::PageIndex, RefPtr<WebCore::ImageBuffer>, IntHash<PDFDocumentLayout::PageIndex>, WTF::UnsignedWithZeroKeyHashTraits<PDFDocumentLayout::PageIndex>>;
 
     PDFPageIndexToPreviewHash m_enqueuedPagePreviews;
     PDFPageIndexToBufferHash m_pagePreviews;

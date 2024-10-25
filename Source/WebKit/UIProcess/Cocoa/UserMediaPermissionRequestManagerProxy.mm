@@ -29,6 +29,7 @@
 #import "MediaPermissionUtilities.h"
 #import "SandboxUtilities.h"
 #import "UserMediaCaptureManagerProxy.h"
+#import "WKWebView.h"
 #import "WebPageProxy.h"
 #import "WebPreferences.h"
 #import <WebCore/VideoFrame.h>
@@ -64,7 +65,7 @@ static WebCore::VideoFrameRotation computeVideoFrameRotation(int rotation)
 
 @interface WKRotationCoordinatorObserver : NSObject {
     WeakPtr<WebKit::UserMediaPermissionRequestManagerProxy> _managerProxy;
-    UncheckedKeyHashMap<String, RetainPtr<AVCaptureDeviceRotationCoordinator>> m_coordinators;
+    HashMap<String, RetainPtr<AVCaptureDeviceRotationCoordinator>> m_coordinators;
 }
 
 -(id)initWithRequestManagerProxy:(WeakPtr<WebKit::UserMediaPermissionRequestManagerProxy>&&)managerProxy;
@@ -197,7 +198,7 @@ void UserMediaPermissionRequestManagerProxy::startMonitoringCaptureDeviceRotatio
     if (!page)
         return;
 
-    auto webView = page->cocoaView();
+    RetainPtr webView = page->cocoaView();
     auto *layer = [webView layer];
     if (!layer) {
         RELEASE_LOG_ERROR(WebRTC, "UserMediaPermissionRequestManagerProxy unable to start monitoring capture device rotation");

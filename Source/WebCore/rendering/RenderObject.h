@@ -736,7 +736,7 @@ public:
     inline bool preservesNewline() const;
 
     RenderView& view() const { return *document().renderView(); }
-    WEBCORE_EXPORT CheckedRef<RenderView> checkedView() const;
+    CheckedRef<RenderView> checkedView() const;
 
     HostWindow* hostWindow() const;
 
@@ -769,7 +769,7 @@ public:
     // Returns the object containing this one. Can be different from parent for positioned elements.
     // If repaintContainer and repaintContainerSkipped are not null, on return *repaintContainerSkipped
     // is true if the renderer returned is an ancestor of repaintContainer.
-    WEBCORE_EXPORT RenderElement* container() const;
+    RenderElement* container() const;
     RenderElement* container(const RenderLayerModelObject* repaintContainer, bool& repaintContainerSkipped) const;
 
     RenderBoxModelObject* offsetParent() const;
@@ -888,6 +888,8 @@ public:
 
     const RenderStyle& style() const;
     const RenderStyle& firstLineStyle() const;
+    WritingMode writingMode() const { return style().writingMode(); }
+    // writingMode().isHorizontal() is cached by isHorizontalWritingMode() above.
 
     // Anonymous blocks that are part of of a continuation chain will return their inline continuation's outline style instead.
     // This is typically only relevant when repainting.

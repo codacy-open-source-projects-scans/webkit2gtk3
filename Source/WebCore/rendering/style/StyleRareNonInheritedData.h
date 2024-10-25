@@ -195,9 +195,6 @@ public:
 
     TimelineScope timelineScope;
 
-    SingleTimelineRange animationRangeStart;
-    SingleTimelineRange animationRangeEnd;
-
     ScrollbarGutter scrollbarGutter;
     ScrollbarWidth scrollbarWidth { ScrollbarWidth::Auto };
 
@@ -206,8 +203,6 @@ public:
 
     Vector<AtomString> anchorNames;
     AtomString positionAnchor;
-
-    TextEdge textBoxEdge;
 
     std::optional<Length> blockStepSize;
     unsigned blockStepInsert : 1; // BlockStepInsert

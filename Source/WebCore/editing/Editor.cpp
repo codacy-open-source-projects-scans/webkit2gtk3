@@ -2094,7 +2094,7 @@ WritingDirection Editor::baseWritingDirectionForSelectionStart() const
             return result;
     }
 
-    switch (renderer->style().direction()) {
+    switch (renderer->writingMode().bidiDirection()) {
     case TextDirection::LTR:
         return WritingDirection::LeftToRight;
     case TextDirection::RTL:
@@ -2360,7 +2360,7 @@ void Editor::setWritingSuggestion(const String& fullTextWithPrediction, const Ch
 }
 #endif
 
-void Editor::setComposition(const String& text, const Vector<CompositionUnderline>& underlines, const Vector<CompositionHighlight>& highlights, const UncheckedKeyHashMap<String, Vector<CharacterRange>>& annotations, unsigned selectionStart, unsigned selectionEnd)
+void Editor::setComposition(const String& text, const Vector<CompositionUnderline>& underlines, const Vector<CompositionHighlight>& highlights, const HashMap<String, Vector<CharacterRange>>& annotations, unsigned selectionStart, unsigned selectionEnd)
 {
     Ref document = protectedDocument();
     SetCompositionScope setCompositionScope(document.copyRef());
@@ -4288,7 +4288,43 @@ bool Editor::selectionStartHasMarkerFor(DocumentMarker::Type markerType, int fro
     }
 
     return false;
-}       
+}
+
+void Editor::selectionStartSetMarkerForTesting(DocumentMarker::Type markerType, int from, int length, const String& data)
+{
+    RefPtr node = findFirstMarkable(document().selection().selection().start().protectedDeprecatedNode().get());
+    if (!node)
+        return;
+
+    RefPtr text = dynamicDowncast<Text>(node);
+    if (!text)
+        return;
+
+    CheckedRef markers = document().checkedMarkers();
+
+    unsigned unsignedFrom = static_cast<unsigned>(from);
+    unsigned unsignedLength = static_cast<unsigned>(length);
+
+    switch (markerType) {
+    case DocumentMarker::Type::TransparentContent:
+        markers->addMarker(*text, unsignedFrom, unsignedLength, markerType, DocumentMarker::TransparentContentData { node, WTF::UUID { 0 } });
+        return;
+
+    case DocumentMarker::Type::DraggedContent:
+        markers->addMarker(*text, unsignedFrom, unsignedLength, markerType, node);
+        return;
+
+    case DocumentMarker::Type::Grammar:
+    case DocumentMarker::Type::Spelling:
+    case DocumentMarker::Type::Replacement:
+        markers->addMarker(*text, unsignedFrom, unsignedLength, markerType, data);
+        return;
+
+    default:
+        // FIXME: Support more marker types in this testing utility function.
+        RELEASE_ASSERT_NOT_REACHED();
+    }
+}
 
 OptionSet<TextCheckingType> Editor::resolveTextCheckingTypeMask(const Node& rootEditableElement, OptionSet<TextCheckingType> textCheckingOptions)
 {

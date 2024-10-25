@@ -80,6 +80,7 @@ FlexLayout::LogicalFlexItems FlexFormattingContext::convertFlexItemsToLogicalSpa
         auto direction = root().style().flexDirection();
         auto previousLogicalOrder = std::optional<int> { };
         auto isMainAxisParallelWithInlineAxis = FlexFormattingUtils::isMainAxisParallelWithInlineAxis(root());
+        auto isReversedInCrossAxis = FlexFormattingUtils::areFlexLinesReversedInCrossAxis(root());
 
         for (auto* flexItem = root().firstInFlowChild(); flexItem; flexItem = flexItem->nextInFlowSibling()) {
             auto& flexItemGeometry = m_globalLayoutState.geometryForBox(*flexItem);
@@ -100,7 +101,7 @@ FlexLayout::LogicalFlexItems FlexFormattingContext::convertFlexItemsToLogicalSpa
 
                 mainAxis.size = propertyValueForLength(isMainAxisParallelWithInlineAxis ? style.width() : style.height(), flexContainerMainInnerSize);
                 mainAxis.minimumSize = propertyValueForLength(isMainAxisParallelWithInlineAxis ? style.minWidth() : style.minHeight(), flexContainerMainInnerSize);
-                mainAxis.minimumSize = propertyValueForLength(isMainAxisParallelWithInlineAxis ? style.maxWidth() : style.maxHeight(), flexContainerMainInnerSize);
+                mainAxis.maximumSize = propertyValueForLength(isMainAxisParallelWithInlineAxis ? style.maxWidth() : style.maxHeight(), flexContainerMainInnerSize);
                 // Auto keyword retrieves the value of the main size property as the used flex-basis.
                 // If that value is itself auto, then the used value is content.
                 mainAxis.definiteFlexBasis = style.flexBasis().isAuto() ? mainAxis.size : propertyValueForLength(style.flexBasis(), flexContainerMainInnerSize);
@@ -127,9 +128,10 @@ FlexLayout::LogicalFlexItems FlexFormattingContext::convertFlexItemsToLogicalSpa
                         return flexItemGeometry.marginBefore();
                     return { };
                 };
-                mainAxis.marginStart = marginStart();
-                mainAxis.marginEnd = marginEnd();
-                mainAxis.borderAndPadding = flexContainerMainInnerSize ? flexItemGeometry.horizontalBorderAndPadding() : flexItemGeometry.verticalBorderAndPadding();
+                auto shouldFlipMargins = isMainAxisParallelWithInlineAxis && root().writingMode().isLineInverted();
+                mainAxis.marginStart = !shouldFlipMargins ? marginStart() : marginEnd();
+                mainAxis.marginEnd = !shouldFlipMargins ? marginEnd() : marginStart();
+                mainAxis.borderAndPadding = isMainAxisParallelWithInlineAxis ? flexItemGeometry.horizontalBorderAndPadding() : flexItemGeometry.verticalBorderAndPadding();
             };
             setMainAxisValues();
 
@@ -138,32 +140,39 @@ FlexLayout::LogicalFlexItems FlexFormattingContext::convertFlexItemsToLogicalSpa
 
                 crossAxis.definiteSize = propertyValueForLength(isMainAxisParallelWithInlineAxis ? style.height() : style.width(), flexContainerCrossInnerSize);
                 crossAxis.minimumSize = propertyValueForLength(isMainAxisParallelWithInlineAxis ? style.minHeight() : style.minWidth(), flexContainerCrossInnerSize);
-                crossAxis.minimumSize = propertyValueForLength(isMainAxisParallelWithInlineAxis ? style.maxHeight() : style.maxWidth(), flexContainerCrossInnerSize);
+                crossAxis.maximumSize = propertyValueForLength(isMainAxisParallelWithInlineAxis ? style.maxHeight() : style.maxWidth(), flexContainerCrossInnerSize);
 
                 auto marginStart = [&]() -> std::optional<LayoutUnit> {
-                    if (direction == FlexDirection::Row && !style.marginBefore().isAuto())
-                        return flexItemGeometry.marginBefore();
-                    if (direction == FlexDirection::RowReverse && !style.marginAfter().isAuto())
-                        return flexItemGeometry.marginAfter();
-                    if (direction == FlexDirection::Column && !style.marginStart().isAuto())
-                        return flexItemGeometry.marginStart();
-                    if (direction == FlexDirection::ColumnReverse && !style.marginEnd().isAuto())
-                        return flexItemGeometry.marginEnd();
+                    if (!isReversedInCrossAxis) {
+                        if (direction == FlexDirection::Row || direction == FlexDirection::RowReverse)
+                            return !style.marginBefore().isAuto() ? std::make_optional(flexItemGeometry.marginBefore()) : std::nullopt;
+                        if (direction == FlexDirection::Column || direction == FlexDirection::ColumnReverse)
+                            return !style.marginStart().isAuto() ? std::make_optional(flexItemGeometry.marginStart()) : std::nullopt;
+                        return { };
+                    }
+                    if (direction == FlexDirection::Row || direction == FlexDirection::RowReverse)
+                        return !style.marginAfter().isAuto() ? std::make_optional(flexItemGeometry.marginAfter()) : std::nullopt;
+                    if (direction == FlexDirection::Column || direction == FlexDirection::ColumnReverse)
+                        return !style.marginEnd().isAuto() ? std::make_optional(flexItemGeometry.marginEnd()) : std::nullopt;
                     return { };
                 };
                 auto marginEnd = [&]() -> std::optional<LayoutUnit> {
-                    if (direction == FlexDirection::Row && !style.marginAfter().isAuto())
-                        return flexItemGeometry.marginAfter();
-                    if (direction == FlexDirection::RowReverse && !style.marginBefore().isAuto())
-                        return flexItemGeometry.marginBefore();
-                    if (direction == FlexDirection::Column && !style.marginEnd().isAuto())
-                        return flexItemGeometry.marginEnd();
-                    if (direction == FlexDirection::ColumnReverse && !style.marginStart().isAuto())
-                        return flexItemGeometry.marginStart();
+                    if (!isReversedInCrossAxis) {
+                        if (direction == FlexDirection::Row || direction == FlexDirection::RowReverse)
+                            return !style.marginAfter().isAuto() ? std::make_optional(flexItemGeometry.marginAfter()) : std::nullopt;
+                        if (direction == FlexDirection::Column || direction == FlexDirection::ColumnReverse)
+                            return !style.marginEnd().isAuto() ? std::make_optional(flexItemGeometry.marginEnd()) : std::nullopt;
+                        return { };
+                    }
+                    if (direction == FlexDirection::Row || direction == FlexDirection::RowReverse)
+                        return !style.marginBefore().isAuto() ? std::make_optional(flexItemGeometry.marginBefore()) : std::nullopt;
+                    if (direction == FlexDirection::Column || direction == FlexDirection::ColumnReverse)
+                        return !style.marginStart().isAuto() ? std::make_optional(flexItemGeometry.marginStart()) : std::nullopt;
                     return { };
                 };
-                crossAxis.marginStart = marginStart();
-                crossAxis.marginEnd = marginEnd();
+                auto shouldFlipMargins = !isMainAxisParallelWithInlineAxis && root().writingMode().isLineInverted();
+                crossAxis.marginStart = !shouldFlipMargins ? marginStart() : marginEnd();
+                crossAxis.marginEnd = !shouldFlipMargins ? marginEnd() : marginStart();
 
                 crossAxis.hasSizeAuto = isMainAxisParallelWithInlineAxis ? style.height().isAuto() : style.width().isAuto();
                 crossAxis.borderAndPadding = isMainAxisParallelWithInlineAxis ? flexItemGeometry.verticalBorderAndPadding() : flexItemGeometry.horizontalBorderAndPadding();
@@ -204,11 +213,28 @@ FlexLayout::LogicalFlexItems FlexFormattingContext::convertFlexItemsToLogicalSpa
 
 void FlexFormattingContext::setFlexItemsGeometry(const FlexLayout::LogicalFlexItems& logicalFlexItemList, const FlexLayout::LogicalFlexItemRects& logicalRects, const ConstraintsForFlexContent& constraints)
 {
-    auto logicalWidth = logicalRects.last().right() - logicalRects.first().left();
     auto& flexBoxStyle = root().style();
     auto flexDirection = flexBoxStyle.flexDirection();
-    auto isMainAxisParallelWithInlineAxis = FlexFormattingUtils::isMainAxisParallelWithInlineAxis(root());
-    auto flexContainerContentBoxPosition = LayoutPoint { constraints.mainAxis().startPosition, constraints.crossAxis().startPosition };
+    auto isLeftToRightDirection = flexBoxStyle.writingMode().isLogicalLeftInlineStart();
+    auto isRowDirection = flexDirection == FlexDirection::Row || flexDirection == FlexDirection::RowReverse;
+    auto flexContainerContentBoxPosition = LayoutPoint { isRowDirection ? constraints.mainAxis().startPosition : constraints.crossAxis().startPosition, isRowDirection ? constraints.crossAxis().startPosition : constraints.mainAxis().startPosition };
+    auto flexContainerMainAxisSize = [&] {
+        if (auto size = constraints.mainAxis().availableSize)
+            return *size;
+        // Let's use content size when available size is inf.
+        auto& lastFlexItem = logicalFlexItemList.last();
+        auto& lastRect = logicalRects.last();
+        return lastRect.right() + lastRect.marginRight() + (lastFlexItem.isContentBoxBased() ? geometryForFlexItem(lastFlexItem.layoutBox()).horizontalBorderAndPadding() : 0_lu);
+    }();
+    auto flexContainerCrossAxisSize = [&] {
+        if (auto crossAxisSize = constraints.crossAxis().availableSize)
+            return *crossAxisSize;
+        // In case of content size driven height in reversed cross axis direction (content is upside down), the height is just the farthest point with content.
+        auto maximumHeight = LayoutUnit { };
+        for (auto& logicalRect : logicalRects)
+            maximumHeight = std::max(maximumHeight, logicalRect.bottom() + logicalRect.marginBottom());
+        return maximumHeight;
+    }();
 
     for (size_t index = 0; index < logicalFlexItemList.size(); ++index) {
         auto& logicalFlexItem = logicalFlexItemList[index];
@@ -218,50 +244,47 @@ void FlexFormattingContext::setFlexItemsGeometry(const FlexLayout::LogicalFlexIt
             if (flexBoxStyle.flexWrap() != FlexWrap::Reverse)
                 return logicalRects[index];
             auto rect = logicalRects[index];
-            // Let's use the bottom of the content if flex box does not have a definite height.
-            auto flexBoxLogicalHeightForWarpReverse = constraints.crossAxis().availableSize.value_or(logicalRects.last().bottom());
-            auto adjustedLogicalBorderBoxTop = flexBoxLogicalHeightForWarpReverse - (rect.bottom() - flexItemGeometry.marginBefore());
+            auto adjustedLogicalBorderBoxTop = flexContainerCrossAxisSize - rect.bottom();
             if (logicalFlexItem.isContentBoxBased())
-                adjustedLogicalBorderBoxTop -= flexItemGeometry.verticalBorderAndPadding();
+                adjustedLogicalBorderBoxTop -= flexDirection == FlexDirection::Row || flexDirection == FlexDirection::RowReverse ? flexItemGeometry.verticalBorderAndPadding() : flexItemGeometry.horizontalBorderAndPadding();
             rect.setTop(adjustedLogicalBorderBoxTop);
             return rect;
         }();
 
-        auto borderBoxTopLeft = LayoutPoint { };
-        switch (flexDirection) {
-        case FlexDirection::Row: {
-            borderBoxTopLeft = { flexContainerContentBoxPosition.x() + logicalRect.left(), flexContainerContentBoxPosition.y() + logicalRect.top() };
-            break;
+        auto borderBoxTop = LayoutUnit { };
+        auto borderBoxLeft = LayoutUnit { };
+        if (flexDirection == FlexDirection::Row || flexDirection == FlexDirection::RowReverse) {
+            borderBoxTop += logicalRect.top();
+            if (flexDirection == FlexDirection::Row)
+                borderBoxLeft = logicalRect.left();
+            else {
+                borderBoxLeft = flexContainerMainAxisSize - logicalRect.right();
+                if (logicalFlexItem.isContentBoxBased())
+                    borderBoxLeft -= flexItemGeometry.horizontalBorderAndPadding();
+            }
+        } else {
+            // Let's flip x and y to go from column to row.
+            borderBoxLeft = logicalRect.top();
+            if (flexDirection == FlexDirection::Column)
+                borderBoxTop = logicalRect.left();
+            else {
+                borderBoxTop = flexContainerMainAxisSize - logicalRect.right();
+                if (logicalFlexItem.isContentBoxBased())
+                    borderBoxTop -= flexItemGeometry.verticalBorderAndPadding();
+            }
         }
-        case FlexDirection::RowReverse:
-            borderBoxTopLeft = { constraints.mainAxis().startPosition + *constraints.mainAxis().availableSize - logicalRect.right(), flexContainerContentBoxPosition.y() + logicalRect.top() };
-            if (logicalFlexItem.isContentBoxBased())
-                borderBoxTopLeft.move({ -flexItemGeometry.horizontalBorderAndPadding(), 0_lu });
-            break;
-        case FlexDirection::Column: {
-            auto flippedTopLeft = FloatPoint { logicalRect.top(), logicalRect.left() };
-            borderBoxTopLeft = { flexContainerContentBoxPosition.x() + flippedTopLeft.x(), flexContainerContentBoxPosition.y() + flippedTopLeft.y() };
-            break;
-        }
-        case FlexDirection::ColumnReverse: {
-            auto visualBottom = flexContainerContentBoxPosition.y() + constraints.mainAxis().availableSize.value_or(logicalWidth);
-            borderBoxTopLeft = { flexContainerContentBoxPosition.x() + logicalRect.top(), visualBottom - logicalRect.right() };
-            break;
-        }
-        default:
-            ASSERT_NOT_REACHED();
-            break;
-        }
-        flexItemGeometry.setTopLeft(borderBoxTopLeft);
-
-        auto contentBoxWidth = isMainAxisParallelWithInlineAxis ? logicalRect.width() : logicalRect.height();
-        auto contentBoxHeight = isMainAxisParallelWithInlineAxis ? logicalRect.height() : logicalRect.width();
+        auto contentBoxWidth = isRowDirection ? logicalRect.width() : logicalRect.height();
+        auto contentBoxHeight = isRowDirection ? logicalRect.height() : logicalRect.width();
         if (!logicalFlexItem.isContentBoxBased()) {
             contentBoxWidth -= flexItemGeometry.horizontalBorderAndPadding();
             contentBoxHeight -= flexItemGeometry.verticalBorderAndPadding();
         }
         flexItemGeometry.setContentBoxWidth(contentBoxWidth);
         flexItemGeometry.setContentBoxHeight(contentBoxHeight);
+
+        if (!isLeftToRightDirection)
+            borderBoxLeft = (isRowDirection ? flexContainerMainAxisSize : flexContainerCrossAxisSize) - (borderBoxLeft + flexItemGeometry.borderBoxWidth());
+        flexItemGeometry.setTopLeft({ flexContainerContentBoxPosition.x() + borderBoxLeft, flexContainerContentBoxPosition.y() + borderBoxTop });
     }
 }
 

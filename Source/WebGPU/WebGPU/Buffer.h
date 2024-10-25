@@ -69,8 +69,7 @@ public:
     ~Buffer();
 
     void destroy();
-    const void* getConstMappedRange(size_t offset, size_t);
-    void* getMappedRange(size_t offset, size_t);
+    std::span<uint8_t> getMappedRange(size_t offset, size_t);
     void mapAsync(WGPUMapModeFlags, size_t offset, size_t, CompletionHandler<void(WGPUBufferMapAsyncStatus)>&& callback);
     void unmap();
     void setLabel(String&&);
@@ -95,6 +94,7 @@ public:
     State state() const { return m_state; }
 
     Device& device() const { return m_device; }
+    Ref<Device> protectedDevice() const { return m_device; }
     bool isDestroyed() const;
     void setCommandEncoder(CommandEncoder&, bool mayModifyBuffer = false) const;
     std::span<uint8_t> getBufferContents();

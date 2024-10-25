@@ -248,6 +248,9 @@ fast/workers/worker-storagequota-query-usage.html
 fast/events/autoscroll-with-software-keyboard.html [ Skip ]
 fast/events/autoscroll-when-input-is-offscreen.html [ Skip ]
 
+# HTTP 204 (No Content) should be ignored
+webkit.org/b/60206 http/tests/navigation/response204.html
+
 # JSC does not support setIsolatedWorldSecurityOrigin
 webkit.org/b/61540 http/tests/security/isolatedWorld/cross-origin-xhr.html
 
@@ -2436,3 +2439,9 @@ webkit.org/b/280792 inspector/worker/debugger-pause-subworker.html [ Skip ]
 
 # webkit.org/b/281523 [macOS arm64] Flaky test - imported/w3c/web-platform-tests/resource-timing/status-codes-create-entry.html (failed in EWS)
 [ arm64 ] imported/w3c/web-platform-tests/resource-timing/status-codes-create-entry.html [ Pass Failure ]
+
+# Platform-specific test enabled on macOS and iOS separately.
+webanimations/scroll-timeline-clamped-current-time-while-rubber-banding-mac.html [ Pass ]
+
+# webkit.org/b/281765 PROGRESSION (285251@main): [ macOS iOS ] imported/w3c/web-platform-tests/navigation-api/navigate-event/cross-origin-traversal-redirect.html is a constant failure. 
+imported/w3c/web-platform-tests/navigation-api/navigate-event/cross-origin-traversal-redirect.html [ Skip ]

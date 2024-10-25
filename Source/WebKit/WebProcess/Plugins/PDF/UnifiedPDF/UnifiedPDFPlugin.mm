@@ -2021,14 +2021,6 @@ bool UnifiedPDFPlugin::handleContextMenuEvent(const WebMouseEvent& event)
 #endif // ENABLE(CONTEXT_MENUS)
 }
 
-void UnifiedPDFPlugin::animatedScrollDidEnd()
-{
-#if PLATFORM(MAC)
-    m_isScrollingWithAnimationToPageExtent = false;
-    m_animatedKeyboardScrollingDirection = std::nullopt;
-#endif
-}
-
 bool UnifiedPDFPlugin::handleKeyboardEvent(const WebKeyboardEvent& event)
 {
     return m_presentationController->handleKeyboardEvent(event);
@@ -2808,7 +2800,8 @@ PDFPageCoverage UnifiedPDFPlugin::pageCoverageForSelection(PDFSelection *selecti
             continue;
 
         // FIXME: <https://webkit.org/b/276981> This needs per-row adjustment via the presentation controller.
-        pageCoverage.append({ *pageIndex, FloatRect { [selection boundsForPage:page] } });
+        auto selectionBounds = FloatRect { [selection boundsForPage:page] };
+        pageCoverage.append(PerPageInfo { *pageIndex, selectionBounds, selectionBounds });
         if (firstPageOnly == FirstPageOnly::Yes)
             break;
     }
@@ -3126,8 +3119,8 @@ Vector<FloatRect> UnifiedPDFPlugin::rectsForTextMatch(const WebFoundTextRange::P
         if (!pageIndex)
             continue;
 
-        auto perPageInfo = PerPageInfo { *pageIndex, [selection boundsForPage:page] };
-        findMatchRects.append(WTFMove(perPageInfo));
+        auto selectionBounds = FloatRect { [selection boundsForPage:page] };
+        findMatchRects.append(PerPageInfo { *pageIndex, selectionBounds, selectionBounds });
     }
 
     return visibleRectsForFindMatchRects(findMatchRects);
@@ -3751,6 +3744,25 @@ Vector<WebCore::FloatRect> UnifiedPDFPlugin::annotationRectsForTesting() const
     }
 
     return annotationRects;
+}
+
+
+void UnifiedPDFPlugin::setTextAnnotationValueForTesting(unsigned pageIndex, unsigned annotationIndex, const String& value)
+{
+    if (pageIndex >= m_documentLayout.pageCount())
+        return;
+
+    RetainPtr page = m_documentLayout.pageAtIndex(pageIndex);
+    RetainPtr annotationsOnPage = [page annotations];
+    if (annotationIndex >= [annotationsOnPage count])
+        return;
+
+    RetainPtr annotation = [annotationsOnPage objectAtIndex:annotationIndex];
+    if (!annotationIsWidgetOfType(annotation.get(), WidgetType::Text))
+        return;
+
+    [annotation setWidgetStringValue:value];
+    setNeedsRepaintForAnnotation(annotation.get(), repaintRequirementsForAnnotation(annotation.get(), IsAnnotationCommit::Yes));
 }
 
 void UnifiedPDFPlugin::setPDFDisplayModeForTesting(const String& mode)

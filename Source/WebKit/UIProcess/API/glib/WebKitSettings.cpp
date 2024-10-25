@@ -192,7 +192,7 @@ enum {
     N_PROPERTIES,
 };
 
-static GParamSpec* sObjProperties[N_PROPERTIES] = { nullptr, };
+static std::array<GParamSpec*, N_PROPERTIES> sObjProperties;
 
 static void webKitSettingsDispose(GObject* object)
 {
@@ -1703,7 +1703,8 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
      * In some constrained environments where a firewall blocks UDP network traffic excepted on a
      * specific port range, this settings can be used to give hints to the WebRTC backend regarding
      * which ports to allocate. The format is min-port:max-port, so for instance 20000:30000. The
-     * default value is 0:0 which means the OS will use no hints from the WebRTC backend.
+     * default empty string value means the OS will use no hints from the WebRTC backend. Using 0
+     * for one of the values is allowed and means the value is unspecified.
      *
      * Since: 2.48
      */
@@ -1714,7 +1715,7 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
         nullptr, // A null string forces the default value.
         readWriteConstructParamFlags);
 
-    g_object_class_install_properties(gObjectClass, N_PROPERTIES, sObjProperties);
+    g_object_class_install_properties(gObjectClass, N_PROPERTIES, sObjProperties.data());
 }
 
 WebPreferences* webkitSettingsGetPreferences(WebKitSettings* settings)
@@ -4298,6 +4299,8 @@ WebKitFeatureList* webkit_settings_get_development_features(void)
  */
 gboolean webkit_settings_apply_from_key_file(WebKitSettings* settings, GKeyFile* keyFile, const gchar* groupName, GError** error)
 {
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
     g_return_val_if_fail(WEBKIT_IS_SETTINGS(settings), FALSE);
     g_return_val_if_fail(keyFile, FALSE);
     g_return_val_if_fail(groupName, FALSE);
@@ -4395,6 +4398,8 @@ gboolean webkit_settings_apply_from_key_file(WebKitSettings* settings, GKeyFile*
 
     g_object_setv(G_OBJECT(settings), propertyNames->len, const_cast<const char**>(reinterpret_cast<char**>(propertyNames->pdata)), reinterpret_cast<GValue*>(values->data));
     return TRUE;
+
+    WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 }
 
 /**
@@ -4410,7 +4415,7 @@ gboolean webkit_settings_apply_from_key_file(WebKitSettings* settings, GKeyFile*
 const gchar*
 webkit_settings_get_webrtc_udp_ports_range(WebKitSettings* settings)
 {
-    g_return_val_if_fail(WEBKIT_IS_SETTINGS(settings), FALSE);
+    g_return_val_if_fail(WEBKIT_IS_SETTINGS(settings), nullptr);
 #if ENABLE(WEB_RTC)
     return settings->priv->webrtcUDPPortsRange.data();
 #else

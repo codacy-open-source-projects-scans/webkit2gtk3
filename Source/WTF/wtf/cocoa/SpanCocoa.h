@@ -25,10 +25,12 @@
 
 #pragma once
 
-#include <span>
+#import <dispatch/dispatch.h>
+#import <span>
 
 namespace WTF {
 
+#ifdef __OBJC__
 inline std::span<const uint8_t> span(NSData *data)
 {
     if (!data)
@@ -39,14 +41,27 @@ WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 }
 
-#ifdef __OBJC__
 inline RetainPtr<NSData> toNSData(std::span<const uint8_t> span)
 {
     return adoptNS([[NSData alloc] initWithBytes:span.data() length:span.size()]);
 }
+#endif // #ifdef __OBJC__
+
+template<typename> class Function;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+WTF_EXPORT_PRIVATE bool dispatch_data_apply_span(dispatch_data_t, const Function<bool(std::span<const uint8_t>)>& applier);
+#ifdef __cplusplus
+} // extern "C
 #endif
 
 } // namespace WTF
 
+using WTF::dispatch_data_apply_span;
+
+#ifdef __OBJC__
 using WTF::span;
 using WTF::toNSData;
+#endif

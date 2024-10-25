@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2023 Apple Inc. All rights reserved.
+ * Copyright (C) 2012-2024 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -326,6 +326,12 @@ static bool canAttemptTextRecognitionForNonImageElements(const WebKit::Interacti
 namespace WebKit {
 using namespace WebCore;
 
+enum class IgnoreTapGestureReason : uint8_t {
+    None,
+    ToggleEditMenu,
+    DeferToScrollView,
+};
+
 static NSArray<NSString *> *supportedPlainTextPasteboardTypes()
 {
     static NeverDestroyed supportedTypes = [] {
@@ -396,12 +402,14 @@ WKSelectionDrawingInfo::WKSelectionDrawingInfo(const EditorState& editorState)
     type = SelectionType::Range;
     if (!editorState.postLayoutData)
         return;
+
     auto& postLayoutData = *editorState.postLayoutData;
     auto& visualData = *editorState.visualData;
     caretRect = visualData.caretRectAtEnd;
     caretColor = postLayoutData.caretColor;
     selectionGeometries = visualData.selectionGeometries;
     selectionClipRect = visualData.selectionClipRect;
+    enclosingLayerID = visualData.enclosingLayerID;
 }
 
 inline bool operator==(const WKSelectionDrawingInfo& a, const WKSelectionDrawingInfo& b)
@@ -437,6 +445,9 @@ inline bool operator==(const WKSelectionDrawingInfo& a, const WKSelectionDrawing
     if (a.type != WKSelectionDrawingInfo::SelectionType::None && a.selectionClipRect != b.selectionClipRect)
         return false;
 
+    if (a.enclosingLayerID != b.enclosingLayerID)
+        return false;
+
     return true;
 }
 
@@ -459,6 +470,7 @@ TextStream& operator<<(TextStream& stream, const WKSelectionDrawingInfo& info)
     stream.dumpProperty("caret color", info.caretColor);
     stream.dumpProperty("selection geometries", info.selectionGeometries);
     stream.dumpProperty("selection clip rect", info.selectionClipRect);
+    stream.dumpProperty("layer", info.enclosingLayerID);
     return stream;
 }
 
@@ -1861,6 +1873,9 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 
 - (BOOL)shouldHideSelectionWhenScrolling
 {
+    if (_page->preferences().selectionHonorsOverflowScrolling())
+        return NO;
+
     if (_isEditable)
         return _focusedElementInformation.insideFixedPosition;
 
@@ -3257,11 +3272,11 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     if (!hitView)
         return NO;
 
-    RetainPtr selectionContainer = [self _selectionContainerScrollView];
-    return hitView == selectionContainer || [selectionContainer _wk_isAncestorOf:hitView.get()];
+    RetainPtr hitScroller = dynamic_objc_cast<UIScrollView>(hitView.get()) ?: [hitView _wk_parentScrollView];
+    return hitScroller && hitScroller == self._selectionContainerViewInternal._wk_parentScrollView;
 }
 
-- (BOOL)_shouldToggleSelectionCommandsAfterTapAt:(CGPoint)point
+- (BOOL)_shouldToggleEditMenuAfterTapAt:(CGPoint)point
 {
     if (_lastSelectionDrawingInfo.selectionGeometries.isEmpty())
         return NO;
@@ -3312,15 +3327,28 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 {
     CGPoint point = [gestureRecognizer locationInView:self];
 
-    auto shouldAcknowledgeTap = [&](WKScrollViewTrackingTapGestureRecognizer *tapGesture) -> BOOL {
-        if ([self _shouldToggleSelectionCommandsAfterTapAt:point])
-            return NO;
-        auto scrollView = tapGesture.lastTouchedScrollView;
-        return ![self _isPanningScrollViewOrAncestor:scrollView] && ![self _isInterruptingDecelerationForScrollViewOrAncestor:scrollView];
+    auto ignoreTapGestureReason = [&](WKScrollViewTrackingTapGestureRecognizer *tapGesture) -> WebKit::IgnoreTapGestureReason {
+        if ([self _shouldToggleEditMenuAfterTapAt:point])
+            return WebKit::IgnoreTapGestureReason::ToggleEditMenu;
+
+        RetainPtr scrollView = [tapGesture lastTouchedScrollView];
+        if ([self _isPanningScrollViewOrAncestor:scrollView.get()] || [self _isInterruptingDecelerationForScrollViewOrAncestor:scrollView.get()])
+            return WebKit::IgnoreTapGestureReason::DeferToScrollView;
+
+        return WebKit::IgnoreTapGestureReason::None;
     };
 
-    if (gestureRecognizer == _singleTapGestureRecognizer)
-        return shouldAcknowledgeTap(_singleTapGestureRecognizer.get());
+    if (gestureRecognizer == _singleTapGestureRecognizer) {
+        switch (ignoreTapGestureReason(_singleTapGestureRecognizer.get())) {
+        case WebKit::IgnoreTapGestureReason::ToggleEditMenu:
+            _page->clearSelectionAfterTappingSelectionHighlightIfNeeded(point);
+            FALLTHROUGH;
+        case WebKit::IgnoreTapGestureReason::DeferToScrollView:
+            return NO;
+        case WebKit::IgnoreTapGestureReason::None:
+            return YES;
+        }
+    }
 
     if (gestureRecognizer == _keyboardDismissalGestureRecognizer) {
         auto tapIsInEditableRoot = [&] {
@@ -3330,7 +3358,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
         return self._hasFocusedElement
             && !self.hasHiddenContentEditable
             && !tapIsInEditableRoot()
-            && shouldAcknowledgeTap(_keyboardDismissalGestureRecognizer.get());
+            && ignoreTapGestureReason(_keyboardDismissalGestureRecognizer.get()) == WebKit::IgnoreTapGestureReason::None;
     }
 
     if (gestureRecognizer == _doubleTapGestureRecognizerForDoubleClick) {
@@ -5950,8 +5978,12 @@ static void logTextInteraction(const char* methodName, UIGestureRecognizer *loup
 
 - (void)updateFocusedElementValueAsColor:(UIColor *)value
 {
-    WebCore::Color color(WebCore::roundAndClampToSRGBALossy(value.CGColor));
-    String valueAsString = WebCore::serializationForHTML(color);
+    auto color = [&] {
+        if (_page->preferences().inputTypeColorEnhancementsEnabled())
+            return WebCore::Color::createAndPreserveColorSpace(value.CGColor);
+        return WebCore::Color(WebCore::roundAndClampToSRGBALossy(value.CGColor));
+    }();
+    auto valueAsString = WebCore::serializationForHTML(color);
 
     _page->setFocusedElementValue(_focusedElementInformation.elementContext, valueAsString);
     _focusedElementInformation.value = valueAsString;
@@ -11560,7 +11592,7 @@ static WebKit::DocumentEditingContextRequest toWebRequest(id request)
 
 - (void)setGrammarCheckingEnabled:(BOOL)enabled
 {
-    if (static_cast<bool>(enabled) == WebKit::TextChecker::state().isGrammarCheckingEnabled)
+    if (static_cast<bool>(enabled) == WebKit::TextChecker::state().contains(WebKit::TextCheckerState::GrammarCheckingEnabled))
         return;
 
     WebKit::TextChecker::setGrammarCheckingEnabled(enabled);
@@ -13623,29 +13655,23 @@ static inline WKTextAnimationType toWKTextAnimationType(WebCore::TextAnimationTy
     return self._selectionContainerViewInternal;
 }
 
-- (WKBaseScrollView *)_selectionContainerScrollView
-{
-    if (!self.selectionHonorsOverflowScrolling)
-        return [_webView _scrollViewInternal];
-
-    if (!_page->editorState().hasVisualData())
-        return [_webView _scrollViewInternal];
-
-    auto scrollingNodeID = _page->editorState().visualData->enclosingScrollingNodeID;
-    if (!scrollingNodeID)
-        return [_webView _scrollViewInternal];
-
-    WeakPtr coordinator = _page->scrollingCoordinatorProxy();
-    if (UNLIKELY(!coordinator))
-        return [_webView _scrollViewInternal];
-
-    RetainPtr scrollView = downcast<WebKit::RemoteScrollingCoordinatorProxyIOS>(*coordinator).scrollViewForScrollingNodeID(*scrollingNodeID);
-    return dynamic_objc_cast<WKBaseScrollView>(scrollView.get());
-}
-
 - (UIView *)_selectionContainerViewInternal
 {
-    return self._selectionContainerScrollView.scrolledContentView ?: self;
+    if (!self.selectionHonorsOverflowScrolling)
+        return self;
+
+    if (!_page->editorState().hasVisualData())
+        return self;
+
+    WeakPtr drawingArea = downcast<WebKit::RemoteLayerTreeDrawingAreaProxy>(_page->drawingArea());
+    if (!drawingArea)
+        return self;
+
+    WeakPtr layerTreeNode = drawingArea->remoteLayerTreeHost().nodeForID(_page->editorState().visualData->enclosingLayerID);
+    if (!layerTreeNode)
+        return self;
+
+    return layerTreeNode->uiView() ?: self;
 }
 
 @end

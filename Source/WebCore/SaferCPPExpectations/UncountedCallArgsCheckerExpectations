@@ -33,9 +33,11 @@ JSBaseAudioContext.cpp
 JSBiquadFilterNode.cpp
 JSBlobEvent.cpp
 JSBroadcastChannel.cpp
+JSCSSFontFaceRule.cpp
 JSCSSGroupingRule.cpp
 JSCSSHWB.cpp
 JSCSSImportRule.cpp
+JSCSSKeyframeRule.cpp
 JSCSSKeyframesRule.cpp
 JSCSSMathClamp.cpp
 JSCSSMathInvert.cpp
@@ -45,12 +47,15 @@ JSCSSMathNegate.cpp
 JSCSSMathProduct.cpp
 JSCSSMathSum.cpp
 JSCSSMatrixComponent.cpp
+JSCSSNestedDeclarations.cpp
 JSCSSNumericArray.cpp
+JSCSSPageRule.cpp
 JSCSSRotate.cpp
 JSCSSRuleList.cpp
 JSCSSSkew.cpp
 JSCSSSkewX.cpp
 JSCSSSkewY.cpp
+JSCSSStyleDeclaration.cpp
 JSCSSStyleRule.cpp
 JSCSSTransformValue.cpp
 JSCSSTranslate.cpp
@@ -109,6 +114,7 @@ JSEXTDisjointTimerQueryWebGL2.cpp
 JSElement.cpp
 JSElementInternals.cpp
 JSEventSource.cpp
+JSEventTarget.cpp
 JSFetchEvent.cpp
 JSFetchRequest.cpp
 JSFetchRequestInit.cpp
@@ -222,6 +228,7 @@ JSMediaStreamAudioDestinationNode.cpp
 JSMediaStreamAudioSourceNode.cpp
 JSMediaStreamTrack.cpp
 JSMessageChannel.cpp
+JSMessageEvent.cpp
 JSMessagePort.cpp
 JSMouseEvent.cpp
 JSMutationEvent.cpp
@@ -383,7 +390,6 @@ JSValidityState.cpp
 JSVideoConfiguration.cpp
 JSVideoTrack.cpp
 JSVideoTrackList.cpp
-JSViewTimeline.cpp
 JSViewTransition.cpp
 JSVisualViewport.cpp
 JSWakeLockSentinel.cpp
@@ -454,6 +460,7 @@ Modules/WebGPU/Implementation/WebGPUXRBindingImpl.cpp
 Modules/airplay/WebMediaSessionManager.cpp
 Modules/applepay-ams-ui/ApplePayAMSUIPaymentHandler.cpp
 Modules/applepay/ApplePaySession.cpp
+Modules/applepay/ApplePaySetup.cpp
 Modules/applepay/PaymentCoordinator.cpp
 Modules/applepay/PaymentSession.cpp
 Modules/applepay/paymentrequest/ApplePayPaymentHandler.cpp
@@ -465,7 +472,6 @@ Modules/cache/DOMCache.cpp
 Modules/cache/DOMCacheStorage.cpp
 Modules/cache/RetrieveRecordsOptions.h
 Modules/cache/WindowOrWorkerGlobalScopeCaches.cpp
-Modules/cookie-store/CookieStore.cpp
 Modules/credentialmanagement/CredentialsContainer.cpp
 Modules/encryptedmedia/CDM.cpp
 Modules/encryptedmedia/MediaKeySession.cpp
@@ -757,6 +763,7 @@ bindings/js/JSAudioWorkletGlobalScopeCustom.cpp
 bindings/js/JSCSSRuleCustom.cpp
 bindings/js/JSCSSRuleCustom.h
 bindings/js/JSCSSRuleListCustom.cpp
+bindings/js/JSCSSStyleDeclarationCustom.cpp
 bindings/js/JSCanvasRenderingContext2DCustom.cpp
 bindings/js/JSCustomElementInterface.cpp
 bindings/js/JSCustomElementRegistryCustom.cpp
@@ -771,7 +778,6 @@ bindings/js/JSDOMConvertCallbacks.h
 bindings/js/JSDOMConvertDate.cpp
 bindings/js/JSDOMConvertEnumeration.h
 bindings/js/JSDOMConvertEventListener.h
-bindings/js/JSDOMConvertIndexedDB.h
 bindings/js/JSDOMConvertInterface.h
 bindings/js/JSDOMConvertScheduledAction.h
 bindings/js/JSDOMConvertStrings.h
@@ -791,6 +797,7 @@ bindings/js/JSDOMWindowCustom.cpp
 bindings/js/JSDOMWindowProperties.cpp
 bindings/js/JSDOMWindowProperties.h
 bindings/js/JSDOMWrapperCache.h
+bindings/js/JSDeprecatedCSSOMValueCustom.cpp
 bindings/js/JSDocumentCustom.cpp
 bindings/js/JSElementCustom.cpp
 bindings/js/JSElementInternalsCustom.cpp
@@ -1001,7 +1008,6 @@ css/typedom/numeric/CSSMathNegate.cpp
 css/typedom/numeric/CSSMathProduct.cpp
 css/typedom/numeric/CSSMathSum.cpp
 css/typedom/numeric/CSSMathValue.h
-css/typedom/transform/CSSMatrixComponent.cpp
 css/typedom/transform/CSSPerspective.cpp
 css/typedom/transform/CSSRotate.cpp
 css/typedom/transform/CSSScale.cpp
@@ -1641,7 +1647,6 @@ platform/graphics/ca/cocoa/PlatformCALayerContentsDelayedReleaser.mm
 platform/graphics/cg/GraphicsContextCG.cpp
 platform/graphics/cg/GraphicsContextGLCG.cpp
 platform/graphics/cg/ImageBufferIOSurfaceBackend.cpp
-platform/graphics/cg/ImageBufferUtilitiesCG.cpp
 platform/graphics/cg/PDFDocumentImage.cpp
 platform/graphics/cg/ShareableBitmapCG.mm
 platform/graphics/cocoa/CMUtilities.mm
@@ -2029,7 +2034,6 @@ svg/SVGTextPathElement.cpp
 svg/SVGTextPathElement.h
 svg/SVGTextPositioningElement.h
 svg/SVGToOTFFontConversion.cpp
-svg/SVGTransformValue.h
 svg/SVGURIReference.cpp
 svg/SVGURIReference.h
 svg/SVGUseElement.cpp
@@ -2095,7 +2099,6 @@ workers/service/ServiceWorkerRegistration.cpp
 workers/service/ServiceWorkerWindowClient.cpp
 workers/service/background-fetch/BackgroundFetch.cpp
 workers/service/background-fetch/BackgroundFetchEngine.cpp
-workers/service/background-fetch/BackgroundFetchManager.cpp
 workers/service/background-fetch/BackgroundFetchRegistration.cpp
 workers/service/background-fetch/ServiceWorkerRegistrationBackgroundFetchAPI.cpp
 workers/service/context/SWContextManager.cpp

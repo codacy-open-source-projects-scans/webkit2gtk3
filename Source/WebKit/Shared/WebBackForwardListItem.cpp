@@ -63,10 +63,10 @@ WebBackForwardListItem::~WebBackForwardListItem()
     removeFromBackForwardCache();
 }
 
-UncheckedKeyHashMap<BackForwardItemIdentifier, WeakRef<WebBackForwardListItem>>& WebBackForwardListItem::allItems()
+HashMap<BackForwardItemIdentifier, WeakRef<WebBackForwardListItem>>& WebBackForwardListItem::allItems()
 {
     RELEASE_ASSERT(RunLoop::isMain());
-    static NeverDestroyed<UncheckedKeyHashMap<BackForwardItemIdentifier, WeakRef<WebBackForwardListItem>>> items;
+    static NeverDestroyed<HashMap<BackForwardItemIdentifier, WeakRef<WebBackForwardListItem>>> items;
     return items;
 }
 
@@ -195,7 +195,7 @@ WebCore::BackForwardItemIdentifier WebBackForwardListItem::itemID() const
 
 void WebBackForwardListItem::setRootFrameState(Ref<FrameState>&& mainFrameState)
 {
-    m_rootFrameItem->setFrameState(WTFMove(mainFrameState));
+    protectedRootFrameItem()->setFrameState(WTFMove(mainFrameState));
 }
 
 FrameState& WebBackForwardListItem::rootFrameState() const
@@ -227,6 +227,16 @@ const String& WebBackForwardListItem::title() const
 bool WebBackForwardListItem::wasCreatedByJSWithoutUserInteraction() const
 {
     return m_rootFrameItem->frameState().wasCreatedByJSWithoutUserInteraction;
+}
+
+void WebBackForwardListItem::setWasRestoredFromSession()
+{
+    protectedRootFrameItem()->setWasRestoredFromSession();
+}
+
+Ref<WebBackForwardListFrameItem> WebBackForwardListItem::protectedRootFrameItem()
+{
+    return m_rootFrameItem.get();
 }
 
 #if !LOG_DISABLED

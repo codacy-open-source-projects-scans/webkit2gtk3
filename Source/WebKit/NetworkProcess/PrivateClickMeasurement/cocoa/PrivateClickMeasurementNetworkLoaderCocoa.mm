@@ -80,10 +80,10 @@ static bool trustsServerForLocalTests(NSURLAuthenticationChallenge *challenge)
 namespace WebKit::PCM {
 
 enum class LoadTaskIdentifierType { };
-using LoadTaskIdentifier = LegacyNullableObjectIdentifier<LoadTaskIdentifierType>;
-static UncheckedKeyHashMap<LoadTaskIdentifier, RetainPtr<NSURLSessionDataTask>>& taskMap()
+using LoadTaskIdentifier = ObjectIdentifier<LoadTaskIdentifierType>;
+static HashMap<LoadTaskIdentifier, RetainPtr<NSURLSessionDataTask>>& taskMap()
 {
-    static NeverDestroyed<UncheckedKeyHashMap<LoadTaskIdentifier, RetainPtr<NSURLSessionDataTask>>> map;
+    static NeverDestroyed<HashMap<LoadTaskIdentifier, RetainPtr<NSURLSessionDataTask>>> map;
     return map.get();
 }
 

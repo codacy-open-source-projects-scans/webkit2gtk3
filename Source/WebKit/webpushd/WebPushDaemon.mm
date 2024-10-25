@@ -110,6 +110,8 @@ using WebCore::SecurityOriginData;
 
 namespace WebPushD {
 
+static unsigned s_protocolVersion = protocolVersionValue;
+
 static constexpr Seconds s_incomingPushTransactionTimeout { 10_s };
 
 #if HAVE(FULL_FEATURED_USER_NOTIFICATIONS)
@@ -295,21 +297,20 @@ void WebPushDaemon::connectionEventHandler(xpc_object_t request)
         return;
 
     auto version = xpc_dictionary_get_uint64(request, protocolVersionKey);
-    if (version != protocolVersionValue) {
+    if (version != s_protocolVersion) {
         RELEASE_LOG_ERROR(Push, "Received request with protocol version %llu not matching daemon protocol version %llu", version, protocolVersionValue);
         tryCloseRequestConnection(request);
         return;
     }
 
-    size_t dataSize { 0 };
-    auto* data = static_cast<const uint8_t*>(xpc_dictionary_get_data(request, protocolEncodedMessageKey, &dataSize));
-    if (!data) {
+    auto data = xpc_dictionary_get_data_span(request, protocolEncodedMessageKey);
+    if (!data.data()) {
         RELEASE_LOG_ERROR(Push, "WebPushDaemon::connectionEventHandler - No encoded message data in xpc message");
         tryCloseRequestConnection(request);
         return;
     }
 
-    auto decoder = IPC::Decoder::create({ data, dataSize }, { });
+    auto decoder = IPC::Decoder::create(data, { });
     if (!decoder) {
         RELEASE_LOG_ERROR(Push, "WebPushDaemon::connectionEventHandler - Failed to create decoder for xpc message");
         tryCloseRequestConnection(request);
@@ -736,6 +737,9 @@ void WebPushDaemon::getPendingPushMessages(PushClientConnection& connection, Com
     WEBPUSHDAEMON_RELEASE_LOG(Push, "Fetched %zu push messages, %zu remaining", result.size(), m_pendingPushMessages.size());
 
     replySender(WTFMove(result));
+
+    if (m_pendingPushMessages.isEmpty())
+        releaseIncomingPushTransaction();
 }
 
 void WebPushDaemon::getPushTopicsForTesting(PushClientConnection& connection, CompletionHandler<void(Vector<String>, Vector<String>)>&& completionHandler)
@@ -1189,6 +1193,12 @@ void WebPushDaemon::getAppBadgeForTesting(PushClientConnection& connection, Comp
 }
 
 #endif // HAVE(FULL_FEATURED_USER_NOTIFICATIONS)
+
+void WebPushDaemon::setProtocolVersionForTesting(PushClientConnection& connection, unsigned version, CompletionHandler<void()>&& completionHandler)
+{
+    s_protocolVersion = version;
+    completionHandler();
+}
 
 } // namespace WebPushD
 

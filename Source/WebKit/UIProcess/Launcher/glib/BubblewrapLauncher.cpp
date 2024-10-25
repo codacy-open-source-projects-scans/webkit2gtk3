@@ -40,6 +40,8 @@
 #include "Display.h"
 #endif
 
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
+
 #if !defined(MFD_ALLOW_SEALING) && HAVE(LINUX_MEMFD_H)
 #include <linux/memfd.h>
 #endif
@@ -717,7 +719,7 @@ static std::optional<CString> directoryContainingDBusSocket(const char* dbusAddr
     return std::nullopt;
 }
 
-static void addExtraPaths(const UncheckedKeyHashMap<CString, SandboxPermission>& paths, Vector<CString>& args)
+static void addExtraPaths(const HashMap<CString, SandboxPermission>& paths, Vector<CString>& args)
 {
     for (const auto& pathAndPermission : paths) {
         args.appendVector(Vector<CString>({
@@ -955,5 +957,7 @@ GRefPtr<GSubprocess> bubblewrapSpawn(GSubprocessLauncher* launcher, const Proces
 }
 
 };
+
+WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 #endif // ENABLE(BUBBLEWRAP_SANDBOX)

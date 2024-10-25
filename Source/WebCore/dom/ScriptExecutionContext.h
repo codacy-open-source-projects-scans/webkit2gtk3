@@ -270,6 +270,7 @@ public:
 
     virtual JSC::VM& vm() = 0;
     virtual Ref<JSC::VM> protectedVM();
+    virtual JSC::VM* vmIfExists() const = 0;
 
     void adjustMinimumDOMTimerInterval(Seconds oldMinimumTimerInterval);
     virtual Seconds minimumDOMTimerInterval() const;
@@ -423,7 +424,7 @@ private:
     RejectedPromiseTracker* ensureRejectedPromiseTrackerSlow();
 
     void checkConsistency() const;
-    WEBCORE_EXPORT RefCountedSerialFunctionDispatcher& nativePromiseDispatcher();
+    WEBCORE_EXPORT GuaranteedSerialFunctionDispatcher& nativePromiseDispatcher();
 
     HashSet<MessagePort*> m_messagePorts;
     HashSet<ContextDestructionObserver*> m_destructionObservers;
@@ -467,7 +468,7 @@ private:
     bool m_willprocessMessageWithMessagePortsSoon { false };
     bool m_hasLoggedAuthenticatedEncryptionWarning { false };
 
-    RefPtr<RefCountedSerialFunctionDispatcher> m_nativePromiseDispatcher;
+    RefPtr<GuaranteedSerialFunctionDispatcher> m_nativePromiseDispatcher;
     WeakHashSet<NativePromiseRequest> m_nativePromiseRequests;
 };
 

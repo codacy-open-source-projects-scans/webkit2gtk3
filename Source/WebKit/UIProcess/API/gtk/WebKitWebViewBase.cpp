@@ -243,10 +243,10 @@ struct MotionEvent {
 };
 
 #if !USE(GTK4)
-typedef UncheckedKeyHashMap<GtkWidget*, IntRect> WebKitWebViewChildrenMap;
-typedef UncheckedKeyHashMap<uint32_t, GUniquePtr<GdkEvent>> TouchEventsMap;
+typedef HashMap<GtkWidget*, IntRect> WebKitWebViewChildrenMap;
+typedef HashMap<uint32_t, GUniquePtr<GdkEvent>> TouchEventsMap;
 #else
-typedef UncheckedKeyHashMap<uint32_t, GRefPtr<GdkEvent>> TouchEventsMap;
+typedef HashMap<uint32_t, GRefPtr<GdkEvent>> TouchEventsMap;
 #endif
 
 struct _WebKitWebViewBasePrivate {
@@ -1132,7 +1132,9 @@ static bool shouldForwardWheelEvent(WebKitWebViewBase* webViewBase, GdkEvent* ev
             if (length > 0)
                 length--;
             for (unsigned i = 0; i < length; i++) {
+                WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
                 auto oldTime = history.get()[i].time;
+                WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
                 webViewBase->priv->wheelEventsToPropagate.removeAllMatching([&oldTime] (GRefPtr<GdkEvent>& current) {
                     return gdk_event_get_time(current.get()) == oldTime;
                 });

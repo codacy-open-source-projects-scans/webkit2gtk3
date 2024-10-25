@@ -1598,12 +1598,18 @@ void RenderLayer::updateTransformFromStyle(TransformationMatrix& transform, cons
 {
     auto referenceBoxRect = snapRectToDevicePixelsIfNeeded(renderer().transformReferenceBoxRect(style), renderer());
     renderer().applyTransform(transform, style, referenceBoxRect, options);
+
+    // https://drafts.csswg.org/css-anchor-position-1/#anchor-pos
+    // "The positioned element is additionally visually shifted by its snapshotted scroll offset, as if by an additional translate() transform."
+    if (m_snapshottedScrollOffsetForAnchorPositioning)
+        transform.translate(m_snapshottedScrollOffsetForAnchorPositioning->width(), m_snapshottedScrollOffsetForAnchorPositioning->height());
+
     makeMatrixRenderable(transform, canRender3DTransforms());
 }
 
 void RenderLayer::updateTransform()
 {
-    bool hasTransform = renderer().isTransformed();
+    bool hasTransform = renderer().isTransformed() || m_snapshottedScrollOffsetForAnchorPositioning;
     bool had3DTransform = has3DTransform();
 
     std::unique_ptr<TransformationMatrix> oldTransform;
@@ -2946,7 +2952,7 @@ RenderLayer::OverflowControlRects RenderLayer::overflowControlsRects() const
     auto overflowControlsPositioningRect = snappedIntRect(renderBox.paddingBoxRectIncludingScrollbar());
 
     bool placeVerticalScrollbarOnTheLeft = renderBox.shouldPlaceVerticalScrollbarOnLeft();
-    bool haveResizer = renderer().style().resize() != Resize::None;
+    bool haveResizer = renderer().style().resize() != Resize::None && renderer().style().pseudoElementType() == PseudoId::None;
 
     OverflowControlRects result;
     auto cornerRect = [&](IntSize cornerSize) {
@@ -4441,6 +4447,25 @@ bool RenderLayer::participatesInPreserve3D() const
     return ancestorLayerIsDOMParent(parent()) && parent()->preserves3D() && (transform() || renderer().style().backfaceVisibility() == BackfaceVisibility::Hidden || preserves3D());
 }
 
+void RenderLayer::setSnapshottedScrollOffsetForAnchorPositioning(LayoutSize offset)
+{
+    if (m_snapshottedScrollOffsetForAnchorPositioning == offset)
+        return;
+
+    // FIXME: Scroll offset should be adjusted in the scrolling tree so layers stay exactly in sync.
+    m_snapshottedScrollOffsetForAnchorPositioning = offset;
+    updateTransform();
+}
+
+void RenderLayer::clearSnapshottedScrollOffsetForAnchorPositioning()
+{
+    if (!m_snapshottedScrollOffsetForAnchorPositioning)
+        return;
+
+    m_snapshottedScrollOffsetForAnchorPositioning = { };
+    updateTransform();
+}
+
 // hitTestLocation and hitTestRect are relative to rootLayer.
 // A 'flattening' layer is one preserves3D() == false.
 // transformState.m_accumulatedTransform holds the transform from the containing flattening layer.
@@ -5837,14 +5862,22 @@ void RenderLayer::styleChanged(StyleDifference diff, const RenderStyle* oldStyle
 
         // Visibility and scrollability are input to canUseCompositedScrolling().
         if (m_scrollableArea) {
-            if (oldStyle->direction() != renderer().style().direction())
+            if (oldStyle->writingMode() != renderer().style().writingMode())
                 m_scrollableArea->invalidateScrollCornerRect({ });
             if (visibilityChanged || oldStyle->isOverflowVisible() != renderer().style().isOverflowVisible())
                 m_scrollableArea->computeHasCompositedScrollableOverflow(diff <= StyleDifference::RepaintLayer ? LayoutUpToDate::Yes : LayoutUpToDate::No);
         }
 
+        if (oldStyle->isOverflowVisible() != renderer().style().isOverflowVisible())
+            setSelfAndDescendantsNeedPositionUpdate();
+
         if (oldStyle->hasZeroOpacity() != renderer().style().hasZeroOpacity())
             setNeedsPositionUpdate();
+
+        if (oldStyle->preserves3D() != preserves3D()) {
+            dirty3DTransformedDescendantStatus();
+            setNeedsPostLayoutCompositingUpdateOnAncestors();
+        }
     }
 
     if (m_scrollableArea) {

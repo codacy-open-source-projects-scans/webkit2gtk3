@@ -260,7 +260,7 @@ public:
 
     RefPtr<WebKit::WebURLSchemeHandler> urlSchemeHandlerForURLScheme(const WTF::String&);
     void setURLSchemeHandlerForURLScheme(Ref<WebKit::WebURLSchemeHandler>&&, const WTF::String&);
-    const UncheckedKeyHashMap<WTF::String, Ref<WebKit::WebURLSchemeHandler>>& urlSchemeHandlers() { return m_data.urlSchemeHandlers; }
+    const HashMap<WTF::String, Ref<WebKit::WebURLSchemeHandler>>& urlSchemeHandlers() { return m_data.urlSchemeHandlers; }
 
     const Vector<WTF::String>& corsDisablingPatterns() const { return m_data.corsDisablingPatterns; }
     void setCORSDisablingPatterns(Vector<WTF::String>&& patterns) { m_data.corsDisablingPatterns = WTFMove(patterns); }
@@ -455,19 +455,12 @@ public:
     bool overlayRegionsEnabled() const { return m_data.overlayRegionsEnabled; }
     void setOverlayRegionsEnabled(bool value) { m_data.overlayRegionsEnabled = value; }
 #endif // ENABLE(OVERLAY_REGIONS_IN_EVENT_REGION)
-#if ENABLE(CSS_TRANSFORM_STYLE_SEPARATED)
+#if HAVE(CORE_ANIMATION_SEPARATED_LAYERS)
     bool cssTransformStyleSeparatedEnabled() const { return m_data.cssTransformStyleSeparatedEnabled; }
     void setCSSTransformStyleSeparatedEnabled(bool value) { m_data.cssTransformStyleSeparatedEnabled = value; }
 #endif
 
 #endif // PLATFORM(VISION)
-
-#if PLATFORM(MAC)
-    static constexpr Seconds defaultWebProcessSuspensionDelay { 8_min };
-
-    Seconds webProcessSuspensionDelay() const { return m_data.webProcessSuspensionDelay; }
-    void setWebProcessSuspensionDelay(Seconds delay) { m_data.webProcessSuspensionDelay = delay; }
-#endif
 
 private:
     struct Data {
@@ -574,7 +567,7 @@ private:
         RefPtr<ApplicationManifest> applicationManifest;
 #endif
 
-        UncheckedKeyHashMap<WTF::String, Ref<WebKit::WebURLSchemeHandler>> urlSchemeHandlers;
+        HashMap<WTF::String, Ref<WebKit::WebURLSchemeHandler>> urlSchemeHandlers;
         Vector<WTF::String> corsDisablingPatterns;
         HashSet<WTF::String> maskedURLSchemes;
         bool maskedURLSchemesWasSet { false };
@@ -645,7 +638,7 @@ private:
 #if ENABLE(OVERLAY_REGIONS_IN_EVENT_REGION)
         bool overlayRegionsEnabled { false };
 #endif
-#if ENABLE(CSS_TRANSFORM_STYLE_SEPARATED)
+#if HAVE(CORE_ANIMATION_SEPARATED_LAYERS)
         bool cssTransformStyleSeparatedEnabled { false };
 #endif
 
@@ -663,10 +656,6 @@ private:
 #endif
 
         WebCore::ContentSecurityPolicyModeForExtension contentSecurityPolicyModeForExtension { WebCore::ContentSecurityPolicyModeForExtension::None };
-
-#if PLATFORM(MAC)
-        Seconds webProcessSuspensionDelay { defaultWebProcessSuspensionDelay };
-#endif
     };
 
     // All data members should be added to the Data structure to avoid breaking PageConfiguration::copy().

@@ -2288,7 +2288,7 @@ void FrameLoader::commitProvisionalLoad()
         bool canTriggerCrossDocumentViewTransition = false;
         RefPtr<NavigationActivation> activation;
         if (pdl) {
-            canTriggerCrossDocumentViewTransition = pdl->navigationCanTriggerCrossDocumentViewTransition(*document);
+            canTriggerCrossDocumentViewTransition = pdl->navigationCanTriggerCrossDocumentViewTransition(*document, !!cachedPage);
 
             RefPtr domWindow = document->domWindow();
             auto navigationAPIType = pdl->triggeringAction().navigationAPIType();
@@ -2301,7 +2301,7 @@ void FrameLoader::commitProvisionalLoad()
                 if (RefPtr page = frame->page(); page && *navigationAPIType != NavigationNavigationType::Reload)
                     newItem = frame->checkedHistory()->createItemWithLoader(page->historyItemClient(), pdl.get());
 
-                activation = domWindow->protectedNavigation()->createForPageswapEvent(newItem.get(), pdl.get());
+                activation = domWindow->protectedNavigation()->createForPageswapEvent(newItem.get(), pdl.get(), !!cachedPage);
             }
         }
         document->dispatchPageswapEvent(canTriggerCrossDocumentViewTransition, WTFMove(activation));
@@ -2320,7 +2320,7 @@ void FrameLoader::commitProvisionalLoad()
         document->checkedEditor()->confirmOrCancelCompositionAndNotifyClient();
     }
 
-    if (!frame->tree().parent() && frame->history().currentItem() && frame->history().currentItem() != frame->history().provisionalItem()) {
+    if (!frame->tree().parent() && frame->history().currentItem() && (!frame->history().provisionalItem() || frame->history().currentItem()->identifier() != frame->history().provisionalItem()->identifier())) {
         // Check to see if we need to cache the page we are navigating away from into the back/forward cache.
         // We are doing this here because we know for sure that a new page is about to be loaded.
         BackForwardCache::singleton().addIfCacheable(*frame->history().protectedCurrentItem(), frame->protectedPage().get());
@@ -3947,7 +3947,6 @@ void FrameLoader::continueLoadAfterNavigationPolicy(const ResourceRequest& reque
     ASSERT(m_policyDocumentLoader || !m_provisionalDocumentLoader->unreachableURL().isEmpty());
 
     Ref frame = m_frame.get();
-    bool isTargetItem = frame->checkedHistory()->provisionalItem() ? frame->checkedHistory()->provisionalItem()->isTargetItem() : false;
 
     bool urlIsDisallowed = allowNavigationToInvalidURL == AllowNavigationToInvalidURL::No && !request.url().isValid();
     bool canContinue = navigationPolicyDecision == NavigationPolicyDecision::ContinueLoad && shouldClose() && !urlIsDisallowed;
@@ -3985,14 +3984,9 @@ void FrameLoader::continueLoadAfterNavigationPolicy(const ResourceRequest& reque
         if (navigationPolicyDecision != NavigationPolicyDecision::LoadWillContinueInAnotherProcess)
             checkLoadComplete();
 
-        // If the navigation request came from the back/forward menu, and we punt on it, we have the 
-        // problem that we have optimistically moved the b/f cursor already, so move it back. For sanity,
-        // we only do this when punting a navigation for the target frame or top-level frame.  
-        if ((isTargetItem || frame->isMainFrame()) && isBackForwardLoadType(policyChecker().loadType())) {
-            if (RefPtr page = frame->page()) {
-                if (RefPtr resetItem = frame->mainFrame().history().currentItem())
-                    page->checkedBackForward()->setCurrentItem(*resetItem);
-            }
+        if (RefPtr provisionalItem = frame->checkedHistory()->provisionalItem(); provisionalItem && isBackForwardLoadType(policyChecker().loadType())) {
+            if (RefPtr page = frame->page())
+                page->checkedBackForward()->clearProvisionalItem(*provisionalItem);
         }
         return;
     }
@@ -4686,7 +4680,7 @@ std::pair<RefPtr<Frame>, CreatedNewPage> createWindow(LocalFrame& openerFrame, F
     }
 
     // FIXME: Setting the referrer should be the caller's responsibility.
-    String referrer = SecurityPolicy::generateReferrerHeader(openerFrame.document()->referrerPolicy(), request.resourceRequest().url(), openerFrame.loader().outgoingReferrerURL(), OriginAccessPatternsForWebProcess::singleton());
+    String referrer = features.wantsNoReferrer() ? String() :  SecurityPolicy::generateReferrerHeader(openerFrame.document()->referrerPolicy(), request.resourceRequest().url(), openerFrame.loader().outgoingReferrerURL(), OriginAccessPatternsForWebProcess::singleton());
     if (!referrer.isEmpty())
         request.resourceRequest().setHTTPReferrer(referrer);
     FrameLoader::addSameSiteInfoToRequestIfNeeded(request.resourceRequest(), openerFrame.protectedDocument().get());

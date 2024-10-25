@@ -181,11 +181,11 @@ header: <WebCore/AttributedString.h>
     CGFloat marginMaxXEdge;
     CGFloat marginMaxYEdge;
 
-    RetainPtr<PlatformColor> backgroundColor;
-    RetainPtr<PlatformColor> borderMinXEdgeColor;
-    RetainPtr<PlatformColor> borderMinYEdgeColor;
-    RetainPtr<PlatformColor> borderMaxXEdgeColor;
-    RetainPtr<PlatformColor> borderMaxYEdgeColor;
+    RetainPtr<WebCore::CocoaColor> backgroundColor;
+    RetainPtr<WebCore::CocoaColor> borderMinXEdgeColor;
+    RetainPtr<WebCore::CocoaColor> borderMinYEdgeColor;
+    RetainPtr<WebCore::CocoaColor> borderMaxXEdgeColor;
+    RetainPtr<WebCore::CocoaColor> borderMaxYEdgeColor;
 }
 
 header: <WebCore/AttributedString.h>
@@ -257,8 +257,8 @@ header: <WebCore/AttributedString.h>
 
 struct WebCore::AttributedString {
     String string;
-    [Validator='WebCore::AttributedString::rangesAreSafe(*string, *attributes)'] Vector<std::pair<WebCore::AttributedString::Range, UncheckedKeyHashMap<String, WebCore::AttributedString::AttributeValue>>> attributes;
-    std::optional<UncheckedKeyHashMap<String, WebCore::AttributedString::AttributeValue>> documentAttributes;
+    [Validator='WebCore::AttributedString::rangesAreSafe(*string, *attributes)'] Vector<std::pair<WebCore::AttributedString::Range, HashMap<String, WebCore::AttributedString::AttributeValue>>> attributes;
+    std::optional<HashMap<String, WebCore::AttributedString::AttributeValue>> documentAttributes;
 };
 
 #if ENABLE(MEDIA_RECORDER)

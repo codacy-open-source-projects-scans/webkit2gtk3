@@ -404,7 +404,6 @@ Modules/async-clipboard/Clipboard.cpp
 Modules/async-clipboard/ClipboardItemBindingsDataSource.cpp
 Modules/cache/DOMCache.cpp
 Modules/cache/DOMCacheStorage.cpp
-Modules/cookie-store/CookieStore.cpp
 Modules/encryptedmedia/CDM.cpp
 Modules/encryptedmedia/MediaKeySystemRequest.cpp
 Modules/fetch/FetchBody.cpp
@@ -544,7 +543,6 @@ animation/AnimationTimeline.cpp
 animation/AnimationTimelinesController.cpp
 animation/BlendingKeyframes.cpp
 animation/CSSAnimation.cpp
-animation/CSSNumberishTime.cpp
 animation/CSSPropertyAnimation.cpp
 animation/CSSTransition.cpp
 animation/DocumentTimeline.cpp
@@ -634,6 +632,7 @@ bindings/js/JSLocationCustom.cpp
 bindings/js/JSMediaListCustom.h
 bindings/js/JSMessagePortCustom.cpp
 bindings/js/JSMicrotaskCallback.h
+bindings/js/JSNavigateEventCustom.cpp
 bindings/js/JSNodeCustom.cpp
 bindings/js/JSNodeIteratorCustom.cpp
 bindings/js/JSObservableArray.cpp
@@ -719,7 +718,6 @@ css/StyleRuleImport.cpp
 css/StyleSheetContents.cpp
 css/parser/CSSParserImpl.cpp
 css/query/ContainerQueryFeatures.cpp
-css/query/GenericMediaQueryEvaluator.cpp
 css/query/MediaQueryFeatures.cpp
 css/typedom/CSSNumericValue.cpp
 css/typedom/CSSStyleValueFactory.cpp
@@ -782,6 +780,7 @@ dom/ScriptedAnimationController.cpp
 dom/SelectorQuery.cpp
 dom/ShadowRoot.cpp
 dom/SimpleRange.cpp
+dom/SimulatedClick.cpp
 dom/SlotAssignment.cpp
 dom/SpaceSplitString.cpp
 dom/StaticRange.cpp
@@ -865,7 +864,6 @@ html/HTMLOptionElement.cpp
 html/HTMLPictureElement.cpp
 html/HTMLSelectElement.cpp
 html/HTMLSlotElement.cpp
-html/HTMLSourceElement.cpp
 html/HTMLStyleElement.cpp
 html/HTMLSummaryElement.cpp
 html/HTMLTableElement.cpp
@@ -898,7 +896,6 @@ html/canvas/EXTDisjointTimerQueryWebGL2.cpp
 html/canvas/EXTPolygonOffsetClamp.cpp
 html/canvas/GPUBasedCanvasRenderingContext.cpp
 html/canvas/GPUCanvasContextCocoa.mm
-html/canvas/ImageBitmapRenderingContext.cpp
 html/canvas/OESDrawBuffersIndexed.cpp
 html/canvas/OESVertexArrayObject.cpp
 html/canvas/OffscreenCanvasRenderingContext2D.cpp
@@ -978,11 +975,11 @@ layout/formattingContexts/inline/text/TextUtil.cpp
 layout/integration/inline/LayoutIntegrationLineLayout.cpp
 layout/layouttree/LayoutTreeBuilder.cpp
 loader/ApplicationManifestLoader.cpp
-loader/CookieJar.cpp
 loader/DocumentLoader.cpp
 loader/FrameLoader.cpp
 loader/HistoryController.cpp
 loader/MixedContentChecker.cpp
+loader/NavigationAction.cpp
 loader/NavigationScheduler.cpp
 loader/ThreadableLoader.cpp
 loader/WorkerThreadableLoader.cpp
@@ -1071,7 +1068,6 @@ page/mac/ServicesOverlayController.mm
 page/scrolling/AsyncScrollingCoordinator.cpp
 page/scrolling/ScrollAnchoringController.cpp
 page/scrolling/ScrollingCoordinator.cpp
-page/scrolling/ScrollingStateStickyNode.cpp
 page/scrolling/ScrollingTree.cpp
 page/scrolling/ScrollingTreeFixedNode.cpp
 page/scrolling/ScrollingTreeOverflowScrollProxyNode.cpp
@@ -1332,7 +1328,6 @@ testing/Internals.mm
 testing/LegacyMockCDM.cpp
 testing/MockCDMFactory.cpp
 testing/MockPageOverlayClient.cpp
-testing/MockPaymentCoordinator.cpp
 testing/ServiceWorkerInternals.cpp
 testing/js/WebCoreTestSupport.cpp
 workers/AbstractWorker.cpp

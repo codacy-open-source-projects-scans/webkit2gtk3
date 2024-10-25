@@ -208,7 +208,7 @@ void Navigation::updateForActivation(HistoryItem* previousItem, std::optional<Na
 }
 
 // https://html.spec.whatwg.org/multipage/browsing-the-web.html#fire-the-pageswap-event
-RefPtr<NavigationActivation> Navigation::createForPageswapEvent(HistoryItem* newItem, DocumentLoader* documentLoader)
+RefPtr<NavigationActivation> Navigation::createForPageswapEvent(HistoryItem* newItem, DocumentLoader* documentLoader, bool fromBackForwardCache)
 {
     auto type = documentLoader->triggeringAction().navigationAPIType();
     if (!type || !frame())
@@ -216,7 +216,7 @@ RefPtr<NavigationActivation> Navigation::createForPageswapEvent(HistoryItem* new
 
     // Skip cross-origin requests, or if any cross-origin redirects have been made.
     bool isSameOrigin = SecurityOrigin::create(documentLoader->documentURL())->isSameOriginAs(window()->protectedDocument()->securityOrigin());
-    if (!isSameOrigin || !documentLoader->request().isSameSite())
+    if (!isSameOrigin || (!documentLoader->request().isSameSite() && !fromBackForwardCache))
         return nullptr;
 
     RefPtr<NavigationHistoryEntry> oldEntry;
@@ -429,6 +429,13 @@ Navigation::Result Navigation::performTraversal(const String& key, Navigation::O
 {
     if (!window()->protectedDocument()->isFullyActive() || window()->document()->unloadCounter())
         return createErrorResult(WTFMove(committed), WTFMove(finished), ExceptionCode::InvalidStateError, "Invalid state"_s);
+
+    auto entry = findEntryByKey(key);
+    if (!entry)
+        createErrorResult(WTFMove(committed), WTFMove(finished), ExceptionCode::AbortError, "Navigation aborted"_s);
+
+    if (!frame()->isMainFrame() && !window()->protectedDocument()->canNavigate(&frame()->page()->mainFrame()))
+        return createErrorResult(WTFMove(committed), WTFMove(finished), ExceptionCode::SecurityError, "Invalid state"_s);
 
     RefPtr current = currentEntry();
     if (current->key() == key) {

@@ -267,7 +267,7 @@ public:
         case CaptureDevice::DeviceType::Window: {
 #if PLATFORM(COCOA)
             return DisplayCaptureSourceCocoa::create([this, &device, pageIdentifier] (auto& observer) {
-                auto capturer = makeUniqueRef<MockDisplayCapturer>(observer, device, pageIdentifier);
+                auto capturer = makeUniqueRefWithoutRefCountedCheck<MockDisplayCapturer>(observer, device, pageIdentifier);
                 m_capturer = capturer.get();
                 return capturer;
             }, device, WTFMove(hashSalts), constraints, pageIdentifier);
@@ -301,7 +301,12 @@ private:
 #endif
 };
 
-class MockRealtimeAudioSourceFactory final : public AudioCaptureFactory
+class MockRealtimeAudioSourceFactory final
+#if PLATFORM(COCOA)
+    : public CoreAudioCaptureSourceFactory
+#else
+    : public AudioCaptureFactory
+#endif
 {
 public:
     CaptureSourceOrError createAudioCaptureSource(const CaptureDevice& device, MediaDeviceHashSalts&& hashSalts, const MediaConstraints* constraints, std::optional<PageIdentifier> pageIdentifier) final
@@ -320,11 +325,6 @@ public:
 private:
     CaptureDeviceManager& audioCaptureDeviceManager() final { return MockRealtimeMediaSourceCenter::singleton().audioCaptureDeviceManager(); }
     const Vector<CaptureDevice>& speakerDevices() const final { return MockRealtimeMediaSourceCenter::speakerDevices(); }
-#if PLATFORM(COCOA)
-    void enableMutedSpeechActivityEventListener(Function<void()>&& callback) final {
-        CoreAudioSharedUnit::singleton().enableMutedSpeechActivityEventListener(WTFMove(callback)); }
-    void disableMutedSpeechActivityEventListener() final { CoreAudioSharedUnit::singleton().disableMutedSpeechActivityEventListener(); }
-#endif
 };
 
 static Vector<MockMediaDevice>& devices()

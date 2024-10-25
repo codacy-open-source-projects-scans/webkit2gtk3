@@ -840,9 +840,9 @@ void WebChromeClient::print(LocalFrame& frame, const StringWithDirection& title)
 
 #if ENABLE(INPUT_TYPE_COLOR)
 
-std::unique_ptr<ColorChooser> WebChromeClient::createColorChooser(ColorChooserClient& client, const Color& initialColor)
+RefPtr<ColorChooser> WebChromeClient::createColorChooser(ColorChooserClient& client, const Color& initialColor)
 {
-    return makeUnique<WebColorChooser>(protectedPage().ptr(), &client, initialColor);
+    return WebColorChooser::create(protectedPage().ptr(), &client, initialColor);
 }
 
 #endif
@@ -1333,6 +1333,13 @@ void WebChromeClient::enterFullScreenForElement(Element& element, HTMLMediaEleme
         setVideoFullscreenMode(*videoElement, mode);
 #endif
 }
+
+#if ENABLE(QUICKLOOK_FULLSCREEN)
+void WebChromeClient::updateImageSource(Element& element)
+{
+    protectedPage()->fullScreenManager()->updateImageSource(element);
+}
+#endif // ENABLE(QUICKLOOK_FULLSCREEN)
 
 void WebChromeClient::exitFullScreenForElement(Element* element)
 {

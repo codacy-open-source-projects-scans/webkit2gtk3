@@ -467,7 +467,8 @@ enum class ItemPosition : uint8_t {
     FlexStart,
     FlexEnd,
     Left,
-    Right
+    Right,
+    AnchorCenter,
 };
 
 enum class OverflowAlignment : uint8_t {
@@ -889,7 +890,7 @@ enum class PointerEvents : uint8_t {
 enum class TransformStyle3D : uint8_t {
     Flat,
     Preserve3D,
-#if ENABLE(CSS_TRANSFORM_STYLE_SEPARATED)
+#if HAVE(CORE_ANIMATION_SEPARATED_LAYERS)
     Separated
 #endif
 };
@@ -958,12 +959,6 @@ enum class TextUnderlinePosition : uint8_t {
     FromFont = 1 << 1,
     Left     = 1 << 2,
     Right    = 1 << 3
-};
-
-enum class TextOrientation : uint8_t {
-    Mixed,
-    Upright,
-    Sideways
 };
 
 enum class TextOverflow : bool {
@@ -1314,7 +1309,6 @@ WTF::TextStream& operator<<(WTF::TextStream&, TextEmphasisMark);
 WTF::TextStream& operator<<(WTF::TextStream&, TextEmphasisPosition);
 WTF::TextStream& operator<<(WTF::TextStream&, TextGroupAlign);
 WTF::TextStream& operator<<(WTF::TextStream&, TextJustify);
-WTF::TextStream& operator<<(WTF::TextStream&, TextOrientation);
 WTF::TextStream& operator<<(WTF::TextStream&, TextOverflow);
 WTF::TextStream& operator<<(WTF::TextStream&, TextSecurity);
 WTF::TextStream& operator<<(WTF::TextStream&, TextTransform);

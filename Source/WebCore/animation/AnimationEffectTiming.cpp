@@ -34,7 +34,7 @@ void AnimationEffectTiming::updateComputedProperties(IsProgressBased isProgressB
 {
     // https://drafts.csswg.org/web-animations-2/#intrinsic-iteration-duration
     if (isProgressBased == IsProgressBased::Yes && iterations)
-        intrinsicIterationDuration = CSSNumberishTime::fromPercentage(100) / iterations;
+        intrinsicIterationDuration = WebAnimationTime::fromPercentage(100) / iterations;
     else
         intrinsicIterationDuration = iterationDuration;
 
@@ -91,11 +91,11 @@ BasicEffectTiming AnimationEffectTiming::getBasicTiming(const ResolutionData& da
             if (!data.playbackRate)
                 return false;
             // Let effective start time be the animation’s start time if resolved, or zero otherwise.
-            auto effectiveStartTime = data.startTime.value_or(CSSNumberishTime::fromPercentage(0));
+            auto effectiveStartTime = data.startTime.value_or(WebAnimationTime::fromPercentage(0));
             // Set unlimited current time based on the first matching condition:
             // - start time is resolved: (timeline time - start time) × playback rate
             // - Otherwise: animation's current time
-            ASSERT(data.timelineTime);
+            ASSERT_IMPLIES(data.startTime, data.timelineTime);
             auto unlimitedCurrentTime = data.startTime ? (*data.timelineTime - *data.startTime) * data.playbackRate : *data.localTime;
             // Let effective timeline time be unlimited current time / animation’s playback rate + effective start time
             auto effectiveTimelineTime = unlimitedCurrentTime / data.playbackRate + effectiveStartTime;
@@ -107,7 +107,7 @@ BasicEffectTiming AnimationEffectTiming::getBasicTiming(const ResolutionData& da
 
         auto animationIsBackwards = data.playbackRate < 0;
 
-        auto beforeActiveBoundaryTime = [&]() -> CSSNumberishTime {
+        auto beforeActiveBoundaryTime = [&]() -> WebAnimationTime {
             if (auto endTimeSeconds = endTime.time())
                 return { std::max(std::min(delay, *endTimeSeconds), 0_s) };
             return endTime.matchingZero();
@@ -121,7 +121,7 @@ BasicEffectTiming AnimationEffectTiming::getBasicTiming(const ResolutionData& da
         if (localTime->approximatelyLessThan(beforeActiveBoundaryTime) || (animationIsBackwards && localTime->approximatelyEqualTo(beforeActiveBoundaryTime) && !atProgressTimelineBoundary()))
             return AnimationEffectPhase::Before;
 
-        auto activeAfterBoundaryTime = [&]() -> CSSNumberishTime {
+        auto activeAfterBoundaryTime = [&]() -> WebAnimationTime {
             if (endTime.percentage())
                 return std::max(std::min(activeDuration, endTime), activeDuration.matchingZero());
             ASSERT(endTime.time());
@@ -143,7 +143,7 @@ BasicEffectTiming AnimationEffectTiming::getBasicTiming(const ResolutionData& da
         return AnimationEffectPhase::Active;
     }();
 
-    auto activeTime = [this, localTime, phase]() -> std::optional<CSSNumberishTime> {
+    auto activeTime = [this, localTime, phase]() -> std::optional<WebAnimationTime> {
         // 3.8.3.1. Calculating the active time
         // https://drafts.csswg.org/web-animations-1/#calculating-the-active-time
 

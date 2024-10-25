@@ -762,15 +762,16 @@ template<typename OptionalType> auto valueOrDefault(OptionalType&& optionalValue
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wcast-align"
 template<typename T, typename U, std::size_t Extent>
-std::span<T, Extent == std::dynamic_extent ? std::dynamic_extent : (sizeof(U) * Extent) / sizeof(T)> spanReinterpretCast(std::span<U, Extent> span)
+constexpr std::span<T, Extent == std::dynamic_extent ? std::dynamic_extent : (sizeof(U) * Extent) / sizeof(T)> spanReinterpretCast(std::span<U, Extent> span)
 {
+    static_assert(std::is_const_v<T> || (!std::is_const_v<T> && !std::is_const_v<U>), "spanReinterpretCast will not remove constness from source");
+    static_assert(!std::is_same_v<std::remove_const_t<T>, std::remove_const_t<U>>, "Unnecessary call to spanReinterpretCast");
+
     if constexpr (Extent == std::dynamic_extent) {
         if constexpr (sizeof(U) < sizeof(T) || sizeof(U) % sizeof(T))
-            RELEASE_ASSERT_WITH_MESSAGE(!(span.size_bytes() % sizeof(T)), "spanReinterpretCast will not change size in bytes from source");
+            RELEASE_ASSERT_UNDER_CONSTEXPR_CONTEXT(!(span.size_bytes() % sizeof(T))); // Refuse to change size in bytes from source.
     } else
         static_assert(!((sizeof(U) * Extent) % sizeof(T)), "spanReinterpretCast will not change size in bytes from source");
-
-    static_assert(std::is_const_v<T> || (!std::is_const_v<T> && !std::is_const_v<U>), "spanReinterpretCast will not remove constness from source");
 
     using ReturnType = std::span<T, Extent == std::dynamic_extent ? std::dynamic_extent : (sizeof(U) * Extent) / sizeof(T)>;
     return ReturnType { reinterpret_cast<T*>(const_cast<std::remove_const_t<U>*>(span.data())), span.size_bytes() / sizeof(T) };
@@ -823,20 +824,11 @@ void memsetSpan(std::span<T, Extent> destination, uint8_t byte)
     memset(destination.data(), byte, destination.size_bytes());
 }
 
-// Preferred helper function for converting an imported C++ API into a span.
-template<typename T>
-inline auto makeSpan(const T& source)
-{
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
-    return std::span { source.begin(), source.end() };
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
-}
-
 // Less preferred helper function for converting an imported API into a span.
 // Use this when we can't edit the imported API and it doesn't offer
 // begin() / end() or a span accessor.
 template<typename T, std::size_t Extent = std::dynamic_extent>
-inline auto unsafeForgeSpan(T* ptr, size_t size)
+inline constexpr auto unsafeForgeSpan(T* ptr, size_t size)
 {
 WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
     return std::span<T, Extent> { ptr, size };
@@ -1042,7 +1034,6 @@ using WTF::is8ByteAligned;
 using WTF::isCompilationThread;
 using WTF::isPointerAligned;
 using WTF::isStatelessLambda;
-using WTF::makeSpan;
 using WTF::makeUnique;
 using WTF::makeUniqueWithoutFastMallocCheck;
 using WTF::makeUniqueWithoutRefCountedCheck;

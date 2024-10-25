@@ -1113,6 +1113,7 @@ http/tests/security/contentSecurityPolicy/navigate-self-to-data-url.html [ Skip 
 
 # Color well is turned off.
 accessibility/color-well.html [ Skip ]
+accessibility/color-well-legacy.html [ Skip ]
 accessibility/color-input-value-changes.html [ Skip ]
 accessibility/mac/media-query-values-change.html [ Skip ]
 editing/pasteboard/drag-and-drop-color-input-events.html [ Skip ]
@@ -1120,7 +1121,9 @@ editing/pasteboard/drag-and-drop-color-input.html [ Skip ]
 fast/css/pseudo-visited-background-color-on-input.html [ ImageOnlyFailure ]
 fast/css/read-only-read-write-input-basics.html [ ImageOnlyFailure ]
 fast/forms/color [ Skip ]
-imported/w3c/web-platform-tests/html/semantics/forms/the-input-element/color.html [ Skip ]
+imported/w3c/web-platform-tests/html/semantics/forms/the-input-element/color-attributes.window.html [ Skip ]
+imported/w3c/web-platform-tests/html/semantics/forms/the-input-element/color.tentative.html [ Skip ]
+imported/w3c/web-platform-tests/html/semantics/forms/the-input-element/color.window.html [ Skip ]
 imported/w3c/web-platform-tests/css/css-ui/compute-kind-widget-generated/kind-of-widget-fallback-color-input-background-color-001.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-ui/compute-kind-widget-generated/kind-of-widget-fallback-color-input-background-size-001.html [ ImageOnlyFailure ]
 

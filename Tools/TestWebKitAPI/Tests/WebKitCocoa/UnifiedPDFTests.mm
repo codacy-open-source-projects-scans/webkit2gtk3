@@ -32,17 +32,47 @@
 #import "Test.h"
 #import "TestNavigationDelegate.h"
 #import "TestWKWebView.h"
+#import "UISideCompositingScope.h"
 #import "UnifiedPDFTestHelpers.h"
 #import "WKWebViewConfigurationExtras.h"
 #import <WebCore/ColorSerialization.h>
+#import <WebKit/WKNavigationDelegatePrivate.h>
 #import <WebKit/WKPreferencesPrivate.h>
 #import <WebKit/WKWebViewPrivate.h>
 #import <WebKit/_WKFeature.h>
 #import <wtf/RetainPtr.h>
 
-namespace TestWebKitAPI {
+@interface ObserveWebContentCrashNavigationDelegate : NSObject <WKNavigationDelegate>
+@end
 
-#if PLATFORM(MAC)
+@implementation ObserveWebContentCrashNavigationDelegate {
+    bool _webProcessCrashed;
+    bool _navigationFinished;
+}
+
+- (void)_webView:(WKWebView *)webView webContentProcessDidTerminateWithReason:(_WKProcessTerminationReason)reason
+{
+    _webProcessCrashed = true;
+}
+
+- (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation
+{
+    _navigationFinished = true;
+}
+
+- (bool)webProcessCrashed
+{
+    return _webProcessCrashed;
+}
+
+- (bool)navigationFinished
+{
+    return _navigationFinished;
+}
+
+@end
+
+namespace TestWebKitAPI {
 
 static constexpr auto defaultSamplingInterval = 100;
 static Vector<WebCore::Color> sampleColorsInWebView(TestWKWebView *webView, unsigned interval = defaultSamplingInterval)
@@ -57,6 +87,8 @@ static Vector<WebCore::Color> sampleColorsInWebView(TestWKWebView *webView, unsi
     }
     return samples;
 }
+
+#if PLATFORM(MAC)
 
 UNIFIED_PDF_TEST(KeyboardScrollingInSinglePageMode)
 {
@@ -169,6 +201,44 @@ UNIFIED_PDF_TEST(StablePresentationUpdateCallback)
 }
 
 #endif
+
+UNIFIED_PDF_TEST(PasswordFormShouldDismissAfterNavigation)
+{
+    RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:CGRectMake(0, 0, 600, 600) configuration:configurationForWebViewTestingUnifiedPDF().get() addToWindow:YES]);
+
+    [webView synchronouslyLoadRequest:[NSURLRequest requestWithURL:[NSBundle.test_resourcesBundle URLForResource:@"notEncrypted" withExtension:@"pdf"]]];
+    auto colorsBefore = sampleColorsInWebView(webView.get(), 2);
+
+    RetainPtr request = [NSURLRequest requestWithURL:[NSBundle.test_resourcesBundle URLForResource:@"encrypted" withExtension:@"pdf"]];
+    [webView synchronouslyLoadRequest:request.get()];
+
+    [webView synchronouslyGoBack];
+    [webView synchronouslyGoForward];
+    // FIXME: Perform the document unlock after detecting the plugin element, either through MutationObserver scripting or some TestWKWebView hook.
+    Util::runFor(50_ms);
+
+    [webView objectByEvaluatingJavaScript:@"internals.unlockPDFDocumentForTesting(document.querySelector('embed'), 'test')"];
+    auto colorsAfter = sampleColorsInWebView(webView.get(), 2);
+
+    EXPECT_EQ(colorsBefore, colorsAfter);
+}
+
+UNIFIED_PDF_TEST(WebProcessShouldNotCrashWithUISideCompositingDisabled)
+{
+    UISideCompositingScope scope { UISideCompositingState::Disabled };
+
+    RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:CGRectMake(0, 0, 600, 600) configuration:configurationForWebViewTestingUnifiedPDF().get() addToWindow:YES]);
+    RetainPtr delegate = adoptNS([[ObserveWebContentCrashNavigationDelegate alloc] init]);
+    [webView setNavigationDelegate:delegate.get()];
+
+    RetainPtr request = [NSURLRequest requestWithURL:[NSBundle.test_resourcesBundle URLForResource:@"test" withExtension:@"pdf"]];
+    [webView loadRequest:request.get()];
+
+    Util::waitFor([delegate] {
+        return [delegate webProcessCrashed] || [delegate navigationFinished];
+    });
+    EXPECT_FALSE([delegate webProcessCrashed]);
+}
 
 } // namespace TestWebKitAPI
 

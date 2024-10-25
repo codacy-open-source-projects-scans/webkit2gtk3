@@ -46,7 +46,7 @@ class NavigationDestination;
 enum class FrameLoadType : uint8_t;
 
 enum class NavigationAPIMethodTrackerType { };
-using NavigationAPIMethodTrackerIdentifier = LegacyNullableObjectIdentifier<NavigationAPIMethodTrackerType>;
+using NavigationAPIMethodTrackerIdentifier = ObjectIdentifier<NavigationAPIMethodTrackerType>;
 
 // https://html.spec.whatwg.org/multipage/nav-history-apis.html#navigation-api-method-tracker
 struct NavigationAPIMethodTracker : public RefCounted<NavigationAPIMethodTracker> {
@@ -146,7 +146,7 @@ public:
     void updateForReactivation(Vector<Ref<HistoryItem>>& newHistoryItems, HistoryItem& reactivatedItem);
     void updateForActivation(HistoryItem* previousItem, std::optional<NavigationNavigationType>);
 
-    RefPtr<NavigationActivation> createForPageswapEvent(HistoryItem* newItem, DocumentLoader*);
+    RefPtr<NavigationActivation> createForPageswapEvent(HistoryItem* newItem, DocumentLoader*, bool fromBackForwardCache);
 
     void abortOngoingNavigationIfNeeded();
 

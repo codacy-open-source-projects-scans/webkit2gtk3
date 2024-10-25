@@ -65,10 +65,7 @@ HistoryItem::HistoryItem(Client& client, const String& urlString, const String& 
 {
 }
 
-HistoryItem::~HistoryItem()
-{
-    ASSERT(!BackForwardCache::singleton().isInBackForwardCache(m_identifier));
-}
+HistoryItem::~HistoryItem() = default;
 
 HistoryItem::HistoryItem(const HistoryItem& item)
     : RefCounted<HistoryItem>()
@@ -84,7 +81,6 @@ HistoryItem::HistoryItem(const HistoryItem& item)
     , m_pageScaleFactor(item.m_pageScaleFactor)
     , m_children(item.m_children.map([](auto& child) { return child->copy(); }))
     , m_lastVisitWasFailure(item.m_lastVisitWasFailure)
-    , m_isTargetItem(item.m_isTargetItem)
     , m_itemSequenceNumber(item.m_itemSequenceNumber)
     , m_documentSequenceNumber(item.m_documentSequenceNumber)
     , m_formData(item.m_formData ? RefPtr<FormData> { item.m_formData->copy() } : nullptr)
@@ -116,7 +112,6 @@ void HistoryItem::reset()
     m_displayTitle = String();
 
     m_lastVisitWasFailure = false;
-    m_isTargetItem = false;
 
     m_itemSequenceNumber = generateSequenceNumber();
 
@@ -266,6 +261,7 @@ void HistoryItem::setPageScaleFactor(float scaleFactor)
 void HistoryItem::setDocumentState(const Vector<AtomString>& state)
 {
     m_documentState = state;
+    notifyChanged();
 }
 
 const Vector<AtomString>& HistoryItem::documentState() const
@@ -288,16 +284,6 @@ ShouldOpenExternalURLsPolicy HistoryItem::shouldOpenExternalURLsPolicy() const
     return m_shouldOpenExternalURLsPolicy;
 }
 
-bool HistoryItem::isTargetItem() const
-{
-    return m_isTargetItem;
-}
-
-void HistoryItem::setIsTargetItem(bool flag)
-{
-    m_isTargetItem = flag;
-}
-
 void HistoryItem::setStateObject(RefPtr<SerializedScriptValue>&& object)
 {
     m_stateObject = WTFMove(object);
@@ -318,11 +304,9 @@ void HistoryItem::addChildItem(Ref<HistoryItem>&& child)
 
 void HistoryItem::setChildItem(Ref<HistoryItem>&& child)
 {
-    ASSERT(!child->isTargetItem());
     unsigned size = m_children.size();
     for (unsigned i = 0; i < size; ++i)  {
         if (m_children[i]->target() == child->target()) {
-            child->setIsTargetItem(m_children[i]->isTargetItem());
             m_children[i] = WTFMove(child);
             return;
         }
@@ -367,6 +351,7 @@ const Vector<Ref<HistoryItem>>& HistoryItem::children() const
 void HistoryItem::clearChildren()
 {
     m_children.clear();
+    notifyChanged();
 }
 
 // We do same-document navigation if going to a different item and if either of the following is true:
@@ -375,7 +360,7 @@ void HistoryItem::clearChildren()
 bool HistoryItem::shouldDoSameDocumentNavigationTo(HistoryItem& otherItem) const
 {
     // The following logic must be kept in sync with WebKit::WebBackForwardListItem::itemIsInSameDocument().
-    if (this == &otherItem)
+    if (m_identifier == otherItem.identifier())
         return false;
 
     if (stateObject() || otherItem.stateObject())
