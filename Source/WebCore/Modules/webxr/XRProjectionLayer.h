@@ -1,0 +1,96 @@
+/*
+ * Copyright (C) 2024-2025 Apple, Inc. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY APPLE INC. AND ITS CONTRIBUTORS ``AS IS''
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+ * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL APPLE INC. OR ITS CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+#pragma once
+
+#if ENABLE(WEBXR_LAYERS)
+
+#include "PlatformXR.h"
+#if ENABLE(WEBGPU)
+#include "WebGPUXRProjectionLayer.h"
+#endif
+#include "WebXRRigidTransform.h"
+#include "XRCompositionLayer.h"
+
+#if PLATFORM(COCOA)
+#include <wtf/MachSendRight.h>
+#endif
+
+namespace WebCore {
+
+namespace WebGPU {
+class XRProjectionLayer;
+}
+
+class GPUTexture;
+
+class XRProjectionLayer : public XRCompositionLayer {
+    WTF_MAKE_TZONE_OR_ISO_ALLOCATED(XRProjectionLayer);
+public:
+#if ENABLE(WEBGPU)
+    static Ref<XRProjectionLayer> create(ScriptExecutionContext& scriptExecutionContext, Ref<WebCore::WebGPU::XRProjectionLayer>&& backing)
+    {
+        return adoptRef(*new XRProjectionLayer(scriptExecutionContext, WTFMove(backing)));
+    }
+#endif
+    virtual ~XRProjectionLayer();
+
+    uint32_t textureWidth() const;
+    uint32_t textureHeight() const;
+    uint32_t textureArrayLength() const;
+
+    bool ignoreDepthValues() const;
+    std::optional<float> fixedFoveation() const;
+    void setFixedFoveation(std::optional<float>);
+    WebXRRigidTransform* deltaPose() const;
+    void setDeltaPose(WebXRRigidTransform*);
+
+    // WebXRLayer
+    void startFrame(PlatformXR::FrameData&) final;
+    PlatformXR::Device::Layer endFrame() final;
+#if ENABLE(WEBGPU)
+    WebCore::WebGPU::XRProjectionLayer& backing();
+    std::optional<PlatformXR::FrameData::LayerData> layerData() const;
+#endif
+
+private:
+#if ENABLE(WEBGPU)
+    XRProjectionLayer(ScriptExecutionContext&, Ref<WebCore::WebGPU::XRProjectionLayer>&&);
+
+    bool isXRProjectionLayer() const final { return true; }
+
+    const Ref<WebCore::WebGPU::XRProjectionLayer> m_backing;
+#endif
+    std::optional<PlatformXR::FrameData::LayerData> m_layerData;
+    RefPtr<WebXRRigidTransform> m_transform;
+};
+
+} // namespace WebCore
+
+SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::XRProjectionLayer)
+    static bool isType(const WebCore::WebXRLayer& layer) { return layer.isXRProjectionLayer(); }
+SPECIALIZE_TYPE_TRAITS_END()
+
+#endif
