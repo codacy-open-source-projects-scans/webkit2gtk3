@@ -81,6 +81,7 @@
 #import "WebPageProxy.h"
 #import "WebProcessPool.h"
 #import "WebProcessProxy.h"
+#import "_WKCaptionStyleMenuController.h"
 #import "_WKDragActionsInternal.h"
 #import "_WKRemoteObjectRegistryInternal.h"
 #import "_WKThumbnailViewInternal.h"
@@ -6314,6 +6315,12 @@ bool WebViewImpl::completeBackSwipeForTesting()
     return gestureController && gestureController->completeSimulatedSwipeInDirectionForTesting(ViewGestureController::SwipeDirection::Back);
 }
 
+bool WebViewImpl::didCallEndSwipeGestureForTesting() const
+{
+    RefPtr gestureController = m_gestureController;
+    return gestureController && gestureController->didCallEndSwipeGesture();
+}
+
 void WebViewImpl::effectiveAppearanceDidChange()
 {
     m_page->effectiveAppearanceDidChange();
@@ -7157,12 +7164,12 @@ void WebViewImpl::fulfillDeferredImageAnalysisOverlayViewHierarchyTask()
 
 #if ENABLE(CONTENT_INSET_BACKGROUND_FILL)
 
-void WebViewImpl::setCanInstallScrollPocket()
+void WebViewImpl::setClientImplicitlyRequestedTopScrollPocket()
 {
-    if (m_canInstallScrollPocket)
+    if (m_clientImplicitlyRequestedTopScrollPocket)
         return;
 
-    m_canInstallScrollPocket = true;
+    m_clientImplicitlyRequestedTopScrollPocket = true;
     updateScrollPocket();
 }
 
@@ -7196,15 +7203,13 @@ void WebViewImpl::updateScrollPocket()
         return;
 
     Ref page = m_page.get();
-    if (!m_canInstallScrollPocket)
-        return;
-
     RetainPtr view = m_view.get();
     CGFloat topContentInset = obscuredContentInsets().top();
     CGFloat additionalHeight = page->overflowHeightForTopScrollEdgeEffect();
     bool needsTopView = page->preferences().contentInsetBackgroundFillEnabled()
         && view
         && !view->_reasonsToHideTopScrollPocket
+        && (m_clientImplicitlyRequestedTopScrollPocket || automaticallyAdjustsContentInsets())
         && (topContentInset > 0 || additionalHeight > 0);
 
     RetainPtr topScrollPocketSelector = NSStringFromSelector(@selector(_topScrollPocket));
@@ -7296,6 +7301,15 @@ void WebViewImpl::unregisterViewAboveScrollPocket(NSView *containerView)
 }
 
 #endif // ENABLE(CONTENT_INSET_BACKGROUND_FILL)
+
+#if ENABLE(VIDEO)
+void WebViewImpl::showCaptionDisplaySettings(CompletionHandler<void(bool)>&& callback)
+{
+    RetainPtr controller = adoptNS([[WKCaptionStyleMenuController alloc] init]);
+    NSMenu *menu = [controller captionStyleMenu];
+    callback([menu popUpMenuPositioningItem:nil atLocation:NSMakePoint(0, 0) inView:[protectedWindow() contentView]]);
+}
+#endif
 
 } // namespace WebKit
 

@@ -26,8 +26,9 @@
 #import "config.h"
 #import "RemoteAnimationStack.h"
 
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#if ENABLE(THREADED_ANIMATIONS)
 
+#import "RemoteAnimationUtilities.h"
 #import <pal/spi/cocoa/QuartzCoreSPI.h>
 #import <wtf/TZoneMallocInlines.h>
 
@@ -214,6 +215,22 @@ void RemoteAnimationStack::clear(PlatformLayer *layer)
 #endif
 }
 
+Ref<JSON::Object> RemoteAnimationStack::toJSONForTesting() const
+{
+    Ref convertedAnimations = JSON::Array::create();
+    OptionSet<WebCore::AcceleratedEffectProperty> animatedProperties;
+
+    for (auto& animation : m_animations) {
+        animatedProperties.add(animation->animatedProperties());
+        convertedAnimations->pushObject(animation->toJSONForTesting());
+    }
+
+    Ref object = JSON::Object::create();
+    object->setArray("animations"_s, WTFMove(convertedAnimations));
+    object->setObject("baseValues"_s, WebKit::toJSONForTesting(m_baseValues, animatedProperties));
+    return object;
+}
+
 } // namespace WebKit
 
-#endif // ENABLE(THREADED_ANIMATION_RESOLUTION)
+#endif // ENABLE(THREADED_ANIMATIONS)

@@ -137,7 +137,6 @@ public:
     static Ref<CSSValue> convertMarginTrim(ExtractorState&, OptionSet<MarginTrimType>);
     static Ref<CSSValue> convertContain(ExtractorState&, OptionSet<Containment>);
     static Ref<CSSValue> convertPositionTryFallbacks(ExtractorState&, const FixedVector<PositionTryFallback>&);
-    static Ref<CSSValue> convertWillChange(ExtractorState&, const WillChangeData*);
     static Ref<CSSValue> convertLineBoxContain(ExtractorState&, OptionSet<Style::LineBoxContain>);
     static Ref<CSSValue> convertTouchAction(ExtractorState&, OptionSet<TouchAction>);
     static Ref<CSSValue> convertTextTransform(ExtractorState&, OptionSet<TextTransform>);
@@ -153,12 +152,12 @@ public:
     static Ref<CSSValue> convertNameScope(ExtractorState&, const NameScope&);
     static Ref<CSSValue> convertPositionVisibility(ExtractorState&, OptionSet<PositionVisibility>);
 
-    // MARK: FillLayer conversions
+    // MARK: MaskLayer property conversions
 
-    static Ref<CSSValue> convertFillLayerMaskComposite(ExtractorState&, CompositeOperator);
-    static Ref<CSSValue> convertFillLayerWebkitMaskComposite(ExtractorState&, CompositeOperator);
-    static Ref<CSSValue> convertFillLayerMaskMode(ExtractorState&, MaskMode);
-    static Ref<CSSValue> convertFillLayerWebkitMaskSourceType(ExtractorState&, MaskMode);
+    static Ref<CSSValue> convertSingleMaskComposite(ExtractorState&, CompositeOperator);
+    static Ref<CSSValue> convertSingleWebkitMaskComposite(ExtractorState&, CompositeOperator);
+    static Ref<CSSValue> convertSingleMaskMode(ExtractorState&, MaskMode);
+    static Ref<CSSValue> convertSingleWebkitMaskSourceType(ExtractorState&, MaskMode);
 
     // MARK: Font conversions
 
@@ -330,32 +329,6 @@ inline Ref<CSSValue> ExtractorConverter::convertPositionTryFallbacks(ExtractorSt
         list.append(CSSValueList::createSpaceSeparated(singleFallbackList));
     }
 
-    return CSSValueList::createCommaSeparated(WTFMove(list));
-}
-
-inline Ref<CSSValue> ExtractorConverter::convertWillChange(ExtractorState&, const WillChangeData* willChangeData)
-{
-    if (!willChangeData || !willChangeData->numFeatures())
-        return CSSPrimitiveValue::create(CSSValueAuto);
-
-    CSSValueListBuilder list;
-    for (size_t i = 0; i < willChangeData->numFeatures(); ++i) {
-        auto feature = willChangeData->featureAt(i);
-        switch (feature.first) {
-        case WillChangeData::Feature::ScrollPosition:
-            list.append(CSSPrimitiveValue::create(CSSValueScrollPosition));
-            break;
-        case WillChangeData::Feature::Contents:
-            list.append(CSSPrimitiveValue::create(CSSValueContents));
-            break;
-        case WillChangeData::Feature::Property:
-            list.append(CSSPrimitiveValue::create(feature.second));
-            break;
-        case WillChangeData::Feature::Invalid:
-            ASSERT_NOT_REACHED();
-            break;
-        }
-    }
     return CSSValueList::createCommaSeparated(WTFMove(list));
 }
 
@@ -741,19 +714,19 @@ inline Ref<CSSValue> ExtractorConverter::convertPositionVisibility(ExtractorStat
     return CSSValueList::createSpaceSeparated(WTFMove(list));
 }
 
-// MARK: - FillLayer conversions
+// MARK: - MaskLayer property conversions
 
-inline Ref<CSSValue> ExtractorConverter::convertFillLayerMaskComposite(ExtractorState&, CompositeOperator composite)
+inline Ref<CSSValue> ExtractorConverter::convertSingleMaskComposite(ExtractorState&, CompositeOperator composite)
 {
     return CSSPrimitiveValue::create(toCSSValueID(composite, CSSPropertyMaskComposite));
 }
 
-inline Ref<CSSValue> ExtractorConverter::convertFillLayerWebkitMaskComposite(ExtractorState&, CompositeOperator composite)
+inline Ref<CSSValue> ExtractorConverter::convertSingleWebkitMaskComposite(ExtractorState&, CompositeOperator composite)
 {
     return CSSPrimitiveValue::create(toCSSValueID(composite, CSSPropertyWebkitMaskComposite));
 }
 
-inline Ref<CSSValue> ExtractorConverter::convertFillLayerMaskMode(ExtractorState&, MaskMode maskMode)
+inline Ref<CSSValue> ExtractorConverter::convertSingleMaskMode(ExtractorState&, MaskMode maskMode)
 {
     switch (maskMode) {
     case MaskMode::Alpha:
@@ -767,7 +740,7 @@ inline Ref<CSSValue> ExtractorConverter::convertFillLayerMaskMode(ExtractorState
     return CSSPrimitiveValue::create(CSSValueMatchSource);
 }
 
-inline Ref<CSSValue> ExtractorConverter::convertFillLayerWebkitMaskSourceType(ExtractorState&, MaskMode maskMode)
+inline Ref<CSSValue> ExtractorConverter::convertSingleWebkitMaskSourceType(ExtractorState&, MaskMode maskMode)
 {
     switch (maskMode) {
     case MaskMode::Alpha:

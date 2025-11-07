@@ -65,6 +65,7 @@ public:
     void transitionDidComplete(Ref<CSSTransition>&&);
 
     void animationAcceleratedRunningStateDidChange(WebAnimation&);
+    void runPostRenderingUpdateTasks();
     void detachFromDocument() override;
 
     void enqueueAnimationEvent(AnimationEventBase&);
@@ -94,7 +95,7 @@ private:
     bool isDocumentTimeline() const final { return true; }
 
     AnimationTimelinesController* controller() const override;
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#if ENABLE(THREADED_ANIMATIONS)
     Ref<AcceleratedTimeline> createAcceleratedRepresentation() override;
 #endif
 

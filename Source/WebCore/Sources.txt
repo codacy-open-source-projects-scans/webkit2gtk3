@@ -329,6 +329,7 @@ Modules/permissions/PermissionController.cpp
 Modules/permissions/PermissionStatus.cpp
 Modules/permissions/Permissions.cpp
 Modules/permissions/WorkerNavigatorPermissions.cpp
+Modules/pictureinpicture/DocumentOrShadowRootPictureInPicture.cpp
 Modules/pictureinpicture/DocumentPictureInPicture.cpp
 Modules/pictureinpicture/HTMLVideoElementPictureInPicture.cpp
 Modules/pictureinpicture/PictureInPictureEvent.cpp
@@ -736,6 +737,7 @@ bindings/js/JSMessagePortCustom.cpp
 bindings/js/JSMutationObserverCustom.cpp
 bindings/js/JSMutationRecordCustom.cpp
 bindings/js/JSNavigateEventCustom.cpp
+bindings/js/JSNavigationCustom.cpp
 bindings/js/JSNavigatorCustom.cpp
 bindings/js/JSNodeCustom.cpp
 bindings/js/JSNodeIteratorCustom.cpp
@@ -1596,6 +1598,7 @@ html/HTMLProgressElement.cpp
 html/HTMLQuoteElement.cpp
 html/HTMLScriptElement.cpp
 html/HTMLSelectElement.cpp
+html/HTMLSelectedContentElement.cpp
 html/HTMLSlotElement.cpp
 html/HTMLSourceElement.cpp
 html/HTMLSpanElement.cpp
@@ -2233,8 +2236,8 @@ page/VisitedLinkStore.cpp
 page/VisualViewport.cpp
 page/WebKitJSHandle.cpp
 page/WebKitSerializedNode.cpp
-page/WebKitStringMatchersNamespace.cpp
-page/WebKitStringMatcher.cpp
+page/WebKitBuffer.cpp
+page/WebKitBufferNamespace.cpp
 page/WheelEventDeltaFilter.cpp
 page/WheelEventTestMonitor.cpp
 page/WindowFeatures.cpp
@@ -3013,7 +3016,6 @@ rendering/style/StyleSelfAlignmentData.cpp
 rendering/style/StyleSurroundData.cpp
 rendering/style/StyleTransformData.cpp
 rendering/style/StyleVisitedLinkColorData.cpp
-rendering/style/WillChangeData.cpp
 rendering/svg/RenderSVGBlock.cpp
 rendering/svg/RenderSVGContainer.cpp
 rendering/svg/RenderSVGEllipse.cpp
@@ -3349,6 +3351,7 @@ style/values/transitions/StyleTransition.cpp
 style/values/ui/StyleAccentColor.cpp
 style/values/ui/StyleCursor.cpp
 style/values/view-transitions/StyleViewTransitionName.cpp
+style/values/will-change/StyleWillChange.cpp
 svg/DocumentSVG.cpp
 svg/SVGAElement.cpp
 svg/SVGAltGlyphDefElement.cpp
@@ -4289,6 +4292,7 @@ JSHTMLProgressElement.cpp
 JSHTMLQuoteElement.cpp
 JSHTMLScriptElement.cpp
 JSHTMLSelectElement.cpp
+JSHTMLSelectedContentElement.cpp
 JSHTMLSlotElement.cpp
 JSHTMLSourceElement.cpp
 JSHTMLSpanElement.cpp
@@ -4900,9 +4904,8 @@ JSStorage.cpp
 JSStorageEvent.cpp
 JSStorageManager.cpp
 JSStreamPipeOptions.cpp
-JSWebKitStringMatcher.cpp
-JSWebKitStringMatchersNamespace.cpp
-JSWebKitStringMatcherOptions.cpp
+JSWebKitBuffer.cpp
+JSWebKitBufferNamespace.cpp
 JSStringCallback.cpp
 JSStructuredSerializeOptions.cpp
 JSStyleMedia.cpp

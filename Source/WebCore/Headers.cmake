@@ -861,6 +861,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     Modules/webxr/XRCanvasConfiguration.h
     Modules/webxr/XRGPUProjectionLayerInit.h
+    Modules/webxr/XRHitTestTrackableType.h
 
     Scripts/generate-log-declarations.py
 
@@ -1690,6 +1691,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     html/HTMLQuoteElement.h
     html/HTMLScriptElement.h
     html/HTMLSelectElement.h
+    html/HTMLSelectedContentElement.h
     html/HTMLStyleElement.h
     html/HTMLSummaryElement.h
     html/HTMLTableCaptionElement.h
@@ -2192,10 +2194,10 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/ViewportConfiguration.h
     page/VisitedLinkStore.h
     page/WebCoreKeyboardUIMode.h
+    page/WebKitBuffer.h
     page/WebKitJSHandle.h
     page/WebKitNamespace.h
     page/WebKitSerializedNode.h
-    page/WebKitStringMatcher.h
     page/WheelEventDeltaFilter.h
     page/WheelEventTestMonitor.h
     page/WindowFeatures.h
@@ -3118,6 +3120,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/RenderLineBreak.h
     rendering/RenderListItem.h
     rendering/RenderMedia.h
+    rendering/RenderMediaInlines.h
     rendering/RenderModel.h
     rendering/RenderObject.h
     rendering/RenderObjectDocument.h
@@ -3137,6 +3140,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/RenderTreeAsText.h
     rendering/RenderTreeMutationDisallowedScope.h
     rendering/RenderVideo.h
+    rendering/RenderVideoInlines.h
     rendering/RenderView.h
     rendering/RenderViewTransitionCapture.h
     rendering/RenderWidget.h
@@ -3200,7 +3204,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/style/StyleSurroundData.h
     rendering/style/StyleTransformData.h
     rendering/style/StyleVisitedLinkColorData.h
-    rendering/style/WillChangeData.h
 
     rendering/svg/RenderSVGInlineText.h
     rendering/svg/RenderSVGModelObject.h
@@ -3258,6 +3261,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     style/values/animations/StyleSingleAnimationTimeline.h
 
     style/values/backgrounds/StyleBackgroundLayer.h
+    style/values/backgrounds/StyleBackgroundLayers.h
     style/values/backgrounds/StyleBackgroundSize.h
     style/values/backgrounds/StyleBorderImage.h
     style/values/backgrounds/StyleBorderImageOutset.h
@@ -3369,6 +3373,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     style/values/masking/StyleMaskBorderSource.h
     style/values/masking/StyleMaskBorderWidth.h
     style/values/masking/StyleMaskLayer.h
+    style/values/masking/StyleMaskLayers.h
 
     style/values/math/StyleMathDepth.h
 
@@ -3402,6 +3407,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     style/values/position/StyleInset.h
 
     style/values/primitives/StyleCoordinatedValueList.h
+    style/values/primitives/StyleCoordinatedValueListValue.h
     style/values/primitives/StyleLengthWrapper+Blending.h
     style/values/primitives/StyleLengthWrapper.h
     style/values/primitives/StyleLengthWrapperData.h
@@ -3449,6 +3455,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     style/values/shapes/StylePathOperationWrappers.h
     style/values/shapes/StylePolygonFunction.h
     style/values/shapes/StyleRectFunction.h
+    style/values/shapes/StyleShapeForward.h
     style/values/shapes/StyleShapeFunction.h
     style/values/shapes/StyleShapeImageThreshold.h
     style/values/shapes/StyleShapeMargin.h
@@ -3526,6 +3533,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     style/values/view-transitions/StyleViewTransitionClass.h
     style/values/view-transitions/StyleViewTransitionName.h
+
+    style/values/will-change/StyleWillChange.h
 
     svg/SVGAngle.h
     svg/SVGDocument.h

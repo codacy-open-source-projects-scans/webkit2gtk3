@@ -35,6 +35,7 @@
 #import "PDFPlugin.h"
 #import "PluginView.h"
 #import "PrintInfo.h"
+#import "RemoteLayerTreeCommitBundle.h"
 #import "RemoteLayerTreeTransaction.h"
 #import "RemoteRenderingBackendProxy.h"
 #import "RemoteSnapshotRecorderProxy.h"
@@ -128,12 +129,16 @@
 #import "WKProcessExtension.h"
 #endif
 
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#if ENABLE(THREADED_ANIMATIONS)
 #import <WebCore/AcceleratedEffectStackUpdater.h>
 #endif
 
 #if HAVE(PDFKIT)
 #import "PDFKitSPI.h"
+#endif
+
+#if ENABLE(WK_WEB_EXTENSIONS)
+#include "WebExtensionControllerProxy.h"
 #endif
 
 #import "PDFKitSoftLink.h"
@@ -957,7 +962,7 @@ std::pair<URL, DidFilterLinkDecoration> WebPage::applyLinkDecorationFilteringWit
 
         const auto& conditionals = it->value;
         bool isEmptyOrFoundDomain = conditionals.domains.isEmpty() || conditionals.domains.contains(RegistrableDomain { url });
-        bool isEmptyOrFoundPath = conditionals.paths.isEmpty() || std::any_of(conditionals.paths.begin(), conditionals.paths.end(),
+        bool isEmptyOrFoundPath = conditionals.paths.isEmpty() || std::ranges::any_of(conditionals.paths,
             [&url](auto& path) {
                 return url.path().contains(path);
             });
@@ -1971,7 +1976,7 @@ void WebPage::willCommitLayerTree(RemoteLayerTreeTransaction& layerTransaction, 
         return;
 
     Ref page = *corePage();
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#if ENABLE(THREADED_ANIMATIONS)
     if (RefPtr document = localRootFrame->document()) {
         if (CheckedPtr timelinesController = document->timelinesController()) {
             if (auto* acceleratedEffectStackUpdater = timelinesController->existingAcceleratedEffectStackUpdater())
@@ -1985,16 +1990,6 @@ void WebPage::willCommitLayerTree(RemoteLayerTreeTransaction& layerTransaction, 
     layerTransaction.setScrollOrigin(frameView->scrollOrigin());
     layerTransaction.setPageScaleFactor(page->pageScaleFactor());
     layerTransaction.setRenderTreeSize(page->renderTreeSize());
-    layerTransaction.setThemeColor(page->themeColor());
-    layerTransaction.setPageExtendedBackgroundColor(page->pageExtendedBackgroundColor());
-    layerTransaction.setSampledPageTopColor(page->sampledPageTopColor());
-
-    bool isMainFrameProcess = !!page->localMainFrame();
-    if (isMainFrameProcess && std::exchange(m_needsFixedContainerEdgesUpdate, false)) {
-        page->updateFixedContainerEdges(sidesRequiringFixedContainerEdges());
-        layerTransaction.setFixedContainerEdges(page->fixedContainerEdges());
-    }
-
     layerTransaction.setBaseLayoutViewportSize(frameView->baseLayoutViewportSize());
     layerTransaction.setMinStableLayoutViewportOrigin(frameView->minStableLayoutViewportOrigin());
     layerTransaction.setMaxStableLayoutViewportOrigin(frameView->maxStableLayoutViewportOrigin());
@@ -2009,7 +2004,6 @@ void WebPage::willCommitLayerTree(RemoteLayerTreeTransaction& layerTransaction, 
     layerTransaction.setViewportMetaTagWidthWasExplicit(m_viewportConfiguration.viewportArguments().widthWasExplicit);
     layerTransaction.setViewportMetaTagCameFromImageDocument(m_viewportConfiguration.viewportArguments().type == ViewportArguments::Type::ImageDocument);
     layerTransaction.setAvoidsUnsafeArea(m_viewportConfiguration.avoidsUnsafeArea());
-    layerTransaction.setIsInStableState(m_isInStableState);
     layerTransaction.setAllowsUserScaling(allowsUserScaling());
     if (m_pendingDynamicViewportSizeUpdateID) {
         layerTransaction.setDynamicViewportSizeUpdateID(*m_pendingDynamicViewportSizeUpdateID);
@@ -2026,9 +2020,26 @@ void WebPage::willCommitLayerTree(RemoteLayerTreeTransaction& layerTransaction, 
     m_pendingThemeColorChange = false;
     m_pendingPageExtendedBackgroundColorChange = false;
     m_pendingSampledPageTopColorChange = false;
+}
+
+void WebPage::willCommitMainFrameData(MainFrameData& data)
+{
+    Ref page = *corePage();
+    data.themeColor = page->themeColor();
+    data.pageExtendedBackgroundColor = page->pageExtendedBackgroundColor();
+    data.sampledPageTopColor = page->sampledPageTopColor();
+
+    if (std::exchange(m_needsFixedContainerEdgesUpdate, false)) {
+        page->updateFixedContainerEdges(sidesRequiringFixedContainerEdges());
+        data.fixedContainerEdges = page->fixedContainerEdges();
+    }
+
+#if PLATFORM(IOS_FAMILY)
+    data.isInStableState = m_isInStableState;
+#endif
 
     if (hasPendingEditorStateUpdate() || m_needsEditorStateVisualDataUpdate) {
-        layerTransaction.setEditorState(editorState());
+        data.editorState = editorState();
         m_pendingEditorStateUpdateStatus = PendingEditorStateUpdateStatus::NotScheduled;
         m_needsEditorStateVisualDataUpdate = false;
     }
@@ -2060,6 +2071,13 @@ bool WebPage::isSpeaking() const
     auto [result] = sendResult.takeReplyOr(false);
     return result;
 }
+
+#if ENABLE(WK_WEB_EXTENSIONS)
+RefPtr<WebExtensionControllerProxy> WebPage::protectedWebExtensionControllerProxy() const
+{
+    return webExtensionControllerProxy();
+}
+#endif
 
 } // namespace WebKit
 

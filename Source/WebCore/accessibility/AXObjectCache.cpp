@@ -70,6 +70,7 @@
 #include "ElementRareData.h"
 #include "EventNames.h"
 #include "FocusController.h"
+#include "FrameLoader.h"
 #include "HTMLAreaElement.h"
 #include "HTMLButtonElement.h"
 #include "HTMLCanvasElement.h"
@@ -79,7 +80,6 @@
 #include "HTMLInputElement.h"
 #include "HTMLLabelElement.h"
 #include "HTMLMapElement.h"
-#include "HTMLMediaElement.h"
 #include "HTMLMeterElement.h"
 #include "HTMLNames.h"
 #include "HTMLOptGroupElement.h"
@@ -565,6 +565,16 @@ AccessibilityObject* AXObjectCache::focusedObjectForLocalFrame()
     if (!document)
         return nullptr;
 
+#if ENABLE_ACCESSIBILITY_LOCAL_FRAME
+    // If there's one AXObjectCache per frame, then we should return null if focus is in a different frame.
+    RefPtr page = document->page();
+    RefPtr focusedOrMainFrame = page ? page->focusController().focusedOrMainFrame() : nullptr;
+    if (!focusedOrMainFrame)
+        return nullptr;
+    if (focusedOrMainFrame->document() != document.get())
+        return nullptr;
+#endif
+
     document->updateStyleIfNeeded();
     if (RefPtr focusedElement = document->focusedElement())
         return focusedObjectForNode(focusedElement.get());
@@ -822,6 +832,11 @@ AccessibilityObject* AXObjectCache::getOrCreate(RenderObject& renderer)
     if (renderer.beingDestroyed())
         return nullptr;
 
+    // We should never create objects that have dirty layout. Doing so can cause
+    // incorrect accessibility tree updates and also for renderers to be deleted
+    // out from under us, causing memory safety issues (or CheckedPtr crashes if we're lucky).
+    AX_BROKEN_ASSERT(!renderer.needsLayout());
+
     Ref object = createObjectFromRenderer(renderer);
 
     // Will crash later if we have two objects for the same renderer.
@@ -848,8 +863,14 @@ RefPtr<AXIsolatedTree> AXObjectCache::getOrCreateIsolatedTree()
         return nullptr;
 
     RefPtr tree = AXIsolatedTree::treeForFrameID(m_frameID);
-    if (tree)
-        return tree;
+    if (tree) {
+        if (tree->treeID() == treeID())
+            return tree;
+
+        // The tree belongs to a different document (navigation occurred). Remove the old tree and create a new one.
+        AXIsolatedTree::removeTreeForFrameID(*m_frameID);
+        tree = nullptr;
+    }
 
     // A new isolated tree needs to be created. Initialize the GeometryManager primary screen rect to be ready when needed.
     m_geometryManager->initializePrimaryScreenRect();
@@ -2631,11 +2652,12 @@ void AXObjectCache::onSelectedTextChanged(const VisiblePositionRange& selection,
 
 void AXObjectCache::frameLoadingEventNotification(LocalFrame* frame, AXLoadingEvent loadingEvent)
 {
-    if (!frame)
-        return;
-
-    // Delegate on the right platform
-    frameLoadingEventPlatformNotification(getOrCreate(frame->contentRenderer()), loadingEvent);
+    if (frame) {
+        // We pass the RenderView* (via contentRenderer()) rather than calling getOrCreate and passing
+        // that because some platforms don't handle all loading event types, and we don't want to call
+        // getOrCreate unnecessarily (because doing so is not always safe, and can do a fair amount of work).
+        frameLoadingEventPlatformNotification(frame->contentRenderer(), loadingEvent);
+    }
 }
 
 void AXObjectCache::postLiveRegionChangeNotification(AccessibilityObject& object)

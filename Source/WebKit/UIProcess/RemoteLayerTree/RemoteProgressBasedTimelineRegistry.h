@@ -25,7 +25,7 @@
 
 #pragma once
 
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#if ENABLE(THREADED_ANIMATIONS)
 
 #include "RemoteProgressBasedTimeline.h"
 #include <WebCore/AcceleratedTimeline.h>
@@ -41,6 +41,8 @@ public:
     bool isEmpty() const { return m_timelines.isEmpty(); }
     void update(WebCore::ProcessIdentifier, const HashSet<Ref<WebCore::AcceleratedTimeline>>&);
     RemoteProgressBasedTimeline* get(const TimelineID&) const;
+    void updateTimelinesForNode(const WebCore::ScrollingTreeScrollingNode&);
+    bool hasTimelineForNode(const WebCore::ScrollingTreeScrollingNode&) const;
 
 private:
     UncheckedKeyHashMap<WebCore::ProcessIdentifier, UncheckedKeyHashMap<WebCore::ScrollingNodeID, HashSet<Ref<RemoteProgressBasedTimeline>>>> m_timelines;
@@ -48,4 +50,4 @@ private:
 
 } // namespace WebKit
 
-#endif // ENABLE(THREADED_ANIMATION_RESOLUTION)
+#endif // ENABLE(THREADED_ANIMATIONS)

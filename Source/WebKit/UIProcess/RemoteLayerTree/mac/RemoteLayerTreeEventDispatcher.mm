@@ -46,7 +46,7 @@
 #import <wtf/SystemTracing.h>
 #import <wtf/TZoneMallocInlines.h>
 
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#if ENABLE(THREADED_ANIMATIONS)
 #import "RemoteMonotonicTimeline.h"
 #endif
 
@@ -390,10 +390,10 @@ void RemoteLayerTreeEventDispatcher::startOrStopDisplayLinkOnMainThread()
         if (m_wheelEventActivityHysteresis.state() == PAL::HysteresisState::Started)
             return true;
 
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#if ENABLE(THREADED_ANIMATIONS)
         {
             Locker lock { m_animationLock };
-            if (!m_animationStacks.isEmpty())
+            if (m_monotonicTimelineRegistry && !m_monotonicTimelineRegistry->isEmpty())
                 return true;
         }
 #endif
@@ -478,7 +478,7 @@ void RemoteLayerTreeEventDispatcher::didRefreshDisplay(PlatformDisplayID display
 
     if (m_state != SynchronizationState::Idle) {
         scrollingTree->tryToApplyLayerPositions();
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#if ENABLE(THREADED_ANIMATIONS)
         updateAnimations();
 #endif
     }
@@ -517,7 +517,7 @@ void RemoteLayerTreeEventDispatcher::delayedRenderingUpdateDetectionTimerFired()
 
     if (auto scrollingTree = this->scrollingTree())
         scrollingTree->tryToApplyLayerPositions();
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#if ENABLE(THREADED_ANIMATIONS)
     updateAnimations();
 #endif
 }
@@ -558,7 +558,7 @@ void RemoteLayerTreeEventDispatcher::waitForRenderingUpdateCompletionOrTimeout()
         ScrollingThread::dispatch([protectedThis = Ref { *this }]() {
             if (auto scrollingTree = protectedThis->scrollingTree())
                 scrollingTree->tryToApplyLayerPositions();
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#if ENABLE(THREADED_ANIMATIONS)
             protectedThis->updateAnimations();
 #endif
         });
@@ -576,7 +576,7 @@ bool RemoteLayerTreeEventDispatcher::scrollingTreeWasRecentlyActive()
     if (scrollingTree->hasRecentActivity())
         return true;
 
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#if ENABLE(THREADED_ANIMATIONS)
     Locker lock { m_animationLock };
     return !m_animationStacks.isEmpty();
 #else
@@ -616,7 +616,7 @@ void RemoteLayerTreeEventDispatcher::renderingUpdateComplete()
     m_state = SynchronizationState::Idle;
 }
 
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#if ENABLE(THREADED_ANIMATIONS)
 void RemoteLayerTreeEventDispatcher::lockForAnimationChanges()
 {
     ASSERT(isMainRunLoop());
@@ -693,6 +693,16 @@ void RemoteLayerTreeEventDispatcher::updateAnimations()
         if (!animationStack->isEmpty())
             m_animationStacks.set(layerID, WTFMove(animationStack));
     }
+}
+
+RefPtr<const RemoteAnimationStack> RemoteLayerTreeEventDispatcher::animationStackForNodeWithIDForTesting(WebCore::PlatformLayerIdentifier layerID) const
+{
+    assertIsHeld(m_animationLock);
+
+    auto it = m_animationStacks.find(layerID);
+    if (it != m_animationStacks.end())
+        return it->value.ptr();
+    return nullptr;
 }
 #endif
 

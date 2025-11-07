@@ -433,7 +433,7 @@ CGPoint RemoteScrollingCoordinatorProxyIOS::nearestActiveContentInsetAdjustedSna
 
 void RemoteScrollingCoordinatorProxyIOS::displayDidRefresh(PlatformDisplayID displayID)
 {
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#if ENABLE(THREADED_ANIMATIONS)
     updateAnimations();
 #endif
 }
@@ -443,11 +443,18 @@ RemoteLayerTreeDrawingAreaProxyIOS& RemoteScrollingCoordinatorProxyIOS::drawingA
     return *downcast<RemoteLayerTreeDrawingAreaProxyIOS>(webPageProxy().drawingArea());
 }
 
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#if ENABLE(THREADED_ANIMATIONS)
 void RemoteScrollingCoordinatorProxyIOS::animationsWereAddedToNode(RemoteLayerTreeNode& node)
 {
     m_animatedNodeLayerIDs.add(node.layerID());
-    drawingAreaIOS().scheduleDisplayRefreshCallbacksForAnimation();
+    if (m_monotonicTimelineRegistry && !m_monotonicTimelineRegistry->isEmpty())
+        drawingAreaIOS().scheduleDisplayRefreshCallbacksForAnimation();
+}
+
+void RemoteScrollingCoordinatorProxyIOS::progressBasedTimelinesWereUpdatedForNode(const WebCore::ScrollingTreeScrollingNode& node)
+{
+    if (scrollingTree().hasTimelineForNode(node))
+        drawingAreaIOS().scheduleDisplayRefreshCallbacksForAnimation();
 }
 
 void RemoteScrollingCoordinatorProxyIOS::animationsWereRemovedFromNode(RemoteLayerTreeNode& node)

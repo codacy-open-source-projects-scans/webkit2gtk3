@@ -62,9 +62,12 @@ struct TextExtractionTestOptions {
     bool clipToBounds { false };
     bool includeRects { false };
     bool includeURLs { false };
+    bool includeNodeIdentifiers { false };
+    bool includeEventListeners { false };
+    bool includeAccessibilityAttributes { false };
+    bool includeTextInAutoFilledControls { false };
     bool mergeParagraphs { false };
     bool skipNearlyTransparentContent { false };
-    bool canIncludeIdentifiers { false };
 };
 
 TextExtractionTestOptions* toTextExtractionTestOptions(JSContextRef, JSValueRef);
@@ -464,6 +467,11 @@ public:
 
     virtual bool didCallEnsurePositionInformationIsUpToDateSinceLastCheck() const { notImplemented(); return false; }
     virtual void clearEnsurePositionInformationIsUpToDateTracking() { notImplemented(); }
+
+#if ENABLE(THREADED_ANIMATIONS)
+    // Animations
+    virtual JSRetainPtr<JSStringRef> animationStackForLayerWithID(uint64_t) const { notImplemented(); return nullptr; }
+#endif
 
 protected:
     explicit UIScriptController(UIScriptContext&);

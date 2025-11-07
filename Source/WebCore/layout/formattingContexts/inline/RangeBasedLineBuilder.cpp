@@ -103,12 +103,12 @@ LineLayoutResult RangeBasedLineBuilder::layoutInlineContent(const LineInput& lin
 
         if (isFirstFormattedLineCandidate) {
             ASSERT(!previousLine);
-            lineLayoutResult.inlineAndOpaqueContent.insert(0, { leadingInlineItem, leadingInlineItem.firstLineStyle(), { } });
+            lineLayoutResult.runs.insert(0, { leadingInlineItem, leadingInlineItem.firstLineStyle(), { } });
             lineLayoutResult.inlineItemRange.start = lineInput.needsLayoutRange.start;
             return;
         }
         // Subsequent lines need leading spanning inline box run.
-        lineLayoutResult.inlineAndOpaqueContent.insert(0, { leadingInlineItem, { }, { } });
+        lineLayoutResult.runs.insert(0, { leadingInlineItem, { }, { } });
     };
     insertLeadingInlineBoxRun();
 
@@ -116,7 +116,7 @@ LineLayoutResult RangeBasedLineBuilder::layoutInlineContent(const LineInput& lin
         if (lineLayoutResult.inlineItemRange.end != needsLayoutRange.end)
             return;
         auto& trailingInlineItem = m_inlineItemList.back();
-        lineLayoutResult.inlineAndOpaqueContent.append({ trailingInlineItem, isFirstFormattedLineCandidate ? trailingInlineItem.firstLineStyle() : trailingInlineItem.style(), lineLayoutResult.contentGeometry.logicalWidth });
+        lineLayoutResult.runs.append({ trailingInlineItem, isFirstFormattedLineCandidate ? trailingInlineItem.firstLineStyle() : trailingInlineItem.style(), lineLayoutResult.contentGeometry.logicalWidth });
         lineLayoutResult.inlineItemRange.end = lineInput.needsLayoutRange.end;
     };
     appendTrailingInlineBoxRunIfNeeded();
@@ -171,7 +171,7 @@ bool RangeBasedLineBuilder::isEligibleForRangeInlineLayout(const InlineFormattin
         auto& inlineBoxStyle = inlineItemList.first().layoutBox().style();
         if (inlineBoxStyle.textAlign() != rootStyle.textAlign())
             return false;
-        if (!TextOnlySimpleLineBuilder::isEligibleForSimplifiedInlineLayoutByStyle(rootStyle) || !TextOnlySimpleLineBuilder::isEligibleForSimplifiedInlineLayoutByStyle(inlineBoxStyle))
+        if (!TextOnlySimpleLineBuilder::isEligibleForSimplifiedInlineLayoutByStyle(inlineFormattingContext.root()) || !TextOnlySimpleLineBuilder::isEligibleForSimplifiedInlineLayoutByStyle(inlineItemList.first().layoutBox()))
             return false;
     }
 

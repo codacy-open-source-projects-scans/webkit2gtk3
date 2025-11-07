@@ -2025,6 +2025,11 @@ bool Quirks::needsNowPlayingFullscreenSwapQuirk() const
     return needsQuirks() && m_quirksData.needsNowPlayingFullscreenSwapQuirk;
 }
 
+bool Quirks::needsSuppressPostLayoutBoundaryEventsQuirk() const
+{
+    return needsQuirks() && m_quirksData.needsSuppressPostLayoutBoundaryEventsQuirk;
+}
+
 // tiktok.com rdar://149712691
 std::optional<Quirks::TikTokOverflowingContentQuirkType> Quirks::needsTikTokOverflowingContentQuirk(const Element& element, const RenderStyle& parentStyle) const
 {
@@ -3026,7 +3031,8 @@ static void handleVimeoQuirks(QuirksData& quirksData, const URL& quirksURL, cons
     // Vimeo.com has incorrect layout on iOS on certain videos with wider
     // aspect ratios than the device's screen in landscape mode.
     // (Ref: rdar://116531089)
-    quirksData.shouldDisableElementFullscreen = true;
+    if (PAL::currentUserInterfaceIdiomIsSmallScreen())
+        quirksData.shouldDisableElementFullscreen = true;
 #endif
 #if ENABLE(VIDEO_PRESENTATION_MODE)
     // vimeo.com: rdar://problem/73227900
@@ -3176,6 +3182,13 @@ static void handleCapitalGroupQuirks(QuirksData& quirksData, const URL&, const S
     quirksData.shouldDelayReloadWhenRegisteringServiceWorker = true;
 }
 
+static void handleCrunchyRollQuirks(QuirksData& quirksData, const URL&, const String& quirksDomainString, const URL&)
+{
+    if (quirksDomainString != "crunchyroll.com"_s)
+        return;
+    quirksData.needsSuppressPostLayoutBoundaryEventsQuirk = true;
+}
+
 void Quirks::determineRelevantQuirks()
 {
     RELEASE_ASSERT(m_document);
@@ -3233,6 +3246,7 @@ void Quirks::determineRelevantQuirks()
         { "digitaltrends"_s, &handleDigitalTrendsQuirks },
         { "steampowered"_s, &handleSteamQuirks },
 #endif
+        { "crunchyroll"_s, &handleCrunchyRollQuirks },
         { "t-mobile"_s, &handleTMobileQuirks },
         { "descript"_s, &handleDescriptQuirks },
 #if PLATFORM(IOS_FAMILY)

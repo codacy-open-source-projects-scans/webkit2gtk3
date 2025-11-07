@@ -180,7 +180,7 @@ void TiledCoreAnimationDrawingArea::updateRenderingWithForcedRepaint()
     if (m_layerTreeStateIsFrozen)
         return;
 
-    m_webPage->protectedCorePage()->forceRepaintAllFrames();
+    Ref { m_webPage.get() }->protectedCorePage()->forceRepaintAllFrames();
     updateRendering();
     [CATransaction flush];
     [CATransaction synchronize];
@@ -197,7 +197,8 @@ void TiledCoreAnimationDrawingArea::updateRenderingWithForcedRepaintAsync(WebPag
         RefPtr protectedThis = weakThis.get();
         if (!protectedThis)
             return completionHandler();
-        protectedThis->m_webPage->protectedDrawingArea()->updateRenderingWithForcedRepaint();
+        Ref protectedPage = protectedThis->m_webPage.get();
+        protectedPage->protectedDrawingArea()->updateRenderingWithForcedRepaint();
         completionHandler();
     });
 }
@@ -235,13 +236,14 @@ void TiledCoreAnimationDrawingArea::triggerRenderingUpdate()
 
 void TiledCoreAnimationDrawingArea::updatePreferences(const WebPreferencesStore& store)
 {
-    Ref settings = m_webPage->corePage()->settings();
+    Ref webPage = m_webPage.get();
+    Ref settings = webPage->corePage()->settings();
 
     // Fixed position elements need to be composited and create stacking contexts
     // in order to be scrolled by the ScrollingCoordinator.
     settings->setAcceleratedCompositingForFixedPositionEnabled(true);
 
-    DebugPageOverlays::settingsChanged(*m_webPage->protectedCorePage());
+    DebugPageOverlays::settingsChanged(*webPage->protectedCorePage());
 
     bool showTiledScrollingIndicator = settings->showTiledScrollingIndicator();
     if (showTiledScrollingIndicator == !!m_debugInfoLayer)
@@ -643,7 +645,8 @@ bool TiledCoreAnimationDrawingArea::shouldUseTiledBackingForFrameView(const Loca
 
 PlatformCALayer* TiledCoreAnimationDrawingArea::layerForTransientZoom() const
 {
-    RefPtr scaledLayer = dynamicDowncast<GraphicsLayerCA>(m_webPage->checkedLocalMainFrameView()->graphicsLayerForPageScale());
+    CheckedPtr frameView =  Ref { m_webPage.get() }->localMainFrameView();
+    RefPtr scaledLayer = dynamicDowncast<GraphicsLayerCA>(frameView->graphicsLayerForPageScale());
     if (!scaledLayer)
         return nullptr;
 
@@ -657,7 +660,8 @@ RefPtr<WebCore::PlatformCALayer> TiledCoreAnimationDrawingArea::protectedLayerFo
 
 PlatformCALayer* TiledCoreAnimationDrawingArea::shadowLayerForTransientZoom() const
 {
-    RefPtr shadowLayer = dynamicDowncast<GraphicsLayerCA>(m_webPage->checkedLocalMainFrameView()->graphicsLayerForTransientZoomShadow());
+    CheckedPtr frameView =  Ref { m_webPage.get() }->localMainFrameView();
+    RefPtr shadowLayer = dynamicDowncast<GraphicsLayerCA>(frameView->graphicsLayerForTransientZoomShadow());
     if (!shadowLayer)
         return nullptr;
 

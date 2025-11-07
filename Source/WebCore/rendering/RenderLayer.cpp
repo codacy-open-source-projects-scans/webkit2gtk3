@@ -603,7 +603,7 @@ static bool canCreateStackingContext(const RenderLayer& layer)
         || renderer.style().hasIsolation()
         || renderer.shouldApplyPaintContainment()
         || !renderer.style().usedZIndex().isAuto()
-        || (renderer.style().willChange() && renderer.style().willChange()->canCreateStackingContext())
+        || renderer.style().willChange().canCreateStackingContext()
         || layer.establishesTopLayer();
 }
 
@@ -653,7 +653,7 @@ bool RenderLayer::computeCanBeBackdropRoot() const
         || renderer().hasBlendMode()
         || renderer().hasMask()
         || (renderer().requiresRenderingConsolidationForViewTransition() && !renderer().isDocumentElementRenderer())
-        || (renderer().style().willChange() && renderer().style().willChange()->canBeBackdropRoot());
+        || renderer().style().willChange().canBeBackdropRoot();
 }
 
 bool RenderLayer::setIsNormalFlowOnly(bool isNormalFlowOnly)
@@ -6017,7 +6017,7 @@ static bool rendererHasHDRContent(const RenderElement& renderer)
 
     auto styleHasHDRContent = [](const auto& style) {
         if (style.hasBackgroundImage()) {
-            if (style.backgroundLayers().hasHDRContent())
+            if (Style::hasHDRContent(style.backgroundLayers()))
                 return true;
         }
 

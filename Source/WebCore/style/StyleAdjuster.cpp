@@ -454,7 +454,7 @@ static bool shouldTreatAutoZIndexAsZero(const RenderStyle& style)
         || style.hasIsolation()
         || style.position() == PositionType::Sticky
         || style.position() == PositionType::Fixed
-        || style.willChangeCreatesStackingContext();
+        || style.willChange().canCreateStackingContext();
 }
 
 void Adjuster::adjustFromBuilder(RenderStyle& style)
@@ -468,9 +468,11 @@ void Adjuster::adjustFromBuilder(RenderStyle& style)
     } else if (style.position() != PositionType::Static)
         style.setUsedZIndex(style.specifiedZIndex());
 
-    // Cull out any useless animations and transitions.
+    // Adjust any coordinated value lists.
     style.adjustAnimations();
     style.adjustTransitions();
+    style.adjustBackgroundLayers();
+    style.adjustMaskLayers();
 
     // Do the same for scroll-timeline and view-timeline longhands.
     style.adjustScrollTimelines();

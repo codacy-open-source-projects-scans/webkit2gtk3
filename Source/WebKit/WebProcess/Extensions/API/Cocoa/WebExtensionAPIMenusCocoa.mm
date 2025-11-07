@@ -253,7 +253,7 @@ bool WebExtensionAPIMenus::parseCreateAndUpdateProperties(ForUpdate forUpdate, N
             return false;
         }
 
-        outClickCallback = WebExtensionCallbackHandler::create(clickCallback.context.JSGlobalContextRef, JSValueToObject(clickCallback.context.JSGlobalContextRef, clickCallback.JSValueRef, nullptr), runtime());
+        outClickCallback = WebExtensionCallbackHandler::create(clickCallback.context.JSGlobalContextRef, JSValueToObject(clickCallback.context.JSGlobalContextRef, clickCallback.JSValueRef, nullptr), protectedRuntime());
     }
 
     NSDictionary *iconDictionary;
@@ -509,7 +509,7 @@ void WebExtensionContextProxy::dispatchMenusClickedEvent(const WebExtensionMenuI
         WebCore::UserGestureIndicator gestureIndicator(WebCore::IsProcessingUserGesture::Yes, coreFrame ? coreFrame->document() : nullptr);
 
         if (RefPtr clickHandler = namespaceObject.menus().clickHandlers().get(menuItemParameters.identifier))
-            clickHandler->call(info, tab);
+            clickHandler->call(toJSValueRef(clickHandler->globalContext(), info), toJSValueRef(clickHandler->globalContext(), tab));
 
         namespaceObject.menus().onClicked().invokeListenersWithArgument(info, tab);
     });

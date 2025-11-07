@@ -103,7 +103,6 @@
 #include "TextSpacing.h"
 #include "TouchAction.h"
 #include "ViewTimeline.h"
-#include "WillChangeData.h"
 #include <ranges>
 #include <wtf/text/MakeString.h>
 
@@ -139,8 +138,6 @@ public:
 
     static OptionSet<MarginTrimType> convertMarginTrim(BuilderState&, const CSSValue&);
 
-    static RefPtr<WillChangeData> convertWillChange(BuilderState&, const CSSValue&);
-
     static std::optional<ScopedName> convertPositionAnchor(BuilderState&, const CSSValue&);
     static std::optional<PositionArea> convertPositionArea(BuilderState&, const CSSValue&);
     static OptionSet<PositionVisibility> convertPositionVisibility(BuilderState&, const CSSValue&);
@@ -149,7 +146,7 @@ public:
 
     static FixedVector<PositionTryFallback> convertPositionTryFallbacks(BuilderState&, const CSSValue&);
 
-    static MaskMode convertFillLayerMaskMode(BuilderState&, const CSSValue&);
+    static MaskMode convertSingleMaskMode(BuilderState&, const CSSValue&);
 };
 
 template<typename T, typename... Rest> inline T BuilderConverter::convertStyleType(BuilderState& builderState, const CSSValue& value, Rest&&... rest)
@@ -633,40 +630,6 @@ inline OptionSet<Containment> BuilderConverter::convertContain(BuilderState& bui
     return containment;
 }
 
-inline RefPtr<WillChangeData> BuilderConverter::convertWillChange(BuilderState& builderState, const CSSValue& value)
-{
-    if (value.valueID() == CSSValueAuto)
-        return nullptr;
-
-    auto willChange = WillChangeData::create();
-    auto processSingleValue = [&](const CSSValue& item) {
-        auto* primitiveValue = dynamicDowncast<CSSPrimitiveValue>(item);
-        if (!primitiveValue)
-            return;
-        switch (primitiveValue->valueID()) {
-        case CSSValueScrollPosition:
-            willChange->addFeature(WillChangeData::Feature::ScrollPosition);
-            break;
-        case CSSValueContents:
-            willChange->addFeature(WillChangeData::Feature::Contents);
-            break;
-        default:
-            if (primitiveValue->isPropertyID()) {
-                if (!isExposed(primitiveValue->propertyID(), &builderState.document().settings()))
-                    break;
-                willChange->addFeature(WillChangeData::Feature::Property, primitiveValue->propertyID());
-            }
-            break;
-        }
-    };
-    if (auto* list = dynamicDowncast<CSSValueList>(value)) {
-        for (auto& item : *list)
-            processSingleValue(item);
-    } else
-        processSingleValue(value);
-    return willChange;
-}
-
 inline std::optional<ScopedName> BuilderConverter::convertPositionAnchor(BuilderState& builderState, const CSSValue& value)
 {
     if (value.valueID() == CSSValueAuto)
@@ -1124,7 +1087,7 @@ inline FixedVector<PositionTryFallback> BuilderConverter::convertPositionTryFall
     });
 }
 
-inline MaskMode BuilderConverter::convertFillLayerMaskMode(BuilderState& builderState, const CSSValue& value)
+inline MaskMode BuilderConverter::convertSingleMaskMode(BuilderState& builderState, const CSSValue& value)
 {
     switch (value.valueID()) {
     case CSSValueAlpha:

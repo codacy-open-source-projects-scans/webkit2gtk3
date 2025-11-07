@@ -677,7 +677,7 @@ bool RenderStyle::isIdempotentTextAutosizingCandidate(AutosizeStatus status) con
         return false;
     }
 
-    if (hasBackgroundImage() && backgroundLayers().first().repeat() == FillRepeat::NoRepeat)
+    if (hasBackgroundImage() && backgroundLayers().usedFirst().repeat() == FillRepeat::NoRepeat)
         return false;
 
     return true;
@@ -869,7 +869,7 @@ static bool rareDataChangeRequiresLayout(const StyleRareNonInheritedData& first,
         || first.gridItem != second.gridItem)
         return true;
 
-    if (!arePointingToEqualData(first.willChange, second.willChange)) {
+    if (first.willChange != second.willChange) {
         changedContextSensitiveProperties.add(StyleDifferenceContextSensitiveProperty::WillChange);
         // Don't return; keep looking for another change
     }
@@ -2263,14 +2263,6 @@ void RenderStyle::setQuotes(Style::Quotes&& quotes)
         m_rareInheritedData.access().quotes = WTFMove(quotes);
 }
 
-void RenderStyle::setWillChange(RefPtr<WillChangeData>&& willChangeData)
-{
-    if (arePointingToEqualData(m_nonInheritedData->rareData->willChange.get(), willChangeData.get()))
-        return;
-
-    m_nonInheritedData.access().rareData.access().willChange = WTFMove(willChangeData);
-}
-
 bool RenderStyle::affectedByTransformOrigin() const
 {
     if (rotate().affectedByTransformOrigin())
@@ -2440,50 +2432,34 @@ const AtomString& RenderStyle::hyphenString() const
 
 void RenderStyle::adjustAnimations()
 {
-    if (m_nonInheritedData->miscData->animations.isNone())
+    if (animations().isInitial())
         return;
 
-    auto& animationList = ensureAnimations();
-
-    // Get rid of empty animations and anything beyond them
-    for (size_t i = 0, size = animationList.size(); i < size; ++i) {
-        if (animationList[i].isEmpty()) {
-            animationList.resize(i);
-            break;
-        }
-    }
-
-    if (animationList.isEmpty()) {
-        clearAnimations();
-        return;
-    }
-
-    // Repeat patterns into layers that don't have some properties set.
-    animationList.fillUnsetProperties();
+    ensureAnimations().prepareForUse();
 }
 
 void RenderStyle::adjustTransitions()
 {
-    if (m_nonInheritedData->miscData->transitions.isNone())
+    if (transitions().isInitial())
         return;
 
-    auto& transitionList = ensureTransitions();
+    ensureTransitions().prepareForUse();
+}
 
-    // Get rid of empty transitions and anything beyond them
-    for (size_t i = 0, size = transitionList.size(); i < size; ++i) {
-        if (transitionList[i].isEmpty()) {
-            transitionList.resize(i);
-            break;
-        }
-    }
-
-    if (transitionList.isEmpty()) {
-        clearTransitions();
+void RenderStyle::adjustBackgroundLayers()
+{
+    if (backgroundLayers().isInitial())
         return;
-    }
 
-    // Repeat patterns into layers that don't have some properties set.
-    transitionList.fillUnsetProperties();
+    ensureBackgroundLayers().prepareForUse();
+}
+
+void RenderStyle::adjustMaskLayers()
+{
+    if (maskLayers().isInitial())
+        return;
+
+    ensureMaskLayers().prepareForUse();
 }
 
 const FontMetrics& RenderStyle::metricsOfPrimaryFont() const

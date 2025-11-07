@@ -47,6 +47,7 @@ tiled-drawing [ Pass ]
 ipc/mac [ Pass ]
 ipc/restrictedendpoints/mac [ Pass ]
 fast/page-color-sampling [ Pass ]
+[ Sequoia+ ] webanimations/threaded-animations [ Pass ]
 
 fast/events/autoscroll-when-zoomed.html [ Pass ]
 fast/events/autoscroll-main-document.html [ Pass ]
@@ -2036,8 +2037,6 @@ webkit.org/b/288660 [ Sonoma Release x86_64 ] media/media-hevc-video-as-img.html
 # webkit.org/b/280219 [EWS] imported/w3c/web-platform-t ests/css/css-view-transitio ns/massive-element-below-vi ewport-offscreen-old.html is a constant failure on Ventura+ Intel
 [ Sonoma Release x86_64 ] imported/w3c/web-platform-tests/css/css-view-transitions/massive-element-below-viewport-offscreen-old.html [ Skip ]
 
-webkit.org/b/288742 [ Debug ] ipc/media-player-invalid-test.html [ Crash ]
-
 webkit.org/b/288878 media/modern-media-controls/tracks-support/audio-multiple-tracks.html [ Pass Timeout ]
 
 webkit.org/b/289090 [ Debug arm64 ] imported/w3c/web-platform-tests/dom/nodes/remove-from-shadow-host-and-adopt-into-iframe.html [ Pass Timeout ]
@@ -2267,9 +2266,6 @@ apple-visual-effects/apple-visual-effect-automatic-vibrancy.html [ Slow ]
 applicationmanifest/developer-warnings.html [ Slow ]
 compositing/animation/animated-composited-inside-hidden.html [ Slow ]
 compositing/backface-visibility/backface-visibility-3d.html [ Slow ]
-fast/events/popup-allowed-from-gesture-initiated-event.html [ Pass Timeout ]
-fast/events/popup-blocked-from-fake-user-gesture.html [ Pass Timeout ]
-fast/events/popup-blocking-timers1.html [ Pass Timeout ]
 fast/history/history_reload.html [ Pass Timeout ]
 fast/mediacapturefromelement/CanvasCaptureMediaStream-offscreencanvas.html [ Pass Timeout Failure ]
 http/tests/privateClickMeasurement/attribution-conversion-through-image-redirect-in-new-window.html [ Timeout ]
@@ -2412,5 +2408,7 @@ webkit.org/b/301566 [ Debug ] imported/w3c/web-platform-tests/custom-elements/re
 [ Tahoe Debug arm64 ] http/tests/media/hls/track-in-band-multiple-cues.html [ Timeout ]
 [ Tahoe Debug arm64 ] http/tests/media/hls/track-webvtt-multitracks.html [ Timeout ]
 
-webkit.org/b/301700 [ Tahoe ] fast/forms/month/month-editable-components/month-editable-components-mouse-events.html [ Failure ]
-webkit.org/b/301700 [ Tahoe ] fast/forms/time/time-editable-components/time-editable-components-mouse-events.html [ Failure ]
+# webkit.org/b/301951 3x fast/events/popup tests (layout-tests) are constantly timing out 
+fast/events/popup-blocking-timers1.html [ Timeout ]
+fast/events/popup-blocked-from-fake-user-gesture.html [ Timeout ]
+fast/events/popup-allowed-from-gesture-initiated-event.html [ Timeout ]

@@ -73,6 +73,7 @@
 #include "MutableCSSSelector.h"
 #include "NestingLevelIncrementer.h"
 #include "NodeDocument.h"
+#include "StyleColor.h"
 #include "StylePropertiesInlines.h"
 #include "StyleRule.h"
 #include "StyleRuleFunction.h"
@@ -1802,21 +1803,6 @@ void CSSParser::consumeCustomPropertyValue(CSSParserTokenRange range, const Atom
 void CSSParser::consumeDeclarationValue(CSSParserTokenRange range, CSSPropertyID propertyID, IsImportant important, StyleRuleType ruleType)
 {
     CSSPropertyParser::parseValue(propertyID, important, range, m_context, topContext().m_parsedProperties, ruleType);
-}
-
-std::optional<Style::Color> CSSParser::parseColorOrCurrentColorWithoutContext(const String& string)
-{
-    if (auto color = CSSParserFastPaths::parseSimpleColor(string, CSSParserContext(HTMLStandardMode)))
-        return *color;
-    // FIXME: Unclear why we want to ignore the boolean argument "strict" and always pass strictCSSParserContext here.
-    auto value = CSSPropertyParser::parseStylePropertyLonghand(CSSPropertyColor, string, strictCSSParserContext());
-    if (!value)
-        return std::nullopt;
-    if (value->isColor())
-        return CSSColorValue::absoluteColor(*value);
-    if (value->valueID() == CSSValueCurrentcolor)
-        return Style::Color();
-    return std::nullopt;
 }
 
 } // namespace WebCore

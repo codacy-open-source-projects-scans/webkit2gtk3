@@ -83,6 +83,7 @@ struct WKAppPrivacyReportTestingData {
 - (BOOL)_beginBackSwipeForTesting;
 - (BOOL)_completeBackSwipeForTesting;
 - (void)_resetNavigationGestureStateForTesting;
+@property (nonatomic, readonly) BOOL _didCallEndSwipeGestureForTesting;
 
 - (void)_setShareSheetCompletesImmediatelyWithResolutionForTesting:(BOOL)resolved;
 
@@ -178,6 +179,10 @@ struct WKAppPrivacyReportTestingData {
 - (void)_modelProcessModelPlayerCountForTesting:(void(^)(NSUInteger))completionHandler;
 
 - (NSString *)_webContentProcessVariantForFrame:(nullable _WKFrameHandle *)frameHandle;
+
+#if defined(ENABLE_THREADED_ANIMATIONS) && ENABLE_THREADED_ANIMATIONS
+- (NSString *)_animationStackForLayerWithID:(unsigned long long)layerID;
+#endif
 
 @end
 

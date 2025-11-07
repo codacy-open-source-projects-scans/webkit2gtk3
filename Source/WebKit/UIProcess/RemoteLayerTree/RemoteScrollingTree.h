@@ -34,19 +34,22 @@
 #include <wtf/TZoneMalloc.h>
 #include <wtf/WeakPtr.h>
 
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#if ENABLE(THREADED_ANIMATIONS)
 #include "RemoteProgressBasedTimelineRegistry.h"
 #endif
 
 namespace WebCore {
 class PlatformMouseEvent;
+#if ENABLE(THREADED_ANIMATIONS)
+class ScrollingTreeScrollingNode;
+#endif
 };
 
 namespace WebKit {
 
 class RemoteScrollingCoordinatorProxy;
 
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#if ENABLE(THREADED_ANIMATIONS)
 class RemoteAnimationTimeline;
 #endif
 
@@ -89,9 +92,10 @@ public:
 
     void tryToApplyLayerPositions();
 
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#if ENABLE(THREADED_ANIMATIONS)
     void updateTimelineRegistration(WebCore::ProcessIdentifier, const HashSet<Ref<WebCore::AcceleratedTimeline>>&);
     RefPtr<const RemoteAnimationTimeline> timeline(const TimelineID&) const;
+    bool hasTimelineForNode(const WebCore::ScrollingTreeScrollingNode&) const;
 #endif
 
 protected:
@@ -108,7 +112,9 @@ protected:
     WeakPtr<RemoteScrollingCoordinatorProxy> m_scrollingCoordinatorProxy;
     bool m_hasNodesWithSynchronousScrollingReasons WTF_GUARDED_BY_LOCK(m_treeLock) { false };
 
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#if ENABLE(THREADED_ANIMATIONS)
+    void updateProgressBasedTimelinesForNode(const WebCore::ScrollingTreeScrollingNode&);
+
 private:
     std::unique_ptr<RemoteProgressBasedTimelineRegistry> m_progressBasedTimelineRegistry;
 #endif

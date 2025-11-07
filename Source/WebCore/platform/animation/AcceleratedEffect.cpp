@@ -26,7 +26,7 @@
 #include "config.h"
 #include "AcceleratedEffect.h"
 
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#if ENABLE(THREADED_ANIMATIONS)
 
 #include "AnimationEffect.h"
 #include "AnimationUtilities.h"
@@ -216,6 +216,7 @@ AcceleratedEffect::AcceleratedEffect(const KeyframeEffect& effect, const Timelin
     if (RefPtr animation = effect.animation()) {
         m_paused = animation->playState() == WebAnimation::PlayState::Paused;
         m_playbackRate = animation->playbackRate();
+        ASSERT(!animation->pending());
         ASSERT(animation->holdTime() || animation->startTime());
         m_holdTime = animation->holdTime();
         m_startTime = animation->startTime();
@@ -546,4 +547,4 @@ bool AcceleratedEffect::isPropertyAdditiveOrCumulative(KeyframeInterpolation::Pr
 
 } // namespace WebCore
 
-#endif // ENABLE(THREADED_ANIMATION_RESOLUTION)
+#endif // ENABLE(THREADED_ANIMATIONS)

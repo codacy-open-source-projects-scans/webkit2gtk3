@@ -6611,6 +6611,19 @@ static String joinAndTruncateLinesToWordLimit(Vector<String>&& components, std::
     return makeStringByJoining(WTFMove(truncatedComponents), "\n"_s);
 }
 
+static HashMap<String, String> extractReplacementStrings(_WKTextExtractionConfiguration *configuration)
+{
+    HashMap<String, String> result;
+    RetainPtr replacementStrings = [configuration replacementStrings];
+    for (NSString *replacement in replacementStrings.get()) {
+        if (!replacement.length)
+            continue;
+
+        result.set(String { replacement }, String { [replacementStrings objectForKey:replacement] });
+    }
+    return result;
+}
+
 - (void)_debugTextWithConfiguration:(_WKTextExtractionConfiguration *)configuration completionHandler:(void(^)(NSString *))completionHandler
 {
     bool shouldFilter = configuration.shouldFilterText && _page->protectedPreferences()->textExtractionFilterEnabled();
@@ -6630,8 +6643,10 @@ static String joinAndTruncateLinesToWordLimit(Vector<String>&& components, std::
         shouldFilter,
         includeURLs = configuration.includeURLs,
         includeRects = configuration.includeRects,
-        maxWordsPerParagraph = WTFMove(maxWordsPerParagraph)
-    ](auto&& item) {
+        onlyIncludeText = configuration.onlyIncludeVisibleText,
+        maxWordsPerParagraph = WTFMove(maxWordsPerParagraph),
+        replacementStrings = extractReplacementStrings(configuration)
+    ](auto&& item) mutable {
         RetainPtr strongSelf = weakSelf.get();
         if (!strongSelf)
             return completionHandler(nil);
@@ -6698,8 +6713,9 @@ static String joinAndTruncateLinesToWordLimit(Vector<String>&& components, std::
             optionFlags.add(IncludeURLs);
         if (includeRects)
             optionFlags.add(IncludeRects);
-
-        WebKit::TextExtractionOptions options { WTFMove(filterCallback), [strongSelf _activeNativeMenuItemTitles], optionFlags };
+        if (onlyIncludeText)
+            optionFlags.add(OnlyIncludeText);
+        WebKit::TextExtractionOptions options { WTFMove(filterCallback), [strongSelf _activeNativeMenuItemTitles], WTFMove(replacementStrings), optionFlags };
         WebKit::convertToText(WTFMove(*item), WTFMove(options), [completionHandler = WTFMove(completionHandler)](auto&& string) {
             completionHandler(string.createNSString().get());
         });
@@ -6828,6 +6844,41 @@ static inline std::optional<WebCore::NodeIdentifier> toNodeIdentifier(const Stri
 
 @implementation WKWebView (WKTextExtraction)
 
+#if USE(APPLE_INTERNAL_SDK) || (!PLATFORM(WATCHOS) && !PLATFORM(APPLETV))
+
+static std::optional<WebCore::JSHandleIdentifier> mainFrameJSHandleIdentifier(_WKJSHandle *nodeHandle)
+{
+    if (!nodeHandle)
+        return std::nullopt;
+
+    auto info = nodeHandle->_ref->info();
+    if (!info.frameInfo.isMainFrame) {
+        // FIXME: Blocked on support for text extraction in subframes.
+        return std::nullopt;
+    }
+
+    return info.identifier;
+}
+
+static HashMap<String, HashMap<WebCore::JSHandleIdentifier, String>> extractClientNodeAttributes(_WKTextExtractionConfiguration *configuration)
+{
+    __block HashMap<String, HashMap<WebCore::JSHandleIdentifier, String>> result;
+
+    [configuration forEachClientNodeAttribute:^(NSString *attribute, NSString *value, _WKJSHandle *nodeHandle) {
+        auto handleIdentifier = mainFrameJSHandleIdentifier(nodeHandle);
+        if (!handleIdentifier)
+            return;
+
+        result.ensure(String { attribute }, [] {
+            return HashMap<WebCore::JSHandleIdentifier, String> { };
+        }).iterator->value.add(WTFMove(*handleIdentifier), String { value });
+    }];
+
+    return result;
+}
+
+#endif // USE(APPLE_INTERNAL_SDK) || (!PLATFORM(WATCHOS) && !PLATFORM(APPLETV))
+
 - (void)_requestTextExtractionInternal:(_WKTextExtractionConfiguration *)configuration completion:(CompletionHandler<void(std::optional<WebCore::TextExtraction::Item>&&)>&&)completion
 {
 #if USE(APPLE_INTERNAL_SDK) || (!PLATFORM(WATCHOS) && !PLATFORM(APPLETV))
@@ -6837,9 +6888,9 @@ static inline std::optional<WebCore::NodeIdentifier> toNodeIdentifier(const Stri
 
     auto rectInWebView = configuration.targetRect;
     bool mergeParagraphs = configuration.mergeParagraphs;
-    bool canIncludeIdentifiers = configuration.canIncludeIdentifiers;
+    bool includeNodeIdentifiers = configuration.includeNodeIdentifiers;
     bool skipNearlyTransparentContent = configuration.skipNearlyTransparentContent;
-    auto rectInRootView = [&]() -> std::optional<WebCore::FloatRect> {
+    auto rectInRootView = [&] -> std::optional<WebCore::FloatRect> {
         if (CGRectIsNull(rectInWebView))
             return std::nullopt;
 
@@ -6851,10 +6902,15 @@ static inline std::optional<WebCore::NodeIdentifier> toNodeIdentifier(const Stri
     }();
 
     WebCore::TextExtraction::Request request {
+        .clientNodeAttributes = extractClientNodeAttributes(configuration),
         .collectionRectInRootView = WTFMove(rectInRootView),
+        .targetNodeHandleIdentifier = mainFrameJSHandleIdentifier(configuration.targetNode),
         .mergeParagraphs = mergeParagraphs,
         .skipNearlyTransparentContent = skipNearlyTransparentContent,
-        .canIncludeIdentifiers = canIncludeIdentifiers,
+        .includeNodeIdentifiers = includeNodeIdentifiers,
+        .includeEventListeners = !!configuration.includeEventListeners,
+        .includeAccessibilityAttributes = !!configuration.includeAccessibilityAttributes,
+        .includeTextInAutoFilledControls = !!configuration.includeTextInAutoFilledControls,
     };
 
     _page->requestTextExtraction(WTFMove(request), WTFMove(completion));

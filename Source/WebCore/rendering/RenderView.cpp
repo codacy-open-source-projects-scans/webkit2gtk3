@@ -85,7 +85,7 @@ RenderView::RenderView(Document& document, RenderStyle&& style)
     : RenderBlockFlow(Type::View, document, WTFMove(style))
     , m_frameView(*document.view())
     , m_initialContainingBlock(makeUniqueRef<Layout::InitialContainingBlock>(RenderStyle::clone(this->style())))
-    , m_layoutState(makeUniqueRef<Layout::LayoutState>(document, m_initialContainingBlock, Layout::LayoutState::Type::Primary, LayoutIntegration::layoutWithFormattingContextForBox, LayoutIntegration::formattingContextRootLogicalWidthForType, LayoutIntegration::formattingContextRootLogicalHeightForType))
+    , m_layoutState(makeUniqueRef<Layout::LayoutState>(document, m_initialContainingBlock, Layout::LayoutState::Type::Primary, LayoutIntegration::layoutWithFormattingContextForBox, LayoutIntegration::formattingContextRootLogicalWidthForType, LayoutIntegration::formattingContextRootLogicalHeightForType, LayoutIntegration::layoutWithFormattingContextForBlockInInline))
     , m_selection(*this)
 {
     // FIXME: We should find a way to enforce this at compile time.
@@ -397,7 +397,7 @@ static inline bool rendererObscuresBackground(const RenderElement& rootElement)
     if (!rendererForBackground)
         return false;
 
-    if (rendererForBackground->style().backgroundLayers().first().clip() == FillBox::Text)
+    if (rendererForBackground->style().backgroundLayers().usedFirst().clip() == FillBox::Text)
         return false;
 
     return true;
@@ -699,7 +699,7 @@ IntRect RenderView::unscaledDocumentRect() const
 bool RenderView::rootBackgroundIsEntirelyFixed() const
 {
     if (auto* rootBackgroundRenderer = rendererForRootBackground())
-        return rootBackgroundRenderer->style().backgroundLayers().hasEntirelyFixedBackground();
+        return Style::hasEntirelyFixedBackground(rootBackgroundRenderer->style().backgroundLayers());
     return false;
 }
 
@@ -1058,7 +1058,7 @@ void RenderView::updatePlayStateForAllAnimations(const IntRect& visibleRect)
             }
         };
 
-        for (auto& layer : renderElement.style().backgroundLayers()) {
+        for (auto& layer : renderElement.style().backgroundLayers().usedValues()) {
             RefPtr image = layer.image().tryStyleImage();
             updateAnimation(image ? image->cachedImage() : nullptr);
         }

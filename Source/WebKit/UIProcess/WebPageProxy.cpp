@@ -1481,6 +1481,29 @@ void WebPageProxy::setBrowsingContextGroup(BrowsingContextGroup& browsingContext
     m_browsingContextGroup = browsingContextGroup;
 }
 
+#if ENABLE(VIDEO)
+void WebPageProxy::showCaptionDisplaySettings(CompletionHandler<void(bool)>&& callback)
+{
+    if (RefPtr pageClient = this->pageClient()) {
+        pageClient->showCaptionDisplaySettings(WTFMove(callback));
+        return;
+    }
+
+    callback(false);
+}
+
+void WebPageProxy::showCaptionDisplaySettingsPreview(const FrameInfoData& frameInfo, WebCore::HTMLMediaElementIdentifier identifier)
+{
+    sendToProcessContainingFrame(frameInfo.frameID, Messages::WebPage::ShowCaptionDisplaySettingsPreview(identifier));
+}
+
+void WebPageProxy::hideCaptionDisplaySettingsPreview(const FrameInfoData& frameInfo, WebCore::HTMLMediaElementIdentifier identifier)
+{
+    sendToProcessContainingFrame(frameInfo.frameID, Messages::WebPage::HideCaptionDisplaySettingsPreview(identifier));
+}
+
+#endif
+
 void WebPageProxy::swapToProvisionalPage(Ref<ProvisionalPageProxy>&& provisionalPage)
 {
     ASSERT(!m_isClosed);
@@ -3706,7 +3729,7 @@ void WebPageProxy::activateMediaStreamCaptureInPage()
 }
 
 #if !PLATFORM(COCOA)
-void WebPageProxy::didCommitLayerTree(const RemoteLayerTreeTransaction&)
+void WebPageProxy::didCommitLayerTree(const RemoteLayerTreeTransaction&, const std::optional<MainFrameData>&)
 {
 }
 
@@ -4988,12 +5011,16 @@ void WebPageProxy::receivedNavigationActionPolicyDecision(WebProcessProxy& proce
             else {
                 auto nonPersistentDataStore = WebsiteDataStore::createNonPersistent();
                 replacedDataStoreForWebArchiveLoad = websiteDataStore.ptr();
-                websiteDataStore = WTFMove(nonPersistentDataStore);
+                m_websiteDataStore = WTFMove(nonPersistentDataStore);
+                m_configuration->protectedProcessPool()->pageBeginUsingWebsiteDataStore(*this, protectedWebsiteDataStore());
+                websiteDataStore = m_websiteDataStore;
                 processSwapRequestedByClient = ProcessSwapRequestedByClient::Yes;
             }
             loadedWebArchive = LoadedWebArchive::Yes;
         } else if (didLoadWebArchive()) {
-            websiteDataStore = m_replacedDataStoreForWebArchiveLoad.releaseNonNull();
+            m_configuration->protectedProcessPool()->pageEndUsingWebsiteDataStore(*this, protectedWebsiteDataStore());
+            m_websiteDataStore = m_replacedDataStoreForWebArchiveLoad.releaseNonNull();
+            websiteDataStore = m_websiteDataStore;
             m_replacedDataStoreForWebArchiveLoad = nullptr;
             processSwapRequestedByClient = ProcessSwapRequestedByClient::Yes;
         }
@@ -6815,8 +6842,10 @@ WebPageProxy::GeneratePageLoadTimingResult WebPageProxy::generatePageLoadTimingS
         return WaitForSubresourcesFinishedLoading;
     lastTimestamp = std::max(lastTimestamp, m_pageLoadTiming->allSubresourcesFinishedLoading());
 
-    // Stop waiting for page load to end 100 ms after the last of the timestamps we care about.
-    Seconds interval = std::max(0_ms, lastTimestamp + 100_ms - WallTime::now());
+    // Stop waiting for page load to end N ms after the last of the timestamps we care about, where
+    // N is the quiescence interval passed in by the client.
+    auto quiescenceInterval = m_configuration->processPool().pltResourceDelayInterval();
+    Seconds interval = std::max(0_ms, lastTimestamp + quiescenceInterval - WallTime::now());
     m_generatePageLoadTimingTimer.startOneShot(interval);
     return WaitForQuiescence;
 }
@@ -7532,6 +7561,9 @@ void WebPageProxy::didCommitLoadForFrame(IPC::Connection& connection, FrameIdent
     if (frame->isMainFrame())
         m_internals->imageTranslationLanguageIdentifiers = std::nullopt;
 #endif
+
+    if (frame->isMainFrame())
+        m_internals->textManipulationParameters = std::nullopt;
 }
 
 void WebPageProxy::didFinishDocumentLoadForFrame(IPC::Connection& connection, FrameIdentifier frameID, std::optional<WebCore::NavigationIdentifier> navigationID, const UserData& userData, WallTime timestamp)
@@ -10261,12 +10293,12 @@ void WebPageProxy::setTextIndicator(const TextIndicatorData& indicatorData, WebC
     notImplemented();
 }
 
-void WebPageProxy::updateTextIndicatorFromFrame(FrameIdentifier frameID, const WebCore::TextIndicatorData& indicatorData)
+void WebPageProxy::updateTextIndicatorFromFrame(FrameIdentifier frameID, const RefPtr<WebCore::TextIndicator>&& textIndicator)
 {
     notImplemented();
 }
 
-void WebPageProxy::updateTextIndicator(const TextIndicatorData& indicatorData)
+void WebPageProxy::updateTextIndicator(RefPtr<WebCore::TextIndicator>&& textIndicator)
 {
     notImplemented();
 }
@@ -12245,6 +12277,8 @@ WebPageCreationParameters WebPageProxy::creationParameters(WebProcessProxy& proc
     parameters.imageTranslationLanguageIdentifiers = m_internals->imageTranslationLanguageIdentifiers;
 #endif
 
+    parameters.textManipulationParameters = m_internals->textManipulationParameters;
+
     return parameters;
 }
 
@@ -12921,14 +12955,6 @@ void WebPageProxy::shouldAllowDeviceOrientationAndMotionAccess(IPC::Connection& 
     protectedWebsiteDataStore()->protectedDeviceOrientationAndMotionAccessController()->shouldAllowAccess(*this, *frame, WTFMove(frameInfo), mayPrompt, WTFMove(completionHandler));
 }
 
-bool WebPageProxy::originHasDeviceOrientationAndMotionAccess(const WebCore::SecurityOriginData& origin)
-{
-    if (!protectedPreferences()->deviceOrientationPermissionAPIEnabled())
-        return true;
-
-    return protectedWebsiteDataStore()->protectedDeviceOrientationAndMotionAccessController()->cachedDeviceOrientationPermission(origin) == DeviceOrientationOrMotionPermissionState::Granted;
-}
-
 #endif
 
 
@@ -12997,12 +13023,11 @@ Ref<MediaKeySystemPermissionRequestManagerProxy> WebPageProxy::protectedMediaKey
 
 #if ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS) && USE(UICONTEXTMENU)
 
-void WebPageProxy::showMediaControlsContextMenu(FloatRect&& targetFrame, Vector<MediaControlsContextMenuItem>&& items, CompletionHandler<void(MediaControlsContextMenuItem::ID)>&& completionHandler)
+void WebPageProxy::showMediaControlsContextMenu(FloatRect&& targetFrame, Vector<MediaControlsContextMenuItem>&& items, const FrameInfoData& frameInfo, HTMLMediaElementIdentifier identifier, CompletionHandler<void(MediaControlsContextMenuItem::ID)>&& completionHandler)
 {
     if (RefPtr pageClient = this->pageClient())
-        pageClient->showMediaControlsContextMenu(WTFMove(targetFrame), WTFMove(items), WTFMove(completionHandler));
+        pageClient->showMediaControlsContextMenu(WTFMove(targetFrame), WTFMove(items), frameInfo, identifier, WTFMove(completionHandler));
 }
-
 #endif // ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS) && USE(UICONTEXTMENU)
 
 #if ENABLE(NOTIFICATIONS)
@@ -15276,14 +15301,6 @@ void WebPageProxy::willAcquireUniversalFileReadSandboxExtension(WebProcessProxy&
 
 void WebPageProxy::simulateDeviceOrientationChange(double alpha, double beta, double gamma)
 {
-#if ENABLE(DEVICE_ORIENTATION)
-    auto origin = SecurityOrigin::createFromString(protectedPageLoadState()->activeURL())->data();
-    if (!originHasDeviceOrientationAndMotionAccess(origin)) {
-        WEBPAGEPROXY_RELEASE_LOG_ERROR(Process, "simulateDeviceOrientationChange: Not sending simulated orientation change to page because origin %" SENSITIVE_LOG_STRING " does not have access.", origin.toString().utf8().data());
-        return;
-    }
-#endif
-
     send(Messages::WebPage::SimulateDeviceOrientationChange(alpha, beta, gamma));
 }
 
@@ -15528,6 +15545,8 @@ void WebPageProxy::setMockWebAuthenticationConfiguration(MockWebAuthenticationCo
 void WebPageProxy::startTextManipulations(const Vector<TextManipulationController::ExclusionRule>& exclusionRules, bool includeSubframes, TextManipulationItemCallback&& callback, CompletionHandler<void()>&& completionHandler)
 {
     m_textManipulationItemCallback = WTFMove(callback);
+    m_internals->textManipulationParameters = { includeSubframes, exclusionRules };
+
     auto callbackAggregator = CallbackAggregator::create(WTFMove(completionHandler));
     forEachWebContentProcess([&](auto& webProcess, auto pageID) {
         webProcess.sendWithAsyncReply(Messages::WebPage::StartTextManipulations(exclusionRules, includeSubframes), [callbackAggregator] { }, pageID);

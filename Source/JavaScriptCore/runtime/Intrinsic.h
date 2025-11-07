@@ -62,6 +62,7 @@ namespace JSC {
     macro(ArrayValuesIntrinsic) \
     macro(ArrayKeysIntrinsic) \
     macro(ArrayEntriesIntrinsic) \
+    macro(ArrayConstructorOfIntrinsic) \
     macro(AsyncIteratorIntrinsic) \
     macro(BooleanConstructorIntrinsic) \
     macro(CharCodeAtIntrinsic) \
@@ -210,6 +211,7 @@ namespace JSC {
     macro(PromiseConstructorRejectIntrinsic) \
     macro(PromiseRejectIntrinsic) \
     macro(PromisePrototypeThenIntrinsic) \
+    macro(PromisePrototypeCatchIntrinsic) \
     \
     /* Getter intrinsics. */ \
     macro(TypedArrayLengthIntrinsic) \
@@ -275,5 +277,3 @@ class PrintStream;
 void printInternal(PrintStream&, JSC::Intrinsic);
 
 } // namespace WTF
-
-

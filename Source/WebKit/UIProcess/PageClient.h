@@ -44,6 +44,7 @@
 #include <WebCore/ExceptionData.h>
 #include <WebCore/FocusDirection.h>
 #include <WebCore/FrameIdentifier.h>
+#include <WebCore/HTMLMediaElementIdentifier.h>
 #include <WebCore/InputMode.h>
 #include <WebCore/MediaControlsContextMenuItem.h>
 #include <WebCore/ScrollTypes.h>
@@ -208,6 +209,7 @@ struct FocusedElementInformation;
 struct FrameInfoData;
 struct InteractionInformationAtPosition;
 struct KeyEventInterpretationContext;
+struct MainFrameData;
 struct WebAutocorrectionContext;
 struct WebHitTestResultData;
 
@@ -539,7 +541,7 @@ public:
 #endif // PLATFORM(MAC)
 
 #if PLATFORM(COCOA)
-    virtual void didCommitLayerTree(const RemoteLayerTreeTransaction&) = 0;
+    virtual void didCommitLayerTree(const RemoteLayerTreeTransaction&, const std::optional<MainFrameData>&) = 0;
     virtual void layerTreeCommitComplete() { }
 
     virtual void scrollingNodeScrollViewDidScroll(WebCore::ScrollingNodeID) = 0;
@@ -676,7 +678,7 @@ public:
 #endif
 
 #if ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS) && USE(UICONTEXTMENU)
-    virtual void showMediaControlsContextMenu(WebCore::FloatRect&&, Vector<WebCore::MediaControlsContextMenuItem>&&, CompletionHandler<void(WebCore::MediaControlsContextMenuItem::ID)>&& completionHandler) { completionHandler(WebCore::MediaControlsContextMenuItem::invalidID); }
+    virtual void showMediaControlsContextMenu(WebCore::FloatRect&&, Vector<WebCore::MediaControlsContextMenuItem>&&, const FrameInfoData&, WebCore::HTMLMediaElementIdentifier, CompletionHandler<void(WebCore::MediaControlsContextMenuItem::ID)>&& completionHandler) { completionHandler(WebCore::MediaControlsContextMenuItem::invalidID); }
 #endif // ENABLE(MEDIA_CONTROLS_CONTEXT_MENUS) && USE(UICONTEXTMENU)
     
 #if PLATFORM(MAC)
@@ -839,6 +841,10 @@ public:
 #if ENABLE(POINTER_LOCK)
     virtual void beginPointerLockMouseTracking() { }
     virtual void endPointerLockMouseTracking() { }
+#endif
+
+#if ENABLE(VIDEO)
+    virtual void showCaptionDisplaySettings(CompletionHandler<void(bool)>&& callback) { callback(false); }
 #endif
 };
 

@@ -26,8 +26,9 @@
 #import "config.h"
 #import "RemoteAnimationTimeline.h"
 
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#if ENABLE(THREADED_ANIMATIONS)
 
+#import "RemoteAnimationUtilities.h"
 #import <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
@@ -40,7 +41,16 @@ RemoteAnimationTimeline::RemoteAnimationTimeline(TimelineID identifier, std::opt
 {
 }
 
+Ref<JSON::Object> RemoteAnimationTimeline::toJSONForTesting() const
+{
+    Ref object = JSON::Object::create();
+    object->setValue("currentTime"_s, WebKit::toJSONForTesting(m_currentTime));
+    object->setValue("duration"_s, WebKit::toJSONForTesting(m_duration));
+    object->setString("identifier"_s, m_identifier.loggingString());
+    return object;
+}
+
 } // namespace WebKit
 
-#endif // ENABLE(THREADED_ANIMATION_RESOLUTION)
+#endif // ENABLE(THREADED_ANIMATIONS)
 

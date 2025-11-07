@@ -62,7 +62,7 @@ platform/mediarecorder/MediaRecorderPrivateEncoder.cpp
 platform/mediastream/RealtimeVideoCaptureSource.cpp
 platform/mediastream/cocoa/IncomingAudioMediaStreamTrackRendererUnit.cpp
 [ iOS ] platform/mediastream/ios/ReplayKitCaptureSource.mm
-[ iOS ] platform/mediastream/mac/CoreAudioSharedUnit.cpp
+[ iOS ] platform/mediastream/mac/CoreAudioCaptureUnit.cpp
 platform/mediastream/mac/RealtimeIncomingVideoSourceCocoa.mm
 platform/mediastream/mac/RealtimeOutgoingAudioSourceCocoa.cpp
 rendering/BackgroundPainter.cpp
@@ -82,7 +82,6 @@ rendering/svg/RenderSVGText.cpp
 rendering/svg/legacy/LegacyRenderSVGResourceGradient.cpp
 rendering/svg/legacy/SVGResourcesCycleSolver.cpp
 rendering/updating/RenderTreeUpdater.cpp
-style/StyleBuilderCustom.h
 style/StyleCustomProperty.cpp
 style/Styleable.cpp
 style/values/StyleValueTypes.h

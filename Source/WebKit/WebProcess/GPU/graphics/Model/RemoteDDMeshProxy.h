@@ -29,6 +29,7 @@
 
 #include "DDModelIdentifier.h"
 #include "RemoteDeviceProxy.h"
+#include <WebCore/DDFloat4x4.h>
 #include <WebCore/DDMesh.h>
 #include <WebCore/DDMeshDescriptor.h>
 #include <wtf/TZoneMalloc.h>
@@ -82,16 +83,31 @@ private:
 #if PLATFORM(COCOA)
     std::pair<simd_float4, simd_float4> getCenterAndExtents() const final;
 #endif
+    void play(bool) final;
 
     void render() final;
     void setLabelInternal(const String&) final;
+    void setEntityTransform(const WebCore::DDModel::DDFloat4x4&) final;
+    std::optional<WebCore::DDModel::DDFloat4x4> entityTransform() const final;
+    bool supportsTransform(const WebCore::TransformationMatrix&) const final;
+    void setScale(float) final;
+    void setCameraDistance(float) final;
+    void setStageMode(WebCore::StageModeOperation) final;
+#if ENABLE(GPU_PROCESS_MODEL)
+    void setRotation(float yaw, float pitch, float roll) final;
+#endif
 
     const DDModelIdentifier m_backing;
     const Ref<ConvertToBackingContext> m_convertToBackingContext;
     const Ref<RemoteGPUProxy> m_root;
 #if PLATFORM(COCOA)
-    simd_float4 m_center;
-    simd_float4 m_extents;
+    simd_float4 m_minCorner;
+    simd_float4 m_maxCorner;
+#endif
+    std::optional<WebCore::DDModel::DDFloat4x4> m_transform;
+#if ENABLE(GPU_PROCESS_MODEL)
+    float m_cameraDistance { 1.f };
+    WebCore::StageModeOperation m_stageMode;
 #endif
 };
 

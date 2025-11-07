@@ -38,7 +38,7 @@
 namespace WebCore {
 
 AnimationTimeline::AnimationTimeline(std::optional<WebAnimationTime> duration)
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#if ENABLE(THREADED_ANIMATIONS)
     : m_acceleratedTimelineIdentifier(TimelineIdentifier::generate())
 #endif
 {
@@ -125,7 +125,7 @@ Style::SingleAnimationRange AnimationTimeline::defaultRange() const
 }
 
 
-#if ENABLE(THREADED_ANIMATION_RESOLUTION)
+#if ENABLE(THREADED_ANIMATIONS)
 AcceleratedTimeline& AnimationTimeline::acceleratedRepresentation()
 {
     if (!m_acceleratedRepresentation)
@@ -135,8 +135,6 @@ AcceleratedTimeline& AnimationTimeline::acceleratedRepresentation()
 
 Ref<AcceleratedTimeline> AnimationTimeline::createAcceleratedRepresentation()
 {
-    // Until we implement accelerated representations of other timeline types,
-    // we should only ever call DocumentTimeline::createAcceleratedRepresentation().
     ASSERT_NOT_REACHED();
     return AcceleratedTimeline::create(m_acceleratedTimelineIdentifier, 0_s);
 }

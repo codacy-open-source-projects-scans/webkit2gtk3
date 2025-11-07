@@ -249,6 +249,7 @@ set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/style/values/transitions"
     "${WEBCORE_DIR}/style/values/ui"
     "${WEBCORE_DIR}/style/values/view-transitions"
+    "${WEBCORE_DIR}/style/values/will-change"
     "${WEBCORE_DIR}/svg"
     "${WEBCORE_DIR}/svg/animation"
     "${WEBCORE_DIR}/svg/graphics"
@@ -1388,6 +1389,7 @@ set(WebCore_NON_SVG_IDL_FILES
     html/HTMLQuoteElement.idl
     html/HTMLScriptElement.idl
     html/HTMLSelectElement.idl
+    html/HTMLSelectedContentElement.idl
     html/HTMLSlotElement.idl
     html/HTMLSourceElement.idl
     html/HTMLSpanElement.idl
@@ -1583,12 +1585,11 @@ set(WebCore_NON_SVG_IDL_FILES
     page/UndoItem.idl
     page/UndoManager.idl
     page/VisualViewport.idl
+    page/WebKitBuffer.idl
+    page/WebKitBufferNamespace.idl
     page/WebKitJSHandle.idl
     page/WebKitPoint.idl
     page/WebKitSerializedNode.idl
-    page/WebKitStringMatcher.idl
-    page/WebKitStringMatcherOptions.idl
-    page/WebKitStringMatchersNamespace.idl
     page/WindowEventHandlers.idl
     page/WindowLocalStorage.idl
     page/WindowOrWorkerGlobalScope+Crypto.idl
