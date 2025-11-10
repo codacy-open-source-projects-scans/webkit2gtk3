@@ -1647,9 +1647,11 @@ bool KeyframeEffect::isRunningAccelerated() const
     if (threadedAnimationsEnabled()) {
         if (!m_inTargetEffectStack || !canBeAccelerated())
             return false;
-        RefPtr animation = this->animation();
-        ASSERT(animation);
-        return !animation->isSuspended() && animation->playState() == WebAnimation::PlayState::Running;
+        ASSERT(animation());
+        Ref animation = *this->animation();
+        if (animation->isSuspended())
+            return false;
+        return m_isAssociatedWithProgressBasedTimeline || animation->playState() == WebAnimation::PlayState::Running;
     }
 #endif
     return m_runningAccelerated == RunningAccelerated::Yes;
@@ -1811,7 +1813,7 @@ void KeyframeEffect::getAnimatedStyle(std::unique_ptr<RenderStyle>& animatedStyl
     setAnimatedPropertiesInStyle(*animatedStyle.get(), computedTiming);
 }
 
-void KeyframeEffect::setAnimatedPropertiesInStyle(RenderStyle& targetStyle, const ComputedEffectTiming& computedTiming)
+void KeyframeEffect::setAnimatedPropertiesInStyle(RenderStyle& targetStyle, const ComputedEffectTiming& computedTiming) const
 {
     ASSERT(computedTiming.progress);
     ASSERT(computedTiming.currentIteration);
@@ -1837,7 +1839,6 @@ void KeyframeEffect::setAnimatedPropertiesInStyle(RenderStyle& targetStyle, cons
     // The effect value of a single property referenced by a keyframe effect as one of its target properties,
     // for a given iteration progress, current iteration and underlying value is calculated as follows.
 
-    updateBlendingKeyframes(targetStyle, { nullptr });
     if (m_blendingKeyframes.isEmpty())
         return;
 
@@ -2087,13 +2088,16 @@ void KeyframeEffect::animationDidTick()
     invalidate();
     updateAcceleratedActions();
 
+    if (RefPtr viewTimeline = activeViewTimeline())
+        computeMissingKeyframeOffsets(m_parsedKeyframes, viewTimeline.get(), animation());
+}
+
+void KeyframeEffect::animationBecameReady()
+{
 #if ENABLE(THREADED_ANIMATIONS)
     if (threadedAnimationsEnabled())
         updateAcceleratedAnimationIfNecessary();
 #endif
-
-    if (RefPtr viewTimeline = activeViewTimeline())
-        computeMissingKeyframeOffsets(m_parsedKeyframes, viewTimeline.get(), animation());
 }
 
 void KeyframeEffect::animationDidChangeTimingProperties()

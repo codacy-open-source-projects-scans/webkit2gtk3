@@ -192,8 +192,6 @@ editing/cocoa/WebContentReaderCocoa.mm
 [ Mac ] editing/mac/EditorMac.mm
 editing/mac/FrameSelectionMac.mm
 editing/markup.cpp
-fileapi/BlobLoader.h
-fileapi/FileReader.cpp
 history/CachedFrame.cpp
 html/CachedHTMLCollection.h
 html/CachedHTMLCollectionInlines.h
@@ -571,7 +569,6 @@ rendering/TextDecorationPainter.cpp
 [ iOS ] rendering/ios/RenderThemeIOS.mm
 rendering/line/BreakingContext.h
 rendering/line/LineInlineHeaders.h
-rendering/line/LineWidth.cpp
 rendering/line/TrailingObjects.cpp
 rendering/line/WordTrailingSpace.h
 rendering/mathml/MathOperator.cpp

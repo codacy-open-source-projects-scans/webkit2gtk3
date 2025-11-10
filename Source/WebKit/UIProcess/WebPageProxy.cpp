@@ -123,6 +123,7 @@
 #include "RemotePageProxy.h"
 #include "RemoteWebTouchEvent.h"
 #include "RestrictedOpenerType.h"
+#include "RunJavaScriptParameters.h"
 #include "SharedBufferReference.h"
 #include "SpeechRecognitionPermissionManager.h"
 #include "SpeechRecognitionRemoteRealtimeMediaSource.h"
@@ -1365,7 +1366,7 @@ void WebPageProxy::launchProcess(const Site& site, ProcessLaunchReason reason)
         m_legacyMainFrameProcess = relatedPage->ensureRunningProcess();
         WEBPAGEPROXY_RELEASE_LOG(Loading, "launchProcess: Using process (process=%p, PID=%i) from related page", m_legacyMainFrameProcess.ptr(), m_legacyMainFrameProcess->processID());
     } else
-        m_legacyMainFrameProcess = processPool->processForSite(protectedWebsiteDataStore(), WebProcessPool::IsSharedProcess::No, site, site, { }, shouldEnableLockdownMode() ? WebProcessProxy::LockdownMode::Enabled : WebProcessProxy::LockdownMode::Disabled, shouldEnableEnhancedSecurity() ? WebProcessProxy::EnhancedSecurity::Enabled : WebProcessProxy::EnhancedSecurity::Disabled, m_configuration, WebCore::ProcessSwapDisposition::None);
+        m_legacyMainFrameProcess = processPool->processForSite(protectedWebsiteDataStore(), WebProcessPool::IsSharedProcess::No, site, site, { }, shouldEnableLockdownMode() ? WebProcessProxy::LockdownMode::Enabled : WebProcessProxy::LockdownMode::Disabled, (shouldEnableEnhancedSecurity() || protectedPreferences()->forceEnhancedSecurity()) ? WebProcessProxy::EnhancedSecurity::Enabled : WebProcessProxy::EnhancedSecurity::Disabled, m_configuration, WebCore::ProcessSwapDisposition::None);
 
     m_shouldReloadDueToCrashWhenVisible = false;
     m_isLockdownModeExplicitlySet = m_configuration->isLockdownModeExplicitlySet();
@@ -5037,7 +5038,7 @@ void WebPageProxy::receivedNavigationActionPolicyDecision(WebProcessProxy& proce
 
     m_isLockdownModeExplicitlySet = (websitePolicies && websitePolicies->isLockdownModeExplicitlySet()) || m_configuration->isLockdownModeExplicitlySet();
     auto lockdownMode = (websitePolicies ? websitePolicies->lockdownModeEnabled() : shouldEnableLockdownMode()) ? WebProcessProxy::LockdownMode::Enabled : WebProcessProxy::LockdownMode::Disabled;
-    auto enhancedSecurity = ((websitePolicies && websitePolicies->enhancedSecurityEnabled()) ? WebProcessProxy::EnhancedSecurity::Enabled : WebProcessProxy::EnhancedSecurity::Disabled);
+    auto enhancedSecurity = ((websitePolicies && websitePolicies->enhancedSecurityEnabled()) || protectedPreferences()->forceEnhancedSecurity()) ? WebProcessProxy::EnhancedSecurity::Enabled : WebProcessProxy::EnhancedSecurity::Disabled;
 
     Ref browsingContextGroup = m_browsingContextGroup;
     bool usesSameWebsiteDataStore = websiteDataStore.ptr() == &this->websiteDataStore();
@@ -6418,6 +6419,12 @@ void WebPageProxy::runJavaScriptInMainFrame(RunJavaScriptParameters&& parameters
 
 void WebPageProxy::runJavaScriptInFrameInScriptWorld(RunJavaScriptParameters&& parameters, std::optional<WebCore::FrameIdentifier> frameID, API::ContentWorld& world, bool wantsResult, CompletionHandler<void(Expected<JavaScriptEvaluationResult, std::optional<WebCore::ExceptionDetails>>)>&& callbackFunction)
 {
+    static uintptr_t nextLoggingIdentifier;
+    uintptr_t loggingIdentifier = nextLoggingIdentifier++;
+#if PLATFORM(COCOA)
+    WTFBeginSignpost(loggingIdentifier, EvaluateJavaScript, "evaluateJavaScript: frameID=%llu sourceURL=%" PRIVATE_LOG_STRING, frameID ? frameID->toUInt64() : 0, parameters.sourceURL.string().ascii().data());
+#endif
+
     // For backward-compatibility support running script in a WebView which has not done any loads yets.
     launchInitialProcessIfNecessary();
 
@@ -6430,7 +6437,12 @@ void WebPageProxy::runJavaScriptInFrameInScriptWorld(RunJavaScriptParameters&& p
         activity = processContainingFrame(frameID)->protectedThrottler()->foregroundActivity("WebPageProxy::runJavaScriptInFrameInScriptWorld"_s);
 #endif
 
-    sendWithAsyncReplyToProcessContainingFrame(frameID, Messages::WebPage::RunJavaScriptInFrameInScriptWorld(parameters, frameID, world.worldDataForProcess(processContainingFrame(frameID)), wantsResult), [activity = WTFMove(activity), callbackFunction = WTFMove(callbackFunction)] (auto&& result) mutable {
+    sendWithAsyncReplyToProcessContainingFrame(frameID, Messages::WebPage::RunJavaScriptInFrameInScriptWorld(parameters, frameID, world.worldDataForProcess(processContainingFrame(frameID)), wantsResult), [activity = WTFMove(activity), loggingIdentifier, callbackFunction = WTFMove(callbackFunction)] (auto&& result) mutable {
+#if PLATFORM(COCOA)
+        WTFEndSignpost(loggingIdentifier, EvaluateJavaScript);
+#else
+        UNUSED_PARAM(loggingIdentifier);
+#endif
         callbackFunction(WTFMove(result));
     });
 }
@@ -10293,7 +10305,7 @@ void WebPageProxy::setTextIndicator(const TextIndicatorData& indicatorData, WebC
     notImplemented();
 }
 
-void WebPageProxy::updateTextIndicatorFromFrame(FrameIdentifier frameID, const RefPtr<WebCore::TextIndicator>&& textIndicator)
+void WebPageProxy::updateTextIndicatorFromFrame(FrameIdentifier frameID, RefPtr<WebCore::TextIndicator>&& textIndicator)
 {
     notImplemented();
 }
