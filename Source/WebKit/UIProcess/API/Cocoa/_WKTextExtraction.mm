@@ -53,10 +53,10 @@
     if (!(self = [super init]))
         return nil;
 
-    _shouldFilterText = YES;
+    _filterOptions = _WKTextExtractionFilterAll;
     _includeURLs = !onlyVisibleText;
     _includeRects = !onlyVisibleText;
-    _includeNodeIdentifiers = !onlyVisibleText;
+    _nodeIdentifierInclusion = onlyVisibleText ? _WKTextExtractionNodeIdentifierInclusionNone : _WKTextExtractionNodeIdentifierInclusionInteractive;
     _includeEventListeners = !onlyVisibleText;
     _includeAccessibilityAttributes = !onlyVisibleText;
     _includeTextInAutoFilledControls = !onlyVisibleText;
@@ -122,11 +122,11 @@
     _includeRects = value;
 }
 
-- (void)setIncludeNodeIdentifiers:(BOOL)value
+- (void)setNodeIdentifierInclusion:(_WKTextExtractionNodeIdentifierInclusion)value
 {
     ENSURE_VALID_TEXT_ONLY_CONFIGURATION(value);
 
-    _includeNodeIdentifiers = value;
+    _nodeIdentifierInclusion = value;
 }
 
 - (void)setIncludeEventListeners:(BOOL)value

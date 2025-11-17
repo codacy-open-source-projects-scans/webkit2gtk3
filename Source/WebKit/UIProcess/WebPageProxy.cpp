@@ -4236,7 +4236,7 @@ void WebPageProxy::continueWheelEventHandling(const WebWheelEvent& wheelEvent, c
     LOG_WITH_STREAM(WheelEvents, stream << "WebPageProxy::continueWheelEventHandling - " << result);
 
     if (!result.needsMainThreadProcessing()) {
-        if (m_mainFrame && wheelEvent.phase() == WebWheelEvent::Phase::PhaseBegan) {
+        if (m_mainFrame && wheelEvent.phase() == WebWheelEvent::Phase::Began) {
             // When wheel events are handled entirely in the UI process, we still need to tell the web process where the mouse is for cursor updates.
             sendToProcessContainingFrame(m_mainFrame->frameID(), Messages::WebPage::SetLastKnownMousePosition(m_mainFrame->frameID(), wheelEvent.position(), wheelEvent.globalPosition()));
         }
@@ -4345,14 +4345,23 @@ void WebPageProxy::cacheWheelEventScrollingAccelerationCurve(const NativeWebWhee
 
     ASSERT(drawingArea()->shouldSendWheelEventsToEventDispatcher());
 
-    if (nativeWheelEvent.momentumPhase() != WebWheelEvent::PhaseBegan)
+    if (nativeWheelEvent.momentumPhase() != WebWheelEvent::Phase::Began)
         return;
 
     if (!protectedPreferences()->momentumScrollingAnimatorEnabled())
         return;
 
     // FIXME: We should not have to fetch the curve repeatedly, but it can also change occasionally.
-    internals().scrollingAccelerationCurve = ScrollingAccelerationCurve::fromNativeWheelEvent(nativeWheelEvent);
+    internals().scrollingAccelerationCurve = ScrollingAccelerationCurve::fromNativeWheelEvent(nativeWheelEvent).or_else([identifier = identifier()] {
+        auto curve = ScrollingAccelerationCurve::fallbackCurve();
+        static std::once_flag onceFlag;
+        std::call_once(onceFlag, [&curve, identifier] {
+            UNUSED_VARIABLE(identifier);
+            if (curve)
+                LOG_WITH_STREAM(ScrollAnimations, stream << "WebPageProxy::cacheWheelEventScrollingAccelerationCurve - using fallback acceleration curve " << *curve << " for page " << identifier);
+        });
+        return curve;
+    });
 #endif
 }
 
@@ -4360,7 +4369,7 @@ void WebPageProxy::sendWheelEventScrollingAccelerationCurveIfNecessary(WebCore::
 {
     ASSERT(drawingArea()->shouldSendWheelEventsToEventDispatcher());
 #if ENABLE(MOMENTUM_EVENT_DISPATCHER)
-    if (event.momentumPhase() != WebWheelEvent::PhaseBegan)
+    if (event.momentumPhase() != WebWheelEvent::Phase::Began)
         return;
 
     if (internals().scrollingAccelerationCurve == internals().lastSentScrollingAccelerationCurve)
@@ -4502,6 +4511,9 @@ void WebPageProxy::updateTouchEventTracking(const WebTouchEvent& touchStartEvent
         update(tracking.touchStartTracking, Type::Mousedown);
         update(tracking.touchMoveTracking, Type::Mousemove);
         update(tracking.touchEndTracking, Type::Mouseup);
+        update(tracking.touchEndTracking, Type::Gestureend);
+        update(tracking.touchMoveTracking, Type::Gesturechange);
+        update(tracking.touchStartTracking, Type::Gesturestart);
     }
 #else
     UNUSED_PARAM(touchStartEvent);
@@ -10295,12 +10307,12 @@ void WebPageProxy::didGetImageForFindMatch(ImageBufferParameters&& parameters, S
 }
 
 #if !PLATFORM(COCOA)
-void WebPageProxy::setTextIndicatorFromFrame(FrameIdentifier frameID, const WebCore::TextIndicatorData& indicatorData, WebCore::TextIndicatorLifetime lifetime)
+void WebPageProxy::setTextIndicatorFromFrame(FrameIdentifier frameID, const RefPtr<WebCore::TextIndicator>&& textIndicator, WebCore::TextIndicatorLifetime lifetime)
 {
     notImplemented();
 }
 
-void WebPageProxy::setTextIndicator(const TextIndicatorData& indicatorData, WebCore::TextIndicatorLifetime lifetime)
+void WebPageProxy::setTextIndicator(RefPtr<WebCore::TextIndicator>&& textIndicator, WebCore::TextIndicatorLifetime lifetime)
 {
     notImplemented();
 }
@@ -12004,7 +12016,6 @@ WebPageCreationParameters WebPageProxy::creationParameters(WebProcessProxy& proc
         .webPageProxyIdentifier = identifier(),
         .pageGroupData = m_pageGroup->data(),
         .visitedLinkTableID = m_visitedLinkStore->identifier(),
-        .overrideReferrerForAllRequests = m_configuration->overrideReferrerForAllRequests(),
         .userContentControllerParameters = m_userContentController->parametersForProcess(process),
         .mainFrameIdentifier = mainFrameIdentifier,
         .openedMainFrameName = m_openedMainFrameName,
@@ -16889,7 +16900,7 @@ void WebPageProxy::setDefaultSpatialTrackingLabel(const String& spatialTrackingL
     updateDefaultSpatialTrackingLabel();
 }
 
-const String& WebPageProxy::defaultSpatialTrackingLabel() const
+String WebPageProxy::defaultSpatialTrackingLabel() const
 {
     return m_defaultSpatialTrackingLabel;
 }

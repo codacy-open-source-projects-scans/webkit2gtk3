@@ -549,6 +549,12 @@ TextStream& operator<<(TextStream& ts, EventListenerRegionType listenerType)
     case EventListenerRegionType::NonPassiveMouseUp: ts << "active mouse up"_s; break;
     case EventListenerRegionType::MouseMove: ts << "mouse down"_s; break;
     case EventListenerRegionType::NonPassiveMouseMove: ts << "active mouse move"_s; break;
+    case EventListenerRegionType::GestureChange: ts << "gesture change"_s; break;
+    case EventListenerRegionType::NonPassiveGestureChange: ts << "active gesture change"_s; break;
+    case EventListenerRegionType::GestureEnd: ts << "gesture end"_s; break;
+    case EventListenerRegionType::NonPassiveGestureEnd: ts << "active gesture end"_s; break;
+    case EventListenerRegionType::GestureStart: ts << "gesture start"_s; break;
+    case EventListenerRegionType::NonPassiveGestureStart: ts << "active gesture start"_s; break;
     }
     return ts;
 }
@@ -772,17 +778,6 @@ TextStream& operator<<(TextStream& ts, ListStylePosition position)
     switch (position) {
     case ListStylePosition::Outside: ts << "outside"_s; break;
     case ListStylePosition::Inside: ts << "inside"_s; break;
-    }
-    return ts;
-}
-
-TextStream& operator<<(TextStream& ts, MarginTrimType marginTrimType)
-{
-    switch (marginTrimType) {
-    case MarginTrimType::BlockStart: ts << "block-start"_s; break;
-    case MarginTrimType::BlockEnd: ts << "block-end"_s; break;
-    case MarginTrimType::InlineStart: ts << "inline-start"_s; break;
-    case MarginTrimType::InlineEnd: ts << "inline-end"_s; break;
     }
     return ts;
 }
@@ -1282,19 +1277,6 @@ TextStream& operator<<(TextStream& ts, TextSecurity textSecurity)
     return ts;
 }
 
-TextStream& operator<<(TextStream& ts, TextTransform textTransform)
-{
-    switch (textTransform) {
-    case TextTransform::Capitalize: ts << "capitalize"_s; break;
-    case TextTransform::Uppercase: ts << "uppercase"_s; break;
-    case TextTransform::Lowercase: ts << "lowercase"_s; break;
-    case TextTransform::FullSizeKana: ts << "full-size-kana"_s; break;
-    case TextTransform::FullWidth: ts << "full-width"_s; break;
-    case TextTransform::MathAuto: ts << "math-auto"_s; break;
-    }
-    return ts;
-}
-
 TextStream& operator<<(TextStream& ts, TextUnderlinePosition position)
 {
     switch (position) {
@@ -1517,16 +1499,6 @@ TextStream& operator<<(TextStream& ts, OverflowContinue overflowContinue)
     case OverflowContinue::Discard:
         ts << "discard"_s;
         break;
-    }
-    return ts;
-}
-
-TextStream& operator<<(TextStream& ts, PositionVisibility positionVisibility)
-{
-    switch (positionVisibility) {
-    case PositionVisibility::AnchorsValid: ts << "anchors-valid"; break;
-    case PositionVisibility::AnchorsVisible: ts << "anchors-visible"; break;
-    case PositionVisibility::NoOverflow: ts << "no-overflow"; break;
     }
     return ts;
 }

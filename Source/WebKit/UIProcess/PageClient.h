@@ -132,6 +132,7 @@ enum class DOMPasteRequiresInteraction : bool;
 enum class ScrollIsAnimated : bool;
 
 struct AppHighlight;
+struct AriaNotifyData;
 struct DataDetectorElementInfo;
 struct DictionaryPopupInfo;
 struct ElementContext;
@@ -412,6 +413,7 @@ public:
     virtual WebCore::IntRect rootViewToAccessibilityScreen(const WebCore::IntRect&) = 0;
 #if PLATFORM(IOS_FAMILY)
     virtual void relayAccessibilityNotification(String&&, RetainPtr<NSData>&&) = 0;
+    virtual void relayAriaNotifyNotification(const WebCore::AriaNotifyData&) = 0;
 #endif
 #if PLATFORM(MAC)
     virtual WebCore::IntRect rootViewToWindow(const WebCore::IntRect&) = 0;
@@ -434,6 +436,7 @@ public:
 #endif
 #if USE(EXTENSIONKIT)
     virtual UIView *createVisibilityPropagationView() { return nullptr; }
+    virtual void removeVisibilityPropagationView(UIView *) { }
 #endif
 #endif // HAVE(VISIBILITY_PROPAGATION_VIEW)
 
@@ -813,7 +816,7 @@ public:
 #endif
 
 #if HAVE(SPATIAL_TRACKING_LABEL)
-    virtual const String& spatialTrackingLabel() const = 0;
+    virtual String spatialTrackingLabel() const = 0;
 #endif
 
 #if ENABLE(GAMEPAD)

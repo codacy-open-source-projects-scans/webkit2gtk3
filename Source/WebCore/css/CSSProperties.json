@@ -591,10 +591,8 @@
                 }
             ],
             "codegen-properties": {
-                "animation-wrapper": "FontFamilyWrapper",
-                "animation-wrapper-requires-override-parameters": [],
-                "style-builder-custom": "All",
                 "style-extractor-custom": true,
+                "style-builder-custom": "All",
                 "high-priority": true,
                 "parser-function": "consumeFontFamily",
                 "parser-grammar-unused": "[ <family-name> | <generic-family> | <-webkit-generic-family> ]#",
@@ -2730,6 +2728,7 @@
                 "animation-wrapper": "StyleTypeWrapper",
                 "render-style-initial": "initialBorderWidth",
                 "style-converter": "StyleType<LineWidth>",
+                "style-builder-custom": "Initial",
                 "disables-native-appearance": true,
                 "parser-grammar": "<line-width>"
             },
@@ -3261,6 +3260,7 @@
                 "animation-wrapper": "StyleTypeWrapper",
                 "render-style-initial": "initialBorderWidth",
                 "style-converter": "StyleType<LineWidth>",
+                "style-builder-custom": "Initial",
                 "disables-native-appearance": true,
                 "parser-grammar": "<line-width>"
             },
@@ -3368,6 +3368,7 @@
                 "animation-wrapper": "StyleTypeWrapper",
                 "render-style-initial": "initialBorderWidth",
                 "style-converter": "StyleType<LineWidth>",
+                "style-builder-custom": "Initial",
                 "disables-native-appearance": true,
                 "parser-grammar": "<line-width>"
             },
@@ -3574,6 +3575,7 @@
                 "animation-wrapper": "StyleTypeWrapper",
                 "render-style-initial": "initialBorderWidth",
                 "style-converter": "StyleType<LineWidth>",
+                "style-builder-custom": "Initial",
                 "disables-native-appearance": true,
                 "parser-grammar": "<line-width>"
             },
@@ -4821,6 +4823,23 @@
                 "url": "https://www.w3.org/TR/css-logical/#inset-properties"
             }
         },
+        "item-tolerance": {
+            "animation-type": "by computed value",
+            "initial": "normal",
+            "values": [
+                "normal",
+                "infinite"
+            ],
+            "codegen-properties": {
+                "animation-wrapper": "StyleTypeWrapper",
+                "style-converter": "StyleType<ItemTolerance>",
+                "parser-grammar": "normal | <length-percentage> | infinite"
+            },
+            "specification": {
+                "category": "css-grid",
+                "url": "https://drafts.csswg.org/css-grid-3/#item-tolerance"
+            }
+        },
         "left": {
             "animation-type": "by computed value",
             "initial": "auto",
@@ -5339,7 +5358,7 @@
                 "inline-end"
             ],
             "codegen-properties": {
-                "style-converter": "MarginTrim",
+                "style-converter": "StyleType<MarginTrim>",
                 "parser-function": "consumeMarginTrim",
                 "parser-grammar-unused": "none | [ block || inline ] | [ block-start || inline-start || block-end || inline-end ]",
                 "parser-grammar-unused-reason": "Needs support for transforming parsed input to minimal form."
@@ -6624,6 +6643,7 @@
             "codegen-properties": {
                 "animation-wrapper": "StyleTypeWrapper",
                 "style-converter": "StyleType<LineWidth>",
+                "style-builder-custom": "Initial",
                 "parser-grammar": "<line-width>"
             },
             "specification": {
@@ -7866,6 +7886,7 @@
             "inherited": true,
             "initial": "none",
             "values": [
+                "none",
                 "capitalize",
                 "uppercase",
                 "lowercase",
@@ -7873,15 +7894,15 @@
                 "full-width",
                 {
                     "value": "math-auto",
-                    "settings-flag": "cssTextTransformMathAutoEnabled"
-                },
-                "none"
+                    "settings-flag": "cssTextTransformMathAutoEnabled",
+                    "url": "https://w3c.github.io/mathml-core/#math-auto-transform"
+                }
             ],
             "codegen-properties": {
                 "aliases": [
                     "-epub-text-transform"
                 ],
-                "style-converter": "TextTransform",
+                "style-converter": "StyleType<TextTransform>",
                 "parser-grammar": "none | [ [ capitalize | uppercase | lowercase ] || full-width || full-size-kana ]@(no-single-item-opt) | math-auto@(settings-flag=cssTextTransformMathAutoEnabled)"
             },
             "specification": {
@@ -8616,8 +8637,7 @@
             "animation-type": "not animatable",
             "initial": "none",
             "codegen-properties": {
-                "style-converter": "Contain",
-                "render-style-initial": "initialContainment",
+                "style-converter": "StyleType<Contain>",
                 "parser-grammar": "none | strict | content | [ [size | inline-size] || layout || style || paint ]@(no-single-item-opt)"
             },
             "specification": {
@@ -9215,6 +9235,7 @@
                 ],
                 "animation-wrapper": "StyleTypeWrapper",
                 "style-converter": "StyleType<LineWidth>",
+                "style-builder-custom": "Initial",
                 "parser-grammar": "<line-width>"
             },
             "specification":  {
@@ -9408,8 +9429,7 @@
                 "aliases": [
                     "-webkit-align-content"
                 ],
-                "render-style-initial": "initialContentAlignment",
-                "style-converter": "ContentAlignmentData",
+                "style-converter": "StyleType<AlignContent>",
                 "parser-function": "consumeAlignContent",
                 "parser-grammar-unused": "normal | <baseline-position> | <content-distribution> | [ <overflow-position>? <content-position> ]",
                 "parser-grammar-unused-reason": "Needs support for default values on optionals.",
@@ -9443,8 +9463,7 @@
                 "aliases": [
                     "-webkit-align-items"
                 ],
-                "render-style-initial": "initialDefaultAlignment",
-                "style-converter": "SelfOrDefaultAlignmentData",
+                "style-converter": "StyleType<AlignItems>",
                 "parser-function": "consumeAlignItems",
                 "parser-grammar-unused": "normal | stretch | <baseline-position> | [ <overflow-position>? <self-position> ]",
                 "parser-grammar-unused-reason": "Needs support for default values on optionals.",
@@ -9480,8 +9499,7 @@
                 "aliases": [
                     "-webkit-align-self"
                 ],
-                "render-style-initial": "initialSelfAlignment",
-                "style-converter": "SelfOrDefaultAlignmentData",
+                "style-converter": "StyleType<AlignSelf>",
                 "parser-function": "consumeAlignSelf",
                 "parser-grammar-unused": "auto | normal | stretch | <baseline-position> | [ <overflow-position>? <self-position> ]",
                 "parser-grammar-unused-reason": "Needs support for default values on optionals.",
@@ -9679,8 +9697,7 @@
                 "aliases": [
                     "-webkit-justify-content"
                 ],
-                "render-style-initial": "initialContentAlignment",
-                "style-converter": "ContentAlignmentData",
+                "style-converter": "StyleType<JustifyContent>",
                 "parser-function": "consumeJustifyContent",
                 "parser-grammar-unused": "normal | <content-distribution> | [ <overflow-position>? [ <content-position> | left | right ] ]",
                 "parser-grammar-unused-reason": "Needs support for default values on optionals.",
@@ -9744,8 +9761,7 @@
             "animation-type": "discrete",
             "initial": "auto",
             "codegen-properties": {
-                "render-style-initial": "initialSelfAlignment",
-                "style-converter": "SelfOrDefaultAlignmentData",
+                "style-converter": "StyleType<JustifySelf>",
                 "parser-function": "consumeJustifySelf",
                 "parser-grammar-unused": "auto | normal | stretch | <baseline-position> | [ <overflow-position>? [ <self-position> | left | right ] ]",
                 "parser-grammar-unused-reason": "Needs support for default values on optionals."
@@ -9762,7 +9778,7 @@
                 "aliases": [
                     "-webkit-justify-items"
                 ],
-                "style-converter": "SelfOrDefaultAlignmentData",
+                "style-converter": "StyleType<JustifyItems>",
                 "parser-function": "consumeJustifyItems",
                 "parser-grammar-unused": "[ normal | stretch | <baseline-position> | [ <overflow-position>? [ <self-position> | left | right ] ] | legacy | legacy ] && [ left | right | center ]",
                 "parser-grammar-unused-reason": "Needs support for default values on optionals."
@@ -10178,7 +10194,7 @@
                 "initial-letter"
             ],
             "codegen-properties": {
-                "style-converter": "LineBoxContain",
+                "style-converter": "StyleType<WebkitLineBoxContain>",
                 "parser-grammar": "none | [ block || inline || font || glyphs || replaced || inline-box || initial-letter ]"
             },
             "status": {
@@ -12201,7 +12217,7 @@
             ],
             "codegen-properties": {
                 "settings-flag": "cssAnchorPositioningEnabled",
-                "style-converter": "PositionVisibility",
+                "style-converter": "StyleType<PositionVisibility>",
                 "parser-grammar": "always | [ anchors-valid || anchors-visible || no-overflow ]@(no-single-item-opt)"
             },
             "specification": {
@@ -12264,11 +12280,13 @@
                     "status": "unimplemented",
                     "url": "https://w3c.github.io/pointerevents/#the-touch-action-css-property"
                 },
-                "pinch-zoom"
+                {
+                    "value": "pinch-zoom",
+                    "status": "non-standard"
+                }
             ],
             "codegen-properties": {
-                "render-style-name-for-methods": "TouchActions",
-                "style-converter": "TouchAction",
+                "style-converter": "StyleType<TouchAction>",
                 "parser-grammar": "auto | none | [ pan-x || pan-y || pinch-zoom ]@(no-single-item-opt) | manipulation",
                 "parser-grammar-comment": "Current spec grammar is 'auto | none | [ [ pan-x | pan-left | pan-right ] || [ pan-y | pan-up | pan-down ] ] | manipulation'"
             },

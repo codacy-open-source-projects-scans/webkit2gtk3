@@ -31,7 +31,6 @@
 #include "AnchorPositionEvaluator.h"
 #include "CSSCalcSymbolTable.h"
 #include "CSSCalcValue.h"
-#include "CSSContentDistributionValue.h"
 #include "CSSCounterStyleRegistry.h"
 #include "CSSDynamicRangeLimitValue.h"
 #include "CSSFontFeatureValue.h"
@@ -74,7 +73,6 @@
 #include "StyleFlexBasis.h"
 #include "StyleInset.h"
 #include "StyleLengthWrapper+CSSValueConversion.h"
-#include "StyleLineBoxContain.h"
 #include "StyleMargin.h"
 #include "StyleMaximumSize.h"
 #include "StyleMinimumSize.h"
@@ -101,7 +99,6 @@
 #include "StyleURL.h"
 #include "StyleValueTypes+CSSValueConversion.h"
 #include "TextSpacing.h"
-#include "TouchAction.h"
 #include "ViewTimeline.h"
 #include <ranges>
 #include <wtf/text/MakeString.h>
@@ -116,7 +113,6 @@ class BuilderConverter {
 public:
     template<typename T, typename... Rest> static T convertStyleType(BuilderState&, const CSSValue&, Rest&&...);
 
-    static OptionSet<TextTransform> convertTextTransform(BuilderState&, const CSSValue&);
     template<CSSValueID> static AtomString convertCustomIdentAtomOrKeyword(BuilderState&, const CSSValue&);
 
     static OptionSet<TextEmphasisPosition> convertTextEmphasisPosition(BuilderState&, const CSSValue&);
@@ -124,23 +120,13 @@ public:
     static TextAlignLast convertTextAlignLast(BuilderState&, const CSSValue&);
     static Resize convertResize(BuilderState&, const CSSValue&);
     static OptionSet<TextUnderlinePosition> convertTextUnderlinePosition(BuilderState&, const CSSValue&);
-    static OptionSet<LineBoxContain> convertLineBoxContain(BuilderState&, const CSSValue&);
-    static OptionSet<TouchAction> convertTouchAction(BuilderState&, const CSSValue&);
-
-    static StyleSelfAlignmentData convertSelfOrDefaultAlignmentData(BuilderState&, const CSSValue&);
-    static StyleContentAlignmentData convertContentAlignmentData(BuilderState&, const CSSValue&);
 
     static OptionSet<HangingPunctuation> convertHangingPunctuation(BuilderState&, const CSSValue&);
 
     static OptionSet<SpeakAs> convertSpeakAs(BuilderState&, const CSSValue&);
 
-    static OptionSet<Containment> convertContain(BuilderState&, const CSSValue&);
-
-    static OptionSet<MarginTrimType> convertMarginTrim(BuilderState&, const CSSValue&);
-
     static std::optional<ScopedName> convertPositionAnchor(BuilderState&, const CSSValue&);
     static std::optional<PositionArea> convertPositionArea(BuilderState&, const CSSValue&);
-    static OptionSet<PositionVisibility> convertPositionVisibility(BuilderState&, const CSSValue&);
 
     static NameScope convertNameScope(BuilderState&, const CSSValue&);
 
@@ -152,19 +138,6 @@ public:
 template<typename T, typename... Rest> inline T BuilderConverter::convertStyleType(BuilderState& builderState, const CSSValue& value, Rest&&... rest)
 {
     return toStyleFromCSSValue<T>(builderState, value, std::forward<Rest>(rest)...);
-}
-
-inline OptionSet<TextTransform> BuilderConverter::convertTextTransform(BuilderState&, const CSSValue& value)
-{
-    auto result = RenderStyle::initialTextTransform();
-    if (auto* list = dynamicDowncast<CSSValueList>(value)) {
-        for (auto& currentValue : *list)
-            result.add(fromCSSValue<TextTransform>(currentValue));
-    } else if (auto* primitiveValue = dynamicDowncast<CSSPrimitiveValue>(value)) {
-        if (primitiveValue->valueID() == CSSValueMathAuto)
-            result.add(TextTransform::MathAuto);
-    }
-    return result;
 }
 
 template<CSSValueID keyword> inline AtomString BuilderConverter::convertCustomIdentAtomOrKeyword(BuilderState& builderState, const CSSValue& value)
@@ -319,68 +292,6 @@ inline OptionSet<TextUnderlinePosition> BuilderConverter::convertTextUnderlinePo
     return position;
 }
 
-inline OptionSet<LineBoxContain> BuilderConverter::convertLineBoxContain(BuilderState& builderState, const CSSValue& value)
-{
-    if (RefPtr primitive = dynamicDowncast<CSSPrimitiveValue>(value)) {
-        switch (primitive->valueID()) {
-        case CSSValueNone:
-            return { };
-        case CSSValueBlock:
-            return LineBoxContain::Block;
-        case CSSValueInline:
-            return LineBoxContain::Inline;
-        case CSSValueFont:
-            return LineBoxContain::Font;
-        case CSSValueGlyphs:
-            return LineBoxContain::Glyphs;
-        case CSSValueReplaced:
-            return LineBoxContain::Replaced;
-        case CSSValueInlineBox:
-            return LineBoxContain::InlineBox;
-        case CSSValueInitialLetter:
-            return LineBoxContain::InitialLetter;
-        default:
-            builderState.setCurrentPropertyInvalidAtComputedValueTime();
-            return { };
-        }
-    }
-
-    auto list = requiredListDowncast<CSSValueList, CSSPrimitiveValue>(builderState, value);
-    if (!list)
-        return { };
-
-    OptionSet<LineBoxContain> result;
-    for (Ref primitive : *list) {
-        switch (primitive->valueID()) {
-        case CSSValueBlock:
-            result.add(LineBoxContain::Block);
-            break;
-        case CSSValueInline:
-            result.add(LineBoxContain::Inline);
-            break;
-        case CSSValueFont:
-            result.add(LineBoxContain::Font);
-            break;
-        case CSSValueGlyphs:
-            result.add(LineBoxContain::Glyphs);
-            break;
-        case CSSValueReplaced:
-            result.add(LineBoxContain::Replaced);
-            break;
-        case CSSValueInlineBox:
-            result.add(LineBoxContain::InlineBox);
-            break;
-        case CSSValueInitialLetter:
-            result.add(LineBoxContain::InitialLetter);
-            break;
-        default:
-            builderState.setCurrentPropertyInvalidAtComputedValueTime();
-            return { };
-        }
-    }
-    return result;
-}
-
 inline float zoomWithTextZoomFactor(BuilderState& builderState)
 {
     if (auto* frame = builderState.document().frame()) {
@@ -389,147 +300,6 @@ inline float zoomWithTextZoomFactor(BuilderState& builderState)
         return usedZoom * textZoomFactor;
     }
     return builderState.cssToLengthConversionData().zoom();
-}
-
-inline OptionSet<TouchAction> BuilderConverter::convertTouchAction(BuilderState&, const CSSValue& value)
-{
-    if (is<CSSPrimitiveValue>(value))
-        return fromCSSValue<TouchAction>(value);
-
-    if (auto* list = dynamicDowncast<CSSValueList>(value)) {
-        OptionSet<TouchAction> touchActions;
-        for (auto& currentValue : *list) {
-            auto valueID = currentValue.valueID();
-            if (valueID != CSSValuePanX && valueID != CSSValuePanY && valueID != CSSValuePinchZoom)
-                return RenderStyle::initialTouchActions();
-            touchActions.add(fromCSSValueID<TouchAction>(valueID));
-        }
-        return touchActions;
-    }
-
-    return RenderStyle::initialTouchActions();
-}
-
-// Get the "opposite" ItemPosition to the provided ItemPosition.
-// e.g: start -> end, end -> start, self-start -> self-end.
-// Position that doesn't have an opposite value is returned as-is.
-inline ItemPosition oppositeItemPosition(ItemPosition position)
-{
-    switch (position) {
-    case ItemPosition::Legacy:
-    case ItemPosition::Auto:
-    case ItemPosition::Normal:
-    case ItemPosition::Stretch:
-    case ItemPosition::Baseline:
-    case ItemPosition::LastBaseline:
-    case ItemPosition::Center:
-    case ItemPosition::AnchorCenter:
-        return position;
-
-    case ItemPosition::Start:
-        return ItemPosition::End;
-    case ItemPosition::End:
-        return ItemPosition::Start;
-
-    case ItemPosition::SelfStart:
-        return ItemPosition::SelfEnd;
-    case ItemPosition::SelfEnd:
-        return ItemPosition::SelfStart;
-
-    case ItemPosition::FlexStart:
-        return ItemPosition::FlexEnd;
-    case ItemPosition::FlexEnd:
-        return ItemPosition::FlexStart;
-
-    case ItemPosition::Left:
-        return ItemPosition::Right;
-    case ItemPosition::Right:
-        return ItemPosition::Left;
-    }
-
-    ASSERT_NOT_REACHED();
-    return position;
-}
-
-inline StyleSelfAlignmentData BuilderConverter::convertSelfOrDefaultAlignmentData(BuilderState& builderState, const CSSValue& value)
-{
-    auto alignmentData = RenderStyle::initialSelfAlignment();
-
-    if (value.isPair()) {
-        if (value.first().valueID() == CSSValueLegacy) {
-            alignmentData.setPositionType(ItemPositionType::Legacy);
-            alignmentData.setPosition(fromCSSValue<ItemPosition>(value.second()));
-        } else if (value.first().valueID() == CSSValueFirst)
-            alignmentData.setPosition(ItemPosition::Baseline);
-        else if (value.first().valueID() == CSSValueLast)
-            alignmentData.setPosition(ItemPosition::LastBaseline);
-        else {
-            alignmentData.setOverflow(fromCSSValue<OverflowAlignment>(value.first()));
-            alignmentData.setPosition(fromCSSValue<ItemPosition>(value.second()));
-        }
-    } else
-        alignmentData.setPosition(fromCSSValue<ItemPosition>(value));
-
-    // Flip the position according to position-try fallback, if specified.
-    if (auto positionTryFallback = builderState.positionTryFallback()) {
-        auto writingMode = builderState.style().writingMode();
-        for (auto tactic : positionTryFallback->tactics) {
-            switch (tactic) {
-            case PositionTryFallback::Tactic::FlipBlock:
-                if (builderState.cssPropertyID() == CSSPropertyAlignSelf)
-                    alignmentData.setPosition(oppositeItemPosition(alignmentData.position()));
-                break;
-            case PositionTryFallback::Tactic::FlipInline:
-                if (builderState.cssPropertyID() == CSSPropertyJustifySelf)
-                    alignmentData.setPosition(oppositeItemPosition(alignmentData.position()));
-                break;
-            case PositionTryFallback::Tactic::FlipX:
-                if (builderState.cssPropertyID() == (writingMode.isHorizontal() ? CSSPropertyJustifySelf : CSSPropertyAlignSelf))
-                    alignmentData.setPosition(oppositeItemPosition(alignmentData.position()));
-                break;
-            case PositionTryFallback::Tactic::FlipY:
-                if (builderState.cssPropertyID() == (writingMode.isHorizontal() ? CSSPropertyAlignSelf : CSSPropertyJustifySelf))
-                    alignmentData.setPosition(oppositeItemPosition(alignmentData.position()));
-                break;
-            case PositionTryFallback::Tactic::FlipStart:
-                // justify-self additionally takes left/right, align-self doesn't. When
-                // applying flip-start, justify-self gets swapped with align-self. So if
-                // we're resolving justify-self (which later gets swapped with align-self),
-                // and the position is 'left' or 'right', resolve it to self-start/self-end.
-                if (builderState.cssPropertyID() == CSSPropertyJustifySelf) {
-                    switch (alignmentData.position()) {
-                    case ItemPosition::Left:
-                        alignmentData.setPosition(writingMode.bidiDirection() == TextDirection::LTR ? ItemPosition::SelfStart : ItemPosition::SelfEnd);
-                        break;
-                    case ItemPosition::Right:
-                        alignmentData.setPosition(writingMode.bidiDirection() == TextDirection::LTR ? ItemPosition::SelfEnd : ItemPosition::SelfStart);
-                        break;
-                    default:
-                        break;
-                    }
-                }
-
-                break;
-            }
-        }
-    }
-
-    return alignmentData;
-}
-
-inline StyleContentAlignmentData BuilderConverter::convertContentAlignmentData(BuilderState&, const CSSValue& value)
-{
-    StyleContentAlignmentData alignmentData = RenderStyle::initialContentAlignment();
-    auto* contentValue = dynamicDowncast<CSSContentDistributionValue>(value);
-    if (!contentValue)
-        return alignmentData;
-    if (contentValue->distribution() != CSSValueInvalid)
-        alignmentData.setDistribution(fromCSSValueID<ContentDistribution>(contentValue->distribution()));
-    if (contentValue->position() != CSSValueInvalid)
-        alignmentData.setPosition(fromCSSValueID<ContentPosition>(contentValue->position()));
-    if (contentValue->overflow() != CSSValueInvalid)
-        alignmentData.setOverflow(fromCSSValueID<OverflowAlignment>(contentValue->overflow()));
-    return alignmentData;
 }
 
 inline OptionSet<SpeakAs> BuilderConverter::convertSpeakAs(BuilderState&, const CSSValue& value)
@@ -552,82 +322,6 @@ inline OptionSet<HangingPunctuation> BuilderConverter::convertHangingPunctuation
             result.add(fromCSSValue<HangingPunctuation>(currentValue));
     }
     return result;
-}
-
-inline OptionSet<MarginTrimType> BuilderConverter::convertMarginTrim(BuilderState&, const CSSValue& value)
-{
-    // See if value is "block" or "inline" before trying to parse a list
-    if (auto* primitiveValue = dynamicDowncast<CSSPrimitiveValue>(value)) {
-        if (primitiveValue->valueID() == CSSValueBlock)
-            return { MarginTrimType::BlockStart, MarginTrimType::BlockEnd };
-        if (primitiveValue->valueID() == CSSValueInline)
-            return { MarginTrimType::InlineStart, MarginTrimType::InlineEnd };
-    }
-    auto list = dynamicDowncast<CSSValueList>(value);
-    if (!list || !list->size())
-        return RenderStyle::initialMarginTrim();
-    OptionSet<MarginTrimType> marginTrim;
-    for (auto& item : *list) {
-        if (item.valueID() == CSSValueBlock)
-            marginTrim.add({ MarginTrimType::BlockStart, MarginTrimType::BlockEnd });
-        if (item.valueID() == CSSValueInline)
-            marginTrim.add({ MarginTrimType::InlineStart, MarginTrimType::InlineEnd });
-    }
-    if (!marginTrim.isEmpty())
-        return marginTrim;
-    for (auto& item : *list) {
-        if (item.valueID() == CSSValueBlockStart)
-            marginTrim.add(MarginTrimType::BlockStart);
-        if (item.valueID() == CSSValueBlockEnd)
-            marginTrim.add(MarginTrimType::BlockEnd);
-        if (item.valueID() == CSSValueInlineStart)
-            marginTrim.add(MarginTrimType::InlineStart);
-        if (item.valueID() == CSSValueInlineEnd)
-            marginTrim.add(MarginTrimType::InlineEnd);
-    }
-    ASSERT(list->size() <= 4);
-    return marginTrim;
-}
-
-inline OptionSet<Containment> BuilderConverter::convertContain(BuilderState& builderState, const CSSValue& value)
-{
-    if (is<CSSPrimitiveValue>(value)) {
-        if (value.valueID() == CSSValueNone)
-            return RenderStyle::initialContainment();
-        if (value.valueID() == CSSValueStrict)
-            return RenderStyle::strictContainment();
-        return RenderStyle::contentContainment();
-    }
-
-    OptionSet<Containment> containment;
-
-    auto list = requiredListDowncast<CSSValueList, CSSPrimitiveValue>(builderState, value);
-    if (!list)
-        return { };
-
-    for (auto& value : *list) {
-        switch (value.valueID()) {
-        case CSSValueSize:
-            containment.add(Containment::Size);
-            break;
-        case CSSValueInlineSize:
-            containment.add(Containment::InlineSize);
-            break;
-        case CSSValueLayout:
-            containment.add(Containment::Layout);
-            break;
-        case CSSValuePaint:
-            containment.add(Containment::Paint);
-            break;
-        case CSSValueStyle:
-            containment.add(Containment::Style);
-            break;
-        default:
-            ASSERT_NOT_REACHED();
-            break;
-        };
-    }
-    return containment;
 }
 
 inline std::optional<ScopedName> BuilderConverter::convertPositionAnchor(BuilderState& builderState, const CSSValue& value)
@@ -994,23 +688,6 @@ inline std::optional<PositionArea> BuilderConverter::convertPositionArea(Builder
     }
 
     return area;
-}
-
-inline OptionSet<PositionVisibility> BuilderConverter::convertPositionVisibility(BuilderState& builderState, const CSSValue& value)
-{
-    if (value.valueID() == CSSValueAlways)
-        return { };
-
-    auto maybeList = requiredListDowncast<CSSValueList, CSSPrimitiveValue>(builderState, value);
-    if (!maybeList)
-        return { };
-    auto list = *maybeList;
-
-    OptionSet<PositionVisibility> result;
-    for (const auto& value : list)
-        result.add(fromCSSValue<PositionVisibility>(value));
-
-    return result;
 }
 
 inline NameScope BuilderConverter::convertNameScope(BuilderState& builderState, const CSSValue& value)

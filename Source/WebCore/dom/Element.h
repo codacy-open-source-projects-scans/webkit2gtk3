@@ -130,6 +130,7 @@ enum class CommandType: uint8_t {
     RequestClose,
 };
 
+struct AriaNotifyOptions;
 struct CheckVisibilityOptions;
 struct FocusEventData;
 struct FullscreenOptions;
@@ -247,6 +248,9 @@ public:
     const AtomString& ariaRequired() const;
     const AtomString& ariaSelected() const;
     const AtomString& ariaSort() const;
+
+    WEBCORE_EXPORT void ariaNotify(const String&);
+    WEBCORE_EXPORT void ariaNotify(const String&, const AriaNotifyOptions&);
 
 #if DUMP_NODE_STATISTICS
     bool hasNamedNodeMap() const;
@@ -403,14 +407,14 @@ public:
     // For exposing to DOM only.
     WEBCORE_EXPORT NamedNodeMap& attributesMap() const;
 
-    enum class AttributeModificationReason : uint8_t { Directly, ByCloning, Parser };
+    enum class AttributeModificationReason : uint8_t { Directly, ByCloning, Parser, ParserFastPath };
     // This function is called whenever an attribute is added, changed or removed.
     // Do not call this function directly. notifyAttributeChanged() should be used instead
     // in order to update state dependent on attribute changes.
     virtual void attributeChanged(const QualifiedName&, const AtomString& oldValue, const AtomString& newValue, AttributeModificationReason = AttributeModificationReason::Directly);
 
     // Only called by the parser immediately after element construction.
-    void parserSetAttributes(std::span<const Attribute>);
+    void parserSetAttributes(std::span<const Attribute>, AttributeModificationReason = AttributeModificationReason::Parser);
 
     bool isEventHandlerAttribute(const Attribute&) const;
     virtual FormListedElement* asFormListedElement();

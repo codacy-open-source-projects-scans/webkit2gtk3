@@ -58,6 +58,7 @@
 #include "AccessibilitySpinButton.h"
 #include "AccessibilityTableColumn.h"
 #include "AccessibilityTableHeaderContainer.h"
+#include "AriaNotifyOptions.h"
 #include "CaretRectComputation.h"
 #include "ContainerNodeInlines.h"
 #include "CustomElementDefaultARIA.h"
@@ -213,6 +214,7 @@ std::atomic<bool> AXObjectCache::gAccessibilityThreadTextApisEnabled = false;
 std::atomic<bool> AXObjectCache::gForceInitialFrameCaching = false;
 #if PLATFORM(COCOA)
 std::atomic<bool> AXObjectCache::gAccessibilityDOMIdentifiersEnabled = false;
+std::atomic<bool> AXObjectCache::gShouldRepostNotificationsForTests = false;
 #endif
 
 bool AXObjectCache::accessibilityEnhancedUserInterfaceEnabled()
@@ -1598,6 +1600,13 @@ void AXObjectCache::notificationPostTimerFired()
         postPlatformNotification(note.first, note.second);
 }
 
+#if PLATFORM(COCOA)
+void AXObjectCache::setShouldRepostNotificationsForTests(bool value)
+{
+    gShouldRepostNotificationsForTests = value;
+}
+#endif
+
 void AXObjectCache::postNotification(RenderObject* renderer, AXNotification notification, PostTarget postTarget)
 {
     if (!renderer)
@@ -1687,6 +1696,42 @@ void AXObjectCache::postNotification(AccessibilityObject& object, AXNotification
     m_notificationsToPost.append(std::make_pair(Ref { object }, notification));
     if (!m_notificationPostTimer.isActive())
         m_notificationPostTimer.startOneShot(0_s);
+}
+
+void AXObjectCache::postARIANotifyNotification(Node& node, const String& announcement, const AriaNotifyOptions& options)
+{
+    RefPtr object = getOrCreate(node);
+    if (!object)
+        return;
+
+    auto priority = NotifyPriority::Normal;
+    if (options.priority) {
+        switch (*options.priority) {
+        case AriaNotifyOptions::NotificationPriority::Normal:
+            priority = NotifyPriority::Normal;
+            break;
+        case AriaNotifyOptions::NotificationPriority::High:
+            priority = NotifyPriority::High;
+            break;
+        }
+    }
+
+    auto interruptBehavior = InterruptBehavior::None;
+    if (options.interrupt) {
+        switch (*options.interrupt) {
+        case AriaNotifyOptions::NotificationInterrupt::None:
+            interruptBehavior = InterruptBehavior::None;
+            break;
+        case AriaNotifyOptions::NotificationInterrupt::All:
+            interruptBehavior = InterruptBehavior::All;
+            break;
+        case AriaNotifyOptions::NotificationInterrupt::Pending:
+            interruptBehavior = InterruptBehavior::Pending;
+            break;
+        }
+    }
+
+    postPlatformARIANotifyNotification(announcement, priority, interruptBehavior, object->languageIncludingAncestors());
 }
 
 void AXObjectCache::checkedStateChanged(Element& element)
@@ -2729,7 +2774,8 @@ void AXObjectCache::handleActiveDescendantChange(Element& element, const AtomStr
     AXTRACE("AXObjectCache::handleActiveDescendantChange"_s);
 
     // Use the element's document instead of the cache's document in case we're inside a frame that's managing focus.
-    if (!element.document().frame()->selection().isFocusedAndActive())
+    RefPtr frame = element.document().frame();
+    if (!frame || !frame->selection().isFocusedAndActive())
         return;
 
     RefPtr object = getOrCreate(element);

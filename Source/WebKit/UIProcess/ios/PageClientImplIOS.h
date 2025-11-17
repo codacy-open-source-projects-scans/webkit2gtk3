@@ -95,6 +95,7 @@ private:
 #endif // ENABLE(MODEL_PROCESS)
 #if USE(EXTENSIONKIT)
     UIView *createVisibilityPropagationView() override;
+    void removeVisibilityPropagationView(UIView *) override;
 #endif
 #endif // HAVE(VISIBILITY_PROPAGATION_VIEW)
 
@@ -132,6 +133,7 @@ private:
     WebCore::IntPoint accessibilityScreenToRootView(const WebCore::IntPoint&) override;
     WebCore::IntRect rootViewToAccessibilityScreen(const WebCore::IntRect&) override;
     void relayAccessibilityNotification(String&&, RetainPtr<NSData>&&) override;
+    void relayAriaNotifyNotification(const WebCore::AriaNotifyData&) override;
     void doneWithKeyEvent(const NativeWebKeyboardEvent&, bool wasEventHandled) override;
 #if ENABLE(TOUCH_EVENTS)
     void doneWithTouchEvent(const WebTouchEvent&, bool wasEventHandled) override;
@@ -370,7 +372,7 @@ private:
 #endif
 
 #if HAVE(SPATIAL_TRACKING_LABEL)
-    const String& spatialTrackingLabel() const final;
+    String spatialTrackingLabel() const final;
 #endif
 
     void scheduleVisibleContentRectUpdate() final;

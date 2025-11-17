@@ -153,7 +153,7 @@ void RenderGrid::styleDidChange(StyleDifference diff, const RenderStyle* oldStyl
             gridItem.setChildNeedsLayout();
     }
 
-    if (oldStyle->resolvedAlignItems(selfAlignmentNormalBehavior(this)).position() == ItemPosition::Stretch) {
+    if (oldStyle->alignItems().resolve(selfAlignmentNormalBehavior(this)).position() == ItemPosition::Stretch) {
         // Style changes on the grid container implying stretching (to-stretch) or
         // shrinking (from-stretch) require the affected items to be laid out again.
         // These logic only applies to 'stretch' since the rest of the alignment
@@ -1781,10 +1781,15 @@ StyleSelfAlignmentData RenderGrid::alignSelfForGridItem(const RenderBox& gridIte
     CheckedPtr renderGrid = dynamicDowncast<RenderGrid>(gridItem);
     if (renderGrid && renderGrid->isSubgridInParentDirection(Style::GridTrackSizingDirection::Rows))
         return { ItemPosition::Stretch, OverflowAlignment::Default };
+
+    auto normalBehavior = stretchingMode == StretchingMode::Any ? selfAlignmentNormalBehavior(&gridItem) : ItemPosition::Normal;
+
+    if (!gridItem.style().alignSelf().isAuto())
+        return gridItem.style().alignSelf().resolve(normalBehavior);
+
     if (!gridStyle)
         gridStyle = &style();
-    auto normalBehavior = stretchingMode == StretchingMode::Any ? selfAlignmentNormalBehavior(&gridItem) : ItemPosition::Normal;
-    return gridItem.style().resolvedAlignSelf(gridStyle, normalBehavior);
+    return gridStyle->alignItems().resolve(normalBehavior);
 }
 
 StyleSelfAlignmentData RenderGrid::justifySelfForGridItem(const RenderBox& gridItem, StretchingMode stretchingMode, const RenderStyle* gridStyle) const
@@ -1792,10 +1797,15 @@ StyleSelfAlignmentData RenderGrid::justifySelfForGridItem(const RenderBox& gridI
     CheckedPtr renderGrid = dynamicDowncast<RenderGrid>(gridItem);
     if (renderGrid && renderGrid->isSubgridInParentDirection(Style::GridTrackSizingDirection::Columns))
         return { ItemPosition::Stretch, OverflowAlignment::Default };
+
+    auto normalBehavior = stretchingMode == StretchingMode::Any ? selfAlignmentNormalBehavior(&gridItem) : ItemPosition::Normal;
+
+    if (!gridItem.style().justifySelf().isAuto())
+        return gridItem.style().justifySelf().resolve(normalBehavior);
+
     if (!gridStyle)
         gridStyle = &style();
-    auto normalBehavior = stretchingMode == StretchingMode::Any ? selfAlignmentNormalBehavior(&gridItem) : ItemPosition::Normal;
-    return gridItem.style().resolvedJustifySelf(gridStyle, normalBehavior);
+    return gridStyle->justifyItems().resolve(normalBehavior);
 }
 
 bool RenderGrid::aspectRatioPrefersInline(const RenderBox& gridItem, bool blockFlowIsColumnAxis)
@@ -1881,19 +1891,19 @@ void RenderGrid::applySubgridStretchAlignmentToGridItemIfNeeded(RenderBox& gridI
     }
 }
 
-bool RenderGrid::isChildEligibleForMarginTrim(MarginTrimType marginTrimType, const RenderBox& gridItem) const
+bool RenderGrid::isChildEligibleForMarginTrim(Style::MarginTrimSide marginTrimSide, const RenderBox& gridItem) const
 {
-    ASSERT(style().marginTrim().contains(marginTrimType));
+    ASSERT(style().marginTrim().contains(marginTrimSide));
 
-    auto isTrimmingBlockDirection = marginTrimType == MarginTrimType::BlockStart || marginTrimType == MarginTrimType::BlockEnd;
+    auto isTrimmingBlockDirection = marginTrimSide == Style::MarginTrimSide::BlockStart || marginTrimSide == Style::MarginTrimSide::BlockEnd;
     auto itemGridSpan = isTrimmingBlockDirection ? currentGrid().gridItemSpanIgnoringCollapsedTracks(gridItem, Style::GridTrackSizingDirection::Rows) : currentGrid().gridItemSpanIgnoringCollapsedTracks(gridItem, Style::GridTrackSizingDirection::Columns);
-    switch (marginTrimType) {
-    case MarginTrimType::BlockStart:
-    case MarginTrimType::InlineStart:
+    switch (marginTrimSide) {
+    case Style::MarginTrimSide::BlockStart:
+    case Style::MarginTrimSide::InlineStart:
         return !itemGridSpan.startLine();
-    case MarginTrimType::BlockEnd:
+    case Style::MarginTrimSide::BlockEnd:
         return itemGridSpan.endLine() == currentGrid().numTracks(Style::GridTrackSizingDirection::Rows);
-    case MarginTrimType::InlineEnd:
+    case Style::MarginTrimSide::InlineEnd:
         return itemGridSpan.endLine() == currentGrid().numTracks(Style::GridTrackSizingDirection::Columns);
     }
     ASSERT_NOT_REACHED();
@@ -2320,7 +2330,9 @@ std::pair<OverflowAlignment, ContentPosition> static resolveContentDistributionF
 
 StyleContentAlignmentData RenderGrid::contentAlignment(Style::GridTrackSizingDirection direction) const
 {
-    return direction == Style::GridTrackSizingDirection::Columns ? style().resolvedJustifyContent(contentAlignmentNormalBehaviorGrid()) : style().resolvedAlignContent(contentAlignmentNormalBehaviorGrid());
+    return direction == Style::GridTrackSizingDirection::Columns
+        ? style().justifyContent().resolve(contentAlignmentNormalBehaviorGrid())
+        : style().alignContent().resolve(contentAlignmentNormalBehaviorGrid());
 }
 
 ContentAlignmentData RenderGrid::computeContentPositionAndDistributionOffset(Style::GridTrackSizingDirection direction, const LayoutUnit& availableFreeSpace, unsigned numberOfGridTracks) const

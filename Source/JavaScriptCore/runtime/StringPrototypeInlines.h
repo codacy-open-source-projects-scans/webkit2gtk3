@@ -25,7 +25,7 @@
 
 #pragma once
 
-#include "CachedCall.h"
+#include "CachedCallInlines.h"
 #include "ExceptionHelpers.h"
 #include "JSCellButterfly.h"
 #include "ObjectConstructor.h"
@@ -1117,6 +1117,7 @@ static ALWAYS_INLINE JSString* tryTrimSpaces(VM& vm, JSGlobalObject* globalObjec
     case Yarr::SpecificPattern::TrailingSpacesStar:
     case Yarr::SpecificPattern::LeadingSpacesStar:
     case Yarr::SpecificPattern::Atom:
+    case Yarr::SpecificPattern::Newlines:
     case Yarr::SpecificPattern::None:
         break;
     }
@@ -1300,6 +1301,7 @@ ALWAYS_INLINE JSString* replaceUsingRegExpSearch(VM& vm, JSGlobalObject* globalO
             break;
         }
         case Yarr::SpecificPattern::Atom:
+        case Yarr::SpecificPattern::Newlines:
         case Yarr::SpecificPattern::None:
             break;
         }

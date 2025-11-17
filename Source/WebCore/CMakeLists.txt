@@ -232,6 +232,7 @@ set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/style/values/non-standard"
     "${WEBCORE_DIR}/style/values/overflow"
     "${WEBCORE_DIR}/style/values/page"
+    "${WEBCORE_DIR}/style/values/pointerevents"
     "${WEBCORE_DIR}/style/values/position"
     "${WEBCORE_DIR}/style/values/primitives"
     "${WEBCORE_DIR}/style/values/rhythm"
@@ -1136,6 +1137,7 @@ set(WebCore_NON_SVG_IDL_FILES
     dom/AbortSignal.idl
     dom/AbstractRange.idl
     dom/AddEventListenerOptions.idl
+    dom/AriaNotifyOptions.idl
     dom/Attr.idl
     dom/BeforeUnloadEvent.idl
     dom/BroadcastChannel.idl

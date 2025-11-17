@@ -88,6 +88,8 @@ enum class ViewStabilityFlag : uint8_t;
 - (void)didInterruptScrolling;
 - (void)didZoomToScale:(CGFloat)scale;
 - (void)willStartZoomOrScroll;
+
+- (CGFloat)intrinsicDeviceScaleFactor;
 - (BOOL)screenIsBeingCaptured;
 
 - (void)_webViewDestroyed;
@@ -116,6 +118,7 @@ enum class ViewStabilityFlag : uint8_t;
 #endif // ENABLE(MODEL_PROCESS)
 #if USE(EXTENSIONKIT)
 - (UIView *)_createVisibilityPropagationView;
+- (void)_removeVisibilityPropagationView:(UIView *)view;
 #endif
 #endif // HAVE(VISIBILITY_PROPAGATION_VIEW)
 

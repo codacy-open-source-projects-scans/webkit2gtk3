@@ -2613,6 +2613,9 @@ header: <WebCore/SearchPopupMenu.h>
     Mousemove,
     Mouseup,
     Mousewheel,
+    Gesturechange,
+    Gestureend,
+    Gesturestart,
     Pointerdown,
     Pointerenter,
     Pointerleave,
@@ -4569,7 +4572,8 @@ enum class WebCore::MediaPlayerMediaEngineIdentifier : uint8_t {
     HolePunch,
     MediaFoundation,
     MockMSE,
-    CocoaWebM
+    CocoaWebM,
+    WirelessPlayback
 };
 
 enum class WebCore::MediaPlayerWirelessPlaybackTargetType : uint8_t {
@@ -6714,6 +6718,13 @@ header: <WebCore/TextExtractionTypes.h>
 };
 
 header: <WebCore/TextExtractionTypes.h>
+[CustomHeader] enum class WebCore::TextExtraction::NodeIdentifierInclusion : uint8_t {
+    None,
+    EditableOnly,
+    Interactive,
+};
+
+header: <WebCore/TextExtractionTypes.h>
 [CustomHeader] struct WebCore::TextExtraction::Interaction {
     WebCore::TextExtraction::Action action;
     String text;
@@ -6742,7 +6753,7 @@ header: <WebCore/TextExtractionTypes.h>
     std::optional<WebCore::JSHandleIdentifier> targetNodeHandleIdentifier;
     bool mergeParagraphs;
     bool skipNearlyTransparentContent;
-    bool includeNodeIdentifiers;
+    WebCore::TextExtraction::NodeIdentifierInclusion nodeIdentifierInclusion;
     bool includeEventListeners;
     bool includeAccessibilityAttributes;
     bool includeTextInAutoFilledControls;
@@ -6815,6 +6826,8 @@ header: <WebCore/TextExtractionTypes.h>
     Nav,
     Button,
     Canvas,
+    Subscript,
+    Superscript,
     Generic
 };
 
@@ -6832,6 +6845,7 @@ header: <WebCore/TextExtractionTypes.h>
     Variant<WebCore::TextExtraction::ContainerType, WebCore::TextExtraction::TextItemData, WebCore::TextExtraction::ScrollableItemData, WebCore::TextExtraction::ImageItemData, WebCore::TextExtraction::SelectData, WebCore::TextExtraction::ContentEditableData, WebCore::TextExtraction::TextFormControlData, WebCore::TextExtraction::LinkItemData> data;
     WebCore::FloatRect rectInRootView;
     Vector<WebCore::TextExtraction::Item> children;
+    String nodeName;
     std::optional<WebCore::NodeIdentifier> nodeIdentifier;
     OptionSet<WebCore::TextExtraction::EventListenerCategory> eventListeners;
     HashMap<String, String> ariaAttributes;
@@ -8934,6 +8948,19 @@ struct WebCore::FocusEventData {
 }
 
 header: <WebCore/AXObjectCache.h>
+[CustomHeader] enum class WebCore::NotifyPriority : uint8_t {
+    Normal,
+    High
+};
+
+header: <WebCore/AXObjectCache.h>
+[CustomHeader] enum class WebCore::InterruptBehavior : uint8_t {
+    None,
+    All,
+    Pending
+};
+
+header: <WebCore/AXObjectCache.h>
 [CustomHeader] struct WebCore::AXDebugInfo {
     bool isAccessibilityEnabled;
     bool isAccessibilityThreadInitialized;
@@ -8941,7 +8968,15 @@ header: <WebCore/AXObjectCache.h>
     String isolatedTree;
     uint64_t remoteTokenHash;
     uint64_t webProcessLocalTokenHash;
-}
+};
+
+header: <WebCore/AXObjectCache.h>
+[CustomHeader] struct WebCore::AriaNotifyData {
+    String message;
+    WebCore::NotifyPriority priority;
+    WebCore::InterruptBehavior interrupt;
+    String language;
+};
 
 header: <WebCore/ScriptTrackingPrivacyCategory.h>
 [OptionSet] enum class WebCore::ScriptTrackingPrivacyFlag : uint16_t {

@@ -301,24 +301,13 @@ void WebPageProxy::beginSafeBrowsingCheck(const URL& url, API::Navigation& navig
 }
 
 #if ENABLE(CONTENT_FILTERING)
-void WebPageProxy::contentFilterDidBlockLoadForFrame(IPC::Connection& connection, const WebCore::ContentFilterUnblockHandler& unblockHandler, FrameIdentifier frameID)
+void WebPageProxy::contentFilterDidBlockLoadForFrame(const WebCore::ContentFilterUnblockHandler& unblockHandler, FrameIdentifier frameID)
 {
-    contentFilterDidBlockLoadForFrameShared(connection, unblockHandler, frameID);
+    contentFilterDidBlockLoadForFrameShared(unblockHandler, frameID);
 }
 
-void WebPageProxy::contentFilterDidBlockLoadForFrameShared(IPC::Connection& connection, const WebCore::ContentFilterUnblockHandler& unblockHandler, FrameIdentifier frameID)
+void WebPageProxy::contentFilterDidBlockLoadForFrameShared(const WebCore::ContentFilterUnblockHandler& unblockHandler, FrameIdentifier frameID)
 {
-#if HAVE(PARENTAL_CONTROLS_WITH_UNBLOCK_HANDLER)
-    bool usesWebContentRestrictions = false;
-#if HAVE(WEBCONTENTRESTRICTIONS)
-    usesWebContentRestrictions = protectedPreferences()->usesWebContentRestrictionsForFilter();
-#endif
-    if (usesWebContentRestrictions)
-        MESSAGE_CHECK(!unblockHandler.webFilterEvaluator(), connection);
-#else
-    UNUSED_PARAM(connection);
-#endif
-
     if (RefPtr frame = WebFrameProxy::webFrame(frameID))
         frame->contentFilterDidBlockLoad(unblockHandler);
 }
@@ -1525,23 +1514,26 @@ void WebPageProxy::createTextIndicatorForElementWithID(const String& elementID, 
     protectedLegacyMainFrameProcess()->sendWithAsyncReply(Messages::WebPage::CreateTextIndicatorForElementWithID(elementID), WTFMove(completionHandler), webPageIDInMainFrameProcess());
 }
 
-void WebPageProxy::setTextIndicatorFromFrame(FrameIdentifier frameID, const WebCore::TextIndicatorData& indicatorData, WebCore::TextIndicatorLifetime lifetime)
+void WebPageProxy::setTextIndicatorFromFrame(FrameIdentifier frameID, const RefPtr<WebCore::TextIndicator>&& textIndicator, WebCore::TextIndicatorLifetime lifetime)
 {
     RefPtr frame = WebFrameProxy::webFrame(frameID);
     if (!frame)
         return;
 
-    auto rect = indicatorData.textBoundingRectInRootViewCoordinates;
-    convertRectToMainFrameCoordinates(rect, frame->rootFrame().frameID(), [weakThis = WeakPtr { *this }, indicatorData = indicatorData, lifetime](std::optional<FloatRect> convertedRect) mutable {
+    if (!textIndicator)
+        return;
+
+    auto rect = textIndicator->textBoundingRectInRootViewCoordinates();
+    convertRectToMainFrameCoordinates(rect, frame->rootFrame().frameID(), [weakThis = WeakPtr { *this }, textIndicator = WTFMove(textIndicator), lifetime] (std::optional<FloatRect> convertedRect) mutable {
         RefPtr protectedThis = weakThis.get();
         if (!protectedThis || !convertedRect)
             return;
-        indicatorData.textBoundingRectInRootViewCoordinates = *convertedRect;
-        protectedThis->setTextIndicator(WTFMove(indicatorData), lifetime);
+        textIndicator->setTextBoundingRectInRootViewCoordinates(*convertedRect);
+        protectedThis->setTextIndicator(WTFMove(textIndicator), lifetime);
     });
 }
 
-void WebPageProxy::setTextIndicator(const WebCore::TextIndicatorData& indicatorData, WebCore::TextIndicatorLifetime lifetime)
+void WebPageProxy::setTextIndicator(RefPtr<WebCore::TextIndicator>&& textIndicator, WebCore::TextIndicatorLifetime lifetime)
 {
     RefPtr pageClient = this->pageClient();
     if (!pageClient)
@@ -1552,7 +1544,7 @@ void WebPageProxy::setTextIndicator(const WebCore::TextIndicatorData& indicatorD
     teardownTextIndicatorLayer();
     m_textIndicatorFadeTimer.stop();
 
-    m_textIndicator = TextIndicator::create(indicatorData);
+    m_textIndicator = textIndicator;
 
     CGRect frame = m_textIndicator->textBoundingRectInRootViewCoordinates();
     m_textIndicatorLayer = adoptNS([[WebTextIndicatorLayer alloc] initWithFrame:frame
@@ -1571,6 +1563,9 @@ void WebPageProxy::updateTextIndicatorFromFrame(FrameIdentifier frameID, RefPtr<
 {
     RefPtr frame = WebFrameProxy::webFrame(frameID);
     if (!frame)
+        return;
+
+    if (!textIndicator)
         return;
 
     auto rect = textIndicator->textBoundingRectInRootViewCoordinates();

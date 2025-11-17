@@ -101,6 +101,7 @@
 		466D69112BA4E433005D43F4 /* SpanCocoa.h in Headers */ = {isa = PBXBuildFile; fileRef = 466D69102BA4E433005D43F4 /* SpanCocoa.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		466E7A7A2D66E57E0096FDA4 /* AlignedStorage.h in Headers */ = {isa = PBXBuildFile; fileRef = 466E7A792D66E57E0096FDA4 /* AlignedStorage.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		467DCD532CD4689A0040C644 /* UnicodeExtras.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 467DCD522CD4689A0040C644 /* UnicodeExtras.cpp */; };
+		468378C62EC2D84200A9257A /* BOMSPI.h in Headers */ = {isa = PBXBuildFile; fileRef = 468378C52EC2D84200A9257A /* BOMSPI.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		468742F12D7F8A0100F4BE74 /* FileHandle.h in Headers */ = {isa = PBXBuildFile; fileRef = 468742EF2D7F8A0100F4BE74 /* FileHandle.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		468742F22D7F8A0100F4BE74 /* FileHandle.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 468742F02D7F8A0100F4BE74 /* FileHandle.cpp */; };
 		468EAFD42D5B1E37005069CF /* SocketPOSIX.h in Headers */ = {isa = PBXBuildFile; fileRef = 468EAFD32D5B1E37005069CF /* SocketPOSIX.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -108,6 +109,7 @@
 		46A6D0DA2D8A168400FC76C8 /* MappedFileData.h in Headers */ = {isa = PBXBuildFile; fileRef = 46A6D0D72D8A168400FC76C8 /* MappedFileData.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		46B0FB5D2D24BFBA0012184C /* ParsingUtilities.h in Headers */ = {isa = PBXBuildFile; fileRef = 46B0FB5C2D24BFBA0012184C /* ParsingUtilities.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		46B4C53C2D4F2D0A00BAA3FE /* NSStringExtras.h in Headers */ = {isa = PBXBuildFile; fileRef = 46B4C53B2D4F2D0A00BAA3FE /* NSStringExtras.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		46BD41CA2EC723B2002ED70B /* XPCObjectPtr.h in Headers */ = {isa = PBXBuildFile; fileRef = 46BD41C92EC723B2002ED70B /* XPCObjectPtr.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		46BEB6EB22FFE24900269867 /* RefCounted.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 46BEB6E922FFDDD500269867 /* RefCounted.cpp */; };
 		46BEB6EB22FFE24900269868 /* RefTrackerMixin.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 46BEB6E922FFDDD500269868 /* RefTrackerMixin.cpp */; };
 		46CA183A2D83C17A00B68573 /* FileHandlePOSIX.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 46CA18392D83C17A00B68573 /* FileHandlePOSIX.cpp */; };
@@ -1308,6 +1310,7 @@
 		466D69102BA4E433005D43F4 /* SpanCocoa.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SpanCocoa.h; sourceTree = "<group>"; };
 		466E7A792D66E57E0096FDA4 /* AlignedStorage.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AlignedStorage.h; sourceTree = "<group>"; };
 		467DCD522CD4689A0040C644 /* UnicodeExtras.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = UnicodeExtras.cpp; sourceTree = "<group>"; };
+		468378C52EC2D84200A9257A /* BOMSPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BOMSPI.h; sourceTree = "<group>"; };
 		468742EF2D7F8A0100F4BE74 /* FileHandle.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FileHandle.h; sourceTree = "<group>"; };
 		468742F02D7F8A0100F4BE74 /* FileHandle.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = FileHandle.cpp; sourceTree = "<group>"; };
 		468EAFD32D5B1E37005069CF /* SocketPOSIX.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SocketPOSIX.h; sourceTree = "<group>"; };
@@ -1316,6 +1319,7 @@
 		46B0FB5C2D24BFBA0012184C /* ParsingUtilities.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ParsingUtilities.h; sourceTree = "<group>"; };
 		46B4C53B2D4F2D0A00BAA3FE /* NSStringExtras.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NSStringExtras.h; sourceTree = "<group>"; };
 		46BA9EAB1F4CD61E009A2BBC /* CompletionHandler.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CompletionHandler.h; sourceTree = "<group>"; };
+		46BD41C92EC723B2002ED70B /* XPCObjectPtr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = XPCObjectPtr.h; sourceTree = "<group>"; };
 		46BEB6E922FFDDD500269867 /* RefCounted.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = RefCounted.cpp; sourceTree = "<group>"; };
 		46BEB6E922FFDDD500269868 /* RefTrackerMixin.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = RefTrackerMixin.cpp; sourceTree = "<group>"; };
 		46BEB6E922FFDDD50026DEAD /* RefTrackerMixin.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = RefTrackerMixin.h; sourceTree = "<group>"; };
@@ -2162,6 +2166,7 @@
 				53FC70CF23FB950C005B1990 /* OSLogPrintStream.mm */,
 				37C7CC291EA40A73007BD956 /* WeakLinking.h */,
 				44235FF62D76448F00F4A6CB /* XPCExtras.h */,
+				46BD41C92EC723B2002ED70B /* XPCObjectPtr.h */,
 			);
 			path = darwin;
 			sourceTree = "<group>";
@@ -3223,6 +3228,7 @@
 		DDF306C627C08654006A526F /* cocoa */ = {
 			isa = PBXGroup;
 			children = (
+				468378C52EC2D84200A9257A /* BOMSPI.h */,
 				DDF306CA27C08654006A526F /* CFXPCBridgeSPI.h */,
 				DDF306C727C08654006A526F /* CrashReporterClientSPI.h */,
 				1C08E3662985D7D300CAE594 /* IOReturnSPI.h */,
@@ -3430,6 +3436,7 @@
 				DD3DC95927A4BF8E007E5B61 /* BlockObjCExceptions.h in Headers */,
 				DD3DC98527A4BF8E007E5B61 /* BlockPtr.h in Headers */,
 				DD3DC97427A4BF8E007E5B61 /* BloomFilter.h in Headers */,
+				468378C62EC2D84200A9257A /* BOMSPI.h in Headers */,
 				DD3DC90E27A4BF8E007E5B61 /* BooleanLattice.h in Headers */,
 				DD3DC91B27A4BF8E007E5B61 /* Box.h in Headers */,
 				DD3DC92927A4BF8E007E5B61 /* BoxPtr.h in Headers */,
@@ -3950,6 +3957,7 @@
 				FFE39CB02B1D7472004972B0 /* wuint.h in Headers */,
 				FF41AC672A79C9BA00AC0FA5 /* WYHash.h in Headers */,
 				44235FF72D76449300F4A6CB /* XPCExtras.h in Headers */,
+				46BD41CA2EC723B2002ED70B /* XPCObjectPtr.h in Headers */,
 				DDF306EA27C08654006A526F /* XPCSPI.h in Headers */,
 				E32B4F3D2E0C698F00BDA4FD /* XTSPI.h in Headers */,
 				145DE2882CE95CE700F9F1D2 /* ZippedRange.h in Headers */,

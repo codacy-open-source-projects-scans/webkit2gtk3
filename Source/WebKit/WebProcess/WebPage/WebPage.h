@@ -280,6 +280,7 @@ enum class PaginationMode : uint8_t;
 
 struct AXDebugInfo;
 struct AppHighlight;
+struct AriaNotifyData;
 struct AttributedString;
 struct BackForwardItemIdentifierType;
 struct CharacterRange;
@@ -793,7 +794,7 @@ public:
 
     void replaceStringMatchesFromInjectedBundle(const Vector<uint32_t>& matchIndices, const String& replacementText, bool selectionOnly);
 
-    void setTextIndicator(const WebCore::TextIndicatorData&);
+    void setTextIndicator(RefPtr<WebCore::TextIndicator>&&);
     void updateTextIndicator(RefPtr<WebCore::TextIndicator>&&);
 
     WebFrame& mainWebFrame() const { return m_mainFrame; }
@@ -986,6 +987,7 @@ public:
     WebCore::IntRect rootViewToAccessibilityScreen(const WebCore::IntRect&);
 #if PLATFORM(IOS_FAMILY)
     void relayAccessibilityNotification(String&&, RetainPtr<NSData>&&);
+    void relayAriaNotifyNotification(WebCore::AriaNotifyData&&);
 #endif
 
     RefPtr<WebImage> scaledSnapshotWithOptions(const WebCore::IntRect&, double additionalScaleFactor, SnapshotOptions);
@@ -2057,8 +2059,6 @@ public:
     void setFramePrinting(WebCore::FrameIdentifier, bool printing, WebCore::FloatSize pageSize, WebCore::FloatSize originalPageSize, float maximumShrinkRatio, WebCore::AdjustViewSize shouldAdjustViewSize);
 
     WebHistoryItemClient& historyItemClient() const { return m_historyItemClient.get(); }
-
-    const String& overrideReferrerForAllRequests() const { return m_overrideReferrerForAllRequests; }
 
     bool isAlwaysOnLoggingAllowed() const;
 
@@ -3165,7 +3165,6 @@ private:
     bool m_textManipulationIncludesSubframes { false };
 
     Vector<String> m_corsDisablingPatterns;
-    const String m_overrideReferrerForAllRequests;
 
     std::unique_ptr<WebCore::CachedPage> m_cachedPage;
 

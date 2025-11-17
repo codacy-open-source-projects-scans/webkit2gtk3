@@ -55,6 +55,8 @@
 #include "StyleResolver.h"
 #include "StyleScaleTransformFunction.h"
 #include "StyleSelfAlignmentData.h"
+#include "StyleTextDecorationLine.h"
+#include "StyleTextTransform.h"
 #include "StyleTreeResolver.h"
 #include "TransformOperationData.h"
 #include <algorithm>
@@ -82,7 +84,6 @@ namespace WebCore {
 struct SameSizeAsBorderValue {
     Style::Color m_color;
     float m_width;
-    bool m_isKeyword;
     int m_restBits;
 };
 
@@ -109,7 +110,7 @@ static_assert(sizeof(RenderStyle) == sizeof(SameSizeAsRenderStyle), "RenderStyle
 
 static_assert(PublicPseudoIDBits == allPublicPseudoElementTypes.size());
 
-static_assert(!(static_cast<unsigned>(maxTextTransformValue) >> TextTransformBits));
+static_assert(!(static_cast<unsigned>(Style::maxTextTransformValue) >> TextTransformBits));
 
 // Value zero is used to indicate no pseudo-element.
 static_assert(!((enumToUnderlyingType(PseudoElementType::HighestEnumValue) + 1) >> PseudoElementTypeBits));
@@ -264,88 +265,6 @@ RenderStyle::~RenderStyle()
 RenderStyle RenderStyle::replace(RenderStyle&& newStyle)
 {
     return RenderStyle { *this, WTFMove(newStyle) };
-}
-
-static StyleSelfAlignmentData resolvedSelfAlignment(const StyleSelfAlignmentData& value, ItemPosition normalValueBehavior)
-{
-    if (value.position() == ItemPosition::Legacy || value.position() == ItemPosition::Normal || value.position() == ItemPosition::Auto)
-        return { normalValueBehavior, OverflowAlignment::Default };
-    return value;
-}
-
-StyleSelfAlignmentData RenderStyle::resolvedAlignItems(ItemPosition normalValueBehavior) const
-{
-    return resolvedSelfAlignment(alignItems(), normalValueBehavior);
-}
-
-StyleSelfAlignmentData RenderStyle::resolvedAlignSelf(const RenderStyle* parentStyle, ItemPosition normalValueBehavior) const
-{
-    // The auto keyword computes to the parent's align-items computed value.
-    // We will return the behavior of 'normal' value if needed, which is specific of each layout model.
-    if (!parentStyle || alignSelf().position() != ItemPosition::Auto)
-        return resolvedSelfAlignment(alignSelf(), normalValueBehavior);
-    return parentStyle->resolvedAlignItems(normalValueBehavior);
-}
-
-StyleSelfAlignmentData RenderStyle::resolvedJustifyItems(ItemPosition normalValueBehavior) const
-{
-    return resolvedSelfAlignment(justifyItems(), normalValueBehavior);
-}
-
-StyleSelfAlignmentData RenderStyle::resolvedJustifySelf(const RenderStyle* parentStyle, ItemPosition normalValueBehavior) const
-{
-    // The auto keyword computes to the parent's justify-items computed value.
-    // We will return the behavior of 'normal' value if needed, which is specific of each layout model.
-    if (!parentStyle || justifySelf().position() != ItemPosition::Auto)
-        return resolvedSelfAlignment(justifySelf(), normalValueBehavior);
-    return parentStyle->resolvedJustifyItems(normalValueBehavior);
-}
-
-static inline StyleContentAlignmentData resolvedContentAlignment(const StyleContentAlignmentData& value, const StyleContentAlignmentData& normalValueBehavior)
-{
-    return (value.position() == ContentPosition::Normal && value.distribution() == ContentDistribution::Default) ? normalValueBehavior : value;
-}
-
-StyleContentAlignmentData RenderStyle::resolvedAlignContent(const StyleContentAlignmentData& normalValueBehavior) const
-{
-    // We will return the behavior of 'normal' value if needed, which is specific of each layout model.
-    return resolvedContentAlignment(alignContent(), normalValueBehavior);
-}
-
-StyleContentAlignmentData RenderStyle::resolvedJustifyContent(const StyleContentAlignmentData& normalValueBehavior) const
-{
-    // We will return the behavior of 'normal' value if needed, which is specific of each layout model.
-    return resolvedContentAlignment(justifyContent(), normalValueBehavior);
-}
-
-static inline ContentPosition resolvedContentAlignmentPosition(const StyleContentAlignmentData& value, const StyleContentAlignmentData& normalValueBehavior)
-{
-    return (value.position() == ContentPosition::Normal && value.distribution() == ContentDistribution::Default) ? normalValueBehavior.position() : value.position();
-}
-
-static inline ContentDistribution resolvedContentAlignmentDistribution(const StyleContentAlignmentData& value, const StyleContentAlignmentData& normalValueBehavior)
-{
-    return (value.position() == ContentPosition::Normal && value.distribution() == ContentDistribution::Default) ? normalValueBehavior.distribution() : value.distribution();
-}
-
-ContentPosition RenderStyle::resolvedJustifyContentPosition(const StyleContentAlignmentData& normalValueBehavior) const
-{
-    return resolvedContentAlignmentPosition(justifyContent(), normalValueBehavior);
-}
-
-ContentDistribution RenderStyle::resolvedJustifyContentDistribution(const StyleContentAlignmentData& normalValueBehavior) const
-{
-    return resolvedContentAlignmentDistribution(justifyContent(), normalValueBehavior);
-}
-
-ContentPosition RenderStyle::resolvedAlignContentPosition(const StyleContentAlignmentData& normalValueBehavior) const
-{
-    return resolvedContentAlignmentPosition(alignContent(), normalValueBehavior);
-}
-
-ContentDistribution RenderStyle::resolvedAlignContentDistribution(const StyleContentAlignmentData& normalValueBehavior) const
-{
-    return resolvedContentAlignmentDistribution(alignContent(), normalValueBehavior);
 }
 
 void RenderStyle::inheritFrom(const RenderStyle& inheritParent)
@@ -893,12 +812,12 @@ static bool rareDataChangeRequiresLayout(const StyleRareNonInheritedData& first,
     if (first.inputSecurity != second.inputSecurity)
         return true;
 
-    if (first.usedContain().contains(Containment::Size) != second.usedContain().contains(Containment::Size)
-        || first.usedContain().contains(Containment::InlineSize) != second.usedContain().contains(Containment::InlineSize)
-        || first.usedContain().contains(Containment::Layout) != second.usedContain().contains(Containment::Layout))
+    if (first.usedContain().contains(Style::ContainValue::Size) != second.usedContain().contains(Style::ContainValue::Size)
+        || first.usedContain().contains(Style::ContainValue::InlineSize) != second.usedContain().contains(Style::ContainValue::InlineSize)
+        || first.usedContain().contains(Style::ContainValue::Layout) != second.usedContain().contains(Style::ContainValue::Layout))
         return true;
 
-    // content-visibiliy:hidden turns on contain:size which requires relayout.
+    // content-visibility:hidden turns on contain:size which requires relayout.
     if ((static_cast<ContentVisibility>(first.contentVisibility) == ContentVisibility::Hidden) != (static_cast<ContentVisibility>(second.contentVisibility) == ContentVisibility::Hidden))
         return true;
 
@@ -1837,12 +1756,12 @@ void RenderStyle::conservativelyCollectChangedAnimatableProperties(const RenderS
             changingProperties.m_properties.set(CSSPropertyAspectRatio);
         if (first.alignContent != second.alignContent)
             changingProperties.m_properties.set(CSSPropertyAlignContent);
-        if (first.justifyContent != second.justifyContent)
-            changingProperties.m_properties.set(CSSPropertyJustifyContent);
         if (first.alignItems != second.alignItems)
             changingProperties.m_properties.set(CSSPropertyAlignItems);
         if (first.alignSelf != second.alignSelf)
             changingProperties.m_properties.set(CSSPropertyAlignSelf);
+        if (first.justifyContent != second.justifyContent)
+            changingProperties.m_properties.set(CSSPropertyJustifyContent);
         if (first.justifyItems != second.justifyItems)
             changingProperties.m_properties.set(CSSPropertyJustifyItems);
         if (first.justifySelf != second.justifySelf)
@@ -1961,7 +1880,7 @@ void RenderStyle::conservativelyCollectChangedAnimatableProperties(const RenderS
             changingProperties.m_properties.set(CSSPropertyOffsetRotate);
         if (first.textDecorationThickness != second.textDecorationThickness)
             changingProperties.m_properties.set(CSSPropertyTextDecorationThickness);
-        if (first.touchActions != second.touchActions)
+        if (first.touchAction != second.touchAction)
             changingProperties.m_properties.set(CSSPropertyTouchAction);
         if (first.marginTrim != second.marginTrim)
             changingProperties.m_properties.set(CSSPropertyMarginTrim);
@@ -2202,7 +2121,7 @@ void RenderStyle::conservativelyCollectChangedAnimatableProperties(const RenderS
         // textSizeAdjust
         // userSelect
         // isInSubtreeWithBlendMode
-        // usedTouchActions
+        // usedTouchAction
         // eventListenerRegionTypes
         // effectiveInert
         // usedContentVisibility
@@ -2617,6 +2536,13 @@ void RenderStyle::setFontOpticalSizing(FontOpticalSizing opticalSizing)
 {
     auto description = fontDescription();
     description.setOpticalSizing(opticalSizing);
+    setFontDescription(WTFMove(description));
+}
+
+void RenderStyle::setFontFamily(Style::FontFamilies&& families)
+{
+    auto description = fontDescription();
+    description.setFamilies(families.takePlatform());
     setFontDescription(WTFMove(description));
 }
 
@@ -3688,7 +3614,7 @@ void RenderStyle::NonInheritedFlags::dumpDifferences(TextStream& ts, const NonIn
     LOG_IF_DIFFERENT(usesContainerUnits);
     LOG_IF_DIFFERENT(useTreeCountingFunctions);
 
-    LOG_IF_DIFFERENT_WITH_CAST(Style::TextDecorationLine, textDecorationLine);
+    LOG_IF_DIFFERENT_WITH_FROM_RAW(Style::TextDecorationLine, textDecorationLine);
 
     LOG_IF_DIFFERENT(hasExplicitlyInheritedProperties);
     LOG_IF_DIFFERENT(disallowsFastPathInheritance);
@@ -3714,8 +3640,8 @@ void RenderStyle::InheritedFlags::dumpDifferences(TextStream& ts, const Inherite
     LOG_IF_DIFFERENT_WITH_CAST(TextAlignMode, textAlign);
     LOG_IF_DIFFERENT_WITH_CAST(TextWrapStyle, textWrapStyle);
 
-    LOG_RAW_OPTIONSET_IF_DIFFERENT(TextTransform, textTransform);
-    LOG_IF_DIFFERENT_WITH_CAST(Style::TextDecorationLine, textDecorationLineInEffect);
+    LOG_IF_DIFFERENT_WITH_FROM_RAW(Style::TextTransform, textTransform);
+    LOG_IF_DIFFERENT_WITH_FROM_RAW(Style::TextDecorationLine, textDecorationLineInEffect);
 
     LOG_IF_DIFFERENT_WITH_CAST(PointerEvents, pointerEvents);
     LOG_IF_DIFFERENT_WITH_CAST(Visibility, visibility);

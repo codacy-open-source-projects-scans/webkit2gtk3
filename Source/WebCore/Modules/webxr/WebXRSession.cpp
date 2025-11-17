@@ -30,6 +30,7 @@
 #if ENABLE(WEBXR)
 
 #include "ContextDestructionObserverInlines.h"
+#include "DOMPointReadOnly.h"
 #include "DocumentPage.h"
 #include "EventNames.h"
 #include "JSDOMPromiseDeferred.h"
@@ -51,6 +52,7 @@
 #include "XRHitTestOptionsInit.h"
 #include "XRRenderStateInit.h"
 #include "XRSessionEvent.h"
+#include "XRTransientInputHitTestOptionsInit.h"
 #include <wtf/RefPtr.h>
 #include <wtf/SystemTracing.h>
 #include <wtf/TZoneMallocInlines.h>
@@ -105,7 +107,7 @@ WebXRSession::~WebXRSession()
 
 XREnvironmentBlendMode WebXRSession::environmentBlendMode() const
 {
-    return m_environmentBlendMode;
+    return m_frameData.environmentBlendMode;
 }
 
 XRInteractionMode WebXRSession::interactionMode() const
@@ -753,7 +755,10 @@ bool WebXRSession::isHandTrackingEnabled() const
 // https://immersive-web.github.io/hit-test/#dom-xrsession-requesthittestsource
 void WebXRSession::requestHitTestSource(const XRHitTestOptionsInit& init, RequestHitTestSourcePromise&& promise)
 {
-    // 3. If session’s ended value is true, throw an InvalidStateError and abort these steps.
+    if (!m_requestedFeatures.contains(PlatformXR::SessionFeature::HitTest)) {
+        promise.reject(Exception { ExceptionCode::NotSupportedError });
+        return;
+    }
     if (m_ended) {
         promise.reject(Exception { ExceptionCode::InvalidStateError, "The session was already ended"_s });
         return;
@@ -783,9 +788,35 @@ void WebXRSession::requestHitTestSource(const XRHitTestOptionsInit& init, Reques
     });
 }
 
-void WebXRSession::requestHitTestSourceForTransientInput(const XRTransientInputHitTestOptionsInit&, RequestHitTestSourceForTransientInputPromise&& promise)
+// https://immersive-web.github.io/hit-test/#dom-xrsession-requesthittestsourcefortransientinput
+void WebXRSession::requestHitTestSourceForTransientInput(const XRTransientInputHitTestOptionsInit& init, RequestHitTestSourceForTransientInputPromise&& promise)
 {
-    promise.resolve(WebXRTransientInputHitTestSource::create());
+    if (!m_requestedFeatures.contains(PlatformXR::SessionFeature::HitTest)) {
+        promise.reject(Exception { ExceptionCode::NotSupportedError });
+        return;
+    }
+    if (m_ended) {
+        promise.reject(Exception { ExceptionCode::InvalidStateError, "The session was already ended"_s });
+        return;
+    }
+    RefPtr device = this->device();
+    if (!device) {
+        promise.reject(Exception { ExceptionCode::InvalidStateError });
+        return;
+    }
+    auto toFloatPoint3D = [](auto& point) {
+        return FloatPoint3D(point.x(), point.y(), point.z());
+    };
+    PlatformXR::Ray ray { { 0, 0, 0 }, { 0, 0, -1 } };
+    if (init.offsetRay)
+        ray = PlatformXR::Ray { toFloatPoint3D(init.offsetRay->origin()), toFloatPoint3D(init.offsetRay->direction()) };
+    PlatformXR::TransientInputHitTestOptions options = { init.profile, init.entityTypes, WTFMove(ray) };
+    device->requestTransientInputHitTestSource(options, [protectedThis = Ref { *this }, promise = WTFMove(promise)](ExceptionOr<PlatformXR::TransientInputHitTestSource> exceptionOrSource) mutable {
+        if (exceptionOrSource.hasException())
+            promise.reject(exceptionOrSource.releaseException());
+        else
+            promise.resolve(WebXRTransientInputHitTestSource::create(protectedThis, exceptionOrSource.releaseReturnValue()));
+    });
 }
 #endif
 

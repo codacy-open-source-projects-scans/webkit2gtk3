@@ -693,6 +693,8 @@ bool RenderBlock::canPerformSimplifiedLayout() const
         return false;
     if (layoutContext().isSkippedContentRootForLayout(*this) && (outOfFlowChildNeedsLayout() || canContainFixedPositionObjects()))
         return false;
+    if (isSkippedContentRoot(*this) && firstChild() && firstChild()->wasSkippedDuringLastLayoutDueToContentVisibility())
+        return false;
     return outOfFlowChildNeedsLayout() || needsSimplifiedNormalFlowLayout();
 }
 
@@ -779,9 +781,9 @@ LayoutUnit RenderBlock::marginIntrinsicLogicalWidthForChild(RenderBox& child) co
     auto& marginRight = child.style().marginEnd(writingMode());
     const auto& zoomFactor = child.style().usedZoomForLength();
     LayoutUnit margin;
-    if (auto fixedMarginLeft = marginLeft.tryFixed(); fixedMarginLeft && !shouldTrimChildMargin(MarginTrimType::InlineStart, child))
+    if (auto fixedMarginLeft = marginLeft.tryFixed(); fixedMarginLeft && !shouldTrimChildMargin(Style::MarginTrimSide::InlineStart, child))
         margin += fixedMarginLeft->resolveZoom(zoomFactor);
-    if (auto fixedMarginRight = marginRight.tryFixed(); fixedMarginRight && !shouldTrimChildMargin(MarginTrimType::InlineEnd, child))
+    if (auto fixedMarginRight = marginRight.tryFixed(); fixedMarginRight && !shouldTrimChildMargin(Style::MarginTrimSide::InlineEnd, child))
         margin += fixedMarginRight->resolveZoom(zoomFactor);
     return margin;
 }
@@ -948,6 +950,29 @@ void RenderBlock::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
     }
 }
 
+PaintInfo RenderBlock::paintInfoForBlockChildren(const PaintInfo& paintInfo) const
+{
+    auto phaseForChildren = [&] {
+        switch (paintInfo.phase) {
+        case PaintPhase::ChildOutlines:
+            return PaintPhase::Outline;
+        case PaintPhase::ChildBlockBackgrounds:
+            return PaintPhase::ChildBlockBackground;
+        default:
+            return paintInfo.phase;
+        }
+    };
+
+    PaintInfo paintInfoForChildren(paintInfo);
+    paintInfoForChildren.phase = phaseForChildren();
+    paintInfoForChildren.updateSubtreePaintRootForChildren(this);
+
+    if (paintInfoForChildren.eventRegionContext())
+        paintInfoForChildren.paintBehavior.add(PaintBehavior::EventRegionIncludeBackground);
+
+    return paintInfoForChildren;
+}
+
 void RenderBlock::paintContents(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     ASSERT(!isSkippedContentRoot(*this));
@@ -955,21 +980,12 @@ void RenderBlock::paintContents(PaintInfo& paintInfo, const LayoutPoint& paintOf
     if (childrenInline())
         paintInlineChildren(paintInfo, paintOffset);
     else {
-        PaintPhase newPhase = (paintInfo.phase == PaintPhase::ChildOutlines) ? PaintPhase::Outline : paintInfo.phase;
-        newPhase = (newPhase == PaintPhase::ChildBlockBackgrounds) ? PaintPhase::ChildBlockBackground : newPhase;
-
-        // We don't paint our own background, but we do let the kids paint their backgrounds.
-        PaintInfo paintInfoForChild(paintInfo);
-        paintInfoForChild.phase = newPhase;
-        paintInfoForChild.updateSubtreePaintRootForChildren(this);
-
-        if (paintInfo.eventRegionContext())
-            paintInfoForChild.paintBehavior.add(PaintBehavior::EventRegionIncludeBackground);
+        PaintInfo paintInfoForChildred = paintInfoForBlockChildren(paintInfo);
 
         // FIXME: Paint-time pagination is obsolete and is now only used by embedded WebViews inside AppKit
         // NSViews. Do not add any more code for this.
         bool usePrintRect = !view().printRect().isEmpty();
-        paintChildren(paintInfo, paintOffset, paintInfoForChild, usePrintRect);
+        paintChildren(paintInfo, paintOffset, paintInfoForChildred, usePrintRect);
     }
 }
 
@@ -1287,7 +1303,7 @@ bool RenderBlock::establishesIndependentFormattingContextIgnoringDisplayType(con
     return style.isFloating()
         || style.hasOutOfFlowPosition()
         || isBlockBoxWithPotentiallyScrollableOverflow()
-        || style.containsLayout()
+        || style.usedContain().contains(Style::ContainValue::Layout)
         || style.containerType() != ContainerType::Normal
         || WebCore::shouldApplyPaintContainment(style, *protectedElement())
         || (style.isDisplayBlockLevel() && !style.blockStepSize().isNone());
@@ -2852,28 +2868,26 @@ bool RenderBlock::updateFragmentRangeForBoxChild(const RenderBox& box) const
     return false;
 }
 
-void RenderBlock::setTrimmedMarginForChild(RenderBox &child, MarginTrimType marginTrimType)
+void RenderBlock::setTrimmedMarginForChild(RenderBox& child, Style::MarginTrimSide side)
 {
-    switch (marginTrimType) {
-    case MarginTrimType::BlockStart:
+    switch (side) {
+    case Style::MarginTrimSide::BlockStart:
         setMarginBeforeForChild(child, 0_lu);
-        child.markMarginAsTrimmed(MarginTrimType::BlockStart);
         break;
-    case MarginTrimType::BlockEnd:
+    case Style::MarginTrimSide::BlockEnd:
         setMarginAfterForChild(child, 0_lu);
-        child.markMarginAsTrimmed(MarginTrimType::BlockEnd);
         break;
-    case MarginTrimType::InlineStart:
+    case Style::MarginTrimSide::InlineStart:
         setMarginStartForChild(child, 0_lu);
-        child.markMarginAsTrimmed(MarginTrimType::InlineStart);
         break;
-    case MarginTrimType::InlineEnd:
+    case Style::MarginTrimSide::InlineEnd:
         setMarginEndForChild(child, 0_lu);
-        child.markMarginAsTrimmed(MarginTrimType::InlineEnd);
         break;
     default:
         ASSERT_NOT_IMPLEMENTED_YET();
     }
+
+    child.markMarginAsTrimmed(side);
 }
 
 LayoutUnit RenderBlock::collapsedMarginBeforeForChild(const RenderBox& child) const

@@ -1049,6 +1049,10 @@ accessibility/youtube-embed-accessibility-hierarchy.html [ Skip ]
 
 accessibility/mac/iframe-hit-testing.html [ Skip ]
 
+# Skipping because ariaNotify is not supported in WK1.
+accessibility/mac/aria-notify-with-options.html [ Skip ]
+accessibility/mac/aria-notify.html [ Skip ]
+
 # DOM paste access requests are not implemented in WebKit1.
 editing/async-clipboard/clipboard-change-data-while-reading.html [ Skip ]
 editing/async-clipboard/clipboard-do-not-read-text-from-platform-if-text-changes.html [ Skip ]
@@ -2966,7 +2970,7 @@ intersection-observer/root-element-deleted.html [ Skip ]
 webkit.org/b/270310 [ Sonoma+ ] imported/w3c/web-platform-tests/html/semantics/interactive-elements/the-dialog-element/removed-element-is-removed-from-top-layer.html [ ImageOnlyFailure ]
 webkit.org/b/270310 [ Sonoma+ ] imported/w3c/web-platform-tests/html/semantics/interactive-elements/the-dialog-element/top-layer-stacking-correct-order-remove-readd.html [ ImageOnlyFailure ]
 
-# webkit.org/b/270207 REGRESSION (Sonoma23B74 --> Sonoma23D56 ): [ macOS wk1 ] Multiple tests are failing with image diff (0.01%) in fast/ and composting/ tests
+# webkit.org/b/270207 REGRESSION (Sonoma23B74 --> Sonoma23D56 ): [ macOS wk1 ] Multiple tests are failing with image diff (0.01%) in fast/ and compositing/ tests
 [ Sonoma+ ] compositing/clipping/border-radius-with-composited-descendant.html [ ImageOnlyFailure ]
 [ Sonoma+ ] compositing/clipping/border-radius-with-composited-descendant-nested.html [ ImageOnlyFailure ]
 [ Sonoma+ ] fast/images/exif-orientation-composited.html [ ImageOnlyFailure ]
@@ -3053,6 +3057,9 @@ webkit.org/b/276145 http/tests/security/block-popup-to-all-zero-address.html [ S
 http/tests/xmlhttprequest/cross-origin-authorization.html [ Failure ]
 
 compositing/repaint/scroller-repaints-once.html [ Failure ]
+
+# No support for # testRunner.dontForceRepaint in WK1.
+fast/repaint/iframe-from-display-none-repaint.html [ Skip ]
 
 fast/scrolling/scroll-corner-update-on-direction-change.html [ Skip ]
 
@@ -3272,6 +3279,7 @@ media/video-setSinkId-default.html [ Skip ]
 
 # Lockdown Mode does not apply
 dom/xsl/lockdown-mode [ Skip ]
+fast/speechsynthesis/lockdown-mode [ Skip ]
 http/tests/lockdown-mode [ Skip ]
 js/dom/lockdown-mode [ Skip ]
 
@@ -3304,3 +3312,5 @@ imported/w3c/web-platform-tests/css/CSS2/stacking-context/composite-change-after
 
 imported/w3c/web-platform-tests/css/CSS2/abspos/abspos-containing-block-initial-004b.xht [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/CSS2/abspos/abspos-containing-block-initial-004d.xht [ ImageOnlyFailure ]
+
+webkit.org/b/302559 [ Release ] webaudio/audiobuffersource-not-gced-until-ended.html [ Skip ]

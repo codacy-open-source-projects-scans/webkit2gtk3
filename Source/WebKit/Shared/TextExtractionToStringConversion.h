@@ -46,6 +46,8 @@ using NodeIdentifier = ObjectIdentifier<NodeIdentifierType>;
 
 namespace WebKit {
 
+using TextExtractionVersion = unsigned;
+
 enum class TextExtractionOptionFlag : uint8_t {
     IncludeURLs     = 1 << 0,
     IncludeRects    = 1 << 1,
@@ -58,24 +60,27 @@ using TextExtractionFilterCallback = Function<Ref<TextExtractionFilterPromise>(c
 
 struct TextExtractionOptions {
     TextExtractionOptions(TextExtractionOptions&& other)
-        : filterCallback(WTFMove(other.filterCallback))
+        : filterCallbacks(WTFMove(other.filterCallbacks))
         , nativeMenuItems(WTFMove(other.nativeMenuItems))
         , replacementStrings(WTFMove(other.replacementStrings))
+        , version(other.version)
         , flags(other.flags)
     {
     }
 
-    TextExtractionOptions(TextExtractionFilterCallback&& filter, Vector<String>&& items, HashMap<String, String>&& replacementStrings, TextExtractionOptionFlags flags)
-        : filterCallback(WTFMove(filter))
+    TextExtractionOptions(Vector<TextExtractionFilterCallback>&& filters, Vector<String>&& items, HashMap<String, String>&& replacementStrings, std::optional<TextExtractionVersion> version, TextExtractionOptionFlags flags)
+        : filterCallbacks(WTFMove(filters))
         , nativeMenuItems(WTFMove(items))
         , replacementStrings(WTFMove(replacementStrings))
+        , version(version)
         , flags(flags)
     {
     }
 
-    TextExtractionFilterCallback filterCallback;
+    Vector<TextExtractionFilterCallback> filterCallbacks;
     Vector<String> nativeMenuItems;
     HashMap<String, String> replacementStrings;
+    std::optional<TextExtractionVersion> version;
     TextExtractionOptionFlags flags;
 };
 

@@ -34,6 +34,7 @@
 #include <WebCore/DocumentClasses.h>
 #include <WebCore/DocumentEnums.h>
 #include <WebCore/DocumentEventTiming.h>
+#include <WebCore/Element.h>
 #include <WebCore/FocusControllerTypes.h>
 #include <WebCore/FontSelectorClient.h>
 #include <WebCore/FrameDestructionObserver.h>
@@ -289,6 +290,7 @@ class DOMTimerHoldingTank;
 #endif
 
 struct ApplicationManifest;
+struct AriaNotifyOptions;
 struct BoundaryPoint;
 struct CSSParserContext;
 struct CaretPositionFromPointOptions;
@@ -381,6 +383,12 @@ enum class PageshowEventPersistence : bool { NotPersisted, Persisted };
 
 enum class EventHandlerRemoval : bool { One, All };
 using EventTargetSet = WeakHashCountedSet<Node, WeakPtrImplWithEventTargetData>;
+
+struct CachedSetInnerHTML {
+    String source;
+    WeakPtr<ContainerNode, WeakPtrImplWithEventTargetData> cachedContainer;
+    ElementName contextElementName;
+};
 
 enum class DimensionsCheck : uint8_t {
     Left = 1 << 0,
@@ -1448,7 +1456,7 @@ public:
     void addScreenPropertiesChangedObserver(const ScreenPropertiesChangedObserver&);
 
 #if HAVE(SPATIAL_TRACKING_LABEL)
-    const String& defaultSpatialTrackingLabel() const;
+    String defaultSpatialTrackingLabel() const;
     void defaultSpatialTrackingLabelChanged(const String&);
 
     using DefaultSpatialTrackingLabelChangedObserver = WTF::Observer<void(const String&)>;
@@ -2054,6 +2062,12 @@ public:
     WEBCORE_EXPORT void prefetch(const URL&, const Vector<String>&, std::optional<ReferrerPolicy>, bool lowPriority = false);
 
     void processSpeculationRulesHeader(const String& headerValue, const URL& baseURL);
+    CachedSetInnerHTML& cachedSetInnerHTML() { return m_cachedSetInnerHTML; }
+    void updateCachedSetInnerHTML(const String& sourceString, ContainerNode&, Element& contextElement);
+    void invalidateCachedSetInnerHTML();
+
+    WEBCORE_EXPORT void ariaNotify(const String&);
+    WEBCORE_EXPORT void ariaNotify(const String&, const AriaNotifyOptions&);
 
 protected:
     enum class ConstructionFlag : uint8_t {
@@ -2809,6 +2823,8 @@ private:
     const Ref<DocumentSyncData> m_syncData;
 
     Vector<Ref<LoadableSpeculationRules>> m_loadableSpeculationRules;
+
+    CachedSetInnerHTML m_cachedSetInnerHTML;
 }; // class Document
 
 inline AXObjectCache* Document::existingAXObjectCache() const

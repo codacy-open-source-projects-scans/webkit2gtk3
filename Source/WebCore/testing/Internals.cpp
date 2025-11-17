@@ -172,6 +172,7 @@
 #include "MockLibWebRTCPeerConnection.h"
 #include "MockPageOverlay.h"
 #include "MockPageOverlayClient.h"
+#include "Navigation.h"
 #include "NavigatorBeacon.h"
 #include "NavigatorMediaDevices.h"
 #include "NetworkLoadInformation.h"
@@ -7295,6 +7296,18 @@ String Internals::windowLocationHost(DOMWindow& window)
     return window.location().host();
 }
 
+void Internals::setNavigationRateLimiterParameters(DOMWindow& window, unsigned maxNavigations, double windowDurationSeconds)
+{
+    if (RefPtr localWindow = dynamicDowncast<LocalDOMWindow>(window))
+        localWindow->navigation().rateLimiterForTesting().setParametersForTesting(maxNavigations, Seconds(windowDurationSeconds));
+}
+
+void Internals::resetNavigationRateLimiter(DOMWindow& window)
+{
+    if (RefPtr localWindow = dynamicDowncast<LocalDOMWindow>(window))
+        localWindow->navigation().rateLimiterForTesting().resetForTesting();
+}
+
 ExceptionOr<String> Internals::systemColorForCSSValue(const String& cssValue, bool useDarkModeAppearance, bool useElevatedUserInterfaceLevel)
 {
     CSSValueID id = cssValueKeywordID(cssValue);
@@ -7935,7 +7948,7 @@ void Internals::registerPDFTest(Ref<VoidCallback>&& callback, Element& element)
         pluginViewBase->registerPDFTestCallback(WTFMove(callback));
 }
 
-const String& Internals::defaultSpatialTrackingLabel() const
+String Internals::defaultSpatialTrackingLabel() const
 {
 #if HAVE(SPATIAL_TRACKING_LABEL)
     auto* document = contextDocument();
@@ -8080,6 +8093,19 @@ RefPtr<MediaSessionManagerInterface> Internals::sessionManager() const
         return nullptr;
 
     return page->mediaSessionManager();
+}
+
+bool Internals::hasMediaSessionManager() const
+{
+    RefPtr document = contextDocument();
+    if (!document)
+        return false;
+
+    RefPtr page = document->page();
+    if (!page)
+        return false;
+
+    return !!page->mediaSessionManagerIfExists();
 }
 
 #if ENABLE(MODEL_ELEMENT)

@@ -154,6 +154,7 @@ struct GraphicsContextGLAttributes;
 
 struct AppHighlight;
 struct ApplePayAMSUIRequest;
+struct AriaNotifyData;
 struct CharacterRange;
 struct ContactsRequestData;
 struct ContentRuleListMatchedRule;
@@ -167,7 +168,6 @@ struct ShareDataWithParsedURL;
 struct SimpleRange;
 struct StringWithDirection;
 struct SystemPreviewInfo;
-struct TextIndicatorData;
 struct TextRecognitionOptions;
 struct ViewportArguments;
 struct WindowFeatures;
@@ -287,6 +287,7 @@ public:
     virtual IntRect rootViewToAccessibilityScreen(const IntRect&) const = 0;
 #if PLATFORM(IOS_FAMILY)
     virtual void relayAccessibilityNotification(String&&, RetainPtr<NSData>&&) const = 0;
+    virtual void relayAriaNotifyNotification(AriaNotifyData&&) const = 0;
 #endif
 
     virtual void mainFrameDidChange() { };
@@ -399,7 +400,7 @@ public:
 
     virtual RefPtr<DateTimeChooser> createDateTimeChooser(DateTimeChooserClient&) = 0;
 
-    virtual void setTextIndicator(const TextIndicatorData&) const = 0;
+    virtual void setTextIndicator(RefPtr<TextIndicator>&&) const = 0;
     virtual void updateTextIndicator(RefPtr<TextIndicator>&&) const = 0;
 
     virtual void runOpenPanel(LocalFrame&, FileChooser&) = 0;

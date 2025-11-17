@@ -417,11 +417,8 @@ public:
     void setInlineMediaPlaybackPolicy(InlineMediaPlaybackPolicy policy) { m_inlineMediaPlaybackPolicy = policy; }
 
     struct WebpagePreferences {
-        WEBCORE_EXPORT WebpagePreferences();
-        WEBCORE_EXPORT ~WebpagePreferences();
-        WebpagePreferences& operator=(WebpagePreferences&&);
-
         RefPtr<UserContentProvider> userContentProvider;
+        String overrideReferrerForAllRequests;
     };
     const WebpagePreferences& preferences() const { return m_preferences; }
     WEBCORE_EXPORT void setPreferences(WebpagePreferences&&);
@@ -596,9 +593,6 @@ private:
     WEBCORE_EXPORT ResourceError contentFilterDidBlock(ContentFilterUnblockHandler&&, String&& unblockRequestDeniedScript) final;
     WEBCORE_EXPORT void cancelMainResourceLoadForContentFilter(const ResourceError&) final;
     WEBCORE_EXPORT void handleProvisionalLoadFailureFromContentFilter(const URL& blockedPageURL, SubstituteData&&) final;
-#if HAVE(WEBCONTENTRESTRICTIONS)
-    WEBCORE_EXPORT bool usesWebContentRestrictions() final;
-#endif
 #if HAVE(WEBCONTENTRESTRICTIONS_PATH_SPI)
     WEBCORE_EXPORT String webContentRestrictionsConfigurationPath() const final;
 #endif

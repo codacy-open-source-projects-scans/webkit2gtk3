@@ -70,6 +70,7 @@
 #import "WebPageProxy.h"
 #import "WebProcessProxy.h"
 #import "_WKDownloadInternal.h"
+#import <WebCore/AXObjectCache.h>
 #import <WebCore/Cursor.h>
 #import <WebCore/DOMPasteAccess.h>
 #import <WebCore/DictionaryLookup.h>
@@ -264,6 +265,11 @@ void PageClientImpl::didReceiveInteractiveModelElement(std::optional<WebCore::No
 UIView *PageClientImpl::createVisibilityPropagationView()
 {
     return [contentView() _createVisibilityPropagationView];
+}
+
+void PageClientImpl::removeVisibilityPropagationView(UIView *view)
+{
+    [contentView() _removeVisibilityPropagationView:view];
 }
 #endif
 #endif // HAVE(VISIBILITY_PROPAGATION_VIEW)
@@ -516,6 +522,21 @@ void PageClientImpl::relayAccessibilityNotification(String&& notificationName, R
     auto contentView = this->contentView();
     if ([contentView respondsToSelector:@selector(accessibilityRelayNotification:notificationData:)])
         [contentView accessibilityRelayNotification:notificationName.createNSString().get() notificationData:notificationData.get()];
+}
+
+void PageClientImpl::relayAriaNotifyNotification(const WebCore::AriaNotifyData& notificationData)
+{
+    RetainPtr message = notificationData.message.createNSString();
+
+    RetainPtr attributes = adoptNS([[NSDictionary alloc] initWithObjectsAndKeys:
+        WebCore::notifyPriorityToAXValueString(notificationData.priority).get(), @"UIAccessibilityARIAAnnouncementPriority",
+        WebCore::interruptBehaviorToAXValueString(notificationData.interrupt).get(), @"UIAccessibilityARIAAnnouncementInterruptBehavior",
+        notificationData.language.createNSString().get(), @"UIAccessibilitySpeechAttributeLanguage",
+        nil]);
+
+    RetainPtr attributedString = adoptNS([[NSAttributedString alloc] initWithString:message.get() attributes:attributes.get()]);
+
+    UIAccessibilityPostNotification(UIAccessibilityAnnouncementNotification, attributedString.get());
 }
 
 IntRect PageClientImpl::rootViewToAccessibilityScreen(const IntRect& rect)
@@ -1322,7 +1343,7 @@ FloatPoint PageClientImpl::webViewToRootView(const FloatPoint& point) const
 }
 
 #if HAVE(SPATIAL_TRACKING_LABEL)
-const String& PageClientImpl::spatialTrackingLabel() const
+String PageClientImpl::spatialTrackingLabel() const
 {
     return [contentView() spatialTrackingLabel];
 }

@@ -26,14 +26,22 @@
 #include "config.h"
 #include "TextExtractionToStringConversion.h"
 
+#include <WebCore/HTMLNames.h>
 #include <WebCore/TextExtractionTypes.h>
+#include <wtf/EnumSet.h>
+#include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/MakeString.h>
 #include <wtf/text/StringBuilder.h>
-#include <wtf/TZoneMallocInlines.h>
 
 namespace WebKit {
 
 using namespace WebCore;
+
+enum class TextExtractionVersionBehavior : uint8_t {
+    TagNameForTextFormControls,
+};
+using TextExtractionVersionBehaviors = EnumSet<TextExtractionVersionBehavior>;
+static constexpr auto currentTextExtractionOutputVersion = 2;
 
 static String commaSeparatedString(const Vector<String>& parts)
 {
@@ -75,11 +83,14 @@ public:
         : m_options(WTFMove(options))
         , m_completion(WTFMove(completion))
     {
+        if (version() >= 2)
+            m_versionBehaviors.add(TextExtractionVersionBehavior::TagNameForTextFormControls);
     }
 
     ~TextExtractionAggregator()
     {
         addLineForNativeMenuItemsIfNeeded();
+        addLineForVersionNumberIfNeeded();
 
         m_completion(makeStringByJoining(WTFMove(m_lines), "\n"_s));
     }
@@ -126,6 +137,11 @@ public:
         return index;
     }
 
+    bool useTagNameForTextFormControls() const
+    {
+        return m_versionBehaviors.contains(TextExtractionVersionBehavior::TagNameForTextFormControls);
+    }
+
     bool includeRects() const
     {
         return !onlyIncludeText() && m_options.flags.contains(TextExtractionOptionFlag::IncludeRects);
@@ -141,12 +157,19 @@ public:
         return m_options.flags.contains(TextExtractionOptionFlag::OnlyIncludeText);
     }
 
-    RefPtr<TextExtractionFilterPromise> filter(const String& text, std::optional<WebCore::NodeIdentifier>&& identifier) const
+    RefPtr<TextExtractionFilterPromise> filter(const String& text, const std::optional<WebCore::NodeIdentifier>& identifier) const
     {
-        if (!m_options.filterCallback)
+        if (m_options.filterCallbacks.isEmpty())
             return nullptr;
 
-        return m_options.filterCallback(text, WTFMove(identifier));
+        TextExtractionFilterPromise::Producer producer;
+        Ref promise = producer.promise();
+
+        filterRecursive(text, identifier, 0, [producer = WTFMove(producer)](auto&& result) mutable {
+            producer.settle(WTFMove(result));
+        });
+
+        return promise;
     }
 
     void applyReplacements(String& text)
@@ -156,6 +179,20 @@ public:
     }
 
 private:
+    void filterRecursive(const String& text, const std::optional<WebCore::NodeIdentifier>& identifier, size_t index, CompletionHandler<void(String&&)>&& completion) const
+    {
+        if (index >= m_options.filterCallbacks.size())
+            return completion(String { text });
+
+        Ref promise = m_options.filterCallbacks[index](text, std::optional { identifier });
+        promise->whenSettled(RunLoop::mainSingleton(), [completion = WTFMove(completion), protectedThis = Ref { *this }, identifier, index](auto&& result) mutable {
+            if (!result)
+                return completion({ });
+
+            protectedThis->filterRecursive(WTFMove(*result), identifier, index + 1, WTFMove(completion));
+        });
+    }
+
     void addLineForNativeMenuItemsIfNeeded()
     {
         if (onlyIncludeText())
@@ -171,10 +208,22 @@ private:
         addResult({ advanceToNextLine(), 0 }, { "nativePopupMenu"_s, WTFMove(itemsDescription) });
     }
 
+    void addLineForVersionNumberIfNeeded()
+    {
+        if (!onlyIncludeText())
+            addResult({ advanceToNextLine(), 0 }, { makeString("version="_s, version()) });
+    }
+
+    uint32_t version() const
+    {
+        return m_options.version.value_or(currentTextExtractionOutputVersion);
+    }
+
     const TextExtractionOptions m_options;
     Vector<String> m_lines;
     unsigned m_nextLineIndex { 0 };
     CompletionHandler<void(String&&)> m_completion;
+    TextExtractionVersionBehaviors m_versionBehaviors;
 };
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(TextExtractionAggregator);
@@ -247,12 +296,8 @@ static void addPartsForText(const TextExtraction::TextItemData& textItem, Vector
                 return;
             }
 
-            auto isNewline = [](UChar character) {
-                return character == '\n' || character == '\r';
-            };
-
             auto startIndex = filteredText.find([&](auto character) {
-                return !isNewline(character);
+                return !isASCIIWhitespace(character);
             });
 
             if (startIndex == notFound) {
@@ -261,7 +306,7 @@ static void addPartsForText(const TextExtraction::TextItemData& textItem, Vector
             } else {
                 size_t endIndex = filteredText.length() - 1;
                 for (size_t i = filteredText.length(); i > 0; --i) {
-                    if (!isNewline(filteredText.characterAt(i - 1))) {
+                    if (!isASCIIWhitespace(filteredText.characterAt(i - 1))) {
                         endIndex = i - 1;
                         break;
                     }
@@ -341,6 +386,12 @@ static void addPartsForItem(const TextExtraction::Item& item, std::optional<Node
             case TextExtraction::ContainerType::Canvas:
                 containerString = "canvas"_s;
                 break;
+            case TextExtraction::ContainerType::Subscript:
+                containerString = "subscript"_s;
+                break;
+            case TextExtraction::ContainerType::Superscript:
+                containerString = "superscript"_s;
+                break;
             case TextExtraction::ContainerType::Generic:
                 break;
             }
@@ -367,10 +418,10 @@ static void addPartsForItem(const TextExtraction::Item& item, std::optional<Node
             aggregator.addResult(line, WTFMove(parts));
         },
         [&](const TextExtraction::TextFormControlData& controlData) {
-            parts.append("textFormControl"_s);
+            parts.append(aggregator.useTagNameForTextFormControls() ? item.nodeName.convertToASCIILowercase() : String { "textFormControl"_s });
             parts.appendVector(partsForItem(item, aggregator));
 
-            if (!controlData.controlType.isEmpty())
+            if (!controlData.controlType.isEmpty() && !equalIgnoringASCIICase(controlData.controlType, item.nodeName))
                 parts.insert(1, makeString('\'', controlData.controlType, '\''));
 
             if (!controlData.autocomplete.isEmpty())
@@ -405,9 +456,6 @@ static void addPartsForItem(const TextExtraction::Item& item, std::optional<Node
 
             if (!linkData.completedURL.isEmpty() && aggregator.includeURLs())
                 parts.append(makeString("url='"_s, normalizedURLString(linkData.completedURL), '\''));
-
-            if (!linkData.target.isEmpty())
-                parts.append(makeString("target='"_s, escapeString(linkData.target), '\''));
 
             aggregator.addResult(line, WTFMove(parts));
         },
@@ -448,6 +496,27 @@ static void addPartsForItem(const TextExtraction::Item& item, std::optional<Node
     );
 }
 
+static bool childTextNodeIsRedundant(const TextExtraction::Item& parent, const String& childText)
+{
+    if (auto link = parent.dataAs<TextExtraction::LinkItemData>(); link && link->completedURL.string().containsIgnoringASCIICase(childText))
+        return true;
+
+    if (auto formControl = parent.dataAs<TextExtraction::TextFormControlData>()) {
+        auto& editable = formControl->editable;
+        if (editable.placeholder.containsIgnoringASCIICase(childText))
+            return true;
+
+        if (editable.label.containsIgnoringASCIICase(childText))
+            return true;
+
+        return std::ranges::any_of(parent.ariaAttributes, [&](auto& entry) {
+            return entry.value.containsIgnoringASCIICase(childText);
+        });
+    }
+
+    return false;
+}
+
 static void addTextRepresentationRecursive(const TextExtraction::Item& item, std::optional<NodeIdentifier>&& enclosingNode, unsigned depth, TextExtractionAggregator& aggregator)
 {
     auto identifier = item.nodeIdentifier;
@@ -465,10 +534,15 @@ static void addTextRepresentationRecursive(const TextExtraction::Item& item, std
     TextExtractionLine line { aggregator.advanceToNextLine(), depth };
     addPartsForItem(item, std::optional { identifier }, line, aggregator);
 
-    if (item.children.size() == 1 && std::holds_alternative<TextExtraction::TextItemData>(item.children[0].data)) {
-        // In the case of a single text child, we append that text to the same line.
-        addPartsForItem(item.children[0], WTFMove(identifier), line, aggregator);
-        return;
+    if (item.children.size() == 1) {
+        if (auto text = item.children[0].dataAs<TextExtraction::TextItemData>()) {
+            if (childTextNodeIsRedundant(item, text->content.trim(isASCIIWhitespace)))
+                return;
+
+            // In the case of a single text child, we append that text to the same line.
+            addPartsForItem(item.children[0], WTFMove(identifier), line, aggregator);
+            return;
+        }
     }
 
     for (auto& child : item.children)

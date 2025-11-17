@@ -530,6 +530,8 @@ void InlineDisplayContentBuilder::processNonBidiContent(const LineLayoutResult& 
                 appendHardLineBreakDisplayBox(lineRun, visualRectRelativeToRoot, boxes);
             else if (lineRun.isAtomicInlineBox() || lineRun.isListMarker())
                 appendAtomicInlineLevelDisplayBox(lineRun, visualRectRelativeToRoot, boxes);
+            else if (lineRun.isInlineBoxStart() || lineRun.isLineSpanningInlineBoxStart())
+                appendInlineBoxDisplayBox(lineRun, lineBox.inlineLevelBoxFor(lineRun), visualRectRelativeToRoot, boxes);
             else if (lineRun.isBlock()) {
                 // Block content should always be placed at the start of the content box even when floats shrink the line.
                 auto adjustedVisualRect = [&] {
@@ -539,11 +541,6 @@ void InlineDisplayContentBuilder::processNonBidiContent(const LineLayoutResult& 
                     return rect;
                 };
                 appendBlockLevelDisplayBox(lineRun, adjustedVisualRect(), boxes);
-            }
-            else if (lineRun.isInlineBoxStart() || lineRun.isLineSpanningInlineBoxStart()) {
-                // Do not generate display boxes for inline boxes on non-contentful lines (e.g. <span></span>)
-                if (lineBox.hasContent())
-                    appendInlineBoxDisplayBox(lineRun, lineBox.inlineLevelBoxFor(lineRun), visualRectRelativeToRoot, boxes);
             } else
                 ASSERT_NOT_REACHED();
         };
@@ -609,9 +606,9 @@ struct AncestorStack {
     std::optional<size_t> unwind(const ElementBox& elementBox)
     {
         // Unwind the stack all the way to container box.
-        if (!m_set.contains(&elementBox))
+        if (!m_set.contains(elementBox))
             return { };
-        while (m_set.last() != &elementBox) {
+        while (m_set.last().ptr() != &elementBox) {
             m_stack.removeLast();
             m_set.removeLast();
         }
@@ -624,12 +621,12 @@ struct AncestorStack {
     {
         m_stack.append(displayBoxNodeIndexForContainer);
         ASSERT(!m_set.contains(&elementBox));
-        m_set.add(&elementBox);
+        m_set.add(elementBox);
     }
 
 private:
     Vector<size_t> m_stack;
-    ListHashSet<const ElementBox*> m_set;
+    ListHashSet<CheckedRef<const ElementBox>> m_set;
 };
 
 static inline size_t createDisplayBoxNodeForContainerAndPushToAncestorStack(const ElementBox& elementBox, size_t displayBoxIndex, size_t parentDisplayBoxNodeIndex, DisplayBoxTree& displayBoxTree, AncestorStack& ancestorStack)

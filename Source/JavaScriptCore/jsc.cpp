@@ -1712,9 +1712,13 @@ JSC_DEFINE_HOST_FUNCTION(functionDebug, (JSGlobalObject* globalObject, CallFrame
 JSC_DEFINE_HOST_FUNCTION(functionDescribe, (JSGlobalObject* globalObject, CallFrame* callFrame))
 {
     VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
     if (callFrame->argumentCount() < 1)
         return JSValue::encode(jsUndefined());
-    return JSValue::encode(jsString(vm, toString(callFrame->argument(0))));
+    std::optional<String> string = toStringWithBoundsCheck(callFrame->argument(0));
+    if (!string)
+        return JSValue::encode(throwException(globalObject, scope, createRangeError(globalObject, "Out of memory."_s)));
+    return JSValue::encode(jsString(vm, *string));
 }
 
 JSC_DEFINE_HOST_FUNCTION(functionDescribeArray, (JSGlobalObject* globalObject, CallFrame* callFrame))
@@ -3178,7 +3182,7 @@ JSC_DEFINE_HOST_FUNCTION(functionGenerateHeapSnapshot, (JSGlobalObject* globalOb
     DeferTermination deferScope(vm);
     auto scope = DECLARE_THROW_SCOPE(vm);
 
-    HeapSnapshotBuilder snapshotBuilder(vm.ensureHeapProfiler(), HeapSnapshotBuilder::SnapshotType::InspectorSnapshot, OverflowPolicy::RecordOverflow);
+    HeapSnapshotBuilder snapshotBuilder(vm.ensureHeapProfiler(), HeapSnapshotBuilder::SnapshotType::InspectorSnapshot);
     snapshotBuilder.buildSnapshot();
 
     String jsonString = snapshotBuilder.json();
@@ -3200,7 +3204,7 @@ JSC_DEFINE_HOST_FUNCTION(functionGenerateHeapSnapshotForGCDebugging, (JSGlobalOb
     {
         DeferGCForAWhile deferGC(vm); // Prevent concurrent GC from interfering with the full GC that the snapshot does.
 
-        HeapSnapshotBuilder snapshotBuilder(vm.ensureHeapProfiler(), HeapSnapshotBuilder::SnapshotType::GCDebuggingSnapshot, OverflowPolicy::RecordOverflow);
+        HeapSnapshotBuilder snapshotBuilder(vm.ensureHeapProfiler(), HeapSnapshotBuilder::SnapshotType::GCDebuggingSnapshot);
         snapshotBuilder.buildSnapshot();
 
         jsonString = snapshotBuilder.json();
@@ -4405,12 +4409,18 @@ int runJSC(const CommandLine& options, bool isWorker, const Func& func)
             func(vm, globalObject, success);
             vm.drainMicrotasks();
         }
-        vm.deferredWorkTimer->runRunLoop();
-        {
-            JSLockHolder locker(vm);
+        if (vm.hasPendingTerminationException()) {
+            vm.setExecutionForbidden();
+            if (!options.m_treatWatchdogExceptionAsSuccess)
+                success = false;
+        } else {
+            vm.deferredWorkTimer->runRunLoop();
+            {
+                JSLockHolder locker(vm);
 
-            if (!options.m_reprl && options.m_interactive && success)
-                runInteractive(globalObject);
+                if (!options.m_reprl && options.m_interactive && success)
+                    runInteractive(globalObject);
+            }
         }
 
         result = success && (asyncTestExpectedPasses == asyncTestPasses) ? 0 : 3;

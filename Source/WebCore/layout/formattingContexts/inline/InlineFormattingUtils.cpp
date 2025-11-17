@@ -378,11 +378,11 @@ static inline const ElementBox& nearestCommonAncestor(const Box& first, const Bo
     if (&firstParent != &rootBox && &secondParent != &rootBox && &firstParent.parent() == &secondParent.parent())
         return firstParent.parent();
 
-    HashSet<const ElementBox*> descendantsSet;
+    HashSet<CheckedRef<const ElementBox>> descendantsSet;
     for (auto* descendant = &firstParent; descendant != &rootBox; descendant = &descendant->parent())
-        descendantsSet.add(descendant);
+        descendantsSet.add(*descendant);
     for (auto* descendant = &secondParent; descendant != &rootBox; descendant = &descendant->parent()) {
-        if (!descendantsSet.add(descendant).isNewEntry)
+        if (!descendantsSet.add(*descendant).isNewEntry)
             return *descendant;
     }
     return rootBox;
@@ -612,10 +612,15 @@ LineEndingTruncationPolicy InlineFormattingUtils::lineEndingTruncationPolicy(con
 
 std::optional<LineLayoutResult::InlineContentEnding> InlineFormattingUtils::inlineContentEnding(const Line::Result& lineContent)
 {
+    if (!lineContent.runs.isEmpty() && lineContent.runs[0].isBlock()) {
+        ASSERT(lineContent.runs.size() == 1);
+        return { };
+    }
+
     for (auto& run : lineContent.runs | std::views::reverse) {
+        ASSERT(!run.isBlock());
         if (run.isOpaque())
             continue;
-
         if (run.isLineBreak())
             return { LineLayoutResult::InlineContentEnding::LineBreak };
         if (auto& textContent = run.textContent(); textContent && textContent->needsHyphen)

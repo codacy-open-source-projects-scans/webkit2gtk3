@@ -259,6 +259,19 @@ AllowMultiElementImplicitSubmission:
     WebCore:
       default: false
 
+AllowMultipleCommitLayerTreePending:
+  type: bool
+  status: internal
+  humanReadableName: "Allow requesting CommitLayerTree before the previous has completed"
+  humanReadableDescription: "Allow requesting CommitLayerTree before the previous has completed"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: defaultAllowMultipleCommitLayerTreePending()
+    WebCore:
+      default: false
+
 AllowPrivacySensitiveOperationsInNonPersistentDataStores:
   type: bool
   status: embedder
@@ -3187,18 +3200,18 @@ FullScreenEnabled:
 
 FullScreenKeyboardLock:
   type: bool
-  status: testable
+  status: stable
   category: dom
   humanReadableName: "Fullscreen API based Keyboard Lock"
   humanReadableDescription: "Fullscreen API based Keyboard Lock"
   condition: ENABLE(FULLSCREEN_API)
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 FullscreenRequirementForScreenOrientationLockingEnabled:
   type: bool
@@ -3434,10 +3447,24 @@ GraphicsContextFiltersEnabled:
 
 GridFormattingContextIntegrationEnabled:
   type: bool
-  status: unstable
+  status: stable
   category: dom
   humanReadableName: "Next-generation grid layout integration (GFC)"
   humanReadableDescription: "Enable next-generation grid layout integration (GFC)"
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
+    WebCore:
+      default: true
+
+GridLanesEnabled:
+  type: bool
+  status: preview
+  category: css
+  humanReadableName: "CSS display: grid-lanes"
+  humanReadableDescription: "Enable CSS display: grid-lanes"
   defaultValue:
     WebKitLegacy:
       default: false
@@ -4167,6 +4194,19 @@ InvisibleAutoplayNotPermitted:
     WebCore:
       default: false
 
+IsARIANotifyEnabled:
+  type: bool
+  status: unstable
+  humanReadableName: "ariaNotify()"
+  humanReadableDescription: "Enable ariaNotify support"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 IsAccessibilityIsolatedTreeEnabled:
   type: bool
   status: embedder
@@ -4250,20 +4290,6 @@ IsThirdPartyCookieBlockingDisabled:
   category: privacy
   humanReadableName: "Disable Full 3rd-Party Cookie Blocking (ITP)"
   humanReadableDescription: "Disable full third-party cookie blocking when Intelligent Tracking Prevention is enabled"
-  defaultValue:
-    WebKitLegacy:
-      default: false
-    WebKit:
-      default: false
-    WebCore:
-      default: false
-
-ItemPackCollapseDisplayGridEnabled:
-  type: bool
-  status: preview
-  category: css
-  humanReadableName: "CSS Item Pack Collapse (display: grid)"
-  humanReadableDescription: "Enable CSS Item Pack Collapse for CSS Grid"
   defaultValue:
     WebKitLegacy:
       default: false
@@ -8357,6 +8383,20 @@ UseAVCaptureDeviceRotationCoordinatorAPI:
       default: false
   sharedPreferenceForWebProcess: true
 
+UseAppKitGestures:
+  type: bool
+  status: internal
+  humanReadableName: "AppKit Gestures"
+  humanReadableDescription: "Use AppKit Gestures"
+  condition: PLATFORM(MAC)
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 UseAsyncUIKitInteractions:
   type: bool
   status: internal
@@ -8639,22 +8679,6 @@ UsesSingleWebProcess:
   defaultValue:
     WebKit:
       default: false
-  sharedPreferenceForWebProcess: true
-
-UsesWebContentRestrictionsForFilter:
-  type: bool
-  status: internal
-  condition: HAVE(WEBCONTENTRESTRICTIONS)
-  defaultsOverridable: true
-  humanReadableName: "Uses WebContentRestriction framework for content filter"
-  webcoreBinding: DeprecatedGlobalSettings
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
   sharedPreferenceForWebProcess: true
 
 VP9DecoderEnabled:
@@ -9350,7 +9374,7 @@ WebLocksAPIEnabled:
 
 WebMUseRemoteAudioVideoRenderer:
   type: bool
-  status: testable
+  status: stable
   category: media
   humanReadableName: "WebM player uses GPU renderer"
   humanReadableDescription: "WebM player uses GPU renderer"
@@ -9359,9 +9383,9 @@ WebMUseRemoteAudioVideoRenderer:
     WebKitLegacy:
       default: false
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
   sharedPreferenceForWebProcess: true
 
 WebPageSpatialBackdropEnabled:
@@ -9885,8 +9909,10 @@ WindowFocusRestricted:
 WirelessPlaybackMediaPlayerEnabled:
   type: bool
   status: unstable
+  category: media
   humanReadableName: "Wireless Playback Media Player"
   humanReadableDescription: "Enable wireless playback via MediaPlayerPrivateWirelessPlayback"
+  webcoreBinding: DeprecatedGlobalSettings
   condition: ENABLE(REMOTE_PLAYBACK_MEDIA_PLAYER)
   defaultValue:
     WebCore:
@@ -9896,7 +9922,6 @@ WirelessPlaybackMediaPlayerEnabled:
     WebKitLegacy:
       default: false
   disableInLockdownMode: true
-  sharedPreferenceForWebProcess: true
 
 WirelessPlaybackTargetAPIEnabled:
   type: bool

@@ -2603,7 +2603,7 @@ void Page::prioritizeVisibleResources()
         return;
 
     auto resourceLoaders = toPrioritize.map([](auto& resource) {
-        return resource->loader();
+        return RefPtr { resource->loader() };
     });
 
     platformStrategies()->loaderStrategy()->prioritizeResourceLoads(resourceLoaders);
@@ -3133,9 +3133,7 @@ RefPtr<HTMLMediaElement> Page::bestMediaElementForRemoteControls(MediaElementSes
 
 void Page::playbackControlsManagerUpdateTimerFired()
 {
-    WeakPtr localMainFrame = dynamicDowncast<LocalFrame>(m_mainFrame.get());
-    RefPtr document = localMainFrame ? localMainFrame->document() : nullptr;
-    if (auto bestMediaElement = bestMediaElementForRemoteControls(MediaElementSession::PlaybackControlsPurpose::ControlsManager, document.get()))
+    if (auto bestMediaElement = bestMediaElementForRemoteControls(MediaElementSession::PlaybackControlsPurpose::ControlsManager, nullptr))
         chrome().client().setUpPlaybackControlsManager(*bestMediaElement);
     else
         chrome().client().clearPlaybackControlsManager();
@@ -3368,7 +3366,7 @@ void Page::setActivityState(OptionSet<ActivityState> activityState)
         observer->activityStateDidChange(oldActivityState, m_activityState);
 
     if (wasVisibleAndActive != isVisibleAndActive()) {
-        if (RefPtr manager = mediaSessionManager())
+        if (RefPtr manager = mediaSessionManagerIfExists())
             manager->updateNowPlayingInfoIfNecessary();
         stopKeyboardScrollAnimation();
     }
@@ -6010,6 +6008,10 @@ RefPtr<MediaSessionManagerInterface> Page::mediaSessionManager()
 
         m_mediaSessionManager = m_mediaSessionManagerFactory.value()(*m_identifier);
 
+#if USE(AUDIO_SESSION)
+        Ref { *m_mediaSessionManager }->setShouldDeactivateAudioSession(true);
+#endif
+
         MediaEngineConfigurationFactory::setMediaSessionManagerProvider([] (PageIdentifier identifier) {
             return Page::mediaSessionManagerForPageIdentifier(identifier);
         });
@@ -6084,5 +6086,30 @@ void Page::updateControlTints()
             view->updateControlTints();
     });
 }
+
+#if PLATFORM(IOS_FAMILY)
+void Page::addHardwareKeyboardAttachmentObserver(HardwareKeyboardAttachmentObserver&& observer)
+{
+    m_hardwareKeyboardAttachmentObservers.append(WTFMove(observer));
+}
+
+void Page::flushHardwareKeyboardAttachmentObservers()
+{
+    bool attached = m_hardwareKeyboardAttached;
+    std::ranges::for_each(m_hardwareKeyboardAttachmentObservers, [attached](auto& observer) {
+        observer(attached);
+    });
+    m_hardwareKeyboardAttachmentObservers.clear();
+}
+
+void Page::didUpdateHardwareKeyboardAttachment(bool attached)
+{
+    if (m_hardwareKeyboardAttached == attached)
+        return;
+
+    m_hardwareKeyboardAttached = attached;
+    flushHardwareKeyboardAttachmentObservers();
+}
+#endif
 
 } // namespace WebCore

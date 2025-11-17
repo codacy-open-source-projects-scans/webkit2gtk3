@@ -32,6 +32,19 @@ NS_HEADER_AUDIT_BEGIN(nullability, sendability)
 @class WKWebView;
 @class _WKJSHandle;
 
+typedef NS_OPTIONS(NSUInteger, _WKTextExtractionFilterOptions) {
+    _WKTextExtractionFilterNone = 0,
+    _WKTextExtractionFilterTextRecognition = 1 << 0,
+    _WKTextExtractionFilterClassifier = 1 << 1,
+    _WKTextExtractionFilterAll = _WKTextExtractionFilterTextRecognition | _WKTextExtractionFilterClassifier,
+} WK_API_AVAILABLE(macos(WK_MAC_TBA), ios(WK_IOS_TBA), visionos(WK_XROS_TBA));
+
+typedef NS_ENUM(NSInteger, _WKTextExtractionNodeIdentifierInclusion) {
+    _WKTextExtractionNodeIdentifierInclusionNone = 0,
+    _WKTextExtractionNodeIdentifierInclusionEditableOnly,
+    _WKTextExtractionNodeIdentifierInclusionInteractive
+} WK_API_AVAILABLE(macos(WK_MAC_TBA), ios(WK_IOS_TBA), visionos(WK_XROS_TBA));
+
 WK_CLASS_AVAILABLE(macos(WK_MAC_TBA), ios(WK_IOS_TBA), visionos(WK_XROS_TBA))
 @interface _WKTextExtractionConfiguration : NSObject
 
@@ -57,10 +70,13 @@ WK_CLASS_AVAILABLE(macos(WK_MAC_TBA), ios(WK_IOS_TBA), visionos(WK_XROS_TBA))
 @property (nonatomic) BOOL includeRects;
 
 /*!
- Include node IDs for interactive nodes.
- The default value is `YES`.
+ Policy determining which nodes should be uniquely identified in the output.
+ `.none`          	Prevents collection of any identifiers.
+ `.editableOnly`    Limits collection of identifiers to editable elements and form controls.
+ `.interactive`     Collects identifiers for all buttons, links, and other interactive elements.
+ The default value is `.interactive`.
  */
-@property (nonatomic) BOOL includeNodeIdentifiers;
+@property (nonatomic) _WKTextExtractionNodeIdentifierInclusion nodeIdentifierInclusion;
 
 /*!
  Include information about event listeners.
@@ -105,6 +121,12 @@ WK_CLASS_AVAILABLE(macos(WK_MAC_TBA), ios(WK_IOS_TBA), visionos(WK_XROS_TBA))
  The default value is `nil`.
  */
 @property (nonatomic, copy, nullable) NSDictionary<NSString *, NSString *> *replacementStrings;
+
+/*!
+ Filters to apply when extracting text.
+ Defaults to `_WKTextExtractionFilterAll`.
+ */
+@property (nonatomic) _WKTextExtractionFilterOptions filterOptions;
 
 @end
 

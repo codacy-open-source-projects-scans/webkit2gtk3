@@ -32,6 +32,7 @@
 #include "AXObjectCacheInlines.h"
 #include "AnimationTimelinesController.h"
 #include "ApplicationManifest.h"
+#include "AriaNotifyOptions.h"
 #include "AsyncNodeDeletionQueueInlines.h"
 #include "Attr.h"
 #include "BeforeUnloadEvent.h"
@@ -9027,7 +9028,7 @@ void Document::addScreenPropertiesChangedObserver(const ScreenPropertiesChangedO
 }
 
 #if HAVE(SPATIAL_TRACKING_LABEL)
-const String& Document::defaultSpatialTrackingLabel() const
+String Document::defaultSpatialTrackingLabel() const
 {
     if (RefPtr page = this->page())
         return page->defaultSpatialTrackingLabel();
@@ -10322,6 +10323,10 @@ void Document::updateIntersectionObservations()
 
 void Document::updateIntersectionObservations(const Vector<WeakPtr<IntersectionObserver>>& intersectionObservers)
 {
+    RefPtr frame = this->frame();
+    if (!frame)
+        return;
+
     RefPtr frameView = view();
     if (!frameView)
         return;
@@ -10346,7 +10351,7 @@ void Document::updateIntersectionObservations(const Vector<WeakPtr<IntersectionO
         if (!observer)
             continue;
 
-        auto needNotify = observer->updateObservations(*this);
+        auto needNotify = observer->updateObservations(*frame);
         if (needNotify == IntersectionObserver::NeedNotify::Yes)
             intersectionObserversWithPendingNotifications.append(observer);
     }
@@ -12101,6 +12106,45 @@ void Document::processSpeculationRulesHeader(const String& headerValue, const UR
                 protectedThis->m_loadableSpeculationRules.append(WTFMove(loadableSpeculationRules));
         });
     }
+}
+
+void Document::ariaNotify(const String& announcement)
+{
+    if (!settings().isARIANotifyEnabled())
+        return;
+
+    if (CheckedPtr cache = axObjectCache())
+        cache->postARIANotifyNotification(*this, announcement, { });
+}
+
+void Document::ariaNotify(const String& announcement, const AriaNotifyOptions& options)
+{
+    if (!settings().isARIANotifyEnabled())
+        return;
+
+    if (CheckedPtr cache = axObjectCache())
+        cache->postARIANotifyNotification(*this, announcement, options);
+}
+
+void Document::invalidateCachedSetInnerHTML()
+{
+    auto& cache = cachedSetInnerHTML();
+    if (cache.cachedContainer)
+        cache.cachedContainer->setDidMutateSubtreeAfterSetInnerHTML();
+    cache.source = String();
+}
+
+void Document::updateCachedSetInnerHTML(const String& sourceString, ContainerNode& container, Element& contextElement)
+{
+    auto& cache = cachedSetInnerHTML();
+
+    if (sourceString.length() < cache.source.length() || sourceString.length() > maxCachedSetInnerHTMLStringSize())
+        return;
+
+    cache.source = sourceString;
+    cache.cachedContainer = &container;
+    cache.contextElementName = contextElement.elementName();
+    container.clearDidMutateSubtreeAfterSetInnerHTML();
 }
 
 } // namespace WebCore

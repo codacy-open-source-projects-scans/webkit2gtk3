@@ -372,9 +372,9 @@ void ThreadedCompositor::frameComplete()
 
 void ThreadedCompositor::didCompositeRunLoopObserverFired()
 {
+    m_didCompositeRunLoopObserver->invalidate();
     if (m_layerTreeHost)
         m_layerTreeHost->didComposite(m_compositionResponseID);
-    m_didCompositeRunLoopObserver->invalidate();
 }
 
 void ThreadedCompositor::updateSceneAttributes(const IntSize& size, float deviceScaleFactor)

@@ -74,8 +74,10 @@ void layoutWithFormattingContextForBlockInInline(const Layout::ElementBox& block
 {
     auto& placedFloats = parentBlockLayoutState.placedFloats();
 
+    auto& blockRenderer = downcast<RenderBox>(*block.rendererForIntegration());
+    auto& rootBlockContainer = downcast<RenderBlockFlow>(*rootLayoutBox(block).rendererForIntegration());
+
     auto populateRootRendererWithFloatsFromIFC = [&] {
-        auto& rootBlockContainer = downcast<RenderBlockFlow>(*rootLayoutBox(block).rendererForIntegration());
         for (auto& floatItem : placedFloats.list()) {
             auto* layoutBox = floatItem.layoutBox();
             if (!layoutBox) {
@@ -94,24 +96,39 @@ void layoutWithFormattingContextForBlockInInline(const Layout::ElementBox& block
     };
     populateRootRendererWithFloatsFromIFC();
 
-    // FIXME: We need to run this through the render tree code of "estimateLogicalTopPosition"
-    downcast<RenderBox>(*block.rendererForIntegration()).setLogicalTop(blockLogicalTopLeft.y());
+    auto marginInfoForBlock = [&] {
+        auto& marginState = parentBlockLayoutState.marginState();
+        return RenderBlockFlow::MarginInfo { marginState.canCollapseWithChildren, marginState.canCollapseMarginBeforeWithChildren, marginState.canCollapseMarginAfterWithChildren, marginState.quirkContainer, marginState.atBeforeSideOfBlock, marginState.atAfterSideOfBlock, marginState.hasMarginBeforeQuirk, marginState.hasMarginAfterQuirk, marginState.determinedMarginBeforeQuirk, marginState.positiveMargin, marginState.negativeMargin };
+    };
 
-    layoutWithFormattingContextForBox(block, { }, { }, layoutState);
-    ASSERT(!block.rendererForIntegration()->needsLayout());
+    auto positionAndMargin = rootBlockContainer.layoutBlockChildFromInlineLayout(blockRenderer, blockLogicalTopLeft.y(), marginInfoForBlock());
+
+    auto updateMarginState = [&] {
+        auto& marginInfo = positionAndMargin.marginInfo;
+        parentBlockLayoutState.marginState() = { marginInfo.canCollapseWithChildren(), marginInfo.canCollapseMarginBeforeWithChildren(), marginInfo.canCollapseMarginAfterWithChildren(), marginInfo.quirkContainer(), marginInfo.atBeforeSideOfBlock(), marginInfo.atAfterSideOfBlock(), marginInfo.hasMarginBeforeQuirk(), marginInfo.hasMarginAfterQuirk(), marginInfo.determinedMarginBeforeQuirk(), marginInfo.positiveMargin(), marginInfo.negativeMargin() };
+    };
+    updateMarginState();
+
+    auto updater = BoxGeometryUpdater { layoutState, rootLayoutBox(block) };
+    updater.updateBoxGeometryAfterIntegrationLayout(block, rootBlockContainer.contentBoxLogicalWidth());
+
+    ASSERT(!blockRenderer.needsLayout());
+    auto& blockGeometry = layoutState.ensureGeometryForBox(block);
+    blockGeometry.setTopLeft(LayoutPoint { blockGeometry.marginStart(), positionAndMargin.logicalTop });
+    // FIXME: This is only valid under the assumption that the block is immediately followed by an inline (i.e. no margin collapsing).
+    blockGeometry.setVerticalMargin({ positionAndMargin.logicalTop, positionAndMargin.marginInfo.margin() });
 
     auto populateIFCWithNewlyPlacedFloats = [&] {
-        auto* renderBlockFlow = dynamicDowncast<RenderBlockFlow>(*block.rendererForIntegration());
+        auto* renderBlockFlow = dynamicDowncast<RenderBlockFlow>(blockRenderer);
         if (!renderBlockFlow)
             return;
-
-        auto& blockBoxGeometry = layoutState.ensureGeometryForBox(block);
-        blockBoxGeometry.setTopLeft(LayoutPoint { blockBoxGeometry.marginStart(), blockBoxGeometry.marginBefore() });
 
         if (!renderBlockFlow->containsFloats() || renderBlockFlow->createsNewFormattingContext())
             return;
 
         for (auto& floatingObject : *renderBlockFlow->floatingObjectSet()) {
+            if (!floatingObject->renderer())
+                continue;
             if (!floatingObject->isDescendant())
                 continue;
 
@@ -126,10 +143,10 @@ void layoutWithFormattingContextForBlockInInline(const Layout::ElementBox& block
             boxGeometry.setHorizontalMargin({ });
             boxGeometry.setVerticalMargin({ });
 
-            auto shapeOutsideInfo = floatingObject->renderer().shapeOutsideInfo();
+            auto shapeOutsideInfo = floatingObject->renderer()->shapeOutsideInfo();
             RefPtr shape = shapeOutsideInfo ? &shapeOutsideInfo->computedShape() : nullptr;
 
-            auto usedPosition = RenderStyle::usedFloat(floatingObject->renderer()) == UsedFloat::Left ? Layout::PlacedFloats::Item::Position::Start : Layout::PlacedFloats::Item::Position::End;
+            auto usedPosition = RenderStyle::usedFloat(*floatingObject->renderer()) == UsedFloat::Left ? Layout::PlacedFloats::Item::Position::Start : Layout::PlacedFloats::Item::Position::End;
             placedFloats.add({ usedPosition, boxGeometry, floatRect.location(), WTFMove(shape) });
         }
     };

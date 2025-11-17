@@ -29,7 +29,6 @@
 #include <WebCore/BoxExtents.h>
 #include <WebCore/PseudoElementIdentifier.h>
 #include <WebCore/StylePrimitiveNumeric+Forward.h>
-#include <WebCore/StyleTextDecorationLine.h>
 #include <WebCore/WritingMode.h>
 #include <unicode/utypes.h>
 #include <wtf/CheckedRef.h>
@@ -68,11 +67,9 @@ class RenderElement;
 class RenderStyle;
 class SVGRenderStyle;
 class ScrollTimeline;
-class StyleContentAlignmentData;
 class StyleInheritedData;
 class StyleNonInheritedData;
 class StyleRareInheritedData;
-class StyleSelfAlignmentData;
 class TransformationMatrix;
 class ViewTimeline;
 
@@ -108,7 +105,6 @@ enum class ColumnProgression : bool;
 enum class ColumnSpan : bool;
 enum class CompositeOperator : uint8_t;
 enum class ContainerType : uint8_t;
-enum class Containment : uint8_t;
 enum class ContentDistribution : uint8_t;
 enum class ContentPosition : uint8_t;
 enum class ContentVisibility : uint8_t;
@@ -117,7 +113,7 @@ enum class CursorVisibility : bool;
 enum class DisplayType : uint8_t;
 enum class DominantBaseline : uint8_t;
 enum class EmptyCell : bool;
-enum class EventListenerRegionType : uint32_t;
+enum class EventListenerRegionType : uint64_t;
 enum class FieldSizing : bool;
 enum class FillAttachment : uint8_t;
 enum class FillBox : uint8_t;
@@ -146,7 +142,6 @@ enum class LineCap : uint8_t;
 enum class LineJoin : uint8_t;
 enum class LineSnap : uint8_t;
 enum class ListStylePosition : bool;
-enum class MarginTrimType : uint8_t;
 enum class MarqueeBehavior : uint8_t;
 enum class MarqueeDirection : uint8_t;
 enum class MaskType : uint8_t;
@@ -167,7 +162,6 @@ enum class PaginationMode : uint8_t;
 enum class PaintBehavior : uint32_t;
 enum class PointerEvents : uint8_t;
 enum class PositionType : uint8_t;
-enum class PositionVisibility : uint8_t;
 enum class PrintColorAdjust : bool;
 enum class PseudoId : uint8_t;
 enum class Resize : uint8_t;
@@ -199,7 +193,6 @@ enum class TextUnderlinePosition : uint8_t;
 enum class TextWrapMode : bool;
 enum class TextWrapStyle : uint8_t;
 enum class TextZoom : bool;
-enum class TouchAction : uint8_t;
 enum class TransformBox : uint8_t;
 enum class TransformStyle3D : uint8_t;
 enum class UnicodeBidi : uint8_t;
@@ -234,6 +227,9 @@ class CustomPropertyData;
 class CustomPropertyRegistry;
 
 struct AccentColor;
+struct AlignContent;
+struct AlignItems;
+struct AlignSelf;
 struct Animation;
 struct AnchorNames;
 struct AppleColorFilter;
@@ -256,6 +252,7 @@ struct Color;
 struct ColorScheme;
 struct ColumnCount;
 struct ColumnWidth;
+struct Contain;
 struct ContainIntrinsicSize;
 struct ContainerNames;
 struct Content;
@@ -264,6 +261,8 @@ struct Cursor;
 struct DynamicRangeLimit;
 struct Filter;
 struct FlexBasis;
+struct FontFamilies;
+struct FontFamiliesView;
 struct FontFeatureSettings;
 struct FontPalette;
 struct FontSizeAdjust;
@@ -286,12 +285,17 @@ struct HyphenateLimitEdge;
 struct HyphenateLimitLines;
 struct ImageOrNone;
 struct InsetEdge;
+struct ItemTolerance;
+struct JustifyContent;
+struct JustifyItems;
+struct JustifySelf;
 struct LetterSpacing;
 struct LineHeight;
 struct LineWidth;
 struct LineFitEdge;
 struct ListStyleType;
 struct MarginEdge;
+struct MarginTrim;
 struct MaskBorder;
 struct MaskBorderOutset;
 struct MaskBorderRepeat;
@@ -314,6 +318,7 @@ struct PaddingEdge;
 struct PageSize;
 struct Perspective;
 struct Position;
+struct PositionVisibility;
 struct PositionX;
 struct PositionY;
 struct PositionTryFallback;
@@ -352,12 +357,15 @@ struct TabSize;
 struct TextAutospace;
 struct TextBoxEdge;
 struct TextDecorationThickness;
+struct TextDecorationLine;
 struct TextEmphasisStyle;
 struct TextIndent;
 struct TextShadow;
 struct TextSizeAdjust;
 struct TextSpacingTrim;
+struct TextTransform;
 struct TextUnderlineOffset;
+struct TouchAction;
 struct Transform;
 struct TransformOrigin;
 struct Transition;
@@ -369,6 +377,7 @@ struct ViewTransitionClasses;
 struct ViewTransitionName;
 struct WebkitBoxReflect;
 struct WebkitInitialLetter;
+struct WebkitLineBoxContain;
 struct WebkitLineClamp;
 struct WebkitLineGrid;
 struct WebkitMarqueeIncrement;
@@ -384,7 +393,6 @@ struct ZoomFactor;
 enum class Change : uint8_t;
 enum class GridTrackSizingDirection : bool;
 enum class ImageOrientation : bool;
-enum class LineBoxContain : uint8_t;
 enum class PositionTryOrder : uint8_t;
 enum class SVGGlyphOrientationHorizontal : uint8_t;
 enum class SVGGlyphOrientationVertical : uint8_t;
@@ -486,17 +494,6 @@ public:
 
     bool scrollAnchoringSuppressionStyleDidChange(const RenderStyle*) const;
     bool outOfFlowPositionStyleDidChange(const RenderStyle*) const;
-
-    ContentPosition resolvedJustifyContentPosition(const StyleContentAlignmentData& normalValueBehavior) const;
-    ContentDistribution resolvedJustifyContentDistribution(const StyleContentAlignmentData& normalValueBehavior) const;
-    ContentPosition resolvedAlignContentPosition(const StyleContentAlignmentData& normalValueBehavior) const;
-    ContentDistribution resolvedAlignContentDistribution(const StyleContentAlignmentData& normalValueBehavior) const;
-    StyleSelfAlignmentData resolvedAlignItems(ItemPosition normalValueBehavior) const;
-    StyleSelfAlignmentData resolvedAlignSelf(const RenderStyle* parentStyle, ItemPosition normalValueBehavior) const;
-    StyleContentAlignmentData resolvedAlignContent(const StyleContentAlignmentData& normalValueBehavior) const;
-    StyleSelfAlignmentData resolvedJustifyItems(ItemPosition normalValueBehavior) const;
-    StyleSelfAlignmentData resolvedJustifySelf(const RenderStyle* parentStyle, ItemPosition normalValueBehavior) const;
-    StyleContentAlignmentData resolvedJustifyContent(const StyleContentAlignmentData& normalValueBehavior) const;
 
     std::optional<PseudoElementType> pseudoElementType() const;
     const AtomString& pseudoElementNameArgument() const;
@@ -735,6 +732,7 @@ public:
     float computedFontSize() const;
     std::pair<FontOrientation, NonCJKGlyphOrientation> fontAndGlyphOrientation();
 
+    inline Style::FontFamilies fontFamily() const;
     inline FontOpticalSizing fontOpticalSizing() const;
     inline Style::FontFeatureSettings fontFeatureSettings() const;
     inline Style::FontVariationSettings fontVariationSettings() const;
@@ -763,7 +761,7 @@ public:
     inline TextAlignMode textAlign() const { return static_cast<TextAlignMode>(m_inheritedFlags.textAlign); }
     inline TextAlignLast textAlignLast() const;
     inline TextGroupAlign textGroupAlign() const;
-    inline OptionSet<TextTransform> textTransform() const;
+    inline Style::TextTransform textTransform() const;
     inline Style::TextDecorationLine textDecorationLineInEffect() const;
     inline Style::TextDecorationLine textDecorationLine() const;
     inline TextDecorationStyle textDecorationStyle() const;
@@ -778,7 +776,7 @@ public:
     inline Style::TextBoxEdge textBoxEdge() const;
     inline Style::LineFitEdge lineFitEdge() const;
 
-    inline OptionSet<MarginTrimType> marginTrim() const;
+    inline Style::MarginTrim marginTrim() const;
 
     inline const Style::LetterSpacing& computedLetterSpacing() const;
     inline const Style::WordSpacing& computedWordSpacing() const;
@@ -911,15 +909,8 @@ public:
     inline double logicalAspectRatio() const;
     inline bool hasAspectRatio() const;
 
-    inline OptionSet<Containment> contain() const;
-    inline OptionSet<Containment> usedContain() const;
-    inline bool containsLayout() const;
-    inline bool containsSize() const;
-    inline bool containsInlineSize() const;
-    inline bool containsSizeOrInlineSize() const;
-    inline bool containsStyle() const;
-    inline bool containsPaint() const;
-    inline bool containsLayoutOrPaint() const;
+    inline Style::Contain contain() const;
+    inline Style::Contain usedContain() const;
     inline ContainerType containerType() const;
     inline const Style::ContainerNames& containerNames() const;
     inline bool containerTypeAndNamesEqual(const RenderStyle&) const;
@@ -951,17 +942,17 @@ public:
     inline Style::FlexGrow flexGrow() const;
     inline Style::FlexShrink flexShrink() const;
     inline const Style::FlexBasis& flexBasis() const;
-    inline const StyleContentAlignmentData& alignContent() const;
-    inline const StyleSelfAlignmentData& alignItems() const;
-    inline const StyleSelfAlignmentData& alignSelf() const;
+    inline Style::AlignContent alignContent() const;
+    inline Style::AlignItems alignItems() const;
+    inline Style::AlignSelf alignSelf() const;
     inline FlexDirection flexDirection() const;
     inline bool isRowFlexDirection() const;
     inline bool isColumnFlexDirection() const;
     inline bool isReverseFlexDirection() const;
     inline FlexWrap flexWrap() const;
-    inline const StyleContentAlignmentData& justifyContent() const;
-    inline const StyleSelfAlignmentData& justifyItems() const;
-    inline const StyleSelfAlignmentData& justifySelf() const;
+    inline Style::JustifyContent justifyContent() const;
+    inline Style::JustifyItems justifyItems() const;
+    inline Style::JustifySelf justifySelf() const;
 
     inline Style::GridAutoFlow gridAutoFlow() const;
     inline const Style::GridTrackSizes& gridAutoColumns() const;
@@ -1029,6 +1020,7 @@ public:
     inline const Style::GapGutter& columnGap() const;
     inline const Style::GapGutter& rowGap() const;
     inline const Style::GapGutter& gap(Style::GridTrackSizingDirection) const;
+    inline const Style::ItemTolerance& itemTolerance() const;
 
     inline const Style::Transform& transform() const;
     inline bool hasTransform() const;
@@ -1162,16 +1154,16 @@ public:
 
     inline const Style::PageSize& pageSize() const;
 
-    inline OptionSet<Style::LineBoxContain> lineBoxContain() const;
+    inline Style::WebkitLineBoxContain lineBoxContain() const;
     inline const Style::WebkitLineClamp& lineClamp() const;
     inline const Style::BlockEllipsis& blockEllipsis() const;
     inline Style::MaximumLines maxLines() const;
     inline OverflowContinue overflowContinue() const;
     inline const Style::WebkitInitialLetter& initialLetter() const;
 
-    inline OptionSet<TouchAction> touchActions() const;
+    inline Style::TouchAction touchAction() const;
     // 'touch-action' behavior depends on values in ancestors. We use an additional inherited property to implement that.
-    inline OptionSet<TouchAction> usedTouchActions() const;
+    inline Style::TouchAction usedTouchAction() const;
     inline OptionSet<EventListenerRegionType> eventListenerRegionTypes() const;
 
     inline bool effectiveInert() const;
@@ -1384,6 +1376,7 @@ public:
     // Only used for blending font sizes when animating, for MathML anonymous blocks, and for text autosizing.
     void setFontSize(float);
     void setFontOpticalSizing(FontOpticalSizing);
+    void setFontFamily(Style::FontFamilies&&);
     void setFontFeatureSettings(Style::FontFeatureSettings&&);
     void setFontVariationSettings(Style::FontVariationSettings&&);
     void setFontPalette(Style::FontPalette&&);
@@ -1420,7 +1413,7 @@ public:
     inline void setTextIndent(Style::TextIndent&&);
     inline void setTextUnderlinePosition(OptionSet<TextUnderlinePosition>);
     inline void setTextUnderlineOffset(Style::TextUnderlineOffset&&);
-    inline void setTextTransform(OptionSet<TextTransform>);
+    inline void setTextTransform(Style::TextTransform);
     bool setZoom(float);
     inline bool setUsedZoom(float);
     inline void setTextZoom(TextZoom);
@@ -1431,7 +1424,7 @@ public:
     inline void setTextBoxEdge(Style::TextBoxEdge);
     inline void setLineFitEdge(Style::LineFitEdge);
 
-    inline void setMarginTrim(OptionSet<MarginTrimType>);
+    inline void setMarginTrim(Style::MarginTrim);
 
     void setLineHeight(Style::LineHeight&&);
 #if ENABLE(TEXT_AUTOSIZING)
@@ -1466,7 +1459,7 @@ public:
 
     inline void setAspectRatio(Style::AspectRatio&&);
 
-    inline void setContain(OptionSet<Containment>);
+    inline void setContain(Style::Contain);
     inline void setContainerType(ContainerType);
     inline void setContainerNames(Style::ContainerNames&&);
 
@@ -1556,19 +1549,16 @@ public:
     inline void setFlexGrow(Style::FlexGrow);
     inline void setFlexShrink(Style::FlexShrink);
     inline void setFlexBasis(Style::FlexBasis&&);
-    inline void setOrder(Style::Order);
-    inline void setAlignContent(const StyleContentAlignmentData&);
-    inline void setAlignItems(const StyleSelfAlignmentData&);
-    inline void setAlignItemsPosition(ItemPosition);
-    inline void setAlignSelf(const StyleSelfAlignmentData&);
-    inline void setAlignSelfPosition(ItemPosition);
     inline void setFlexDirection(FlexDirection);
     inline void setFlexWrap(FlexWrap);
-    inline void setJustifyContent(const StyleContentAlignmentData&);
-    inline void setJustifyContentPosition(ContentPosition);
-    inline void setJustifyItems(const StyleSelfAlignmentData&);
-    inline void setJustifySelf(const StyleSelfAlignmentData&);
-    inline void setJustifySelfPosition(ItemPosition);
+    inline void setOrder(Style::Order);
+
+    inline void setAlignContent(Style::AlignContent);
+    inline void setAlignItems(Style::AlignItems);
+    inline void setAlignSelf(Style::AlignSelf);
+    inline void setJustifyContent(Style::JustifyContent);
+    inline void setJustifyItems(Style::JustifyItems);
+    inline void setJustifySelf(Style::JustifySelf);
 
     inline void setBoxDecorationBreak(BoxDecorationBreak);
 
@@ -1610,6 +1600,7 @@ public:
     inline void setColumnFill(ColumnFill);
     inline void setColumnGap(Style::GapGutter&&);
     inline void setRowGap(Style::GapGutter&&);
+    inline void setItemTolerance(Style::ItemTolerance&&);
     inline void setColumnRuleColor(Style::Color&&);
     inline void setColumnRuleStyle(BorderStyle);
     inline void setColumnRuleWidth(Style::LineWidth);
@@ -1689,7 +1680,7 @@ public:
     inline void setPageSize(Style::PageSize&&);
     inline void resetPageSize();
 
-    inline void setLineBoxContain(OptionSet<Style::LineBoxContain>);
+    inline void setLineBoxContain(Style::WebkitLineBoxContain);
     inline void setLineClamp(Style::WebkitLineClamp&&);
 
     inline void setMaxLines(Style::MaximumLines);
@@ -1698,8 +1689,8 @@ public:
 
     inline void setInitialLetter(Style::WebkitInitialLetter&&);
 
-    inline void setTouchActions(OptionSet<TouchAction>);
-    inline void setUsedTouchActions(OptionSet<TouchAction>);
+    inline void setTouchAction(Style::TouchAction);
+    inline void setUsedTouchAction(Style::TouchAction);
     inline void setEventListenerRegionTypes(OptionSet<EventListenerRegionType>);
 
     inline void setEffectiveInert(bool);
@@ -1993,6 +1984,9 @@ public:
     static constexpr OverscrollBehavior initialOverscrollBehaviorX();
     static constexpr OverscrollBehavior initialOverscrollBehaviorY();
 
+    static constexpr Style::AlignContent initialAlignContent();
+    static constexpr Style::AlignItems initialAlignItems();
+    static constexpr Style::AlignSelf initialAlignSelf();
     static constexpr Clear initialClear();
     static inline Style::Clip initialClip();
     static inline Style::SVGCenterCoordinateComponent initialCx();
@@ -2046,7 +2040,7 @@ public:
     static constexpr EmptyCell initialEmptyCells();
     static constexpr ListStylePosition initialListStylePosition();
     static inline Style::ListStyleType initialListStyleType();
-    static constexpr OptionSet<TextTransform> initialTextTransform();
+    static constexpr Style::TextTransform initialTextTransform();
     static inline Style::ViewTransitionClasses initialViewTransitionClasses();
     static inline Style::ViewTransitionName initialViewTransitionName();
     static constexpr Visibility initialVisibility();
@@ -2079,7 +2073,7 @@ public:
     static inline Style::SVGRadiusComponent initialRx();
     static inline Style::SVGRadiusComponent initialRy();
     static inline Style::MarginEdge initialMargin();
-    static constexpr OptionSet<MarginTrimType> initialMarginTrim();
+    static constexpr Style::MarginTrim initialMarginTrim();
     static inline Style::PaddingEdge initialPadding();
     static inline Style::PageSize initialPageSize();
     static inline Style::TextIndent initialTextIndent();
@@ -2092,8 +2086,8 @@ public:
     static constexpr TextAlignMode initialTextAlign();
     static constexpr TextAlignLast initialTextAlignLast();
     static constexpr TextGroupAlign initialTextGroupAlign();
-    static inline Style::TextDecorationLine initialTextDecorationLine();
-    static inline Style::TextDecorationLine initialTextDecorationLineInEffect();
+    static constexpr Style::TextDecorationLine initialTextDecorationLine();
+    static constexpr Style::TextDecorationLine initialTextDecorationLineInEffect();
     static constexpr TextDecorationStyle initialTextDecorationStyle();
     static constexpr TextDecorationSkipInk initialTextDecorationSkipInk();
     static constexpr OptionSet<TextUnderlinePosition> initialTextUnderlinePosition();
@@ -2121,10 +2115,9 @@ public:
     static constexpr Style::FlexShrink initialFlexShrink();
     static inline Style::FlexBasis initialFlexBasis();
     static constexpr Style::Order initialOrder();
-    static constexpr StyleSelfAlignmentData initialJustifyItems();
-    static constexpr StyleSelfAlignmentData initialSelfAlignment();
-    static constexpr StyleSelfAlignmentData initialDefaultAlignment();
-    static constexpr StyleContentAlignmentData initialContentAlignment();
+    static constexpr Style::JustifyContent initialJustifyContent();
+    static constexpr Style::JustifyItems initialJustifyItems();
+    static constexpr Style::JustifySelf initialJustifySelf();
     static constexpr FlexDirection initialFlexDirection();
     static constexpr FlexWrap initialFlexWrap();
     static constexpr MarqueeBehavior initialMarqueeBehavior();
@@ -2153,9 +2146,7 @@ public:
     static constexpr Resize initialResize();
     static constexpr StyleAppearance initialAppearance();
     static inline Style::AspectRatio initialAspectRatio();
-    static constexpr OptionSet<Containment> initialContainment();
-    static constexpr OptionSet<Containment> strictContainment();
-    static constexpr OptionSet<Containment> contentContainment();
+    static constexpr Style::Contain initialContain();
     static constexpr ContainerType initialContainerType();
     static Style::ContainerNames initialContainerNames();
     static inline Style::Content initialContent();
@@ -2172,6 +2163,7 @@ public:
     static inline Style::GapGutter initialColumnGap();
     static constexpr Style::ColumnWidth initialColumnWidth();
     static inline Style::GapGutter initialRowGap();
+    static inline Style::ItemTolerance initialItemTolerance();
     static inline Style::Transform initialTransform();
     static inline Style::TransformOrigin initialTransformOrigin();
     static inline Style::TransformOriginX initialTransformOriginX();
@@ -2195,7 +2187,7 @@ public:
     static constexpr RubyPosition initialRubyPosition();
     static constexpr RubyAlign initialRubyAlign();
     static constexpr RubyOverhang initialRubyOverhang();
-    static constexpr OptionSet<Style::LineBoxContain> initialLineBoxContain();
+    static constexpr Style::WebkitLineBoxContain initialLineBoxContain();
     static constexpr Style::ImageOrientation initialImageOrientation();
     static constexpr ImageRendering initialImageRendering();
     static inline Style::BorderImageSource initialBorderImageSource();
@@ -2227,7 +2219,7 @@ public:
 
     static inline Style::WillChange initialWillChange();
 
-    static constexpr TouchAction initialTouchActions();
+    static constexpr Style::TouchAction initialTouchAction();
 
     static constexpr FieldSizing initialFieldSizing();
 
@@ -2428,9 +2420,9 @@ public:
     std::optional<size_t> usedPositionOptionIndex() const;
     void setUsedPositionOptionIndex(std::optional<size_t>);
 
-    static constexpr OptionSet<PositionVisibility> initialPositionVisibility();
-    inline OptionSet<PositionVisibility> positionVisibility() const;
-    inline void setPositionVisibility(OptionSet<PositionVisibility>);
+    static constexpr Style::PositionVisibility initialPositionVisibility();
+    inline Style::PositionVisibility positionVisibility() const;
+    inline void setPositionVisibility(Style::PositionVisibility);
 
     inline AlignmentBaseline alignmentBaseline() const;
     inline void setAlignmentBaseline(AlignmentBaseline);
@@ -2537,7 +2529,7 @@ private:
         PREFERRED_TYPE(bool) unsigned isLink : 1;
         PREFERRED_TYPE(PseudoElementType) unsigned pseudoElementType : PseudoElementTypeBits;
         unsigned pseudoBits : PublicPseudoIDBits;
-        PREFERRED_TYPE(Style::TextDecorationLine) unsigned textDecorationLine : TextDecorationLineBits; // Text decorations defined *only* by this element.
+        unsigned textDecorationLine : TextDecorationLineBits; // Text decorations defined *only* by this element. PREFERRED_TYPE elided to avoid header inclusion.
 
         // If you add more style bits here, you will also need to update RenderStyle::NonInheritedFlags::copyNonInheritedFrom().
     };
@@ -2557,9 +2549,9 @@ private:
         PREFERRED_TYPE(TextWrapMode) unsigned char textWrapMode : 1;
         PREFERRED_TYPE(TextAlignMode) unsigned char textAlign : 4;
         PREFERRED_TYPE(TextWrapStyle) unsigned char textWrapStyle : 2;
-        PREFERRED_TYPE(OptionSet<TextTransform>) unsigned char textTransform : TextTransformBits;
+        unsigned char textTransform : TextTransformBits; // PREFERRED_TYPE elided to avoid header inclusion.
         unsigned char : 1; // byte alignment
-        PREFERRED_TYPE(Style::TextDecorationLine) unsigned char textDecorationLineInEffect : TextDecorationLineBits;
+        unsigned char textDecorationLineInEffect : TextDecorationLineBits; // PREFERRED_TYPE elided to avoid header inclusion.
 
         // Cursors and Visibility = 13 bits aligned onto 4 bits + 1 byte + 1 bit
         PREFERRED_TYPE(PointerEvents) unsigned char pointerEvents : 4;

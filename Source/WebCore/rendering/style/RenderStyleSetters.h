@@ -68,11 +68,9 @@ inline void RenderStyle::resetMargin() { SET_NESTED(m_nonInheritedData, surround
 inline void RenderStyle::resetPadding() { SET_NESTED(m_nonInheritedData, surroundData, padding, Style::PaddingBox { 0_css_px }); }
 inline void RenderStyle::resetPageSize() { SET_NESTED(m_nonInheritedData, rareData, pageSize, Style::PageSize { CSS::Keyword::Auto { } }); }
 inline void RenderStyle::setAccentColor(Style::AccentColor&& color) { SET(m_rareInheritedData, accentColor, WTFMove(color)); }
-inline void RenderStyle::setAlignContent(const StyleContentAlignmentData& data) { SET_NESTED(m_nonInheritedData, miscData, alignContent, data); }
-inline void RenderStyle::setAlignItems(const StyleSelfAlignmentData& data) { SET_NESTED(m_nonInheritedData, miscData, alignItems, data); }
-inline void RenderStyle::setAlignItemsPosition(ItemPosition position) { m_nonInheritedData.access().miscData.access().alignItems.setPosition(position); }
-inline void RenderStyle::setAlignSelf(const StyleSelfAlignmentData& data) { SET_NESTED(m_nonInheritedData, miscData, alignSelf, data); }
-inline void RenderStyle::setAlignSelfPosition(ItemPosition position) { m_nonInheritedData.access().miscData.access().alignSelf.setPosition(position); }
+inline void RenderStyle::setAlignContent(Style::AlignContent alignContent) { SET_NESTED(m_nonInheritedData, miscData, alignContent, alignContent); }
+inline void RenderStyle::setAlignItems(Style::AlignItems alignItems) { SET_NESTED(m_nonInheritedData, miscData, alignItems, alignItems); }
+inline void RenderStyle::setAlignSelf(Style::AlignSelf alignSelf) { SET_NESTED(m_nonInheritedData, miscData, alignSelf, alignSelf); }
 inline void RenderStyle::setAnchorNames(Style::AnchorNames&& names) { SET_NESTED(m_nonInheritedData, rareData, anchorNames, WTFMove(names)); }
 inline void RenderStyle::setAnchorScope(const NameScope& scope) { SET_NESTED(m_nonInheritedData, rareData, anchorScope, scope); }
 inline void RenderStyle::setAppearance(StyleAppearance appearance) { SET_NESTED_PAIR(m_nonInheritedData, miscData, appearance, static_cast<unsigned>(appearance), usedAppearance, static_cast<unsigned>(appearance)); }
@@ -136,7 +134,7 @@ inline void RenderStyle::setColumnRuleStyle(BorderStyle b) { SET_DOUBLY_NESTED(m
 inline void RenderStyle::setColumnRuleWidth(Style::LineWidth width) { SET_DOUBLY_NESTED(m_nonInheritedData, miscData, multiCol, rule.m_width, width); }
 inline void RenderStyle::setColumnSpan(ColumnSpan span) { SET_DOUBLY_NESTED(m_nonInheritedData, miscData, multiCol, columnSpan, static_cast<unsigned>(span)); }
 inline void RenderStyle::setColumnWidth(Style::ColumnWidth width) { SET_DOUBLY_NESTED(m_nonInheritedData, miscData, multiCol, width, width); }
-inline void RenderStyle::setContain(OptionSet<Containment> containment) { SET_NESTED(m_nonInheritedData, rareData, contain, containment); }
+inline void RenderStyle::setContain(Style::Contain contain) { SET_NESTED(m_nonInheritedData, rareData, contain, contain.toRaw()); }
 inline void RenderStyle::setContainIntrinsicHeight(Style::ContainIntrinsicSize&& height) { SET_NESTED(m_nonInheritedData, rareData, containIntrinsicHeight, WTFMove(height)); }
 inline void RenderStyle::setContainIntrinsicWidth(Style::ContainIntrinsicSize&& width) { SET_NESTED(m_nonInheritedData, rareData, containIntrinsicWidth, WTFMove(width)); }
 inline void RenderStyle::setContainerNames(Style::ContainerNames&& names) { SET_NESTED(m_nonInheritedData, rareData, containerNames, WTFMove(names)); }
@@ -146,7 +144,8 @@ inline void RenderStyle::setContentVisibility(ContentVisibility value) { SET_NES
 inline void RenderStyle::setUsedAppearance(StyleAppearance a) { SET_NESTED(m_nonInheritedData, miscData, usedAppearance, static_cast<unsigned>(a)); }
 inline void RenderStyle::setEffectiveInert(bool effectiveInert) { SET(m_rareInheritedData, effectiveInert, effectiveInert); }
 inline void RenderStyle::setIsEffectivelyTransparent(bool effectivelyTransparent) { SET(m_rareInheritedData, effectivelyTransparent, effectivelyTransparent); }
-inline void RenderStyle::setUsedTouchActions(OptionSet<TouchAction> touchActions) { SET(m_rareInheritedData, usedTouchActions, touchActions); }
+inline void RenderStyle::setItemTolerance(Style::ItemTolerance&& tolerance) { SET_NESTED(m_nonInheritedData, rareData, itemTolerance, WTFMove(tolerance)); }
+inline void RenderStyle::setUsedTouchAction(Style::TouchAction touchAction) { SET(m_rareInheritedData, usedTouchAction, touchAction); }
 inline void RenderStyle::setEventListenerRegionTypes(OptionSet<EventListenerRegionType> eventListenerTypes) { SET(m_rareInheritedData, eventListenerRegionTypes, eventListenerTypes); }
 inline void RenderStyle::setFieldSizing(FieldSizing value) { SET_NESTED(m_nonInheritedData, rareData, fieldSizing, static_cast<unsigned>(value)); }
 inline void RenderStyle::setFilter(Style::Filter&& filter) { SET_DOUBLY_NESTED(m_nonInheritedData, miscData, filter, filter, WTFMove(filter)); }
@@ -191,15 +190,13 @@ inline void RenderStyle::setInsetBox(Style::InsetBox&& box) { SET_NESTED(m_nonIn
 inline void RenderStyle::setInitialLetter(Style::WebkitInitialLetter&& initialLetter) { SET_NESTED(m_nonInheritedData, rareData, initialLetter, WTFMove(initialLetter)); }
 inline void RenderStyle::setInputSecurity(InputSecurity security) { SET_NESTED(m_nonInheritedData, rareData, inputSecurity, static_cast<unsigned>(security)); }
 inline void RenderStyle::setJoinStyle(LineJoin style) { SET(m_rareInheritedData, joinStyle, static_cast<unsigned>(style)); }
-inline void RenderStyle::setJustifyContent(const StyleContentAlignmentData& data) { SET_NESTED(m_nonInheritedData, miscData, justifyContent, data); }
-inline void RenderStyle::setJustifyContentPosition(ContentPosition position) { m_nonInheritedData.access().miscData.access().justifyContent.setPosition(position); }
-inline void RenderStyle::setJustifyItems(const StyleSelfAlignmentData& data) { SET_NESTED(m_nonInheritedData, miscData, justifyItems, data); }
-inline void RenderStyle::setJustifySelf(const StyleSelfAlignmentData& data) { SET_NESTED(m_nonInheritedData, miscData, justifySelf, data); }
-inline void RenderStyle::setJustifySelfPosition(ItemPosition position) { m_nonInheritedData.access().miscData.access().justifySelf.setPosition(position); }
+inline void RenderStyle::setJustifyContent(Style::JustifyContent justifyContent) { SET_NESTED(m_nonInheritedData, miscData, justifyContent, justifyContent); }
+inline void RenderStyle::setJustifyItems(Style::JustifyItems justifyItems) { SET_NESTED(m_nonInheritedData, miscData, justifyItems, justifyItems); }
+inline void RenderStyle::setJustifySelf(Style::JustifySelf justifySelf) { SET_NESTED(m_nonInheritedData, miscData, justifySelf, justifySelf); }
 inline void RenderStyle::setLeft(Style::InsetEdge&& edge) { SET_NESTED(m_nonInheritedData, surroundData, inset.left(), WTFMove(edge)); }
 inline void RenderStyle::setLetterSpacing(Style::LetterSpacing&& letterSpacing) { SET_NESTED(m_inheritedData, fontData, letterSpacing, WTFMove(letterSpacing)); }
 inline void RenderStyle::setLineAlign(LineAlign alignment) { SET(m_rareInheritedData, lineAlign, static_cast<unsigned>(alignment)); }
-inline void RenderStyle::setLineBoxContain(OptionSet<Style::LineBoxContain> c) { SET(m_rareInheritedData, lineBoxContain, c.toRaw()); }
+inline void RenderStyle::setLineBoxContain(Style::WebkitLineBoxContain lineBoxContain) { SET(m_rareInheritedData, lineBoxContain, lineBoxContain.toRaw()); }
 inline void RenderStyle::setLineBreak(LineBreak rule) { SET(m_rareInheritedData, lineBreak, static_cast<unsigned>(rule)); }
 inline void RenderStyle::setLineClamp(Style::WebkitLineClamp&& value) { SET_NESTED(m_nonInheritedData, rareData, lineClamp, WTFMove(value)); }
 inline void RenderStyle::setLineGrid(Style::WebkitLineGrid&& lineGrid) { SET(m_rareInheritedData, lineGrid, WTFMove(lineGrid)); }
@@ -211,7 +208,7 @@ inline void RenderStyle::setMarginBox(Style::MarginBox&& box) { SET_NESTED(m_non
 inline void RenderStyle::setMarginLeft(Style::MarginEdge&& edge) { SET_NESTED(m_nonInheritedData, surroundData, margin.left(), WTFMove(edge)); }
 inline void RenderStyle::setMarginRight(Style::MarginEdge&& edge) { SET_NESTED(m_nonInheritedData, surroundData, margin.right(), WTFMove(edge)); }
 inline void RenderStyle::setMarginTop(Style::MarginEdge&& edge) { SET_NESTED(m_nonInheritedData, surroundData, margin.top(), WTFMove(edge)); }
-inline void RenderStyle::setMarginTrim(OptionSet<MarginTrimType> value) { SET_NESTED(m_nonInheritedData, rareData, marginTrim, value); }
+inline void RenderStyle::setMarginTrim(Style::MarginTrim value) { SET_NESTED(m_nonInheritedData, rareData, marginTrim, value.toRaw()); }
 inline void RenderStyle::setMarqueeBehavior(MarqueeBehavior b) { SET_DOUBLY_NESTED(m_nonInheritedData, rareData, marquee, behavior, static_cast<unsigned>(b)); }
 inline void RenderStyle::setMarqueeDirection(MarqueeDirection d) { SET_DOUBLY_NESTED(m_nonInheritedData, rareData, marquee, direction, static_cast<unsigned>(d)); }
 inline void RenderStyle::setMarqueeIncrement(Style::WebkitMarqueeIncrement&& increment) { SET_DOUBLY_NESTED(m_nonInheritedData, rareData, marquee, increment, WTFMove(increment)); }
@@ -253,7 +250,7 @@ inline void RenderStyle::setPaddingLeft(Style::PaddingEdge&& edge) { SET_NESTED(
 inline void RenderStyle::setPaddingRight(Style::PaddingEdge&& edge) { SET_NESTED(m_nonInheritedData, surroundData, padding.right(), WTFMove(edge)); }
 inline void RenderStyle::setPaddingTop(Style::PaddingEdge&& edge) { SET_NESTED(m_nonInheritedData, surroundData, padding.top(), WTFMove(edge)); }
 inline void RenderStyle::setPageSize(Style::PageSize&& pageSize) { SET_NESTED(m_nonInheritedData, rareData, pageSize, WTFMove(pageSize)); }
-inline void RenderStyle::setPaintOrder(Style::SVGPaintOrder paintOrder) { SET(m_rareInheritedData, paintOrder, static_cast<unsigned>(paintOrder.type())); }
+inline void RenderStyle::setPaintOrder(Style::SVGPaintOrder paintOrder) { SET(m_rareInheritedData, paintOrder, paintOrder.toRaw()); }
 inline void RenderStyle::setPerspective(Style::Perspective&& perspective) { SET_NESTED(m_nonInheritedData, rareData, perspective, WTFMove(perspective)); }
 inline void RenderStyle::setPerspectiveOrigin(Style::PerspectiveOrigin&& origin) { SET_NESTED(m_nonInheritedData, rareData, perspectiveOrigin, WTFMove(origin)); }
 inline void RenderStyle::setPerspectiveOriginX(Style::PerspectiveOriginX&& originX) { SET_NESTED(m_nonInheritedData, rareData, perspectiveOrigin.x, WTFMove(originX)); }
@@ -261,7 +258,7 @@ inline void RenderStyle::setPerspectiveOriginY(Style::PerspectiveOriginY&& origi
 inline void RenderStyle::setPositionAnchor(const std::optional<Style::ScopedName>& anchor) { SET_NESTED(m_nonInheritedData, rareData, positionAnchor, anchor); }
 inline void RenderStyle::setPositionArea(std::optional<PositionArea> value) { SET_NESTED(m_nonInheritedData, rareData, positionArea, value); }
 inline void RenderStyle::setPositionTryOrder(Style::PositionTryOrder order) { SET_NESTED(m_nonInheritedData, rareData, positionTryOrder, static_cast<unsigned>(order)); }
-inline void RenderStyle::setPositionVisibility(OptionSet<PositionVisibility> value) { SET_NESTED(m_nonInheritedData, rareData, positionVisibility, value.toRaw()); }
+inline void RenderStyle::setPositionVisibility(Style::PositionVisibility value) { SET_NESTED(m_nonInheritedData, rareData, positionVisibility, value.toRaw()); }
 inline void RenderStyle::setResize(Resize r) { SET_NESTED(m_nonInheritedData, miscData, resize, static_cast<unsigned>(r)); }
 inline void RenderStyle::setRight(Style::InsetEdge&& edge) { SET_NESTED(m_nonInheritedData, surroundData, inset.right(), WTFMove(edge)); }
 inline void RenderStyle::setRotate(Style::Rotate&& rotate) { SET_NESTED(m_nonInheritedData, rareData, rotate, WTFMove(rotate)); }
@@ -319,12 +316,12 @@ inline void RenderStyle::setTextSecurity(TextSecurity security) { SET(m_rareInhe
 inline void RenderStyle::setTextShadow(Style::TextShadows&& textShadow) { SET(m_rareInheritedData, textShadow, WTFMove(textShadow)); }
 inline void RenderStyle::setTextStrokeColor(Style::Color&& color) { SET(m_rareInheritedData, textStrokeColor, WTFMove(color)); }
 inline void RenderStyle::setTextStrokeWidth(Style::WebkitTextStrokeWidth width) { SET(m_rareInheritedData, textStrokeWidth, width); }
-inline void RenderStyle::setTextTransform(OptionSet<TextTransform> value) { m_inheritedFlags.textTransform = value.toRaw(); }
+inline void RenderStyle::setTextTransform(Style::TextTransform value) { m_inheritedFlags.textTransform = value.toRaw(); }
 inline void RenderStyle::setTextUnderlineOffset(Style::TextUnderlineOffset&& textUnderlineOffset) { SET(m_rareInheritedData, textUnderlineOffset, WTFMove(textUnderlineOffset)); }
 inline void RenderStyle::setTextUnderlinePosition(OptionSet<TextUnderlinePosition> position) { SET(m_rareInheritedData, textUnderlinePosition, static_cast<unsigned>(position.toRaw())); }
 inline void RenderStyle::setTextZoom(TextZoom zoom) { SET(m_rareInheritedData, textZoom, static_cast<unsigned>(zoom)); }
 inline void RenderStyle::setTop(Style::InsetEdge&& edge) { SET_NESTED(m_nonInheritedData, surroundData, inset.top(), WTFMove(edge)); }
-inline void RenderStyle::setTouchActions(OptionSet<TouchAction> actions) { SET_NESTED(m_nonInheritedData, rareData, touchActions, actions); }
+inline void RenderStyle::setTouchAction(Style::TouchAction touchAction) { SET_NESTED(m_nonInheritedData, rareData, touchAction, touchAction); }
 inline void RenderStyle::setTransform(Style::Transform&& transform) { SET_DOUBLY_NESTED(m_nonInheritedData, miscData, transform, transform, WTFMove(transform)); }
 inline void RenderStyle::setTransformBox(TransformBox box) { SET_DOUBLY_NESTED(m_nonInheritedData, miscData, transform, transformBox, box); }
 inline void RenderStyle::setTransformOrigin(Style::TransformOrigin&& origin) { SET_DOUBLY_NESTED(m_nonInheritedData, miscData, transform, origin, WTFMove(origin)); }

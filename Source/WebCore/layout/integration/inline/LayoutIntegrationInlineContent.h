@@ -69,7 +69,7 @@ public:
 
     InlineDisplay::Content& displayContent() { return m_displayContent; }
     const InlineDisplay::Content& displayContent() const { return m_displayContent; }
-    bool hasContent() const;
+    bool hasInflowContent() const;
 
     FloatRect scrollableOverflow() const { return m_scrollableOverflow; }
     FloatRect inkOverflow() const { return m_inkOverflow; }
@@ -79,6 +79,7 @@ public:
     float firstLinePaginationOffset() const { return m_firstLinePaginationOffset.value_or(0.f); }
     float clearBeforeAfterGaps() const { return m_clearGapBeforeFirstLine + m_clearGapAfterLastLine; }
     float clearGapBeforeFirstLine() const { return m_clearGapBeforeFirstLine; }
+    bool hasBlockLevelBoxes() const { return m_hasBlockLevelBoxes; }
 
     IteratorRange<const InlineDisplay::Box*> boxesForRect(const LayoutRect&) const;
 
@@ -88,6 +89,7 @@ public:
     std::optional<size_t> firstBoxIndexForLayoutBox(const Layout::Box&) const;
 
     template<typename Function> void traverseNonRootInlineBoxes(const Layout::Box&, Function&&);
+    template<typename Function> void traverseDescendantBlockLevelBoxes(const Layout::Box&, Function&&);
 
     const RenderBlockFlow& formattingContextRoot() const;
 
@@ -107,6 +109,8 @@ private:
     void setClearGapBeforeFirstLine(float clearGapBeforeFirstLine) { m_clearGapBeforeFirstLine = clearGapBeforeFirstLine; }
     void setClearGapAfterLastLine(float clearGapAfterLastLine) { m_clearGapAfterLastLine = clearGapAfterLastLine; }
     void setFirstLinePaginationOffset(float firstLinePaginationOffset) { m_firstLinePaginationOffset = firstLinePaginationOffset; }
+    void setHasBlockLevelBoxes() { m_hasBlockLevelBoxes = true; }
+
     const Vector<size_t>& nonRootInlineBoxIndexesForLayoutBox(const Layout::Box&) const;
 
     CheckedRef<const RenderBlockFlow> m_formattingContextRoot;
@@ -124,6 +128,7 @@ private:
     std::optional<float> m_firstLinePaginationOffset { };
 
     bool m_hasMultilinePaintOverlap { false };
+    bool m_hasBlockLevelBoxes { false };
 
     Vector<Vector<SVGTextFragment>> m_svgTextFragmentsForBoxes;
 };
@@ -132,6 +137,21 @@ template<typename Function> void InlineContent::traverseNonRootInlineBoxes(const
 {
     for (auto index : nonRootInlineBoxIndexesForLayoutBox(layoutBox))
         function(displayContent().boxes[index]);
+}
+
+template<typename Function> void InlineContent::traverseDescendantBlockLevelBoxes(const Layout::Box& ancestor, Function&& function)
+{
+    if (!m_hasBlockLevelBoxes)
+        return;
+
+    for (auto& box : m_displayContent.boxes) {
+        if (!box.isBlockLevelBox())
+            continue;
+        CheckedRef layoutBox = box.layoutBox();
+        if (!layoutBox->isDescendantOfWithinFormattingContext(ancestor))
+            continue;
+        function(box);
+    }
 }
 
 }

@@ -522,8 +522,8 @@ void RenderBox::updateFromStyle()
             if (is<HTMLHtmlElement>(documentElement)
                 && document().body() == element()
                 && documentElementRenderer.effectiveOverflowX() == Overflow::Visible
-                && !styleToUse.usedContain()
-                && !documentElementRenderer.style().usedContain()) {
+                && styleToUse.usedContain().isNone()
+                && documentElementRenderer.style().usedContain().isNone()) {
                 boxHasNonVisibleOverflow = false;
             }
         }
@@ -1490,7 +1490,7 @@ void RenderBox::clearOverridingLogicalWidthForFlexBasisComputation()
         gOverridingLogicalWidthMapForFlexBasisComputation->remove(*this);
 }
 
-void RenderBox::markMarginAsTrimmed(MarginTrimType newTrimmedMargin)
+void RenderBox::markMarginAsTrimmed(Style::MarginTrimSide newTrimmedMargin)
 {
     auto& rareData = ensureRareData();
     rareData.trimmedMargins = rareData.trimmedMargins | newTrimmedMargin;
@@ -1502,7 +1502,7 @@ void RenderBox::clearTrimmedMarginsMarkings()
     ensureRareData().trimmedMargins = { };
 }
 
-bool RenderBox::hasTrimmedMargin(std::optional<MarginTrimType> marginTrimType) const
+bool RenderBox::hasTrimmedMargin(std::optional<Style::MarginTrimSide> marginTrimType) const
 {
     if (!isInFlow())
         return false;
@@ -2798,10 +2798,10 @@ void RenderBox::computeLogicalWidth(LogicalExtentComputedValues& computedValues)
 
     // Margin calculations.
     if (hasPerpendicularContainingBlock || isFloating() || isInline()) {
-        computedValues.m_margins.m_start = computeOrTrimInlineMargin(containingBlock, MarginTrimType::BlockStart, [&] {
+        computedValues.m_margins.m_start = computeOrTrimInlineMargin(containingBlock, Style::MarginTrimSide::BlockStart, [&] {
             return Style::evaluateMinimum<LayoutUnit>(styleToUse.marginStart(), containerLogicalWidth, styleToUse.usedZoomForLength());
         });
-        computedValues.m_margins.m_end = computeOrTrimInlineMargin(containingBlock, MarginTrimType::BlockEnd, [&] {
+        computedValues.m_margins.m_end = computeOrTrimInlineMargin(containingBlock, Style::MarginTrimSide::BlockEnd, [&] {
             return Style::evaluateMinimum<LayoutUnit>(styleToUse.marginEnd(), containerLogicalWidth, styleToUse.usedZoomForLength());
         });
     } else {
@@ -2857,10 +2857,10 @@ LayoutUnit RenderBox::fillAvailableMeasure(LayoutUnit availableLogicalWidth, Lay
     auto& marginStartLength = style().marginStart();
     auto& marginEndLength = style().marginEnd();
     LayoutUnit availableSizeForResolvingMargin = isOrthogonalElement ? containingBlockLogicalWidthForContent() : availableLogicalWidth;
-    marginStart = computeOrTrimInlineMargin(*container, MarginTrimType::InlineStart, [&] {
+    marginStart = computeOrTrimInlineMargin(*container, Style::MarginTrimSide::InlineStart, [&] {
         return Style::evaluateMinimum<LayoutUnit>(marginStartLength, availableSizeForResolvingMargin, style().usedZoomForLength());
     });
-    marginEnd = computeOrTrimInlineMargin(*container, MarginTrimType::InlineEnd, [&] {
+    marginEnd = computeOrTrimInlineMargin(*container, Style::MarginTrimSide::InlineEnd, [&] {
         return Style::evaluateMinimum<LayoutUnit>(marginEndLength, availableSizeForResolvingMargin, style().usedZoomForLength());
     });
     return availableLogicalWidth - marginStart - marginEnd;
@@ -3021,7 +3021,12 @@ bool RenderBox::columnFlexItemHasStretchAlignment() const
     ASSERT(parentStyle.isColumnFlexDirection());
     if (style().marginStart().isAuto() || style().marginEnd().isAuto())
         return false;
-    return style().resolvedAlignSelf(&parentStyle, containingBlock()->selfAlignmentNormalBehavior()).position() == ItemPosition::Stretch;
+
+    auto normalBehavior = containingBlock()->selfAlignmentNormalBehavior();
+
+    if (!style().alignSelf().isAuto())
+        return style().alignSelf().resolve(normalBehavior).position() == ItemPosition::Stretch;
+    return parentStyle.alignItems().resolve(normalBehavior).position() == ItemPosition::Stretch;
 }
 
 bool RenderBox::isStretchingColumnFlexItem() const
@@ -3050,11 +3055,19 @@ bool RenderBox::hasStretchedLogicalHeight() const
     if (containingBlock->isHorizontalWritingMode() != isHorizontalWritingMode()) {
         if (auto* grid = dynamicDowncast<RenderGrid>(*this); grid && grid->isSubgridInParentDirection(Style::GridTrackSizingDirection::Columns))
             return true;
-        return style.resolvedJustifySelf(&containingBlock->style(), containingBlock->selfAlignmentNormalBehavior(this)).position() == ItemPosition::Stretch;
+
+        auto normalBehavior = containingBlock->selfAlignmentNormalBehavior(this);
+        if (!style.justifySelf().isAuto())
+            return style.justifySelf().resolve(normalBehavior).position() == ItemPosition::Stretch;
+        return containingBlock->style().justifyItems().resolve(normalBehavior).position() == ItemPosition::Stretch;
     }
     if (auto* grid = dynamicDowncast<RenderGrid>(*this); grid && grid->isSubgridInParentDirection(Style::GridTrackSizingDirection::Rows))
         return true;
-    return style.resolvedAlignSelf(&containingBlock->style(), containingBlock->selfAlignmentNormalBehavior(this)).position() == ItemPosition::Stretch;
+
+    auto normalBehavior = containingBlock->selfAlignmentNormalBehavior(this);
+    if (!style.alignSelf().isAuto())
+        return style.alignSelf().resolve(normalBehavior).position() == ItemPosition::Stretch;
+    return containingBlock->style().alignItems().resolve(normalBehavior).position() == ItemPosition::Stretch;
 }
 
 // FIXME: Can/Should we move this inside specific layout classes (flex. grid)? Can we refactor columnFlexItemHasStretchAlignment logic?
@@ -3073,11 +3086,17 @@ bool RenderBox::hasStretchedLogicalWidth(StretchingMode stretchingMode) const
     if (containingBlock->isHorizontalWritingMode() != isHorizontalWritingMode()) {
         if (auto* grid = dynamicDowncast<RenderGrid>(*this); grid && grid->isSubgridInParentDirection(Style::GridTrackSizingDirection::Rows))
             return true;
-        return style.resolvedAlignSelf(&containingBlock->style(), normalItemPosition).position() == ItemPosition::Stretch;
+
+        if (!style.alignSelf().isAuto())
+            return style.alignSelf().resolve(normalItemPosition).position() == ItemPosition::Stretch;
+        return containingBlock->style().alignItems().resolve(normalItemPosition).position() == ItemPosition::Stretch;
     }
     if (auto* grid = dynamicDowncast<RenderGrid>(*this); grid && grid->isSubgridInParentDirection(Style::GridTrackSizingDirection::Columns))
         return true;
-    return style.resolvedJustifySelf(&containingBlock->style(), normalItemPosition).position() == ItemPosition::Stretch;
+
+    if (!style.justifySelf().isAuto())
+        return style.justifySelf().resolve(normalItemPosition).position() == ItemPosition::Stretch;
+    return containingBlock->style().justifyItems().resolve(normalItemPosition).position() == ItemPosition::Stretch;
 }
 
 bool RenderBox::sizesPreferredLogicalWidthToFitContent() const
@@ -3149,7 +3168,7 @@ bool RenderBox::sizesPreferredLogicalWidthToFitContent() const
 }
 
 template<typename Function>
-LayoutUnit RenderBox::computeOrTrimInlineMargin(const RenderBlock& containingBlock, MarginTrimType marginSide, NOESCAPE const Function& computeInlineMargin) const
+LayoutUnit RenderBox::computeOrTrimInlineMargin(const RenderBlock& containingBlock, Style::MarginTrimSide marginSide, NOESCAPE const Function& computeInlineMargin) const
 {
     if (containingBlock.shouldTrimChildMargin(marginSide, *this)) {
         // FIXME(255434): This should be set when the margin is being trimmed
@@ -3157,7 +3176,7 @@ LayoutUnit RenderBox::computeOrTrimInlineMargin(const RenderBlock& containingBlo
         // be done at this level within RenderBox. We should be able to leave the 
         // trimming responsibility to each of those contexts and not need to
         // do any of it here (trimming the margin and setting the rare data bit)
-        if (isGridItem() && (marginSide == MarginTrimType::InlineStart || marginSide == MarginTrimType::InlineEnd))
+        if (isGridItem() && (marginSide == Style::MarginTrimSide::InlineStart || marginSide == Style::MarginTrimSide::InlineEnd))
             const_cast<RenderBox&>(*this).markMarginAsTrimmed(marginSide);
         return 0_lu;
     }
@@ -3180,10 +3199,10 @@ void RenderBox::computeInlineDirectionMargins(const RenderBlock& containingBlock
 
     if (isInline()) {
         // Inline blocks/tables don't have their margins increased.
-        marginStart = computeOrTrimInlineMargin(containingBlock, MarginTrimType::InlineStart, [&] {
+        marginStart = computeOrTrimInlineMargin(containingBlock, Style::MarginTrimSide::InlineStart, [&] {
             return Style::evaluateMinimum<LayoutUnit>(marginStartLength, containerWidth, zoomFactor);
         });
-        marginEnd = computeOrTrimInlineMargin(containingBlock, MarginTrimType::InlineStart, [&] {
+        marginEnd = computeOrTrimInlineMargin(containingBlock, Style::MarginTrimSide::InlineStart, [&] {
             return Style::evaluateMinimum<LayoutUnit>(marginEndLength, containerWidth, zoomFactor);
         });
         return;
@@ -3213,13 +3232,13 @@ void RenderBox::computeInlineDirectionMargins(const RenderBlock& containingBlock
         auto alignModeCenter = containingBlock.style().textAlign() == TextAlignMode::WebKitCenter && !marginStartLength.isAuto() && !marginEndLength.isAuto();
         if (marginAutoCenter || alignModeCenter) {
             // Other browsers center the margin box for align=center elements so we match them here.
-            marginStart = computeOrTrimInlineMargin(containingBlock, MarginTrimType::InlineStart, [&] {
+            marginStart = computeOrTrimInlineMargin(containingBlock, Style::MarginTrimSide::InlineStart, [&] {
                 auto marginStartWidth = Style::evaluateMinimum<LayoutUnit>(marginStartLength, containerWidthForMarginAuto, zoomFactor);
                 auto marginEndWidth = Style::evaluateMinimum<LayoutUnit>(marginEndLength, containerWidthForMarginAuto, zoomFactor);
                 auto centeredMarginBoxStart = std::max<LayoutUnit>(0, (containerWidthForMarginAuto - childWidth - marginStartWidth - marginEndWidth) / 2);
                 return centeredMarginBoxStart + marginStartWidth;
             });
-            marginEnd = computeOrTrimInlineMargin(containingBlock, MarginTrimType::InlineEnd, [&] {
+            marginEnd = computeOrTrimInlineMargin(containingBlock, Style::MarginTrimSide::InlineEnd, [&] {
                 auto marginEndWidth = Style::evaluateMinimum<LayoutUnit>(marginEndLength, containerWidthForMarginAuto, zoomFactor);
                 return containerWidthForMarginAuto - childWidth - marginStart + marginEndWidth;
             });
@@ -3237,10 +3256,10 @@ void RenderBox::computeInlineDirectionMargins(const RenderBlock& containingBlock
         auto pushToEndFromTextAlign = !marginEndLength.isAuto() && ((!containingBlockStyle.writingMode().isBidiLTR() && containingBlockStyle.textAlign() == TextAlignMode::WebKitLeft)
             || (containingBlockStyle.writingMode().isBidiLTR() && containingBlockStyle.textAlign() == TextAlignMode::WebKitRight));
         if ((marginStartLength.isAuto() || pushToEndFromTextAlign) && childWidth < containerWidthForMarginAuto) {
-            marginEnd = computeOrTrimInlineMargin(containingBlock, MarginTrimType::InlineEnd, [&] {
+            marginEnd = computeOrTrimInlineMargin(containingBlock, Style::MarginTrimSide::InlineEnd, [&] {
                 return Style::evaluate<LayoutUnit>(marginEndLength, containerWidthForMarginAuto, zoomFactor);
             });
-            marginStart = computeOrTrimInlineMargin(containingBlock, MarginTrimType::InlineStart, [&] {
+            marginStart = computeOrTrimInlineMargin(containingBlock, Style::MarginTrimSide::InlineStart, [&] {
                 return containerWidthForMarginAuto - childWidth - marginEnd;
             });
             return true;
@@ -3252,10 +3271,10 @@ void RenderBox::computeInlineDirectionMargins(const RenderBlock& containingBlock
     
     // Case Four: Either no auto margins, or our width is >= the container width (css2.1, 10.3.3). In that case
     // auto margins will just turn into 0.
-    marginStart = computeOrTrimInlineMargin(containingBlock, MarginTrimType::InlineStart, [&] {
+    marginStart = computeOrTrimInlineMargin(containingBlock, Style::MarginTrimSide::InlineStart, [&] {
         return Style::evaluateMinimum<LayoutUnit>(marginStartLength, containerWidth, zoomFactor);
     });
-    marginEnd = computeOrTrimInlineMargin(containingBlock, MarginTrimType::InlineEnd, [&] {
+    marginEnd = computeOrTrimInlineMargin(containingBlock, Style::MarginTrimSide::InlineEnd, [&] {
         return Style::evaluateMinimum<LayoutUnit>(marginEndLength, containerWidth, zoomFactor);
     });
 }
@@ -3989,8 +4008,8 @@ void RenderBox::computeBlockDirectionMargins(const RenderBlock& containingBlock,
     // Margins are calculated with respect to the logical width of
     // the containing block (8.3)
     LayoutUnit cw = containingBlockLogicalWidthForContent();
-    marginBefore = constrainBlockMarginInAvailableSpaceOrTrim(containingBlock, cw, MarginTrimType::BlockStart);
-    marginAfter = constrainBlockMarginInAvailableSpaceOrTrim(containingBlock, cw, MarginTrimType::BlockEnd); 
+    marginBefore = constrainBlockMarginInAvailableSpaceOrTrim(containingBlock, cw, Style::MarginTrimSide::BlockStart);
+    marginAfter = constrainBlockMarginInAvailableSpaceOrTrim(containingBlock, cw, Style::MarginTrimSide::BlockEnd);
 }
 
 void RenderBox::computeAndSetBlockDirectionMargins(const RenderBlock& containingBlock)
@@ -4002,10 +4021,10 @@ void RenderBox::computeAndSetBlockDirectionMargins(const RenderBlock& containing
     containingBlock.setMarginAfterForChild(*this, marginAfter);
 }
 
-LayoutUnit RenderBox::constrainBlockMarginInAvailableSpaceOrTrim(const RenderBox& containingBlock, LayoutUnit availableSpace, MarginTrimType marginSide) const
+LayoutUnit RenderBox::constrainBlockMarginInAvailableSpaceOrTrim(const RenderBox& containingBlock, LayoutUnit availableSpace, Style::MarginTrimSide marginSide) const
 {
     
-    ASSERT(marginSide == MarginTrimType::BlockStart || marginSide == MarginTrimType::BlockEnd);
+    ASSERT(marginSide == Style::MarginTrimSide::BlockStart || marginSide == Style::MarginTrimSide::BlockEnd);
     if (containingBlock.shouldTrimChildMargin(marginSide, *this)) {
         // FIXME(255434): This should be set when the margin is being trimmed
         // within the context of its layout system (block, flex, grid) and should not 
@@ -4017,7 +4036,7 @@ LayoutUnit RenderBox::constrainBlockMarginInAvailableSpaceOrTrim(const RenderBox
         return 0_lu;
     }
     
-    return marginSide == MarginTrimType::BlockStart
+    return marginSide == Style::MarginTrimSide::BlockStart
         ? Style::evaluateMinimum<LayoutUnit>(style().marginBefore(containingBlock.writingMode()), availableSpace, style().usedZoomForLength())
         : Style::evaluateMinimum<LayoutUnit>(style().marginAfter(containingBlock.writingMode()), availableSpace, style().usedZoomForLength());
 }
@@ -4556,7 +4575,9 @@ void RenderBox::addOverflowFromContainedBox(const RenderBox& child, OptionSet<Co
 
 void RenderBox::addOverflowFromFloatBox(const FloatingObject& floatBox)
 {
-    addOverflowWithRendererOffset(floatBox.renderer(), floatBox.locationOffsetOfBorderBox());
+    if (!floatBox.renderer())
+        return;
+    addOverflowWithRendererOffset(*floatBox.renderer(), floatBox.locationOffsetOfBorderBox());
 }
 
 // 'offsetFromThis' is normally the renderer's position (RenderBox::location()).
@@ -5230,7 +5251,7 @@ bool RenderBox::requiresLayer() const
     return RenderBoxModelObject::requiresLayer()
         || hasNonVisibleOverflow()
         || style().specifiesColumns()
-        || style().containsLayout()
+        || style().usedContain().contains(Style::ContainValue::Layout)
         || !style().usedZIndex().isAuto()
         || hasRunningAcceleratedAnimations();
 }
@@ -5258,7 +5279,9 @@ void RenderBox::updateFloatPainterAfterSelfPaintingLayerChange()
                 break;
             auto blockFlowContainsThisFloat = false;
             for (auto& floatingObject : *floatingObjects) {
-                blockFlowContainsThisFloat = &floatingObject->renderer() == this;
+                if (!floatingObject->renderer())
+                    continue;
+                blockFlowContainsThisFloat = floatingObject->renderer() == this;
                 if (blockFlowContainsThisFloat) {
                     floatPainter = floatingObject.get();
                     if (blockFlow->hasLayer() && blockFlow->layer()->isSelfPaintingLayer())

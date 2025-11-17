@@ -702,7 +702,6 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
 #if PLATFORM(IOS_FAMILY)
     , m_updateLayoutViewportHeightExpansionTimer(*this, &WebPage::updateLayoutViewportHeightExpansionTimerFired, updateLayoutViewportHeightExpansionTimerInterval)
 #endif
-    , m_overrideReferrerForAllRequests(parameters.overrideReferrerForAllRequests)
 #if ENABLE(IPC_TESTING_API)
     , m_visitedLinkTableID(parameters.visitedLinkTableID)
 #endif
@@ -1049,7 +1048,8 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     page->setUserInterfaceLayoutDirection(m_userInterfaceLayoutDirection);
 #if PLATFORM(IOS_FAMILY)
     // Set hardware keyboard attached status
-    page->setHardwareKeyboardAttached(m_keyboardIsAttached);
+    page->didUpdateHardwareKeyboardAttachment(m_keyboardIsAttached);
+
     page->setTextAutosizingWidth(parameters.textAutosizingWidth);
     setOverrideViewportArguments(parameters.overrideViewportArguments);
 #endif
@@ -1169,11 +1169,6 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
 
 #if PLATFORM(IOS_FAMILY)
     setViewportConfigurationViewLayoutSize(parameters.viewportConfigurationViewLayoutSize, parameters.viewportConfigurationLayoutSizeScaleFactorFromClient, parameters.viewportConfigurationMinimumEffectiveDeviceWidth);
-#endif
-
-#if USE(AUDIO_SESSION)
-    if (RefPtr manager = mediaSessionManager())
-        manager->setShouldDeactivateAudioSession(true);
 #endif
 
 #if HAVE(VISIBILITY_PROPAGATION_VIEW) && !HAVE(NON_HOSTING_VISIBILITY_PROPAGATION_VIEW)
@@ -3796,7 +3791,7 @@ void WebPage::dispatchWheelEventWithoutScrolling(FrameIdentifier frameID, const 
 #if ENABLE(KINETIC_SCROLLING)
     RefPtr localMainFrame = this->localMainFrame();
     auto gestureState =  localMainFrame ? localMainFrame->eventHandler().wheelScrollGestureState() : std::nullopt;
-    bool isCancelable = !gestureState || gestureState == WheelScrollGestureState::Blocking || wheelEvent.phase() == WebWheelEvent::PhaseBegan;
+    bool isCancelable = !gestureState || gestureState == WheelScrollGestureState::Blocking || wheelEvent.phase() == WebWheelEvent::Phase::Began;
 #else
     bool isCancelable = true;
 #endif
@@ -5697,9 +5692,9 @@ void WebPage::setActiveOpenPanelResultListener(Ref<WebOpenPanelResultListener>&&
     m_activeOpenPanelResultListener = WTFMove(openPanelResultListener);
 }
 
-void WebPage::setTextIndicator(const WebCore::TextIndicatorData& indicatorData)
+void WebPage::setTextIndicator(RefPtr<WebCore::TextIndicator>&& textIndicator)
 {
-    send(Messages::WebPageProxy::SetTextIndicatorFromFrame(m_mainFrame->frameID(), indicatorData, WebCore::TextIndicatorLifetime::Temporary));
+    send(Messages::WebPageProxy::SetTextIndicatorFromFrame(m_mainFrame->frameID(), WTFMove(textIndicator), WebCore::TextIndicatorLifetime::Temporary));
 }
 
 void WebPage::updateTextIndicator(RefPtr<WebCore::TextIndicator>&& textIndicator)

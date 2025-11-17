@@ -1785,7 +1785,7 @@ fast/events/scale-and-scroll-body.html [ Failure ]
 fast/events/show-modal-dialog-onblur-onfocus.html [ Failure ]
 fast/events/tabindex-focus-blur-all.html [ Failure ]
 
-webkit.org/b/271781 fast/harness/show-modal-dialog.html [ Failure ] # change to pass when issue is resolved
+webkit.org/b/271781 fast/harness/show-modal-dialog.html [ Pass ]
 
 # Ref-test imported from W3C that is failing because type=image input elements have rounded corners on iOS.
 imported/w3c/web-platform-tests/html/semantics/forms/the-input-element/image01.html [ ImageOnlyFailure ]
@@ -2530,8 +2530,6 @@ webkit.org/b/152279 http/tests/misc/large-js-program.py [ Skip ]
 webkit.org/b/152279 js/dom/line-column-numbers.html [ Skip ]
 
 webkit.org/b/152442 fast/scrolling/rtl-point-in-iframe.html [ Skip ]
-
-webkit.org/b/152282 css3/filters/composited-during-transition-layertree.html [ Failure ]
 
 webkit.org/b/152935 fast/scrolling/scroll-position-on-reload-rtl.html [ Failure ]
 
@@ -8358,6 +8356,9 @@ fast/forms/ios/zoom-after-input-tap.html [ Failure ]
 
 webkit.org/b/302104 fast/scrolling/ios/bounding-client-rect-on-fixed.html [ Pass Failure ]
 
+# List buttons do not have tint color on iOS.
+fast/css/accent-color/datalist.html [ Skip ]
+
 imported/w3c/web-platform-tests/css/CSS2/linebox/inline-formatting-context-002.xht [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/CSS2/linebox/inline-formatting-context-003.xht [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/CSS2/linebox/inline-formatting-context-004.xht [ ImageOnlyFailure ]
@@ -8365,3 +8366,18 @@ imported/w3c/web-platform-tests/css/CSS2/linebox/inline-formatting-context-005.x
 imported/w3c/web-platform-tests/css/CSS2/linebox/inline-formatting-context-006.xht [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/CSS2/linebox/inline-formatting-context-007.xht [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/CSS2/linebox/inline-formatting-context-022.xht [ ImageOnlyFailure ]
+
+# webkit.org/b/302331 REGRESSION(302097@main): [macOS iOS] 2x imported/w3c/web-platform-tests/css/css-viewport tests are flaky failure
+imported/w3c/web-platform-tests/css/css-viewport/zoom/iframe-zoom-nested.html [ Pass Failure ]
+imported/w3c/web-platform-tests/css/css-viewport/zoom/zoom-iframe-dynamic.html [ Failure ]
+
+imported/w3c/web-platform-tests/css/CSS2/box-display/block-in-inline-001.xht [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/CSS2/box-display/block-in-inline-002.xht [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/CSS2/box-display/box-generation-001.xht [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/CSS2/box-display/box-generation-002.xht [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/CSS2/box-display/display-008.xht [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/CSS2/box-display/display-009.xht [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/CSS2/box-display/display-012.xht [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/CSS2/box-display/display-013.xht [ ImageOnlyFailure ]
+
+webkit.org/b/302486 [ Release ] http/tests/site-isolation/history/add-iframes-and-navigate-mainframe.html [ Skip ]

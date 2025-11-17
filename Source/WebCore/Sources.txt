@@ -877,7 +877,6 @@ css/CSSColorValue.cpp
 css/CSSComputedStyleDeclaration.cpp
 css/CSSConditionRule.cpp
 css/CSSContainerRule.cpp
-css/CSSContentDistributionValue.cpp
 css/CSSCounterStyle.cpp
 css/CSSCounterStyleDescriptors.cpp
 css/CSSCounterStyleRegistry.cpp
@@ -2563,6 +2562,7 @@ platform/graphics/MIMESniffer.cpp
 platform/graphics/MIMETypeCache.cpp
 platform/graphics/MediaPlayer.cpp
 platform/graphics/MediaPlayerPrivate.cpp
+platform/graphics/MediaPlayerPrivateWirelessPlayback.cpp
 platform/graphics/MediaResourceSniffer.cpp
 platform/graphics/MediaSourcePrivate.cpp
 platform/graphics/Model.cpp
@@ -3166,6 +3166,12 @@ style/calc/StyleCalculationTree+Evaluation.cpp
 style/calc/StyleCalculationTree.cpp
 style/calc/StyleCalculationValue.cpp
 style/calc/StyleCalculationValueMap.cpp
+style/values/align/StyleAlignContent.cpp
+style/values/align/StyleAlignItems.cpp
+style/values/align/StyleAlignSelf.cpp
+style/values/align/StyleJustifyContent.cpp
+style/values/align/StyleJustifyItems.cpp
+style/values/align/StyleJustifySelf.cpp
 style/values/animations/StyleAnimation.cpp
 style/values/animations/StyleSingleAnimationName.cpp
 style/values/animations/StyleSingleAnimationRangeName.cpp
@@ -3185,6 +3191,7 @@ style/values/borders/StyleBorderRadius.cpp
 style/values/borders/StyleBoxShadow.cpp
 style/values/borders/StyleCornerShapeValue.cpp
 style/values/box/StyleMargin.cpp
+style/values/box/StyleMarginTrim.cpp
 style/values/break/StyleOrphans.cpp
 style/values/break/StyleWidows.cpp
 style/values/color-adjust/StyleColorScheme.cpp
@@ -3201,6 +3208,7 @@ style/values/color/StyleKeywordColor.cpp
 style/values/color/StyleLightDarkColor.cpp
 style/values/color/StyleOpacity.cpp
 style/values/color/StyleResolvedColor.cpp
+style/values/contain/StyleContain.cpp
 style/values/content/StyleContent.cpp
 style/values/content/StyleQuotes.cpp
 style/values/counter-styles/StyleCounterStyle.cpp
@@ -3226,6 +3234,8 @@ style/values/filter-effects/StyleOpacityFunction.cpp
 style/values/filter-effects/StyleSaturateFunction.cpp
 style/values/filter-effects/StyleSepiaFunction.cpp
 style/values/flexbox/StyleFlexBasis.cpp
+style/values/fonts/StyleFontFamily.cpp
+style/values/fonts/StyleFontFamilyName.cpp
 style/values/fonts/StyleFontFeatureSettings.cpp
 style/values/fonts/StyleFontPalette.cpp
 style/values/fonts/StyleFontSizeAdjust.cpp
@@ -3246,6 +3256,7 @@ style/values/grid/StyleGridTemplateList.cpp
 style/values/grid/StyleGridTrackBreadth.cpp
 style/values/grid/StyleGridTrackSize.cpp
 style/values/grid/StyleGridTrackSizes.cpp
+style/values/grid/StyleItemTolerance.cpp
 style/values/images/StyleGradient.cpp
 style/values/images/StyleImageOrNone.cpp
 style/values/images/StyleImageOrientation.cpp
@@ -3279,6 +3290,7 @@ style/values/non-standard/StyleWebKitTouchCallout.cpp
 style/values/overflow/StyleBlockEllipsis.cpp
 style/values/overflow/StyleScrollbarGutter.cpp
 style/values/page/StylePageSize.cpp
+style/values/pointerevents/StyleTouchAction.cpp
 style/values/primitives/StyleLengthResolution.cpp
 style/values/primitives/StyleLengthWrapper+DeprecatedCSSValueConversion.cpp
 style/values/primitives/StyleLengthWrapperData.cpp
@@ -3330,6 +3342,7 @@ style/values/text/StyleLetterSpacing.cpp
 style/values/text/StyleTabSize.cpp
 style/values/text/StyleTextAutospace.cpp
 style/values/text/StyleTextIndent.cpp
+style/values/text/StyleTextTransform.cpp
 style/values/text/StyleWordSpacing.cpp
 style/values/transforms/functions/StyleMatrix3DTransformFunction.cpp
 style/values/transforms/functions/StyleMatrixTransformFunction.cpp
@@ -3658,6 +3671,7 @@ JSAnimationFrameRatePreset.cpp
 JSAnimationPlaybackEvent.cpp
 JSAnimationPlaybackEventInit.cpp
 JSAnimationTimeline.cpp
+JSAriaNotifyOptions.cpp
 JSAttestationConveyancePreference.cpp
 JSAttr.cpp
 JSAudioBuffer.cpp

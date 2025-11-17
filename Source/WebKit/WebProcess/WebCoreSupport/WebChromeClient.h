@@ -65,6 +65,7 @@ public:
 
 #if PLATFORM(IOS_FAMILY)
     void relayAccessibilityNotification(String&&, RetainPtr<NSData>&&) const final;
+    void relayAriaNotifyNotification(WebCore::AriaNotifyData&&) const final;
 #endif
 
 private:
@@ -404,7 +405,7 @@ private:
     void isPlayingMediaDidChange(WebCore::MediaProducerMediaStateFlags) final;
     void handleAutoplayEvent(WebCore::AutoplayEvent, OptionSet<WebCore::AutoplayEventFlags>) final;
 
-    void setTextIndicator(const WebCore::TextIndicatorData&) const final;
+    void setTextIndicator(RefPtr<WebCore::TextIndicator>&&) const final;
     void updateTextIndicator(RefPtr<WebCore::TextIndicator>&&) const final;
 
 #if ENABLE(TELEPHONE_NUMBER_DETECTION) && PLATFORM(MAC)

@@ -312,10 +312,46 @@ public:
 
     void add64(RegisterID op1Hi, RegisterID op1Lo, RegisterID op2Hi, RegisterID op2Lo, RegisterID destHi, RegisterID destLo)
     {
-        RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
-        m_assembler.add_S(scratch, op1Lo, op2Lo);
-        m_assembler.adc(destHi, op1Hi, op2Hi);
-        move(scratch, destLo);
+        if (destLo != op1Hi && destLo != op2Hi) {
+            m_assembler.add_S(destLo, op1Lo, op2Lo);
+            m_assembler.adc(destHi, op1Hi, op2Hi);
+        } else {
+            RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+            m_assembler.add_S(scratch, op1Lo, op2Lo);
+            m_assembler.adc(destHi, op1Hi, op2Hi);
+            move(scratch, destLo);
+        }
+    }
+
+    void and64(RegisterID op1Hi, RegisterID op1Lo, RegisterID op2Hi, RegisterID op2Lo, RegisterID destHi, RegisterID destLo)
+    {
+        if (destHi != op1Lo && destHi != op2Lo) {
+            m_assembler.ARM_and(destHi, op1Hi, op2Hi);
+            m_assembler.ARM_and(destLo, op1Lo, op2Lo);
+        } else {
+            RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+            m_assembler.ARM_and(scratch, op1Hi, op2Hi);
+            m_assembler.ARM_and(destLo, op1Lo, op2Lo);
+            move(scratch, destHi);
+        }
+    }
+
+    void mul64(RegisterID op1Hi, RegisterID op1Lo, RegisterID op2Hi, RegisterID op2Lo, RegisterID destHi, RegisterID destLo)
+    {
+        // Check if dest registers will clobber the high parts we need later
+        if (destLo != op1Hi && destLo != op2Hi && destHi != op1Hi && destHi != op2Hi) {
+            // No overlap - direct computation
+            m_assembler.umull(destLo, destHi, op1Lo, op2Lo);
+            m_assembler.mla(destHi, op1Hi, op2Lo, destHi);
+            m_assembler.mla(destHi, op1Lo, op2Hi, destHi);
+        } else {
+            // Overlap exists - compute middle terms first into scratch, then add
+            RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+            m_assembler.mul(scratch, op1Hi, op2Lo);
+            m_assembler.mla(scratch, op1Lo, op2Hi, scratch);
+            m_assembler.umull(destLo, destHi, op1Lo, op2Lo);
+            add32(scratch, destHi);
+        }
     }
 
     void and16(Address src, RegisterID dest)
@@ -377,6 +413,166 @@ public:
         m_assembler.clz(dest, dest);
     }
 
+    void countLeadingZeros64(RegisterID srcHi, RegisterID srcLo, RegisterID destHi, RegisterID destLo)
+    {
+        if (destLo != srcLo) {
+            m_assembler.clz(destLo, srcHi);
+            m_assembler.cmp(destLo, ARMThumbImmediate::makeEncodedImm(32));
+            Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+            m_assembler.clz(destLo, srcLo);
+            m_assembler.add(destLo, destLo, ARMThumbImmediate::makeEncodedImm(32));
+            done.link(this);
+            xor32(destHi, destHi);
+        } else {
+            RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+            move(srcLo, scratch);
+            m_assembler.clz(destLo, srcHi);
+            m_assembler.cmp(destLo, ARMThumbImmediate::makeEncodedImm(32));
+            Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+            m_assembler.clz(destLo, scratch);
+            m_assembler.add(destLo, destLo, ARMThumbImmediate::makeEncodedImm(32));
+            done.link(this);
+            xor32(destHi, destHi);
+        }
+    }
+
+    void countTrailingZeros64(RegisterID srcHi, RegisterID srcLo, RegisterID destHi, RegisterID destLo)
+    {
+        if (destLo != srcHi) {
+            countTrailingZeros32(srcLo, destLo);
+            m_assembler.cmp(destLo, ARMThumbImmediate::makeEncodedImm(32));
+            Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+            countTrailingZeros32(srcHi, destLo);
+            m_assembler.add(destLo, destLo, ARMThumbImmediate::makeEncodedImm(32));
+            done.link(this);
+            xor32(destHi, destHi);
+        } else {
+            RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+            move(srcHi, scratch);
+            countTrailingZeros32(srcLo, destLo);
+            m_assembler.cmp(destLo, ARMThumbImmediate::makeEncodedImm(32));
+            Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+            countTrailingZeros32(scratch, destLo);
+            m_assembler.add(destLo, destLo, ARMThumbImmediate::makeEncodedImm(32));
+            done.link(this);
+            xor32(destHi, destHi);
+        }
+    }
+
+    void compare64(RelationalCondition cond, RegisterID lhsHi, RegisterID lhsLo, RegisterID rhsHi, RegisterID rhsLo, RegisterID dest)
+    {
+        if (cond == RelationalCondition::Equal || cond == RelationalCondition::NotEqual) {
+            // For Equal/NotEqual, we can optimize to only set one value conditionally
+            // NotEqual: default to 1, change to 0 only if both parts equal
+            // Equal: default to 0, change to 1 only if both parts equal
+            if (dest != lhsHi && dest != rhsHi && dest != lhsLo && dest != rhsLo) {
+                m_assembler.mov(dest, ARMThumbImmediate::makeEncodedImm(cond == RelationalCondition::NotEqual ? 1 : 0));
+                m_assembler.cmp(lhsHi, rhsHi);
+                Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+                m_assembler.cmp(lhsLo, rhsLo);
+                // Only need to set the "opposite" value when both parts match
+                m_assembler.it(ARMv7Assembler::ConditionEQ);
+                m_assembler.mov(dest, ARMThumbImmediate::makeEncodedImm(cond == RelationalCondition::NotEqual ? 0 : 1));
+                done.link(this);
+            } else {
+                RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+                m_assembler.mov(scratch, ARMThumbImmediate::makeEncodedImm(cond == RelationalCondition::NotEqual ? 1 : 0));
+                m_assembler.cmp(lhsHi, rhsHi);
+                Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+                m_assembler.cmp(lhsLo, rhsLo);
+                m_assembler.it(ARMv7Assembler::ConditionEQ);
+                m_assembler.mov(scratch, ARMThumbImmediate::makeEncodedImm(cond == RelationalCondition::NotEqual ? 0 : 1));
+                done.link(this);
+                move(scratch, dest);
+            }
+            return;
+        }
+
+        ARMv7Assembler::Condition hiCondition;
+        switch (cond) {
+        case RelationalCondition::GreaterThan:
+        case RelationalCondition::GreaterThanOrEqual:
+            hiCondition = ARMv7Assembler::ConditionGT;
+            break;
+        case RelationalCondition::LessThan:
+        case RelationalCondition::LessThanOrEqual:
+            hiCondition = ARMv7Assembler::ConditionLT;
+            break;
+        case RelationalCondition::Above:
+        case RelationalCondition::AboveOrEqual:
+            hiCondition = ARMv7Assembler::ConditionHI;
+            break;
+        case RelationalCondition::Below:
+        case RelationalCondition::BelowOrEqual:
+            hiCondition = ARMv7Assembler::ConditionLO;
+            break;
+        default:
+            RELEASE_ASSERT_NOT_REACHED();
+        }
+
+        ARMv7Assembler::Condition loCondition;
+        switch (cond) {
+        case RelationalCondition::GreaterThan:
+        case RelationalCondition::Above:
+            loCondition = ARMv7Assembler::ConditionHI;
+            break;
+        case RelationalCondition::GreaterThanOrEqual:
+        case RelationalCondition::AboveOrEqual:
+            loCondition = ARMv7Assembler::ConditionHS;
+            break;
+        case RelationalCondition::LessThan:
+        case RelationalCondition::Below:
+            loCondition = ARMv7Assembler::ConditionLO;
+            break;
+        case RelationalCondition::LessThanOrEqual:
+        case RelationalCondition::BelowOrEqual:
+            loCondition = ARMv7Assembler::ConditionLS;
+            break;
+        default:
+            RELEASE_ASSERT_NOT_REACHED();
+        }
+
+        if (dest != lhsLo && dest != rhsLo && dest != lhsHi && dest != rhsHi) {
+            // No aliasing - use ITE blocks with 1 branch
+            m_assembler.cmp(lhsHi, rhsHi);
+            m_assembler.it(hiCondition, false);
+            m_assembler.mov(dest, ARMThumbImmediate::makeEncodedImm(1));
+            m_assembler.mov(dest, ARMThumbImmediate::makeEncodedImm(0));
+
+            Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+
+            m_assembler.cmp(lhsLo, rhsLo);
+            m_assembler.it(loCondition, false);
+            m_assembler.mov(dest, ARMThumbImmediate::makeEncodedImm(1));
+            m_assembler.mov(dest, ARMThumbImmediate::makeEncodedImm(0));
+
+            done.link(this);
+        } else {
+            // dest aliases with source - use scratch
+            RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+
+            m_assembler.cmp(lhsHi, rhsHi);
+            m_assembler.it(hiCondition, false);
+            m_assembler.mov(scratch, ARMThumbImmediate::makeEncodedImm(1));
+            m_assembler.mov(scratch, ARMThumbImmediate::makeEncodedImm(0));
+
+            Jump done = makeBranch(ARMv7Assembler::ConditionNE);
+
+            m_assembler.cmp(lhsLo, rhsLo);
+            m_assembler.it(loCondition, false);
+            m_assembler.mov(scratch, ARMThumbImmediate::makeEncodedImm(1));
+            m_assembler.mov(scratch, ARMThumbImmediate::makeEncodedImm(0));
+
+            done.link(this);
+            move(scratch, dest);
+        }
+    }
+
+    void lshiftUnchecked(RegisterID src, RegisterID shiftAmount, RegisterID dest)
+    {
+        m_assembler.lsl(dest, src, shiftAmount);
+    }
+
     void lshift32(RegisterID src, RegisterID shiftAmount, RegisterID dest)
     {
         RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
@@ -390,7 +586,10 @@ public:
 
     void lshift32(RegisterID src, TrustedImm32 imm, RegisterID dest)
     {
-        m_assembler.lsl(dest, src, imm.m_value & 0x1f);
+        if (!(imm.m_value & 0x1f))
+            move(src, dest);
+        else
+            m_assembler.lsl(dest, src, imm.m_value & 0x1f);
     }
 
     void lshift32(TrustedImm32 imm, RegisterID shiftAmount, RegisterID dest)
@@ -545,6 +744,19 @@ public:
         }
     }
 
+    void or64(RegisterID op1Hi, RegisterID op1Lo, RegisterID op2Hi, RegisterID op2Lo, RegisterID destHi, RegisterID destLo)
+    {
+        if (destLo != op1Hi && destLo != op2Hi) {
+            m_assembler.orr(destLo, op1Lo, op2Lo);
+            m_assembler.orr(destHi, op1Hi, op2Hi);
+        } else {
+            RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+            m_assembler.orr(scratch, op1Lo, op2Lo);
+            m_assembler.orr(destHi, op1Hi, op2Hi);
+            move(scratch, destLo);
+        }
+    }
+
     void rotateRight32(RegisterID op1, RegisterID op2, RegisterID dest)
     {
         m_assembler.ror(dest, op1, op2);
@@ -579,6 +791,12 @@ public:
         m_assembler.sub(scratch, ARMThumbImmediate::makeUInt12(32), scratch);
         m_assembler.ror(dest, src, scratch);
     }
+
+    void rshiftUnchecked(RegisterID src, RegisterID shiftAmount, RegisterID dest)
+    {
+        m_assembler.asr(dest, src, shiftAmount);
+    }
+
     void rshift32(RegisterID src, RegisterID shiftAmount, RegisterID dest)
     {
         RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
@@ -602,7 +820,7 @@ public:
     {
         rshift32(dest, shiftAmount, dest);
     }
-    
+
     void rshift32(TrustedImm32 imm, RegisterID dest)
     {
         rshift32(dest, imm, dest);
@@ -616,6 +834,11 @@ public:
         m_assembler.asr(dest, dataTempRegister, dest);
     }
 
+    void urshiftUnchecked(RegisterID src, RegisterID shiftAmount, RegisterID dest)
+    {
+        m_assembler.lsr(dest, src, shiftAmount);
+    }
+
     void urshift32(RegisterID src, RegisterID shiftAmount, RegisterID dest)
     {
         RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
@@ -623,10 +846,10 @@ public:
         ARMThumbImmediate armImm = ARMThumbImmediate::makeEncodedImm(0x1f);
         ASSERT(armImm.isValid());
         m_assembler.ARM_and(scratch, shiftAmount, armImm);
-        
+
         m_assembler.lsr(dest, src, scratch);
     }
-    
+
     void urshift32(RegisterID src, TrustedImm32 imm, RegisterID dest)
     {
         if (!(imm.m_value & 0x1f))
@@ -639,7 +862,7 @@ public:
     {
         urshift32(dest, shiftAmount, dest);
     }
-    
+
     void urshift32(TrustedImm32 imm, RegisterID dest)
     {
         urshift32(dest, imm, dest);
@@ -692,6 +915,17 @@ public:
         }
     }
 
+    void sub32(TrustedImm32 imm, RegisterID src, RegisterID dest)
+    {
+        ARMThumbImmediate armImm = ARMThumbImmediate::makeUInt12OrEncodedImm(imm.m_value);
+        if (armImm.isValid())
+            m_assembler.sub(dest, armImm, src);
+        else {
+            move(imm, dataTempRegister);
+            m_assembler.sub(dest, dataTempRegister, src);
+        }
+    }
+
     void sub32(TrustedImm32 imm, Address address)
     {
         load32(address, dataTempRegister);
@@ -734,10 +968,28 @@ public:
 
     void sub64(RegisterID leftHi, RegisterID leftLo, RegisterID rightHi, RegisterID rightLo, RegisterID destHi, RegisterID destLo)
     {
-        RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
-        m_assembler.sub_S(scratch, leftLo, rightLo);
-        m_assembler.sbc(destHi, leftHi, rightHi);
-        move(scratch, destLo);
+        if (destLo != leftHi && destLo != rightHi) {
+            m_assembler.sub_S(destLo, leftLo, rightLo);
+            m_assembler.sbc(destHi, leftHi, rightHi);
+        } else {
+            RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+            m_assembler.sub_S(scratch, leftLo, rightLo);
+            m_assembler.sbc(destHi, leftHi, rightHi);
+            move(scratch, destLo);
+        }
+    }
+
+    void xor64(RegisterID op1Hi, RegisterID op1Lo, RegisterID op2Hi, RegisterID op2Lo, RegisterID destHi, RegisterID destLo)
+    {
+        if (destHi != op1Lo && destHi != op2Lo) {
+            m_assembler.eor(destHi, op1Hi, op2Hi);
+            m_assembler.eor(destLo, op1Lo, op2Lo);
+        } else {
+            RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+            m_assembler.eor(scratch, op1Hi, op2Hi);
+            m_assembler.eor(destLo, op1Lo, op2Lo);
+            move(scratch, destHi);
+        }
     }
 
     void xor32(RegisterID op1, RegisterID op2, RegisterID dest)
@@ -1101,23 +1353,32 @@ public:
             loadPair32(Address(scratch), dest1, dest2);
         } else {
             ASSERT(dest1 != dest2); // If it is the same, ldp becomes illegal instruction.
-            int32_t absOffset = address.u.offset;
-            if (absOffset < 0)
-                absOffset = -absOffset;
-            if (!(absOffset & ~0x3fc)) {
-                if ((dest1 == addressTempRegister) || (dest2 == addressTempRegister))
-                    invalidateCachedAddressTempRegister();
-                if ((dest1 == dataTempRegister) || (dest2 == dataTempRegister))
-                    cachedDataTempRegister().invalidate();
-                m_assembler.ldrd(dest1, dest2, address.base, address.u.offset, /* index: */ true, /* wback: */ false);
-            } else if (address.base == dest1) {
+            // Check if dest1 or dest2 aliases the base register to avoid UNPREDICTABLE ldrd behavior
+            if (address.base == dest1) {
+                // Load high word first to avoid clobbering base register
                 ArmAddress highAddress(address.base, address.u.offset + 4);
                 load32(highAddress, dest2);
                 load32(address, dest1);
+            } else if (address.base == dest2) {
+                // Load low word first to avoid clobbering base register
+                load32(address, dest1);
+                ArmAddress highAddress(address.base, address.u.offset + 4);
+                load32(highAddress, dest2);
             } else {
-                load32(address, dest1);
-                ArmAddress highAddress(address.base, address.u.offset + 4);
-                load32(highAddress, dest2);
+                int32_t absOffset = address.u.offset;
+                if (absOffset < 0)
+                    absOffset = -absOffset;
+                if (!(absOffset & ~0x3fc)) {
+                    if ((dest1 == addressTempRegister) || (dest2 == addressTempRegister))
+                        invalidateCachedAddressTempRegister();
+                    if ((dest1 == dataTempRegister) || (dest2 == dataTempRegister))
+                        cachedDataTempRegister().invalidate();
+                    m_assembler.ldrd(dest1, dest2, address.base, address.u.offset, /* index: */ true, /* wback: */ false);
+                } else {
+                    load32(address, dest1);
+                    ArmAddress highAddress(address.base, address.u.offset + 4);
+                    load32(highAddress, dest2);
+                }
             }
         }
     }
@@ -1304,6 +1565,12 @@ public:
         store16(dataTempRegister, address);
     }
 
+    void store16(TrustedImm32 imm, Address address)
+    {
+        move(imm, dataTempRegister);
+        store16(dataTempRegister, address);
+    }
+
     void storeRel16(RegisterID src, Address address)
     {
         storeFence();
@@ -1324,6 +1591,14 @@ public:
 
     void storePair32(TrustedImm32 imm1, TrustedImm32 imm2, Address address)
     {
+        if (imm1.m_value == imm2.m_value) {
+            RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
+            move(imm1, scratch);
+            store32(scratch, address);
+            store32(scratch, address.withOffset(4));
+            return;
+        }
+
         int32_t absOffset = address.offset;
         if (absOffset < 0)
             absOffset = -absOffset;

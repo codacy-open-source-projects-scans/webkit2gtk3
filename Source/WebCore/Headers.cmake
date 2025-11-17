@@ -3246,9 +3246,19 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     style/values/StyleValueTypes.h
 
+    style/values/align/StyleAlignContent.h
+    style/values/align/StyleAlignItems.h
+    style/values/align/StyleAlignSelf.h
+    style/values/align/StyleBaselineAlignmentPreference.h
     style/values/align/StyleGapGutter.h
+    style/values/align/StyleJustifyContent.h
+    style/values/align/StyleJustifyItems.h
+    style/values/align/StyleJustifySelf.h
+    style/values/align/StyleLegacyPosition.h
+    style/values/align/StyleOverflowPosition.h
 
     style/values/anchor-position/StyleAnchorName.h
+    style/values/anchor-position/StylePositionVisibility.h
 
     style/values/animations/StyleAnimation.h
     style/values/animations/StyleAnimations.h
@@ -3279,6 +3289,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     style/values/borders/StyleShadow.h
 
     style/values/box/StyleMargin.h
+    style/values/box/StyleMarginTrim.h
     style/values/box/StylePadding.h
 
     style/values/break/StyleOrphans.h
@@ -3294,6 +3305,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     style/values/color/StyleOpacity.h
     style/values/color/StyleResolvedColor.h
 
+    style/values/contain/StyleContain.h
     style/values/contain/StyleContainerName.h
 
     style/values/content/StyleContent.h
@@ -3320,6 +3332,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     style/values/flexbox/StyleWebKitBoxFlexGroup.h
     style/values/flexbox/StyleWebKitBoxOrdinalGroup.h
 
+    style/values/fonts/StyleFontFamily.h
+    style/values/fonts/StyleFontFamilyName.h
     style/values/fonts/StyleFontFeatureSettings.h
     style/values/fonts/StyleFontPalette.h
     style/values/fonts/StyleFontSizeAdjust.h
@@ -3333,6 +3347,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     style/values/fonts/StyleFontWidth.h
 
     style/values/grid/StyleGridAutoFlow.h
+    style/values/grid/StyleItemTolerance.h
     style/values/grid/StyleGridNamedAreaMap.h
     style/values/grid/StyleGridNamedLinesMap.h
     style/values/grid/StyleGridOrderedNamedLinesMap.h
@@ -3352,7 +3367,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     style/values/images/StyleImageWrapper.h
     style/values/images/StyleObjectPosition.h
 
-    style/values/inline/StyleLineBoxContain.h
     style/values/inline/StyleLineFitEdge.h
     style/values/inline/StyleLineHeight.h
     style/values/inline/StyleTextBoxEdge.h
@@ -3389,6 +3403,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     style/values/non-standard/StyleWebKitBorderSpacing.h
     style/values/non-standard/StyleWebKitBoxReflect.h
+    style/values/non-standard/StyleWebKitLineBoxContain.h
     style/values/non-standard/StyleWebKitLineClamp.h
     style/values/non-standard/StyleWebKitMarqueeIncrement.h
     style/values/non-standard/StyleWebKitMarqueeRepetition.h
@@ -3403,6 +3418,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     style/values/overflow/StyleScrollbarGutter.h
 
     style/values/page/StylePageSize.h
+
+    style/values/pointerevents/StyleTouchAction.h
 
     style/values/position/StyleInset.h
 
@@ -3493,6 +3510,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     style/values/text/StyleTextAutospace.h
     style/values/text/StyleTextIndent.h
     style/values/text/StyleTextSpacingTrim.h
+    style/values/text/StyleTextTransform.h
     style/values/text/StyleWordSpacing.h
 
     style/values/text-decoration/StyleTextDecorationLine.h
