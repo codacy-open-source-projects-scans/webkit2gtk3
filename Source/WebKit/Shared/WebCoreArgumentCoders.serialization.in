@@ -7275,7 +7275,7 @@ struct WebCore::PrewarmInformation {
 
 struct WebCore::RemoteUserInputEventData {
     WebCore::FrameIdentifier targetFrameID;
-    WebCore::IntPoint transformedPoint;
+    WebCore::DoublePoint transformedPoint;
 };
 
 struct WebCore::LinkDecorationFilteringData {
@@ -8001,7 +8001,8 @@ header: <WebCore/MediaSourcePrivate.h>
 enum class WebCore::MediaSourcePrivateAddStatus : uint8_t {
     Ok,
     NotSupported,
-    ReachedIdLimit
+    ReachedIdLimit,
+    InvalidState
 };
 
 header: <WebCore/MediaSourcePrivate.h>
@@ -8840,8 +8841,7 @@ header: <WebCore/TrackInfo.h>
     WebCore::FloatSize displaySize;
     uint8_t bitDepth;
     WebCore::PlatformVideoColorSpace colorSpace;
-    WebCore::FourCC boxType;
-    RefPtr<WebCore::SharedBuffer> atomData;
+    Vector<std::pair<WebCore::FourCC, Ref<WebCore::SharedBuffer>>> extensionAtoms
 };
 
 [RefCounted, CreateUsing=fromVariant] struct WebCore::TrackInfo {

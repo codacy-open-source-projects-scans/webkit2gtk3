@@ -46,6 +46,7 @@
 #include "ScrollAxis.h"
 #include "ScrollTypes.h"
 #include "StyleContain.h"
+#include "StyleHangingPunctuation.h"
 #include "StyleImageOrientation.h"
 #include "StyleMarginTrim.h"
 #include "StylePositionVisibility.h"
@@ -779,10 +780,10 @@ constexpr CSSValueID toCSSValueID(DisplayType e)
         return CSSValueGrid;
     case DisplayType::InlineGrid:
         return CSSValueInlineGrid;
-    case DisplayType::Masonry:
-        return CSSValueMasonry;
-    case DisplayType::InlineMasonry:
-        return CSSValueInlineMasonry;
+    case DisplayType::GridLanes:
+        return CSSValueGridLanes;
+    case DisplayType::InlineGridLanes:
+        return CSSValueInlineGridLanes;
     case DisplayType::None:
         return CSSValueNone;
     case DisplayType::Contents:
@@ -845,10 +846,10 @@ template<> constexpr DisplayType fromCSSValueID(CSSValueID valueID)
         return DisplayType::Grid;
     case CSSValueInlineGrid:
         return DisplayType::InlineGrid;
-    case CSSValueMasonry:
-        return DisplayType::Masonry;
-    case CSSValueInlineMasonry:
-        return DisplayType::InlineMasonry;
+    case CSSValueGridLanes:
+        return DisplayType::GridLanes;
+    case CSSValueInlineGridLanes:
+        return DisplayType::InlineGridLanes;
     case CSSValueNone:
         return DisplayType::None;
     case CSSValueContents:
@@ -924,8 +925,8 @@ DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
 #undef TYPE
 #undef FOR_EACH
 
-#define TYPE HangingPunctuation
-#define FOR_EACH(CASE) CASE(First) CASE(Last) CASE(AllowEnd) CASE(ForceEnd)
+#define TYPE Style::HangingPunctuationValue
+#define FOR_EACH(CASE) CASE(First) CASE(ForceEnd) CASE(AllowEnd) CASE(Last)
 DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
 #undef TYPE
 #undef FOR_EACH
