@@ -51,8 +51,11 @@
 #include "StyleMarginTrim.h"
 #include "StylePositionVisibility.h"
 #include "StyleScrollBehavior.h"
+#include "StyleSpeakAs.h"
 #include "StyleTextDecorationLine.h"
+#include "StyleTextEmphasisPosition.h"
 #include "StyleTextTransform.h"
+#include "StyleTextUnderlinePosition.h"
 #include "StyleTouchAction.h"
 #include "StyleWebKitLineBoxContain.h"
 #include "StyleWebKitOverflowScrolling.h"
@@ -1269,6 +1272,18 @@ DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
 #undef TYPE
 #undef FOR_EACH
 
+#define TYPE Style::TextEmphasisPositionValue
+#define FOR_EACH(CASE) CASE(Over) CASE(Under) CASE(Left) CASE(Right)
+DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
+#undef TYPE
+#undef FOR_EACH
+
+#define TYPE Style::TextUnderlinePositionValue
+#define FOR_EACH(CASE) CASE(FromFont) CASE(Under) CASE(Left) CASE(Right)
+DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
+#undef TYPE
+#undef FOR_EACH
+
 #define TYPE TextSecurity
 #define FOR_EACH(CASE) CASE(None) CASE(Disc) CASE(Circle) CASE(Square)
 DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
@@ -1805,7 +1820,7 @@ DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
 #undef TYPE
 #undef FOR_EACH
 
-#define TYPE SpeakAs
+#define TYPE Style::SpeakAsValue
 #define FOR_EACH(CASE) CASE(SpellOut) CASE(Digits) CASE(LiteralPunctuation) CASE(NoPunctuation)
 DEFINE_TO_FROM_CSS_VALUE_ID_FUNCTIONS
 #undef TYPE

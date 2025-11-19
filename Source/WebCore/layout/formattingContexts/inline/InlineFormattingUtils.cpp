@@ -563,10 +563,10 @@ std::pair<InlineLayoutUnit, InlineLayoutUnit> InlineFormattingUtils::textEmphasi
     auto hasAboveTextEmphasis = false;
     auto hasUnderTextEmphasis = false;
     if (style.writingMode().isVerticalTypographic()) {
-        hasAboveTextEmphasis = !emphasisPosition.contains(TextEmphasisPosition::Left);
+        hasAboveTextEmphasis = !emphasisPosition.contains(Style::TextEmphasisPositionValue::Left);
         hasUnderTextEmphasis = !hasAboveTextEmphasis;
     } else {
-        hasAboveTextEmphasis = !emphasisPosition.contains(TextEmphasisPosition::Under);
+        hasAboveTextEmphasis = !emphasisPosition.contains(Style::TextEmphasisPositionValue::Under);
         hasUnderTextEmphasis = !hasAboveTextEmphasis;
     }
 
@@ -630,13 +630,14 @@ std::optional<LineLayoutResult::InlineContentEnding> InlineFormattingUtils::inli
     return { };
 }
 
-bool InlineFormattingUtils::shouldDiscardRemainingContentInBlockDirection(size_t numberOfLinesWithInlineContent) const
+bool InlineFormattingUtils::shouldDiscardRemainingContentInBlockDirection() const
 {
-    auto lineClamp = formattingContext().layoutState().parentBlockLayoutState().lineClamp();
+    auto& inlineLayoutState = formattingContext().layoutState();
+    auto lineClamp = inlineLayoutState.parentBlockLayoutState().lineClamp();
     if (!lineClamp || !lineClamp->shouldDiscardOverflow)
         return false;
     ASSERT(!lineClamp->isLegacy);
-    return lineClamp->maximumLines == numberOfLinesWithInlineContent;
+    return lineClamp->maximumLines == inlineLayoutState.lineCountForBlockDirectionClamp();
 }
 
 }

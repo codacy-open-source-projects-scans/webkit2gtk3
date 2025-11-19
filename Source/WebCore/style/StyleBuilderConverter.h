@@ -115,13 +115,9 @@ public:
 
     template<CSSValueID> static AtomString convertCustomIdentAtomOrKeyword(BuilderState&, const CSSValue&);
 
-    static OptionSet<TextEmphasisPosition> convertTextEmphasisPosition(BuilderState&, const CSSValue&);
     static TextAlignMode convertTextAlign(BuilderState&, const CSSValue&);
     static TextAlignLast convertTextAlignLast(BuilderState&, const CSSValue&);
     static Resize convertResize(BuilderState&, const CSSValue&);
-    static OptionSet<TextUnderlinePosition> convertTextUnderlinePosition(BuilderState&, const CSSValue&);
-
-    static OptionSet<SpeakAs> convertSpeakAs(BuilderState&, const CSSValue&);
 
     static std::optional<ScopedName> convertPositionAnchor(BuilderState&, const CSSValue&);
     static std::optional<PositionArea> convertPositionArea(BuilderState&, const CSSValue&);
@@ -147,42 +143,6 @@ template<CSSValueID keyword> inline AtomString BuilderConverter::convertCustomId
     if (primitiveValue->valueID() == keyword)
         return nullAtom();
     return AtomString { primitiveValue->stringValue() };
-}
-
-inline static OptionSet<TextEmphasisPosition> valueToEmphasisPosition(const CSSPrimitiveValue& primitiveValue)
-{
-    ASSERT(primitiveValue.isValueID());
-
-    switch (primitiveValue.valueID()) {
-    case CSSValueOver:
-        return TextEmphasisPosition::Over;
-    case CSSValueUnder:
-        return TextEmphasisPosition::Under;
-    case CSSValueLeft:
-        return TextEmphasisPosition::Left;
-    case CSSValueRight:
-        return TextEmphasisPosition::Right;
-    default:
-        break;
-    }
-
-    ASSERT_NOT_REACHED();
-    return RenderStyle::initialTextEmphasisPosition();
-}
-
-inline OptionSet<TextEmphasisPosition> BuilderConverter::convertTextEmphasisPosition(BuilderState& builderState, const CSSValue& value)
-{
-    if (auto* primitiveValue = dynamicDowncast<CSSPrimitiveValue>(value))
-        return valueToEmphasisPosition(*primitiveValue);
-
-    auto list = requiredListDowncast<CSSValueList, CSSPrimitiveValue>(builderState, value);
-    if (!list)
-        return { };
-
-    OptionSet<TextEmphasisPosition> position;
-    for (auto& currentValue : *list)
-        position.add(valueToEmphasisPosition(currentValue));
-    return position;
 }
 
 inline TextAlignMode BuilderConverter::convertTextAlign(BuilderState& builderState, const CSSValue& value)
@@ -253,43 +213,6 @@ inline Resize BuilderConverter::convertResize(BuilderState& builderState, const 
     return resize;
 }
 
-inline static OptionSet<TextUnderlinePosition> valueToUnderlinePosition(const CSSPrimitiveValue& primitiveValue)
-{
-    ASSERT(primitiveValue.isValueID());
-
-    switch (primitiveValue.valueID()) {
-    case CSSValueFromFont:
-        return TextUnderlinePosition::FromFont;
-    case CSSValueUnder:
-        return TextUnderlinePosition::Under;
-    case CSSValueLeft:
-        return TextUnderlinePosition::Left;
-    case CSSValueRight:
-        return TextUnderlinePosition::Right;
-    case CSSValueAuto:
-        return RenderStyle::initialTextUnderlinePosition();
-    default:
-        break;
-    }
-
-    ASSERT_NOT_REACHED();
-    return RenderStyle::initialTextUnderlinePosition();
-}
-
-inline OptionSet<TextUnderlinePosition> BuilderConverter::convertTextUnderlinePosition(BuilderState& builderState, const CSSValue& value)
-{
-    if (auto* primitiveValue = dynamicDowncast<CSSPrimitiveValue>(value))
-        return valueToUnderlinePosition(*primitiveValue);
-
-    auto pair = requiredPairDowncast<CSSPrimitiveValue>(builderState, value);
-    if (!pair)
-        return { };
-
-    auto position = valueToUnderlinePosition(pair->first);
-    position.add(valueToUnderlinePosition(pair->second));
-    return position;
-}
-
 inline float zoomWithTextZoomFactor(BuilderState& builderState)
 {
     if (auto* frame = builderState.document().frame()) {
@@ -298,18 +221,6 @@ inline float zoomWithTextZoomFactor(BuilderState& builderState)
         return usedZoom * textZoomFactor;
     }
     return builderState.cssToLengthConversionData().zoom();
-}
-
-inline OptionSet<SpeakAs> BuilderConverter::convertSpeakAs(BuilderState&, const CSSValue& value)
-{
-    auto result = RenderStyle::initialSpeakAs();
-    if (auto* list = dynamicDowncast<CSSValueList>(value)) {
-        for (auto& currentValue : *list) {
-            if (!isValueID(currentValue, CSSValueNormal))
-                result.add(fromCSSValue<SpeakAs>(currentValue));
-        }
-    }
-    return result;
 }
 
 inline std::optional<ScopedName> BuilderConverter::convertPositionAnchor(BuilderState& builderState, const CSSValue& value)

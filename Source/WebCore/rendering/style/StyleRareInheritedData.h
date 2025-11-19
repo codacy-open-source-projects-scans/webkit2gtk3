@@ -45,14 +45,17 @@
 #include <WebCore/StyleQuotes.h>
 #include <WebCore/StyleSVGPaintOrder.h>
 #include <WebCore/StyleScrollbarColor.h>
+#include <WebCore/StyleSpeakAs.h>
 #include <WebCore/StyleStrokeMiterlimit.h>
 #include <WebCore/StyleStrokeWidth.h>
 #include <WebCore/StyleTabSize.h>
 #include <WebCore/StyleTextBoxEdge.h>
+#include <WebCore/StyleTextEmphasisPosition.h>
 #include <WebCore/StyleTextEmphasisStyle.h>
 #include <WebCore/StyleTextIndent.h>
 #include <WebCore/StyleTextShadow.h>
 #include <WebCore/StyleTextUnderlineOffset.h>
+#include <WebCore/StyleTextUnderlinePosition.h>
 #include <WebCore/StyleTouchAction.h>
 #include <WebCore/StyleWebKitLineBoxContain.h>
 #include <WebCore/StyleWebKitLineGrid.h>
@@ -184,11 +187,11 @@ public:
     PREFERRED_TYPE(LineBreak) unsigned lineBreak : 3;
     PREFERRED_TYPE(UserSelect) unsigned userSelect : 2;
     PREFERRED_TYPE(ColorSpace) unsigned colorSpace : 1;
-    PREFERRED_TYPE(OptionSet<SpeakAs>) unsigned speakAs : 4 { 0 };
+    PREFERRED_TYPE(Style::SpeakAs) unsigned speakAs : 4;
     PREFERRED_TYPE(Hyphens) unsigned hyphens : 2;
     PREFERRED_TYPE(TextCombine) unsigned textCombine : 1;
-    PREFERRED_TYPE(TextEmphasisPosition) unsigned textEmphasisPosition : 4;
-    PREFERRED_TYPE(TextUnderlinePosition) unsigned textUnderlinePosition : 4;
+    PREFERRED_TYPE(Style::TextEmphasisPosition) unsigned textEmphasisPosition : 4;
+    PREFERRED_TYPE(Style::TextUnderlinePosition) unsigned textUnderlinePosition : 4;
     PREFERRED_TYPE(Style::WebkitLineBoxContain) unsigned lineBoxContain: 7;
     PREFERRED_TYPE(Style::ImageOrientation) unsigned imageOrientation : 1;
     PREFERRED_TYPE(ImageRendering) unsigned imageRendering : 3;

@@ -285,7 +285,7 @@ inline void RenderStyle::setShapeImageThreshold(Style::ShapeImageThreshold shape
 inline void RenderStyle::setShapeMargin(Style::ShapeMargin&& shapeMargin) { SET_NESTED(m_nonInheritedData, rareData, shapeMargin, WTFMove(shapeMargin)); }
 inline void RenderStyle::setShapeOutside(Style::ShapeOutside&& shapeOutside) { SET_NESTED(m_nonInheritedData, rareData, shapeOutside, WTFMove(shapeOutside)); }
 inline void RenderStyle::setUsedContentVisibility(ContentVisibility usedContentVisibility) { SET(m_rareInheritedData, usedContentVisibility, static_cast<unsigned>(usedContentVisibility)); }
-inline void RenderStyle::setSpeakAs(OptionSet<SpeakAs> style) { SET(m_rareInheritedData, speakAs, style.toRaw()); }
+inline void RenderStyle::setSpeakAs(Style::SpeakAs speakAs) { SET(m_rareInheritedData, speakAs, speakAs.toRaw()); }
 inline void RenderStyle::setSpecifiedZIndex(Style::ZIndex index) { SET_NESTED_PAIR(m_nonInheritedData, boxData, m_hasAutoSpecifiedZIndex, static_cast<uint8_t>(index.m_isAuto), m_specifiedZIndexValue, index.m_value); }
 inline void RenderStyle::setStrokeColor(Style::Color&& color) { SET(m_rareInheritedData, strokeColor, WTFMove(color)); }
 inline void RenderStyle::setStrokeMiterLimit(Style::StrokeMiterlimit value) { SET(m_rareInheritedData, miterLimit, value); }
@@ -304,7 +304,7 @@ inline void RenderStyle::setTextDecorationThickness(Style::TextDecorationThickne
 inline void RenderStyle::setTextDecorationLineInEffect(Style::TextDecorationLine&& value) { m_inheritedFlags.textDecorationLineInEffect = value.toRaw(); }
 inline void RenderStyle::setTextEmphasisColor(Style::Color&& c) { SET(m_rareInheritedData, textEmphasisColor, WTFMove(c)); }
 inline void RenderStyle::setTextEmphasisStyle(Style::TextEmphasisStyle&& style) { SET(m_rareInheritedData, textEmphasisStyle, style); }
-inline void RenderStyle::setTextEmphasisPosition(OptionSet<TextEmphasisPosition> position) { SET(m_rareInheritedData, textEmphasisPosition, static_cast<unsigned>(position.toRaw())); }
+inline void RenderStyle::setTextEmphasisPosition(Style::TextEmphasisPosition position) { SET(m_rareInheritedData, textEmphasisPosition, position.toRaw()); }
 inline void RenderStyle::setTextFillColor(Style::Color&& color) { SET(m_rareInheritedData, textFillColor, WTFMove(color)); }
 inline void RenderStyle::setHasExplicitlySetColor(bool value) { m_inheritedFlags.hasExplicitlySetColor = value; }
 inline void RenderStyle::setTableLayout(TableLayoutType value) { SET_NESTED(m_nonInheritedData, miscData, tableLayout, static_cast<unsigned>(value)); }
@@ -318,7 +318,7 @@ inline void RenderStyle::setTextStrokeColor(Style::Color&& color) { SET(m_rareIn
 inline void RenderStyle::setTextStrokeWidth(Style::WebkitTextStrokeWidth width) { SET(m_rareInheritedData, textStrokeWidth, width); }
 inline void RenderStyle::setTextTransform(Style::TextTransform value) { m_inheritedFlags.textTransform = value.toRaw(); }
 inline void RenderStyle::setTextUnderlineOffset(Style::TextUnderlineOffset&& textUnderlineOffset) { SET(m_rareInheritedData, textUnderlineOffset, WTFMove(textUnderlineOffset)); }
-inline void RenderStyle::setTextUnderlinePosition(OptionSet<TextUnderlinePosition> position) { SET(m_rareInheritedData, textUnderlinePosition, static_cast<unsigned>(position.toRaw())); }
+inline void RenderStyle::setTextUnderlinePosition(Style::TextUnderlinePosition position) { SET(m_rareInheritedData, textUnderlinePosition, position.toRaw()); }
 inline void RenderStyle::setTextZoom(TextZoom zoom) { SET(m_rareInheritedData, textZoom, static_cast<unsigned>(zoom)); }
 inline void RenderStyle::setTop(Style::InsetEdge&& edge) { SET_NESTED(m_nonInheritedData, surroundData, inset.top(), WTFMove(edge)); }
 inline void RenderStyle::setTouchAction(Style::TouchAction touchAction) { SET_NESTED(m_nonInheritedData, rareData, touchAction, touchAction); }

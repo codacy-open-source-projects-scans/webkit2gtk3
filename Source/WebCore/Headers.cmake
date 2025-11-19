@@ -3489,6 +3489,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     style/values/sizing/StyleMinimumSize.h
     style/values/sizing/StylePreferredSize.h
 
+    style/values/speech/StyleSpeakAs.h
+
     style/values/svg/StyleSVGBaselineShift.h
     style/values/svg/StyleSVGCenterCoordinateComponent.h
     style/values/svg/StyleSVGCoordinateComponent.h
@@ -3517,9 +3519,11 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     style/values/text-decoration/StyleTextDecorationLine.h
     style/values/text-decoration/StyleTextDecorationThickness.h
+    style/values/text-decoration/StyleTextEmphasisPosition.h
     style/values/text-decoration/StyleTextEmphasisStyle.h
     style/values/text-decoration/StyleTextShadow.h
     style/values/text-decoration/StyleTextUnderlineOffset.h
+    style/values/text-decoration/StyleTextUnderlinePosition.h
 
     style/values/transforms/functions/StyleTransformFunctionWrapper.h
     style/values/transforms/functions/StyleMatrix3DTransformFunction.h

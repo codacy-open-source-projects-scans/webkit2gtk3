@@ -853,13 +853,6 @@ enum class Hyphens : uint8_t {
     Auto
 };
 
-enum class SpeakAs : uint8_t {
-    SpellOut           = 1 << 0,
-    Digits             = 1 << 1,
-    LiteralPunctuation = 1 << 2,
-    NoPunctuation      = 1 << 3
-};
-
 enum class TextEmphasisFill : bool {
     Filled,
     Open
@@ -871,20 +864,6 @@ enum class TextEmphasisMark : uint8_t {
     DoubleCircle,
     Triangle,
     Sesame
-};
-
-enum class TextEmphasisPosition : uint8_t {
-    Over  = 1 << 0,
-    Under = 1 << 1,
-    Left  = 1 << 2,
-    Right = 1 << 3
-};
-
-enum class TextUnderlinePosition : uint8_t {
-    Under    = 1 << 0,
-    FromFont = 1 << 1,
-    Left     = 1 << 2,
-    Right    = 1 << 3
 };
 
 enum class TextOverflow : bool {
@@ -1312,7 +1291,6 @@ WTF::TextStream& operator<<(WTF::TextStream&, ScrollSnapAxisAlignType);
 WTF::TextStream& operator<<(WTF::TextStream&, ScrollSnapStop);
 WTF::TextStream& operator<<(WTF::TextStream&, ScrollSnapStrictness);
 WTF::TextStream& operator<<(WTF::TextStream&, Scroller);
-WTF::TextStream& operator<<(WTF::TextStream&, SpeakAs);
 WTF::TextStream& operator<<(WTF::TextStream&, StyleDifference);
 WTF::TextStream& operator<<(WTF::TextStream&, StyleDifferenceContextSensitiveProperty);
 WTF::TextStream& operator<<(WTF::TextStream&, TableLayoutType);
@@ -1323,12 +1301,10 @@ WTF::TextStream& operator<<(WTF::TextStream&, TextDecorationSkipInk);
 WTF::TextStream& operator<<(WTF::TextStream&, TextDecorationStyle);
 WTF::TextStream& operator<<(WTF::TextStream&, TextEmphasisFill);
 WTF::TextStream& operator<<(WTF::TextStream&, TextEmphasisMark);
-WTF::TextStream& operator<<(WTF::TextStream&, TextEmphasisPosition);
 WTF::TextStream& operator<<(WTF::TextStream&, TextGroupAlign);
 WTF::TextStream& operator<<(WTF::TextStream&, TextJustify);
 WTF::TextStream& operator<<(WTF::TextStream&, TextOverflow);
 WTF::TextStream& operator<<(WTF::TextStream&, TextSecurity);
-WTF::TextStream& operator<<(WTF::TextStream&, TextUnderlinePosition);
 WTF::TextStream& operator<<(WTF::TextStream&, TextWrapMode);
 WTF::TextStream& operator<<(WTF::TextStream&, TextWrapStyle);
 WTF::TextStream& operator<<(WTF::TextStream&, TextBoxTrim);

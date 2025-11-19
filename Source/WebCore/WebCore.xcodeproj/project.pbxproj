@@ -5082,6 +5082,7 @@
 		BC3E62432659791800548ACD /* PlatformColorSpace.h in Headers */ = {isa = PBXBuildFile; fileRef = BC3E62422659791700548ACD /* PlatformColorSpace.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BC4368E80C226E32005EFB5F /* Rect.h in Headers */ = {isa = PBXBuildFile; fileRef = BC4368E70C226E32005EFB5F /* Rect.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BC4529DD2ECBA98600FD066C /* StyleHangingPunctuation.h in Headers */ = {isa = PBXBuildFile; fileRef = BC4529DB2ECBA96F00FD066C /* StyleHangingPunctuation.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		BC4529E92ECBAD6E00FD066C /* StyleSpeakAs.h in Headers */ = {isa = PBXBuildFile; fileRef = BC4529E62ECBAD6400FD066C /* StyleSpeakAs.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BC46306E2E9B0F6500EA911F /* StyleCalculationValue.h in Headers */ = {isa = PBXBuildFile; fileRef = BC4630652E9B098600EA911F /* StyleCalculationValue.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BC4630702E9B0F8B00EA911F /* StyleCalculationTree.h in Headers */ = {isa = PBXBuildFile; fileRef = BC46305E2E9B098600EA911F /* StyleCalculationTree.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BC46307C2E9C18D100EA911F /* ModelPlayerIdentifier.h in Headers */ = {isa = PBXBuildFile; fileRef = BC46307B2E9C18CB00EA911F /* ModelPlayerIdentifier.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -5175,6 +5176,8 @@
 		BC611FF52EC79F6000904592 /* StyleContain.h in Headers */ = {isa = PBXBuildFile; fileRef = BC611FF32EC79C1E00904592 /* StyleContain.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BC6120002EC7B83D00904592 /* StyleTouchAction.h in Headers */ = {isa = PBXBuildFile; fileRef = BC611FFE2EC7ADDE00904592 /* StyleTouchAction.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BC6120112EC9039D00904592 /* StyleTextTransform.h in Headers */ = {isa = PBXBuildFile; fileRef = BC61200F2EC8F27000904592 /* StyleTextTransform.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		BC6120252ECA437D00904592 /* StyleTextUnderlinePosition.h in Headers */ = {isa = PBXBuildFile; fileRef = BC6120212ECA434F00904592 /* StyleTextUnderlinePosition.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		BC6120262ECA437D00904592 /* StyleTextEmphasisPosition.h in Headers */ = {isa = PBXBuildFile; fileRef = BC6120232ECA435D00904592 /* StyleTextEmphasisPosition.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BC635E8C264C2CAE000EF33A /* PixelBufferFormat.h in Headers */ = {isa = PBXBuildFile; fileRef = BC635E8B264C2CAE000EF33A /* PixelBufferFormat.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BC635E8E264C2CE7000EF33A /* PixelBufferConversion.h in Headers */ = {isa = PBXBuildFile; fileRef = BC0CA74C264AED0A004FDC62 /* PixelBufferConversion.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BC64640A11D7F304006455B0 /* DOMStringMap.h in Headers */ = {isa = PBXBuildFile; fileRef = BC64640811D7F304006455B0 /* DOMStringMap.h */; };
@@ -18747,6 +18750,8 @@
 		BC4368E70C226E32005EFB5F /* Rect.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = Rect.h; sourceTree = "<group>"; };
 		BC4529DB2ECBA96F00FD066C /* StyleHangingPunctuation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StyleHangingPunctuation.h; sourceTree = "<group>"; };
 		BC4529DC2ECBA96F00FD066C /* StyleHangingPunctuation.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = StyleHangingPunctuation.cpp; sourceTree = "<group>"; };
+		BC4529E62ECBAD6400FD066C /* StyleSpeakAs.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StyleSpeakAs.h; sourceTree = "<group>"; };
+		BC4529E72ECBAD6400FD066C /* StyleSpeakAs.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = StyleSpeakAs.cpp; sourceTree = "<group>"; };
 		BC46305E2E9B098600EA911F /* StyleCalculationTree.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StyleCalculationTree.h; sourceTree = "<group>"; };
 		BC46305F2E9B098600EA911F /* StyleCalculationTree.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = StyleCalculationTree.cpp; sourceTree = "<group>"; };
 		BC4630602E9B098600EA911F /* StyleCalculationTree+Copy.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "StyleCalculationTree+Copy.h"; sourceTree = "<group>"; };
@@ -18939,6 +18944,10 @@
 		BC611FFF2EC7ADDE00904592 /* StyleTouchAction.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = StyleTouchAction.cpp; sourceTree = "<group>"; };
 		BC61200F2EC8F27000904592 /* StyleTextTransform.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StyleTextTransform.h; sourceTree = "<group>"; };
 		BC6120102EC8F27000904592 /* StyleTextTransform.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = StyleTextTransform.cpp; sourceTree = "<group>"; };
+		BC6120212ECA434F00904592 /* StyleTextUnderlinePosition.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StyleTextUnderlinePosition.h; sourceTree = "<group>"; };
+		BC6120222ECA434F00904592 /* StyleTextUnderlinePosition.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = StyleTextUnderlinePosition.cpp; sourceTree = "<group>"; };
+		BC6120232ECA435D00904592 /* StyleTextEmphasisPosition.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StyleTextEmphasisPosition.h; sourceTree = "<group>"; };
+		BC6120242ECA435D00904592 /* StyleTextEmphasisPosition.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = StyleTextEmphasisPosition.cpp; sourceTree = "<group>"; };
 		BC635E8B264C2CAE000EF33A /* PixelBufferFormat.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PixelBufferFormat.h; sourceTree = "<group>"; };
 		BC635E8F264C2ECE000EF33A /* PixelBufferFormat.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = PixelBufferFormat.cpp; sourceTree = "<group>"; };
 		BC635E90264C469F000EF33A /* PixelFormat.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = PixelFormat.cpp; sourceTree = "<group>"; };
@@ -36196,12 +36205,16 @@
 				4C1508772E512B4100B720D9 /* StyleTextDecorationLine.h */,
 				BC092A0C2E2D75E6002ACB2C /* StyleTextDecorationThickness.cpp */,
 				1CB6B4F8217B83930093B9CD /* StyleTextDecorationThickness.h */,
+				BC6120242ECA435D00904592 /* StyleTextEmphasisPosition.cpp */,
+				BC6120232ECA435D00904592 /* StyleTextEmphasisPosition.h */,
 				BCD9EFEE2E19879200D1C3DF /* StyleTextEmphasisStyle.cpp */,
 				BCD9EFEC2E18E59C00D1C3DF /* StyleTextEmphasisStyle.h */,
 				BC3078E32D02884200630D75 /* StyleTextShadow.cpp */,
 				BC3078E22D02884200630D75 /* StyleTextShadow.h */,
 				BC2A0D712E086B9A003CBA0E /* StyleTextUnderlineOffset.cpp */,
 				BC2A0D702E086B9A003CBA0E /* StyleTextUnderlineOffset.h */,
+				BC6120222ECA434F00904592 /* StyleTextUnderlinePosition.cpp */,
+				BC6120212ECA434F00904592 /* StyleTextUnderlinePosition.h */,
 			);
 			path = "text-decoration";
 			sourceTree = "<group>";
@@ -36265,6 +36278,15 @@
 				BC3CC1F52DE4CBF40032971C /* StyleTranslate.h */,
 			);
 			path = transforms;
+			sourceTree = "<group>";
+		};
+		BC4529E82ECBAD6400FD066C /* speech */ = {
+			isa = PBXGroup;
+			children = (
+				BC4529E72ECBAD6400FD066C /* StyleSpeakAs.cpp */,
+				BC4529E62ECBAD6400FD066C /* StyleSpeakAs.h */,
+			);
+			path = speech;
 			sourceTree = "<group>";
 		};
 		BC4630692E9B098600EA911F /* calc */ = {
@@ -36862,6 +36884,7 @@
 				BCB271C62CBD7D6B00265123 /* shapes */,
 				BC09297D2E29CE12002ACB2C /* size-adjust */,
 				BC675B662DEE883300AD4D79 /* sizing */,
+				BC4529E82ECBAD6400FD066C /* speech */,
 				BC2A0CE02E0314ED003CBA0E /* svg */,
 				BCD9EFE62E18E56700D1C3DF /* text */,
 				BC3078E42D02884200630D75 /* text-decoration */,
@@ -46890,6 +46913,7 @@
 				BCCE02922E766AAA0028EA38 /* StyleSingleTransitionDuration.h in Headers */,
 				BC7320022E732F3F00A6584F /* StyleSingleTransitionProperty.h in Headers */,
 				BC4F32B52E89C4DA00F6AEC1 /* StyleSkewTransformFunction.h in Headers */,
+				BC4529E92ECBAD6E00FD066C /* StyleSpeakAs.h in Headers */,
 				BC34D2BC2E3BDAB4001EAD95 /* StyleStrokeMiterlimit.h in Headers */,
 				BC092AFA2E33DBE9002ACB2C /* StyleStrokeWidth.h in Headers */,
 				BC5EB5E50E81BF6D00B25965 /* StyleSurroundData.h in Headers */,
@@ -46912,6 +46936,7 @@
 				4C15087A2E512B4100B720D9 /* StyleTextDecorationLine.h in Headers */,
 				1C73A71521857587004CCEA5 /* StyleTextDecorationThickness.h in Headers */,
 				BC10DA8A2E80D200000EE742 /* StyleTextEdge.h in Headers */,
+				BC6120262ECA437D00904592 /* StyleTextEmphasisPosition.h in Headers */,
 				BCD9EFED2E18E5A000D1C3DF /* StyleTextEmphasisStyle.h in Headers */,
 				BCD9EFEB2E18E58600D1C3DF /* StyleTextIndent.h in Headers */,
 				BC3CC22E2DE8D2D50032971C /* StyleTextShadow.h in Headers */,
@@ -46920,6 +46945,7 @@
 				BC6120112EC9039D00904592 /* StyleTextTransform.h in Headers */,
 				BC2A0D902E088492003CBA0E /* StyleTextUnderlineOffset.h in Headers */,
 				BC6120002EC7B83D00904592 /* StyleTouchAction.h in Headers */,
+				BC6120252ECA437D00904592 /* StyleTextUnderlinePosition.h in Headers */,
 				BC731F932E6CA6E000A6584F /* StyleTransform.h in Headers */,
 				BC5EB8100E81F2CE00B25965 /* StyleTransformData.h in Headers */,
 				BC4F32BB2E89C51D00F6AEC1 /* StyleTransformFunction.h in Headers */,
