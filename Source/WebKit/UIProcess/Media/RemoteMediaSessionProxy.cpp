@@ -28,6 +28,7 @@
 
 #if ENABLE(VIDEO) || ENABLE(WEB_AUDIO)
 
+#include "RemoteMediaSessionClientProxy.h"
 #include "RemoteMediaSessionManagerMessages.h"
 #include "RemoteMediaSessionManagerProxy.h"
 #include <WebCore/NotImplemented.h>

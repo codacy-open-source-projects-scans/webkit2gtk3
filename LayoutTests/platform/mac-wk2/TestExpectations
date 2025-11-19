@@ -2414,4 +2414,6 @@ webkit.org/b/302172 [ Debug ] imported/w3c/web-platform-tests/css/css-view-trans
 
 webkit.org/b/302174 [ Tahoe Debug arm64 ] platform/mac/media/encrypted-media/fps-generateRequest.html [ Timeout ]
 
-webkit.org/b/302685 [ Release ] fast/files/blob-stream-error.html [ Pass Timeout ]
+# webkit.org/b/302674 fast/webgpu/nocrash/fuzz-279542.html appears to cause other tests to timeout
+[ Tahoe Debug arm64 ] fast/webgpu/nocrash/ [ Skip ]
+[ Tahoe Debug arm64 ] fast/selectors/is-backtracking.html [ Skip ]

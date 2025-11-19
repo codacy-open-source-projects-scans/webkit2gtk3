@@ -853,6 +853,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/webtransport/WebTransportHash.h
     Modules/webtransport/WebTransportOptions.h
     Modules/webtransport/WebTransportReceiveStreamStats.h
+    Modules/webtransport/WebTransportSendGroup.h
     Modules/webtransport/WebTransportSendStreamSink.h
     Modules/webtransport/WebTransportSendStreamStats.h
     Modules/webtransport/WebTransportSession.h
@@ -1778,7 +1779,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     inspector/FrameInspectorController.h
     inspector/InspectorBackendClient.h
-    inspector/InspectorController.h
     inspector/InspectorDebuggableType.h
     inspector/InspectorFrontendAPIDispatcher.h
     inspector/InspectorFrontendClient.h
@@ -1792,6 +1792,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     inspector/InspectorWebAgentBase.h
     inspector/LegacyWebSocketInspectorInstrumentation.h
     inspector/PageDebugger.h
+    inspector/PageInspectorController.h
 
     inspector/agents/InspectorPageAgent.h
 
