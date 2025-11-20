@@ -28,6 +28,8 @@
 
 #include "ContextDestructionObserverInlines.h"
 #include "ContentSecurityPolicy.h"
+#include "DatagramByteSource.h"
+#include "DatagramSink.h"
 #include "DatagramSource.h"
 #include "ExceptionOr.h"
 #include "JSDOMException.h"
@@ -89,10 +91,34 @@ ExceptionOr<Ref<WebTransport>> WebTransport::create(ScriptExecutionContext& cont
     if (incomingUnidirectionalStreams.hasException())
         return incomingUnidirectionalStreams.releaseException();
 
-    auto datagramSource = DatagramSource::create();
-    auto incomingDatagrams = ReadableStream::create(domGlobalObject, datagramSource.copyRef());
-    if (incomingDatagrams.hasException())
-        return incomingDatagrams.releaseException();
+    RefPtr<DatagramSource> datagramSource;
+    RefPtr<ReadableStream> incomingDatagrams;
+    if (options.datagramsReadableMode) {
+        Ref datagramByteSource = DatagramByteSource::create();
+        ReadableByteStreamController::PullAlgorithm pullAlgorithm = [datagramByteSource](auto& globalObject, auto&& controller) {
+            auto [promise, deferred] = createPromiseAndWrapper(globalObject);
+            datagramByteSource->pull(globalObject, controller, WTFMove(deferred));
+            return promise;
+        };
+
+        ReadableByteStreamController::CancelAlgorithm cancelAlgorithm = [datagramByteSource](auto& globalObject, auto&&, auto&&) {
+            auto [promise, deferred] = createPromiseAndWrapper(globalObject);
+            datagramByteSource->cancel(WTFMove(deferred));
+            return promise;
+        };
+
+        incomingDatagrams = ReadableStream::createReadableByteStream(domGlobalObject, WTFMove(pullAlgorithm), WTFMove(cancelAlgorithm), {
+            .isReachableFromOpaqueRootIfPulling = ReadableStream::IsReachableFromOpaqueRootIfPulling::Yes
+        });
+        datagramSource = WTFMove(datagramByteSource);
+    } else {
+        Ref datagramDefaultSource = DatagramDefaultSource::create();
+        auto readableOrException = ReadableStream::create(domGlobalObject, datagramDefaultSource.copyRef());
+        if (readableOrException.hasException())
+            return readableOrException.releaseException();
+        incomingDatagrams = readableOrException.releaseReturnValue();
+        datagramSource = WTFMove(datagramDefaultSource);
+    }
 
     RefPtr socketProvider = context.socketProvider();
     if (!socketProvider) {
@@ -100,9 +126,9 @@ ExceptionOr<Ref<WebTransport>> WebTransport::create(ScriptExecutionContext& cont
         return Exception { ExceptionCode::InvalidStateError };
     }
 
-    auto datagrams = WebTransportDatagramDuplexStream::create(incomingDatagrams.releaseReturnValue());
+    auto datagrams = WebTransportDatagramDuplexStream::create(incomingDatagrams.releaseNonNull());
 
-    auto transport = adoptRef(*new WebTransport(context, domGlobalObject, incomingBidirectionalStreams.releaseReturnValue(), incomingUnidirectionalStreams.releaseReturnValue(), options.congestionControl, WTFMove(datagrams), WTFMove(datagramSource), WTFMove(receiveStreamSource), WTFMove(bidirectionalStreamSource)));
+    auto transport = adoptRef(*new WebTransport(context, domGlobalObject, incomingBidirectionalStreams.releaseReturnValue(), incomingUnidirectionalStreams.releaseReturnValue(), options.congestionControl, WTFMove(datagrams), datagramSource.releaseNonNull(), WTFMove(receiveStreamSource), WTFMove(bidirectionalStreamSource)));
     transport->suspendIfNeeded();
     transport->initializeOverHTTP(*socketProvider, context, WTFMove(parsedURL), WTFMove(options));
     return transport;
@@ -140,6 +166,7 @@ WebTransport::WebTransport(ScriptExecutionContext& context, JSDOMGlobalObject& g
     , m_receiveStreamSource(WTFMove(receiveStreamSource))
     , m_bidirectionalStreamSource(WTFMove(bidirectionalStreamSource))
 {
+    context.createdWebTransport(*this);
 }
 
 WebTransport::~WebTransport() = default;
@@ -308,6 +335,21 @@ void WebTransport::cleanupWithSessionError()
     }), std::nullopt);
 }
 
+void WebTransport::cleanupContext(ScriptExecutionContext& context)
+{
+    // https://www.w3.org/TR/webtransport/#web-transport-context-cleanup-steps
+    if (m_state == State::Connected) {
+        m_state = State::Failed;
+        if (auto session = std::exchange(m_session, nullptr))
+            session->terminate(0, { });
+        context.postTask([protectedThis = Ref { *this }] (auto&) {
+            protectedThis->cleanupWithSessionError();
+        });
+    }
+    if (m_state == State::Connecting)
+        m_state = State::Failed;
+}
+
 void WebTransport::close(WebTransportCloseInfo&& closeInfo)
 {
     // https://www.w3.org/TR/webtransport/#dom-webtransport-close
@@ -452,6 +494,12 @@ void WebTransport::didFail(std::optional<unsigned>&& code, String&& message)
         }), WTFMove(closeInfo));
     } else
         cleanupWithSessionError();
+}
+
+void WebTransport::didDrain()
+{
+    m_state = State::Draining;
+    m_draining.second->resolve();
 }
 
 RefPtr<WebTransportSession> WebTransport::protectedSession()

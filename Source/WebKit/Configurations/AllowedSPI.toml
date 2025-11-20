@@ -86,6 +86,7 @@ symbols = [
     "nw_webtransport_metadata_get_session_error_message",
     "nw_webtransport_metadata_set_session_error_message",
     "nw_webtransport_metadata_get_session_closed",
+    "nw_webtransport_metadata_set_remote_drain_handler",
     "nw_webtransport_options_add_connect_request_header",
     "nw_webtransport_options_set_allow_joining_before_ready",
     "nw_webtransport_options_set_is_datagram",
@@ -230,3 +231,14 @@ selectors = [
     { name = "_verticalScrollIndicatorColor", class = "UIScrollView" },
 ]
 requires = ["HAVE_UIKIT_SCROLLBAR_COLOR_SPI"]
+
+[[temporary-usage]]
+request = "rdar://164431329"
+cleanup = "rdar://164667890"
+classes = [
+    "AVLegibleMediaOptionsMenuController",
+]
+selectors = [
+    { name = "buildMenuOfType:", class = "AVLegibleMediaOptionsMenuController" },
+]
+requires = ["HAVE_AVLEGIBLEMEDIAOPTIONSMENUCONTROLLER"]

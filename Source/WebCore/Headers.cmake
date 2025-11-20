@@ -847,6 +847,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/websockets/WebSocketIdentifier.h
     Modules/websockets/WorkerThreadableWebSocketChannel.h
 
+    Modules/webtransport/DatagramsReadableMode.h
     Modules/webtransport/WebTransportCongestionControl.h
     Modules/webtransport/WebTransportConnectionStats.h
     Modules/webtransport/WebTransportDatagramStats.h
@@ -1618,6 +1619,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     html/CanvasBase.h
     html/CanvasNoiseInjection.h
     html/CanvasObserver.h
+    html/CaptionDisplaySettingsClient.h
+    html/CaptionDisplaySettingsOptions.h
     html/CollectionTraversal.h
     html/CollectionTraversalInlines.h
     html/CollectionType.h
@@ -1731,6 +1734,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     html/PDFDocument.h
     html/PermissionsPolicy.h
     html/PluginDocument.h
+    html/ResolvedCaptionDisplaySettingsOptions.h
+    html/ResolvedCaptionDisplaySettingsOptionsWrapper.h
     html/StepRange.h
     html/SwitchTrigger.h
     html/TimeRanges.h
@@ -3406,6 +3411,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     style/values/non-standard/StyleWebKitBoxReflect.h
     style/values/non-standard/StyleWebKitLineBoxContain.h
     style/values/non-standard/StyleWebKitLineClamp.h
+    style/values/non-standard/StyleWebKitLocale.h
     style/values/non-standard/StyleWebKitMarqueeIncrement.h
     style/values/non-standard/StyleWebKitMarqueeRepetition.h
     style/values/non-standard/StyleWebKitMarqueeSpeed.h

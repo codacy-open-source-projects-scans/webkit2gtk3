@@ -525,6 +525,7 @@ Modules/websockets/WebSocketHandshake.cpp
 Modules/websockets/WorkerThreadableWebSocketChannel.cpp
 Modules/webtransport/DatagramSink.cpp
 Modules/webtransport/DatagramSource.cpp
+Modules/webtransport/DatagramByteSource.cpp
 Modules/webtransport/WebTransport.cpp
 Modules/webtransport/WebTransportBidirectionalStream.cpp
 Modules/webtransport/WebTransportBidirectionalStreamSource.cpp
@@ -1622,6 +1623,7 @@ html/HTMLTrackElement.cpp
 html/HTMLUListElement.cpp
 html/HTMLUnknownElement.cpp
 html/HTMLVideoElement.cpp
+html/HTMLVideoElementCaptionDisplaySettings.cpp
 html/HTMLWBRElement.cpp
 html/HiddenInputType.cpp
 html/ImageBitmap.cpp
@@ -3286,6 +3288,7 @@ style/values/multicol/StyleColumnCount.cpp
 style/values/multicol/StyleColumnWidth.cpp
 style/values/non-standard/StyleWebKitBoxReflect.cpp
 style/values/non-standard/StyleWebKitLineClamp.cpp
+style/values/non-standard/StyleWebKitLocale.cpp
 style/values/non-standard/StyleWebKitOverflowScrolling.cpp
 style/values/non-standard/StyleWebKitTextStrokeWidth.cpp
 style/values/non-standard/StyleWebKitTouchCallout.cpp
@@ -3863,6 +3866,7 @@ JSCanvasTextBaseline.cpp
 JSCanvasTextDrawingStyles.cpp
 JSCanvasTransform.cpp
 JSCanvasUserInterface.cpp
+JSCaptionDisplaySettingsOptions.cpp
 JSCaretPosition.cpp
 JSCaretPositionFromPointOptions.cpp
 JSChannelCountMode.cpp
@@ -3972,6 +3976,7 @@ JSDataCue.cpp
 JSDataTransfer.cpp
 JSDataTransferItem.cpp
 JSDataTransferItemList.cpp
+JSDatagramsReadableMode.cpp
 JSDatabase.cpp
 JSDatabaseCallback.cpp
 JSDecompressionStream.cpp

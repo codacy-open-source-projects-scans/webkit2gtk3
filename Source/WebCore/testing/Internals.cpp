@@ -310,6 +310,7 @@
 #if ENABLE(VIDEO)
 #include "CaptionUserPreferences.h"
 #include "HTMLMediaElement.h"
+#include "MockCaptionDisplaySettingsClientCallback.h"
 #include "PageGroup.h"
 #include "TextTrack.h"
 #include "TextTrackCueGeneric.h"
@@ -1438,9 +1439,13 @@ ExceptionOr<void> Internals::resumeAnimations() const
 
 Vector<Internals::AcceleratedAnimation> Internals::acceleratedAnimationsForElement(Element& element)
 {
+    CheckedPtr timelinesController = element.document().timelinesController();
+    if (!timelinesController)
+        return { };
+
     Vector<Internals::AcceleratedAnimation> animations;
-    for (const auto& animationAsPair : element.document().timeline().acceleratedAnimationsForElement(element))
-        animations.append({ animationAsPair.first, animationAsPair.second });
+    for (const auto& acceleratedAnimation : timelinesController->acceleratedAnimationsForElement(element))
+        animations.append({ acceleratedAnimation.property, acceleratedAnimation.speed, acceleratedAnimation.isThreaded });
     return animations;
 }
 
@@ -4846,6 +4851,31 @@ void Internals::showCaptionDisplaySettingsPreviewForMediaElement(HTMLMediaElemen
 void Internals::hideCaptionDisplaySettingsPreviewForMediaElement(HTMLMediaElement& element)
 {
     element.hideCaptionDisplaySettingsPreview();
+}
+
+void Internals::setMockCaptionDisplaySettingsClientCallback(RefPtr<MockCaptionDisplaySettingsClientCallback>&& callback)
+{
+    if (m_mockCaptionDisplaySettingsClientCallback == callback)
+        return;
+
+    m_mockCaptionDisplaySettingsClientCallback = WTFMove(callback);
+
+    auto frame = this->frame();
+    if (!frame)
+        return;
+
+    auto page = frame->page();
+    if (!page)
+        return;
+
+    page->clearCaptionDisplaySettingsClientForTesting();
+    if (m_mockCaptionDisplaySettingsClientCallback)
+        page->setCaptionDisplaySettingsClientForTesting(*m_mockCaptionDisplaySettingsClientCallback);
+}
+
+MockCaptionDisplaySettingsClientCallback* Internals::mockCaptionDisplaySettingsClientCallback() const
+{
+    return m_mockCaptionDisplaySettingsClientCallback.get();
 }
 
 #endif

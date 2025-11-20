@@ -119,6 +119,7 @@ class FloatRect;
 class FloatSize;
 class FontAttributeChanges;
 class FontChanges;
+class FrameTreeSyncData;
 class GraphicsLayer;
 class ImageBufferBackend;
 class InspectorOverlay;
@@ -270,11 +271,13 @@ struct DictionaryPopupInfo;
 struct DocumentSyncSerializationData;
 struct DragItem;
 struct ElementContext;
+struct ExceptionData;
 struct ExceptionDetails;
 struct FileChooserSettings;
 struct FocusOptions;
 struct FontAttributes;
 struct FrameIdentifierType;
+struct FrameTreeSyncSerializationData;
 struct GrammarDetail;
 struct HTMLModelElementCamera;
 struct ImageBufferParameters;
@@ -335,7 +338,6 @@ struct WrappedCryptoKey;
 struct MockWebAuthenticationConfiguration;
 struct DigitalCredentialsRequestData;
 struct DigitalCredentialsResponseData;
-struct ExceptionData;
 struct MobileDocumentRequest;
 struct OpenID4VPRequest;
 #endif
@@ -434,9 +436,10 @@ class ShareableBitmapHandle;
 class ShareableResourceHandle;
 class Site;
 class TransformationMatrix;
+struct NodeIdentifierType;
+struct ResolvedCaptionDisplaySettingsOptions;
 struct TextAnimationData;
 enum class ImageDecodingError : uint8_t;
-struct NodeIdentifierType;
 enum class ExceptionCode : uint8_t;
 
 using NodeIdentifier = ObjectIdentifier<NodeIdentifierType>;
@@ -1051,6 +1054,8 @@ public:
     void setPrivateClickMeasurement(std::nullopt_t);
     void setPrivateClickMeasurement(WebCore::PrivateClickMeasurement&&);
     void setPrivateClickMeasurement(WebCore::PrivateClickMeasurement&&, String sourceDescription, String purchaser);
+    void setPrivateClickMeasurementImmediately(WebCore::PrivateClickMeasurement&&);
+    void simulatePrivateClickMeasurementConversion(int priority, int triggerData, const URL& sourceURL, const URL& destinationURL);
 
     struct EventAttribution {
         uint8_t sourceID;
@@ -2539,6 +2544,9 @@ public:
     void broadcastDocumentSyncData(IPC::Connection&, const WebCore::DocumentSyncSerializationData&);
     void broadcastAllDocumentSyncData(IPC::Connection&, Ref<WebCore::DocumentSyncData>&&);
 
+    void broadcastFrameTreeSyncData(IPC::Connection&, WebCore::FrameIdentifier, const WebCore::FrameTreeSyncSerializationData&);
+    void broadcastAllFrameTreeSyncData(IPC::Connection&, WebCore::FrameIdentifier,  Ref<WebCore::FrameTreeSyncData>&&);
+
     void addOpenedPage(WebPageProxy&);
     bool hasOpenedPage() const;
 
@@ -2958,7 +2966,7 @@ private:
 
     WebContentMode effectiveContentModeAfterAdjustingPolicies(API::WebsitePolicies&, const WebCore::ResourceRequest&);
 
-    void willSubmitForm(IPC::Connection&, FrameInfoData&&, FrameInfoData&& sourceFrameInfoData, Vector<std::pair<String, String>>&& textFieldValues, const UserData&, CompletionHandler<void()>&&);
+    void willSubmitForm(IPC::Connection&, FrameInfoData&&, FrameInfoData&& sourceFrameInfoData, Vector<std::pair<String, String>>&& textFieldValues, const UserData&, const URL& requestURL, const String& method, CompletionHandler<void()>&&);
 
 #if ENABLE(CONTENT_EXTENSIONS)
     void contentRuleListNotification(URL&&, WebCore::ContentRuleListResults&&);
@@ -3461,7 +3469,7 @@ private:
     void setBrowsingContextGroup(BrowsingContextGroup&);
 
 #if ENABLE(VIDEO)
-    void showCaptionDisplaySettings(CompletionHandler<void(bool)>&&);
+    void showCaptionDisplaySettings(WebCore::HTMLMediaElementIdentifier, const WebCore::ResolvedCaptionDisplaySettingsOptions&, CompletionHandler<void(Expected<void, WebCore::ExceptionData>&&)>&&);
 #endif
 
     struct Internals;

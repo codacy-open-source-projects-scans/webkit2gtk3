@@ -91,7 +91,6 @@
 
 #if ENABLE(THREADED_ANIMATIONS)
 #include "AcceleratedEffect.h"
-#include "AcceleratedEffectStackUpdater.h"
 #endif
 
 namespace WebCore {
@@ -1379,7 +1378,7 @@ std::optional<unsigned> KeyframeEffect::transformFunctionListPrefix() const
 {
     auto isTransformFunctionListsMatchPrefixRelevant = [&]() {
 #if ENABLE(THREADED_ANIMATIONS)
-        if (threadedAnimationsEnabled()) {
+        if (canHaveAcceleratedRepresentation()) {
             // The prefix is only relevant if the animation is fully replaced.
             if (m_compositeOperation != CompositeOperation::Replace || m_hasKeyframeComposingAcceleratedProperty)
                 return false;
@@ -1656,7 +1655,7 @@ OptionSet<AnimationImpact> KeyframeEffect::apply(RenderStyle& targetStyle, const
 bool KeyframeEffect::isRunningAccelerated() const
 {
 #if ENABLE(THREADED_ANIMATIONS)
-    if (threadedAnimationsEnabled()) {
+    if (canHaveAcceleratedRepresentation()) {
         if (!m_inTargetEffectStack || !canBeAccelerated())
             return false;
         ASSERT(animation());
@@ -1947,13 +1946,8 @@ bool KeyframeEffect::canBeAccelerated() const
     }
 
 #if ENABLE(THREADED_ANIMATIONS)
-    if (RefPtr document = this->document()) {
-        Ref settings = document->settings();
-        if (m_isAssociatedWithProgressBasedTimeline && settings->threadedScrollDrivenAnimationsEnabled())
-            return !animation()->pending();
-        if (!m_isAssociatedWithProgressBasedTimeline && settings->threadedTimeBasedAnimationsEnabled())
-            return true;
-    }
+    if (canHaveAcceleratedRepresentation())
+        return true;
 #endif
 
     if (m_isAssociatedWithProgressBasedTimeline)
@@ -1986,7 +1980,7 @@ bool KeyframeEffect::animatesMotionPath() const
 bool KeyframeEffect::preventsAcceleration() const
 {
 #if ENABLE(THREADED_ANIMATIONS)
-    if (threadedAnimationsEnabled())
+    if (canHaveAcceleratedRepresentation())
         return false;
 #endif
 
@@ -2011,7 +2005,7 @@ bool KeyframeEffect::preventsAcceleration() const
 void KeyframeEffect::updateAcceleratedActions()
 {
 #if ENABLE(THREADED_ANIMATIONS)
-    if (threadedAnimationsEnabled())
+    if (canHaveAcceleratedRepresentation())
         return;
 #endif
 
@@ -2056,7 +2050,7 @@ void KeyframeEffect::updateAcceleratedActions()
 void KeyframeEffect::addPendingAcceleratedAction(AcceleratedAction action)
 {
 #if ENABLE(THREADED_ANIMATIONS)
-    if (threadedAnimationsEnabled())
+    if (canHaveAcceleratedRepresentation())
         return;
 #endif
 
@@ -2086,7 +2080,7 @@ void KeyframeEffect::animationDidTick()
 void KeyframeEffect::animationBecameReady()
 {
 #if ENABLE(THREADED_ANIMATIONS)
-    if (threadedAnimationsEnabled())
+    if (canHaveAcceleratedRepresentation())
         updateAcceleratedAnimationIfNecessary();
 #endif
 }
@@ -2101,9 +2095,9 @@ void KeyframeEffect::animationDidChangeTimingProperties()
 void KeyframeEffect::updateAcceleratedAnimationIfNecessary()
 {
 #if ENABLE(THREADED_ANIMATIONS)
-    if (threadedAnimationsEnabled()) {
+    if (canHaveAcceleratedRepresentation()) {
         if (canBeAccelerated())
-            updateAssociatedThreadedEffectStack();
+            scheduleAssociatedAcceleratedEffectStackUpdate();
         return;
     }
 #endif
@@ -2122,7 +2116,7 @@ void KeyframeEffect::updateAcceleratedAnimationIfNecessary()
 void KeyframeEffect::animationDidFinish()
 {
 #if ENABLE(THREADED_ANIMATIONS)
-    if (threadedAnimationsEnabled())
+    if (canHaveAcceleratedRepresentation())
         updateAcceleratedAnimationIfNecessary();
 #endif
 }
@@ -2221,7 +2215,7 @@ std::optional<KeyframeEffect::RecomputationReason> KeyframeEffect::recomputeKeyf
 void KeyframeEffect::animationWasCanceled()
 {
 #if ENABLE(THREADED_ANIMATIONS)
-    if (threadedAnimationsEnabled()) {
+    if (canHaveAcceleratedRepresentation()) {
         updateAcceleratedAnimationIfNecessary();
         return;
     }
@@ -2245,7 +2239,7 @@ void KeyframeEffect::wasRemovedFromEffectStack()
 void KeyframeEffect::willChangeRenderer()
 {
 #if ENABLE(THREADED_ANIMATIONS)
-    if (threadedAnimationsEnabled()) {
+    if (canHaveAcceleratedRepresentation()) {
         updateAcceleratedAnimationIfNecessary();
         return;
     }
@@ -2258,8 +2252,8 @@ void KeyframeEffect::willChangeRenderer()
 void KeyframeEffect::animationSuspensionStateDidChange(bool animationIsSuspended)
 {
 #if ENABLE(THREADED_ANIMATIONS)
-    if (threadedAnimationsEnabled()) {
-        updateAssociatedThreadedEffectStack();
+    if (canHaveAcceleratedRepresentation()) {
+        scheduleAssociatedAcceleratedEffectStackUpdate();
         return;
     }
 #endif
@@ -2271,7 +2265,7 @@ void KeyframeEffect::animationSuspensionStateDidChange(bool animationIsSuspended
 void KeyframeEffect::applyPendingAcceleratedActionsOrUpdateTimingProperties()
 {
 #if ENABLE(THREADED_ANIMATIONS)
-    if (threadedAnimationsEnabled())
+    if (canHaveAcceleratedRepresentation())
         return;
 #endif
 
@@ -2289,7 +2283,7 @@ void KeyframeEffect::applyPendingAcceleratedActionsOrUpdateTimingProperties()
 void KeyframeEffect::applyPendingAcceleratedActions()
 {
 #if ENABLE(THREADED_ANIMATIONS)
-    if (threadedAnimationsEnabled())
+    if (canHaveAcceleratedRepresentation())
         return;
 #endif
 
@@ -2625,7 +2619,7 @@ bool KeyframeEffect::ticksContinuouslyWhileActive() const
 
     if (isCompletelyAccelerated() && isRunningAccelerated()) {
 #if ENABLE(THREADED_ANIMATIONS)
-        if (threadedAnimationsEnabled())
+        if (canHaveAcceleratedRepresentation())
             return !m_acceleratedRepresentation || !m_acceleratedRepresentation->disallowedProperties().isEmpty();
 #endif
         return false;
@@ -2671,7 +2665,7 @@ void KeyframeEffect::setComposite(CompositeOperation compositeOperation)
     invalidate();
 
 #if ENABLE(THREADED_ANIMATIONS)
-    if (threadedAnimationsEnabled())
+    if (canHaveAcceleratedRepresentation())
         updateAcceleratedAnimationIfNecessary();
 #endif
 }
@@ -2899,7 +2893,7 @@ void KeyframeEffect::effectStackNoLongerAllowsAcceleration()
 void KeyframeEffect::effectStackNoLongerAllowsAccelerationDuringAcceleratedActionApplication()
 {
 #if ENABLE(THREADED_ANIMATIONS)
-    if (threadedAnimationsEnabled()) {
+    if (canHaveAcceleratedRepresentation()) {
         ASSERT_NOT_REACHED();
         return;
     }
@@ -2914,8 +2908,8 @@ void KeyframeEffect::effectStackNoLongerAllowsAccelerationDuringAcceleratedActio
 void KeyframeEffect::abilityToBeAcceleratedDidChange()
 {
 #if ENABLE(THREADED_ANIMATIONS)
-    if (threadedAnimationsEnabled()) {
-        updateAssociatedThreadedEffectStack();
+    if (canHaveAcceleratedRepresentation()) {
+        scheduleAssociatedAcceleratedEffectStackUpdate();
         return;
     }
 #endif
@@ -3005,12 +2999,12 @@ static bool acceleratedPropertyDidChange(AnimatableCSSProperty property, const R
 void KeyframeEffect::lastStyleChangeEventStyleDidChange(const RenderStyle* previousStyle, const RenderStyle* currentStyle)
 {
 #if ENABLE(THREADED_ANIMATIONS)
-    if (threadedAnimationsEnabled()) {
+    if (canHaveAcceleratedRepresentation()) {
         if (!isRunningAccelerated())
             return;
 
         if ((previousStyle && !currentStyle) || (!previousStyle && currentStyle)) {
-            updateAssociatedThreadedEffectStack();
+            scheduleAssociatedAcceleratedEffectStackUpdate();
             return;
         }
 
@@ -3020,7 +3014,7 @@ void KeyframeEffect::lastStyleChangeEventStyleDidChange(const RenderStyle* previ
         ASSERT(previousStyle && currentStyle);
         for (auto property : CSSProperty::allAcceleratedAnimationProperties(settings)) {
             if (acceleratedPropertyDidChange(property, *previousStyle, *currentStyle, settings)) {
-                updateAssociatedThreadedEffectStack();
+                scheduleAssociatedAcceleratedEffectStackUpdate();
                 return;
             }
         }
@@ -3066,38 +3060,42 @@ KeyframeEffect::StackMembershipMutationScope::~StackMembershipMutationScope()
     RefPtr effect = m_effect;
     if (effect->isRunningAccelerated()) {
         if (originalTargetStyleable != effect->targetStyleable())
-            effect->updateAssociatedThreadedEffectStack(originalTargetStyleable);
-        effect->updateAssociatedThreadedEffectStack();
+            effect->scheduleAssociatedAcceleratedEffectStackUpdate(originalTargetStyleable);
+        effect->scheduleAssociatedAcceleratedEffectStackUpdate();
     }
 }
 
-bool KeyframeEffect::threadedAnimationsEnabled() const
+bool KeyframeEffect::canHaveAcceleratedRepresentation() const
 {
+    if (m_acceleratedRepresentation)
+        return true;
+
     if (RefPtr document = this->document()) {
         Ref settings = document->settings();
-        return settings->threadedScrollDrivenAnimationsEnabled() || settings->threadedTimeBasedAnimationsEnabled();
+        if (m_isAssociatedWithProgressBasedTimeline && settings->threadedScrollDrivenAnimationsEnabled())
+            return true;
+        if (!m_isAssociatedWithProgressBasedTimeline && settings->threadedTimeBasedAnimationsEnabled())
+            return true;
     }
+
     return false;
 }
 
-void KeyframeEffect::updateAssociatedThreadedEffectStack(const std::optional<const Styleable>& previousTarget)
+void KeyframeEffect::scheduleAssociatedAcceleratedEffectStackUpdate(const std::optional<const Styleable>& previousTarget)
 {
-    if (!threadedAnimationsEnabled())
+    if (!canHaveAcceleratedRepresentation())
         return;
 
     ASSERT(document());
     if (!document()->page())
         return;
 
-    ASSERT(document()->timelinesController());
-    auto& acceleratedEffectStackUpdater = CheckedPtr { document()->timelinesController() }->acceleratedEffectStackUpdater();
+    CheckedPtr timelinesController = document()->timelinesController();
+    ASSERT(timelinesController);
     if (previousTarget)
-        acceleratedEffectStackUpdater.updateEffectStackForTarget(*previousTarget);
+        timelinesController->scheduleAcceleratedEffectStackUpdateForTarget(*previousTarget);
     if (auto currentTarget = targetStyleable())
-        acceleratedEffectStackUpdater.updateEffectStackForTarget(*currentTarget);
-
-    if (RefPtr animation = this->animation())
-        animation->acceleratedStateDidChange();
+        timelinesController->scheduleAcceleratedEffectStackUpdateForTarget(*currentTarget);
 }
 #endif
 

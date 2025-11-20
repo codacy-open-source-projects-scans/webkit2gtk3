@@ -72,6 +72,7 @@ public:
     void receiveBidirectionalStream(WebCore::WebTransportStreamIdentifier);
     void streamReceiveBytes(WebCore::WebTransportStreamIdentifier, std::span<const uint8_t>, bool, std::optional<WebCore::Exception>&&);
     void didFail(std::optional<unsigned>&&, String&&);
+    void didDrain();
 
     WTF_ABSTRACT_THREAD_SAFE_REF_COUNTED_AND_CAN_MAKE_WEAK_PTR_IMPL;
 
@@ -95,6 +96,10 @@ private:
     void cancelSendStream(WebCore::WebTransportStreamIdentifier, std::optional<WebCore::WebTransportStreamErrorCode>);
     void destroyStream(WebCore::WebTransportStreamIdentifier, std::optional<WebCore::WebTransportStreamErrorCode>);
     void terminate(WebCore::WebTransportSessionErrorCode, CString&&) final;
+    void datagramIncomingMaxAgeUpdated(std::optional<double>) final;
+    void datagramOutgoingMaxAgeUpdated(std::optional<double>) final;
+    void datagramIncomingHighWaterMarkUpdated(double) final;
+    void datagramOutgoingHighWaterMarkUpdated(double) final;
 
     // MessageSender
     IPC::Connection* messageSenderConnection() const final;

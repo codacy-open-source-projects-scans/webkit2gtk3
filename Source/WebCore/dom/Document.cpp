@@ -1569,13 +1569,17 @@ ExceptionOr<Ref<Element>> Document::createElementForBindings(const AtomString& n
 {
     Ref document = *this;
     RefPtr<CustomElementRegistry> registry;
+    bool shouldUseNullRegistry = usesNullCustomElementRegistry();
     if (argument) [[unlikely]] {
         if (auto* options = std::get_if<ElementCreationOptions>(&*argument)) {
-            registry = options->customElementRegistry;
-            if (registry && !registry->isScoped() && registry != document->customElementRegistry())
-                return Exception { ExceptionCode::NotSupportedError };
+            auto optionalRegistry = options->customElementRegistry;
+            if (optionalRegistry) {
+                registry = *optionalRegistry;
+                shouldUseNullRegistry = !registry;
+                if (registry && !registry->isScoped() && registry != document->customElementRegistry())
+                    return Exception { ExceptionCode::NotSupportedError };
+            }
         }
-
     }
 
     auto result = [&]() -> ExceptionOr<Ref<Element>> {
@@ -1598,7 +1602,7 @@ ExceptionOr<Ref<Element>> Document::createElementForBindings(const AtomString& n
         CustomElementRegistry::addToScopedCustomElementRegistryMap(element, *registry);
         return element;
     }
-    if (!registry && usesNullCustomElementRegistry())
+    if (shouldUseNullRegistry) [[unlikely]]
         element->setUsesNullCustomElementRegistry();
     return element;
 }
@@ -1994,11 +1998,16 @@ ExceptionOr<Ref<Element>> Document::createElementNS(const AtomString& namespaceU
 {
     Ref document = *this;
     RefPtr<CustomElementRegistry> registry;
+    bool shouldUseNullRegistry = usesNullCustomElementRegistry();
     if (argument) [[unlikely]] {
         if (auto* options = std::get_if<ElementCreationOptions>(&*argument)) {
-            registry = options->customElementRegistry;
-            if (registry && !registry->isScoped() && registry != customElementRegistry())
-                return Exception { ExceptionCode::NotSupportedError };
+            auto optionalRegistry = options->customElementRegistry;
+            if (optionalRegistry) {
+                registry = *optionalRegistry;
+                shouldUseNullRegistry = !registry;
+                if (registry && !registry->isScoped() && registry != document->customElementRegistry())
+                    return Exception { ExceptionCode::NotSupportedError };
+            }
         }
     }
 
@@ -2038,7 +2047,7 @@ ExceptionOr<Ref<Element>> Document::createElementNS(const AtomString& namespaceU
         CustomElementRegistry::addToScopedCustomElementRegistryMap(element, *registry);
         return element;
     }
-    if (!registry && usesNullCustomElementRegistry())
+    if (shouldUseNullRegistry) [[unlikely]]
         element->setUsesNullCustomElementRegistry();
     return element;
 }
@@ -10826,10 +10835,8 @@ void Document::updateAnimationsAndSendEvents()
 
 void Document::runPostRenderingUpdateAnimationTasks()
 {
-    if (m_timeline)
-        m_timeline->runPostRenderingUpdateTasks();
     if (CheckedPtr timelinesController = this->timelinesController())
-        timelinesController->updateStaleScrollTimelines();
+        timelinesController->runPostRenderingUpdateTasks();
 }
 
 DocumentTimeline& Document::timeline()

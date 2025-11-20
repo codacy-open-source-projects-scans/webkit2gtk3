@@ -194,6 +194,7 @@ public:
     WebAnimationType animationType() const { return m_animationType; }
 
 #if ENABLE(THREADED_ANIMATIONS)
+    bool canHaveAcceleratedRepresentation() const;
     const AcceleratedEffect* acceleratedRepresentation() const { return m_acceleratedRepresentation.get(); }
     void setAcceleratedRepresentation(const AcceleratedEffect* acceleratedRepresentation) { m_acceleratedRepresentation = acceleratedRepresentation; }
 #endif
@@ -265,8 +266,7 @@ private:
         std::optional<Style::PseudoElementIdentifier> m_originalPseudoElementIdentifier;
     };
 
-    bool threadedAnimationsEnabled() const;
-    void updateAssociatedThreadedEffectStack(const std::optional<const Styleable>& = std::nullopt);
+    void scheduleAssociatedAcceleratedEffectStackUpdate(const std::optional<const Styleable>& = std::nullopt);
 #endif
 
     // AnimationEffect
