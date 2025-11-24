@@ -1947,7 +1947,7 @@ bool KeyframeEffect::canBeAccelerated() const
 
 #if ENABLE(THREADED_ANIMATIONS)
     if (canHaveAcceleratedRepresentation())
-        return true;
+        return !animation()->pending();
 #endif
 
     if (m_isAssociatedWithProgressBasedTimeline)
@@ -2116,7 +2116,7 @@ void KeyframeEffect::updateAcceleratedAnimationIfNecessary()
 void KeyframeEffect::animationDidFinish()
 {
 #if ENABLE(THREADED_ANIMATIONS)
-    if (canHaveAcceleratedRepresentation())
+    if (canHaveAcceleratedRepresentation() && !m_isAssociatedWithProgressBasedTimeline)
         updateAcceleratedAnimationIfNecessary();
 #endif
 }
@@ -2894,7 +2894,15 @@ void KeyframeEffect::effectStackNoLongerAllowsAccelerationDuringAcceleratedActio
 {
 #if ENABLE(THREADED_ANIMATIONS)
     if (canHaveAcceleratedRepresentation()) {
-        ASSERT_NOT_REACHED();
+        ASSERT([&] {
+            if (RefPtr document = this->document()) {
+                Ref settings = document->settings();
+                if (settings->threadedScrollDrivenAnimationsEnabled() && settings->threadedTimeBasedAnimationsEnabled())
+                    return false;
+            }
+            return true;
+        }());
+        scheduleAssociatedAcceleratedEffectStackUpdate();
         return;
     }
 #endif

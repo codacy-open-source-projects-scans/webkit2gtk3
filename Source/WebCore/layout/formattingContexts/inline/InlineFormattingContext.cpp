@@ -162,7 +162,9 @@ InlineLayoutResult InlineFormattingContext::layout(const ConstraintsForInlineCon
     }();
 
     auto& inlineLayoutState = layoutState();
-    inlineLayoutState.setLineCountForBlockDirectionClamp(previousLine ? previousLine->lineIndex + 1 : 0);
+    inlineLayoutState.setLineCount(previousLine ? previousLine->lineIndex + 1 : 0);
+    // FIXME: This needs partial support when line-clamped content has nested blocks.
+    inlineLayoutState.setLineCountWithInlineContentIncludingNestedBlocks(inlineLayoutState.lineCount());
 
     auto textWrapStyle = root().style().textWrapStyle();
     if (root().style().textWrapMode() == TextWrapMode::Wrap && (textWrapStyle == TextWrapStyle::Balance || textWrapStyle == TextWrapStyle::Pretty)) {
@@ -318,6 +320,7 @@ InlineLayoutResult InlineFormattingContext::lineLayout(AbstractLineBuilder& line
 
         auto lineLayoutResult = lineBuilder.layoutInlineContent(lineInput, previousLine, isFirstFormattedLineCandidate);
         auto lineBox = LineBoxBuilder { *this, lineLayoutResult }.build(lineIndex);
+        inlineLayoutState.setLineCount(inlineLayoutState.lineCount() + (lineBox.hasContent() ? 1lu : 0lu));
         auto lineLogicalRect = createDisplayContentForInlineContent(lineBox, lineLayoutResult, constraints, layoutResult.displayContent);
         updateBoxGeometryForPlacedFloats(lineLayoutResult.floatContent.placedFloats);
         updateLayoutStateWithLineLayoutResult(lineLayoutResult, lineLogicalRect, floatingContext);
@@ -348,6 +351,7 @@ InlineLayoutResult InlineFormattingContext::lineLayout(AbstractLineBuilder& line
         lineLogicalTop = formattingUtils().logicalTopForNextLine(lineLayoutResult, lineLogicalRect, floatingContext);
     }
     InlineDisplayLineBuilder::addLegacyLineClampTrailingLinkBoxIfApplicable(*this, inlineLayoutState, layoutResult.displayContent);
+    InlineDisplayLineBuilder::adjustLineBlockAfterSideWithCollapsedMargin(inlineLayoutState.parentBlockLayoutState().marginState(), layoutResult.displayContent.lines, layoutResult.displayContent.boxes);
     return layoutResult;
 }
 
@@ -399,6 +403,11 @@ void InlineFormattingContext::updateLayoutStateWithLineLayoutResult(const LineLa
         auto& marginState = layoutState.parentBlockLayoutState().marginState();
         if (marginState.atBeforeSideOfBlock && lineLayoutResult.hasInflowContent())
             marginState.resetBeforeSideOfBlock();
+        if (lineLayoutResult.hasInlineContent()) {
+            // FIXME: This works as long as blocks are wrapped in anonymous blocks so
+            // that a block can never be followed by another block here.
+            marginState.resetMarginValues();
+        }
     };
     updateBlockBeforeMargin();
 }
@@ -422,27 +431,33 @@ void InlineFormattingContext::updateBoxGeometryForPlacedFloats(const LineLayoutR
 InlineRect InlineFormattingContext::createDisplayContentForInlineContent(const LineBox& lineBox, const LineLayoutResult& lineLayoutResult, const ConstraintsForInlineContent& constraints, InlineDisplay::Content& displayContent)
 {
     auto& inlineLayoutState = layoutState();
-
     auto lineClamp = inlineLayoutState.parentBlockLayoutState().lineClamp();
-    auto isLegacyLineClamp = lineClamp && lineClamp->isLegacy;
     // Eligible lines from nested block containers are already included (see layoutWithFormattingContextForBlockInInline).
-    auto numberOfLinesEligibleForLineClamp = inlineLayoutState.lineCountForBlockDirectionClamp() + (lineLayoutResult.hasInlineContent() ? 1 : 0);
+    auto numberOfLinesWithInlineContent = inlineLayoutState.lineCountWithInlineContentIncludingNestedBlocks() + (lineLayoutResult.hasInlineContent() ? 1 : 0);
     auto numberOfVisibleLinesAllowed = lineClamp ? std::make_optional(lineClamp->maximumLines) : std::nullopt;
 
-    auto lineIsFullyTruncatedInBlockDirection = numberOfVisibleLinesAllowed ? numberOfLinesEligibleForLineClamp > *numberOfVisibleLinesAllowed : false;
+    auto lineIsFullyTruncatedInBlockDirection = numberOfVisibleLinesAllowed ? numberOfLinesWithInlineContent > *numberOfVisibleLinesAllowed : false;
     auto displayLine = InlineDisplayLineBuilder { *this, constraints }.build(lineLayoutResult, lineBox, lineIsFullyTruncatedInBlockDirection);
     auto boxes = InlineDisplayContentBuilder { *this, constraints, lineBox, displayLine }.build(lineLayoutResult);
     displayLine.setBoxCount(boxes.size());
 
-    auto truncationPolicy = InlineFormattingUtils::lineEndingTruncationPolicy(root().style(), numberOfLinesEligibleForLineClamp, numberOfVisibleLinesAllowed, lineBox.hasContent());
-    InlineDisplayLineBuilder::applyEllipsisIfNeeded(truncationPolicy, displayLine, boxes, isLegacyLineClamp);
-    auto lineHasLegacyLineClamp = isLegacyLineClamp && displayLine.hasEllipsis() && truncationPolicy == LineEndingTruncationPolicy::WhenContentOverflowsInBlockDirection;
-    if (lineHasLegacyLineClamp)
-        inlineLayoutState.setLegacyClampedLineIndex(lineBox.lineIndex());
+    auto addTrailingEllipsisIfApplicable = [&] {
+        if (lineLayoutResult.hasBlockContent()) {
+            // When a block line is clamped, its content gets clamped and not this line itself.
+            return;
+        }
+        auto isLegacyLineClamp = lineClamp && lineClamp->isLegacy;
+        auto truncationPolicy = InlineFormattingUtils::lineEndingTruncationPolicy(root().style(), numberOfLinesWithInlineContent, numberOfVisibleLinesAllowed, lineBox.hasContent());
+        InlineDisplayLineBuilder::applyEllipsisIfNeeded(truncationPolicy, displayLine, boxes, isLegacyLineClamp);
+        auto lineHasLegacyLineClamp = isLegacyLineClamp && displayLine.hasEllipsis() && truncationPolicy == LineEndingTruncationPolicy::WhenContentOverflowsInBlockDirection;
+        if (lineHasLegacyLineClamp)
+            inlineLayoutState.setLegacyClampedLineIndex(lineBox.lineIndex());
+    };
+    addTrailingEllipsisIfApplicable();
 
     displayContent.boxes.appendVector(WTFMove(boxes));
     displayContent.lines.append(displayLine);
-    inlineLayoutState.setLineCountForBlockDirectionClamp(numberOfLinesEligibleForLineClamp);
+    inlineLayoutState.setLineCountWithInlineContentIncludingNestedBlocks(numberOfLinesWithInlineContent);
     return InlineFormattingUtils::flipVisualRectToLogicalForWritingMode(displayContent.lines.last().lineBoxRect(), root().writingMode());
 }
 

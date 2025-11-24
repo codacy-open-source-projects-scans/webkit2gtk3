@@ -587,6 +587,7 @@ accessibility/AXAttributeCacheScope.cpp
 accessibility/AXComputedObjectAttributeCache.cpp
 accessibility/AXCoreObject.cpp
 accessibility/AXGeometryManager.cpp
+accessibility/AXLiveRegionManager.cpp
 accessibility/AXLocalFrame.cpp
 accessibility/AXLogger.cpp
 accessibility/AXLoggerBase.cpp
@@ -2978,7 +2979,6 @@ rendering/style/BorderValue.cpp
 rendering/style/DropShadowFilterOperationWithStyleColor.cpp
 rendering/style/GridSpan.cpp
 rendering/style/OutlineValue.cpp
-rendering/style/PositionArea.cpp
 rendering/style/PositionTryFallback.cpp
 rendering/style/PositionTryOrder.cpp
 rendering/style/ReferenceFilterOperation.cpp
@@ -3152,6 +3152,7 @@ style/StyleExtractor.cpp
 style/StyleFontSizeFunctions.cpp
 style/StyleInterpolation.cpp
 style/StyleInvalidator.cpp
+style/StyleNameScope.cpp
 style/StylePendingResources.cpp
 style/StyleRelations.cpp
 style/StyleResolveForDocument.cpp
@@ -3176,6 +3177,11 @@ style/values/align/StyleAlignSelf.cpp
 style/values/align/StyleJustifyContent.cpp
 style/values/align/StyleJustifyItems.cpp
 style/values/align/StyleJustifySelf.cpp
+style/values/anchor-position/StylePositionAreaAxis.cpp
+style/values/anchor-position/StylePositionAreaSelf.cpp
+style/values/anchor-position/StylePositionAreaSpan.cpp
+style/values/anchor-position/StylePositionAreaTrack.cpp
+style/values/anchor-position/StylePositionArea.cpp
 style/values/animations/StyleAnimation.cpp
 style/values/animations/StyleSingleAnimationName.cpp
 style/values/animations/StyleSingleAnimationRangeName.cpp

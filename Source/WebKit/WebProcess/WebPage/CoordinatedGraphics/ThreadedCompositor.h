@@ -26,6 +26,7 @@
 #pragma once
 
 #if USE(COORDINATED_GRAPHICS)
+#include <WebCore/CoordinatedCompositionReason.h>
 #include <WebCore/Damage.h>
 #include <WebCore/DisplayUpdate.h>
 #include <WebCore/GLContext.h>
@@ -70,8 +71,8 @@ public:
 #endif
 
     void setSize(const WebCore::IntSize&, float);
-    uint32_t requestComposition();
-    void scheduleUpdate();
+    void requestCompositionForRenderingUpdate(Function<void()>&&);
+    void requestComposition(WebCore::CompositionReason);
     RunLoop* runLoop();
 
     void invalidate();
@@ -96,6 +97,7 @@ public:
 private:
     explicit ThreadedCompositor(LayerTreeHost&);
 
+    void scheduleUpdateLocked();
     void updateSceneState();
     void renderLayerTree();
     void paintToCurrentGLContext(const WebCore::TransformationMatrix&, const WebCore::IntSize&);
@@ -128,6 +130,8 @@ private:
     struct {
         mutable Lock lock;
         State state WTF_GUARDED_BY_LOCK(lock) { State::Idle };
+        OptionSet<WebCore::CompositionReason> reasons WTF_GUARDED_BY_LOCK(lock);
+        Function<void()> didCompositeRenderinUpdateFunction WTF_GUARDED_BY_LOCK(lock);
     } m_state;
 
     struct {
@@ -155,8 +159,6 @@ private:
     } m_damage;
 #endif
 
-    std::atomic<uint32_t> m_compositionRequestID { 0 };
-    std::atomic<uint32_t> m_compositionResponseID { 0 };
     std::unique_ptr<WebCore::RunLoopObserver> m_didCompositeRunLoopObserver;
 };
 

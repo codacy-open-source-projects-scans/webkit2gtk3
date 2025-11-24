@@ -8,6 +8,7 @@ html {
 
 </style>
 
+<script src="threaded-animations-utils.js"></script>
 <script src="../../resources/testharness.js"></script>
 <script src="../../resources/testharnessreport.js"></script>
 <script src="../../imported/w3c/web-platform-tests/web-animations/testcommon.js"></script>
@@ -22,10 +23,7 @@ promise_test(async t => {
     scrollTarget.animate({ opacity: [0, 1] }, { timeline });
     monotonicTarget.animate({ opacity: [0, 1] }, 1000 * 1000);
 
-    // Wait a few frames for both animations to be committed.
-    await new Promise(requestAnimationFrame);
-    await new Promise(requestAnimationFrame);
-    await new Promise(requestAnimationFrame);
+    await legacyAnimationCommit();
 
     assert_true(window.internals?.acceleratedAnimationsForElement(scrollTarget)[0].isThreaded);
     assert_false(window.internals?.acceleratedAnimationsForElement(monotonicTarget)[0].isThreaded);

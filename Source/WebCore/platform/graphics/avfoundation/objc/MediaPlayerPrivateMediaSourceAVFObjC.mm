@@ -106,7 +106,6 @@ MediaPlayerPrivateMediaSourceAVFObjC::MediaPlayerPrivateMediaSourceAVFObjC(Media
     , m_seekTimer(*this, &MediaPlayerPrivateMediaSourceAVFObjC::seekInternal)
     , m_rendererSeekRequest(NativePromiseRequest::create())
     , m_networkState(MediaPlayer::NetworkState::Empty)
-    , m_readyState(MediaPlayer::ReadyState::HaveNothing)
     , m_logger(player.mediaPlayerLogger())
     , m_logIdentifier(player.mediaPlayerLogIdentifier())
 #if HAVE(SPATIAL_TRACKING_LABEL)
@@ -206,7 +205,7 @@ void MediaPlayerPrivateMediaSourceAVFObjC::load(const String&)
     assertIsMainThread();
     // This media engine only supports MediaSource URLs.
     m_networkState = MediaPlayer::NetworkState::FormatError;
-    if (auto player = m_player.get())
+    if (RefPtr player = m_player.get())
         player->networkStateChanged();
 }
 
@@ -628,8 +627,16 @@ MediaPlayer::NetworkState MediaPlayerPrivateMediaSourceAVFObjC::networkState() c
 
 MediaPlayer::ReadyState MediaPlayerPrivateMediaSourceAVFObjC::readyState() const
 {
+    if (RefPtr mediaSourcePrivate = m_mediaSourcePrivate)
+        return mediaSourcePrivate->mediaPlayerReadyState();
     assertIsMainThread();
     return m_readyState;
+}
+
+void MediaPlayerPrivateMediaSourceAVFObjC::readyStateFromMediaSourceChanged()
+{
+    assertIsMainThread();
+    updateStateFromReadyState();
 }
 
 MediaTime MediaPlayerPrivateMediaSourceAVFObjC::maxTimeSeekable() const
@@ -644,7 +651,6 @@ MediaTime MediaPlayerPrivateMediaSourceAVFObjC::minTimeSeekable() const
 
 const PlatformTimeRanges& MediaPlayerPrivateMediaSourceAVFObjC::buffered() const
 {
-    ASSERT_NOT_REACHED();
     return PlatformTimeRanges::emptyRanges();
 }
 
@@ -889,7 +895,7 @@ std::optional<VideoPlaybackQualityMetrics> MediaPlayerPrivateMediaSourceAVFObjC:
 bool MediaPlayerPrivateMediaSourceAVFObjC::shouldBePlaying() const
 {
     assertIsMainThread();
-    return !m_renderer->paused() && !seeking() && m_readyState >= MediaPlayer::ReadyState::HaveFutureData;
+    return !m_renderer->paused() && !seeking() && readyState() >= MediaPlayer::ReadyState::HaveFutureData;
 }
 
 void MediaPlayerPrivateMediaSourceAVFObjC::setHasAvailableVideoFrame(bool flag)
@@ -1047,14 +1053,19 @@ void MediaPlayerPrivateMediaSourceAVFObjC::setReadyState(MediaPlayer::ReadyState
         ALWAYS_LOG(LOGIDENTIFIER, "stall detected currentTime:", currentTime());
 
     m_readyState = readyState;
+    updateStateFromReadyState();
+}
 
+void MediaPlayerPrivateMediaSourceAVFObjC::updateStateFromReadyState()
+{
+    assertIsMainThread();
     if (shouldBePlaying()) {
         m_renderer->play();
         timeChanged();
     } else
         stall();
 
-    if (m_readyState >= MediaPlayer::ReadyState::HaveCurrentData && hasVideo() && !m_hasAvailableVideoFrame) {
+    if (readyState() >= MediaPlayer::ReadyState::HaveCurrentData && hasVideo() && !m_hasAvailableVideoFrame) {
         m_readyStateIsWaitingForAvailableFrame = true;
         return;
     }

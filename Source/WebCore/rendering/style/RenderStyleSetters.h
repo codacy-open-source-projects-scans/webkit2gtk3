@@ -72,7 +72,7 @@ inline void RenderStyle::setAlignContent(Style::AlignContent alignContent) { SET
 inline void RenderStyle::setAlignItems(Style::AlignItems alignItems) { SET_NESTED(m_nonInheritedData, miscData, alignItems, alignItems); }
 inline void RenderStyle::setAlignSelf(Style::AlignSelf alignSelf) { SET_NESTED(m_nonInheritedData, miscData, alignSelf, alignSelf); }
 inline void RenderStyle::setAnchorNames(Style::AnchorNames&& names) { SET_NESTED(m_nonInheritedData, rareData, anchorNames, WTFMove(names)); }
-inline void RenderStyle::setAnchorScope(const NameScope& scope) { SET_NESTED(m_nonInheritedData, rareData, anchorScope, scope); }
+inline void RenderStyle::setAnchorScope(Style::NameScope&& scope) { SET_NESTED(m_nonInheritedData, rareData, anchorScope, WTFMove(scope)); }
 inline void RenderStyle::setAppearance(StyleAppearance appearance) { SET_NESTED_PAIR(m_nonInheritedData, miscData, appearance, static_cast<unsigned>(appearance), usedAppearance, static_cast<unsigned>(appearance)); }
 inline void RenderStyle::setAppleColorFilter(Style::AppleColorFilter&& appleColorFilter) { SET_NESTED(m_rareInheritedData, appleColorFilter, appleColorFilter, WTFMove(appleColorFilter)); }
 #if HAVE(CORE_MATERIAL)
@@ -255,8 +255,8 @@ inline void RenderStyle::setPerspective(Style::Perspective&& perspective) { SET_
 inline void RenderStyle::setPerspectiveOrigin(Style::PerspectiveOrigin&& origin) { SET_NESTED(m_nonInheritedData, rareData, perspectiveOrigin, WTFMove(origin)); }
 inline void RenderStyle::setPerspectiveOriginX(Style::PerspectiveOriginX&& originX) { SET_NESTED(m_nonInheritedData, rareData, perspectiveOrigin.x, WTFMove(originX)); }
 inline void RenderStyle::setPerspectiveOriginY(Style::PerspectiveOriginY&& originY) { SET_NESTED(m_nonInheritedData, rareData, perspectiveOrigin.y, WTFMove(originY)); }
-inline void RenderStyle::setPositionAnchor(const std::optional<Style::ScopedName>& anchor) { SET_NESTED(m_nonInheritedData, rareData, positionAnchor, anchor); }
-inline void RenderStyle::setPositionArea(std::optional<PositionArea> value) { SET_NESTED(m_nonInheritedData, rareData, positionArea, value); }
+inline void RenderStyle::setPositionAnchor(Style::PositionAnchor&& anchor) { SET_NESTED(m_nonInheritedData, rareData, positionAnchor, WTFMove(anchor)); }
+inline void RenderStyle::setPositionArea(Style::PositionArea positionArea) { SET_NESTED(m_nonInheritedData, rareData, positionArea, positionArea); }
 inline void RenderStyle::setPositionTryOrder(Style::PositionTryOrder order) { SET_NESTED(m_nonInheritedData, rareData, positionTryOrder, static_cast<unsigned>(order)); }
 inline void RenderStyle::setPositionVisibility(Style::PositionVisibility value) { SET_NESTED(m_nonInheritedData, rareData, positionVisibility, value.toRaw()); }
 inline void RenderStyle::setResize(Resize r) { SET_NESTED(m_nonInheritedData, miscData, resize, static_cast<unsigned>(r)); }
@@ -277,7 +277,7 @@ inline void RenderStyle::setVerticalAlign(Style::VerticalAlign&& align) { SET_NE
 inline void RenderStyle::setViewTimelineAxes(Style::ProgressTimelineAxes&& axes) { SET_NESTED(m_nonInheritedData, rareData, viewTimelineAxes, WTFMove(axes)); }
 inline void RenderStyle::setViewTimelineInsets(Style::ViewTimelineInsets&& insets) { SET_NESTED(m_nonInheritedData, rareData, viewTimelineInsets, WTFMove(insets)); }
 inline void RenderStyle::setViewTimelineNames(Style::ProgressTimelineNames&& names) { SET_NESTED(m_nonInheritedData, rareData, viewTimelineNames, WTFMove(names)); }
-inline void RenderStyle::setTimelineScope(const NameScope& scope) { SET_NESTED(m_nonInheritedData, rareData, timelineScope, scope); }
+inline void RenderStyle::setTimelineScope(Style::NameScope&& scope) { SET_NESTED(m_nonInheritedData, rareData, timelineScope, WTFMove(scope)); }
 inline void RenderStyle::setScrollbarColor(Style::ScrollbarColor&& color) { SET(m_rareInheritedData, scrollbarColor, WTFMove(color)); }
 inline void RenderStyle::setScrollbarGutter(Style::ScrollbarGutter&& gutter) { SET_NESTED(m_nonInheritedData, rareData, scrollbarGutter, WTFMove(gutter)); }
 inline void RenderStyle::setScrollbarWidth(Style::ScrollbarWidth width) { SET_NESTED(m_nonInheritedData, rareData, scrollbarWidth, static_cast<unsigned>(width.value)); }

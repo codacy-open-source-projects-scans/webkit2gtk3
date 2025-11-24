@@ -279,7 +279,6 @@ imported/w3c/web-platform-tests/css/css-inline/text-box-trim/text-box-trim-block
 imported/w3c/web-platform-tests/css/css-inline/text-box-trim/text-box-trim-block-in-inline-start-002.html [ Pass ]
 imported/w3c/web-platform-tests/css/css-inline/text-box-trim/text-box-trim-block-in-inline-start-003.html [ Pass ]
 imported/w3c/web-platform-tests/css/css-inline/text-box-trim/text-box-trim-half-leading-block-box-001.html [ Pass ]
-imported/w3c/web-platform-tests/css/css-grid/masonry/tentative/alignment/masonry-align-content-004.html [ Pass ]
 imported/w3c/web-platform-tests/css/css-highlight-api/painting/custom-highlight-painting-vertical-writing-mode-001.html [ Pass ]
 imported/w3c/web-platform-tests/css/css-images/gradient/css-color-4-colors-default-to-oklab-gradient.html [ Pass ]
 imported/w3c/web-platform-tests/css/css-images/gradient/gradient-eval-002.html [ Pass ]
@@ -1134,6 +1133,7 @@ imported/w3c/web-platform-tests/css/CSS2/box-display/display-008.xht [ ImageOnly
 imported/w3c/web-platform-tests/css/CSS2/box-display/display-009.xht [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/CSS2/box-display/display-012.xht [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/CSS2/box-display/display-013.xht [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/CSS2/normal-flow/max-width-107.xht [ ImageOnlyFailure ]
 webkit.org/b/229389 imported/w3c/web-platform-tests/css/css-text/white-space/control-chars-001.html [ ImageOnlyFailure ]
 webkit.org/b/229389 imported/w3c/web-platform-tests/css/css-text/white-space/control-chars-002.html [ ImageOnlyFailure ]
 webkit.org/b/229389 imported/w3c/web-platform-tests/css/css-text/white-space/control-chars-003.html [ ImageOnlyFailure ]
@@ -2509,6 +2509,9 @@ webkit.org/b/292951 webgl/2.0.y/conformance/textures/video/tex-2d-rgba-rgba-unsi
 
 # Fails when using two textures.
 webkit.org/b/258296 webrtc/canvas-to-peer-connection.html [ Failure Timeout ]
+
+# Skia crash in GrResourceCache::notifyARefCntReachedZero
+webrtc/video-vp8-videorange.html [ Crash Pass ]
 
 # The MediaStream implementation is not completed yet
 webkit.org/b/79203 fast/mediastream/RTCPeerConnection-ice.html [ Failure Timeout Crash ]
@@ -3894,6 +3897,7 @@ webkit.org/b/207711 [ Debug ] fast/selectors/slow-style-sharing-with-long-cousin
 webkit.org/b/208368 imported/w3c/web-platform-tests/wasm/jsapi/constructor/instantiate-bad-imports.any.worker.html [ Failure Pass ]
 webkit.org/b/209720 fast/css-generated-content/initial-letter-pagination-raised-rl.html [ ImageOnlyFailure ]
 webkit.org/b/209720 fast/css-grid-layout/grid-align-baseline-vertical.html [ Failure ]
+webkit.org/b/302127 imported/w3c/web-platform-tests/css/css-grid/grid-lanes/tentative/alignment/column-justify-items-end-justify-self-start-001.html [ ImageOnlyFailure ]
 webkit.org/b/211614 imported/w3c/web-platform-tests/wasm/jsapi/constructor/instantiate.any.worker.html [ Failure Pass ]
 webkit.org/b/211940 fast/text/multiple-codeunit-vertical-upright-2.html [ ImageOnlyFailure ]
 webkit.org/b/211940 fast/text/multiple-codeunit-vertical-upright.html [ ImageOnlyFailure ]

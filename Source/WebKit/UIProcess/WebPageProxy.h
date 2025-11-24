@@ -35,6 +35,7 @@
 #include <wtf/ObjectIdentifier.h>
 #include <wtf/OptionSet.h>
 #include <wtf/ProcessID.h>
+#include <wtf/RetainReleaseSwift.h>
 #include <wtf/RunLoop.h>
 #include <wtf/UniqueRef.h>
 #include <wtf/WeakHashSet.h>
@@ -192,7 +193,7 @@ enum class IsPerformingHTTPFallback : bool;
 enum class LayerTreeAsTextOptions : uint16_t;
 enum class LayoutViewportConstraint : bool;
 enum class LockBackForwardList : bool;
-enum class MediaPlaybackTargetContextMockState : uint8_t;
+enum class MediaPlaybackTargetMockState : uint8_t;
 enum class MediaProducerMediaCaptureKind : uint8_t;
 enum class MediaProducerMediaState : uint32_t;
 enum class MediaProducerMutedState : uint8_t;
@@ -284,6 +285,7 @@ struct ImageBufferParameters;
 struct InspectorOverlayHighlight;
 struct LinkIcon;
 struct LinkDecorationFilteringData;
+struct LiveRegionAnnouncementData;
 struct MarkupExclusionRule;
 struct MediaControlsContextMenuItem;
 struct MediaDeviceHashSalts;
@@ -575,6 +577,7 @@ struct JSHandleInfo;
 struct KeyEventInterpretationContext;
 struct LoadParameters;
 struct MainFrameData;
+struct PageData;
 struct ModelIdentifier;
 struct NavigationActionData;
 struct NetworkResourceLoadIdentifierType;
@@ -1274,11 +1277,11 @@ public:
     void setDataDetectionResult(DataDetectionResult&&);
     void handleClickForDataDetectionResult(const WebCore::DataDetectorElementInfo&, const WebCore::IntPoint&);
 #endif
-    void didCommitLayerTree(const RemoteLayerTreeTransaction&, const std::optional<MainFrameData>&);
-    void didCommitMainFrameData(const MainFrameData&);
+    void didCommitLayerTree(const RemoteLayerTreeTransaction&, const std::optional<MainFrameData>&, const PageData&, const TransactionID&);
+    void didCommitMainFrameData(const MainFrameData&, const TransactionID&);
     void layerTreeCommitComplete();
 
-    bool updateLayoutViewportParameters(const RemoteLayerTreeTransaction&);
+    bool updateLayoutViewportParameters(const MainFrameData&);
 
 #if PLATFORM(GTK) || PLATFORM(WPE)
     void cancelComposition(const String& compositionString);
@@ -2116,7 +2119,7 @@ public:
     void showPlaybackTargetPicker(WebCore::PlaybackTargetClientContextIdentifier, const WebCore::FloatRect&, bool hasVideo);
     void playbackTargetPickerClientStateDidChange(WebCore::PlaybackTargetClientContextIdentifier, WebCore::MediaProducerMediaStateFlags);
     void setMockMediaPlaybackTargetPickerEnabled(bool);
-    void setMockMediaPlaybackTargetPickerState(const String&, WebCore::MediaPlaybackTargetContextMockState);
+    void setMockMediaPlaybackTargetPickerState(const String&, WebCore::MediaPlaybackTargetMockState);
     void mockMediaPlaybackTargetPickerDismissPopup();
 #endif
 
@@ -2998,6 +3001,7 @@ private:
 #if PLATFORM(IOS_FAMILY)
     void relayAccessibilityNotification(String&&, std::span<const uint8_t>);
     void relayAriaNotifyNotification(WebCore::AriaNotifyData&&);
+    void relayLiveRegionNotification(WebCore::LiveRegionAnnouncementData&&);
 #endif
     void runBeforeUnloadConfirmPanel(IPC::Connection&, WebCore::FrameIdentifier, FrameInfoData&&, String&& message, CompletionHandler<void(bool)>&&);
     void pageDidScroll(const WebCore::IntPoint&);
@@ -4051,9 +4055,19 @@ private:
     bool m_statusBarIsVisible { true };
     bool m_menuBarIsVisible { true };
     bool m_toolbarsAreVisible { true };
-};
+} SWIFT_SHARED_REFERENCE(refWebPageProxy, derefWebPageProxy);
 
 } // namespace WebKit
+
+inline void refWebPageProxy(WebKit::WebPageProxy* WTF_NONNULL obj)
+{
+    WTF::ref(obj);
+}
+
+inline void derefWebPageProxy(WebKit::WebPageProxy* WTF_NONNULL obj)
+{
+    WTF::deref(obj);
+}
 
 SPECIALIZE_TYPE_TRAITS_BEGIN(WebKit::WebPageProxy)
     static bool isType(const API::Object& object) { return object.type() == API::Object::Type::Page; }

@@ -62,7 +62,6 @@ class LayoutRect;
 class LayoutSize;
 class LayoutUnit;
 class OutlineValue;
-class PositionArea;
 class RenderElement;
 class RenderStyle;
 class SVGRenderStyle;
@@ -207,7 +206,6 @@ enum class WordBreak : uint8_t;
 struct CSSPropertiesBitSet;
 struct CounterDirectiveMap;
 struct GridTrackList;
-struct NameScope;
 struct TransformOperationData;
 
 template<typename> class RectEdges;
@@ -304,6 +302,7 @@ struct MathDepth;
 struct MaximumLines;
 struct MaximumSize;
 struct MinimumSize;
+struct NameScope;
 struct OffsetAnchor;
 struct OffsetDistance;
 struct OffsetPath;
@@ -315,6 +314,8 @@ struct PaddingEdge;
 struct PageSize;
 struct Perspective;
 struct Position;
+struct PositionAnchor;
+struct PositionArea;
 struct PositionVisibility;
 struct PositionX;
 struct PositionY;
@@ -1125,9 +1126,9 @@ public:
     inline void setViewTimelineAxes(Style::ProgressTimelineAxes&&);
     inline void setViewTimelineNames(Style::ProgressTimelineNames&&);
 
-    static inline const NameScope initialTimelineScope();
-    inline const NameScope& timelineScope() const;
-    inline void setTimelineScope(const NameScope&);
+    static inline Style::NameScope initialTimelineScope();
+    inline const Style::NameScope& timelineScope() const;
+    inline void setTimelineScope(Style::NameScope&&);
 
     inline Style::Animations& ensureAnimations();
     inline const Style::Animations& animations() const;
@@ -2398,17 +2399,17 @@ public:
     inline const Style::AnchorNames& anchorNames() const;
     inline void setAnchorNames(Style::AnchorNames&&);
 
-    static inline NameScope initialAnchorScope();
-    inline const NameScope& anchorScope() const;
-    inline void setAnchorScope(const NameScope&);
+    static inline Style::NameScope initialAnchorScope();
+    inline const Style::NameScope& anchorScope() const;
+    inline void setAnchorScope(Style::NameScope&&);
 
-    static inline std::optional<Style::ScopedName> initialPositionAnchor();
-    inline const std::optional<Style::ScopedName>& positionAnchor() const;
-    inline void setPositionAnchor(const std::optional<Style::ScopedName>&);
+    static inline Style::PositionAnchor initialPositionAnchor();
+    inline const Style::PositionAnchor& positionAnchor() const;
+    inline void setPositionAnchor(Style::PositionAnchor&&);
 
-    static inline std::optional<PositionArea> initialPositionArea();
-    inline std::optional<PositionArea> positionArea() const;
-    inline void setPositionArea(std::optional<PositionArea>);
+    static inline Style::PositionArea initialPositionArea();
+    inline Style::PositionArea positionArea() const;
+    inline void setPositionArea(Style::PositionArea);
 
     static constexpr Style::PositionTryOrder initialPositionTryOrder();
     inline Style::PositionTryOrder positionTryOrder() const;

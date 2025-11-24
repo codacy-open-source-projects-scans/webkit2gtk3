@@ -7583,12 +7583,8 @@ const URL& Document::maskedURLForBindings()
 {
     // This function can be called from GC heap thread, thus we need to use StaticStringImpl as a source of URL.
     // StaticStringImpl is never converted to AtomString, and it is safe to be used in any threads.
-    static LazyNeverDestroyed<URL> url;
-    static std::once_flag onceFlag;
-    std::call_once(onceFlag, [&] {
-        url.construct(maskedURLStringForBindings());
-        ASSERT(url->string().impl() == &static_cast<StringImpl&>(maskedURLStringForBindings()));
-    });
+    static NeverDestroyed<URL> url { maskedURLStringForBindings() };
+    ASSERT(url->string().impl() == &static_cast<StringImpl&>(maskedURLStringForBindings()));
     return url;
 }
 
@@ -8748,7 +8744,7 @@ WindowEventLoop& Document::windowEventLoop()
 {
     ASSERT(isMainThread());
     if (!m_eventLoop) [[unlikely]] {
-        m_eventLoop = WindowEventLoop::eventLoopForSecurityOrigin(securityOrigin());
+        m_eventLoop = WindowEventLoop::eventLoopForSecurityOrigin(contextDocument().securityOrigin());
         m_eventLoop->addAssociatedContext(*this);
     }
     return *m_eventLoop;
@@ -10877,9 +10873,9 @@ Vector<RefPtr<WebAnimation>> Document::matchingAnimations(NOESCAPE const Functio
         return false;
     };
 
-    for (auto* animation : WebAnimation::instances()) {
+    for (auto& animation : WebAnimation::instances()) {
         if (animation->isRelevant() && effectCanBeListed(animation->effect()))
-            animations.append(animation);
+            animations.append(animation.get());
     }
 
     std::ranges::stable_sort(animations, [](auto& lhs, auto& rhs) {
@@ -10891,7 +10887,7 @@ Vector<RefPtr<WebAnimation>> Document::matchingAnimations(NOESCAPE const Functio
 
 void Document::keyframesRuleDidChange(const String& name)
 {
-    for (RefPtr animation : WebAnimation::instances()) {
+    for (auto& animation : WebAnimation::instances()) {
         auto cssAnimation = dynamicDowncast<CSSAnimation>(*animation);
         if (!cssAnimation || !cssAnimation->isRelevant())
             continue;

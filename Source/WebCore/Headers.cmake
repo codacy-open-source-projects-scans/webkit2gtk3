@@ -849,11 +849,13 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     Modules/webtransport/DatagramsReadableMode.h
     Modules/webtransport/WebTransportCongestionControl.h
+    Modules/webtransport/WebTransportConnectionInfo.h
     Modules/webtransport/WebTransportConnectionStats.h
     Modules/webtransport/WebTransportDatagramStats.h
     Modules/webtransport/WebTransportHash.h
     Modules/webtransport/WebTransportOptions.h
     Modules/webtransport/WebTransportReceiveStreamStats.h
+    Modules/webtransport/WebTransportReliabilityMode.h
     Modules/webtransport/WebTransportSendGroup.h
     Modules/webtransport/WebTransportSendStreamSink.h
     Modules/webtransport/WebTransportSendStreamStats.h
@@ -3174,9 +3176,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/style/CounterDirectives.h
     rendering/style/GridArea.h
     rendering/style/GridSpan.h
-    rendering/style/NameScope.h
     rendering/style/OutlineValue.h
-    rendering/style/PositionArea.h
     rendering/style/PositionTryFallback.h
     rendering/style/PositionTryOrder.h
     rendering/style/RenderStyle.h
@@ -3239,6 +3239,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     style/StyleForVisitedLink.h
     style/StyleInterpolationClient.h
     style/StyleInterpolationContext.h
+    style/StyleNameScope.h
     style/StyleScope.h
     style/StyleScopeIdentifier.h
     style/StyleScopeOrdinal.h
@@ -3264,6 +3265,12 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     style/values/align/StyleOverflowPosition.h
 
     style/values/anchor-position/StyleAnchorName.h
+    style/values/anchor-position/StylePositionAnchor.h
+    style/values/anchor-position/StylePositionArea.h
+    style/values/anchor-position/StylePositionAreaAxis.h
+    style/values/anchor-position/StylePositionAreaSelf.h
+    style/values/anchor-position/StylePositionAreaSpan.h
+    style/values/anchor-position/StylePositionAreaTrack.h
     style/values/anchor-position/StylePositionVisibility.h
 
     style/values/animations/StyleAnimation.h

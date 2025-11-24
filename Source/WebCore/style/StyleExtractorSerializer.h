@@ -67,9 +67,6 @@ public:
     // MARK: Shared serializations
 
     static void serializePositionTryFallbacks(ExtractorState&, StringBuilder&, const CSS::SerializationContext&, const FixedVector<PositionTryFallback>&);
-    static void serializePositionAnchor(ExtractorState&, StringBuilder&, const CSS::SerializationContext&, const std::optional<ScopedName>&);
-    static void serializePositionArea(ExtractorState&, StringBuilder&, const CSS::SerializationContext&, const std::optional<PositionArea>&);
-    static void serializeNameScope(ExtractorState&, StringBuilder&, const CSS::SerializationContext&, const NameScope&);
 
     // MARK: MaskLayer property serializations
 
@@ -198,51 +195,6 @@ inline void ExtractorSerializer::serializePositionTryFallbacks(ExtractorState& s
     }
 
     builder.append(CSSValueList::createCommaSeparated(WTFMove(list))->cssText(context));
-}
-
-inline void ExtractorSerializer::serializePositionAnchor(ExtractorState& state, StringBuilder& builder, const CSS::SerializationContext& context, const std::optional<ScopedName>& positionAnchor)
-{
-    if (!positionAnchor) {
-        serializationForCSS(builder, context, state.style, CSS::Keyword::Auto { });
-        return;
-    }
-
-    serialize(state, builder, context, *positionAnchor);
-}
-
-inline void ExtractorSerializer::serializePositionArea(ExtractorState& state, StringBuilder& builder, const CSS::SerializationContext& context, const std::optional<PositionArea>& positionArea)
-{
-    if (!positionArea) {
-        serializationForCSS(builder, context, state.style, CSS::Keyword::None { });
-        return;
-    }
-
-    // FIXME: Do this more efficiently without creating and destroying a CSSValue object.
-    builder.append(ExtractorConverter::convertPositionArea(state, *positionArea)->cssText(context));
-}
-
-inline void ExtractorSerializer::serializeNameScope(ExtractorState& state, StringBuilder& builder, const CSS::SerializationContext& context, const NameScope& scope)
-{
-    switch (scope.type) {
-    case NameScope::Type::None:
-        serializationForCSS(builder, context, state.style, CSS::Keyword::None { });
-        return;
-    case NameScope::Type::All:
-        serializationForCSS(builder, context, state.style, CSS::Keyword::All { });
-        return;
-    case NameScope::Type::Ident:
-        if (scope.names.isEmpty()) {
-            serializationForCSS(builder, context, state.style, CSS::Keyword::None { });
-            return;
-        }
-
-        builder.append(interleave(scope.names, [&](auto& builder, auto& name) {
-            serializationForCSS(builder, context, state.style, CustomIdentifier { name });
-        }, ", "_s));
-        return;
-    }
-
-    RELEASE_ASSERT_NOT_REACHED();
 }
 
 // MARK: - MaskLayer property serializations

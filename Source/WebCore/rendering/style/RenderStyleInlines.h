@@ -30,7 +30,6 @@
 #include <WebCore/FontCascadeDescription.h>
 #include <WebCore/GraphicsTypes.h>
 #include <WebCore/HitTestRequest.h>
-#include <WebCore/PositionArea.h>
 #include <WebCore/PositionTryOrder.h>
 #include <WebCore/RenderStyle.h>
 #include <WebCore/SVGRenderStyle.h>
@@ -98,7 +97,7 @@ inline Style::AlignSelf RenderStyle::alignSelf() const { return m_nonInheritedDa
 constexpr auto RenderStyle::allTransformOperations() -> OptionSet<TransformOperationOption> { return { TransformOperationOption::TransformOrigin, TransformOperationOption::Translate, TransformOperationOption::Rotate, TransformOperationOption::Scale, TransformOperationOption::Offset }; }
 inline const Style::Animations& RenderStyle::animations() const { return m_nonInheritedData->miscData->animations; }
 inline const Style::AnchorNames& RenderStyle::anchorNames() const { return m_nonInheritedData->rareData->anchorNames; }
-inline const NameScope& RenderStyle::anchorScope() const { return m_nonInheritedData->rareData->anchorScope; }
+inline const Style::NameScope& RenderStyle::anchorScope() const { return m_nonInheritedData->rareData->anchorScope; }
 inline StyleAppearance RenderStyle::appearance() const { return static_cast<StyleAppearance>(m_nonInheritedData->miscData->appearance); }
 inline const Style::AppleColorFilter& RenderStyle::appleColorFilter() const { return m_rareInheritedData->appleColorFilter->appleColorFilter; }
 #if HAVE(CORE_MATERIAL)
@@ -346,7 +345,7 @@ constexpr Style::AlignContent RenderStyle::initialAlignContent() { return CSS::K
 constexpr Style::AlignItems RenderStyle::initialAlignItems() { return CSS::Keyword::Normal { }; }
 constexpr Style::AlignSelf RenderStyle::initialAlignSelf() { return CSS::Keyword::Auto { }; }
 inline Style::AnchorNames RenderStyle::initialAnchorNames() { return CSS::Keyword::None { }; }
-inline NameScope RenderStyle::initialAnchorScope() { return { }; }
+inline Style::NameScope RenderStyle::initialAnchorScope() { return CSS::Keyword::None { }; }
 inline Style::Animations RenderStyle::initialAnimations() { return CSS::Keyword::None { }; }
 constexpr StyleAppearance RenderStyle::initialAppearance() { return StyleAppearance::None; }
 #if HAVE(CORE_MATERIAL)
@@ -527,8 +526,8 @@ inline Style::PerspectiveOriginX RenderStyle::initialPerspectiveOriginX() { retu
 inline Style::PerspectiveOriginY RenderStyle::initialPerspectiveOriginY() { return 50_css_percentage; }
 constexpr PointerEvents RenderStyle::initialPointerEvents() { return PointerEvents::Auto; }
 constexpr PositionType RenderStyle::initialPosition() { return PositionType::Static; }
-inline std::optional<Style::ScopedName> RenderStyle::initialPositionAnchor() { return { }; }
-inline std::optional<PositionArea> RenderStyle::initialPositionArea() { return { }; }
+inline Style::PositionAnchor RenderStyle::initialPositionAnchor() { return CSS::Keyword::Auto { }; }
+inline Style::PositionArea RenderStyle::initialPositionArea() { return CSS::Keyword::None { }; }
 inline FixedVector<Style::PositionTryFallback> RenderStyle::initialPositionTryFallbacks() { return { }; }
 constexpr Style::PositionTryOrder RenderStyle::initialPositionTryOrder() { return Style::PositionTryOrder::Normal; }
 constexpr Style::PositionVisibility RenderStyle::initialPositionVisibility() { return Style::PositionVisibilityValue::AnchorsVisible; }
@@ -618,7 +617,7 @@ inline Style::ProgressTimelineNames RenderStyle::initialViewTimelineNames() { re
 inline Style::ViewTransitionClasses RenderStyle::initialViewTransitionClasses() { return CSS::Keyword::None { }; }
 inline Style::ViewTransitionName RenderStyle::initialViewTransitionName() { return CSS::Keyword::None { }; }
 constexpr Visibility RenderStyle::initialVisibility() { return Visibility::Visible; }
-inline const NameScope RenderStyle::initialTimelineScope() { return { }; }
+inline Style::NameScope RenderStyle::initialTimelineScope() { return CSS::Keyword::None { }; }
 constexpr WhiteSpaceCollapse RenderStyle::initialWhiteSpaceCollapse() { return WhiteSpaceCollapse::Collapse; }
 constexpr Style::Widows RenderStyle::initialWidows() { return CSS::Keyword::Auto { }; }
 inline Style::WillChange RenderStyle::initialWillChange() { return CSS::Keyword::Auto { }; }
@@ -757,8 +756,8 @@ inline const Style::Perspective& RenderStyle::perspective() const { return m_non
 inline const Style::PerspectiveOrigin& RenderStyle::perspectiveOrigin() const { return m_nonInheritedData->rareData->perspectiveOrigin; }
 inline const Style::PerspectiveOriginX& RenderStyle::perspectiveOriginX() const { return m_nonInheritedData->rareData->perspectiveOrigin.x; }
 inline const Style::PerspectiveOriginY& RenderStyle::perspectiveOriginY() const { return m_nonInheritedData->rareData->perspectiveOrigin.y; }
-inline const std::optional<Style::ScopedName>& RenderStyle::positionAnchor() const { return m_nonInheritedData->rareData->positionAnchor; }
-inline std::optional<PositionArea> RenderStyle::positionArea() const { return m_nonInheritedData->rareData->positionArea; }
+inline const Style::PositionAnchor& RenderStyle::positionAnchor() const { return m_nonInheritedData->rareData->positionAnchor; }
+inline Style::PositionArea RenderStyle::positionArea() const { return m_nonInheritedData->rareData->positionArea; }
 inline Style::PositionTryOrder RenderStyle::positionTryOrder() const { return static_cast<Style::PositionTryOrder>(m_nonInheritedData->rareData->positionTryOrder); }
 inline Style::PositionVisibility RenderStyle::positionVisibility() const { return Style::PositionVisibility::fromRaw(m_nonInheritedData->rareData->positionVisibility); }
 inline bool RenderStyle::preserveNewline() const { return preserveNewline(whiteSpaceCollapse()); }
@@ -785,7 +784,7 @@ inline const Style::ProgressTimelineAxes& RenderStyle::viewTimelineAxes() const 
 inline const Style::ViewTimelineInsets& RenderStyle::viewTimelineInsets() const { return m_nonInheritedData->rareData->viewTimelineInsets; }
 inline const Style::ProgressTimelineNames& RenderStyle::viewTimelineNames() const { return m_nonInheritedData->rareData->viewTimelineNames; }
 inline bool RenderStyle::hasViewTimelines() const { return m_nonInheritedData->rareData->hasViewTimelines(); }
-inline const NameScope& RenderStyle::timelineScope() const { return m_nonInheritedData->rareData->timelineScope; }
+inline const Style::NameScope& RenderStyle::timelineScope() const { return m_nonInheritedData->rareData->timelineScope; }
 inline const Style::ScrollbarColor& RenderStyle::scrollbarColor() const { return m_rareInheritedData->scrollbarColor; }
 inline const Style::ScrollbarGutter& RenderStyle::scrollbarGutter() const { return m_nonInheritedData->rareData->scrollbarGutter; }
 inline Style::ScrollbarWidth RenderStyle::scrollbarWidth() const { return static_cast<ScrollbarWidth>(m_nonInheritedData->rareData->scrollbarWidth); }

@@ -454,14 +454,11 @@
 #endif
 
 #if ENABLE(SWIFT_DEMO_URI_SCHEME)
-#ifdef GENERATE_SINGLE_SWIFT_INTEROP_FILE
 #include "WebKit-Swift.h"
-#else
-#include "WebKit-Swift-CPP.h"
-#endif
 #endif
 
 #if ENABLE(VIDEO) || ENABLE(WEB_AUDIO)
+#include "RemoteAudioSessionConfiguration.h"
 #include "RemoteMediaSessionManagerProxy.h"
 #endif
 
@@ -2194,6 +2191,8 @@ void WebPageProxy::loadRequestWithNavigationShared(Ref<WebProcessProxy>&& proces
     loadParameters.isHandledByAboutSchemeHandler = m_aboutSchemeHandler->canHandleURL(url);
     loadParameters.requiredCookiesVersion = protectedWebsiteDataStore()->cookiesVersion();
     loadParameters.originatingFrame = navigation.lastNavigationAction() ? std::optional(navigation.lastNavigationAction()->originatingFrameInfoData) : std::nullopt;
+    if (auto& action = navigation.lastNavigationAction())
+        loadParameters.requester = action->requester;
 
 #if ENABLE(CONTENT_EXTENSIONS)
     if (protectedPreferences()->iFrameResourceMonitoringEnabled())
@@ -3735,7 +3734,11 @@ void WebPageProxy::activateMediaStreamCaptureInPage()
 }
 
 #if !PLATFORM(COCOA)
-void WebPageProxy::didCommitLayerTree(const RemoteLayerTreeTransaction&, const std::optional<MainFrameData>&)
+void WebPageProxy::didCommitLayerTree(const RemoteLayerTreeTransaction&, const std::optional<MainFrameData>&, const PageData&, const TransactionID&)
+{
+}
+
+void WebPageProxy::didCommitMainFrameData(const MainFrameData&, const TransactionID&)
 {
 }
 
@@ -5176,6 +5179,9 @@ void WebPageProxy::receivedNavigationActionPolicyDecision(WebProcessProxy& proce
             loadParameters.ownerPermissionsPolicy = navigation->ownerPermissionsPolicy();
             loadParameters.isPerformingHTTPFallback = navigationAction->data().isPerformingHTTPFallback;
             loadParameters.isHandledByAboutSchemeHandler = m_aboutSchemeHandler->canHandleURL(loadParameters.request.url());
+            if (auto& action = navigation->lastNavigationAction())
+                loadParameters.requester = action->requester;
+
             processNavigatingTo->send(Messages::WebPage::LoadRequest(WTFMove(loadParameters)), webPageIDInProcess(processNavigatingTo));
         }
 
@@ -5447,6 +5453,8 @@ void WebPageProxy::continueNavigationInNewProcess(API::Navigation& navigation, W
         loadParameters.ownerPermissionsPolicy = navigation.ownerPermissionsPolicy();
         loadParameters.isPerformingHTTPFallback = isPerformingHTTPFallback == IsPerformingHTTPFallback::Yes;
         loadParameters.isHandledByAboutSchemeHandler = m_aboutSchemeHandler->canHandleURL(loadParameters.request.url());
+        if (auto& action = navigation.lastNavigationAction())
+            loadParameters.requester = action->requester;
 
         if (navigation.isInitialFrameSrcLoad())
             frame.setIsPendingInitialHistoryItem(true);
@@ -9069,7 +9077,8 @@ void WebPageProxy::createNewPage(IPC::Connection& connection, WindowFeatures&& w
         if (privateClickMeasurement)
             newPage->internals().privateClickMeasurement = { { WTFMove(*privateClickMeasurement), { }, { } } };
 
-        if (navigationDataForNewProcess && !openedBlobURL) {
+        // When site isolation is enabled, blobs get a dedicated process if its opener process is cross-site from the main process.
+        if (navigationDataForNewProcess && (protectedPreferences()->siteIsolationEnabled() || !openedBlobURL))  {
             bool isRequestFromClientOrUserInput = navigationDataForNewProcess->isRequestFromClientOrUserInput;
 
             reply(std::nullopt, std::nullopt);
@@ -11161,7 +11170,18 @@ void WebPageProxy::mouseEventHandlingCompleted(std::optional<WebEventType> event
 {
     if (remoteUserInputEventData) {
         CheckedRef event = internals().mouseEventQueue.first();
-        event->setPosition(remoteUserInputEventData->transformedPoint);
+        const auto originalPosition = event->position();
+        const auto transformedPosition = remoteUserInputEventData->transformedPoint;
+        event->setPosition(transformedPosition);
+
+        const auto offset = originalPosition - transformedPosition;
+        auto coalescedEvents = event->coalescedEvents();
+        for (CheckedRef coalescedEvent : coalescedEvents) {
+            const auto adjustedPosition = coalescedEvent->position() - offset;
+            coalescedEvent->setPosition(adjustedPosition);
+        }
+        event->setCoalescedEvents(coalescedEvents);
+
         // FIXME: If these sandbox extensions are important, find a way to get them to the iframe process.
         sendMouseEvent(remoteUserInputEventData->targetFrameID, event, { });
         return;
@@ -14664,7 +14684,7 @@ void WebPageProxy::setMockMediaPlaybackTargetPickerEnabled(bool enabled)
         pageClient->checkedMediaSessionManager()->setMockMediaPlaybackTargetPickerEnabled(enabled);
 }
 
-void WebPageProxy::setMockMediaPlaybackTargetPickerState(const String& name, WebCore::MediaPlaybackTargetContextMockState state)
+void WebPageProxy::setMockMediaPlaybackTargetPickerState(const String& name, WebCore::MediaPlaybackTargetMockState state)
 {
     if (RefPtr pageClient = this->pageClient())
         pageClient->checkedMediaSessionManager()->setMockMediaPlaybackTargetPickerState(name, state);
@@ -14682,7 +14702,7 @@ void WebPageProxy::Internals::setPlaybackTarget(PlaybackTargetClientContextIdent
     if (!protectedPage->hasRunningProcess())
         return;
 
-    protectedPage->send(Messages::WebPage::PlaybackTargetSelected(contextId, MediaPlaybackTargetContextSerialized { target->targetContext() }));
+    protectedPage->send(Messages::WebPage::PlaybackTargetSelected(contextId, MediaPlaybackTargetContextSerialized { target.get() }));
 }
 
 void WebPageProxy::Internals::externalOutputDeviceAvailableDidChange(PlaybackTargetClientContextIdentifier contextId, bool available)

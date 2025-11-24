@@ -6834,6 +6834,57 @@ TEST(SiteIsolation, StatusBarVisibility)
     EXPECT_TRUE([[opened.webView objectByEvaluatingJavaScript:statusBarVisible inFrame:[opened.webView firstChildFrame]] boolValue]);
 }
 
+TEST(SiteIsolation, LocalIframeOpensBlobURLFromFileMainFrame)
+{
+    auto iframeHTML = "<script>"
+    "const htmlContent = ` <!DOCTYPE html> <html> <h1>Blob URL Loaded</h1> <script>window.webkit.messageHandlers.testHandler.postMessage('blob url loaded');<\\/script> </html> `;"
+    "const blob = new Blob([htmlContent], { type: 'text/html' });"
+    "const blobUrl = URL.createObjectURL(blob);"
+    "const newWindow = window.open(blobUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');"
+    "window.parent.postMessage('ping', '*');"
+    "</script>"
+    "<h1>blob-popup-local-iframe</h1>"_s;
+
+    HTTPServer server({
+    { "/blob-popup-local-iframe.html"_s, { iframeHTML } },
+    }, HTTPServer::Protocol::Http, nullptr, nullptr, 8001);
+
+    auto configuration = server.httpsProxyConfiguration();
+    enableSiteIsolation(configuration);
+
+    RetainPtr messageHandler = adoptNS([TestMessageHandler new]);
+    [[configuration userContentController] addScriptMessageHandler:messageHandler.get() name:@"testHandler"];
+
+    auto webView = adoptNS([[TestWKWebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600) configuration:configuration]);
+
+    __block RetainPtr<WKWebView> blobWindow;
+    __block bool blobWindowOpened = false;
+    __block bool blobContentChecked = false;
+
+    auto uiDelegate = adoptNS([TestUIDelegate new]);
+    uiDelegate.get().createWebViewWithConfiguration = ^(WKWebViewConfiguration *configuration, WKNavigationAction *action, WKWindowFeatures *windowFeatures) {
+        EXPECT_WK_STREQ([action.request.URL scheme], @"blob");
+        blobWindowOpened = true;
+        blobWindow = adoptNS([[WKWebView alloc] initWithFrame:CGRectZero configuration:configuration]);
+        return blobWindow.get();
+    };
+
+    [webView setUIDelegate:uiDelegate.get()];
+    webView.get().configuration.preferences.javaScriptCanOpenWindowsAutomatically = YES;
+
+    [messageHandler addMessage:@"blob url loaded" withHandler:^{
+        blobContentChecked = true;
+    }];
+
+    NSURL *file = [NSBundle.test_resourcesBundle URLForResource:@"blob-popup-file-mainframe" withExtension:@"html"];
+    [webView loadFileURL:file allowingReadAccessToURL:file.URLByDeletingLastPathComponent];
+
+    TestWebKitAPI::Util::run(&blobContentChecked);
+
+    EXPECT_TRUE(blobWindowOpened);
+    EXPECT_NOT_NULL(blobWindow.get());
+}
+
 #if PLATFORM(MAC)
 
 TEST(SiteIsolation, ColorInputPickerLocation)
@@ -7174,6 +7225,24 @@ TEST(SiteIsolation, ChildIframeNavigatesCrossOriginGrandchildIframeToAboutBlank)
         { "https://example.com"_s,
             { { "https://example.com"_s,  { { "https://example.com"_s } } } }
         },
+    });
+}
+
+TEST(SiteIsolation, BrowsingContextGroupSwitchForIncompatibleCrossOriginOpenerPolicy)
+{
+    HTTPServer server({
+        { "/coop-unsafe-none"_s, { { { "Cross-Origin-Opener-Policy"_s, "unsafe-none"_s } }, "<script>w = window.open('https://webkit.org/coop-same-origin-allow-popups')</script>"_s } },
+        { "/coop-same-origin-allow-popups"_s, { { { "Cross-Origin-Opener-Policy"_s, "same-origin-allow-popups"_s } }, "child"_s } }
+    }, HTTPServer::Protocol::HttpsProxy);
+
+    auto [opener, opened] = openerAndOpenedViews(server, @"https://example.com/coop-unsafe-none");
+
+    EXPECT_WK_STREQ(opened.webView.get().URL.host, "webkit.org");
+    checkFrameTreesInProcesses(opener.webView.get(), {
+        { "https://example.com"_s },
+    });
+    checkFrameTreesInProcesses(opened.webView.get(), {
+        { "https://webkit.org"_s },
     });
 }
 

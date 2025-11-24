@@ -29,11 +29,13 @@
 #include "BlockLayoutState.h"
 #include "InlineLayoutState.h"
 #include "LayoutIntegrationBoxGeometryUpdater.h"
+#include "LayoutIntegrationUtils.h"
 #include "RenderBlock.h"
 #include "RenderBoxInlines.h"
 #include "RenderFlexibleBox.h"
 #include "RenderLayoutState.h"
 #include "RenderObjectInlines.h"
+#include "TextBoxTrimmer.h"
 
 namespace WebCore {
 namespace LayoutIntegration {
@@ -106,27 +108,24 @@ void layoutWithFormattingContextForBlockInInline(const Layout::ElementBox& block
         auto legacyLineClamp = renderTreeLayoutState.legacyLineClamp();
         if (!legacyLineClamp)
             return;
-        legacyLineClamp->currentLineCount += inlineLayoutState.lineCountForBlockDirectionClamp();
+        legacyLineClamp->currentLineCount += inlineLayoutState.lineCountWithInlineContentIncludingNestedBlocks();
         renderTreeLayoutState.setLegacyLineClamp(legacyLineClamp);
     };
     updateRenderTreeLegacyLineClamp();
 
-    auto marginInfoForBlock = [&] {
-        auto& marginState = parentBlockLayoutState.marginState();
-        return RenderBlockFlow::MarginInfo { marginState.canCollapseWithChildren, marginState.canCollapseMarginBeforeWithChildren, marginState.canCollapseMarginAfterWithChildren, marginState.quirkContainer, marginState.atBeforeSideOfBlock, marginState.atAfterSideOfBlock, marginState.hasMarginBeforeQuirk, marginState.hasMarginAfterQuirk, marginState.determinedMarginBeforeQuirk, marginState.positiveMargin, marginState.negativeMargin };
-    };
+    auto positionAndMargin = RenderBlockFlow::BlockPositionAndMargin { };
+    if (inlineLayoutState.lineCount()) {
+        auto textBoxTrimStartDisabler = TextBoxTrimStartDisabler { blockRenderer };
+        positionAndMargin = rootBlockContainer.layoutBlockChildFromInlineLayout(blockRenderer, blockLogicalTopLeft.y(), Layout::IntegrationUtils::toMarginInfo(parentBlockLayoutState.marginState()));
+    } else
+        positionAndMargin = rootBlockContainer.layoutBlockChildFromInlineLayout(blockRenderer, blockLogicalTopLeft.y(), Layout::IntegrationUtils::toMarginInfo(parentBlockLayoutState.marginState()));
 
-    auto positionAndMargin = rootBlockContainer.layoutBlockChildFromInlineLayout(blockRenderer, blockLogicalTopLeft.y(), marginInfoForBlock());
     if (blockRenderer.isSelfCollapsingBlock()) {
         // FIXME: This gets replaced by "handling the after side of the block with margin".
         positionAndMargin.marginInfo.setMargin({ }, { });
     }
 
-    auto updateMarginState = [&] {
-        auto& marginInfo = positionAndMargin.marginInfo;
-        parentBlockLayoutState.marginState() = { marginInfo.canCollapseWithChildren(), marginInfo.canCollapseMarginBeforeWithChildren(), marginInfo.canCollapseMarginAfterWithChildren(), marginInfo.quirkContainer(), marginInfo.atBeforeSideOfBlock(), marginInfo.atAfterSideOfBlock(), marginInfo.hasMarginBeforeQuirk(), marginInfo.hasMarginAfterQuirk(), marginInfo.determinedMarginBeforeQuirk(), marginInfo.positiveMargin(), marginInfo.negativeMargin() };
-    };
-    updateMarginState();
+    parentBlockLayoutState.marginState() = Layout::IntegrationUtils::toMarginState(positionAndMargin.marginInfo);
 
     auto updater = BoxGeometryUpdater { layoutState, rootLayoutBox(block) };
     updater.updateBoxGeometryAfterIntegrationLayout(block, rootBlockContainer.contentBoxLogicalWidth());
@@ -143,8 +142,8 @@ void layoutWithFormattingContextForBlockInInline(const Layout::ElementBox& block
         auto legacyLineClamp = renderTreeLayoutState.legacyLineClamp();
         if (!legacyLineClamp)
             return;
-        auto newlyConstructedLineCount = legacyLineClamp->currentLineCount - inlineLayoutState.lineCountForBlockDirectionClamp();
-        inlineLayoutState.setLineCountForBlockDirectionClamp(inlineLayoutState.lineCountForBlockDirectionClamp() + newlyConstructedLineCount);
+        auto newlyConstructedLineCount = legacyLineClamp->currentLineCount - inlineLayoutState.lineCountWithInlineContentIncludingNestedBlocks();
+        inlineLayoutState.setLineCountWithInlineContentIncludingNestedBlocks(inlineLayoutState.lineCountWithInlineContentIncludingNestedBlocks() + newlyConstructedLineCount);
     };
     udpdateIFCLineClamp();
 

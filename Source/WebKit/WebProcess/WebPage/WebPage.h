@@ -201,7 +201,7 @@ class KeyboardEvent;
 class LegacyWebArchive;
 class LocalFrame;
 class LocalFrameView;
-class MediaPlaybackTargetContext;
+class MediaPlaybackTarget;
 class MediaSessionCoordinator;
 class MediaSessionManagerInterface;
 class Page;
@@ -308,6 +308,7 @@ class HandleUserInputEventResult;
 #endif
 struct InteractionRegion;
 struct KeypressCommand;
+struct LiveRegionAnnouncementData;
 struct MarkupExclusionRule;
 struct MediaDeviceHashSalts;
 struct MediaPlayerClientIdentifierType;
@@ -641,7 +642,7 @@ public:
 
 #if PLATFORM(COCOA)
     void willCommitLayerTree(RemoteLayerTreeTransaction&, WebCore::FrameIdentifier);
-    void willCommitMainFrameData(MainFrameData&);
+    void willCommitMainFrameData(MainFrameData&, const TransactionID&);
     void didFlushLayerTreeAtTime(MonotonicTime, bool flushSucceeded);
 #endif
 
@@ -992,6 +993,7 @@ public:
 #if PLATFORM(IOS_FAMILY)
     void relayAccessibilityNotification(String&&, RetainPtr<NSData>&&);
     void relayAriaNotifyNotification(WebCore::AriaNotifyData&&);
+    void relayLiveRegionNotification(WebCore::LiveRegionAnnouncementData&&);
 #endif
 
     RefPtr<WebImage> scaledSnapshotWithOptions(const WebCore::IntRect&, double additionalScaleFactor, SnapshotOptions);
