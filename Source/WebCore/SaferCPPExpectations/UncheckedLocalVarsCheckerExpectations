@@ -242,7 +242,6 @@ page/DragController.cpp
 page/ElementTargetingController.cpp
 page/EventHandler.cpp
 page/FocusController.cpp
-page/FrameConsoleClient.cpp
 page/FrameSnapshotting.cpp
 page/FrameView.cpp
 page/ImageAnalysisQueue.cpp
@@ -480,7 +479,6 @@ style/MatchResultCache.cpp
 style/PseudoClassChangeInvalidation.cpp
 style/StyleAdjuster.cpp
 style/StyleBuilder.cpp
-style/StyleBuilderConverter.h
 style/StyleBuilderCustom.h
 style/StyleBuilderState.cpp
 style/StyleBuilderStateInlines.h
@@ -499,6 +497,7 @@ style/StyleUpdate.cpp
 style/Styleable.cpp
 style/values/grid/StyleGridPositionsResolver.cpp
 style/values/primitives/StyleLengthResolution.cpp
+style/values/text/StyleTextAlign.cpp
 style/values/transforms/StyleTransformList.cpp
 svg/SVGAnimateMotionElement.cpp
 svg/SVGClipPathElement.cpp

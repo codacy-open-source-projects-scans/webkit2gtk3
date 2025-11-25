@@ -53,6 +53,11 @@ struct LineContent {
     std::optional<InlineLayoutUnit> overflowLogicalWidth { };
     HashMap<const Box*, InlineLayoutUnit> rubyBaseAlignmentOffsetList { };
     InlineLayoutUnit rubyAnnotationOffset { 0.f };
+    enum class LineBreakReason : uint8_t {
+        ForcedLineBreakByBlockContent,
+        Other
+    };
+    LineBreakReason lineBreakReason { LineBreakReason::Other };
 };
 
 static bool isContentfulOrHasDecoration(const InlineItem& inlineItem, const InlineFormattingContext& formattingContext)
@@ -324,7 +329,9 @@ LineLayoutResult LineBuilder::layoutInlineContent(const LineInput& lineInput, co
     // Both the inline content ('last line') and the trailing out-of-flow box are supposed to be center aligned.
     auto shouldTreatAsLastLine = isLastInlineContent || lineContent->range.endIndex() == lineInput.needsLayoutRange.endIndex();
     auto inlineBaseDirection = !result.runs.isEmpty() ? inlineBaseDirectionForLineContent(result.runs, rootStyle(), m_previousLine) : TextDirection::LTR;
-    auto contentLogicalLeft = !result.runs.isEmpty() ? InlineFormattingUtils::horizontalAlignmentOffset(rootStyle(), result.contentLogicalRight, m_lineLogicalRect.width(), result.hangingTrailingContentWidth, result.runs, shouldTreatAsLastLine, inlineBaseDirection) : 0.f;
+    auto lineEndsWithForcedLineBreak = lineContent->lineBreakReason == LineContent::LineBreakReason::ForcedLineBreakByBlockContent || Line::hasTrailingForcedLineBreak(result.runs);
+    auto isLastLineOrLineEndsWithForcedLineBreak = shouldTreatAsLastLine || lineEndsWithForcedLineBreak;
+    auto contentLogicalLeft = !result.runs.isEmpty() ? InlineFormattingUtils::horizontalAlignmentOffset(rootStyle(), result.contentLogicalRight, m_lineLogicalRect.width(), result.hangingTrailingContentWidth, isLastLineOrLineEndsWithForcedLineBreak, inlineBaseDirection) : 0.f;
     Vector<int32_t> visualOrderList;
     if (result.contentNeedsBidiReordering)
         computedVisualOrder(result.runs, visualOrderList);
@@ -502,8 +509,10 @@ UniqueRef<LineContent> LineBuilder::placeInlineAndFloatContent(const InlineItemR
             } else if (auto* blockItem = lineCandidate->blockItem) {
                 // We need to break whenever we come across a block level block to ensure it's the only item on the line.
                 // This is unlike hard line break as in case of 'text<br>', hard line break stays on the current line.
-                if (placedInlineItemCount)
+                if (placedInlineItemCount) {
+                    lineContent->lineBreakReason = LineContent::LineBreakReason::ForcedLineBreakByBlockContent;
                     return;
+                }
 
                 ASSERT(lineCandidate->inlineContent.isEmpty());
                 handleBlockContent(*blockItem);
@@ -635,7 +644,7 @@ UniqueRef<LineContent> LineBuilder::placeInlineAndFloatContent(const InlineItemR
                 // Text is justified according to the method specified by the text-justify property,
                 // in order to exactly fill the line box. Unless otherwise specified by text-align-last,
                 // the last line before a forced break or the end of the block is start-aligned.
-                auto hasTextAlignJustify = (isLastInlineContent || m_line.runs().last().isLineBreak()) ? rootStyle.textAlignLast() == TextAlignLast::Justify : rootStyle.textAlign() == TextAlignMode::Justify;
+                auto hasTextAlignJustify = (isLastInlineContent || m_line.runs().last().isLineBreak()) ? rootStyle.textAlignLast() == Style::TextAlignLast::Justify : rootStyle.textAlign() == Style::TextAlign::Justify;
                 if (hasTextAlignJustify) {
                     auto additionalSpaceForAlignedContent = InlineContentAligner::applyTextAlignJustify(m_line.runs(), spaceToDistribute, m_line.hangingTrailingWhitespaceLength());
                     m_line.inflateContentLogicalWidth(additionalSpaceForAlignedContent);

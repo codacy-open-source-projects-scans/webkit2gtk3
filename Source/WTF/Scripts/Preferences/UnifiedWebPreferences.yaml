@@ -5357,7 +5357,7 @@ MediaSourcePrefersDecompressionSession:
 
 MediaSourceUseRemoteAudioVideoRenderer:
   type: bool
-  status: unstable
+  status: testable
   category: media
   humanReadableName: "MSE player uses GPU renderer"
   humanReadableDescription: "MSE player uses GPU renderer"
@@ -5539,6 +5539,23 @@ ModelElementEnabled:
       default: false
     WebCore:
       "PLATFORM(VISION) && ENABLE(MODEL_ELEMENT)": true
+      default: false
+  disableInLockdownMode: true
+  sharedPreferenceForWebProcess: true
+
+ModelElementImmersiveEnabled:
+  type: bool
+  status: testable
+  category: javascript
+  condition: ENABLE(MODEL_ELEMENT_IMMERSIVE)
+  humanReadableName: "Immersive <model> API"
+  humanReadableDescription: "Enable <model> element immersive API"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
       default: false
   disableInLockdownMode: true
   sharedPreferenceForWebProcess: true
@@ -6433,7 +6450,7 @@ ReadableByteStreamAPIEnabled:
 
 ReadableByteStreamFetchSourceEnabled:
   type: bool
-  status: unstable
+  status: preview
   category: dom
   humanReadableName: "ReadableByteStream for fetch API"
   humanReadableDescription: "Enable Readable Byte Streams for fetch API"

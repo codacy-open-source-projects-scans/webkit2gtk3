@@ -331,6 +331,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/WebGPU/InternalAPI/WebGPUVertexStepMode.h
     Modules/WebGPU/InternalAPI/WebGPUXRBinding.h
     Modules/WebGPU/InternalAPI/WebGPUXREye.h
+    Modules/WebGPU/InternalAPI/WebGPUXRLayerBacking.h
     Modules/WebGPU/InternalAPI/WebGPUXRProjectionLayer.h
     Modules/WebGPU/InternalAPI/WebGPUXRSubImage.h
     Modules/WebGPU/InternalAPI/WebGPUXRView.h
@@ -865,6 +866,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     Modules/webxr/XRCanvasConfiguration.h
     Modules/webxr/XRGPUProjectionLayerInit.h
+    Modules/webxr/XRLayerBacking.h
     Modules/webxr/XRHitTestTrackableType.h
 
     Scripts/generate-log-declarations.py
@@ -1351,6 +1353,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     dom/DocumentFontLoader.h
     dom/DocumentFragment.h
     dom/DocumentFullscreen.h
+    dom/DocumentImmersive.h
     dom/DocumentInlines.h
     dom/DocumentMarker.h
     dom/DocumentMarkerController.h
@@ -3401,6 +3404,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     style/values/masking/StyleMaskBorderWidth.h
     style/values/masking/StyleMaskLayer.h
     style/values/masking/StyleMaskLayers.h
+    style/values/masking/StyleMaskMode.h
 
     style/values/math/StyleMathDepth.h
 
@@ -3524,6 +3528,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     style/values/text/StyleHyphenateLimitLines.h
     style/values/text/StyleLetterSpacing.h
     style/values/text/StyleTabSize.h
+    style/values/text/StyleTextAlign.h
+    style/values/text/StyleTextAlignLast.h
     style/values/text/StyleTextAutospace.h
     style/values/text/StyleTextIndent.h
     style/values/text/StyleTextSpacingTrim.h
@@ -3567,6 +3573,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     style/values/ui/StyleAccentColor.h
     style/values/ui/StyleCursor.h
+    style/values/ui/StyleResize.h
 
     style/values/view-transitions/StyleViewTransitionClass.h
     style/values/view-transitions/StyleViewTransitionName.h

@@ -1254,7 +1254,7 @@ void RenderBlockFlow::determineLogicalLeftPositionForChild(RenderBox& child, App
     // If the child is being centred then the margin calculated to do that has factored in any offset required to
     // avoid floats, so use it if necessary.
 
-    if (style().textAlign() == TextAlignMode::WebKitCenter || child.style().marginStart(writingMode()).isAuto())
+    if (style().textAlign() == Style::TextAlign::WebKitCenter || child.style().marginStart(writingMode()).isAuto())
         newPosition = std::max(newPosition, positionToAvoidFloats + childMarginStart);
     else if (positionToAvoidFloats > initialStartPosition)
         newPosition = std::max(newPosition, positionToAvoidFloats);
@@ -1302,30 +1302,30 @@ void RenderBlockFlow::setStaticInlinePositionForChild(RenderBox& child, LayoutUn
 
 LayoutUnit RenderBlockFlow::staticInlinePositionForOriginalDisplayInline(LayoutUnit logicalTop)
 {
-    TextAlignMode textAlign = style().textAlign();
+    Style::TextAlign textAlign = style().textAlign();
 
     float logicalLeft = logicalLeftOffsetForLine(logicalTop);
     float logicalRight = logicalRightOffsetForLine(logicalTop);
 
     bool isRightAligned = false;
     switch (textAlign) {
-    case TextAlignMode::Left:
-    case TextAlignMode::WebKitLeft:
+    case Style::TextAlign::Left:
+    case Style::TextAlign::WebKitLeft:
         break;
-    case TextAlignMode::Right:
-    case TextAlignMode::WebKitRight:
+    case Style::TextAlign::Right:
+    case Style::TextAlign::WebKitRight:
         isRightAligned = true;
         break;
-    case TextAlignMode::Center:
-    case TextAlignMode::WebKitCenter:
+    case Style::TextAlign::Center:
+    case Style::TextAlign::WebKitCenter:
         logicalLeft += (logicalRight - logicalLeft) / 2;
         break;
-    case TextAlignMode::Justify:
-    case TextAlignMode::Start:
+    case Style::TextAlign::Justify:
+    case Style::TextAlign::Start:
         if (writingMode().isBidiRTL())
             isRightAligned = true;
         break;
-    case TextAlignMode::End:
+    case Style::TextAlign::End:
         if (writingMode().isBidiLTR())
             isRightAligned = true;
         break;
@@ -3899,7 +3899,7 @@ void RenderBlockFlow::invalidateLineLayout(InvalidationReason invalidationReason
 
 static bool hasSimpleStaticPositionForInlineLevelOutOfFlowChildrenByStyle(const RenderStyle& rootStyle)
 {
-    if (rootStyle.textAlign() != TextAlignMode::Start)
+    if (rootStyle.textAlign() != Style::TextAlign::Start)
         return false;
     if (!rootStyle.textIndent().length.isKnownZero())
         return false;
@@ -4106,14 +4106,14 @@ void RenderBlockFlow::layoutInlineContent(RelayoutChildren relayoutChildren, Lay
 
     ASSERT(containingBlock() || is<RenderView>(*this));
     inlineLayout.updateFormattingContexGeometries(containingBlock() ? containingBlockLogicalWidthForContent() : LayoutUnit());
-    auto partialRepaintRect = inlineLayout.layout(relayoutChildren == RelayoutChildren::Yes ? LayoutIntegration::LineLayout::ForceFullLayout::Yes : LayoutIntegration::LineLayout::ForceFullLayout::No);
+
+    auto marginInfo = MarginInfo { *this, MarginInfo::IgnoreScrollbarForAfterMargin::No };
+    auto partialRepaintRect = inlineLayout.layout(marginInfo, relayoutChildren == RelayoutChildren::Yes ? LayoutIntegration::LineLayout::ForceFullLayout::Yes : LayoutIntegration::LineLayout::ForceFullLayout::No);
 
     auto clampedContentHeight = updateLineClampStateAndLogicalHeightAfterLayout();
-    auto borderBoxLogicalHeight = [&] {
-        auto contentHeight = clampedContentHeight.value_or(!hasLines() && hasLineIfEmpty() ? lineHeight() : inlineLayout.contentLogicalHeight());
-        return borderAndPaddingLogicalHeight() + contentHeight + scrollbarLogicalHeight();
-    };
-    setLogicalHeight(borderBoxLogicalHeight());
+    auto contentBoxHeight = clampedContentHeight.value_or(!hasLines() && hasLineIfEmpty() ? lineHeight() : inlineLayout.contentLogicalHeight());
+    auto borderBoxLogicalHeight = handleAfterSideOfBlock(marginInfo, contentBoxHeight);
+    setLogicalHeight(borderBoxLogicalHeight);
     updateRepaintTopAndBottomAfterLayout(relayoutChildren, partialRepaintRect, oldContentTopAndBottomIncludingInkOverflow, repaintLogicalTop, repaintLogicalBottom);
 }
 
