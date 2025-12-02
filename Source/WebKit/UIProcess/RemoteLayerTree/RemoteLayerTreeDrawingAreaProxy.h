@@ -139,6 +139,7 @@ protected:
     IPC::Connection* connectionForIdentifier(WebCore::ProcessIdentifier);
     void forEachProcessState(NOESCAPE Function<void(ProcessState&, WebProcessProxy&)>&&);
 
+    std::unique_ptr<RemoteLayerTreeHost> m_remoteLayerTreeHost;
 private:
 #if ENABLE(TILED_CA_DRAWING_AREA)
     DrawingAreaType type() const final { return DrawingAreaType::RemoteLayerTree; }
@@ -168,7 +169,6 @@ private:
     void waitForDidUpdateActivityState(ActivityStateChangeID) final;
     void hideContentUntilPendingUpdate() final;
     void hideContentUntilAnyUpdate() final;
-    void hideContentUntilDidUpdateActivityState(ActivityStateChangeID) final;
     bool hasVisibleContent() const final;
 
     WebCore::FloatPoint indicatorLocation() const;
@@ -199,7 +199,6 @@ private:
 
     void sendUpdateGeometry();
 
-    std::unique_ptr<RemoteLayerTreeHost> m_remoteLayerTreeHost;
     bool m_isWaitingForDidUpdateGeometry { false };
 
     void didRefreshDisplay(IPC::Connection*);
@@ -221,7 +220,6 @@ private:
     Deque<Seconds> m_frameDurations;
 
     Markable<IPC::AsyncReplyID> m_replyForUnhidingContent;
-    std::optional<ActivityStateChangeID> m_activityStateChangeForUnhidingContent;
     bool m_hasDetachedRootLayer { false };
 
     ActivityStateChangeID m_activityStateChangeID { ActivityStateChangeAsynchronous };

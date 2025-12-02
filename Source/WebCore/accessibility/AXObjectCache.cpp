@@ -34,7 +34,6 @@
 #include "AXIsolatedObject.h"
 #include "AXIsolatedTree.h"
 #include "AXListHelpers.h"
-#include "AXLiveRegionManager.h"
 #include "AXLocalFrame.h"
 #include "AXLogger.h"
 #include "AXLoggerBase.h"
@@ -139,6 +138,7 @@
 #include <wtf/text/MakeString.h>
 
 #if PLATFORM(COCOA)
+#include "AXLiveRegionManager.h"
 #include <wtf/spi/darwin/OSVariantSPI.h>
 #endif
 
@@ -212,6 +212,7 @@ std::atomic<bool> AXObjectCache::gForceDeferredSpellChecking = false;
 #if ENABLE(AX_THREAD_TEXT_APIS)
 std::atomic<bool> AXObjectCache::gAccessibilityThreadTextApisEnabled = false;
 #endif
+std::atomic<bool> AXObjectCache::gAccessibilityTextStitchingEnabled = false;
 std::atomic<bool> AXObjectCache::gForceInitialFrameCaching = false;
 #if PLATFORM(COCOA)
 std::atomic<bool> AXObjectCache::gAccessibilityDOMIdentifiersEnabled = false;
@@ -281,6 +282,7 @@ AXObjectCache::AXObjectCache(LocalFrame& localFrame, Document* document)
 #if ENABLE(AX_THREAD_TEXT_APIS)
     gAccessibilityThreadTextApisEnabled = DeprecatedGlobalSettings::accessibilityThreadTextApisEnabled();
 #endif
+    gAccessibilityTextStitchingEnabled = DeprecatedGlobalSettings::accessibilityTextStitchingEnabled();
 
 #if PLATFORM(COCOA)
     initializeUserDefaultValues();
@@ -297,10 +299,12 @@ AXObjectCache::AXObjectCache(LocalFrame& localFrame, Document* document)
     if (m_loadingProgress <= 0)
         m_loadingProgress = 1;
 
+#if PLATFORM(COCOA)
     if (RefPtr document = m_document.get()) {
         if (document->settings().isAriaLiveRegionManagementEnabled())
             m_liveRegionManager = makeUnique<AXLiveRegionManager>(*this);
     }
+#endif
 
     AXTreeStore::add(m_id, WeakPtr { this });
 }
@@ -1000,8 +1004,10 @@ void AXObjectCache::remove(AXID axID)
     if (!object)
         return;
 
+#if PLATFORM(COCOA)
     if (m_liveRegionManager)
         m_liveRegionManager->unregisterLiveRegion(axID);
+#endif
 
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
     unsigned liveRegionsRemoved = m_sortedLiveRegionIDs.removeAll(axID);
@@ -1417,6 +1423,33 @@ void AXObjectCache::handleRowspanChanged(AccessibilityNodeObject& axCell)
 }
 #endif
 
+const Vector<Vector<AXID>>* AXObjectCache::stitchGroupsOwnedBy(AccessibilityObject& object)
+{
+    CheckedPtr renderBlockFlow = dynamicDowncast<RenderBlockFlow>(object.renderer());
+    if (!renderBlockFlow || renderBlockFlow->beingDestroyed())
+        return nullptr;
+
+    const auto& groups = m_stitchGroups.ensure(*renderBlockFlow, [&] {
+        return object.stitchGroups();
+    }).iterator->value;
+
+    return groups.isEmpty() ? nullptr : &groups;
+}
+
+void AXObjectCache::onLaidOutInlineContent(const RenderBlockFlow& renderer)
+{
+    if (std::optional groups = m_stitchGroups.takeOptional(renderer)) {
+        UNUSED_PARAM(groups);
+
+#if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
+        if (std::optional axID = getAXID(const_cast<RenderBlockFlow&>(renderer))) {
+            if (RefPtr tree = AXIsolatedTree::treeForFrameID(m_frameID))
+                tree->queueNodeUpdate(*axID, { AXProperty::StitchGroups });
+        }
+#endif
+    }
+}
+
 #if ENABLE(AX_THREAD_TEXT_APIS)
 void AXObjectCache::onTextRunsChanged(const RenderObject& renderer)
 {
@@ -1461,20 +1494,25 @@ void AXObjectCache::handleLiveRegionCreated(Element& element)
         if (!axObject)
             return;
 
+#if PLATFORM(COCOA)
         if (m_liveRegionManager) {
             m_liveRegionManager->registerLiveRegion(*axObject, true);
             return;
         }
+#endif
 
 #if PLATFORM(MAC)
         deferSortForNewLiveRegion(*axObject);
 #endif // PLATFORM(MAC)
 
+#if PLATFORM(COCOA)
         if (!m_liveRegionManager)
             postNotification(axObject.get(), protectedDocument().get(), AXNotification::LiveRegionCreated);
+#endif
     }
 }
 
+#if PLATFORM(COCOA)
 void AXObjectCache::initializeLiveRegionManager()
 {
     if (!m_liveRegionManager || m_liveRegionManagerInitialized)
@@ -1488,6 +1526,7 @@ void AXObjectCache::initializeLiveRegionManager()
             m_liveRegionManager->registerLiveRegion(*current);
     }
 }
+#endif
 
 void AXObjectCache::deferElementAddedOrRemoved(Element* element)
 {
@@ -1765,7 +1804,7 @@ void AXObjectCache::postARIANotifyNotification(Node& node, const String& announc
     postPlatformARIANotifyNotification(announcement, priority, interruptBehavior, object->languageIncludingAncestors());
 }
 
-void AXObjectCache::postLiveRegionNotification(AccessibilityObject& object, LiveRegionStatus status, const String& announcement)
+void AXObjectCache::postLiveRegionNotification(AccessibilityObject& object, LiveRegionStatus status, const AttributedString& announcement)
 {
     postPlatformLiveRegionNotification(object, status, announcement);
 }
@@ -2743,10 +2782,12 @@ void AXObjectCache::frameLoadingEventNotification(LocalFrame* frame, AXLoadingEv
 
 void AXObjectCache::postLiveRegionChangeNotification(AccessibilityObject& object)
 {
+#if PLATFORM(COCOA)
     if (m_liveRegionManager) {
         m_liveRegionManager->handleLiveRegionChange(object);
         return;
     }
+#endif
 
     if (m_liveRegionChangedPostTimer.isActive())
         m_liveRegionChangedPostTimer.stop();
@@ -4917,10 +4958,12 @@ void AXObjectCache::performDeferredCacheUpdate(ForceLayout forceLayout)
     m_deferredRegenerateIsolatedTree = false;
 #endif // ENABLE(ACCESSIBILITY_ISOLATED_TREE)
 
+#if PLATFORM(COCOA)
     // Initialize the live region manager after the first cache update, so all existing
     // live regions are registered with their initial state before any changes occur.
     if (!m_liveRegionManagerInitialized)
         initializeLiveRegionManager();
+#endif
 
     platformPerformDeferredCacheUpdate();
 }

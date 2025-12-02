@@ -1922,7 +1922,7 @@ const TimingFunction* KeyframeEffect::timingFunctionForKeyframeAtIndex(size_t in
 
 bool KeyframeEffect::canBeAccelerated() const
 {
-    if (!animation())
+    if (!animation() || !animation()->timeline())
         return false;
 
     if (m_acceleratedPropertiesState == AcceleratedProperties::None)
@@ -1947,7 +1947,7 @@ bool KeyframeEffect::canBeAccelerated() const
 
 #if ENABLE(THREADED_ANIMATIONS)
     if (canHaveAcceleratedRepresentation())
-        return !animation()->pending();
+        return !animation()->pending() && animation()->timeline()->canBeAccelerated();
 #endif
 
     if (m_isAssociatedWithProgressBasedTimeline)
@@ -2053,6 +2053,9 @@ void KeyframeEffect::addPendingAcceleratedAction(AcceleratedAction action)
     if (canHaveAcceleratedRepresentation())
         return;
 #endif
+
+    if (!animation())
+        return;
 
     if (m_runningAccelerated == RunningAccelerated::Prevented || m_runningAccelerated == RunningAccelerated::Failed)
         return;
@@ -3075,9 +3078,6 @@ KeyframeEffect::StackMembershipMutationScope::~StackMembershipMutationScope()
 
 bool KeyframeEffect::canHaveAcceleratedRepresentation() const
 {
-    if (m_acceleratedRepresentation)
-        return true;
-
     if (RefPtr document = this->document()) {
         Ref settings = document->settings();
         if (m_isAssociatedWithProgressBasedTimeline && settings->threadedScrollDrivenAnimationsEnabled())
@@ -3105,6 +3105,20 @@ void KeyframeEffect::scheduleAssociatedAcceleratedEffectStackUpdate(const std::o
     if (auto currentTarget = targetStyleable())
         timelinesController->scheduleAcceleratedEffectStackUpdateForTarget(*currentTarget);
 }
+
+void KeyframeEffect::timelineAccelerationAbilityDidChange()
+{
+    scheduleAssociatedAcceleratedEffectStackUpdate();
+}
+
+RefPtr<AcceleratedEffect> KeyframeEffect::updatedAcceleratedRepresentation(const TimelineIdentifier& timelineIdentifier, const IntRect& borderBoxRect, const AcceleratedEffectValues& baseValues, OptionSet<AcceleratedEffectProperty>& disallowedProperties)
+{
+    updateComputedKeyframeOffsetsIfNeeded();
+    RefPtr acceleratedEffect = AcceleratedEffect::create(*this, timelineIdentifier, borderBoxRect, baseValues, disallowedProperties);
+    m_acceleratedRepresentation = acceleratedEffect.get();
+    return acceleratedEffect;
+}
+
 #endif
 
 const KeyframeInterpolation::Keyframe& KeyframeEffect::keyframeAtIndex(size_t index) const

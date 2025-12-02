@@ -572,6 +572,21 @@ void Adjuster::adjust(RenderStyle& style) const
             || style.display() == DisplayType::TableHeaderGroup || style.display() == DisplayType::TableRow || style.display() == DisplayType::TableRowGroup)
             style.setWritingMode(m_parentStyle.writingMode().computedWritingMode());
 
+
+        // FIXME: Adjust this once CSSWG clarifies exactly how the initial value should compute on other display types.
+        // For now, this gives mostly backwards-compatible behavior.
+        if (style.display() == DisplayType::Grid || style.display() == DisplayType::InlineGrid) {
+            if (style.gridAutoFlow().direction() == GridAutoFlow::Direction::Normal)
+                style.setGridAutoFlowDirection(Style::GridAutoFlow::Direction::Row);
+        } else if (style.display() == DisplayType::GridLanes || style.display() == DisplayType::InlineGridLanes) {
+            if (style.gridAutoFlow().direction() == GridAutoFlow::Direction::Normal) {
+                if (!style.gridTemplateRows().isNone() && style.gridTemplateColumns().isNone())
+                    style.setGridAutoFlowDirection(Style::GridAutoFlow::Direction::Column);
+                else
+                    style.setGridAutoFlowDirection(Style::GridAutoFlow::Direction::Row);
+            }
+        }
+
         if (style.isDisplayDeprecatedFlexibleBox()) {
             // FIXME: Since we don't support block-flow on flexible boxes yet, disallow setting
             // of block-flow to anything other than StyleWritingMode::HorizontalTb.
@@ -1021,8 +1036,8 @@ void Adjuster::adjustForSiteSpecificQuirks(RenderStyle& style) const
         return;
 
     if (documentQuirks.needsBodyScrollbarWidthNoneDisabledQuirk() && is<HTMLBodyElement>(*m_element)) {
-        if (style.scrollbarWidth().isNone())
-            style.setScrollbarWidth(CSS::Keyword::Auto { });
+        if (style.scrollbarWidth() == ScrollbarWidth::None)
+            style.setScrollbarWidth(ScrollbarWidth::Auto);
     }
 
     if (documentQuirks.needsYouTubeOverflowScrollQuirk()) {

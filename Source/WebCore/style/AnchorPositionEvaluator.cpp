@@ -281,7 +281,7 @@ void AnchorPositionEvaluator::captureScrollSnapshots(RenderBox& anchored, bool i
     if (adjuster.isEmpty())
         return clearAnchorScrollSnapshots(anchored);
 
-    if (!anchored.style().positionTryFallbacks().isEmpty()
+    if (!anchored.style().positionTryFallbacks().isNone()
         || anchored.style().positionVisibility().contains(PositionVisibilityValue::NoOverflow))
         adjuster.setFallbackLimits(anchored);
 
@@ -315,7 +315,7 @@ void AnchorPositionEvaluator::updateScrollAdjustments(RenderView& renderView)
         bool needsInvalidation = false;
         if (adjuster.hasFallbackLimits()) {
             if (adjuster.exceedsFallbackLimits(scrollOffset)) {
-                if (!anchored->style().positionTryFallbacks().isEmpty()) {
+                if (!anchored->style().positionTryFallbacks().isNone()) {
                     anchored->setNeedsLayout();
                     needsInvalidation = true;
                 } else
@@ -802,7 +802,7 @@ CheckedPtr<RenderBoxModelObject> AnchorPositionEvaluator::findAnchorForAnchorFun
 
     // Anchor value may now be resolved using layout information
 
-    RefPtr anchorElement = anchorPositionedState.anchorElements.get(resolvedAnchorName).get();
+    RefPtr anchorElement = anchorPositionedState.anchorElements.get(resolvedAnchorName);
     if (!anchorElement) {
         // See: https://drafts.csswg.org/css-anchor-position-1/#valid-anchor-function
         anchorPositionedState.stage = AnchorPositionResolutionStage::Resolved;

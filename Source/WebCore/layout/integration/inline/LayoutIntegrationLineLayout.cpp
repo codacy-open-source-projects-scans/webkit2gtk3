@@ -178,49 +178,6 @@ static bool shouldInvalidateLineLayoutAfterChangeFor(const RenderBlockFlow& root
     }
 }
 
-static inline std::pair<LayoutRect, LayoutRect> toMarginAndBorderBoxVisualRect(const Layout::BoxGeometry& logicalGeometry, const LayoutSize& containerSize, WritingMode writingMode)
-{
-    // In certain writing modes, IFC gets the border box position wrong;
-    // but the margin box is correct, so use it to derive the border box.
-    auto marginBoxLogicalRect = Layout::BoxGeometry::marginBoxRect(logicalGeometry);
-    auto containerLogicalWidth = writingMode.isHorizontal()
-        ? containerSize.width()
-        : containerSize.height();
-    auto marginBoxLogicalX = writingMode.isInlineFlipped()
-        ? containerLogicalWidth - marginBoxLogicalRect.right()
-        : marginBoxLogicalRect.left();
-    auto marginBoxVisualRect = writingMode.isHorizontal()
-        ? LayoutRect {
-            marginBoxLogicalX, marginBoxLogicalRect.top(),
-            marginBoxLogicalRect.width(), marginBoxLogicalRect.height() }
-        : LayoutRect {
-            marginBoxLogicalRect.top(), marginBoxLogicalX,
-            marginBoxLogicalRect.height(), marginBoxLogicalRect.width() };
-
-    auto borderBoxVisualRect = marginBoxVisualRect;
-    LayoutUnit marginLeft, marginTop, marginWidth, marginHeight;
-    if (writingMode.isHorizontal()) {
-        marginLeft = writingMode.isInlineLeftToRight()
-            ? logicalGeometry.marginStart() : logicalGeometry.marginEnd();
-        marginTop = writingMode.isBlockTopToBottom()
-            ? logicalGeometry.marginBefore() : logicalGeometry.marginAfter();
-        marginWidth = logicalGeometry.marginStart() + logicalGeometry.marginEnd();
-        marginHeight = logicalGeometry.marginBefore() + logicalGeometry.marginAfter();
-    } else {
-        marginLeft = writingMode.isLineInverted()
-            // Invert verticalLogicalMargin() *and* convert to unflipped coords.
-            ? logicalGeometry.marginAfter() : logicalGeometry.marginBefore();
-        marginTop = writingMode.isInlineTopToBottom()
-            ? logicalGeometry.marginStart() : logicalGeometry.marginEnd();
-        marginWidth = logicalGeometry.marginBefore() + logicalGeometry.marginAfter();
-        marginHeight = logicalGeometry.marginStart() + logicalGeometry.marginEnd();
-    }
-    borderBoxVisualRect.expand(-marginWidth, -marginHeight);
-    borderBoxVisualRect.move(marginLeft, marginTop);
-
-    return { marginBoxVisualRect, borderBoxVisualRect };
-}
-
 static const InlineDisplay::Line& lastLineWithInflowContent(const InlineDisplay::Lines& lines)
 {
     // Out-of-flow/float content only don't produce lines with inline content. They should not be taken into
@@ -626,7 +583,7 @@ void LineLayout::updateRenderTreePositions(const Vector<LineAdjustment>& lineAdj
             // FIXME: Find out what to do with discarded (see line-clamp) floats in render tree.
             auto isInitialLetter = layoutBox.style().pseudoElementType() == PseudoElementType::FirstLetter;
             auto& floatingObject = flow().insertFloatingBox(renderer);
-            auto [marginBoxVisualRect, borderBoxVisualRect] = toMarginAndBorderBoxVisualRect(logicalGeometry, m_inlineContentConstraints->formattingRootBorderBoxSize(), placedFloatsWritingMode);
+            auto [marginBoxVisualRect, borderBoxVisualRect] = Layout::IntegrationUtils::toMarginAndBorderBoxVisualRect(logicalGeometry, m_inlineContentConstraints->formattingRootBorderBoxSize(), placedFloatsWritingMode);
 
             auto paginationOffset = floatPaginationOffsetMap.getOptional(layoutBox);
             if (paginationOffset) {
@@ -859,6 +816,31 @@ LayoutUnit LineLayout::contentLogicalHeight() const
     return LayoutUnit { contentHeight + offsetAndGaps };
 }
 
+bool LineLayout::isSelfCollapsingContent() const
+{
+    if (!m_inlineContent || !m_inlineContent->hasInflowContent())
+        return true;
+
+    auto& displayContent = m_inlineContent->displayContent();
+    for (auto& line : displayContent.lines) {
+        if (line.hasInlineContent())
+            return false;
+        if (line.hasBlockContent()) {
+            auto blockLevelBox = [&]() -> RenderBox* {
+                for (auto index = line.firstBoxIndex(); index < line.lastBoxIndex(); ++index) {
+                    if (displayContent.boxes[index].isBlockLevelBox())
+                        return dynamicDowncast<RenderBox>(displayContent.boxes[index].layoutBox().rendererForIntegration());
+                    ASSERT(displayContent.boxes[index].isInlineBox());
+                }
+                return { };
+            };
+            if (auto* renderBox = blockLevelBox(); renderBox && !renderBox->isSelfCollapsingBlock())
+                return false;
+        }
+    }
+    return true;
+}
+
 size_t LineLayout::lineCount() const
 {
     if (!m_inlineContent)
@@ -927,7 +909,7 @@ LayoutUnit LineLayout::lastLineBaseline() const
         if (auto baseline = baselineForLineOrBlock(line))
             return *baseline;
     }
-    return baselineForLine(m_inlineContent->displayContent().lines.first());
+    return baselineForLine(m_inlineContent->displayContent().lines.last());
 }
 
 LayoutUnit LineLayout::baselineForLine(const InlineDisplay::Line& line) const

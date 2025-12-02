@@ -98,7 +98,8 @@ private:
 
     AnimationTimelinesController* controller() const override;
 #if ENABLE(THREADED_ANIMATIONS)
-    Ref<AcceleratedTimeline> createAcceleratedRepresentation() override;
+    bool computeCanBeAccelerated() const final { return true; }
+    Ref<AcceleratedTimeline> createAcceleratedRepresentation() const final;
 #endif
 
     void applyPendingAcceleratedAnimations();

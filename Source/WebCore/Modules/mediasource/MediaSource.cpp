@@ -712,6 +712,9 @@ ExceptionOr<void> MediaSource::setDurationInternal(const MediaTime& newDuration)
     // 6. Update the media duration to new duration and run the HTMLMediaElement duration change algorithm.
     protectedPrivate()->durationChanged(duration);
 
+    // Changing the duration may affect the buffered range.
+    updateBufferedIfNeeded(true);
+
     // Changing the duration affects the buffered range.
     monitorSourceBuffers();
 
@@ -784,6 +787,8 @@ void MediaSource::streamEndedWithError(std::optional<EndOfStreamError> error)
         setDurationInternal(maxEndTime);
 
         // 2. Notify the media element that it now has all of the media data.
+        // Once the entire media resource has been fetched (but potentially before any of it has been decoded)
+        // Fire an event named progress at the media element.
         msp->markEndOfStream(MediaSourcePrivate::EndOfStreamStatus::NoError);
         return;
     }
@@ -1416,7 +1421,13 @@ ExceptionOr<Ref<SourceBufferPrivate>> MediaSource::createSourceBufferPrivate(con
 
     RefPtr<SourceBufferPrivate> sourceBufferPrivate;
     MediaSourceConfiguration configuration = {
-        protectedScriptExecutionContext()->settingsValues().textTracksInMSEEnabled
+        .textTracksEnabled = protectedScriptExecutionContext()->settingsValues().textTracksInMSEEnabled,
+#if USE(MEDIAPARSERD)
+        .demuxInProcess = protectedScriptExecutionContext()->settingsValues().mediaSourceUseRemoteAudioVideoRenderer,
+#endif
+#if ENABLE(MEDIA_RECORDER_WEBM)
+        .supportsLimitedMatroska = (document && document->quirks().needsLimitedMatroskaSupport()) || protectedScriptExecutionContext()->settingsValues().limitedMatroskaSupportEnabled
+#endif
     };
     switch (msp->addSourceBuffer(type, configuration, sourceBufferPrivate)) {
     case MediaSourcePrivate::AddStatus::Ok:
