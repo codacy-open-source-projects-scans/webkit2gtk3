@@ -57,8 +57,10 @@
 #include "RenderLayer.h"
 #include "RenderLayoutState.h"
 #include "RenderLineBreak.h"
+#include "RenderObjectInlines.h"
 #include "RenderView.h"
 #include "SVGTextFragment.h"
+#include "Settings.h"
 #include "ShapeOutsideInfo.h"
 #include <ranges>
 #include <wtf/Assertions.h>
@@ -182,10 +184,16 @@ static const InlineDisplay::Line& lastLineWithInflowContent(const InlineDisplay:
 {
     // Out-of-flow/float content only don't produce lines with inline content. They should not be taken into
     // account when computing content box height/baselines.
-    for (auto& line : lines | std::views::reverse) {
+    for (auto index = lines.size(); index--;) {
+        auto& line = lines[index];
         ASSERT(line.boxCount());
-        if (line.hasInflowContent())
+        if (line.hasContentfulInFlowBox())
             return line;
+        // FIXME: This should be merged with margin collapsing.
+        if (line.hasInflowBox() && index && lines[index - 1].lineBoxLogicalRect().maxY() > line.lineBoxLogicalRect().y()) {
+            ASSERT(lines[index - 1].hasBlockLevelBox());
+            return line;
+        }
     }
     return lines.first();
 }
@@ -254,43 +262,47 @@ bool LineLayout::contains(const RenderElement& renderer) const
 LineLayout* LineLayout::containing(RenderObject& renderer)
 {
     if (!isContentRenderer(renderer))
-        return nullptr;
+        return { };
 
     if (!renderer.isInline()) {
         // IFC may contain block level boxes (floats and out-of-flow boxes).
         if (renderer.isRenderSVGBlock()) {
             // SVG content inside svg root shows up as block (see RenderSVGBlock). We only support inline root svg as "atomic content".
-            return nullptr;
+            return { };
         }
         if (renderer.isRenderFrameSet()) {
             // Since RenderFrameSet is not a RenderBlock, finding container for nested framesets can't use containingBlock ancestor walk.
             if (auto* parent = dynamicDowncast<RenderBlockFlow>(renderer.parent()))
                 return parent->inlineLayout();
-            return nullptr;
+            return { };
         }
-        auto adjustedContainingBlock = [&] {
-            RenderElement* containingBlock = nullptr;
-            // Only out of flow and floating block level boxes may participate in IFC.
+        auto adjustedContainingBlock = [&]() -> RenderBlockFlow* {
             if (renderer.isOutOfFlowPositioned()) {
                 // Here we are looking for the containing block as if the out-of-flow box was inflow (for static position purpose).
-                containingBlock = renderer.parent();
+                auto* containingBlock = renderer.parent();
                 if (is<RenderInline>(containingBlock))
                     containingBlock = containingBlock->containingBlock();
-            } else if (renderer.isFloating()) {
-                // Note that containigBlock() on boxes in top layer (i.e. dialog) may return incorrect result during style change even with not-yet-updated style.
-                containingBlock = RenderObject::containingBlockForPositionType(downcast<RenderBox>(renderer).style().position(), renderer);
+                return dynamicDowncast<RenderBlockFlow>(containingBlock);
             }
-            return dynamicDowncast<RenderBlockFlow>(containingBlock);
+            if (renderer.isFloating()) {
+                // Note that containigBlock() on boxes in top layer (i.e. dialog) may return incorrect result during style change even with not-yet-updated style.
+                return dynamicDowncast<RenderBlockFlow>(RenderObject::containingBlockForPositionType(downcast<RenderBox>(renderer).style().position(), renderer));
+            }
+            if (auto* parentInlineBox = dynamicDowncast<RenderInline>(renderer.parent())) {
+                ASSERT(parentInlineBox->settings().blocksInInlineLayoutEnabled());
+                return dynamicDowncast<RenderBlockFlow>(parentInlineBox->containingBlock());
+            }
+            return { };
         };
         if (auto* blockContainer = adjustedContainingBlock())
             return blockContainer->inlineLayout();
-        return nullptr;
+        return { };
     }
 
     if (auto* container = blockContainer(renderer))
         return container->inlineLayout();
 
-    return nullptr;
+    return { };
 }
 
 const LineLayout* LineLayout::containing(const RenderObject& renderer)
@@ -342,7 +354,7 @@ bool LineLayout::rootStyleWillChange(const RenderBlockFlow& root, const RenderSt
     return Layout::InlineInvalidation { ensureLineDamage(), m_inlineContentCache.inlineItems().content(), m_inlineContent->displayContent() }.rootStyleWillChange(downcast<Layout::ElementBox>(*root.layoutBox()), newStyle);
 }
 
-bool LineLayout::styleWillChange(const RenderElement& renderer, const RenderStyle& newStyle, StyleDifference diff)
+bool LineLayout::styleWillChange(const RenderElement& renderer, const RenderStyle& newStyle, Style::Difference diff)
 {
     if (!renderer.layoutBox()) {
         ASSERT_NOT_REACHED();
@@ -476,7 +488,7 @@ std::optional<LayoutRect> LineLayout::layout(RenderBlockFlow::MarginInfo& margin
 
     auto parentBlockLayoutState = Layout::BlockLayoutState {
         m_blockFormattingState.placedFloats(),
-        Layout::IntegrationUtils::toMarginState(marginInfo),
+        Layout::IntegrationUtils::toMarginState(marginInfo, { }),
         lineClamp(flow()),
         textBoxTrim(flow()),
         flow().style().textBoxEdge(),
@@ -504,6 +516,12 @@ std::optional<LayoutRect> LineLayout::layout(RenderBlockFlow::MarginInfo& margin
     }
 
     marginInfo = Layout::IntegrationUtils::toMarginInfo(parentBlockLayoutState.marginState());
+
+    if (!m_inlineContent->hasPaintedInlineLevelBoxes()) {
+        // Nothing to repaint. If layout affects painted block level content those issue their own repaints.
+        return LayoutRect { };
+    }
+
     return isPartialLayout ? std::make_optional(repaintRect) : std::nullopt;
 }
 
@@ -760,7 +778,7 @@ bool LineLayout::hasEllipsisInBlockDirectionOnLastFormattedLine() const
         return false;
 
     for (auto& line : m_inlineContent->displayContent().lines | std::views::reverse) {
-        if (!line.hasInflowContent()) {
+        if (!line.hasContentfulInFlowBox()) {
             // Out-of-flow content could initiate a line with no inline content.
             continue;
         }
@@ -818,14 +836,14 @@ LayoutUnit LineLayout::contentLogicalHeight() const
 
 bool LineLayout::isSelfCollapsingContent() const
 {
-    if (!m_inlineContent || !m_inlineContent->hasInflowContent())
+    if (!m_inlineContent || !m_inlineContent->hasContentfulInFlowBox())
         return true;
 
     auto& displayContent = m_inlineContent->displayContent();
     for (auto& line : displayContent.lines) {
-        if (line.hasInlineContent())
+        if (line.hasContentfulInlineLevelBox())
             return false;
-        if (line.hasBlockContent()) {
+        if (line.hasBlockLevelBox()) {
             auto blockLevelBox = [&]() -> RenderBox* {
                 for (auto index = line.firstBoxIndex(); index < line.lastBoxIndex(); ++index) {
                     if (displayContent.boxes[index].isBlockLevelBox())
@@ -841,18 +859,28 @@ bool LineLayout::isSelfCollapsingContent() const
     return true;
 }
 
+bool LineLayout::hasContentfulInlineOrBlockLine() const
+{
+    return m_inlineContent && m_inlineContent->hasContentfulInFlowBox();
+}
+
+bool LineLayout::hasContentfulInlineLine() const
+{
+    return m_inlineContent && m_inlineContent->hasContentfulInlineLevelBox();
+}
+
 size_t LineLayout::lineCount() const
 {
     if (!m_inlineContent)
         return 0;
-    if (!m_inlineContent->hasInflowContent())
+    if (!m_inlineContent->hasContentfulInFlowBox())
         return 0;
 
     auto& lines = m_inlineContent->displayContent().lines;
     if (lines.isEmpty())
         return 0;
     // In some cases (trailing out-of-flow, non-contentful content after <br>) we produce last line with no content but root inline box only.
-    return lines.last().hasInflowContent() ? lines.size() : lines.size() - 1;
+    return lines.last().hasContentfulInFlowBox() ? lines.size() : lines.size() - 1;
 }
 
 bool LineLayout::hasInkOverflow() const
@@ -868,7 +896,7 @@ LayoutUnit LineLayout::firstLineBaseline() const
     }
 
     auto baselineForLineOrBlock = [&](auto& line) -> std::optional<LayoutUnit> {
-        if (!line.hasInflowContent())
+        if (!line.hasContentfulInFlowBox())
             return { };
 
         if (auto* blockLevelBox = m_inlineContent->blockLevelBoxForLine(line)) {
@@ -894,7 +922,7 @@ LayoutUnit LineLayout::lastLineBaseline() const
     }
 
     auto baselineForLineOrBlock = [&](auto& line) -> std::optional<LayoutUnit> {
-        if (!line.hasInflowContent())
+        if (!line.hasContentfulInFlowBox())
             return { };
 
         if (auto* blockLevelBox = m_inlineContent->blockLevelBoxForLine(line)) {
@@ -1019,7 +1047,7 @@ InlineIterator::InlineBoxIterator LineLayout::firstInlineBoxFor(const RenderInli
 
 InlineIterator::InlineBoxIterator LineLayout::firstRootInlineBox() const
 {
-    if (!m_inlineContent || !m_inlineContent->hasInflowContent())
+    if (!m_inlineContent || !m_inlineContent->hasContentfulInFlowBox())
         return { };
 
     return InlineIterator::inlineBoxFor(*m_inlineContent, m_inlineContent->displayContent().boxes[0]);
@@ -1027,7 +1055,7 @@ InlineIterator::InlineBoxIterator LineLayout::firstRootInlineBox() const
 
 InlineIterator::LineBoxIterator LineLayout::firstLineBox() const
 {
-    if (!m_inlineContent || !m_inlineContent->hasInflowContent())
+    if (!m_inlineContent || !m_inlineContent->hasContentfulInFlowBox())
         return { };
 
     return { InlineIterator::LineBoxIteratorModernPath(*m_inlineContent, 0) };
@@ -1035,7 +1063,7 @@ InlineIterator::LineBoxIterator LineLayout::firstLineBox() const
 
 InlineIterator::LineBoxIterator LineLayout::lastLineBox() const
 {
-    if (!m_inlineContent || !m_inlineContent->hasInflowContent())
+    if (!m_inlineContent || !m_inlineContent->hasContentfulInFlowBox())
         return { };
 
     return { InlineIterator::LineBoxIteratorModernPath(*m_inlineContent, m_inlineContent->displayContent().lines.isEmpty() ? 0 : m_inlineContent->displayContent().lines.size() - 1) };
@@ -1074,7 +1102,7 @@ LayoutRect LineLayout::enclosingBorderBoxRectFor(const RenderInline& renderInlin
         return { };
 
     // FIXME: This preserves existing output.
-    if (!m_inlineContent->hasInflowContent())
+    if (!m_inlineContent->hasContentfulInFlowBox())
         return { };
 
     auto borderBoxLogicalRect = LayoutRect { Layout::BoxGeometry::borderBoxRect(layoutState().geometryForBox(*renderInline.layoutBox())) };
@@ -1130,8 +1158,10 @@ bool LineLayout::isContentConsideredStale() const
     auto* rootRenderer = m_rootLayoutBox->rendererForIntegration();
     if (!rootRenderer)
         return true;
-    if (rootRenderer->needsLayout())
+    if (rootRenderer->normalChildNeedsLayout()) {
+        // FIXME: Let's bail out on needsLayout() -see webkit.org/b/304002
         return true;
+    }
     if (rootRenderer->style().isSkippedRootOrSkippedContent())
         return true;
     if (m_lineDamage && m_lineDamage->hasDetachedContent())
@@ -1172,6 +1202,16 @@ void LineLayout::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset, con
     };
     if (!shouldPaintForPhase())
         return;
+
+    if (!m_inlineContent->hasPaintedInlineLevelBoxes()) {
+        if (!m_inlineContent->hasBlockLevelBoxes())
+            return;
+        if (!layerRenderer) {
+            // Shortcut block-only painting.
+            flow().paintBlockLevelContentInInline(paintInfo, paintOffset);
+            return;
+        }
+    }
 
     InlineContentPainter { paintInfo, paintOffset, layerRenderer, *m_inlineContent, flow() }.paint();
 }
@@ -1415,6 +1455,11 @@ Layout::InlineDamage& LineLayout::ensureLineDamage()
 bool LineLayout::contentNeedsVisualReordering() const
 {
     return m_inlineContentCache.inlineItems().requiresVisualReordering();
+}
+
+bool LineLayout::hasBlocks() const
+{
+    return m_inlineContent && m_inlineContent->hasBlockLevelBoxes();
 }
 
 #if ENABLE(TREE_DEBUGGING)

@@ -116,7 +116,7 @@ void PageTimelineAgent::internalStart(std::optional<int>&& maxCallStackDepth)
         CheckedPtr checkedThis = weakThis.get();
         if (!checkedThis)
             return;
-        if (!checkedThis->tracking() || checkedThis->m_environment.debugger()->isPaused())
+        if (!checkedThis->tracking() || checkedThis->checkedEnvironment()->debugger()->isPaused())
             return;
         if (!checkedThis->m_runLoopNestingLevel) {
             checkedThis->pushCurrentRecord(JSON::Object::create(), TimelineRecordType::RenderingFrame, false);
@@ -136,7 +136,7 @@ void PageTimelineAgent::internalStart(std::optional<int>&& maxCallStackDepth)
         CheckedPtr checkedThis = weakThis.get();
         if (!checkedThis)
             return;
-        if (!checkedThis->tracking() || checkedThis->m_environment.debugger()->isPaused())
+        if (!checkedThis->tracking() || checkedThis->checkedEnvironment()->debugger()->isPaused())
             return;
 
         switch (event) {
@@ -279,7 +279,7 @@ void PageTimelineAgent::mainFrameStartedLoading()
 
     // Pre-emptively disable breakpoints. The frontend must re-enable them.
     if (auto* webDebuggerAgent = Ref { m_instrumentingAgents.get() }->enabledWebDebuggerAgent())
-        webDebuggerAgent->setBreakpointsActive(false);
+        std::ignore = webDebuggerAgent->setBreakpointsActive(false);
 
     // Inform the frontend we started an auto capture. The frontend must stop capture.
     autoCaptureStarted();
@@ -299,7 +299,7 @@ void PageTimelineAgent::mainFrameNavigated()
 void PageTimelineAgent::didCompleteRenderingFrame()
 {
 #if PLATFORM(COCOA)
-    if (!tracking() || m_environment.debugger()->isPaused())
+    if (!tracking() || checkedEnvironment()->debugger()->isPaused())
         return;
 
     ASSERT(m_runLoopNestingLevel > 0);

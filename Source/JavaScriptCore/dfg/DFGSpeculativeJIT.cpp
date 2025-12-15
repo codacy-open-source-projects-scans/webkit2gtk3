@@ -66,8 +66,6 @@ WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 #include "JSIteratorHelper.h"
 #include "JSLexicalEnvironment.h"
 #include "JSMapIterator.h"
-#include "JSPromiseAllContext.h"
-#include "JSPromiseAllGlobalContext.h"
 #include "JSPromiseReaction.h"
 #include "JSPropertyNameEnumerator.h"
 #include "JSRegExpStringIterator.h"
@@ -6515,18 +6513,10 @@ void SpeculativeJIT::compileArithSqrt(Node* node)
 {
     if (node->child1().useKind() == DoubleRepUse) {
         SpeculateDoubleOperand op1(this, node->child1());
-        FPRReg op1FPR = op1.fpr();
 
-        if (!supportsFloatingPointSqrt() || !Options::useArchitectureSpecificOptimizations()) {
-            flushRegisters();
-            FPRResult result(this);
-            callOperationWithoutExceptionCheck(Math::sqrtDouble, result.fpr(), op1FPR);
-            doubleResult(result.fpr(), node);
-        } else {
-            FPRTemporary result(this, op1);
-            sqrtDouble(op1.fpr(), result.fpr());
-            doubleResult(result.fpr(), node);
-        }
+        FPRTemporary result(this, op1);
+        sqrtDouble(op1.fpr(), result.fpr());
+        doubleResult(result.fpr(), node);
         return;
     }
 
@@ -11427,7 +11417,7 @@ void SpeculativeJIT::compileNewRegExpUntyped(Node* node)
         flushRegisters();
         GPRFlushedCallResult result(this);
         GPRReg resultGPR = result.gpr();
-        callOperation(operationNewRegExpString, resultGPR, LinkableConstant::globalObject(*this, node), patternGPR, flagsGPR);
+        callOperation(operationNewRegExpString, resultGPR, LinkableConstant::globalObject(*this, node), TrustedImmPtr(node->structure()), patternGPR, flagsGPR);
         cellResult(resultGPR, node);
         return;
     }
@@ -11441,7 +11431,7 @@ void SpeculativeJIT::compileNewRegExpUntyped(Node* node)
     flushRegisters();
     GPRFlushedCallResult result(this);
     GPRReg resultGPR = result.gpr();
-    callOperation(operationNewRegExpUntyped, resultGPR, LinkableConstant::globalObject(*this, node), patternRegs, flagsRegs);
+    callOperation(operationNewRegExpUntyped, resultGPR, LinkableConstant::globalObject(*this, node), TrustedImmPtr(node->structure()), patternRegs, flagsRegs);
     cellResult(resultGPR, node);
 }
 
@@ -12310,9 +12300,24 @@ void SpeculativeJIT::speculateOther(Edge edge)
 {
     if (!needsTypeCheck(edge, SpecOther))
         return;
-    
+
     JSValueOperand operand(this, edge, ManualOperandSpeculation);
     speculateOther(edge, operand.jsValueRegs());
+}
+
+void SpeculativeJIT::speculateNotOther(Edge edge, JSValueRegs regs, GPRReg tempGPR)
+{
+    DFG_TYPE_CHECK(regs, edge, ~SpecOther, branchIfOther(regs, tempGPR));
+}
+
+void SpeculativeJIT::speculateNotOther(Edge edge)
+{
+    if (!needsTypeCheck(edge, ~SpecOther))
+        return;
+
+    JSValueOperand operand(this, edge, ManualOperandSpeculation);
+    GPRTemporary temp(this);
+    speculateNotOther(edge, operand.jsValueRegs(), temp.gpr());
 }
 
 void SpeculativeJIT::speculateMisc(Edge edge, JSValueRegs regs)
@@ -12482,6 +12487,9 @@ void SpeculativeJIT::speculate(Node*, Edge edge)
         break;
     case NotDoubleUse:
         speculateNotDouble(edge);
+        break;
+    case NotOtherUse:
+        speculateNotOther(edge);
         break;
     case NeitherDoubleNorHeapBigIntUse:
         speculateNeitherDoubleNorHeapBigInt(edge);
@@ -15584,12 +15592,6 @@ void SpeculativeJIT::compileNewInternalFieldObject(Node* node)
         break;
     case JSAsyncFromSyncIteratorType:
         compileNewInternalFieldObjectImpl<JSAsyncFromSyncIterator>(node, operationNewAsyncFromSyncIterator);
-        break;
-    case JSPromiseAllContextType:
-        compileNewInternalFieldObjectImpl<JSPromiseAllContext>(node, operationNewPromiseAllContext);
-        break;
-    case JSPromiseAllGlobalContextType:
-        compileNewInternalFieldObjectImpl<JSPromiseAllGlobalContext>(node, operationNewPromiseAllGlobalContext);
         break;
     case JSRegExpStringIteratorType:
         compileNewInternalFieldObjectImpl<JSRegExpStringIterator>(node, operationNewRegExpStringIterator);

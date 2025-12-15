@@ -1461,9 +1461,9 @@ $(PROJECT_DIR)/dom/DeviceOrientationOrMotionPermissionState.idl
 $(PROJECT_DIR)/dom/Document+CSSOMView.idl
 $(PROJECT_DIR)/dom/Document+CaretPositionFromPoint.idl
 $(PROJECT_DIR)/dom/Document+Fullscreen.idl
-$(PROJECT_DIR)/dom/Document+Immersive.idl
 $(PROJECT_DIR)/dom/Document+HTML.idl
 $(PROJECT_DIR)/dom/Document+HTMLObsolete.idl
+$(PROJECT_DIR)/dom/Document+Immersive.idl
 $(PROJECT_DIR)/dom/Document+PageVisibility.idl
 $(PROJECT_DIR)/dom/Document+PointerLock.idl
 $(PROJECT_DIR)/dom/Document+Selection.idl
@@ -1718,6 +1718,7 @@ $(PROJECT_DIR)/html/MediaController.idl
 $(PROJECT_DIR)/html/MediaEncryptedEvent.idl
 $(PROJECT_DIR)/html/MediaError.idl
 $(PROJECT_DIR)/html/OffscreenCanvas.idl
+$(PROJECT_DIR)/html/Origin.idl
 $(PROJECT_DIR)/html/PopoverInvokerElement.idl
 $(PROJECT_DIR)/html/RadioNodeList.idl
 $(PROJECT_DIR)/html/ResolvedCaptionDisplaySettingsOptions.idl
@@ -2136,6 +2137,7 @@ $(PROJECT_DIR)/testing/FakeXRInputSourceInit.idl
 $(PROJECT_DIR)/testing/FakeXRJointStateInit.idl
 $(PROJECT_DIR)/testing/FakeXRRigidTransformInit.idl
 $(PROJECT_DIR)/testing/FakeXRViewInit.idl
+$(PROJECT_DIR)/testing/FakeXRWorldInit.idl
 $(PROJECT_DIR)/testing/GCObservation.idl
 $(PROJECT_DIR)/testing/InternalSettings.idl
 $(PROJECT_DIR)/testing/Internals.idl
@@ -2147,6 +2149,8 @@ $(PROJECT_DIR)/testing/MockApplePaySetupFeature.idl
 $(PROJECT_DIR)/testing/MockCDMFactory.idl
 $(PROJECT_DIR)/testing/MockCaptionDisplaySettingsClientCallback.idl
 $(PROJECT_DIR)/testing/MockContentFilterSettings.idl
+$(PROJECT_DIR)/testing/MockMediaDeviceRoute.idl
+$(PROJECT_DIR)/testing/MockMediaDeviceRouteController.idl
 $(PROJECT_DIR)/testing/MockPageOverlay.idl
 $(PROJECT_DIR)/testing/MockPaymentAddress.idl
 $(PROJECT_DIR)/testing/MockPaymentContactFields.idl

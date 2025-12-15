@@ -26,6 +26,7 @@
 #include "GStreamerRegistryScanner.h"
 #include "VideoFrameMetadataGStreamer.h"
 #include <wtf/TZoneMallocInlines.h>
+#include <wtf/glib/GMallocString.h>
 
 GST_DEBUG_CATEGORY(webkit_webrtc_incoming_track_processor_debug);
 #define GST_CAT_DEFAULT webkit_webrtc_incoming_track_processor_debug
@@ -131,11 +132,12 @@ String GStreamerIncomingTrackProcessor::mediaStreamIdFromPad()
     // Look-up the mediastream ID, using the msid attribute, fall back to pad name if there is no msid.
     String mediaStreamId;
     if (gstObjectHasProperty(m_pad.get(), "msid"_s)) {
-        GUniqueOutPtr<char> msid;
-        g_object_get(m_pad.get(), "msid", &msid.outPtr(), nullptr);
+        GUniqueOutPtr<char> msidChars;
+        g_object_get(m_pad.get(), "msid", &msidChars.outPtr(), nullptr);
+        auto msid = GMallocString::unsafeAdoptFromUTF8(WTFMove(msidChars));
         if (msid) {
-            mediaStreamId = String::fromUTF8(msid.get());
-            GST_DEBUG_OBJECT(m_bin.get(), "msid set from pad msid property: %s", mediaStreamId.utf8().data());
+            mediaStreamId = String(msid.span());
+            GST_DEBUG_OBJECT(m_bin.get(), "msid set from pad msid property: %s", msid.utf8());
         }
     }
 
@@ -147,9 +149,9 @@ String GStreamerIncomingTrackProcessor::mediaStreamIdFromPad()
         return m_sdpMsIdAndTrackId.first;
     }
 
-    GUniquePtr<gchar> name(gst_pad_get_name(m_pad.get()));
-    mediaStreamId = String::fromLatin1(name.get());
-    GST_DEBUG_OBJECT(m_bin.get(), "msid set from webrtcbin src pad name: %s", mediaStreamId.utf8().data());
+    auto name = GMallocString::unsafeAdoptFromUTF8(gst_pad_get_name(m_pad.get()));
+    mediaStreamId = name.span();
+    GST_DEBUG_OBJECT(m_bin.get(), "msid set from webrtcbin src pad name: %s", name.utf8());
     return mediaStreamId;
 }
 
@@ -168,12 +170,12 @@ void GStreamerIncomingTrackProcessor::retrieveMediaStreamAndTrackIdFromSDP()
     if (!media) [[unlikely]]
         return;
 
-    const char* msidAttribute = gst_sdp_media_get_attribute_val(media, "msid");
+    auto msidAttribute = CStringView::unsafeFromUTF8(gst_sdp_media_get_attribute_val(media, "msid"));
     if (!msidAttribute)
         return;
 
-    GST_LOG_OBJECT(m_bin.get(), "SDP media msid attribute value: %s", msidAttribute);
-    auto components = String::fromUTF8(msidAttribute).split(' ');
+    GST_LOG_OBJECT(m_bin.get(), "SDP media msid attribute value: %s", msidAttribute.utf8());
+    auto components = String(msidAttribute.span()).split(' ');
     if (components.size() != 2)
         return;
 

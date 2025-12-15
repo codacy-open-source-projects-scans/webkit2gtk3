@@ -168,8 +168,8 @@ FloatRect AXIsolatedObject::convertRectToPlatformSpace(const FloatRect& rect, Ac
     if (space == AccessibilityConversionSpace::Screen)
         return convertFrameToSpace(rect, space);
 
-    return Accessibility::retrieveValueFromMainThread<FloatRect>([&rect, &space, this] () -> FloatRect {
-        if (RefPtr axObject = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<FloatRect>([&rect, &space, context = mainThreadContext()] () -> FloatRect {
+        if (RefPtr axObject = context.axObjectOnMainThread())
             return axObject->convertRectToPlatformSpace(rect, space);
         return { };
     });
@@ -177,7 +177,8 @@ FloatRect AXIsolatedObject::convertRectToPlatformSpace(const FloatRect& rect, Ac
 
 bool AXIsolatedObject::isDetached() const
 {
-    return !wrapper() || [wrapper() axBackingObject] != this;
+    RetainPtr retainedWrapper = wrapper();
+    return !retainedWrapper || [retainedWrapper axBackingObject] != this;
 }
 
 void AXIsolatedObject::attachPlatformWrapper(AccessibilityObjectWrapper* wrapper)
@@ -198,7 +199,8 @@ void AXIsolatedObject::attachPlatformWrapper(AccessibilityObjectWrapper* wrapper
 
 void AXIsolatedObject::detachPlatformWrapper(AccessibilityDetachmentType detachmentType)
 {
-    [wrapper() detachIsolatedObject:detachmentType];
+    RetainPtr retainedWrapper = wrapper();
+    [retainedWrapper detachIsolatedObject:detachmentType];
 }
 
 AXCoreObject::AccessibilityChildrenVector AXIsolatedObject::allSortedLiveRegions() const
@@ -353,8 +355,8 @@ AXTextMarkerRange AXIsolatedObject::textMarkerRange() const
     }
 #endif // ENABLE(AX_THREAD_TEXT_APIS)
 
-    return Accessibility::retrieveValueFromMainThread<AXTextMarkerRange>([this] () {
-        RefPtr axObject = associatedAXObject();
+    return Accessibility::retrieveValueFromMainThread<AXTextMarkerRange>([context = mainThreadContext()] () {
+        RefPtr axObject = context.axObjectOnMainThread();
         return axObject ? axObject->textMarkerRange() : AXTextMarkerRange();
     });
 }
@@ -382,8 +384,8 @@ AXTextMarkerRange AXIsolatedObject::textMarkerRangeForNSRange(const NSRange& ran
     }
 #endif // ENABLE(AX_THREAD_TEXT_APIS)
 
-    return Accessibility::retrieveValueFromMainThread<AXTextMarkerRange>([&range, this] () -> AXTextMarkerRange {
-        RefPtr axObject = associatedAXObject();
+    return Accessibility::retrieveValueFromMainThread<AXTextMarkerRange>([&range, context = mainThreadContext()] () -> AXTextMarkerRange {
+        RefPtr axObject = context.axObjectOnMainThread();
         return axObject ? axObject->textMarkerRangeForNSRange(range) : AXTextMarkerRange();
     });
 }
@@ -445,8 +447,8 @@ RetainPtr<NSAttributedString> AXIsolatedObject::attributedStringForTextMarkerRan
     attributedText = propertyValue<RetainPtr<NSAttributedString>>(AXProperty::AttributedText);
 #endif // !ENABLE(AX_THREAD_TEXT_APIS)
     if (!isConfined || !attributedText) {
-        return Accessibility::retrieveValueFromMainThread<RetainPtr<NSAttributedString>>([markerRange = WTFMove(markerRange), &spellCheck, this] () mutable -> RetainPtr<NSAttributedString> {
-            if (RefPtr axObject = associatedAXObject())
+        return Accessibility::retrieveValueFromMainThread<RetainPtr<NSAttributedString>>([markerRange = WTFMove(markerRange), &spellCheck, context = mainThreadContext()] () mutable -> RetainPtr<NSAttributedString> {
+            if (RefPtr axObject = context.axObjectOnMainThread())
                 return axObject->attributedStringForTextMarkerRange(WTFMove(markerRange), spellCheck);
             return { };
         });
@@ -514,8 +516,8 @@ IntPoint AXIsolatedObject::clickPoint()
 {
     ASSERT(_AXGetClientForCurrentRequestUntrusted() != kAXClientTypeVoiceOver);
 
-    return Accessibility::retrieveValueFromMainThread<IntPoint>([this] () -> IntPoint {
-        if (RefPtr object = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<IntPoint>([context = mainThreadContext()] () -> IntPoint {
+        if (RefPtr object = context.axObjectOnMainThread())
             return object->clickPoint();
         return { };
     });
@@ -525,8 +527,8 @@ bool AXIsolatedObject::pressedIsPresent() const
 {
     ASSERT(_AXGetClientForCurrentRequestUntrusted() != kAXClientTypeVoiceOver);
 
-    return Accessibility::retrieveValueFromMainThread<bool>([this] () -> bool {
-        if (RefPtr object = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<bool>([context = mainThreadContext()] () -> bool {
+        if (RefPtr object = context.axObjectOnMainThread())
             return object->pressedIsPresent();
         return false;
     });
@@ -536,8 +538,8 @@ Vector<String> AXIsolatedObject::determineDropEffects() const
 {
     ASSERT(_AXGetClientForCurrentRequestUntrusted() != kAXClientTypeVoiceOver);
 
-    return Accessibility::retrieveValueFromMainThread<Vector<String>>([this] () -> Vector<String> {
-        if (RefPtr object = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<Vector<String>>([context = mainThreadContext()] () -> Vector<String> {
+        if (RefPtr object = context.axObjectOnMainThread())
             return object->determineDropEffects();
         return { };
     });
@@ -547,8 +549,8 @@ int AXIsolatedObject::layoutCount() const
 {
     ASSERT(_AXGetClientForCurrentRequestUntrusted() != kAXClientTypeVoiceOver);
 
-    return Accessibility::retrieveValueFromMainThread<int>([this] () -> int {
-        if (RefPtr object = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<int>([context = mainThreadContext()] () -> int {
+        if (RefPtr object = context.axObjectOnMainThread())
             return object->layoutCount();
         return { };
     });
@@ -558,8 +560,8 @@ Vector<String> AXIsolatedObject::classList() const
 {
     ASSERT(_AXGetClientForCurrentRequestUntrusted() != kAXClientTypeVoiceOver);
 
-    return Accessibility::retrieveValueFromMainThread<Vector<String>>([this] () -> Vector<String> {
-        if (RefPtr object = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<Vector<String>>([context = mainThreadContext()] () -> Vector<String> {
+        if (RefPtr object = context.axObjectOnMainThread())
             return object->classList();
         return { };
     });
@@ -569,8 +571,8 @@ String AXIsolatedObject::computedRoleString() const
 {
     ASSERT(_AXGetClientForCurrentRequestUntrusted() != kAXClientTypeVoiceOver);
 
-    return Accessibility::retrieveValueFromMainThread<String>([this] () -> String {
-        if (RefPtr object = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<String>([context = mainThreadContext()] () -> String {
+        if (RefPtr object = context.axObjectOnMainThread())
             return object->computedRoleString().isolatedCopy();
         return { };
     });

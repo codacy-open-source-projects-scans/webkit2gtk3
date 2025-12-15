@@ -544,6 +544,8 @@ void WebProcessProxy::addRemotePageProxy(RemotePageProxy& remotePage)
 
 void WebProcessProxy::removeRemotePageProxy(RemotePageProxy& remotePage)
 {
+    if (RefPtr page = remotePage.page(); page && m_isResponsive == NoOrMaybe::No)
+        page->processDidBecomeResponsive(*this);
     WEBPROCESSPROXY_RELEASE_LOG(Loading, "removeRemotePageProxy: remotePage=%p", &remotePage);
     m_remotePages.remove(remotePage);
     if (m_remotePages.isEmptyIgnoringNullReferences())
@@ -746,36 +748,36 @@ void WebProcessProxy::shutDown()
     Ref<WebProcessPool> { processPool() }->disconnectProcess(*this);
 }
 
-RefPtr<WebPageProxy> WebProcessProxy::webPage(WebPageProxyIdentifier pageID)
+WebPageProxy* WebProcessProxy::webPage(WebPageProxyIdentifier pageID)
 {
     return globalPageMap().get(pageID);
 }
 
-RefPtr<WebPageProxy> WebProcessProxy::webPage(PageIdentifier pageID)
+WebPageProxy* WebProcessProxy::webPage(PageIdentifier pageID)
 {
-    for (Ref page : globalPages()) {
+    for (WeakRef page : globalPageMap().values()) {
         if (page->webPageIDInMainFrameProcess() == pageID)
-            return page;
+            return page.ptr();
     }
-
     return nullptr;
 }
 
-RefPtr<WebPageProxy> WebProcessProxy::audioCapturingWebPage()
+WebPageProxy* WebProcessProxy::audioCapturingWebPage()
 {
-    for (Ref page : globalPages()) {
-        if (page->hasActiveAudioStream())
+    for (WeakRef page : globalPageMap().values()) {
+        if (Ref { page.get() }->hasActiveAudioStream())
             return page.ptr();
     }
     return nullptr;
 }
 
 #if ENABLE(WEBXR)
-RefPtr<WebPageProxy> WebProcessProxy::webPageWithActiveXRSession()
+WebPageProxy* WebProcessProxy::webPageWithActiveXRSession()
 {
-    for (Ref page : globalPages()) {
+    for (WeakRef weakPage : globalPageMap().values()) {
+        Ref page = weakPage.get();
         if (page->xrSystem() && page->xrSystem()->hasActiveSession())
-            return page;
+            return weakPage.ptr();
     }
     return nullptr;
 }
@@ -889,6 +891,9 @@ void WebProcessProxy::markIsNoLongerInPrewarmedPool()
 
 void WebProcessProxy::removeWebPage(WebPageProxy& webPage, EndsUsingDataStore endsUsingDataStore)
 {
+    if (m_isResponsive == NoOrMaybe::No)
+        webPage.processDidBecomeResponsive(*this);
+
     WEBPROCESSPROXY_RELEASE_LOG(Process, "removeWebPage: webPage=%p, pageProxyID=%" PRIu64 ", webPageID=%" PRIu64, &webPage, webPage.identifier().toUInt64(), webPage.webPageIDInMainFrameProcess().toUInt64());
     RefPtr removedPage = m_pageMap.take(webPage.identifier()).get();
     ASSERT_UNUSED(removedPage, removedPage == &webPage);
@@ -1384,7 +1389,7 @@ void WebProcessProxy::didBecomeUnresponsive()
     auto isResponsiveCallbacks = WTFMove(m_isResponsiveCallbacks);
 
     for (Ref page : pages())
-        page->processDidBecomeUnresponsive();
+        page->processDidBecomeUnresponsive(*this);
 
     bool isWebProcessResponsive = false;
     for (auto& callback : isResponsiveCallbacks)
@@ -1404,7 +1409,7 @@ void WebProcessProxy::didBecomeResponsive()
     m_isResponsive = NoOrMaybe::Maybe;
 
     for (Ref page : pages())
-        page->processDidBecomeResponsive();
+        page->processDidBecomeResponsive(*this);
 }
 
 void WebProcessProxy::willChangeIsResponsive()
@@ -1463,8 +1468,18 @@ void WebProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Connect
 
 #if USE(RUNNINGBOARD) && PLATFORM(MAC)
     for (Ref page : mainPages()) {
-        if (page->preferences().backgroundWebContentRunningBoardThrottlingEnabled())
+        if (page->preferences().backgroundWebContentRunningBoardThrottlingEnabled()) {
             setRunningBoardThrottlingEnabled();
+            break;
+        }
+    }
+    for (auto& weakRemotePage : remotePages()) {
+        if (RefPtr remotePage = weakRemotePage.get()) {
+            if (remotePage->protectedPage()->preferences().backgroundWebContentRunningBoardThrottlingEnabled()) {
+                setRunningBoardThrottlingEnabled();
+                break;
+            }
+        }
     }
 #endif // USE(RUNNINGBOARD) && PLATFORM(MAC)
 

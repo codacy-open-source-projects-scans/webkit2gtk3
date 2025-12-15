@@ -2468,8 +2468,17 @@ static inline bool tryAddEventListener(Node* targetNode, const AtomString& event
     if (typeInfo.isInCategory(EventCategory::Wheel)) {
         document->didAddWheelEventHandler(*targetNode);
         document->invalidateEventListenerRegions();
-    } else if (isTouchRelatedEventType(typeInfo, *targetNode))
+    } else if (isTouchRelatedEventType(typeInfo, *targetNode)) {
         document->didAddTouchEventHandler(*targetNode);
+#if ENABLE(TOUCH_EVENT_REGIONS)
+        document->invalidateEventListenerRegions();
+#endif
+    } else if (typeInfo.isInCategory(EventCategory::Gesture)) {
+#if ENABLE(TOUCH_EVENT_REGIONS)
+        document->didAddTouchEventHandler(*targetNode);
+        document->invalidateEventListenerRegions();
+#endif
+    }
     else if (typeInfo.isInCategory(EventCategory::MouseClickRelated))
         document->didAddOrRemoveMouseEventHandler(*targetNode);
 
@@ -2520,8 +2529,17 @@ static inline bool didRemoveEventListenerOfType(Node& targetNode, const AtomStri
     if (typeInfo.isInCategory(EventCategory::Wheel)) {
         document->didRemoveWheelEventHandler(targetNode);
         document->invalidateEventListenerRegions();
-    } else if (isTouchRelatedEventType(typeInfo, targetNode))
+    } else if (isTouchRelatedEventType(typeInfo, targetNode)) {
         document->didRemoveTouchEventHandler(targetNode);
+#if ENABLE(TOUCH_EVENT_REGIONS)
+        document->invalidateEventListenerRegions();
+#endif
+    } else if (typeInfo.isInCategory(EventCategory::Gesture)) {
+#if ENABLE(TOUCH_EVENT_REGIONS)
+        document->didRemoveTouchEventHandler(targetNode);
+        document->invalidateEventListenerRegions();
+#endif
+    }
     else if (typeInfo.isInCategory(EventCategory::MouseClickRelated))
         document->didAddOrRemoveMouseEventHandler(targetNode);
 
@@ -2565,7 +2583,7 @@ void Node::removeAllEventListeners()
     });
 }
 
-Vector<std::unique_ptr<MutationObserverRegistration>>* Node::mutationObserverRegistry()
+Vector<Ref<MutationObserverRegistration>>* Node::mutationObserverRegistry()
 {
     if (!hasRareData())
         return nullptr;
@@ -2602,7 +2620,7 @@ HashMap<Ref<MutationObserver>, MutationRecordDeliveryOptions> Node::registeredMu
     for (RefPtr node = this; node; node = node->parentNode()) {
         if (auto* registry = node->mutationObserverRegistry()) {
             for (auto& registration : *registry)
-                collectMatchingObserversForMutation(*registration);
+                collectMatchingObserversForMutation(registration);
         }
         if (auto* registry = node->transientMutationObserverRegistry()) {
             for (auto& registration : *registry)
@@ -2615,19 +2633,19 @@ HashMap<Ref<MutationObserver>, MutationRecordDeliveryOptions> Node::registeredMu
 
 void Node::registerMutationObserver(MutationObserver& observer, MutationObserverOptions options, const MemoryCompactLookupOnlyRobinHoodHashSet<AtomString>& attributeFilter)
 {
-    MutationObserverRegistration* registration = nullptr;
+    RefPtr<MutationObserverRegistration> registration;
     auto& registry = ensureRareData().mutationObserverData().registry;
 
     for (auto& candidateRegistration : registry) {
         if (&candidateRegistration->observer() == &observer) {
-            registration = candidateRegistration.get();
+            registration = candidateRegistration.ptr();
             registration->resetObservation(options, attributeFilter);
         }
     }
 
     if (!registration) {
-        registry.append(makeUnique<MutationObserverRegistration>(observer, *this, options, attributeFilter));
-        registration = registry.last().get();
+        registry.append(MutationObserverRegistration::create(observer, *this, options, attributeFilter));
+        registration = registry.last().ptr();
     }
 
     document().addMutationObserverTypes(registration->mutationTypes());
@@ -2641,7 +2659,7 @@ void Node::unregisterMutationObserver(MutationObserverRegistration& registration
         return;
 
     registry->removeFirstMatching([&registration] (auto& current) {
-        return current.get() == &registration;
+        return current.ptr() == &registration;
     });
 }
 

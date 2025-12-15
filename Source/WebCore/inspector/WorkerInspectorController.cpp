@@ -109,8 +109,8 @@ void WorkerInspectorController::frontendInitialized()
     if (m_pauseAfterInitialization) {
         m_pauseAfterInitialization = false;
 
-        ensureDebuggerAgent().enable();
-        ensureDebuggerAgent().pause();
+        std::ignore = ensureDebuggerAgent().enable();
+        std::ignore = ensureDebuggerAgent().pause();
     }
 
     if (m_isAutomaticInspection && is<ServiceWorkerGlobalScope>(m_globalScope)) {
@@ -249,7 +249,7 @@ void WorkerInspectorController::createLazyAgents()
     m_agents.append(WTFMove(scriptProfilerAgent));
 
     if (auto& commandLineAPIHost = m_injectedScriptManager->commandLineAPIHost())
-        commandLineAPIHost->init(m_instrumentingAgents.copyRef());
+        commandLineAPIHost->init(m_instrumentingAgents.get());
 }
 
 WorkerDebuggerAgent& WorkerInspectorController::ensureDebuggerAgent()

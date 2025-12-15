@@ -624,6 +624,7 @@ accessibility/AccessibilityTableHeaderContainer.cpp
 accessibility/isolatedtree/AXIsolatedObject.cpp
 accessibility/isolatedtree/AXIsolatedTree.cpp
 animation/AcceleratedEffectStackUpdater.cpp
+animation/AcceleratedTimelinesUpdater.cpp
 animation/AnimationEffect.cpp
 animation/AnimationEffectTiming.cpp
 animation/AnimationEventBase.cpp
@@ -1650,6 +1651,7 @@ html/MonthInputType.cpp
 html/NavigatorUserActivation.cpp
 html/NumberInputType.cpp
 html/OffscreenCanvas.cpp
+html/Origin.cpp
 html/PDFDocument.cpp
 html/PasswordInputType.cpp
 html/PermissionsPolicy.cpp
@@ -2566,6 +2568,7 @@ platform/graphics/LayoutRoundedRect.cpp
 platform/graphics/LayoutSize.cpp
 platform/graphics/MIMESniffer.cpp
 platform/graphics/MIMETypeCache.cpp
+platform/graphics/MediaPlaybackTargetWirelessPlayback.cpp
 platform/graphics/MediaPlayer.cpp
 platform/graphics/MediaPlayerPrivate.cpp
 platform/graphics/MediaPlayerPrivateWirelessPlayback.cpp
@@ -2984,7 +2987,10 @@ rendering/style/OutlineValue.cpp
 rendering/style/PositionTryOrder.cpp
 rendering/style/ReferenceFilterOperation.cpp
 rendering/style/RenderStyle.cpp
+rendering/style/RenderStyleBase.cpp
 rendering/style/RenderStyleConstants.cpp
+rendering/style/RenderStylePropertiesGettersCustom.cpp
+rendering/style/RenderStylePropertiesInitialCustom.cpp
 rendering/style/SVGRenderStyle.cpp
 rendering/style/SVGRenderStyleDefs.cpp
 rendering/style/StyleAppleColorFilterData.cpp
@@ -3148,8 +3154,10 @@ style/StyleAdjuster.cpp
 style/StyleBuilder.cpp
 style/StyleBuilderState.cpp
 style/StyleChange.cpp
+style/StyleChangedAnimatableProperties.cpp
 style/StyleCustomProperty.cpp
 style/StyleCustomPropertyRegistry.cpp
+style/StyleDifference.cpp
 style/StyleExtractor.cpp
 style/StyleFontSizeFunctions.cpp
 style/StyleInterpolation.cpp
@@ -4545,6 +4553,7 @@ JSOffscreenCanvasRenderingContext2D.cpp
 JSOpenID4VPRequest.cpp
 JSOptionalEffectTiming.cpp
 JSOpusEncoderConfig.cpp
+JSOrigin.cpp
 JSOscillatorNode.cpp
 JSOscillatorOptions.cpp
 JSOscillatorType.cpp

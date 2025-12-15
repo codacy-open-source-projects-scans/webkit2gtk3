@@ -117,10 +117,10 @@ void RenderReplaced::willBeDestroyed()
     RenderBox::willBeDestroyed();
 }
 
-void RenderReplaced::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle)
+void RenderReplaced::styleDidChange(Style::Difference diff, const RenderStyle* oldStyle)
 {
     RenderBox::styleDidChange(diff, oldStyle);
-    auto previousUsedZoom = oldStyle ? oldStyle->usedZoom() : RenderStyle::initialZoom();
+    auto previousUsedZoom = oldStyle ? oldStyle->usedZoom() : Style::evaluate<float>(RenderStyle::initialZoom());
     if (previousUsedZoom != style().usedZoom())
         intrinsicSizeChanged();
 }
@@ -984,8 +984,11 @@ void RenderReplaced::layoutShadowContent(const LayoutSize& oldSize)
         // and this method might be called many times per second during video playback, use a LayoutStateMaintainer:
         LayoutStateMaintainer statePusher(*this, locationOffset(), isTransformed() || hasReflection() || writingMode().isBlockFlipped());
         renderBox.setLocation(LayoutPoint(borderLeft(), borderTop()) + LayoutSize(paddingLeft(), paddingTop()));
-        renderBox.mutableStyle().setHeight(Style::PreferredSize::Fixed { newSize.height() });
-        renderBox.mutableStyle().setWidth(Style::PreferredSize::Fixed { newSize.width() });
+
+        auto usedZoom = renderBox.style().usedZoomForLength();
+        renderBox.mutableStyle().setHeight(Style::PreferredSize::Fixed { newSize.height() / usedZoom.value });
+        renderBox.mutableStyle().setWidth(Style::PreferredSize::Fixed { newSize.width() / usedZoom.value });
+
         renderBox.setNeedsLayout(MarkOnlyThis);
         renderBox.layout();
     }
@@ -1142,12 +1145,12 @@ bool RenderReplaced::replacedMinMaxLogicalHeightComputesAsNone(const auto& logic
 
 bool RenderReplaced::replacedMinLogicalHeightComputesAsNone() const
 {
-    return replacedMinMaxLogicalHeightComputesAsNone(style().logicalMinHeight(), RenderStyle::initialMinSize());
+    return replacedMinMaxLogicalHeightComputesAsNone(style().logicalMinHeight(), RenderStyle::initialMinHeight());
 }
 
 bool RenderReplaced::replacedMaxLogicalHeightComputesAsNone() const
 {
-    return replacedMinMaxLogicalHeightComputesAsNone(style().logicalMaxHeight(), RenderStyle::initialMaxSize());
+    return replacedMinMaxLogicalHeightComputesAsNone(style().logicalMaxHeight(), RenderStyle::initialMaxHeight());
 }
 
 LayoutUnit RenderReplaced::computeReplacedLogicalHeightRespectingMinMaxHeight(LayoutUnit logicalHeight) const

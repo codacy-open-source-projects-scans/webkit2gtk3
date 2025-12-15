@@ -47,9 +47,10 @@ static constexpr ASCIILiteral accessibilityLanguageAttributeKey = "AXLanguage"_s
 static constexpr ASCIILiteral accessibilityLanguageAttributeKey = "UIAccessibilitySpeechAttributeLanguage"_s;
 #endif
 
-struct StringLanguagePair {
+struct LiveRegionObjectMetadata {
     String text;
     String language;
+    HashSet<AXID> descendants;
 };
 
 AXLiveRegionManager::AXLiveRegionManager(AXObjectCache& cache)
@@ -186,15 +187,28 @@ LiveRegionSnapshot AXLiveRegionManager::buildLiveRegionSnapshot(AccessibilityObj
     std::function<void(AccessibilityObject&)> buildObjectList = [this, &buildObjectList, &snapshot] (AccessibilityObject& object) {
         // Treat atomic objects as one object, so when they change the entire subtree is announced.
         if (object.liveRegionAtomic()) {
-            snapshot.objects.append({ object.objectID(), textForObject(object), object.languageIncludingAncestors() });
+            HashSet<AXID> descendants;
+
+            // Collect all atomic-region descendants to detect when nodes are added/removed within the atomic region.
+            std::function<void(AccessibilityObject&)> collectDescendants = [&collectDescendants, &descendants] (AccessibilityObject& descendant) {
+                descendants.add(descendant.objectID());
+                for (auto& child : descendant.unignoredChildren())
+                    collectDescendants(downcast<AccessibilityObject>(child.get()));
+            };
+
+            for (auto& child : object.unignoredChildren())
+                collectDescendants(downcast<AccessibilityObject>(child.get()));
+
+            snapshot.objects.append({ object.objectID(), textForObject(object), object.languageIncludingAncestors(), WTFMove(descendants) });
             return;
         }
 
         if (shouldIncludeInSnapshot(object))
-            snapshot.objects.append({ object.objectID(), textForObject(object), object.languageIncludingAncestors() });
-
-        for (auto& child : object.unignoredChildren())
-            buildObjectList(downcast<AccessibilityObject>(child.get()));
+            snapshot.objects.append({ object.objectID(), textForObject(object), object.languageIncludingAncestors(), { } });
+        else {
+            for (auto& child : object.unignoredChildren())
+                buildObjectList(downcast<AccessibilityObject>(child.get()));
+        }
     };
 
     buildObjectList(object);
@@ -207,8 +221,12 @@ bool AXLiveRegionManager::shouldIncludeInSnapshot(AccessibilityObject& object) c
     if (object.isStaticText())
         return true;
 
+    // Description will account for alt text, aria-label(ledby), and title attributes.
+    if (String description = object.description(); description.length())
+        return true;
+
     // If an object has unignored children, there isn't a need to include it in the snapshot since the children will return YES.
-    if (object.firstUnignoredChild())
+    if (object.hasUnignoredChild())
         return false;
 
     // For leaf objects, include if they have a value (e.g., form controls).
@@ -226,40 +244,67 @@ bool AXLiveRegionManager::shouldIncludeInSnapshot(AccessibilityObject& object) c
 
 String AXLiveRegionManager::textForObject(AccessibilityObject& object) const
 {
-    return object.textMarkerRange().toString(IncludeListMarkerText::Yes, IncludeImageAltText::Yes);
+    if (String description = object.description(); description.length())
+        return description;
+
+    TextUnderElementMode mode;
+    mode.includeListMarkers = IncludeListMarkerText::Yes;
+    // We want all of the text beneath this object when speaking live regions.
+    mode.descendIntoContainers = DescendIntoContainers::Yes;
+    return object.textUnderElement(mode);
 }
 
 AXLiveRegionManager::LiveRegionDiff AXLiveRegionManager::computeChanges(const Vector<LiveRegionObject>& oldObjects, const Vector<LiveRegionObject>& newObjects) const
 {
     // Here we compare the old and new live region to compute:
-    // - Additions: New objects
-    // - Deletions: Objects that were removed from the region
-    // - Changes: Text content/values that changed between the same object.
+    // - Additions: New objects, or atomic regions where nodes were added AND text changed.
+    // - Deletions: Objects that were removed from the region, or atomic regions where nodes were removed AND text changed.
+    // - Changes: Text content/values that changed between the same object (without node additions/removals).
 
     LiveRegionDiff diff;
 
     // Build a map of old objects for lookup. As we match them with new objects, we'll remove them.
     // Whatever remains unmatched at the end represents removals.
-    HashMap<AXID, StringLanguagePair> unmatchedOldObjects;
+    HashMap<AXID, LiveRegionObjectMetadata> unmatchedOldObjects;
     unmatchedOldObjects.reserveInitialCapacity(oldObjects.size());
 
     for (auto& object : oldObjects)
-        unmatchedOldObjects.set(object.objectID, StringLanguagePair { object.text, object.language });
+        unmatchedOldObjects.set(object.objectID, LiveRegionObjectMetadata { object.text, object.language, object.descendants });
 
     for (auto& newObject : newObjects) {
         auto iterator = unmatchedOldObjects.find(newObject.objectID);
         if (iterator == unmatchedOldObjects.end())
             diff.added.append(newObject);
         else {
-            if (iterator->value.text != newObject.text)
+            bool textChanged = iterator->value.text != newObject.text;
+
+            if (!newObject.descendants.isEmpty()) {
+                // This is an atomic region, indicated by the presence of children.
+                HashSet oldDescendantsCopy = iterator->value.descendants;
+                HashSet newDescendantsCopy = newObject.descendants;
+
+                newDescendantsCopy.removeAll(oldDescendantsCopy);
+                oldDescendantsCopy.removeAll(newObject.descendants);
+                bool nodesAdded = newDescendantsCopy.size();
+                bool nodesRemoved = oldDescendantsCopy.size();
+
+                if (nodesAdded && textChanged)
+                    diff.added.append(newObject);
+                else if (nodesRemoved && textChanged)
+                    diff.removed.append(newObject);
+
+                if (textChanged)
+                    diff.changed.append(newObject);
+            } else if (textChanged)
                 diff.changed.append(newObject);
+
             unmatchedOldObjects.remove(iterator);
         }
     }
 
     // Anything left in unmatchedOldObjects is a removal.
     for (auto& entry : unmatchedOldObjects)
-        diff.removed.append({ entry.key, entry.value.text, entry.value.language });
+        diff.removed.append({ entry.key, entry.value.text, entry.value.language, { } });
 
     return diff;
 }
@@ -279,11 +324,13 @@ AttributedString AXLiveRegionManager::computeAnnouncement(const LiveRegionSnapsh
     bool reachedCharacterLimit = false;
     size_t characterCount = 0;
 
+    HashSet<AXID> spokenObjects = { };
+
     // Determines whether we should add a space before adding the next object. Should only be false the first call.
     bool needsSpace = false;
 
     auto appendStringAndLanguage = [&](const LiveRegionObject& object) {
-        if (object.text.isEmpty())
+        if (object.text.isEmpty() || spokenObjects.contains(object.objectID))
             return;
 
         if (needsSpace) {
@@ -298,10 +345,13 @@ AttributedString AXLiveRegionManager::computeAnnouncement(const LiveRegionSnapsh
         if (!object.language.isEmpty()) {
             HashMap<String, AttributedString::AttributeValue> languageAttribute;
             languageAttribute.set(accessibilityLanguageAttributeKey, AttributedString::AttributeValue { object.language });
-            attributes.append({ { startLocation, object.text.length() }, WTFMove(languageAttribute) });
+            // The - / + 1 allows us to set the language of the space character seemlessly with the text around it.
+            attributes.append({ { needsSpace && startLocation ? startLocation - 1 : startLocation, needsSpace && startLocation ? object.text.length() + 1 : object.text.length() }, WTFMove(languageAttribute) });
         }
 
-        needsSpace = true;
+        // If the preceeding object already ends with a space (e.g., list markers), no need to add another.
+        needsSpace = object.text.isEmpty() || object.text[object.text.length() - 1] != ' ';
+        spokenObjects.add(object.objectID);
     };
 
     if (hasAdditions && !diff.added.isEmpty()) {
@@ -358,7 +408,7 @@ void AXLiveRegionManager::postAnnouncementForChange(AccessibilityObject& object,
         return;
 
     AttributedString announcement = computeAnnouncement(newSnapshot, diff);
-    if (announcement.isNull())
+    if (announcement.isNull() || announcement.string.isEmpty())
         return;
 
     if (CheckedPtr cache = m_cache)

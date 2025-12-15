@@ -74,8 +74,7 @@ namespace WebCore {
 static void prepareConfiguration(webrtc::PeerConnectionInterface::RTCConfiguration& configuration)
 {
     configuration.sdp_semantics = webrtc::SdpSemantics::kUnifiedPlan;
-    configuration.crypto_options = webrtc::CryptoOptions { };
-    configuration.crypto_options->srtp.enable_gcm_crypto_suites = true;
+    configuration.crypto_options.srtp.enable_gcm_crypto_suites = true;
 }
 
 RefPtr<LibWebRTCMediaEndpoint> LibWebRTCMediaEndpoint::create(RTCPeerConnection& peerConnection, LibWebRTCProvider& client, Document& document, webrtc::PeerConnectionInterface::RTCConfiguration&& configuration)
@@ -115,6 +114,10 @@ LibWebRTCMediaEndpoint::LibWebRTCMediaEndpoint(RTCPeerConnection& peerConnection
 {
     ASSERT(isMainThread());
     ASSERT(client.factory());
+
+#if RELEASE_LOG_DISABLED
+    UNUSED_PARAM(peerConnection);
+#endif
 
     client.setUseL4S(document.settings().webRTCL4SEnabled());
 }
@@ -693,11 +696,6 @@ void LibWebRTCMediaEndpoint::OnIceCandidate(const webrtc::IceCandidate *rtcCandi
             return;
         protectedThis->protectedPeerConnectionBackend()->newICECandidate(WTFMove(sdp), WTFMove(mid), sdpMLineIndex, WTFMove(url), WTFMove(descriptions));
     });
-}
-
-void LibWebRTCMediaEndpoint::OnIceCandidatesRemoved(const std::vector<webrtc::Candidate>&)
-{
-    ASSERT_NOT_REACHED();
 }
 
 void LibWebRTCMediaEndpoint::createSessionDescriptionSucceeded(std::unique_ptr<webrtc::SessionDescriptionInterface>&& description)

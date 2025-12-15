@@ -35,7 +35,7 @@ public:
     virtual ~LegacyRenderSVGResourceContainer();
 
     void layout() override;
-    void styleDidChange(StyleDifference, const RenderStyle* oldStyle) final;
+    void styleDidChange(Style::Difference, const RenderStyle* oldStyle) final;
 
     static float computeTextPaintingScale(const RenderElement&);
     static AffineTransform transformOnNonScalingStroke(RenderObject*, const AffineTransform& resourceTransform);
@@ -75,8 +75,8 @@ private:
     void registerResource();
 
     AtomString m_id;
-    SingleThreadWeakHashSet<RenderElement> m_clients;
-    SingleThreadWeakHashSet<RenderLayer> m_clientLayers;
+    SingleThreadWeakKeyHashSet<RenderElement> m_clients;
+    SingleThreadWeakKeyHashSet<RenderLayer> m_clientLayers;
     bool m_registered { false };
     bool m_isInvalidating { false };
 };

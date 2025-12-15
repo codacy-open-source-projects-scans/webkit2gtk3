@@ -78,7 +78,6 @@ static Vector<String> writableTypesForImage()
 {
     Vector<String> types;
     types.append(String(legacyTIFFPasteboardTypeSingleton()));
-    types.appendVector(writableTypesForURL());
     types.append(String(legacyRTFDPasteboardTypeSingleton()));
     return types;
 }
@@ -220,7 +219,9 @@ static long writeURLForTypes(const Vector<String>& types, const String& pasteboa
     RetainPtr title = pasteboardURL.title.createNSString();
     if (![title length]) {
         title = [[nsURL path] lastPathComponent];
-        if (![title length])
+        // Very short titles are not useful, and we commonly get a "/" as the last path component.
+        // Fall back to the full URL in this case.
+        if ([title length] <= 1)
             title = userVisibleString;
     }
 

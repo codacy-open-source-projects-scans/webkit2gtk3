@@ -59,8 +59,9 @@ public:
     RefPtr<HTMLModelElement> protectedImmersiveElement() const { return immersiveElement(); }
 
     void requestImmersive(HTMLModelElement*, CompletionHandler<void(ExceptionOr<void>)>&&);
-    void exitImmersive(HTMLModelElement*, CompletionHandler<void(ExceptionOr<void>)>&&);
-    void exitRemovedImmersiveElement(HTMLModelElement*);
+    void exitImmersive(CompletionHandler<void(ExceptionOr<void>)>&&);
+    WEBCORE_EXPORT void exitImmersive();
+    void exitRemovedImmersiveElement(HTMLModelElement*, CompletionHandler<void()>&&);
 
     enum class EventType : bool { Change, Error };
     void dispatchPendingEvents();
@@ -75,6 +76,7 @@ protected:
 private:
     WeakRef<Document, WeakPtrImplWithEventTargetData> m_document;
     WeakPtr<HTMLModelElement, WeakPtrImplWithEventTargetData> m_immersiveElement;
+    void updateElementIsImmersive(HTMLModelElement*, bool);
 
     Deque<std::pair<EventType, GCReachableRef<Element>>> m_pendingEvents;
 };

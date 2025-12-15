@@ -91,8 +91,6 @@
 #include "JSIteratorHelper.h"
 #include "JSLexicalEnvironment.h"
 #include "JSMapIterator.h"
-#include "JSPromiseAllContext.h"
-#include "JSPromiseAllGlobalContext.h"
 #include "JSPromiseReaction.h"
 #include "JSRegExpStringIterator.h"
 #include "JSSetIterator.h"
@@ -160,6 +158,9 @@ JSC_DEFINE_NOEXCEPT_JIT_OPERATION_WITH_ATTRIBUTES(ftlUnreachable, NO_RETURN_DUE_
 
 template<typename OperationResultType>
 concept isB3SupportedExceptionOperationResult = isExceptionOperationResult<OperationResultType> && !std::is_floating_point_v<typename OperationResultType::ResultType>;
+
+template<typename T>
+concept isFunction = std::is_function_v<std::remove_pointer_t<T>>;
 
 class LowerDFGToB3 {
     WTF_MAKE_NONCOPYABLE(LowerDFGToB3);
@@ -2703,16 +2704,20 @@ private:
         compileBinaryMathIC<JITSubGenerator>(arithProfile, repatchingFunction, nonRepatchingFunction);
     }
 
-    template <typename Generator, typename = typename std::enable_if<std::is_same<Generator, JITAddGenerator>::value>::type>
+    template<typename Generator>
+        requires std::same_as<Generator, JITAddGenerator>
     static JITAddIC* addMathIC(DFG::CommonData& common, BinaryArithProfile* profile) { return common.addJITAddIC(profile); }
 
-    template <typename Generator, typename = typename std::enable_if<std::is_same<Generator, JITMulGenerator>::value>::type>
+    template<typename Generator>
+        requires std::same_as<Generator, JITMulGenerator>
     static JITMulIC* addMathIC(DFG::CommonData& common, BinaryArithProfile* profile) { return common.addJITMulIC(profile); }
 
-    template <typename Generator, typename = typename std::enable_if<std::is_same<Generator, JITNegGenerator>::value>::type>
+    template<typename Generator>
+        requires std::same_as<Generator, JITNegGenerator>
     static JITNegIC* addMathIC(DFG::CommonData& common, UnaryArithProfile* profile) { return common.addJITNegIC(profile); }
 
-    template <typename Generator, typename = typename std::enable_if<std::is_same<Generator, JITSubGenerator>::value>::type>
+    template<typename Generator>
+        requires std::same_as<Generator, JITSubGenerator>
     static JITSubIC* addMathIC(DFG::CommonData& common, BinaryArithProfile* profile) { return common.addJITSubIC(profile); }
 
     void compileValueMul()
@@ -2757,8 +2762,7 @@ private:
         compileBinaryMathIC<JITMulGenerator>(arithProfile, repatchingFunction, nonRepatchingFunction);
     }
 
-    template <typename Generator, typename Func1, typename Func2,
-        typename = std::enable_if_t<std::is_function<typename std::remove_pointer<Func1>::type>::value && std::is_function<typename std::remove_pointer<Func2>::type>::value>>
+    template<typename Generator, isFunction Func1, isFunction Func2>
     void compileUnaryMathIC(UnaryArithProfile* arithProfile, Func1 repatchingFunction, Func2 nonRepatchingFunction)
     {
         Node* node = m_node;
@@ -2844,8 +2848,7 @@ private:
         setJSValue(patchpoint);
     }
 
-    template <typename Generator, typename Func1, typename Func2,
-        typename = std::enable_if_t<std::is_function<typename std::remove_pointer<Func1>::type>::value && std::is_function<typename std::remove_pointer<Func2>::type>::value>>
+    template<typename Generator, isFunction Func1, isFunction Func2>
     void compileBinaryMathIC(BinaryArithProfile* arithProfile, Func1 repatchingFunction, Func2 nonRepatchingFunction)
     {
         Node* node = m_node;
@@ -5945,12 +5948,12 @@ IGNORE_CLANG_WARNINGS_END
 #else
             PatchpointValue* patchpoint = m_out.patchpoint(Int32);
 #endif
-            patchpoint->appendSomeRegister(base);
-            patchpoint->clobber(RegisterSetBuilder::macroClobberedGPRs());
-            patchpoint->numGPScratchRegisters = 2;
-
             if (typedArrayType.has_value() && typedArrayType.value() == TypeDataView) {
-                unsigned osrExitArgumentOffset = patchpoint->numChildren();
+                patchpoint->appendSomeRegister(base);
+                patchpoint->clobber(RegisterSetBuilder::macroClobberedGPRs());
+                patchpoint->numGPScratchRegisters = 3;
+
+                unsigned osrExitArgumentOffset = patchpoint->numChildren() + /* result */ 1;
                 OSRExitDescriptor* exitDescriptor = appendOSRExitDescriptor(jsValueValue(base), m_node);
                 patchpoint->appendColdAnys(buildExitArguments(exitDescriptor, m_origin.forExit, jsValueValue(base)));
 
@@ -5966,19 +5969,24 @@ IGNORE_CLANG_WARNINGS_END
                     GPRReg baseGPR = params[1].gpr();
                     GPRReg scratch1GPR = params.gpScratch(0);
                     GPRReg scratch2GPR = params.gpScratch(1);
+                    GPRReg scratch3GPR = params.gpScratch(2);
 
                     RefPtr<OSRExitHandle> handle = exitDescriptor->emitOSRExitLater(*state, OutOfBounds, origin, params, nodeIndex, osrExitArgumentOffset);
                     RefPtr<FTL::JITCode> jitCode = state->jitCode;
 
-                    auto [outOfBounds, doneCases] = jit.loadDataViewByteLength(baseGPR, resultGPR, scratch1GPR, scratch2GPR, TypeDataView);
+                    auto [outOfBounds, doneCases] = jit.loadDataViewByteLength(baseGPR, scratch1GPR, scratch2GPR, scratch3GPR, TypeDataView);
                     jit.addLinkTask([=, protectedJitCode = jitCode, outOfBoundsJump = outOfBounds](LinkBuffer& linkBuffer) {
                         linkBuffer.link(outOfBoundsJump, linkBuffer.locationOf<NoPtrTag>(handle->label));
                     });
                     doneCases.link(&jit);
+                    jit.move(scratch1GPR, resultGPR);
                 });
                 return patchpoint;
             }
 
+            patchpoint->appendSomeRegister(base);
+            patchpoint->clobber(RegisterSetBuilder::macroClobberedGPRs());
+            patchpoint->numGPScratchRegisters = 2;
             patchpoint->setGenerator([=] (CCallHelpers& jit, const StackmapGenerationParams& params) {
                 JIT_COMMENT(jit, "typedArrayLength");
                 AllowMacroScratchRegisterUsage allowScratch(jit);
@@ -9496,12 +9504,6 @@ IGNORE_CLANG_WARNINGS_END
         case JSAsyncFromSyncIteratorType:
             compileNewInternalFieldObjectImpl<JSAsyncFromSyncIterator>(operationNewAsyncFromSyncIterator);
             break;
-        case JSPromiseAllContextType:
-            compileNewInternalFieldObjectImpl<JSPromiseAllContext>(operationNewPromiseAllContext);
-            break;
-        case JSPromiseAllGlobalContextType:
-            compileNewInternalFieldObjectImpl<JSPromiseAllGlobalContext>(operationNewPromiseAllGlobalContext);
-            break;
         case JSRegExpStringIteratorType:
             compileNewInternalFieldObjectImpl<JSRegExpStringIterator>(operationNewRegExpStringIterator);
             break;
@@ -9556,10 +9558,10 @@ IGNORE_CLANG_WARNINGS_END
     {
         JSGlobalObject* globalObject = m_graph.globalObjectFor(m_origin.semantic);
         if (m_node->child1().useKind() == StringUse && m_node->child2().useKind() == StringUse) {
-            setJSValue(vmCall(pointerType(), operationNewRegExpString, weakPointer(globalObject), lowString(m_node->child1()), lowString(m_node->child2())));
+            setJSValue(vmCall(pointerType(), operationNewRegExpString, weakPointer(globalObject), weakStructure(m_node->structure()), lowString(m_node->child1()), lowString(m_node->child2())));
             return;
         }
-        setJSValue(vmCall(pointerType(), operationNewRegExpUntyped, weakPointer(globalObject), lowJSValue(m_node->child1()), lowJSValue(m_node->child2())));
+        setJSValue(vmCall(pointerType(), operationNewRegExpUntyped, weakPointer(globalObject), weakStructure(m_node->structure()), lowJSValue(m_node->child1()), lowJSValue(m_node->child2())));
     }
 
     void compileNewSymbol()
@@ -18019,12 +18021,6 @@ IGNORE_CLANG_WARNINGS_END
         case JSRegExpStringIteratorType:
             compileMaterializeNewInternalFieldObjectImpl<JSRegExpStringIterator>(operationNewRegExpStringIterator);
             break;
-        case JSPromiseAllContextType:
-            compileMaterializeNewInternalFieldObjectImpl<JSPromiseAllContext>(operationNewPromiseAllContext);
-            break;
-        case JSPromiseAllGlobalContextType:
-            compileMaterializeNewInternalFieldObjectImpl<JSPromiseAllGlobalContext>(operationNewPromiseAllGlobalContext);
-            break;
         case JSPromiseType:
             if (m_node->structure()->classInfoForCells() == JSInternalPromise::info())
                 compileMaterializeNewInternalFieldObjectImpl<JSInternalPromise>(operationNewInternalPromise);
@@ -20851,13 +20847,7 @@ IGNORE_CLANG_WARNINGS_END
 
     LValue encodeStructureID(LValue structure)
     {
-#if ENABLE(STRUCTURE_ID_WITH_SHIFT)
-        return m_out.castToInt32(m_out.lShr(structure, m_out.constInt32(StructureID::encodeShiftAmount)));
-#elif CPU(ADDRESS64)
-        return m_out.castToInt32(m_out.bitAnd(structure, m_out.constInt64(StructureID::structureIDMask)));
-#else
         return m_out.castToInt32(structure);
-#endif
     }
 
     void storeStructure(LValue object, LValue structure)
@@ -23559,6 +23549,9 @@ IGNORE_CLANG_WARNINGS_END
         case NotDoubleUse:
             speculateNotDouble(edge);
             break;
+        case NotOtherUse:
+            speculateNotOther(edge);
+            break;
         case NeitherDoubleNorHeapBigIntUse:
             speculateNeitherDoubleNorHeapBigInt(edge);
             break;
@@ -24517,6 +24510,15 @@ IGNORE_CLANG_WARNINGS_END
         typeCheck(jsValueValue(value), edge, SpecOther, isNotOther(value));
     }
 
+    void speculateNotOther(Edge edge)
+    {
+        if (!m_interpreter.needsTypeCheck(edge))
+            return;
+
+        LValue value = lowJSValue(edge, ManualOperandSpeculation);
+        typeCheck(jsValueValue(value), edge, ~SpecOther, isOther(value));
+    }
+
     void speculateMisc(Edge edge)
     {
         if (!m_interpreter.needsTypeCheck(edge))
@@ -25286,16 +25288,7 @@ IGNORE_CLANG_WARNINGS_END
 
     LValue decodeNonNullStructure(LValue structureID)
     {
-#if ENABLE(STRUCTURE_ID_WITH_SHIFT)
-        return m_out.shl(m_out.zeroExtPtr(structureID), m_out.constIntPtr(StructureID::encodeShiftAmount));
-#else
-        LValue maskedStructureID = structureID;
-        if constexpr (structureHeapAddressSize < 4 * GB) {
-            static_assert(static_cast<uint32_t>(StructureID::structureIDMask) == StructureID::structureIDMask);
-            maskedStructureID = m_out.bitAnd(structureID, m_out.constInt32(static_cast<uint32_t>(StructureID::structureIDMask)));
-        }
-        return m_out.bitOr(m_out.constIntPtr(startOfStructureHeap()), m_out.zeroExtPtr(maskedStructureID));
-#endif
+        return m_out.bitOr(m_out.constIntPtr(structureIDBase()), m_out.zeroExtPtr(structureID));
     }
 
     LValue loadStructure(LValue value)

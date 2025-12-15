@@ -57,12 +57,12 @@ public:
         Malloc::free(m_ptr);
     }
 
-    T* get() const
+    T* get() const LIFETIME_BOUND
     {
         return m_ptr;
     }
 
-    T *leakPtr() WARN_UNUSED_RETURN
+    WARN_UNUSED_RETURN T* leakPtr()
     {
         return std::exchange(m_ptr, nullptr);
     }
@@ -77,13 +77,13 @@ public:
         return !m_ptr;
     }
 
-    T& operator*() const
+    T& operator*() const LIFETIME_BOUND
     {
         ASSERT(m_ptr);
         return *m_ptr;
     }
 
-    T* operator->() const
+    T* operator->() const LIFETIME_BOUND
     {
         return m_ptr;
     }

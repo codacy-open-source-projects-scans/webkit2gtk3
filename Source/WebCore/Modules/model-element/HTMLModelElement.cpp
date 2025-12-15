@@ -533,7 +533,7 @@ void HTMLModelElement::createModelPlayer()
 
 #if ENABLE(MODEL_ELEMENT_ENVIRONMENT_MAP)
     if (m_environmentMapData)
-        m_modelPlayer->setEnvironmentMap(m_environmentMapData.takeAsContiguous().get());
+        m_modelPlayer->setEnvironmentMap(m_environmentMapData.takeBufferAsContiguous().get());
     else if (!m_environmentMapURL.isEmpty())
         environmentMapRequestResource();
 #endif
@@ -543,11 +543,21 @@ void HTMLModelElement::createModelPlayer()
 
 void HTMLModelElement::deleteModelPlayer()
 {
-    RefPtr protectedModelPlayerProvider = m_modelPlayerProvider.get();
-    if (protectedModelPlayerProvider && m_modelPlayer)
-        protectedModelPlayerProvider->deleteModelPlayer(*m_modelPlayer);
+    auto deleteModelPlayerBlock = [weakThis = WeakPtr { *this }, modelPlayerProvider = RefPtr { m_modelPlayerProvider.get() }, modelPlayer = RefPtr { m_modelPlayer }] () {
+        if (modelPlayerProvider && modelPlayer)
+            modelPlayerProvider->deleteModelPlayer(*modelPlayer);
 
-    m_modelPlayer = nullptr;
+        RefPtr protectedThis = weakThis.get();
+        if (protectedThis)
+            protectedThis->m_modelPlayer = nullptr;
+    };
+
+#if ENABLE(MODEL_ELEMENT_IMMERSIVE)
+    if (immersive())
+        return document().protectedImmersive()->exitRemovedImmersiveElement(this, WTFMove(deleteModelPlayerBlock));
+#endif
+
+    deleteModelPlayerBlock();
 }
 
 void HTMLModelElement::unloadModelPlayer(bool onSuspend)
@@ -612,7 +622,7 @@ void HTMLModelElement::reloadModelPlayer()
 
 #if ENABLE(MODEL_ELEMENT_ENVIRONMENT_MAP)
     if (m_environmentMapData)
-        m_modelPlayer->setEnvironmentMap(m_environmentMapData.takeAsContiguous().get());
+        m_modelPlayer->setEnvironmentMap(m_environmentMapData.takeBufferAsContiguous().get());
     else if (!m_environmentMapURL.isEmpty())
         environmentMapRequestResource();
 #endif
@@ -1163,7 +1173,7 @@ void HTMLModelElement::environmentMapResourceFinished()
     }
     if (m_modelPlayer) {
         m_environmentMapDataMemoryCost.store(m_environmentMapData.size(), std::memory_order_relaxed);
-        m_modelPlayer->setEnvironmentMap(m_environmentMapData.takeAsContiguous().get());
+        m_modelPlayer->setEnvironmentMap(m_environmentMapData.takeBufferAsContiguous().get());
     }
 
     m_environmentMapResource->removeClient(*this);
@@ -1205,7 +1215,7 @@ void HTMLModelElement::modelResourceFinished()
 
     m_dataComplete = true;
     m_dataMemoryCost.store(m_data.size(), std::memory_order_relaxed);
-    m_model = Model::create(m_data.takeAsContiguous().get(), m_resource->mimeType(), m_resource->url());
+    m_model = Model::create(m_data.takeBufferAsContiguous().get(), m_resource->mimeType(), m_resource->url());
 
     ActiveDOMObject::queueTaskToDispatchEvent(*this, TaskSource::DOMManipulation, Event::create(eventNames().loadEvent, Event::CanBubble::No, Event::IsCancelable::No));
 
@@ -1395,21 +1405,60 @@ void HTMLModelElement::requestImmersive(DOMPromiseDeferred<void>&& promise)
     });
 }
 
-void HTMLModelElement::ensureImmersivePresentation(CompletionHandler<void(ExceptionOr<const LayerHostingContextIdentifier>)>&& completion)
+void HTMLModelElement::ensureImmersivePresentation(CompletionHandler<void(ExceptionOr<LayerHostingContextIdentifier>)>&& completion)
 {
     setDetachedForImmersive(true);
-    ensureModelPlayer([completion = WTFMove(completion)] (auto result) mutable {
-        if (result.hasException())
-            return completion(result.releaseException());
+    ensureModelPlayer([weakThis = WeakPtr { *this }, completion = WTFMove(completion)] (auto result) mutable {
+        RefPtr protectedThis = weakThis.get();
+        if (!protectedThis)
+            return completion(Exception { ExceptionCode::AbortError });
 
-        completion(Exception { ExceptionCode::TypeError, "Model Player created, but next steps are not implemented"_s });
+        if (result.hasException()) {
+            protectedThis->setDetachedForImmersive(false);
+            completion(result.releaseException());
+            return;
+        }
+
+        RefPtr protectedModelPlayer = result.releaseReturnValue();
+        if (!protectedModelPlayer) {
+            protectedThis->setDetachedForImmersive(false);
+            completion(Exception { ExceptionCode::AbortError });
+            return;
+        }
+
+        protectedModelPlayer->ensureImmersivePresentation([weakThis, completion = WTFMove(completion)] (auto contextID) mutable {
+            RefPtr protectedThis = weakThis.get();
+            if (!protectedThis)
+                return completion(Exception { ExceptionCode::AbortError });
+
+            if (!contextID.has_value()) {
+                protectedThis->setDetachedForImmersive(false);
+                completion(Exception { ExceptionCode::TypeError, "Failed to decode model"_s });
+                return;
+            }
+
+            completion(WTFMove(contextID.value()));
+        });
     });
 }
 
 void HTMLModelElement::exitImmersivePresentation(CompletionHandler<void()>&& completion)
 {
-    setDetachedForImmersive(false);
-    completion();
+    RefPtr protectedModelPlayer = m_modelPlayer;
+    if (!protectedModelPlayer) {
+        setDetachedForImmersive(false);
+        completion();
+        return;
+    }
+
+    protectedModelPlayer->exitImmersivePresentation([weakThis = WeakPtr { *this }, completion = WTFMove(completion)] () mutable {
+        RefPtr protectedThis = weakThis.get();
+        if (!protectedThis)
+            return completion();
+
+        protectedThis->setDetachedForImmersive(false);
+        completion();
+    });
 }
 
 void HTMLModelElement::setDetachedForImmersive(bool detachedForImmersive)
@@ -1572,11 +1621,6 @@ void HTMLModelElement::removedFromAncestor(RemovalType removalType, ContainerNod
         m_loadModelTimer = nullptr;
 
         deleteModelPlayer();
-
-#if ENABLE(MODEL_ELEMENT_IMMERSIVE)
-        if (immersive())
-            document().protectedImmersive()->exitRemovedImmersiveElement(this);
-#endif
     }
 }
 

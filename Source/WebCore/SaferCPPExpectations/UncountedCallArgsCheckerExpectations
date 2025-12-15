@@ -31,7 +31,6 @@ Modules/model-element/HTMLModelElement.cpp
 Modules/pictureinpicture/HTMLVideoElementPictureInPicture.cpp
 Modules/push-api/PushManager.cpp
 Modules/push-api/PushSubscription.cpp
-Modules/push-api/ServiceWorkerRegistrationPushAPI.cpp
 Modules/remoteplayback/RemotePlayback.cpp
 Modules/speech/SpeechSynthesis.cpp
 Modules/storage/StorageManager.cpp
@@ -53,7 +52,6 @@ Modules/webaudio/AudioSummingJunction.cpp
 Modules/webaudio/AudioWorkletGlobalScope.cpp
 Modules/webaudio/AudioWorkletMessagingProxy.cpp
 Modules/webaudio/AudioWorkletNode.cpp
-Modules/webaudio/BiquadFilterNode.cpp
 [ iOS ] Modules/webaudio/ChannelMergerNode.cpp
 Modules/webaudio/ConvolverNode.cpp
 Modules/webaudio/DefaultAudioDestinationNode.cpp
@@ -80,7 +78,6 @@ Modules/webdatabase/LocalDOMWindowWebDatabase.cpp
 Modules/webdatabase/SQLStatement.cpp
 Modules/webdatabase/SQLTransaction.cpp
 Modules/webdatabase/SQLTransactionBackend.cpp
-Modules/webdatabase/SQLTransactionCoordinator.cpp
 Modules/webtransport/WebTransport.cpp
 accessibility/AXLogger.cpp
 accessibility/AXObjectCache.cpp
@@ -128,7 +125,6 @@ bindings/js/JSCSSStyleDeclarationCustom.cpp
 bindings/js/JSCanvasRenderingContext2DCustom.cpp
 bindings/js/JSCustomElementInterface.cpp
 bindings/js/JSCustomElementRegistryCustom.cpp
-bindings/js/JSDOMAsyncIterator.h
 bindings/js/JSDOMBindingSecurity.cpp
 bindings/js/JSDOMBindingSecurity.h
 bindings/js/JSDOMBindingSecurityInlines.h
@@ -259,7 +255,6 @@ css/DeprecatedCSSOMRGBColor.h
 css/FontFace.cpp
 css/FontFaceSet.cpp
 css/ImmutableStyleProperties.cpp
-css/MediaList.cpp
 css/MediaQueryList.cpp
 css/MediaQueryMatcher.cpp
 css/MutableStyleProperties.cpp
@@ -434,7 +429,6 @@ html/MediaElementSession.cpp
 html/ModelDocument.cpp
 html/OffscreenCanvas.cpp
 html/PluginDocument.cpp
-html/RadioNodeList.cpp
 [ iOS ] html/TextFieldInputType.cpp
 html/ValidatedFormListedElement.cpp
 html/ValidationMessage.cpp
@@ -509,7 +503,6 @@ layout/integration/inline/LayoutIntegrationLineLayout.cpp
 loader/ApplicationManifestLoader.cpp
 loader/CrossOriginPreflightChecker.cpp
 loader/DocumentThreadableLoader.cpp
-loader/DocumentWriter.cpp
 loader/FrameLoadRequest.cpp
 [ iOS ] loader/FrameLoader.cpp
 loader/MediaResourceLoader.cpp
@@ -604,7 +597,6 @@ page/text-extraction/TextExtraction.cpp
 page/writing-tools/WritingToolsController.mm
 platform/DragImage.cpp
 platform/ScrollAnimationSmooth.cpp
-platform/ScrollAnimator.cpp
 platform/ScrollView.cpp
 platform/ScrollableArea.cpp
 platform/Widget.cpp
@@ -614,7 +606,6 @@ platform/audio/cocoa/AudioFileReaderCocoa.cpp
 [ Mac ] platform/cocoa/DragImageCocoa.mm
 platform/cocoa/PlaybackSessionModelMediaElement.mm
 platform/cocoa/VideoPresentationModelVideoElement.mm
-platform/encryptedmedia/CDMProxy.cpp
 platform/encryptedmedia/CDMProxy.h
 platform/graphics/BitmapImage.cpp
 platform/graphics/BitmapImage.h
@@ -713,7 +704,6 @@ rendering/BorderPainter.cpp
 rendering/CSSFilterRenderer.cpp
 rendering/CaretRectComputation.cpp
 rendering/EllipsisBoxPainter.cpp
-rendering/GlyphDisplayListCache.h
 rendering/HitTestResult.cpp
 rendering/ImageQualityController.cpp
 rendering/InlineBoxPainter.cpp
@@ -781,7 +771,7 @@ rendering/shapes/ShapeOutsideInfo.cpp
 rendering/shapes/ShapeOutsideInfo.h
 rendering/style/RenderStyle.cpp
 rendering/style/RenderStyleInlines.h
-rendering/style/SVGRenderStyle.cpp
+rendering/style/RenderStylePropertiesGettersCustom.h
 rendering/style/StyleCachedImage.cpp
 rendering/style/StyleCanvasImage.cpp
 rendering/style/StyleCrossfadeImage.cpp
@@ -843,6 +833,8 @@ style/StyleAdjuster.cpp
 style/StyleBuilder.cpp
 style/StyleBuilderCustom.h
 style/StyleBuilderState.cpp
+style/StyleChangedAnimatableProperties.cpp
+style/StyleDifference.cpp
 style/StyleExtractor.cpp
 style/StyleExtractorCustom.h
 style/StyleInterpolation.cpp
@@ -866,61 +858,38 @@ style/values/transforms/StyleTransformList.cpp
 style/values/transforms/StyleTranslate.cpp
 style/values/will-change/StyleWillChange.h
 svg/SVGAElement.cpp
-svg/SVGAElement.h
 svg/SVGAltGlyphElement.cpp
 svg/SVGCircleElement.cpp
-svg/SVGCircleElement.h
 svg/SVGClipPathElement.cpp
 svg/SVGClipPathElement.h
 svg/SVGComponentTransferFunctionElement.cpp
 svg/SVGComponentTransferFunctionElement.h
 svg/SVGCursorElement.cpp
-svg/SVGCursorElement.h
 svg/SVGElement.cpp
 svg/SVGElement.h
-svg/SVGElementInlines.h
-svg/SVGEllipseElement.h
 svg/SVGFEBlendElement.h
 svg/SVGFEColorMatrixElement.cpp
 svg/SVGFEColorMatrixElement.h
 svg/SVGFEComponentTransferElement.cpp
-svg/SVGFEComponentTransferElement.h
 svg/SVGFECompositeElement.h
 svg/SVGFEConvolveMatrixElement.cpp
 svg/SVGFEConvolveMatrixElement.h
-svg/SVGFEDiffuseLightingElement.cpp
-svg/SVGFEDiffuseLightingElement.h
 svg/SVGFEDisplacementMapElement.h
-svg/SVGFEDropShadowElement.h
 svg/SVGFEGaussianBlurElement.h
 svg/SVGFEImageElement.cpp
-svg/SVGFEImageElement.h
-svg/SVGFELightElement.h
-svg/SVGFEMergeNodeElement.h
 svg/SVGFEMorphologyElement.h
-svg/SVGFEOffsetElement.h
-svg/SVGFESpecularLightingElement.cpp
-svg/SVGFESpecularLightingElement.h
-svg/SVGFETileElement.h
 svg/SVGFETurbulenceElement.h
 svg/SVGFilterElement.h
-svg/SVGFilterPrimitiveStandardAttributes.h
-svg/SVGFitToViewBox.h
 svg/SVGFontFaceElement.cpp
 svg/SVGFontFaceUriElement.cpp
-svg/SVGForeignObjectElement.h
-svg/SVGGeometryElement.h
 svg/SVGGlyphRefElement.cpp
 svg/SVGGradientElement.cpp
 svg/SVGGradientElement.h
 svg/SVGGraphicsElement.cpp
 svg/SVGGraphicsElement.h
 svg/SVGImageElement.cpp
-svg/SVGImageElement.h
 svg/SVGLengthContext.cpp
-svg/SVGLineElement.h
 svg/SVGLinearGradientElement.cpp
-svg/SVGLinearGradientElement.h
 svg/SVGMPathElement.cpp
 svg/SVGMarkerElement.cpp
 svg/SVGMarkerElement.h
@@ -935,23 +904,16 @@ svg/SVGPatternElement.h
 svg/SVGPolyElement.cpp
 svg/SVGPolyElement.h
 svg/SVGRadialGradientElement.cpp
-svg/SVGRadialGradientElement.h
-svg/SVGRectElement.h
 svg/SVGSVGElement.cpp
-svg/SVGSVGElement.h
-svg/SVGStopElement.h
 svg/SVGTRefElement.cpp
 svg/SVGTextContentElement.cpp
 svg/SVGTextContentElement.h
 svg/SVGTextPathElement.cpp
 svg/SVGTextPathElement.h
 svg/SVGTextPositioningElement.cpp
-svg/SVGTextPositioningElement.h
 svg/SVGToOTFFontConversion.cpp
 svg/SVGURIReference.cpp
-svg/SVGURIReference.h
 svg/SVGUseElement.cpp
-svg/SVGUseElement.h
 svg/SVGViewSpec.cpp
 svg/SVGViewSpec.h
 svg/animation/SVGSMILElement.cpp

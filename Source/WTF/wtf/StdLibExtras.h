@@ -36,6 +36,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <type_traits>
 #include <utility>
@@ -535,6 +536,9 @@ template<typename T> concept HasSwitchOn = requires(T t) {
     t.switchOn([](const auto&) {});
 };
 
+template<typename Derived, typename Base>
+concept DerivedFromOrConvertibleTo = std::is_base_of_v<Base, Derived> || std::is_convertible_v<Derived, Base>;
+
 #ifdef _LIBCPP_VERSION
 
 // Single-variant switch-based visit function adapted from https://www.reddit.com/r/cpp/comments/kst2pu/comment/giilcxv/.
@@ -864,7 +868,7 @@ ALWAYS_INLINE constexpr typename remove_reference<T>::type&& move(T&& value)
 namespace WTF {
 
 template<class T, class... Args>
-ALWAYS_INLINE decltype(auto) makeUnique(Args&&... args)
+[[nodiscard]] ALWAYS_INLINE decltype(auto) makeUnique(Args&&... args)
 {
     static_assert(std::is_same<typename T::WTFIsFastMallocAllocated, int>::value, "T should use FastMalloc (WTF_DEPRECATED_MAKE_FAST_ALLOCATED)");
     static_assert(!HasRefPtrMemberFunctions<T>::value, "T should not be RefCounted");
@@ -876,14 +880,14 @@ ALWAYS_INLINE decltype(auto) makeUnique(Args&&... args)
 // case of reassignment, ref-counting forwarding wouldn't be safe. This function is commonly used
 // with `lazyInitialize()` to initialize a const data member.
 template<class T, class U = T, class... Args>
-ALWAYS_INLINE const std::unique_ptr<U> makeUniqueWithoutRefCountedCheck(Args&&... args)
+[[nodiscard]] ALWAYS_INLINE const std::unique_ptr<U> makeUniqueWithoutRefCountedCheck(Args&&... args)
 {
     static_assert(std::is_same<typename T::WTFIsFastMallocAllocated, int>::value, "T should use FastMalloc (WTF_DEPRECATED_MAKE_FAST_ALLOCATED)");
     return std::unique_ptr<U>(std::make_unique<T>(std::forward<Args>(args)...));
 }
 
 template<class T, class... Args>
-ALWAYS_INLINE decltype(auto) makeUniqueWithoutFastMallocCheck(Args&&... args)
+[[nodiscard]] ALWAYS_INLINE decltype(auto) makeUniqueWithoutFastMallocCheck(Args&&... args)
 {
     static_assert(!HasRefPtrMemberFunctions<T>::value, "T should not be RefCounted");
     return std::make_unique<T>(std::forward<Args>(args)...);
@@ -1070,10 +1074,10 @@ template<typename T, std::size_t TExtent, typename U, std::size_t UExtent>
     requires(TriviallyComparableOneByteCodeUnits<T, U>)
 size_t find(std::span<T, TExtent> haystack, std::span<U, UExtent> needle)
 {
-#if !HAVE(MEMMEM)
     if (needle.empty())
         return 0;
 
+#if !HAVE(MEMMEM)
     if (haystack.size() < needle.size())
         return notFound;
 
@@ -1508,11 +1512,11 @@ template<typename Object, typename Allocator = FastMalloc> void destroyWithTrail
     Allocator::free(object);
 }
 
-template<typename T, typename U>
-ALWAYS_INLINE void lazyInitialize(const std::unique_ptr<T>& ptr, const std::unique_ptr<U>&& obj)
+template<typename T, typename TDeleter, typename U, typename UDeleter>
+ALWAYS_INLINE void lazyInitialize(const std::unique_ptr<T, TDeleter>& ptr, const std::unique_ptr<U, UDeleter>&& obj)
 {
     RELEASE_ASSERT(!ptr);
-    const_cast<std::unique_ptr<T>&>(ptr) = std::move(const_cast<std::unique_ptr<U>&&>(obj));
+    const_cast<std::unique_ptr<T, TDeleter>&>(ptr) = std::move(const_cast<std::unique_ptr<U, UDeleter>&&>(obj)); // NOLINT.
 }
 
 ALWAYS_INLINE std::optional<double> stringToDouble(std::span<const char> buffer, size_t& parsedLength)
@@ -1556,6 +1560,12 @@ struct SizedUnsignedTrait<8> {
 };
 template<typename T>
 using SameSizeUnsignedInteger = SizedUnsignedTrait<sizeof(T)>::Type;
+
+namespace Views {
+
+static constexpr auto dereferenceView = std::views::transform([](auto&& x) -> decltype(auto) { return *x; });
+
+}
 
 } // namespace WTF
 
@@ -1633,5 +1643,7 @@ using WTF::SameSizeUnsignedInteger;
 using WTF::SizedUnsignedTrait;
 using WTF::VariantWrapper;
 using WTF::VariantOrSingle;
+
+using WTF::Views::dereferenceView;
 
 WTF_ALLOW_UNSAFE_BUFFER_USAGE_END

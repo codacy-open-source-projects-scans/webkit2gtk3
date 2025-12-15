@@ -125,7 +125,7 @@ ViewPlatform::ViewPlatform(WPEDisplay* display, const API::PageConfiguration& co
         webView.toplevelStateChanged(previousState, wpe_view_get_toplevel_state(view));
     }), this);
 #if USE(GBM)
-    g_signal_connect(m_wpeView.get(), "preferred-dma-buf-formats-changed", G_CALLBACK(+[](WPEView*, gpointer userData) {
+    g_signal_connect(m_wpeView.get(), "preferred-buffer-formats-changed", G_CALLBACK(+[](WPEView*, gpointer userData) {
         auto& webView = *reinterpret_cast<ViewPlatform*>(userData);
         webView.page().preferredBufferFormatsDidChange();
     }), this);
@@ -411,7 +411,6 @@ gboolean ViewPlatform::handleEvent(WPEEvent* event)
         m_touchEvents.set(wpe_event_touch_get_sequence_id(event), event);
         page().handleTouchEvent(nullptr, NativeWebTouchEvent(event, touchPointsForEvent(event)));
 #endif
-        handleGesture(event);
         return TRUE;
     case WPE_EVENT_TOUCH_UP:
     case WPE_EVENT_TOUCH_CANCEL: {
@@ -421,7 +420,6 @@ gboolean ViewPlatform::handleEvent(WPEEvent* event)
         m_touchEvents.remove(wpe_event_touch_get_sequence_id(event));
         page().handleTouchEvent(nullptr, NativeWebTouchEvent(event, WTFMove(points)));
 #endif
-        handleGesture(event);
         return TRUE;
     }
     case WPE_EVENT_TOUCH_MOVE:
@@ -429,7 +427,6 @@ gboolean ViewPlatform::handleEvent(WPEEvent* event)
         m_touchEvents.set(wpe_event_touch_get_sequence_id(event), event);
         page().handleTouchEvent(nullptr, NativeWebTouchEvent(event, touchPointsForEvent(event)));
 #endif
-        handleGesture(event);
         return TRUE;
     };
     return FALSE;

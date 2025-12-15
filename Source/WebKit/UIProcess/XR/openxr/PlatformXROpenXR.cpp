@@ -208,14 +208,18 @@ void OpenXRCoordinator::createLayerProjection(uint32_t width, uint32_t height, b
             active.renderQueue->dispatch([this, width, height, alpha, completionHandler = WTFMove(reply)] mutable {
                 if (!collectSwapchainFormatsIfNeeded()) {
                     RELEASE_LOG(XR, "OpenXRCoordinator: no supported swapchain formats");
-                    completionHandler(std::nullopt);
+                    callOnMainRunLoop([completion = WTFMove(completionHandler)] mutable {
+                        completion(std::nullopt);
+                    });
                     return;
                 }
 
                 auto swapchain = createSwapchain(width, height, alpha);
                 if (!swapchain) {
                     RELEASE_LOG(XR, "OpenXRCoordinator: failed to create swapchain");
-                    completionHandler(std::nullopt);
+                    callOnMainRunLoop([completion = WTFMove(completionHandler)] mutable {
+                        completion(std::nullopt);
+                    });
                     return;
                 }
 
@@ -226,7 +230,9 @@ void OpenXRCoordinator::createLayerProjection(uint32_t width, uint32_t height, b
 #endif
                     auto layerHandle = m_nextLayerHandle++;
                     m_layers.add(layerHandle, WTFMove(layer));
-                    completionHandler(layerHandle);
+                    callOnMainRunLoop([completion = WTFMove(completionHandler), handle = layerHandle] mutable {
+                        completion(handle);
+                    });
                 }
             });
         });
@@ -261,6 +267,10 @@ void OpenXRCoordinator::startSession(WebPageProxy& page, WeakPtr<PlatformXRCoord
                     return;
                 }
                 m_input = OpenXRInput::create(m_instance, m_session, systemProperties(m_instance, m_systemId));
+                if (!m_input) {
+                    cleanupAllResources();
+                    return;
+                }
                 renderLoop(renderState);
             });
         },
@@ -387,8 +397,10 @@ void OpenXRCoordinator::requestHitTestSource(WebPageProxy& page, const PlatformX
 
             auto copiedOptions = makeUniqueRef<PlatformXR::HitTestOptions>(options);
             active.renderQueue->dispatch([this, renderState = active.renderState, options = WTFMove(copiedOptions), completionHandler = WTFMove(completionHandler)]() mutable {
+#if ENABLE(WEBXR_HIT_TEST)
                 if (!renderState->hitTestManager)
                     renderState->hitTestManager = makeUnique<OpenXRHitTestManager>(m_session);
+#endif
                 auto addResult = renderState->hitTestSources.add(renderState->nextHitTestSource, WTFMove(options));
                 ASSERT_UNUSED(addResult.isNewEntry, addResult);
                 callOnMainRunLoop([source = renderState->nextHitTestSource, completionHandler = WTFMove(completionHandler)] mutable {
@@ -444,8 +456,10 @@ void OpenXRCoordinator::requestTransientInputHitTestSource(WebPageProxy& page, c
 
             auto copiedOptions = makeUniqueRef<PlatformXR::TransientInputHitTestOptions>(options);
             active.renderQueue->dispatch([this, renderState = active.renderState, options = WTFMove(copiedOptions), completionHandler = WTFMove(completionHandler)]() mutable {
+#if ENABLE(WEBXR_HIT_TEST)
                 if (!renderState->hitTestManager)
                     renderState->hitTestManager = makeUnique<OpenXRHitTestManager>(m_session);
+#endif
                 auto addResult = renderState->transientInputHitTestSources.add(renderState->nextTransientInputHitTestSource, WTFMove(options));
                 ASSERT_UNUSED(addResult.isNewEntry, addResult);
                 callOnMainRunLoop([source = renderState->nextTransientInputHitTestSource, completionHandler = WTFMove(completionHandler)] mutable {
@@ -849,7 +863,7 @@ OpenXRCoordinator::PollResult OpenXRCoordinator::pollEvents()
         case XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED: {
             auto* event = reinterpret_cast<XrEventDataInteractionProfileChanged*>(&runtimeEvent);
             LOG(XR, "OpenXR interaction profile changed for session %p", static_cast<void*>(event->session));
-            if (m_input && event->session == m_session)
+            if (event->session == m_session)
                 m_input->updateInteractionProfile();
             break;
         }
@@ -895,8 +909,7 @@ PlatformXR::FrameData OpenXRCoordinator::populateFrameData(Box<RenderState> rend
     frameData.isPositionValid = viewState.viewStateFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT;
     frameData.isPositionEmulated = !(viewState.viewStateFlags & XR_SPACE_LOCATION_POSITION_TRACKED_BIT);
 
-    if (m_input)
-        frameData.inputSources = m_input->collectInputSources(renderState->frameState, m_localSpace);
+    frameData.inputSources = m_input->collectInputSources(renderState->frameState, m_localSpace);
 
     frameData.origin = XrIdentityPose();
 

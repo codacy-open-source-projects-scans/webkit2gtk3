@@ -37,7 +37,7 @@ namespace WebCore {
 using namespace CSS::Literals;
 
 class BorderData {
-    friend class RenderStyle;
+    friend class RenderStyleProperties;
 public:
     using Radii = Style::BorderRadius;
 
@@ -68,7 +68,7 @@ public:
             return 0_css_px;
         if (m_image.overridesBorderWidths()) {
             if (auto fixedBorderWidthValue = m_image.width().values[side].tryFixed())
-                return Style::LineWidth { *fixedBorderWidthValue };
+                return Style::LineWidth { fixedBorderWidthValue->unresolvedValue() };
         }
         return m_edges[side].width();
     }
@@ -137,32 +137,38 @@ public:
     const BorderValue& top() const { return m_edges.top(); }
     const BorderValue& bottom() const { return m_edges.bottom(); }
 
+    Style::BorderImage& image() { return m_image; }
     const Style::BorderImage& image() const { return m_image; }
+
+    Style::BorderRadius& radii() { return m_radii; }
+    const Style::BorderRadius& radii() const { return m_radii; }
+
+    Style::BorderRadiusValue& topLeftRadius() { return m_radii.topLeft(); }
+    Style::BorderRadiusValue& topRightRadius() { return m_radii.topRight(); }
+    Style::BorderRadiusValue& bottomLeftRadius() { return m_radii.bottomLeft(); }
+    Style::BorderRadiusValue& bottomRightRadius() { return m_radii.bottomRight(); }
 
     const Style::BorderRadiusValue& topLeftRadius() const { return m_radii.topLeft(); }
     const Style::BorderRadiusValue& topRightRadius() const { return m_radii.topRight(); }
     const Style::BorderRadiusValue& bottomLeftRadius() const { return m_radii.bottomLeft(); }
     const Style::BorderRadiusValue& bottomRightRadius() const { return m_radii.bottomRight(); }
-    const Style::BorderRadius& radii() const { return m_radii; }
 
     const Style::CornerShapeValue& topLeftCornerShape() const { return m_cornerShapes.topLeft(); }
     const Style::CornerShapeValue& topRightCornerShape() const { return m_cornerShapes.topRight(); }
     const Style::CornerShapeValue& bottomLeftCornerShape() const { return m_cornerShapes.bottomLeft(); }
     const Style::CornerShapeValue& bottomRightCornerShape() const { return m_cornerShapes.bottomRight(); }
 
-    bool isEquivalentForPainting(const BorderData& other, bool currentColorDiffers) const;
+    bool containsCurrentColor() const;
 
     void dump(TextStream&, DumpStyleValues = DumpStyleValues::All) const;
 
     bool operator==(const BorderData&) const = default;
 
 private:
-    bool containsCurrentColor() const;
-
     RectEdges<BorderValue> m_edges;
     Style::BorderImage m_image;
     Style::BorderRadius m_radii { Style::BorderRadiusValue { 0_css_px, 0_css_px } };
-    Style::CornerShape m_cornerShapes { Style::CornerShapeValue::round() };
+    Style::CornerShape m_cornerShapes { Style::CornerShapeValue(CSS::Keyword::Round { }) };
 };
 
 WTF::TextStream& operator<<(WTF::TextStream&, const BorderData&);

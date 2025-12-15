@@ -32,6 +32,7 @@
 
 #include <wtf/MainThread.h>
 #include <wtf/TZoneMallocInlines.h>
+#include <wtf/glib/GMallocString.h>
 
 GST_DEBUG_CATEGORY(webkit_webrtc_data_channel_debug);
 #define GST_CAT_DEFAULT webkit_webrtc_data_channel_debug
@@ -115,7 +116,7 @@ GStreamerDataChannelHandler::GStreamerDataChannelHandler(GRefPtr<GstWebRTCDataCh
         handler->onMessageData(bytes);
     }), this);
     g_signal_connect_swapped(m_channel.get(), "on-message-string", G_CALLBACK(+[](GStreamerDataChannelHandler* handler, const char* message) {
-        handler->onMessageString(message);
+        handler->onMessageString(CStringView::unsafeFromUTF8(message));
     }), this);
     g_signal_connect_swapped(m_channel.get(), "on-error", G_CALLBACK(+[](GStreamerDataChannelHandler* handler, GError* error) {
         handler->onError(error);
@@ -304,8 +305,8 @@ bool GStreamerDataChannelHandler::checkState()
     }
 
 #ifndef GST_DISABLE_GST_DEBUG
-    GUniquePtr<char> stateString(g_enum_to_string(GST_TYPE_WEBRTC_DATA_CHANNEL_STATE, channelState));
-    DC_DEBUG("Dispatching state change to %s on channel %p", stateString.get(), m_channel.get());
+    auto stateString = GMallocString::unsafeAdoptFromUTF8(g_enum_to_string(GST_TYPE_WEBRTC_DATA_CHANNEL_STATE, channelState));
+    DC_DEBUG("Dispatching state change to %s on channel %p", stateString.utf8(), m_channel.get());
 #endif
     postTask([client = m_client, state] {
         if (!*client) {
@@ -377,27 +378,26 @@ void GStreamerDataChannelHandler::onMessageData(GBytes* bytes)
     });
 }
 
-void GStreamerDataChannelHandler::onMessageString(const char* message)
+void GStreamerDataChannelHandler::onMessageString(CStringView message)
 {
     Locker locker { m_clientLock };
 
-    DC_TRACE("Incoming string: %s", message);
+    DC_TRACE("Incoming string: %s", message.utf8());
     if (!m_client) {
         DC_DEBUG("No client yet, keeping as buffered message");
-        m_pendingMessages.append(String::fromUTF8(message));
+        m_pendingMessages.append(String(message.span()));
         return;
     }
 
     if (!*m_client)
         return;
 
-    auto string = String::fromUTF8(message);
-    DC_DEBUG("Dispatching string of size %u", string.length());
-    postTask([client = m_client, string = WTFMove(string)] {
+    DC_DEBUG("Dispatching string of size %zu", message.lengthInBytes());
+    postTask([client = m_client, string = String(message.span())] mutable {
         if (!*client)
             return;
 
-        client.value()->didReceiveStringData(string);
+        client.value()->didReceiveStringData(WTFMove(string));
     });
 }
 

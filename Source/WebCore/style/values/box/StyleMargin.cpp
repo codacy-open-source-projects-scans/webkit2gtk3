@@ -27,7 +27,6 @@
 
 #include "RenderStyleInlines.h"
 #include "StyleBuilderChecking.h"
-#include "StyleBuilderConverter.h"
 #include "StyleLengthWrapper+CSSValueConversion.h"
 
 namespace WebCore {
@@ -53,7 +52,7 @@ auto CSSValueConversion<MarginEdge>::operator()(BuilderState& state, const CSSPr
         if (isFontIndependentUnit)
             usedZoom = evaluationTimeZoomEnabled(state) ? 1.0f : state.style().usedZoom();
         else
-            usedZoom = zoomWithTextZoomFactor(state);
+            usedZoom = state.zoomWithTextZoomFactor();
 
         return state.cssToLengthConversionData().copyWithAdjustedZoom(usedZoom, MarginEdge::Fixed::range.zoomOptions);
     };
@@ -63,10 +62,9 @@ auto CSSValueConversion<MarginEdge>::operator()(BuilderState& state, const CSSPr
         : cssToLengthConversionDataWithTextZoomFactorIfNeeded(state, primitiveValue.isFontIndependentLength());
 
     if (primitiveValue.isLength()) {
-        auto textZoom = (evaluationTimeZoomEnabled(state) && !primitiveValue.isFontIndependentLength()) ? conversionData.zoom() : 1.0f;
         return MarginEdge {
             typename MarginEdge::Fixed {
-                CSS::clampToRange<MarginEdge::Fixed::range, float>(primitiveValue.resolveAsLength(conversionData) * textZoom, minValueForCssLength, maxValueForCssLength),
+                CSS::clampToRange<MarginEdge::Fixed::range, float>(primitiveValue.resolveAsLength(conversionData), minValueForCssLength, maxValueForCssLength),
             },
             primitiveValue.primitiveType() == CSSUnitType::CSS_QUIRKY_EM
         };

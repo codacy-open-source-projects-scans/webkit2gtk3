@@ -76,7 +76,7 @@ void InspectorTimelineAgent::didCreateFrontendAndBackend()
 
 void InspectorTimelineAgent::willDestroyFrontendAndBackend(Inspector::DisconnectReason)
 {
-    disable();
+    std::ignore = disable();
 }
 
 Inspector::Protocol::ErrorStringOr<void> InspectorTimelineAgent::enable()
@@ -157,7 +157,7 @@ void InspectorTimelineAgent::internalDisable()
 {
     Ref { m_instrumentingAgents.get() }->setEnabledTimelineAgent(nullptr);
 
-    stop();
+    std::ignore = stop();
 
     m_instruments.clear();
 }
@@ -178,7 +178,7 @@ void InspectorTimelineAgent::internalStart(std::optional<int>&& maxCallStackDept
 
     Ref { m_instrumentingAgents.get() }->setTrackingTimelineAgent(this);
 
-    m_environment.debugger()->addObserver(*this);
+    checkedEnvironment()->debugger()->addObserver(*this);
 
     m_frontendDispatcher->recordingStarted(timestamp());
 }
@@ -187,7 +187,7 @@ void InspectorTimelineAgent::internalStop()
 {
     Ref { m_instrumentingAgents.get() }->setTrackingTimelineAgent(nullptr);
 
-    m_environment.debugger()->removeObserver(*this, true);
+    checkedEnvironment()->debugger()->removeObserver(*this, true);
 
     // Complete all pending records to prevent discarding events that are currently in progress.
     while (!m_recordStack.isEmpty())
@@ -205,12 +205,12 @@ void InspectorTimelineAgent::autoCaptureStarted() const
 
 double InspectorTimelineAgent::timestamp()
 {
-    return m_environment.executionStopwatch().elapsedTime().seconds();
+    return checkedEnvironment()->executionStopwatch().elapsedTime().seconds();
 }
 
 std::optional<double> InspectorTimelineAgent::timestampFromMonotonicTime(MonotonicTime time)
 {
-    auto stopwatchTime = m_environment.executionStopwatch().fromMonotonicTime(time);
+    auto stopwatchTime = checkedEnvironment()->executionStopwatch().fromMonotonicTime(time);
     if (!stopwatchTime)
         return std::nullopt;
     return stopwatchTime->seconds();
@@ -370,7 +370,7 @@ void InspectorTimelineAgent::startProgrammaticCapture()
     if (auto* webDebuggerAgent = Ref { m_instrumentingAgents.get() }->enabledWebDebuggerAgent()) {
         m_programmaticCaptureRestoreBreakpointActiveValue = webDebuggerAgent->breakpointsActive();
         if (m_programmaticCaptureRestoreBreakpointActiveValue)
-            webDebuggerAgent->setBreakpointsActive(false);
+            std::ignore = webDebuggerAgent->setBreakpointsActive(false);
     } else
         m_programmaticCaptureRestoreBreakpointActiveValue = false;
 
@@ -391,7 +391,7 @@ void InspectorTimelineAgent::stopProgrammaticCapture()
     // Re-enable breakpoints if they were enabled.
     if (m_programmaticCaptureRestoreBreakpointActiveValue) {
         if (auto* webDebuggerAgent = Ref { m_instrumentingAgents.get() }->enabledWebDebuggerAgent())
-            webDebuggerAgent->setBreakpointsActive(true);
+            std::ignore = webDebuggerAgent->setBreakpointsActive(true);
     }
 }
 
@@ -432,9 +432,9 @@ void InspectorTimelineAgent::toggleScriptProfilerInstrument(InstrumentState stat
 {
     if (auto* scriptProfilerAgent = Ref { m_instrumentingAgents.get() }->persistentScriptProfilerAgent()) {
         if (state == InstrumentState::Start)
-            scriptProfilerAgent->startTracking(true);
+            std::ignore = scriptProfilerAgent->startTracking(true);
         else
-            scriptProfilerAgent->stopTracking();
+            std::ignore = scriptProfilerAgent->stopTracking();
     }
 }
 
@@ -443,9 +443,9 @@ void InspectorTimelineAgent::toggleHeapInstrument(InstrumentState state)
     if (auto* heapAgent = Ref { m_instrumentingAgents.get() }->persistentWebHeapAgent()) {
         if (state == InstrumentState::Start) {
             if (shouldStartHeapInstrument())
-                heapAgent->startTracking();
+                std::ignore = heapAgent->startTracking();
         } else
-            heapAgent->stopTracking();
+            std::ignore = heapAgent->stopTracking();
     }
 }
 
@@ -454,9 +454,9 @@ void InspectorTimelineAgent::toggleCPUInstrument(InstrumentState state)
 #if ENABLE(RESOURCE_USAGE)
     if (auto* cpuProfilerAgent = Ref { m_instrumentingAgents.get() }->persistentCPUProfilerAgent()) {
         if (state == InstrumentState::Start)
-            cpuProfilerAgent->startTracking();
+            std::ignore = cpuProfilerAgent->startTracking();
         else
-            cpuProfilerAgent->stopTracking();
+            std::ignore = cpuProfilerAgent->stopTracking();
     }
 #else
     UNUSED_PARAM(state);
@@ -468,9 +468,9 @@ void InspectorTimelineAgent::toggleMemoryInstrument(InstrumentState state)
 #if ENABLE(RESOURCE_USAGE)
     if (auto* memoryAgent = Ref { m_instrumentingAgents.get() }->persistentMemoryAgent()) {
         if (state == InstrumentState::Start)
-            memoryAgent->startTracking();
+            std::ignore = memoryAgent->startTracking();
         else
-            memoryAgent->stopTracking();
+            std::ignore = memoryAgent->stopTracking();
     }
 #else
     UNUSED_PARAM(state);
@@ -492,9 +492,9 @@ void InspectorTimelineAgent::toggleAnimationInstrument(InstrumentState state)
 {
     if (auto* animationAgent = Ref { m_instrumentingAgents.get() }->persistentAnimationAgent()) {
         if (state == InstrumentState::Start)
-            animationAgent->startTracking();
+            std::ignore = animationAgent->startTracking();
         else
-            animationAgent->stopTracking();
+            std::ignore = animationAgent->stopTracking();
     }
 }
 

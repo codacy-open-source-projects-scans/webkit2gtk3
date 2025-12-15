@@ -32,7 +32,9 @@
 #include "Test.h"
 #include <functional>
 #include <wtf/HashSet.h>
+#include <wtf/RefCountedAndCanMakeWeakPtr.h>
 #include <wtf/RefPtr.h>
+#include <wtf/WeakPtr.h>
 #include <wtf/text/MakeString.h>
 #include <wtf/text/StringHash.h>
 
@@ -955,6 +957,140 @@ TEST(WTF_HashSet, RangesAllAnyNoneOf)
     EXPECT_TRUE(std::ranges::any_of(set1, [] (int el) {
         return el < 2;
     }));
+}
+
+// FIXME: Tests using ASSERT_DEATH currently panic on playstation
+#if !PLATFORM(PLAYSTATION)
+TEST(WTF_HashSetDeathTest, StringViewHashTranslatorEmptyValue)
+{
+    HashSet<String> hashSet;
+    auto shouldCrash = [&] {
+        hashSet.add<StringViewHashTranslator>(StringView(String())); // Results in HashTraits empty value
+    };
+    ASSERT_DEATH_IF_SUPPORTED(shouldCrash(), "");
+}
+
+TEST(WTF_HashSetDeathTest, StringViewHashTranslatorDeletedValue)
+{
+    HashSet<String> hashSet;
+    auto shouldCrash = [&] {
+        hashSet.add<StringViewHashTranslator>(StringView(String(WTF::HashTableDeletedValue))); // Results in HashTraits deleted value
+    };
+
+    ASSERT_DEATH_IF_SUPPORTED(shouldCrash(), "");
+}
+
+TEST(WTF_HashSetDeathTest, ASCIICaseInsensitiveStringViewHashTranslatorEmptyValue)
+{
+    HashSet<String> hashSet;
+    auto shouldCrash = [&] {
+        hashSet.add<ASCIICaseInsensitiveStringViewHashTranslator>(StringView(String())); // Results in HashTraits empty value
+    };
+    ASSERT_DEATH_IF_SUPPORTED(shouldCrash(), "");
+}
+
+TEST(WTF_HashSetDeathTest, ASCIICaseInsensitiveStringViewHashTranslatorDeletedValue)
+{
+    HashSet<String> hashSet;
+    auto shouldCrash = [&] {
+        hashSet.add<ASCIICaseInsensitiveStringViewHashTranslator>(StringView(String(WTF::HashTableDeletedValue))); // Results in HashTraits deleted value
+    };
+
+    ASSERT_DEATH_IF_SUPPORTED(shouldCrash(), "");
+}
+
+TEST(WTF_HashSetDeathTest, HashTranslatorASCIILiteralEmptyValue)
+{
+    HashSet<String> hashSet;
+    auto shouldCrash = [&] {
+        hashSet.add<HashTranslatorASCIILiteral>(ASCIILiteral()); // Results in HashTraits empty value
+    };
+    ASSERT_DEATH_IF_SUPPORTED(shouldCrash(), "");
+}
+
+TEST(WTF_HashSetDeathTest, HashTranslatorASCIILiteralDeletedValue)
+{
+    HashSet<String> hashSet;
+    auto shouldCrash = [&] {
+        hashSet.add<HashTranslatorASCIILiteral>(ASCIILiteral::deletedValue()); // Results in HashTraits deleted value
+    };
+
+    ASSERT_DEATH_IF_SUPPORTED(shouldCrash(), "");
+}
+
+#ifdef NDEBUG
+TEST(WTF_HashSetDeathTest, HashTranslatorASCIILiteralCaseInsensitiveEmptyValue)
+{
+    HashSet<String> hashSet;
+    hashSet.reserveInitialCapacity(8); // All empty buckets
+    auto invalidLookup = [&] {
+        return hashSet.contains<HashTranslatorASCIILiteralCaseInsensitive>(ASCIILiteral()); // Results in HashTraits empty value
+    };
+    EXPECT_FALSE(invalidLookup());
+}
+
+TEST(WTF_HashSet, HashTranslatorASCIILiteralCaseInsensitiveDeletedValue)
+{
+    HashSet<String> hashSet;
+    hashSet.reserveInitialCapacity(8);
+    for (size_t i = 0; i < 8; ++i)
+        hashSet.add(String::number(i));
+    for (size_t i = 0; i < 8; ++i)
+        hashSet.remove(String::number(i)); // Lots of deleted buckets (100% deleted buckets is impossible, so we do our best)
+    auto invalidLookup = [&] {
+        return hashSet.contains<HashTranslatorASCIILiteralCaseInsensitive>(ASCIILiteral::deletedValue()); // Results in HashTraits deleted value
+    };
+
+    EXPECT_FALSE(invalidLookup());
+}
+#endif
+
+#endif
+
+class Object : public WTF::RefCountedAndCanMakeWeakPtr<Object> {
+public:
+    static Ref<Object> create() { return adoptRef(*new Object); }
+
+private:
+    Object() = default;
+};
+
+TEST(WTF_HashSet, WeakPtr)
+{
+    HashSet<WeakPtr<Object>> set;
+
+    RefPtr object1 = Object::create();
+    set.add(object1.get());
+
+    Ref object2 = Object::create();
+
+    // Present when live
+    EXPECT_TRUE(set.contains(object1.get()));
+    EXPECT_EQ(set.find(object1.get())->get(), object1.get());
+    EXPECT_EQ(1u, set.size());
+    for (auto& entry : set)
+        EXPECT_EQ(entry, object1.get());
+
+    EXPECT_FALSE(set.contains(&object2.get()));
+    EXPECT_EQ(set.find(&object2.get()), set.end());
+
+    Object* rawObject1 = object1.get();
+    object1 = nullptr;
+
+    // Absent when dead
+    EXPECT_FALSE(set.contains(rawObject1));
+    EXPECT_EQ(set.find(rawObject1), set.end());
+    EXPECT_EQ(set.begin(), set.end());
+
+    // Accurate size after removing weak nulls
+    EXPECT_EQ(1u, set.size());
+    set.removeWeakNullEntries();
+    EXPECT_EQ(0u, set.size());
+
+    // Bounded growth as added objects die
+    for (size_t i = 0; i < 128; ++i)
+        set.add(&Object::create().get());
+    EXPECT_LT(set.size(), 16u);
 }
 
 } // namespace TestWebKitAPI

@@ -32,11 +32,17 @@
 namespace WebKit {
 using namespace WebCore;
 
-Ref<RiceBackendProxy> RiceBackendProxy::create(WebPageProxyIdentifier webPageProxyID, WebCore::RiceBackendClient& client)
+RefPtr<RiceBackendProxy> RiceBackendProxy::create(WebPageProxyIdentifier webPageProxyID, WebCore::RiceBackendClient& client)
 {
     Ref connection = WebProcess::singleton().ensureNetworkProcessConnection().connection();
     auto sendResult = connection->sendSync(Messages::NetworkConnectionToWebProcess::InitializeRiceBackend(webPageProxyID), 0);
+    if (!sendResult.succeeded())
+        return nullptr;
+
     auto [identifier] = sendResult.takeReply();
+    if (!identifier)
+        return nullptr;
+
     return adoptRef(*new RiceBackendProxy(WTFMove(connection), webPageProxyID, *identifier, client));
 }
 
@@ -82,7 +88,10 @@ Vector<String> RiceBackendProxy::gatherSocketAddresses(unsigned streamId)
 {
     Vector<String> addresses;
     callOnMainRunLoopAndWait([&] {
-        auto sendResult = m_connection->sendSync(Messages::RiceBackend::GatherSocketAddresses { streamId }, messageSenderDestinationID());
+        auto sendResult = m_connection->sendSync(Messages::RiceBackend::GatherSocketAddresses { streamId }, messageSenderDestinationID(), 3_s);
+        if (!sendResult.succeeded())
+            return;
+
         auto [reply] = sendResult.takeReply();
         addresses = reply;
     });

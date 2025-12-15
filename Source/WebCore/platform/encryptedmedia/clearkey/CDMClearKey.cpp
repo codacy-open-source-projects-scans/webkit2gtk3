@@ -53,6 +53,7 @@ namespace WebCore {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(CDMFactoryClearKey);
 WTF_MAKE_TZONE_ALLOCATED_IMPL(CDMPrivateClearKey);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(CDMInstanceClearKey);
 
 static std::optional<Vector<RefPtr<KeyHandle>>> parseLicenseFormat(const JSON::Object& root)
 {
@@ -201,7 +202,7 @@ static bool isCencInitData(const SharedBuffer& initData)
     return ((keyIdsMap.first) && (keyIdsMap.second));
 }
 
-static Ref<SharedBuffer> extractKeyidsFromCencInitData(const SharedBuffer& initData)
+static CDMKeyID extractKeyidsFromCencInitData(const SharedBuffer& initData)
 {
     std::pair<unsigned, unsigned> keyIdsMap = extractKeyidsLocationFromCencInitData(initData);
     unsigned keyIdCount = keyIdsMap.first;
@@ -230,7 +231,7 @@ static Ref<SharedBuffer> extractKeyidsFromCencInitData(const SharedBuffer& initD
     return SharedBuffer::create(object->toJSONString().utf8().span());
 }
 
-static Ref<SharedBuffer> extractKeyIdFromWebMInitData(const SharedBuffer& initData)
+static CDMKeyID extractKeyIdFromWebMInitData(const SharedBuffer& initData)
 {
     // Check if initData is a valid WebM initData.
     if (initData.isEmpty() || initData.size() > std::numeric_limits<unsigned>::max())
@@ -461,11 +462,8 @@ void CDMInstanceSessionClearKey::requestLicense(LicenseType, KeyGroupingStrategy
         initData = extractKeyIdFromWebMInitData(initData.get());
 
     callOnMainThread(
-        [this, weakThis = WeakPtr { *this }, callback = WTFMove(callback), initData = WTFMove(initData)]() mutable {
-            if (!weakThis)
-                return;
-
-            callback(WTFMove(initData), m_sessionID, false, Succeeded);
+        [sessionID = m_sessionID, callback = WTFMove(callback), initData = WTFMove(initData)]() mutable {
+            callback(WTFMove(initData), sessionID, false, Succeeded);
         });
 }
 

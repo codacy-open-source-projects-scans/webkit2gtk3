@@ -325,6 +325,32 @@ TemporalPlainDate::mergeDateFields(JSGlobalObject* globalObject, JSObject* tempo
     return { yearToUse, monthToUse, dayToUse, otherMonth, overflow, any };
 }
 
+std::optional<int32_t> TemporalPlainDate::toDay(JSGlobalObject* globalObject, JSObject* temporalDateLike)
+{
+    VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    std::optional<int32_t> day;
+    JSValue dayProperty = temporalDateLike->get(globalObject, vm.propertyNames->day);
+    RETURN_IF_EXCEPTION(scope, { });
+    if (!dayProperty.isUndefined()) {
+        double doubleDay = dayProperty.toIntegerOrInfinity(globalObject);
+        RETURN_IF_EXCEPTION(scope, { });
+
+        if (!std::isfinite(doubleDay)) [[unlikely]] {
+            throwRangeError(globalObject, scope, "day property must be finite"_s);
+            return { };
+        }
+
+        if (!isInBounds<int32_t>(doubleDay))[[unlikely]] {
+            // Later checks will report error
+            day = ISO8601::outOfRangeYear;
+        } else
+            day = static_cast<int32_t>(doubleDay);
+    }
+    return day;
+}
+
 std::optional<int32_t> TemporalPlainDate::toYear(JSGlobalObject* globalObject, JSObject* temporalDateLike)
 {
     VM& vm = globalObject->vm();
@@ -348,6 +374,48 @@ std::optional<int32_t> TemporalPlainDate::toYear(JSGlobalObject* globalObject, J
             year = static_cast<int32_t>(doubleYear);
     }
     return year;
+}
+
+std::tuple<std::optional<int32_t>, std::optional<ParsedMonthCode>, std::optional<int32_t>>
+TemporalPlainDate::toYearMonth(JSGlobalObject* globalObject, JSObject* temporalDateLike)
+{
+    VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    std::optional<int32_t> month;
+    JSValue monthProperty = temporalDateLike->get(globalObject, vm.propertyNames->month);
+    RETURN_IF_EXCEPTION(scope, { });
+    if (!monthProperty.isUndefined()) {
+        double doubleMonth = monthProperty.toIntegerOrInfinity(globalObject);
+        RETURN_IF_EXCEPTION(scope, { });
+
+        if (!std::isfinite(doubleMonth)) [[unlikely]] {
+            throwRangeError(globalObject, scope, "month property must be finite"_s);
+            return { };
+        }
+
+        if (!isInBounds<int32_t>(doubleMonth)) [[unlikely]] {
+            // Later checks will report error
+            month = ISO8601::outOfRangeYear;
+        } else
+            month = static_cast<int32_t>(doubleMonth);
+    }
+
+    std::optional<ParsedMonthCode> monthCode;
+    JSValue monthCodeProperty = temporalDateLike->get(globalObject, vm.propertyNames->monthCode);
+    RETURN_IF_EXCEPTION(scope, { });
+    if (!monthCodeProperty.isUndefined()) {
+        auto monthCodeString = monthCodeProperty.toWTFString(globalObject);
+        RETURN_IF_EXCEPTION(scope, { });
+
+        monthCode = ISO8601::parseMonthCode(monthCodeString);
+    }
+
+    scope.release();
+    auto year = toYear(globalObject, temporalDateLike);
+    RETURN_IF_EXCEPTION(scope, { });
+
+    return { month, monthCode, year };
 }
 
 ISO8601::PlainDate TemporalPlainDate::with(JSGlobalObject* globalObject, JSObject* temporalDateLike, JSValue optionsValue)

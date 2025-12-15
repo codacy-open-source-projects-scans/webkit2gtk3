@@ -29,7 +29,9 @@
 #if ENABLE(ENCRYPTED_MEDIA) && HAVE(AVCONTENTKEYSESSION)
 
 #import "CDMFairPlayStreaming.h"
+#import "CDMKeyID.h"
 #import "CDMKeySystemConfiguration.h"
+#import "CDMLogging.h"
 #import "CDMMediaCapability.h"
 #import "ContentKeyGroupFactoryAVFObjC.h"
 #import "ExceptionOr.h"
@@ -89,23 +91,23 @@ static const size_t kMaximumDeviceIdentifierSeedSize = 20;
 - (void)contentKeySession:(AVContentKeySession *)session didProvideContentKeyRequest:(AVContentKeyRequest *)keyRequest
 {
     UNUSED_PARAM(session);
-    if (_parent)
-        _parent->didProvideRequest(keyRequest);
+    if (RefPtr parent = _parent.get())
+        parent->didProvideRequest(keyRequest);
 }
 
 - (void)contentKeySession:(AVContentKeySession *)session didProvideRenewingContentKeyRequest:(AVContentKeyRequest *)keyRequest
 {
     UNUSED_PARAM(session);
-    if (_parent)
-        _parent->didProvideRenewingRequest(keyRequest);
+    if (RefPtr parent = _parent.get())
+        parent->didProvideRenewingRequest(keyRequest);
 }
 
 #if PLATFORM(IOS_FAMILY)
 - (void)contentKeySession:(AVContentKeySession *)session didProvidePersistableContentKeyRequest:(AVPersistableContentKeyRequest *)keyRequest
 {
     UNUSED_PARAM(session);
-    if (_parent)
-        _parent->didProvidePersistableRequest(keyRequest);
+    if (RefPtr parent = _parent.get())
+        parent->didProvidePersistableRequest(keyRequest);
 }
 
 - (void)contentKeySession:(AVContentKeySession *)session didUpdatePersistableContentKey:(NSData *)persistableContentKey forContentKeyIdentifier:(id)keyIdentifier
@@ -121,7 +123,8 @@ static const size_t kMaximumDeviceIdentifierSeedSize = 20;
 {
     UNUSED_PARAM(session);
     UNUSED_PARAM(initializationData);
-    if (!_parent)
+    RefPtr parent = _parent.get();
+    if (!parent)
         return;
 
     Vector<RetainPtr<AVContentKeyRequest>> requests;
@@ -129,34 +132,35 @@ static const size_t kMaximumDeviceIdentifierSeedSize = 20;
     [keyRequests enumerateObjectsUsingBlock:[&](AVContentKeyRequest* request, NSUInteger, BOOL*) {
         requests.append(request);
     }];
-    _parent->didProvideRequests(WTFMove(requests));
+    parent->didProvideRequests(WTFMove(requests));
 }
 
 - (void)contentKeySession:(AVContentKeySession *)session contentKeyRequest:(AVContentKeyRequest *)keyRequest didFailWithError:(NSError *)err
 {
     UNUSED_PARAM(session);
-    if (_parent)
-        _parent->didFailToProvideRequest(keyRequest, err);
+    if (RefPtr parent = _parent.get())
+        parent->didFailToProvideRequest(keyRequest, err);
 }
 
 - (void)contentKeySession:(AVContentKeySession *)session contentKeyRequestDidSucceed:(AVContentKeyRequest *)keyRequest
 {
     UNUSED_PARAM(session);
-    if (_parent)
-        _parent->requestDidSucceed(keyRequest);
+    if (RefPtr parent = _parent.get())
+        parent->requestDidSucceed(keyRequest);
 }
 
 - (BOOL)contentKeySession:(AVContentKeySession *)session shouldRetryContentKeyRequest:(AVContentKeyRequest *)keyRequest reason:(AVContentKeyRequestRetryReason)retryReason
 {
     UNUSED_PARAM(session);
-    return _parent ? _parent->shouldRetryRequestForReason(keyRequest, retryReason) : false;
+    RefPtr parent = _parent.get();
+    return parent && parent->shouldRetryRequestForReason(keyRequest, retryReason);
 }
 
 - (void)contentKeySessionContentProtectionSessionIdentifierDidChange:(AVContentKeySession *)session
 {
     UNUSED_PARAM(session);
-    if (_parent)
-        _parent->sessionIdentifierChanged(session.contentProtectionSessionIdentifier);
+    if (RefPtr parent = _parent.get())
+        parent->sessionIdentifierChanged(session.contentProtectionSessionIdentifier);
 }
 
 #if HAVE(AVCONTENTKEYREPORTGROUP)
@@ -169,8 +173,8 @@ static const size_t kMaximumDeviceIdentifierSeedSize = 20;
 - (void)contentKeySession:(AVContentKeySession *)session contentProtectionSessionIdentifierDidChangeForReportGroup:(nullable AVContentKeyReportGroup *)reportGroup
 {
     UNUSED_PARAM(session);
-    if (_parent)
-        _parent->groupSessionIdentifierChanged(reportGroup, reportGroup.contentProtectionSessionIdentifier);
+    if (RefPtr parent = _parent.get())
+        parent->groupSessionIdentifierChanged(reportGroup, reportGroup.contentProtectionSessionIdentifier);
 }
 #endif
 
@@ -178,8 +182,8 @@ static const size_t kMaximumDeviceIdentifierSeedSize = 20;
 - (void)contentKeySession:(AVContentKeySession *)session externalProtectionStatusDidChangeForContentKey:(AVContentKey *)contentKey
 {
     UNUSED_PARAM(session);
-    if (_parent)
-        _parent->externalProtectionStatusDidChangeForContentKey(contentKey);
+    if (RefPtr parent = _parent.get())
+        parent->externalProtectionStatusDidChangeForContentKey(contentKey);
 }
 #endif
 
@@ -188,31 +192,11 @@ static const size_t kMaximumDeviceIdentifierSeedSize = 20;
 - (void)contentKeySession:(AVContentKeySession *)session externalProtectionStatusDidChangeForContentKeyRequest:(AVContentKeyRequest *)keyRequest
 {
     UNUSED_PARAM(session);
-    if (_parent)
-        _parent->externalProtectionStatusDidChangeForContentKeyRequest(keyRequest);
+    if (RefPtr parent = _parent.get())
+        parent->externalProtectionStatusDidChangeForContentKeyRequest(keyRequest);
 }
 
 @end
-
-namespace WTF {
-
-template<typename>
-struct LogArgument;
-
-template<>
-struct LogArgument<WebCore::CDMInstanceFairPlayStreamingAVFObjC::Keys> {
-    static String toString(const WebCore::CDMInstanceFairPlayStreamingAVFObjC::Keys& keys)
-    {
-        StringBuilder builder;
-        builder.append('[');
-        for (auto key : keys)
-            builder.append(key->toHexString());
-        builder.append(']');
-        return builder.toString();
-    }
-};
-
-}
 
 namespace WebCore {
 
@@ -245,6 +229,11 @@ static Ref<SharedBuffer> initializationDataForRequest(AVContentKeyRequest* reque
         return SharedBuffer::create([request.identifier dataUsingEncoding:NSUTF8StringEncoding allowLossyConversion:YES]);
 
     return SharedBuffer::create(request.initializationData);
+}
+
+Ref<CDMInstanceFairPlayStreamingAVFObjC> CDMInstanceFairPlayStreamingAVFObjC::create(const CDMPrivateFairPlayStreaming& cdmPrivate)
+{
+    return adoptRef(*new CDMInstanceFairPlayStreamingAVFObjC(cdmPrivate));
 }
 
 CDMInstanceFairPlayStreamingAVFObjC::CDMInstanceFairPlayStreamingAVFObjC(const CDMPrivateFairPlayStreaming& cdmPrivate)
@@ -620,7 +609,7 @@ void CDMInstanceFairPlayStreamingAVFObjC::attachContentKeyToSample(const MediaSa
     ASSERT_NOT_REACHED();
 }
 
-CDMInstanceSessionFairPlayStreamingAVFObjC* CDMInstanceFairPlayStreamingAVFObjC::sessionForKeyIDs(const Keys& keyIDs) const
+CDMInstanceSessionFairPlayStreamingAVFObjC* CDMInstanceFairPlayStreamingAVFObjC::sessionForKeyIDs(const CDMKeyIDs& keyIDs) const
 {
     for (auto& sessionInterface : m_sessions) {
         if (!sessionInterface)
@@ -690,7 +679,7 @@ static bool isPotentiallyUsableKeyStatus(CDMInstanceSession::KeyStatus status)
     }
 }
 
-bool CDMInstanceFairPlayStreamingAVFObjC::isAnyKeyUsable(const Keys& keys) const
+bool CDMInstanceFairPlayStreamingAVFObjC::isAnyKeyUsable(const CDMKeyIDs& keys) const
 {
     for (auto& sessionInterface : m_sessions) {
         if (sessionInterface && sessionInterface->isAnyKeyUsable(keys))
@@ -734,21 +723,20 @@ CDMInstanceSessionFairPlayStreamingAVFObjC::CDMInstanceSessionFairPlayStreamingA
 
 CDMInstanceSessionFairPlayStreamingAVFObjC::~CDMInstanceSessionFairPlayStreamingAVFObjC() = default;
 
-using Keys = CDMInstanceSessionFairPlayStreamingAVFObjC::Keys;
 using Request = CDMInstanceSessionFairPlayStreamingAVFObjC::Request;
-static Keys keyIDsForRequest(const Request& requests)
+static CDMKeyIDs keyIDsForRequest(const Request& requests)
 {
-    Keys keyIDs;
+    CDMKeyIDs keyIDs;
     for (auto& request : requests.requests)
         keyIDs.appendVector(CDMPrivateFairPlayStreaming::keyIDsForRequest(request.get()));
     return keyIDs;
 }
 
-Keys CDMInstanceSessionFairPlayStreamingAVFObjC::keyIDs()
+CDMKeyIDs CDMInstanceSessionFairPlayStreamingAVFObjC::keyIDs()
 {
     // FIXME(rdar://problem/35597141): use the future AVContentKeyRequest keyID property, rather than parsing it out of the init
     // data, to get the keyID.
-    Keys keyIDs;
+    CDMKeyIDs keyIDs;
     for (auto& request : m_requests) {
         for (auto& key : keyIDsForRequest(request))
             keyIDs.append(WTFMove(key));
@@ -886,7 +874,7 @@ void CDMInstanceSessionFairPlayStreamingAVFObjC::updateLicense(const String&, Li
         callback(false, std::nullopt, std::nullopt, std::nullopt, Failed);
         return;
     }
-    Keys keyIDs = keyIDsForRequest(m_currentRequest.value());
+    CDMKeyIDs keyIDs = keyIDsForRequest(m_currentRequest.value());
     if (keyIDs.isEmpty()) {
         ERROR_LOG(LOGIDENTIFIER, " Failed, no keyIDs in currentRequest");
         callback(false, std::nullopt, std::nullopt, std::nullopt, Failed);
@@ -1546,7 +1534,7 @@ bool CDMInstanceSessionFairPlayStreamingAVFObjC::hasRequest(AVContentKeyRequest 
     return contentKeyRequests().contains(keyRequest);
 }
 
-bool CDMInstanceSessionFairPlayStreamingAVFObjC::isAnyKeyUsable(const Keys& keys) const
+bool CDMInstanceSessionFairPlayStreamingAVFObjC::isAnyKeyUsable(const CDMKeyIDs& keys) const
 {
     for (auto& keyStatusPair : keyStatuses()) {
         if (!isPotentiallyUsableKeyStatus(keyStatusPair.second))

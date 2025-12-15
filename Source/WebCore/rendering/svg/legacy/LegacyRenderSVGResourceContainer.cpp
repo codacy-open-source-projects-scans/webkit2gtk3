@@ -68,7 +68,7 @@ void LegacyRenderSVGResourceContainer::willBeDestroyed()
     LegacyRenderSVGHiddenContainer::willBeDestroyed();
 }
 
-void LegacyRenderSVGResourceContainer::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle)
+void LegacyRenderSVGResourceContainer::styleDidChange(Style::Difference diff, const RenderStyle* oldStyle)
 {
     LegacyRenderSVGHiddenContainer::styleDidChange(diff, oldStyle);
 
@@ -126,7 +126,7 @@ void LegacyRenderSVGResourceContainer::markAllClientsForInvalidationIfNeeded(Inv
     bool markForInvalidation = mode != ParentOnlyInvalidation;
     auto* root = SVGRenderSupport::findTreeRootObject(*this);
 
-    for (auto& client : m_clients) {
+    for (auto& client : m_clients | dereferenceView) {
         // We should not mark any client outside the current root for invalidation
         if (root != SVGRenderSupport::findTreeRootObject(client))
             continue;
@@ -150,12 +150,12 @@ void LegacyRenderSVGResourceContainer::markAllClientLayersForInvalidation()
     if (m_clientLayers.isEmptyIgnoringNullReferences())
         return;
 
-    Ref document = (*m_clientLayers.begin()).renderer().document();
+    Ref document = (*m_clientLayers.begin())->renderer().document();
     if (!document->view() || document->renderTreeBeingDestroyed())
         return;
 
     auto inLayout = document->view()->layoutContext().isInLayout();
-    for (auto& clientLayer : m_clientLayers) {
+    for (auto& clientLayer : m_clientLayers | dereferenceView) {
         // FIXME: We should not get here while in layout. See webkit.org/b/208903.
         // Repaint should also be triggered through some other means.
         if (inLayout) {
@@ -226,7 +226,7 @@ void LegacyRenderSVGResourceContainer::registerResource()
         auto* renderer = client->renderer();
         if (!renderer)
             continue;
-        SVGResourcesCache::clientStyleChanged(*renderer, StyleDifference::Layout, nullptr, renderer->style());
+        SVGResourcesCache::clientStyleChanged(*renderer, Style::DifferenceResult::Layout, nullptr, renderer->style());
         renderer->setNeedsLayout();
     }
 }

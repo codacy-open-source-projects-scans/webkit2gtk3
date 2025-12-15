@@ -44,6 +44,7 @@ namespace WebCore {
 
 class MediaPlayerFactoryMediaSourceMock final : public MediaPlayerFactory {
     WTF_MAKE_TZONE_ALLOCATED_INLINE(MediaPlayerFactoryMediaSourceMock);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(MediaPlayerFactoryMediaSourceMock);
 private:
     MediaPlayerEnums::MediaEngineIdentifier identifier() const final { return MediaPlayerEnums::MediaEngineIdentifier::MockMSE; };
 
@@ -154,6 +155,13 @@ bool MockMediaPlayerMediaSource::hasAudio() const
 {
     RefPtr mediaSourcePrivate = m_mediaSourcePrivate;
     return mediaSourcePrivate ? mediaSourcePrivate->hasAudio() : false;
+}
+
+void MockMediaPlayerMediaSource::characteristicsFromMediaSourceChanged()
+{
+    assertIsMainThread();
+    if (RefPtr player = m_player.get())
+        player->characteristicChanged();
 }
 
 void MockMediaPlayerMediaSource::setPageIsVisible(bool)

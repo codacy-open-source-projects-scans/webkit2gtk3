@@ -723,7 +723,7 @@ void GPUConnectionToWebProcess::providePresentingApplicationPID(WebCore::PageIde
 
     ProcessID processID = presentingApplicationPID(pageIdentifier);
     ASSERT(processID);
-    MediaSessionHelper::sharedHelper().providePresentingApplicationPID(processID);
+    MediaSessionHelper::protectedSharedHelper()->providePresentingApplicationPID(processID);
 }
 #endif
 
@@ -1343,9 +1343,8 @@ void GPUConnectionToWebProcess::enableMediaPlaybackIfNecessary()
 #endif
 
 #if ENABLE(ROUTING_ARBITRATION) && HAVE(AVAUDIO_ROUTING_ARBITER)
-    ASSERT(!m_routingArbitrator);
-    m_routingArbitrator = LocalAudioSessionRoutingArbitrator::create(*this);
-    m_gpuProcess->protectedAudioSessionManager()->protectedSession()->setRoutingArbitrationClient(m_routingArbitrator.get());
+    lazyInitialize(m_routingArbitrator, makeUniqueWithoutRefCountedCheck<LocalAudioSessionRoutingArbitrator>(*this));
+    m_gpuProcess->protectedAudioSessionManager()->protectedSession()->setRoutingArbitrationClient(*m_routingArbitrator);
 #endif
 }
 

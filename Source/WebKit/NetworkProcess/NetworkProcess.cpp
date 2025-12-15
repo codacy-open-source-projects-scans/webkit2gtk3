@@ -136,6 +136,11 @@
 #include <WebCore/ParentalControlsURLFilter.h>
 #endif
 
+
+#if HAVE(BROWSERENGINEKIT_WEBCONTENTFILTER)
+#include "WebParentalControlsURLFilter.h"
+#endif
+
 namespace WebKit {
 using namespace WebCore;
 
@@ -193,6 +198,18 @@ NetworkProcess::NetworkProcess(AuxiliaryProcessInitializationParameters&& parame
 }
 
 NetworkProcess::~NetworkProcess() = default;
+
+void NetworkProcess::setSharedParentalControlsURLFilterIfNecessary()
+{
+#if HAVE(BROWSERENGINEKIT_WEBCONTENTFILTER) && !HAVE(WEBCONTENTRESTRICTIONS_PATH_SPI)
+    ASSERT(isMainRunLoop());
+    static bool initialized = false;
+    if (!initialized) {
+        WebCore::ParentalControlsURLFilter::setGlobalFilter(WebParentalControlsURLFilter::create());
+        initialized = true;
+    }
+#endif
+}
 
 AuthenticationManager& NetworkProcess::authenticationManager()
 {
@@ -1161,6 +1178,28 @@ void NetworkProcess::clearUserInteraction(PAL::SessionID sessionID, RegistrableD
         ASSERT_NOT_REACHED();
         completionHandler();
     }
+}
+
+void NetworkProcess::hasLocalStorageOrCookies(PAL::SessionID sessionID, const RegistrableDomain& domain, CompletionHandler<void(bool)>&& completionHandler)
+{
+    CheckedPtr session = networkSession(sessionID);
+    CheckedPtr networkStorageSession = storageSession(sessionID);
+
+    if (!session || !networkStorageSession)
+        return completionHandler(false);
+
+    networkStorageSession->hasCookies(domain, [session = WeakPtr { *session }, domain, completionHandler = WTFMove(completionHandler)](bool hasCookies) mutable {
+        if (hasCookies)
+            return completionHandler(true);
+
+        if (session) {
+            session->storageManager().fetchData({ WebsiteDataType::LocalStorage }, NetworkStorageManager::ShouldComputeSize::No, [domain, completionHandler = WTFMove(completionHandler)](auto entries) mutable {
+                completionHandler(std::ranges::any_of(entries, [&domain](auto& entry) {
+                    return domain.matches(entry.origin);
+                }));
+            });
+        }
+    });
 }
 
 void NetworkProcess::hasLocalStorage(PAL::SessionID sessionID, const RegistrableDomain& domain, CompletionHandler<void(bool)>&& completionHandler)

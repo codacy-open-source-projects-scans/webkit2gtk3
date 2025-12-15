@@ -43,6 +43,7 @@ void GridMasonryLayout::initializeMasonry(unsigned gridAxisTracks, Style::GridTr
     m_masonryAxisGridGap = m_renderGrid->gridGap(m_masonryAxisDirection);
     m_gridAxisTracksCount = gridAxisTracks;
     m_gridContentSize = 0;
+    m_itemOffsets.clear();
 
     m_renderGrid->currentGrid().setupGridForMasonryLayout();
     m_renderGrid->populateExplicitGridAndOrderIterator();
@@ -182,7 +183,7 @@ void GridMasonryLayout::updateRunningPositions(const RenderBox& gridItem, const 
     m_gridContentSize = std::max(m_gridContentSize, newRunningPosition - m_masonryAxisGridGap);
 
     for (auto span : gridAxisSpan)
-        m_runningPositions[span] = std::max(m_runningPositions[span], newRunningPosition);
+        m_runningPositions[span] = newRunningPosition;
 
     updateItemOffset(gridItem, previousRunningPosition);
 }
@@ -255,11 +256,11 @@ GridArea GridMasonryLayout::gridAreaForIndefiniteGridAxisItem(const RenderBox& i
     for (unsigned i = 0; i < maxStartingLine; i++)
         absoluteShortest = std::min(absoluteShortest, maxRunningPositionForSpan(i, itemSpanLength));
 
-    // Step 2: Find first position within tolerance of shortest
+    // Step 2: Find first position within tolerance of shortest, starting from the cursor position.
     unsigned smallestMaxPosLine = 0;
+    auto autoFlowNextCursorShift = (m_autoFlowNextCursor > maxStartingLine) ? 0 : m_autoFlowNextCursor;
     for (unsigned i = 0; i < maxStartingLine; i++) {
-        // Start from cursor position and wrap around
-        auto startingLine = (m_autoFlowNextCursor + i) % maxStartingLine;
+        auto startingLine = (autoFlowNextCursorShift + i) % maxStartingLine;
 
         auto maxPosForCurrentStartingLine = maxRunningPositionForSpan(startingLine, itemSpanLength);
 

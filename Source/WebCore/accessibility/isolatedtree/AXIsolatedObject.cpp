@@ -175,7 +175,7 @@ bool isDefaultValue(AXProperty property, AXPropertyValueVariant& value)
 #endif
         [](InputType::Type&) { return false; },
         [](Vector<Vector<Markable<AXID>>>& typedValue) { return typedValue.isEmpty(); },
-        [](Vector<Vector<AXID>>& typedValue) { return typedValue.isEmpty(); },
+        [](Vector<AXStitchGroup>& typedValue) { return typedValue.isEmpty(); },
         [](CharacterRange& typedValue) { return !typedValue.location && !typedValue.length; },
         [](std::unique_ptr<AXIDAndCharacterRange>& typedValue) {
             return !typedValue || (!typedValue->first && !typedValue->second.location && !typedValue->second.length);
@@ -368,19 +368,19 @@ void AXIsolatedObject::accessibilityText(Vector<AccessibilityText>& texts) const
     texts = vectorAttributeValue<AccessibilityText>(AXProperty::AccessibilityText);
 }
 
-const Vector<Vector<AXID>>* AXIsolatedObject::stitchGroupsView() const
+const Vector<AXStitchGroup>* AXIsolatedObject::stitchGroupsView() const
 {
     size_t index = indexOfProperty(AXProperty::StitchGroups);
     if (index == notFound)
         return nullptr;
 
     return WTF::switchOn(m_properties[index].second,
-        [] (const Vector<Vector<AXID>>& typedValue) -> const Vector<Vector<AXID>>* { return &typedValue; },
-        [] (auto&) -> const Vector<Vector<AXID>>* { return nullptr; }
+        [] (const Vector<AXStitchGroup>& typedValue) -> const Vector<AXStitchGroup>* { return &typedValue; },
+        [] (auto&) -> const Vector<AXStitchGroup>* { return nullptr; }
     );
 }
 
-AXIsolatedObject::StitchState AXIsolatedObject::stitchState(IncludeStitchGroup includeStitchGroup) const
+std::optional<AXStitchGroup> AXIsolatedObject::stitchGroup(IncludeGroupMembers includeGroupMembers) const
 {
     if (!AXObjectCache::isAXTextStitchingEnabled())
         return { };
@@ -389,7 +389,7 @@ AXIsolatedObject::StitchState AXIsolatedObject::stitchState(IncludeStitchGroup i
     if (!blockFlowAncestor)
         return { };
 
-    return stitchStateFromGroups(blockFlowAncestor->stitchGroupsView(), includeStitchGroup);
+    return stitchGroupFromGroups(blockFlowAncestor->stitchGroupsView(), includeGroupMembers);
 }
 
 void AXIsolatedObject::insertMathPairs(Vector<std::pair<Markable<AXID>, Markable<AXID>>>& isolatedPairs, AccessibilityMathMultiscriptPairs& pairs)
@@ -447,8 +447,8 @@ void AXIsolatedObject::setIsExpanded(bool value)
 
 bool AXIsolatedObject::performDismissAction()
 {
-    return Accessibility::retrieveValueFromMainThread<bool>([this] () -> bool {
-        if (RefPtr axObject = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<bool>([context = mainThreadContext()] () -> bool {
+        if (RefPtr axObject = context.axObjectOnMainThread())
             return axObject->performDismissAction();
         return false;
     });
@@ -484,8 +484,8 @@ void AXIsolatedObject::scrollToGlobalPoint(IntPoint&& point) const
 
 bool AXIsolatedObject::setValue(float value)
 {
-    return Accessibility::retrieveValueFromMainThread<bool>([&value, this] () -> bool {
-        if (RefPtr axObject = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<bool>([&value, context = mainThreadContext()] () -> bool {
+        if (RefPtr axObject = context.axObjectOnMainThread())
             return axObject->setValue(value);
         return false;
     });
@@ -500,8 +500,8 @@ void AXIsolatedObject::setValueIgnoringResult(float value)
 
 bool AXIsolatedObject::setValue(const String& value)
 {
-    return Accessibility::retrieveValueFromMainThread<bool>([&value, this] () -> bool {
-        if (RefPtr axObject = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<bool>([&value, context = mainThreadContext()] () -> bool {
+        if (RefPtr axObject = context.axObjectOnMainThread())
             return axObject->setValue(value);
         return false;
     });
@@ -552,8 +552,8 @@ String AXIsolatedObject::selectedText() const
         return selectedTextMarkerRange().toString();
 #endif // ENABLE(AX_THREAD_TEXT_APIS)
 
-    return Accessibility::retrieveValueFromMainThread<String>([this] () -> String {
-        if (RefPtr object = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<String>([context = mainThreadContext()] () -> String {
+        if (RefPtr object = context.axObjectOnMainThread())
             return object->selectedText().isolatedCopy();
         return { };
     });
@@ -593,8 +593,8 @@ SRGBA<uint8_t> AXIsolatedObject::colorValue() const
 
 AXIsolatedObject* AXIsolatedObject::accessibilityHitTest(const IntPoint& point) const
 {
-    auto axID = Accessibility::retrieveValueFromMainThread<std::optional<AXID>>([&point, this] () -> std::optional<AXID> {
-        if (RefPtr object = associatedAXObject()) {
+    auto axID = Accessibility::retrieveValueFromMainThread<std::optional<AXID>>([&point, context = mainThreadContext()] () -> std::optional<AXID> {
+        if (RefPtr object = context.axObjectOnMainThread()) {
             object->updateChildrenIfNecessary();
             if (auto* axObject = object->accessibilityHitTest(point))
                 return axObject->objectID();
@@ -926,12 +926,12 @@ T AXIsolatedObject::getOrRetrievePropertyValue(AXProperty property)
     if (std::optional value = optionalAttributeValue<T>(property))
         return *value;
 
-    Accessibility::performFunctionOnMainThreadAndWait([&property, this] () {
-        RefPtr axObject = associatedAXObject();
+    AXPropertyValueVariant value = nullptr;
+    Accessibility::performFunctionOnMainThreadAndWait([&property, &value, context = mainThreadContext()] () {
+        RefPtr axObject = context.axObjectOnMainThread();
         if (!axObject)
             return;
 
-        AXPropertyValueVariant value;
         switch (property) {
         case AXProperty::InnerHTML:
             value = axObject->innerHTML().isolatedCopy();
@@ -942,10 +942,9 @@ T AXIsolatedObject::getOrRetrievePropertyValue(AXProperty property)
         default:
             break;
         }
-
-        // Cache value so that there is no need to access the main thread in subsequent calls.
-        setPropertyInVector(property, WTFMove(value));
     });
+    // Cache value so that there is no need to access the main thread in subsequent calls.
+    setPropertyInVector(property, WTFMove(value));
 
     return propertyValue<T>(property);
 }
@@ -1025,8 +1024,8 @@ int AXIsolatedObject::indexForVisiblePosition(const VisiblePosition&) const
 
 Vector<SimpleRange> AXIsolatedObject::findTextRanges(const AccessibilitySearchTextCriteria& criteria) const
 {
-    return Accessibility::retrieveValueFromMainThread<Vector<SimpleRange>>([&criteria, this] () -> Vector<SimpleRange> {
-        if (RefPtr object = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<Vector<SimpleRange>>([&criteria, context = mainThreadContext()] () -> Vector<SimpleRange> {
+        if (RefPtr object = context.axObjectOnMainThread())
             return object->findTextRanges(criteria);
         return { };
     });
@@ -1034,8 +1033,8 @@ Vector<SimpleRange> AXIsolatedObject::findTextRanges(const AccessibilitySearchTe
 
 Vector<String> AXIsolatedObject::performTextOperation(const AccessibilityTextOperation& textOperation)
 {
-    return Accessibility::retrieveValueFromMainThread<Vector<String>>([&textOperation, this] () -> Vector<String> {
-        if (RefPtr object = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<Vector<String>>([&textOperation, context = mainThreadContext()] () -> Vector<String> {
+        if (RefPtr object = context.axObjectOnMainThread())
             return object->performTextOperation(textOperation);
         return Vector<String>();
     });
@@ -1069,8 +1068,8 @@ LayoutRect AXIsolatedObject::elementRect() const
     ASSERT(_AXGetClientForCurrentRequestUntrusted() != kAXClientTypeVoiceOver);
 #endif
 
-    return Accessibility::retrieveValueFromMainThread<LayoutRect>([&, this] () -> LayoutRect {
-        if (RefPtr axObject = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<LayoutRect>([context = mainThreadContext()] () -> LayoutRect {
+        if (RefPtr axObject = context.axObjectOnMainThread())
             return axObject->elementRect();
         return { };
     });
@@ -1099,18 +1098,19 @@ FloatRect AXIsolatedObject::relativeFrame() const
         relativeFrame = *cachedRelativeFrame;
 
         if (isStaticText()) {
-            auto stitchState = this->stitchState();
-            if (stitchState.stitchedIntoID && *stitchState.stitchedIntoID == objectID() && stitchState.group.size()) {
-                // |this| is a stitching of multiple objects, so we need to combine all of their frames.
+            if (std::optional stitchGroup = this->stitchGroup()) {
+                if (stitchGroup->representativeID() == objectID() && !stitchGroup->isEmpty()) {
+                    // |this| is a stitching of multiple objects, so we need to combine all of their frames.
 
-                RefPtr tree = this->tree();
-                for (AXID axID : stitchState.group) {
-                    if (axID == objectID())
-                        continue;
+                    RefPtr tree = this->tree();
+                    for (AXID axID : stitchGroup->members()) {
+                        if (axID == objectID())
+                            continue;
 
-                    if (RefPtr object = tree->objectForID(axID)) {
-                        if (std::optional otherCachedFrame = object->cachedRelativeFrame())
-                            relativeFrame = unionRect(relativeFrame, *otherCachedFrame);
+                        if (RefPtr object = tree->objectForID(axID)) {
+                            if (std::optional otherCachedFrame = object->cachedRelativeFrame())
+                                relativeFrame = unionRect(relativeFrame, *otherCachedFrame);
+                        }
                     }
                 }
             }
@@ -1129,8 +1129,8 @@ FloatRect AXIsolatedObject::relativeFrame() const
     // Mock objects and SVG objects need use the main thread since they do not have render nodes and are not painted with layers, respectively.
     // FIXME: Remove isNonLayerSVGObject when LBSE is enabled & SVG frames are cached.
     if (!AXObjectCache::shouldServeInitialCachedFrame() || isNonLayerSVGObject()) {
-        return Accessibility::retrieveValueFromMainThread<FloatRect>([this] () -> FloatRect {
-            if (RefPtr axObject = associatedAXObject())
+        return Accessibility::retrieveValueFromMainThread<FloatRect>([context = mainThreadContext()] () -> FloatRect {
+            if (RefPtr axObject = context.axObjectOnMainThread())
                 return axObject->relativeFrame();
             return { };
         });
@@ -1202,8 +1202,8 @@ FloatRect AXIsolatedObject::convertFrameToSpace(const FloatRect& rect, Accessibi
         }
     }
 
-    return Accessibility::retrieveValueFromMainThread<FloatRect>([&rect, &space, this] () -> FloatRect {
-        if (RefPtr axObject = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<FloatRect>([&rect, &space, context = mainThreadContext()] () -> FloatRect {
+        if (RefPtr axObject = context.axObjectOnMainThread())
             return axObject->convertFrameToSpace(rect, space);
         return { };
     });
@@ -1211,8 +1211,8 @@ FloatRect AXIsolatedObject::convertFrameToSpace(const FloatRect& rect, Accessibi
 
 bool AXIsolatedObject::replaceTextInRange(const String& replacementText, const CharacterRange& textRange)
 {
-    return Accessibility::retrieveValueFromMainThread<bool>([text = replacementText.isolatedCopy(), &textRange, this] () -> bool {
-        if (RefPtr axObject = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<bool>([text = replacementText.isolatedCopy(), &textRange, context = mainThreadContext()] () -> bool {
+        if (RefPtr axObject = context.axObjectOnMainThread())
             return axObject->replaceTextInRange(text, textRange);
         return false;
     });
@@ -1291,8 +1291,8 @@ int AXIsolatedObject::insertionPointLineNumber() const
     }
 #endif // ENABLE(AX_THREAD_TEXT_APIS)
 
-    return Accessibility::retrieveValueFromMainThread<int>([this] () -> int {
-        if (RefPtr axObject = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<int>([context = mainThreadContext()] () -> int {
+        if (RefPtr axObject = context.axObjectOnMainThread())
             return axObject->insertionPointLineNumber();
         return -1;
     });
@@ -1303,8 +1303,8 @@ String AXIsolatedObject::identifierAttribute() const
 #if !LOG_DISABLED
     return stringAttributeValue(AXProperty::IdentifierAttribute);
 #else
-    return Accessibility::retrieveValueFromMainThread<String>([this] () -> String {
-        if (RefPtr object = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<String>([context = mainThreadContext()] () -> String {
+        if (RefPtr object = context.axObjectOnMainThread())
             return object->identifierAttribute().isolatedCopy();
         return { };
     });
@@ -1318,8 +1318,8 @@ CharacterRange AXIsolatedObject::doAXRangeForLine(unsigned lineIndex) const
         return AXTextMarker { *this, 0 }.characterRangeForLine(lineIndex);
 #endif
 
-    return Accessibility::retrieveValueFromMainThread<CharacterRange>([&lineIndex, this] () -> CharacterRange {
-        if (RefPtr object = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<CharacterRange>([&lineIndex, context = mainThreadContext()] () -> CharacterRange {
+        if (RefPtr object = context.axObjectOnMainThread())
             return object->doAXRangeForLine(lineIndex);
         return { };
     });
@@ -1332,8 +1332,8 @@ String AXIsolatedObject::doAXStringForRange(const CharacterRange& range) const
         return textMarkerRange().toString().substring(range.location, range.length);
 #endif // ENABLE(AX_THREAD_TEXT_APIS)
 
-    return Accessibility::retrieveValueFromMainThread<String>([&range, this] () -> String {
-        if (RefPtr object = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<String>([&range, context = mainThreadContext()] () -> String {
+        if (RefPtr object = context.axObjectOnMainThread())
             return object->doAXStringForRange(range).isolatedCopy();
         return { };
     });
@@ -1341,8 +1341,8 @@ String AXIsolatedObject::doAXStringForRange(const CharacterRange& range) const
 
 CharacterRange AXIsolatedObject::characterRangeForPoint(const IntPoint& point) const
 {
-    return Accessibility::retrieveValueFromMainThread<CharacterRange>([&point, this] () -> CharacterRange {
-        if (RefPtr object = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<CharacterRange>([&point, context = mainThreadContext()] () -> CharacterRange {
+        if (RefPtr object = context.axObjectOnMainThread())
             return object->characterRangeForPoint(point);
         return { };
     });
@@ -1350,8 +1350,8 @@ CharacterRange AXIsolatedObject::characterRangeForPoint(const IntPoint& point) c
 
 CharacterRange AXIsolatedObject::doAXRangeForIndex(unsigned index) const
 {
-    return Accessibility::retrieveValueFromMainThread<CharacterRange>([&index, this] () -> CharacterRange {
-        if (RefPtr object = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<CharacterRange>([&index, context = mainThreadContext()] () -> CharacterRange {
+        if (RefPtr object = context.axObjectOnMainThread())
             return object->doAXRangeForIndex(index);
         return { };
     });
@@ -1359,8 +1359,8 @@ CharacterRange AXIsolatedObject::doAXRangeForIndex(unsigned index) const
 
 CharacterRange AXIsolatedObject::doAXStyleRangeForIndex(unsigned index) const
 {
-    return Accessibility::retrieveValueFromMainThread<CharacterRange>([&index, this] () -> CharacterRange {
-        if (RefPtr object = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<CharacterRange>([&index, context = mainThreadContext()] () -> CharacterRange {
+        if (RefPtr object = context.axObjectOnMainThread())
             return object->doAXStyleRangeForIndex(index);
         return { };
     });
@@ -1368,8 +1368,8 @@ CharacterRange AXIsolatedObject::doAXStyleRangeForIndex(unsigned index) const
 
 IntRect AXIsolatedObject::doAXBoundsForRange(const CharacterRange& axRange) const
 {
-    return Accessibility::retrieveValueFromMainThread<IntRect>([&axRange, this] () -> IntRect {
-        if (RefPtr object = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<IntRect>([&axRange, context = mainThreadContext()] () -> IntRect {
+        if (RefPtr object = context.axObjectOnMainThread())
             return object->doAXBoundsForRange(axRange);
         return { };
     });
@@ -1377,8 +1377,8 @@ IntRect AXIsolatedObject::doAXBoundsForRange(const CharacterRange& axRange) cons
 
 IntRect AXIsolatedObject::doAXBoundsForRangeUsingCharacterOffset(const CharacterRange& axRange) const
 {
-    return Accessibility::retrieveValueFromMainThread<IntRect>([&axRange, this] () -> IntRect {
-        if (RefPtr object = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<IntRect>([&axRange, context = mainThreadContext()] () -> IntRect {
+        if (RefPtr object = context.axObjectOnMainThread())
             return object->doAXBoundsForRangeUsingCharacterOffset(axRange);
         return { };
     });
@@ -1392,8 +1392,8 @@ unsigned AXIsolatedObject::doAXLineForIndex(unsigned index)
         return AXTextMarker { *this, 0 }.lineNumberForIndex(index);
 #endif
 
-    return Accessibility::retrieveValueFromMainThread<unsigned>([&index, this] () -> unsigned {
-        if (RefPtr object = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<unsigned>([&index, context = mainThreadContext()] () -> unsigned {
+        if (RefPtr object = context.axObjectOnMainThread())
             return object->doAXLineForIndex(index);
         return 0;
     });
@@ -1419,8 +1419,8 @@ void AXIsolatedObject::setSelectedVisiblePositionRange(const VisiblePositionRang
 
 ModelPlayerAccessibilityChildren AXIsolatedObject::modelElementChildren()
 {
-    return Accessibility::retrieveValueFromMainThread<ModelPlayerAccessibilityChildren>([this] -> ModelPlayerAccessibilityChildren {
-        if (RefPtr object = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<ModelPlayerAccessibilityChildren>([context = mainThreadContext()] -> ModelPlayerAccessibilityChildren {
+        if (RefPtr object = context.axObjectOnMainThread())
             return object->modelElementChildren();
         return { };
     });
@@ -1512,8 +1512,8 @@ bool AXIsolatedObject::isNonNativeTextControl() const
 
 bool AXIsolatedObject::isOnScreen() const
 {
-    return Accessibility::retrieveValueFromMainThread<bool>([this] () -> bool {
-        if (RefPtr object = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<bool>([context = mainThreadContext()] () -> bool {
+        if (RefPtr object = context.axObjectOnMainThread())
             return object->isOnScreen();
         return false;
     });
@@ -1541,8 +1541,8 @@ bool AXIsolatedObject::isSelectedOptionActive() const
 
 Vector<AXTextMarkerRange> AXIsolatedObject::misspellingRanges() const
 {
-    return Accessibility::retrieveValueFromMainThread<Vector<AXTextMarkerRange>>([this] () -> Vector<AXTextMarkerRange> {
-        if (RefPtr axObject = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<Vector<AXTextMarkerRange>>([context = mainThreadContext()] () -> Vector<AXTextMarkerRange> {
+        if (RefPtr axObject = context.axObjectOnMainThread())
             return axObject->misspellingRanges();
         return { };
     });
@@ -1573,8 +1573,8 @@ bool AXIsolatedObject::hasSameFont(AXCoreObject& otherObject)
     if (!is<AXIsolatedObject>(otherObject))
         return false;
 
-    return Accessibility::retrieveValueFromMainThread<bool>([&otherObject, this] () -> bool {
-        if (RefPtr axObject = associatedAXObject()) {
+    return Accessibility::retrieveValueFromMainThread<bool>([&otherObject, context = mainThreadContext()] () -> bool {
+        if (RefPtr axObject = context.axObjectOnMainThread()) {
             if (RefPtr axOtherObject = downcast<AXIsolatedObject>(otherObject).associatedAXObject())
                 return axObject->hasSameFont(*axOtherObject);
         }
@@ -1598,8 +1598,8 @@ bool AXIsolatedObject::hasSameFontColor(AXCoreObject& otherObject)
     if (!is<AXIsolatedObject>(otherObject))
         return false;
 
-    return Accessibility::retrieveValueFromMainThread<bool>([&otherObject, this] () -> bool {
-        if (RefPtr axObject = associatedAXObject()) {
+    return Accessibility::retrieveValueFromMainThread<bool>([&otherObject, context = mainThreadContext()] () -> bool {
+        if (RefPtr axObject = context.axObjectOnMainThread()) {
             if (RefPtr axOtherObject = downcast<AXIsolatedObject>(otherObject).associatedAXObject())
                 return axObject->hasSameFontColor(*axOtherObject);
         }
@@ -1623,8 +1623,8 @@ bool AXIsolatedObject::hasSameStyle(AXCoreObject& otherObject)
     if (!is<AXIsolatedObject>(otherObject))
         return false;
 
-    return Accessibility::retrieveValueFromMainThread<bool>([&otherObject, this] () -> bool {
-        if (RefPtr axObject = associatedAXObject()) {
+    return Accessibility::retrieveValueFromMainThread<bool>([&otherObject, context = mainThreadContext()] () -> bool {
+        if (RefPtr axObject = context.axObjectOnMainThread()) {
             if (RefPtr axOtherObject = downcast<AXIsolatedObject>(otherObject).associatedAXObject())
                 return axObject->hasSameStyle(*axOtherObject);
         }
@@ -1652,8 +1652,8 @@ AXTextMarkerRange AXIsolatedObject::textInputMarkedTextMarkerRange() const
 // Re-visit if ITM expands to more platforms, or if AX clients need to start using this.
 String AXIsolatedObject::linkRelValue() const
 {
-    return Accessibility::retrieveValueFromMainThread<String>([this] () -> String {
-        if (RefPtr object = associatedAXObject())
+    return Accessibility::retrieveValueFromMainThread<String>([context = mainThreadContext()] () -> String {
+        if (RefPtr object = context.axObjectOnMainThread())
             return object->linkRelValue().isolatedCopy();
         return { };
     });
@@ -1804,12 +1804,12 @@ String AXIsolatedObject::stringValue() const
     size_t index = indexOfProperty(AXProperty::StringValue);
     if (index == notFound) {
         if (hasStitchableRole()) {
-            auto stitchState = this->stitchState();
-            if (!stitchState.stitchedIntoID)
+            std::optional stitchGroup = this->stitchGroup();
+            if (!stitchGroup)
                 return textMarkerRange().toString(IncludeListMarkerText::No);
 
             AXID thisID = objectID();
-            if (*stitchState.stitchedIntoID != thisID) {
+            if (stitchGroup->representativeID() != thisID) {
                 // |this| is stitched into another object, so don't return any string value.
                 return emptyString();
             }
@@ -1823,10 +1823,10 @@ String AXIsolatedObject::stringValue() const
             AXTextMarker endMarker;
 
             RefPtr tree = std::get<RefPtr<AXIsolatedTree>>(axTreeForID(treeID()));
-            if (!tree || stitchState.group.isEmpty())
+            if (!tree || stitchGroup->isEmpty())
                 return textMarkerRange().toString(IncludeListMarkerText::No);
 
-            for (auto axID = stitchState.group.rbegin(); axID != stitchState.group.rend() && *axID != thisID; ++axID) {
+            for (auto axID = stitchGroup->members().rbegin(); axID != stitchGroup->members().rend(); ++axID) {
                 if (RefPtr object = tree->objectForID(*axID)) {
                     if (const auto* runs = object->textRuns()) {
                         endMarker = AXTextMarker { *object, runs->totalLength() };
@@ -1838,7 +1838,7 @@ String AXIsolatedObject::stringValue() const
             if (!endMarker.isValid())
                 return textMarkerRange().toString(IncludeListMarkerText::No);
 
-            return AXTextMarkerRange { WTFMove(startMarker), WTFMove(endMarker) }.toString(IncludeListMarkerText::No);
+            return AXTextMarkerRange { WTFMove(startMarker), WTFMove(endMarker) }.toString(IncludeListMarkerText::Yes);
         }
         return emptyString();
     }

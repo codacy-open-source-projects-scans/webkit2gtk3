@@ -223,7 +223,7 @@ public:
     inline String attributeTrimmedWithDefaultARIA(const QualifiedName&) const;
 
     enum class TopLayerElementType : bool { Other, Popover };
-    HTMLElement* topmostPopoverAncestor(TopLayerElementType topLayerType);
+    RefPtr<HTMLElement> topmostPopoverAncestor(TopLayerElementType topLayerType);
 
     // https://github.com/w3c/aria/pull/2484
     // These ARIA attributes will become enumerated. Currently, they use [ReflectSetter] with custom getters
@@ -827,7 +827,7 @@ public:
     // This should be called whenever an element changes in a manner that can affect its style.
     void invalidateStyle();
 
-    // As above but also call RenderElement::setStyle with StyleDifference::RecompositeLayer flag for
+    // As above but also call RenderElement::setStyle with Style::DifferenceResult::RecompositeLayer flag for
     // the element even when the style doesn't change. This is mostly needed by the animation code.
     WEBCORE_EXPORT void invalidateStyleAndLayerComposition();
 

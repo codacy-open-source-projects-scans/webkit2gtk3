@@ -49,6 +49,7 @@
 #include "RenderView.h"
 #include "StyleAnimations.h"
 #include "StylableInlines.h"
+#include "StyleChangedAnimatableProperties.h"
 #include "StyleCustomPropertyData.h"
 #include "StyleInterpolation.h"
 #include "StyleOriginatedAnimation.h"
@@ -151,16 +152,16 @@ RenderElement* Styleable::renderer() const
             return nullptr;
 
         // Find the right ::view-transition-group().
-        CheckedPtr correctGroup = element.renderer()->view().viewTransitionGroupForName(pseudoElementIdentifier->nameArgument);
+        WeakPtr correctGroup = element.renderer()->view().viewTransitionGroupForName(pseudoElementIdentifier->nameArgument);
         if (!correctGroup)
             return nullptr;
 
         // Return early if we're looking for ::view-transition-group().
         if (pseudoElementIdentifier->type == PseudoElementType::ViewTransitionGroup)
-            return correctGroup.unsafeGet();
+            return correctGroup.get();
 
         // Go through all descendants until we find the relevant pseudo element otherwise.
-        for (auto& descendant : descendantsOfType<RenderBox>(*correctGroup)) {
+        for (auto& descendant : descendantsOfType<RenderBox>(CheckedRef { *correctGroup }.get())) {
             if (descendant.style().pseudoElementType() == pseudoElementIdentifier->type)
                 return &descendant;
         }
@@ -786,7 +787,7 @@ void Styleable::updateCSSTransitions(const RenderStyle& currentStyle, const Rend
                     } else if (propertyId != CSSPropertyInvalid)
                         transitionProperties.m_properties.set(propertyId);
                 },
-                [&] (const AtomString&) { }
+                [&](const AtomString&) { }
             );
         };
 
@@ -794,7 +795,7 @@ void Styleable::updateCSSTransitions(const RenderStyle& currentStyle, const Rend
         if (auto* lastStyleChangeEventStyle = this->lastStyleChangeEventStyle())
             targetStyle = lastStyleChangeEventStyle;
 
-        targetStyle->conservativelyCollectChangedAnimatableProperties(newStyle, transitionProperties);
+        Style::conservativelyCollectChangedAnimatableProperties(*targetStyle, newStyle, transitionProperties);
 
         // When we have keyframeEffectStack, it can affect on properties. So we just add them.
         if (keyframeEffectStack()) {

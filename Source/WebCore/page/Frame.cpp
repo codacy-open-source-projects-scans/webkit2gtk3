@@ -42,6 +42,7 @@
 #include "ScrollingCoordinator.h"
 #include "Settings.h"
 #include "WindowProxy.h"
+#include <wtf/Assertions.h>
 #include <wtf/NeverDestroyed.h>
 
 namespace WebCore {
@@ -209,6 +210,35 @@ Ref<NavigationScheduler> Frame::protectedNavigationScheduler() const
     return m_navigationScheduler.get();
 }
 
+std::optional<size_t> Frame::indexInFrameTreeSiblings() const
+{
+    if (!tree().parent())
+        return std::nullopt;
+
+    for (size_t i = 0; i < tree().parent()->tree().childCount(); i++) {
+        if (auto child = tree().parent()->tree().child(i); child->frameID() == this->frameID())
+            return i;
+    }
+
+    ASSERT_NOT_REACHED("This frame should be in its own tree");
+    return std::nullopt;
+}
+
+Vector<size_t> Frame::pathToFrame() const
+{
+    Vector<size_t> path;
+    RefPtr current = this;
+
+    while (current) {
+        if (auto index = current->indexInFrameTreeSiblings())
+            path.append(*index);
+        current = current->tree().parent();
+    }
+
+    path.reverse();
+    return path;
+}
+
 RenderWidget* Frame::ownerRenderer() const
 {
     RefPtr ownerElement = this->ownerElement();
@@ -236,7 +266,7 @@ bool Frame::isRootFrameIdentifier(FrameIdentifier identifier)
 void Frame::updateOpener(Frame& newOpener, NotifyUIProcess notifyUIProcess)
 {
     if (notifyUIProcess == NotifyUIProcess::Yes)
-        loaderClient().updateOpener(newOpener);
+        loaderClient().updateOpener(newOpener.frameID());
     if (m_opener)
         m_opener->m_openedFrames.remove(*this);
     newOpener.m_openedFrames.add(*this);
@@ -247,10 +277,14 @@ void Frame::updateOpener(Frame& newOpener, NotifyUIProcess notifyUIProcess)
     reinitializeDocumentSecurityContext();
 }
 
-void Frame::disownOpener()
+void Frame::disownOpener(NotifyUIProcess notifyUIProcess)
 {
-    if (m_opener)
+    if (m_opener) {
+        if (notifyUIProcess == NotifyUIProcess::Yes)
+            loaderClient().updateOpener(std::nullopt);
         m_opener->m_openedFrames.remove(*this);
+    }
+
     m_opener = nullptr;
 
     reinitializeDocumentSecurityContext();

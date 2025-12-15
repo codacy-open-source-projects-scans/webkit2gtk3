@@ -317,14 +317,11 @@
 #error "Unsupported compiler for bmalloc"
 #endif
 
-#if BCPU(ADDRESS64) && BPLATFORM(IOS_FAMILY) && !BPLATFORM(IOS_FAMILY_SIMULATOR) && !BPLATFORM(MACCATALYST)
-#define BHAVE_36BIT_ADDRESS 1
-#endif
-
 #if BCPU(ADDRESS64)
 #if BHAVE(36BIT_ADDRESS)
 #define BOS_EFFECTIVE_ADDRESS_WIDTH 36
-#elif BOS(DARWIN)
+/* iOS simulators lie about the size of the address space */
+#elif BOS(DARWIN) && !BPLATFORM(IOS_FAMILY_SIMULATOR)
 #define BOS_EFFECTIVE_ADDRESS_WIDTH (bmalloc::getMSBSetConstexpr(MACH_VM_MAX_ADDRESS) + 1)
 #else
 /* We strongly assume that effective address width is <= 48 in 64bit architectures (e.g. NaN boxing). */

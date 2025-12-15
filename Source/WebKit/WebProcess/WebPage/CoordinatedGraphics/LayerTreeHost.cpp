@@ -143,7 +143,7 @@ void LayerTreeHost::setLayerTreeStateIsFrozen(bool isFrozen)
 
 void LayerTreeHost::scheduleRenderingUpdate()
 {
-    WTFEmitSignpost(this, ScheduleRenderingUpdate, "isWaitingForRenderer %i", m_isWaitingForRenderer);
+    WTFEmitSignpost(this, LayerTreeHostScheduleRenderingUpdate, "isWaitingForRenderer %s", m_isWaitingForRenderer ? "yes" : "no");
 
     if (m_layerTreeStateIsFrozen)
         return;
@@ -188,7 +188,7 @@ void LayerTreeHost::updateRendering()
 
     SetForScope<bool> reentrancyProtector(m_isUpdatingRendering, true);
 
-    TraceScope traceScope(UpdateRenderingStart, UpdateRenderingEnd);
+    TraceScope traceScope(LayerTreeHostRenderingUpdateStart, LayerTreeHostRenderingUpdateEnd);
 
     Ref page { m_webPage };
     page->updateRendering();
@@ -248,21 +248,15 @@ void LayerTreeHost::updateRendering()
 
 void LayerTreeHost::renderingUpdateRunLoopObserverFired()
 {
-    WTFBeginSignpost(this, RenderingUpdateRunLoopObserverFired, "isWaitingForRenderer %i", m_isWaitingForRenderer);
+    WTFEmitSignpost(this, RenderingUpdateRunLoopObserverFired, "isWaitingForRenderer %s", m_isWaitingForRenderer ? "yes" : "no");
 
-    if (m_isSuspended) {
-        WTFEndSignpost(this, RenderingUpdateRunLoopObserverFired);
+    if (m_isSuspended)
         return;
-    }
 
-    if (m_isWaitingForRenderer) {
-        WTFEndSignpost(this, RenderingUpdateRunLoopObserverFired);
+    if (m_isWaitingForRenderer)
         return;
-    }
 
     updateRendering();
-
-    WTFEndSignpost(this, RenderingUpdateRunLoopObserverFired);
 }
 
 void LayerTreeHost::updateRootLayer()
@@ -494,10 +488,8 @@ void LayerTreeHost::requestCompositionForRenderingUpdate()
                 updateRenderingWithForcedRepaint();
             else if (m_forceRepaintAsync.callback)
                 m_forceRepaintAsync.callback();
-        } else if (!m_isSuspended && !m_layerTreeStateIsFrozen && (scheduledWhileWaitingForRenderer || m_renderingUpdateRunLoopObserver->isScheduled())) {
-            invalidateRenderingUpdateRunLoopObserver();
-            updateRendering();
-        }
+        } else if (!m_isSuspended && !m_layerTreeStateIsFrozen && scheduledWhileWaitingForRenderer)
+            scheduleRenderingUpdateRunLoopObserver();
 
         WTFEndSignpost(this, DidComposite);
     });

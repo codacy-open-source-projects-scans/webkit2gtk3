@@ -56,8 +56,8 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(InspectorRuntimeAgent);
 InspectorRuntimeAgent::InspectorRuntimeAgent(AgentContext& context)
     : InspectorAgentBase("Runtime"_s)
     , m_injectedScriptManager(context.injectedScriptManager)
-    , m_debugger(*context.environment.debugger())
-    , m_vm(context.environment.vm())
+    , m_debugger(*CheckedRef { context.environment }->debugger())
+    , m_vm(CheckedRef { context.environment }->vm())
 {
 }
 
@@ -454,7 +454,7 @@ void InspectorRuntimeAgent::willDestroyFrontendAndBackend(DisconnectReason reaso
     if (reason != DisconnectReason::InspectedTargetDestroyed && m_isTypeProfilingEnabled)
         setTypeProfilerEnabledState(false);
 
-    disable();
+    std::ignore = disable();
 }
 
 Protocol::ErrorStringOr<void> InspectorRuntimeAgent::enableTypeProfiler()

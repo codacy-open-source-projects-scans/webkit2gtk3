@@ -212,8 +212,8 @@ private:
     void insertMathPairs(Vector<std::pair<Markable<AXID>, Markable<AXID>>>&, AccessibilityMathMultiscriptPairs&);
     template<typename U> void performFunctionOnMainThreadAndWait(U&& lambda) const
     {
-        Accessibility::performFunctionOnMainThreadAndWait([&lambda, this] {
-            if (RefPtr object = associatedAXObject())
+        Accessibility::performFunctionOnMainThreadAndWait([&lambda, context = mainThreadContext()] {
+            if (RefPtr object = context.axObjectOnMainThread())
                 lambda(object.get());
         });
     }
@@ -561,8 +561,8 @@ private:
 
     std::optional<String> textContent() const final;
     bool isBlockFlow() const final { return boolAttributeValue(AXProperty::IsBlockFlow); }
-    StitchState stitchState(IncludeStitchGroup = IncludeStitchGroup::Yes) const final;
-    const Vector<Vector<AXID>>* stitchGroupsView() const;
+    std::optional<AXStitchGroup> stitchGroup(IncludeGroupMembers = IncludeGroupMembers::Yes) const final;
+    const Vector<AXStitchGroup>* stitchGroupsView() const;
 
     String text() const final;
     unsigned textLength() const final;
@@ -617,6 +617,34 @@ private:
 #ifndef NDEBUG
     void verifyChildrenIndexInParent() const final { return AXCoreObject::verifyChildrenIndexInParent(m_children); }
 #endif
+
+    class MainThreadContext {
+    // Contains context necessary to get an AXIsolatedObject's main-thread equivalent AccessibilityObject.
+
+    public:
+        MainThreadContext() = delete;
+
+        explicit MainThreadContext(Ref<AXIsolatedTree> tree, AXID axID)
+            : m_tree(WTFMove(tree))
+            , m_axID(axID)
+        { }
+
+        RefPtr<AccessibilityObject> axObjectOnMainThread() const
+        {
+            ASSERT(isMainThread());
+
+            CheckedPtr cache = m_tree->axObjectCache();
+            return cache ? cache->objectForID(m_axID) : nullptr;
+        }
+
+    private:
+        // Ref'ing AXIsolatedTree is OK because AXIsolatedTree is ThreadSafeRefCounted.
+        Ref<AXIsolatedTree> m_tree;
+        // The object ID to hydrate into an AccessibilityObject on the main-thread.
+        AXID m_axID;
+    }; // class MainThreadContext
+
+    MainThreadContext mainThreadContext() const { return MainThreadContext { *tree(), objectID() }; }
 
     // IDs that haven't been resolved into actual objects in m_children.
     FixedVector<AXID> m_unresolvedChildrenIDs;

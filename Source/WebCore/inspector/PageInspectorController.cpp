@@ -197,7 +197,7 @@ void PageInspectorController::createLazyAgents()
     m_agents.append(makeUniqueRef<InspectorAnimationAgent>(pageContext));
 
     if (auto& commandLineAPIHost = m_injectedScriptManager->commandLineAPIHost())
-        commandLineAPIHost->init(m_instrumentingAgents.copyRef());
+        commandLineAPIHost->init(m_instrumentingAgents.get());
 }
 
 void PageInspectorController::inspectedPageDestroyed()
@@ -513,7 +513,7 @@ void PageInspectorController::frontendInitialized()
     if (m_pauseAfterInitialization) {
         m_pauseAfterInitialization = false;
         if (auto* debuggerAgent = m_instrumentingAgents->enabledPageDebuggerAgent())
-            debuggerAgent->pause();
+            std::ignore = debuggerAgent->pause();
     }
 
 #if ENABLE(REMOTE_INSPECTOR)

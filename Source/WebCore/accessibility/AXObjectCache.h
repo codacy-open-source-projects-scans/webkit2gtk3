@@ -168,6 +168,29 @@ struct AXTextChangeContext {
 };
 #endif // PLATFORM(COCOA)
 
+struct AXNotificationWithData {
+    using DataVariant = Variant<std::monostate, AriaNotifyData
+#if PLATFORM(COCOA)
+        , LiveRegionAnnouncementData
+#endif
+    >;
+
+    AXNotification notification;
+    DataVariant data;
+
+    AXNotificationWithData(AXNotification notification)
+        : notification(notification)
+        , data(std::monostate { }) { }
+
+    AXNotificationWithData(AXNotification notification, const AriaNotifyData& data)
+        : notification(notification), data(data) { }
+
+#if PLATFORM(COCOA)
+    AXNotificationWithData(AXNotification notification, const LiveRegionAnnouncementData& data)
+        : notification(notification), data(data) { }
+#endif
+};
+
 class AccessibilityReplacedText {
 public:
     AccessibilityReplacedText() = default;
@@ -191,6 +214,21 @@ enum class AXTextChange : uint8_t { Inserted, Deleted, Replaced, AttributesChang
 #endif
 
 enum class PostTarget { Element, ObservableParent };
+
+struct DeferredNotificationData {
+    // The renderer or element to post a notification for.
+    SingleThreadWeakPtr<RenderObject> renderer { nullptr };
+    WeakPtr<Element, WeakPtrImplWithEventTargetData> element { nullptr };
+    // The notification to post.
+    AXNotification notification;
+
+    DeferredNotificationData() = delete;
+
+    explicit DeferredNotificationData(RenderObject& renderer, AXNotification notification)
+        : renderer(renderer)
+        , notification(notification)
+    { }
+};
 
 DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(AXObjectCache);
 class AXObjectCache final : public CanMakeWeakPtr<AXObjectCache>, public CanMakeCheckedPtr<AXObjectCache>
@@ -338,7 +376,7 @@ public:
     void onSelectedTextChanged(const VisiblePositionRange&, AccessibilityObject* = nullptr);
     void onSlottedContentChange(const HTMLSlotElement&);
     void onStyleChange(Element&, OptionSet<Style::Change>, const RenderStyle* oldStyle, const RenderStyle* newStyle);
-    void onStyleChange(RenderText&, StyleDifference, const RenderStyle* oldStyle, const RenderStyle& newStyle);
+    void onStyleChange(RenderText&, Style::Difference, const RenderStyle* oldStyle, const RenderStyle& newStyle);
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
     void onAccessibilityPaintStarted();
     void onAccessibilityPaintFinished();
@@ -371,8 +409,8 @@ public:
     void onTextRunsChanged(const RenderObject&);
 #endif
 
-    void onLaidOutInlineContent(const RenderBlockFlow&);
-    const Vector<Vector<AXID>>* stitchGroupsOwnedBy(AccessibilityObject&);
+    void onLaidOutInlineContent(const RenderBlockFlow& renderBlock) { setDirtyStitchGroups(renderBlock); }
+    const Vector<AXStitchGroup>* stitchGroupsOwnedBy(AccessibilityObject&);
 
     void updateLoadingProgress(double);
     void loadingFinished() { updateLoadingProgress(1); }
@@ -533,8 +571,11 @@ public:
             postNotification(*object, notification);
     }
     void postNotification(AccessibilityObject&, AXNotification);
+    void postDeferredNotification(RenderObject&, AXNotification);
     void postARIANotifyNotification(Node&, const String&, const AriaNotifyOptions&);
+#if PLATFORM(COCOA)
     void postLiveRegionNotification(AccessibilityObject&, LiveRegionStatus, const AttributedString&);
+#endif
     // Requests clients to announce to the user the given message in the way they deem appropriate.
     WEBCORE_EXPORT void announce(const String&);
 
@@ -630,7 +671,7 @@ private:
     void buildIsolatedTree();
     void updateIsolatedTree(AccessibilityObject&, AXNotification);
     void updateIsolatedTree(AccessibilityObject*, AXNotification);
-    void updateIsolatedTree(const Vector<std::pair<Ref<AccessibilityObject>, AXNotification>>&);
+    void updateIsolatedTree(const Vector<std::pair<Ref<AccessibilityObject>, AXNotificationWithData>>&);
     void updateIsolatedTree(AccessibilityObject*, AXProperty) const;
     void updateIsolatedTree(AccessibilityObject&, AXProperty) const;
     void startUpdateTreeSnapshotTimer();
@@ -658,12 +699,11 @@ protected:
 
 #if PLATFORM(COCOA)
     WEBCORE_EXPORT void postPlatformAnnouncementNotification(const String&);
-    WEBCORE_EXPORT void postPlatformARIANotifyNotification(const String&, NotifyPriority, InterruptBehavior, const String&);
-    WEBCORE_EXPORT void postPlatformLiveRegionNotification(AccessibilityObject&, LiveRegionStatus, const AttributedString&);
+    WEBCORE_EXPORT void postPlatformARIANotifyNotification(AccessibilityObject&, const AriaNotifyData&);
+    WEBCORE_EXPORT void postPlatformLiveRegionNotification(AccessibilityObject&, const LiveRegionAnnouncementData&);
 #else
     void postPlatformAnnouncementNotification(const String&) { }
-    void postPlatformARIANotifyNotification(const String&, NotifyPriority, InterruptBehavior, const String&) { }
-    void postPlatformLiveRegionNotification(AccessibilityObject&, LiveRegionStatus, const AttributedString&) { }
+    void postPlatformARIANotifyNotification(AccessibilityObject&, const AriaNotifyData&) { }
 #endif
 
     void frameLoadingEventPlatformNotification(RenderView*, AXLoadingEvent);
@@ -759,6 +799,7 @@ private:
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
     void handleRowspanChanged(AccessibilityNodeObject&);
 #endif
+    void handleDeferredNotification(const DeferredNotificationData&);
 
     // aria-modal or modal <dialog> related
     bool isModalElement(Element&) const;
@@ -766,6 +807,8 @@ private:
     void updateCurrentModalNode();
     bool isNodeVisible(const Node*) const;
     bool modalElementHasAccessibleContent(Element&);
+
+    void setDirtyStitchGroups(const RenderBlock&);
 
     // Relationships between objects.
     static Vector<QualifiedName>& relationAttributes();
@@ -846,7 +889,7 @@ private:
 #endif
 
     Timer m_notificationPostTimer;
-    Vector<std::pair<Ref<AccessibilityObject>, AXNotification>> m_notificationsToPost;
+    Vector<std::pair<Ref<AccessibilityObject>, AXNotificationWithData>> m_notificationsToPost;
 
 #if PLATFORM(COCOA)
     Timer m_passwordNotificationTimer;
@@ -902,6 +945,7 @@ private:
 #if PLATFORM(MAC)
     HashMap<PreSortedObjectType, Vector<Ref<AccessibilityObject>>, IntHash<PreSortedObjectType>, WTF::StrongEnumHashTraits<PreSortedObjectType>> m_deferredUnsortedObjects;
 #endif
+    Vector<DeferredNotificationData> m_deferredNotifications;
 
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
     Timer m_buildIsolatedTreeTimer;
@@ -937,7 +981,7 @@ private:
     VisibleSelection m_lastSelection;
 #endif
 
-    WeakHashMap<RenderObject, Vector<Vector<AXID>>, SingleThreadWeakPtrImpl> m_stitchGroups;
+    WeakHashMap<RenderObject, Vector<AXStitchGroup>, SingleThreadWeakPtrImpl> m_stitchGroups;
 };
 
 inline bool AXObjectCache::accessibilityEnabled()

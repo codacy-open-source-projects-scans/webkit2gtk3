@@ -82,6 +82,7 @@
 #include <WebCore/StyleWebKitInitialLetter.h>
 #include <WebCore/StyleWebKitLineClamp.h>
 #include <WebCore/StyleWillChange.h>
+#include <WebCore/StyleZoom.h>
 #include <memory>
 #include <wtf/DataRef.h>
 #include <wtf/Markable.h>
@@ -140,11 +141,10 @@ public:
 
     Style::WebkitLineClamp lineClamp;
 
-    float zoom;
+    Style::Zoom zoom;
 
     Style::MaximumLines maxLines;
 
-    OverflowContinue overflowContinue { OverflowContinue::Auto };
 
     Style::TouchAction touchAction;
 
@@ -222,7 +222,6 @@ public:
 
     Style::ScrollSnapType scrollSnapType;
     Style::ScrollSnapAlign scrollSnapAlign;
-    ScrollSnapStop scrollSnapStop;
 
     AtomString pseudoElementNameArgument;
 
@@ -277,6 +276,8 @@ public:
     PREFERRED_TYPE(bool) unsigned useSVGZoomRulesForLength : 1;
     PREFERRED_TYPE(Style::MarginTrim) unsigned marginTrim : 4;
     PREFERRED_TYPE(Style::Contain) unsigned contain : 5;
+    PREFERRED_TYPE(OverflowContinue) unsigned overflowContinue : 1;
+    PREFERRED_TYPE(ScrollSnapStop) unsigned scrollSnapStop : 1;
 
 private:
     StyleRareNonInheritedData();

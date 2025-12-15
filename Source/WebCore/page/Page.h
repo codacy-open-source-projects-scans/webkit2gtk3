@@ -75,6 +75,10 @@
 #include <WebCore/ShouldRequireExplicitConsentForGamepadAccess.h>
 #endif
 
+#if ENABLE(THREADED_ANIMATIONS)
+#include <WebCore/AcceleratedTimelinesUpdater.h>
+#endif
+
 namespace JSC {
 class Debugger;
 class JSGlobalObject;
@@ -419,18 +423,16 @@ public:
 
     EditorClient& editorClient() { return m_editorClient.get(); }
 
-    WEBCORE_EXPORT RefPtr<LocalFrame> localMainFrame();
-    WEBCORE_EXPORT RefPtr<const LocalFrame> localMainFrame() const;
-    WEBCORE_EXPORT RefPtr<Document> localTopDocument();
-    WEBCORE_EXPORT RefPtr<Document> localTopDocument() const;
+    WEBCORE_EXPORT LocalFrame* localMainFrame() const;
+    WEBCORE_EXPORT Document* localTopDocument() const;
 
-    Frame& mainFrame() { return m_mainFrame.get(); }
-    const Frame& mainFrame() const { return m_mainFrame.get(); }
+    Frame& mainFrame() const { return m_mainFrame.get(); }
     WEBCORE_EXPORT Ref<Frame> protectedMainFrame() const;
     WEBCORE_EXPORT void setMainFrame(Ref<Frame>&&);
     WEBCORE_EXPORT const URL& mainFrameURL() const;
     SecurityOrigin& mainFrameOrigin() const;
     Ref<SecurityOrigin> protectedMainFrameOrigin() const;
+    WEBCORE_EXPORT RefPtr<Frame> findFrameByPath(const Vector<size_t>& path) const;
 
     WEBCORE_EXPORT void setMainFrameURLAndOrigin(const URL&, RefPtr<SecurityOrigin>&&);
 #if ENABLE(DOM_AUDIO_SESSION)
@@ -1020,6 +1022,7 @@ public:
     PluginInfoProvider& pluginInfoProvider();
     Ref<PluginInfoProvider> protectedPluginInfoProvider() const;
 
+    UserContentProvider& userContentProviderForFrame() { return m_userContentProvider; }
     WEBCORE_EXPORT Ref<UserContentProvider> protectedUserContentProviderForFrame();
     WEBCORE_EXPORT void setUserContentProviderForWebKitLegacy(Ref<UserContentProvider>&&);
 
@@ -1409,6 +1412,11 @@ public:
     WEBCORE_EXPORT void setCaptionDisplaySettingsClientForTesting(Ref<CaptionDisplaySettingsClient>&&);
     WEBCORE_EXPORT void clearCaptionDisplaySettingsClientForTesting();
     void showCaptionDisplaySettings(HTMLMediaElement&, const ResolvedCaptionDisplaySettingsOptions&, CompletionHandler<void(ExceptionOr<void>)>&&);
+#endif
+
+#if ENABLE(THREADED_ANIMATIONS)
+    AcceleratedTimelinesUpdater* acceleratedTimelinesUpdater() const { return m_acceleratedTimelinesUpdater.get(); }
+    AcceleratedTimelinesUpdater& ensureAcceleratedTimelinesUpdater();
 #endif
 
 private:
@@ -1894,6 +1902,11 @@ private:
 #if ENABLE(VIDEO)
     RefPtr<CaptionDisplaySettingsClient> m_captionDisplaySettingsClientForTesting;
 #endif
+
+#if ENABLE(THREADED_ANIMATIONS)
+    const std::unique_ptr<AcceleratedTimelinesUpdater> m_acceleratedTimelinesUpdater;
+#endif
+
 }; // class Page
 
 WTF::TextStream& operator<<(WTF::TextStream&, RenderingUpdateStep);

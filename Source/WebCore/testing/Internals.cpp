@@ -220,6 +220,7 @@
 #include "ScriptController.h"
 #include "ScriptExecutionContextInlines.h"
 #include "ScriptedAnimationController.h"
+#include "ScrollTimeline.h"
 #include "ScrollToOptions.h"
 #include "ScrollbarsControllerMock.h"
 #include "ScrollingCoordinator.h"
@@ -426,6 +427,10 @@
 
 #if ENABLE(SERVICE_CONTROLS)
 #include "ImageControlsMac.h"
+#endif
+
+#if ENABLE(WIRELESS_PLAYBACK_MEDIA_PLAYER)
+#import "MockMediaDeviceRouteController.h"
 #endif
 
 using JSC::CallData;
@@ -787,6 +792,13 @@ Internals::Internals(Document& document)
 
 #if ENABLE(DAMAGE_TRACKING)
     document.page()->chrome().client().resetDamageHistoryForTesting();
+#endif
+
+#if ENABLE(WIRELESS_PLAYBACK_MEDIA_PLAYER)
+    if (RefPtr mockMediaDeviceRouteController = m_mockMediaDeviceRouteController) {
+        m_mockMediaDeviceRouteController->setEnabled(false);
+        m_mockMediaDeviceRouteController = nullptr;
+    }
 #endif
 }
 
@@ -1438,6 +1450,29 @@ ExceptionOr<void> Internals::resumeAnimations() const
     return { };
 }
 
+uint64_t Internals::identifierForTimeline(AnimationTimeline& timeline) const
+{
+#if ENABLE(THREADED_ANIMATIONS)
+    return timeline.acceleratedTimelineIdentifier().toRawValue();
+#else
+    UNUSED_PARAM(timeline);
+    return 0;
+#endif
+}
+
+Internals::ScrollingNodeID Internals::scrollingNodeIDForTimeline(AnimationTimeline& timeline) const
+{
+#if ENABLE(THREADED_ANIMATIONS)
+    if (RefPtr scrollTimeline = dynamicDowncast<ScrollTimeline>(timeline)) {
+        if (auto scrollingNodeID = scrollTimeline->scrollingNodeIDForTesting())
+            return { scrollingNodeID->object().toUInt64(), scrollingNodeID->processIdentifier().toUInt64() };
+    }
+#else
+    UNUSED_PARAM(timeline);
+#endif
+    return { 0, 0 };
+}
+
 Vector<Internals::AcceleratedAnimation> Internals::acceleratedAnimationsForElement(Element& element)
 {
     CheckedPtr timelinesController = element.document().timelinesController();
@@ -1714,10 +1749,10 @@ void Internals::setCanShowPlaceholder(Element& element, bool canShowPlaceholder)
         textFormControlElement->setCanShowPlaceholder(canShowPlaceholder);
 }
 
-Element* Internals::insertTextPlaceholder(int width, int height)
+RefPtr<Element> Internals::insertTextPlaceholder(int width, int height)
 {
     RefPtr localFrame = frame();
-    return localFrame ? localFrame->editor().insertTextPlaceholder(IntSize { width, height }).unsafeGet() : nullptr;
+    return localFrame ? localFrame->editor().insertTextPlaceholder(IntSize { width, height }) : nullptr;
 }
 
 void Internals::removeTextPlaceholder(Element& element)
@@ -3473,7 +3508,7 @@ ExceptionOr<uint64_t> Internals::verticalScrollbarLayerID(Node* node) const
     return getLayerID(areaOrException.returnValue()->layerForVerticalScrollbar());
 }
 
-ExceptionOr<Vector<uint64_t>> Internals::scrollingNodeIDForNode(Node* node)
+ExceptionOr<Internals::ScrollingNodeID> Internals::scrollingNodeIDForNode(Node* node)
 {
     auto areaOrException = scrollableAreaForNode(node);
     if (areaOrException.hasException())
@@ -3481,8 +3516,8 @@ ExceptionOr<Vector<uint64_t>> Internals::scrollingNodeIDForNode(Node* node)
 
     auto scrollingNodeID = areaOrException.returnValue()->scrollingNodeID();
     if (!scrollingNodeID)
-        return Vector<uint64_t>({ 0, 0 });
-    return Vector({ scrollingNodeID->object().toUInt64(), scrollingNodeID->processIdentifier().toUInt64() });
+        return { { 0, 0 } };
+    return { { scrollingNodeID->object().toUInt64(), scrollingNodeID->processIdentifier().toUInt64() } };
 }
 
 ExceptionOr<unsigned> Internals::scrollableAreaWidth(Node& node)
@@ -8162,6 +8197,39 @@ String Internals::modelElementState(HTMLModelElement& element)
 bool Internals::isModelElementIntersectingViewport(HTMLModelElement& element)
 {
     return element.isIntersectingViewport();
+}
+#endif
+
+// FIXME: Implement this method for iOS.
+ExceptionOr<void> Internals::copyImageAtLocation(int x, int y)
+{
+#if !PLATFORM(IOS_FAMILY)
+    RefPtr document = contextDocument();
+    if (!document || !document->frame())
+        return Exception { ExceptionCode::InvalidAccessError };
+
+    document->updateLayout(LayoutOptions::IgnorePendingStylesheets);
+
+    constexpr OptionSet<HitTestRequest::Type> hitType { HitTestRequest::Type::ReadOnly, HitTestRequest::Type::Active, HitTestRequest::Type::DisallowUserAgentShadowContent, HitTestRequest::Type::AllowChildFrameContent };
+
+    RefPtr localFrame = dynamicDowncast<LocalFrame>(document->frame()->mainFrame());
+    if (!localFrame)
+        return Exception { ExceptionCode::InvalidAccessError };
+
+    auto hitTestResult = localFrame->eventHandler().hitTestResultAtPoint(IntPoint(x, y), hitType);
+    localFrame->protectedEditor()->copyImage(hitTestResult);
+#endif
+    UNUSED_PARAM(x);
+    UNUSED_PARAM(y);
+    return { };
+}
+
+#if ENABLE(WIRELESS_PLAYBACK_MEDIA_PLAYER)
+MockMediaDeviceRouteController& Internals::mockMediaDeviceRouteController()
+{
+    if (!m_mockMediaDeviceRouteController)
+        m_mockMediaDeviceRouteController = MockMediaDeviceRouteController::create();
+    return *m_mockMediaDeviceRouteController;
 }
 #endif
 

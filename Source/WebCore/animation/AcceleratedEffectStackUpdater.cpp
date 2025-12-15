@@ -28,12 +28,17 @@
 
 #if ENABLE(THREADED_ANIMATIONS)
 
+#include "AcceleratedTimeline.h"
+#include "AcceleratedTimelinesUpdater.h"
+#include "DocumentPage.h"
 #include "KeyframeEffectStack.h"
+#include "NodeDocument.h"
 #include "RenderElement.h"
 #include "RenderLayer.h"
 #include "RenderLayerBacking.h"
 #include "RenderLayerModelObject.h"
 #include "RenderStyleConstants.h"
+#include "ScrollTimeline.h"
 #include "Styleable.h"
 
 namespace WebCore {
@@ -43,7 +48,8 @@ void AcceleratedEffectStackUpdater::update()
     if (!hasTargetsPendingUpdate())
         return;
 
-    m_timelines.clear();
+    RefPtr<Page> page;
+    HashSet<Ref<AcceleratedTimeline>> timelinesInUpdate;
 
     auto targetsPendingUpdate = std::exchange(m_targetsPendingUpdate, { });
     for (auto [element, pseudoElementIdentifier] : targetsPendingUpdate) {
@@ -52,14 +58,20 @@ void AcceleratedEffectStackUpdater::update()
 
         Styleable target { *element, pseudoElementIdentifier };
 
+        if (!page)
+            page = element->protectedDocument()->page();
+
         auto* renderer = dynamicDowncast<RenderLayerModelObject>(target.renderer());
         if (!renderer || !renderer->isComposited())
             continue;
 
         auto* renderLayer = renderer->layer();
         ASSERT(renderLayer && renderLayer->backing());
-        renderLayer->backing()->updateAcceleratedEffectsAndBaseValues(m_timelines);
+        renderLayer->backing()->updateAcceleratedEffectsAndBaseValues(timelinesInUpdate);
     }
+
+    if (page && !timelinesInUpdate.isEmpty())
+        page->ensureAcceleratedTimelinesUpdater().processTimelinesSeenDuringEffectStacksUpdate(WTFMove(timelinesInUpdate));
 }
 
 void AcceleratedEffectStackUpdater::scheduleUpdateForTarget(const Styleable& target)

@@ -87,7 +87,7 @@ public:
     bool removedFromTree(const RenderElement& parent, RenderObject& child);
     bool updateTextContent(const RenderText&, std::optional<size_t> offset, size_t oldLength);
     bool rootStyleWillChange(const RenderBlockFlow&, const RenderStyle& newStyle);
-    bool styleWillChange(const RenderElement&, const RenderStyle& newStyle, StyleDifference);
+    bool styleWillChange(const RenderElement&, const RenderStyle& newStyle, Style::Difference);
     bool boxContentWillChange(const RenderBox&);
 
     std::pair<LayoutUnit, LayoutUnit> computeIntrinsicWidthConstraints();
@@ -110,6 +110,8 @@ public:
 
     bool isPaginated() const;
     size_t lineCount() const;
+    bool hasContentfulInlineOrBlockLine() const;
+    bool hasContentfulInlineLine() const;
     bool isSelfCollapsingContent() const;
     bool hasInkOverflow() const;
     LayoutUnit firstLineBaseline() const;
@@ -142,6 +144,8 @@ public:
 #endif
 
     FloatRect applySVGTextFragments(SVGTextFragmentMap&&);
+
+    bool hasBlocks() const;
 
 private:
     void preparePlacedFloats();

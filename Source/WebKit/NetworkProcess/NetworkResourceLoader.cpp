@@ -288,17 +288,6 @@ void NetworkResourceLoader::startRequest(const ResourceRequest& newRequest)
 }
 
 #if ENABLE(CONTENT_FILTERING)
-static void setSharedParentalControlsURLFilterIfNecessary()
-{
-#if HAVE(BROWSERENGINEKIT_WEBCONTENTFILTER) && !HAVE(WEBCONTENTRESTRICTIONS_PATH_SPI)
-    ASSERT(isMainRunLoop());
-    static bool initialized = false;
-    if (!initialized) {
-        WebCore::ParentalControlsURLFilter::setGlobalFilter(WebParentalControlsURLFilter::create());
-        initialized = true;
-    }
-#endif
-}
 
 void NetworkResourceLoader::startContentFiltering(ResourceRequest&& request, CompletionHandler<void(ResourceRequest)>&& completionHandler)
 {
@@ -306,7 +295,7 @@ void NetworkResourceLoader::startContentFiltering(ResourceRequest&& request, Com
         completionHandler(WTFMove(request));
         return;
     }
-    setSharedParentalControlsURLFilterIfNecessary();
+    NetworkProcess::setSharedParentalControlsURLFilterIfNecessary();
     m_contentFilter = ContentFilter::create(*this);
     CheckedPtr contentFilter = m_contentFilter.get();
 #if HAVE(AUDIT_TOKEN)
@@ -1174,10 +1163,10 @@ void NetworkResourceLoader::didFinishLoading(const NetworkLoadMetrics& networkLo
 #endif
 
     if (isSynchronous())
-        sendReplyToSynchronousRequest(*m_synchronousLoadData, m_bufferedData.get().get(), networkLoadMetrics);
+        sendReplyToSynchronousRequest(*m_synchronousLoadData, m_bufferedData.protectedBuffer().get(), networkLoadMetrics);
     else {
         if (!m_bufferedData.isEmpty()) {
-            sendBuffer(*m_bufferedData.get());
+            sendBuffer(*m_bufferedData.protectedBuffer());
         }
 #if ENABLE(CONTENT_FILTERING)
         if (CheckedPtr contentFilter = m_contentFilter.get()) {
@@ -1611,12 +1600,12 @@ void NetworkResourceLoader::bufferingTimerFired()
         return;
 
 #if ENABLE(CONTENT_FILTERING)
-    auto sharedBuffer = m_bufferedData.takeAsContiguous();
+    auto sharedBuffer = m_bufferedData.takeBufferAsContiguous();
     bool shouldFilter = m_contentFilter && !checkedContentFilter()->continueAfterDataReceived(sharedBuffer);
     if (!shouldFilter)
         sendDidReceiveDataMessage(sharedBuffer);
 #else
-    sendDidReceiveDataMessage(m_bufferedData.takeAsContiguous());
+    sendDidReceiveDataMessage(m_bufferedData.takeBufferAsContiguous());
 #endif
     m_bufferedData.empty();
 }
@@ -1647,12 +1636,12 @@ void NetworkResourceLoader::tryStoreAsCacheEntry()
     if (isCrossOriginPrefetch()) {
         if (CheckedPtr session = protectedConnectionToWebProcess()->networkProcess().networkSession(sessionID())) {
             LOADER_RELEASE_LOG("tryStoreAsCacheEntry: Storing entry in prefetch cache");
-            session->checkedPrefetchCache()->store(m_networkLoad->currentRequest().url(), WTFMove(m_response), m_privateRelayed, m_bufferedDataForCache.take());
+            session->checkedPrefetchCache()->store(m_networkLoad->currentRequest().url(), WTFMove(m_response), m_privateRelayed, m_bufferedDataForCache.takeBuffer());
         }
         return;
     }
     LOADER_RELEASE_LOG("tryStoreAsCacheEntry: Storing entry in HTTP disk cache");
-    protectedCache()->store(m_networkLoad->currentRequest(), m_response, m_privateRelayed, m_bufferedDataForCache.take(), [loader = Ref { *this }](auto&& mappedBody) mutable {
+    protectedCache()->store(m_networkLoad->currentRequest(), m_response, m_privateRelayed, m_bufferedDataForCache.takeBuffer(), [loader = Ref { *this }](auto&& mappedBody) mutable {
 #if ENABLE(SHAREABLE_RESOURCE)
         if (!mappedBody.shareableResourceHandle)
             return;

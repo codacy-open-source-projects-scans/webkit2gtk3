@@ -110,6 +110,8 @@ private:
 };
 
 class CDMInstanceThunder final : public CDMInstanceProxy {
+    WTF_MAKE_TZONE_ALLOCATED(CDMInstanceThunder);
+    WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(CDMInstanceThunder);
 public:
     CDMInstanceThunder(const String& keySystem);
     virtual ~CDMInstanceThunder() = default;
@@ -157,7 +159,12 @@ private:
     void keysUpdateDoneCallback();
     void errorCallback(RefPtr<SharedBuffer>&&);
     CDMInstanceSession::KeyStatus status(const KeyIDType&) const;
-    void sessionFailure();
+
+    enum class SessionChangedResult : bool {
+        Failure,
+        Success
+    };
+    void sessionChanged(SessionChangedResult);
 
     // FIXME: Check all original uses of these attributes.
     String m_sessionID;

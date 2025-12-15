@@ -571,8 +571,8 @@ constexpr double fasterTapSignificantZoomThreshold = 0.8;
 
 @interface WKFoundTextRange : UITextRange
 
-@property (nonatomic, copy) NSString *frameIdentifier;
 @property (nonatomic) NSUInteger order;
+@property (nonatomic, copy) NSArray *pathToFrame;
 
 + (WKFoundTextRange *)foundTextRangeWithWebFoundTextRange:(WebKit::WebFoundTextRange)range;
 
@@ -3928,7 +3928,7 @@ static void cancelPotentialTapIfNecessary(WKContentView* contentView)
             return;
 
         RetainPtr strongSelf = weakSelf.get();
-        if (![strongSelf _hasFocusedElement] || !strongSelf->_focusedElementInformation.elementContext.isSameElement(element))
+        if (![strongSelf _isSameAsFocusedElement:element])
             return;
 
         RELEASE_LOG(ViewGestures, "Dismissing keyboard after tap (%p, pageProxyID=%llu)", strongSelf.get(), strongSelf->_page->identifier().toUInt64());
@@ -5422,6 +5422,11 @@ static void selectionChangedWithTouch(WKTextInteractionWrapper *interaction, con
     return _focusedElementInformation.elementType != WebKit::InputType::None;
 }
 
+- (BOOL)_isSameAsFocusedElement:(const WebCore::ElementContext&)element
+{
+    return [self _hasFocusedElement] && _focusedElementInformation.elementContext.isSameElement(element);
+}
+
 - (void)changeSelectionWithGestureAt:(CGPoint)point withGesture:(WKBEGestureType)gestureType withState:(UIGestureRecognizerState)state
 {
     [self changeSelectionWithGestureAt:point withGesture:gestureType withState:state withFlags:UIWKNone];
@@ -6802,19 +6807,22 @@ static Vector<WebCore::CompositionHighlight> compositionHighlights(NSAttributedS
         WKFoundDOMTextPosition *fromPosition = (WKFoundDOMTextPosition *)from;
         WKFoundDOMTextPosition *toPosition = (WKFoundDOMTextPosition *)to;
 
-        if (fromPosition.order == toPosition.order)
-            return fromPosition.offset - toPosition.offset;
+        if (fromPosition.order != toPosition.order)
+            return fromPosition.order - toPosition.order;
+
+        return fromPosition.offset - toPosition.offset;
     }
 
     if ([from isKindOfClass:[WKFoundPDFTextPosition class]] && [to isKindOfClass:[WKFoundPDFTextPosition class]]) {
         WKFoundPDFTextPosition *fromPosition = (WKFoundPDFTextPosition *)from;
         WKFoundPDFTextPosition *toPosition = (WKFoundPDFTextPosition *)to;
 
-        if (fromPosition.order == toPosition.order) {
-            if (fromPosition.page == toPosition.page)
-                return fromPosition.offset - toPosition.offset;
-            return fromPosition.page - toPosition.page;
-        }
+        if (fromPosition.order != toPosition.order)
+            return fromPosition.order - toPosition.order;
+
+        if (fromPosition.page == toPosition.page)
+            return fromPosition.offset - toPosition.offset;
+        return fromPosition.page - toPosition.page;
     }
 
     if ([from isKindOfClass:[WKFoundTextPosition class]] && [to isKindOfClass:[WKFoundTextPosition class]]) {
@@ -7430,9 +7438,12 @@ static UITextAutocapitalizationType toUITextAutocapitalize(WebCore::Autocapitali
 
 - (BOOL)_isTextInputContextFocused:(_WKTextInputContext *)context
 {
-    ASSERT(context);
+    if (!context) {
+        ASSERT_NOT_REACHED();
+        return NO;
+    }
     // We ignore bounding rect changes as the bounding rect of the focused element is not kept up-to-date.
-    return self._hasFocusedElement && context._textInputContext.isSameElement(_focusedElementInformation.elementContext);
+    return [self _isSameAsFocusedElement:context._textInputContext];
 }
 
 - (void)_focusTextInputContext:(_WKTextInputContext *)context placeCaretAt:(CGPoint)point completionHandler:(void (^)(UIResponder<UITextInput> *))completionHandler
@@ -8424,7 +8435,7 @@ static RetainPtr<NSObject <WKFormPeripheral>> createInputPeripheralWithView(WebK
 
     // FIXME: We should remove this check when we manage to send ElementDidFocus from the WebProcess
     // only when it is truly time to show the keyboard.
-    if (self._hasFocusedElement && _focusedElementInformation.elementContext.isSameElement(information.elementContext)) {
+    if ([self _isSameAsFocusedElement:information.elementContext]) {
         if (_inputPeripheral) {
             if (!self.isFirstResponder)
                 [self becomeFirstResponder];
@@ -8679,10 +8690,7 @@ static RetainPtr<NSObject <WKFormPeripheral>> createInputPeripheralWithView(WebK
 
 - (void)_didProgrammaticallyClearFocusedElement:(WebCore::ElementContext&&)context
 {
-    if (!self._hasFocusedElement)
-        return;
-
-    if (!context.isSameElement(_focusedElementInformation.elementContext))
+    if (![self _isSameAsFocusedElement:context])
         return;
 
     [self _internalInvalidateTextEntryContext];
@@ -8702,10 +8710,7 @@ static RetainPtr<NSObject <WKFormPeripheral>> createInputPeripheralWithView(WebK
 
 - (void)_updateFocusedElementInformation:(const WebKit::FocusedElementInformation&)information
 {
-    if (!self._hasFocusedElement)
-        return;
-
-    if (!_focusedElementInformation.elementContext.isSameElement(information.elementContext))
+    if (![self _isSameAsFocusedElement:information.elementContext])
         return;
 
     _focusedElementInformation = information;
@@ -9574,6 +9579,11 @@ static bool canUseQuickboardControllerFor(UITextContentType type)
 
     if (wasSuppressingSelectionAssistant && !_suppressSelectionAssistantReasons)
         [_textInteractionWrapper activateSelection];
+}
+
+- (BOOL)_isSuppressingSelectionAssistant
+{
+    return !!_suppressSelectionAssistantReasons;
 }
 
 - (UIView <WKFormControl> *)dataListTextSuggestionsInputView
@@ -12421,7 +12431,7 @@ static WebKit::DocumentEditingContextRequest toWebRequest(id request)
 - (BOOL)_elementForTextInputContextIsFocused:(_WKTextInputContext *)context
 {
     // We ignore bounding rect changes as the bounding rect of the focused element is not kept up-to-date.
-    return self._hasFocusedElement && context && context._textInputContext.isSameElement(_focusedElementInformation.elementContext);
+    return context && [self _isSameAsFocusedElement:context._textInputContext];
 }
 
 - (void)indirectScribbleInteraction:(UIIndirectScribbleInteraction *)interaction requestElementsInRect:(CGRect)rect completion:(void(^)(NSArray<UIScribbleElementIdentifier> *))completion
@@ -12817,12 +12827,12 @@ static RetainPtr<NSItemProvider> createItemProvider(const WebKit::WebPageProxy& 
 
 - (CGImageRef)copySubjectResultForImageContextMenu
 {
-    return valueOrDefault(_imageAnalysisContextMenuActionData).copySubjectResult.unsafeGet();
+    return valueOrDefault(_imageAnalysisContextMenuActionData).copySubjectResult.getAutoreleased();
 }
 
 - (UIMenu *)machineReadableCodeSubMenuForImageContextMenu
 {
-    return valueOrDefault(_imageAnalysisContextMenuActionData).machineReadableCodeMenu.unsafeGet();
+    return valueOrDefault(_imageAnalysisContextMenuActionData).machineReadableCodeMenu.getAutoreleased();
 }
 
 #if USE(QUICK_LOOK)
@@ -14258,7 +14268,7 @@ static inline WKTextAnimationType toWKTextAnimationType(WebCore::TextAnimationTy
             if (enclosingView != selectedView && ![enclosingView _wk_isAncestorOf:selectedView])
                 return self;
         }
-        return enclosingView.unsafeGet();
+        return enclosingView.autorelease();
     }();
 
     ASSERT(_cachedSelectionContainerView);
@@ -14344,6 +14354,13 @@ static inline WKTextAnimationType toWKTextAnimationType(WebCore::TextAnimationTy
     auto touchActions = WebKit::touchActionsForPoint(self, WebCore::roundedIntPoint(_lastInteractionLocation));
     using enum WebCore::TouchAction;
     return touchActions.containsAny({ Auto, PanX, Manipulation });
+}
+
+- (BOOL)allowsTouchPanningAtPoint:(CGPoint)point
+{
+    using enum WebCore::TouchAction;
+    auto touchActions = WebKit::touchActionsForPoint(self, WebCore::roundedIntPoint(point));
+    return touchActions.containsAny({ Auto, PanX, PanY, Manipulation });
 }
 
 #if ENABLE(MODEL_PROCESS)
@@ -15948,14 +15965,15 @@ ALLOW_DEPRECATED_DECLARATIONS_END
         }
     );
 
-    [range setFrameIdentifier:webRange.frameIdentifier.createNSString().get()];
+    [range setPathToFrame:createNSArray(webRange.pathToFrame, [](size_t index) {
+        return @(index);
+    }).get()];
     [range setOrder:webRange.order];
     return range.autorelease();
 }
 
 - (void)dealloc
 {
-    [_frameIdentifier release];
     [super dealloc];
 }
 
@@ -15991,7 +16009,10 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 - (WebKit::WebFoundTextRange)webFoundTextRange
 {
     WebKit::WebFoundTextRange::DOMData data { self.location, self.length };
-    return { data, self.frameIdentifier, self.order };
+    auto pathToFrameVector = makeVector(self.pathToFrame, [](id number) -> std::optional<size_t> {
+        return [number unsignedLongValue];
+    });
+    return { data, WTFMove(pathToFrameVector), self.order };
 }
 
 @end
@@ -16025,7 +16046,10 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 - (WebKit::WebFoundTextRange)webFoundTextRange
 {
     WebKit::WebFoundTextRange::PDFData data { self.startPage, self.startPageOffset, self.endPage, self.endPageOffset };
-    return { data, self.frameIdentifier, self.order };
+    auto pathToFrameVector = makeVector(self.pathToFrame, [](id number) -> std::optional<size_t> {
+        return [number unsignedLongValue];
+    });
+    return { data, WTFMove(pathToFrameVector), self.order };
 }
 
 @end

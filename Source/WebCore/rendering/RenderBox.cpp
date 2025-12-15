@@ -250,7 +250,7 @@ void RenderBox::removeFloatingOrOutOfFlowChildFromBlockLists()
     ASSERT_NOT_REACHED();
 }
 
-void RenderBox::styleWillChange(StyleDifference diff, const RenderStyle& newStyle)
+void RenderBox::styleWillChange(Style::Difference diff, const RenderStyle& newStyle)
 {
     s_hadNonVisibleOverflow = hasNonVisibleOverflow();
 
@@ -258,7 +258,7 @@ void RenderBox::styleWillChange(StyleDifference diff, const RenderStyle& newStyl
     if (oldStyle) {
         // The background of the root element or the body element could propagate up to
         // the canvas. Issue full repaint, when our style changes substantially.
-        if (diff >= StyleDifference::Repaint && (isDocumentElementRenderer() || isBody())) {
+        if (diff >= Style::DifferenceResult::Repaint && (isDocumentElementRenderer() || isBody())) {
             view().repaintRootContents();
             if (Style::hasEntirelyFixedBackground(oldStyle->backgroundLayers()) != Style::hasEntirelyFixedBackground(newStyle.backgroundLayers()))
                 view().compositor().rootLayerConfigurationChanged();
@@ -266,7 +266,7 @@ void RenderBox::styleWillChange(StyleDifference diff, const RenderStyle& newStyl
         
         // When a layout hint happens and an object's position style changes, we have to do a layout
         // to dirty the render tree using the old position value now.
-        if (diff == StyleDifference::Layout && parent() && oldStyle->position() != newStyle.position()) {
+        if (diff == Style::DifferenceResult::Layout && parent() && oldStyle->position() != newStyle.position()) {
             if (!oldStyle->hasOutOfFlowPosition() && newStyle.hasOutOfFlowPosition()) {
                 // We are about to go out of flow. Before that takes place, we need to mark the
                 // current containing block chain for preferred widths recalculation.
@@ -324,7 +324,7 @@ void RenderBox::invalidateAncestorBackgroundObscurationStatus()
     }
 }
 
-void RenderBox::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle)
+void RenderBox::styleDidChange(Style::Difference diff, const RenderStyle* oldStyle)
 {
     // Horizontal writing mode definition is updated in RenderBoxModelObject::updateFromStyle,
     // (as part of the RenderBoxModelObject::styleDidChange call below). So, we can safely cache the horizontal
@@ -398,7 +398,7 @@ void RenderBox::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle
 #endif
 
     // Our opaqueness might have changed without triggering layout.
-    if (diff >= StyleDifference::Repaint && diff <= StyleDifference::RepaintLayer)
+    if (diff >= Style::DifferenceResult::Repaint && diff <= Style::DifferenceResult::RepaintLayer)
         invalidateAncestorBackgroundObscurationStatus();
 
     bool isBodyRenderer = isBody();
@@ -406,7 +406,7 @@ void RenderBox::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle
     if (isDocElementRenderer || isBodyRenderer) {
         view().frameView().recalculateScrollbarOverlayStyle();
         
-        if (diff != StyleDifference::Equal)
+        if (diff != Style::DifferenceResult::Equal)
             view().compositor().rootOrBodyStyleChanged(*this, oldStyle);
     }
 
@@ -434,7 +434,7 @@ void RenderBox::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle
         layoutContext().unregisterAnchorScrollAdjusterFor(*this);
     }
 
-    if ((layer() && diff == StyleDifference::Layout && hasNonVisibleOverflow())
+    if ((layer() && diff == Style::DifferenceResult::Layout && hasNonVisibleOverflow())
         || (oldStyle && oldStyle->isOverflowVisible() != style().isOverflowVisible()))
         layoutContext().invalidateAnchorDependenciesForScroller(*this);
 }
@@ -3212,7 +3212,7 @@ void RenderBox::computeInlineDirectionMargins(const RenderBlock& containingBlock
             marginEndLength = 0_css_px;
     }
 
-    if (isGridItem() && downcast<RenderGrid>(containingBlock).isComputingTrackSizes()) {
+    if (auto* grid = dynamicDowncast<RenderGrid>(containingBlock); grid && grid->isComputingTrackSizes()) {
         if (marginStartLength.isAuto())
             marginStartLength = 0_css_px;
         if (marginEndLength.isAuto())
@@ -3512,8 +3512,8 @@ RenderBox::LogicalExtentComputedValues RenderBox::computeLogicalHeight(LayoutUni
         auto visibleHeight = view().pageOrViewLogicalHeight();
         if (isDocumentElementRenderer())
             computedValues.m_extent = std::max(computedValues.m_extent, visibleHeight - margins);
-        else if (parentBox()) {
-            auto marginsBordersPadding = margins + parentBox()->marginBefore() + parentBox()->marginAfter() + parentBox()->borderAndPaddingLogicalHeight();
+        else if (CheckedPtr parentBox = dynamicDowncast<RenderBox>(parent)) {
+            auto marginsBordersPadding = margins + parentBox->marginBefore() + parentBox->marginAfter() + parentBox->borderAndPaddingLogicalHeight();
             computedValues.m_extent = std::max(computedValues.m_extent, visibleHeight - marginsBordersPadding);
         }
     }
@@ -4154,8 +4154,10 @@ void RenderBox::computeOutOfFlowPositionedLogicalWidth(LogicalExtentComputedValu
     if (usedWidth < usedMinWidth)
         usedWidth = usedMinWidth;
 
+    bool hasWidthBorderBoxAspectRatio = style().hasAspectRatio() && style().boxSizingForAspectRatio() == BoxSizing::BorderBox && style().logicalWidth().isAuto();
+
     // Set the final width value.
-    computedValues.m_extent = usedWidth + inlineConstraints.bordersPlusPadding();
+    computedValues.m_extent = hasWidthBorderBoxAspectRatio ? usedWidth : usedWidth + inlineConstraints.bordersPlusPadding();
 
     // Calculate the position.
     inlineConstraints.resolvePosition(computedValues);
@@ -4801,15 +4803,6 @@ LayoutUnit RenderBox::lineHeight() const
         return marginBefore() + logicalHeight() + marginAfter();
 
     return { };
-}
-
-RenderLayer* RenderBox::enclosingFloatPaintingLayer() const
-{
-    for (auto& box : lineageOfType<RenderBox>(*this)) {
-        if (box.layer() && box.layer()->isSelfPaintingLayer())
-            return box.layer();
-    }
-    return nullptr;
 }
 
 LayoutRect RenderBox::logicalVisualOverflowRectForPropagation(const WritingMode parentWritingMode) const

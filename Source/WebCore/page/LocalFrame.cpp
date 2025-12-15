@@ -694,7 +694,6 @@ void LocalFrame::setPrinting(bool printing, FloatSize pageSize, FloatSize origin
     // See https://bugs.webkit.org/show_bug.cgi?id=43704
     ResourceCacheValidationSuppressor validationSuppressor(document->cachedResourceLoader());
 
-    document->setPrinting(printing);
     protectedView()->adjustMediaTypeForPrinting(printing);
 
     // FIXME: Consider invoking Page::updateRendering or an equivalent.
@@ -747,22 +746,24 @@ FloatSize LocalFrame::resizePageRectsKeepingRatio(const FloatSize& originalSize,
 const UserContentProvider* LocalFrame::userContentProvider() const
 {
     RefPtr document = this->document();
-    RefPtr documentLoader = document ? document->loader() : nullptr;
-    if (RefPtr userContentProvider = documentLoader ? documentLoader->preferences().userContentProvider : nullptr)
-        return userContentProvider.unsafeGet();
+    if (RefPtr documentLoader = document ? document->loader() : nullptr) {
+        if (auto* userContentProvider = documentLoader->preferences().userContentProvider.get())
+            return userContentProvider;
+    }
     if (RefPtr page = this->page())
-        return page->protectedUserContentProviderForFrame().unsafePtr();
+        return &page->userContentProviderForFrame();
     return nullptr;
 }
 
 UserContentProvider* LocalFrame::userContentProvider()
 {
     RefPtr document = this->document();
-    RefPtr documentLoader = document ? document->loader() : nullptr;
-    if (RefPtr userContentProvider = documentLoader ? documentLoader->preferences().userContentProvider : nullptr)
-        return userContentProvider.unsafeGet();
+    if (RefPtr documentLoader = document ? document->loader() : nullptr) {
+        if (auto* userContentProvider = documentLoader->preferences().userContentProvider.get())
+            return userContentProvider;
+    }
     if (RefPtr page = this->page())
-        return page->protectedUserContentProviderForFrame().unsafePtr();
+        return &page->userContentProviderForFrame();
     return nullptr;
 }
 
@@ -1676,7 +1677,7 @@ bool LocalFrame::frameCanCreatePaymentSession() const
 #endif
 }
 
-RefPtr<SecurityOrigin> LocalFrame::frameDocumentSecurityOrigin() const
+SecurityOrigin* LocalFrame::frameDocumentSecurityOrigin() const
 {
     if (RefPtr document = this->document())
         return &document->securityOrigin();

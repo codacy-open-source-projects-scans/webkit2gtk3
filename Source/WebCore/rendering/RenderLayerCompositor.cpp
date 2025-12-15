@@ -320,7 +320,7 @@ public:
 
     struct Provider {
         SingleThreadWeakPtr<RenderLayer> providerLayer;
-        SingleThreadWeakListHashSet<RenderLayer> sharingLayers;
+        SingleThreadWeakKeyListHashSet<RenderLayer> sharingLayers;
         LayoutRect absoluteBounds;
     };
 
@@ -365,7 +365,7 @@ private:
     Vector<Provider> m_backingProviderCandidates;
     RenderLayer* m_backingSharingStackingContext { nullptr };
     BackingSharingSequenceIdentifier m_sequenceIdentifier { BackingSharingSequenceIdentifier::generate() };
-    SingleThreadWeakHashSet<RenderLayer> m_layersPendingRepaint;
+    SingleThreadWeakKeyHashSet<RenderLayer> m_layersPendingRepaint;
     bool m_allowOverlappingProviders { false };
 };
 
@@ -547,7 +547,7 @@ bool RenderLayerCompositor::BackingSharingState::isAdditionalProviderCandidate(R
 
 void RenderLayerCompositor::BackingSharingState::issuePendingRepaints()
 {
-    for (auto& layer : m_layersPendingRepaint) {
+    for (auto& layer : m_layersPendingRepaint | dereferenceView) {
         LOG_WITH_STREAM(Compositing, stream << "Issuing postponed repaint of layer " << &layer);
         layer.compositingStatusChanged(LayoutUpToDate::Yes);
         layer.compositor().repaintOnCompositingChange(layer, layer.repaintContainer());
@@ -1017,6 +1017,10 @@ void RenderLayerCompositor::updateEventRegionsRecursive(RenderLayer& layer)
 
 void RenderLayerCompositor::updateEventRegions()
 {
+    bool isProhibitedFrame = m_renderView.document().ownerElement() && !m_renderView.document().ownerElement()->renderer();
+    if (isProhibitedFrame)
+        return;
+
     updateEventRegionsRecursive(*m_renderView.layer());
     m_renderView.setNeedsEventRegionUpdateForNonCompositedFrame(false);
 }
@@ -2177,9 +2181,9 @@ void RenderLayerCompositor::layerGainedCompositedScrollableOverflow(RenderLayer&
     backing->updateConfigurationAfterStyleChange();
 }
 
-void RenderLayerCompositor::layerStyleChanged(StyleDifference diff, RenderLayer& layer, const RenderStyle* oldStyle)
+void RenderLayerCompositor::layerStyleChanged(Style::Difference diff, RenderLayer& layer, const RenderStyle* oldStyle)
 {
-    if (diff == StyleDifference::Equal)
+    if (diff == Style::DifferenceResult::Equal)
         return;
 
     // Create or destroy backing here so that code that runs during layout can reliably use isComposited() (though this
@@ -2197,12 +2201,12 @@ void RenderLayerCompositor::layerStyleChanged(StyleDifference diff, RenderLayer&
     const auto& newStyle = layer.renderer().style();
 
     if (hasContentCompositingLayers()) {
-        if (diff >= StyleDifference::LayoutOutOfFlowMovementOnly) {
+        if (diff >= Style::DifferenceResult::LayoutOutOfFlowMovementOnly) {
             layer.setNeedsPostLayoutCompositingUpdate();
             layer.setNeedsCompositingGeometryUpdate();
         }
 
-        if (diff >= StyleDifference::Layout) {
+        if (diff >= Style::DifferenceResult::Layout) {
             // FIXME: only set flags here if we know we have a composited descendant, but we might not know at this point.
             if (oldStyle && clippingChanged(*oldStyle, newStyle)) {
                 if (layer.isStackingContext()) {
@@ -2236,7 +2240,7 @@ void RenderLayerCompositor::layerStyleChanged(StyleDifference diff, RenderLayer&
         }
     }
 
-    if (diff >= StyleDifference::Repaint && oldStyle) {
+    if (diff >= Style::DifferenceResult::Repaint && oldStyle) {
         // This ensures that we update border-radius clips on layers that are descendants in containing-block order but not paint order. This is necessary even when
         // the current layer is not composited.
         bool changeAffectsClippingOfNonPaintOrderDescendants = !layer.isStackingContext() && layer.renderer().hasNonVisibleOverflow() && oldStyle->border() != newStyle.border();
@@ -2267,7 +2271,7 @@ void RenderLayerCompositor::layerStyleChanged(StyleDifference diff, RenderLayer&
 
     backing->updateConfigurationAfterStyleChange();
 
-    if (diff >= StyleDifference::Repaint) {
+    if (diff >= Style::DifferenceResult::Repaint) {
         // Visibility change may affect geometry of the enclosing composited layer.
         if (oldStyle && oldStyle->usedVisibility() != newStyle.usedVisibility())
             layer.setNeedsCompositingGeometryUpdate();
@@ -2283,7 +2287,7 @@ void RenderLayerCompositor::layerStyleChanged(StyleDifference diff, RenderLayer&
             layer.setNeedsCompositingConfigurationUpdate();
     }
 
-    if (diff >= StyleDifference::RecompositeLayer) {
+    if (diff >= Style::DifferenceResult::RecompositeLayer) {
         if (layer.isComposited()) {
             bool hitTestingStateChanged = oldStyle && (oldStyle->usedPointerEvents() != newStyle.usedPointerEvents());
             if (is<RenderWidget>(layer.renderer()) || hitTestingStateChanged) {
@@ -5978,7 +5982,7 @@ void RenderLayerCompositor::resolveScrollingTreeRelationships()
 
     RefPtr scrollingCoordinator = this->scrollingCoordinator();
 
-    for (auto& layer : m_layersWithUnresolvedRelations) {
+    for (auto& layer : m_layersWithUnresolvedRelations | dereferenceView) {
         LOG_WITH_STREAM(ScrollingTree, stream << "RenderLayerCompositor::resolveScrollingTreeRelationships - resolving relationship for layer " << &layer);
 
         if (!layer.isComposited())
@@ -6048,7 +6052,7 @@ void RenderLayerCompositor::updateSynchronousScrollingNodes()
     };
 
     bool rootHasSlowRepaintObjects = false;
-    for (auto& renderer : *slowRepaintObjects) {
+    for (auto& renderer : *slowRepaintObjects | dereferenceView) {
         auto layer = renderer.enclosingLayer();
         if (!layer)
             continue;
@@ -6213,7 +6217,7 @@ void LegacyWebKitScrollingLayerCoordinator::registerAllViewportConstrainedLayers
     LayerMap layerMap;
     StickyContainerMap stickyContainerMap;
 
-    for (auto& layer : m_viewportConstrainedLayers) {
+    for (auto& layer : m_viewportConstrainedLayers | dereferenceView) {
         ASSERT(layer.isComposited());
 
         std::unique_ptr<ViewportConstraints> constraints;
@@ -6262,13 +6266,13 @@ void LegacyWebKitScrollingLayerCoordinator::updateScrollingLayer(RenderLayer& la
 
 void LegacyWebKitScrollingLayerCoordinator::registerAllScrollingLayers()
 {
-    for (auto& layer : m_scrollingLayers)
+    for (auto& layer : m_scrollingLayers | dereferenceView)
         updateScrollingLayer(layer);
 }
 
 void LegacyWebKitScrollingLayerCoordinator::unregisterAllScrollingLayers()
 {
-    for (auto& layer : m_scrollingLayers) {
+    for (auto& layer : m_scrollingLayers | dereferenceView) {
         auto* backing = layer.backing();
         ASSERT(backing);
         m_chromeClient.removeScrollingLayer(layer.renderer().element(), backing->scrollContainerLayer()->platformLayer(), backing->scrolledContentsLayer()->platformLayer());

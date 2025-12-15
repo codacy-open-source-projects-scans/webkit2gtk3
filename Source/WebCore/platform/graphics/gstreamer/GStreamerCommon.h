@@ -33,6 +33,10 @@
 #include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/text/CStringView.h>
 
+#if USE(GSTREAMER_GL)
+#include "GraphicsTypesGL.h"
+#endif
+
 namespace WTF {
 class MediaTime;
 class URL;
@@ -92,17 +96,18 @@ bool isProtocolAllowed(const WTF::URL&);
 CStringView capsMediaType(const GstCaps*);
 std::optional<TrackID> getStreamIdFromPad(const GRefPtr<GstPad>&);
 std::optional<TrackID> getStreamIdFromStream(const GRefPtr<GstStream>&);
-std::optional<TrackID> parseStreamId(StringView stringId);
+std::optional<TrackID> parseStreamId(const String& stringId);
 bool doCapsHaveType(const GstCaps*, ASCIILiteral);
 bool areEncryptedCaps(const GstCaps*);
 Vector<String> extractGStreamerOptionsFromCommandLine();
 void setGStreamerOptionsFromUIProcess(Vector<String>&&);
+bool ensureGStreamerInitializedNonWebProcess();
 bool ensureGStreamerInitialized();
 void registerWebKitGStreamerElements();
 void registerWebKitGStreamerVideoEncoder();
 void deinitializeGStreamer();
 
-unsigned getGstPlayFlag(const char* nick);
+unsigned getGstPlayFlag(ASCIILiteral nick);
 uint64_t toGstUnsigned64Time(const WTF::MediaTime&);
 
 inline GstClockTime toGstClockTime(const WTF::MediaTime& mediaTime)
@@ -219,7 +224,9 @@ private:
 class GstMappedFrame {
     WTF_MAKE_TZONE_ALLOCATED(GstMappedFrame);
     WTF_MAKE_NONCOPYABLE(GstMappedFrame);
+
 public:
+    GstMappedFrame(GstMappedFrame&&);
     GstMappedFrame(GstBuffer*, const GstVideoInfo*, GstMapFlags);
     GstMappedFrame(const GRefPtr<GstSample>&, GstMapFlags);
 
@@ -243,6 +250,13 @@ public:
     bool isValid() const { return m_frame.buffer; }
     explicit operator bool() const { return m_frame.buffer; }
     bool operator!() const { return !m_frame.buffer; }
+
+#if USE(GSTREAMER_GL)
+    GLuint textureID(int) const;
+#endif
+
+    unsigned componentPlane(int) const;
+    unsigned componentPlaneOffset(int) const;
 
 private:
     GstVideoFrame m_frame;
@@ -287,7 +301,7 @@ bool webkitGstSetElementStateSynchronously(GstElement*, GstState, Function<bool(
 GstBuffer* gstBufferNewWrappedFast(void* data, size_t length);
 
 // These functions should be used for elements not provided by WebKit itself and not provided by GStreamer -core.
-GstElement* makeGStreamerElement(ASCIILiteral factoryName, const String& name = emptyString());
+GstElement* makeGStreamerElement(CStringView factoryName, const String& name = emptyString());
 
 template<typename T>
 std::optional<T> gstStructureGet(const GstStructure*, CStringView key);
@@ -358,7 +372,7 @@ using GstId = GQuark;
 bool gstStructureForeach(const GstStructure*, Function<bool(GstId, const GValue*)>&&);
 void gstStructureIdSetValue(GstStructure*, GstId, const GValue*);
 bool gstStructureMapInPlace(GstStructure*, Function<bool(GstId, GValue*)>&&);
-StringView gstIdToString(GstId);
+String gstIdToString(GstId);
 void gstStructureFilterAndMapInPlace(GstStructure*, Function<bool(GstId, GValue*)>&&);
 
 #if USE(GBM)

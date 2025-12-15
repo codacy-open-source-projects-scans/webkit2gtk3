@@ -30,11 +30,8 @@ bindings/js/GarbageCollectionController.cpp
 bindings/js/JSLocationCustom.cpp
 bindings/js/JSPaintRenderingContext2DCustom.cpp
 bridge/objc/objc_runtime.h
-crypto/cocoa/CryptoAlgorithmEd25519Cocoa.cpp
-crypto/cocoa/CryptoKeyOKPCocoa.cpp
 css/CSSStyleProperties.h
 css/CSSToLengthConversionData.h
-css/MediaList.h
 css/StyleSheetContents.cpp
 css/StyleSheetContents.h
 css/values/primitives/CSSPrimitiveData.h
@@ -46,7 +43,6 @@ editing/TextIterator.cpp
 html/HTMLMediaElement.cpp
 html/canvas/PlaceholderRenderingContext.cpp
 html/shadow/DateTimeEditElement.h
-html/track/TrackBase.h
 [ Mac ] inspector/InspectorFrontendHost.h
 inspector/InspectorInstrumentation.h
 inspector/InspectorStyleSheet.h

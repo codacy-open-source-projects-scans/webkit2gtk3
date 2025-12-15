@@ -39,6 +39,9 @@
 #import "RemoteScrollingCoordinatorProxy.h"
 #import "RemoteScrollingCoordinatorTransaction.h"
 #import "RemoteScrollingTreeCocoa.h"
+#if PLATFORM(IOS_FAMILY) && ENABLE(OVERLAY_REGIONS_IN_EVENT_REGION)
+#import "RemoteScrollingCoordinatorProxyIOS.h"
+#endif
 #import "WebFrameProxy.h"
 #import "WebPageMessages.h"
 #import "WebPageProxy.h"
@@ -494,6 +497,11 @@ void RemoteLayerTreeDrawingAreaProxy::commitLayerTreeTransaction(IPC::Connection
         }
 #endif // ENABLE(ASYNC_SCROLLING)
 
+#if ENABLE(OVERLAY_REGIONS_IN_EVENT_REGION)
+        if (layerTreeTransaction.changedLayerProperties().size() || layerTreeTransaction.destroyedLayers().size())
+            scrollingCoordinatorProxy->updateOverlayRegions(layerTreeTransaction.destroyedLayers());
+#endif
+
         if (m_debugIndicatorLayerTreeHost && mainFrameData) {
             float scale = indicatorScale(layerTreeTransaction.contentsSize());
             scrollingCoordinatorProxy->willCommitLayerAndScrollingTrees();
@@ -914,10 +922,10 @@ void RemoteLayerTreeDrawingAreaProxy::animationsWereRemovedFromNode(RemoteLayerT
         page->checkedScrollingCoordinatorProxy()->animationsWereRemovedFromNode(node);
 }
 
-void RemoteLayerTreeDrawingAreaProxy::updateTimelineRegistration(WebCore::ProcessIdentifier processIdentifier, const HashSet<Ref<WebCore::AcceleratedTimeline>>& timelineRepresentations, MonotonicTime now)
+void RemoteLayerTreeDrawingAreaProxy::updateTimelinesRegistration(WebCore::ProcessIdentifier processIdentifier, const WebCore::AcceleratedTimelinesUpdate& timelinesUpdate, MonotonicTime now)
 {
     if (RefPtr page = this->page())
-        page->checkedScrollingCoordinatorProxy()->updateTimelineRegistration(processIdentifier, timelineRepresentations, now);
+        page->checkedScrollingCoordinatorProxy()->updateTimelinesRegistration(processIdentifier, timelinesUpdate, now);
 }
 
 RefPtr<const RemoteAnimationTimeline> RemoteLayerTreeDrawingAreaProxy::timeline(const TimelineID& timelineID) const
@@ -931,7 +939,6 @@ RefPtr<const RemoteAnimationStack> RemoteLayerTreeDrawingAreaProxy::animationSta
 {
     return m_remoteLayerTreeHost->animationStackForNodeWithIDForTesting(layerID);
 }
-
 #endif // ENABLE(THREADED_ANIMATIONS)
 
 } // namespace WebKit

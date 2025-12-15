@@ -285,9 +285,9 @@ void RemoteScrollingCoordinatorProxyMac::animationsWereRemovedFromNode(RemoteLay
     m_eventDispatcher->animationsWereRemovedFromNode(node);
 }
 
-void RemoteScrollingCoordinatorProxyMac::updateTimelineRegistration(WebCore::ProcessIdentifier processIdentifier, const HashSet<Ref<WebCore::AcceleratedTimeline>>& timelineRepresentations, MonotonicTime now)
+void RemoteScrollingCoordinatorProxyMac::updateTimelinesRegistration(WebCore::ProcessIdentifier processIdentifier, const WebCore::AcceleratedTimelinesUpdate& timelinesUpdate, MonotonicTime now)
 {
-    m_eventDispatcher->updateTimelineRegistration(processIdentifier, timelineRepresentations, now);
+    m_eventDispatcher->updateTimelinesRegistration(processIdentifier, timelinesUpdate, now);
 }
 
 RefPtr<const RemoteAnimationTimeline> RemoteScrollingCoordinatorProxyMac::timeline(const TimelineID& timelineID) const
@@ -301,6 +301,11 @@ RefPtr<const RemoteAnimationStack> RemoteScrollingCoordinatorProxyMac::animation
     RefPtr animationStack = m_eventDispatcher->animationStackForNodeWithIDForTesting(layerID);
     m_eventDispatcher->unlockForAnimationChanges();
     return animationStack;
+}
+
+HashSet<Ref<RemoteProgressBasedTimeline>> RemoteScrollingCoordinatorProxyMac::timelinesForScrollingNodeIDForTesting(WebCore::ScrollingNodeID scrollingNodeID) const
+{
+    return m_eventDispatcher->timelinesForScrollingNodeIDForTesting(scrollingNodeID);
 }
 #endif
 

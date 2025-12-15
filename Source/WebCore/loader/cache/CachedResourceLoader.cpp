@@ -973,7 +973,7 @@ void CachedResourceLoader::updateHTTPRequestHeaders(FrameLoader& frameLoader, Ca
     // Implementing steps 11 to 19 of https://fetch.spec.whatwg.org/#http-network-or-cache-fetch as of 22 Feb 2022.
 
     // FIXME: We should reconcile handling of MainResource with other resources.
-    if (type != CachedResource::Type::MainResource)
+    if (type != CachedResource::Type::MainResource && request.options().cachingPolicy != CachingPolicy::AllowCachingMainResourcePrefetch)
         request.updateReferrerAndOriginHeaders(frameLoader);
     // FetchMetadata depends on PSL to determine same-site relationships and without this
     // ability it is best to not set any FetchMetadata headers as sites generally expect
@@ -1239,6 +1239,7 @@ ResourceErrorOr<CachedResourceHandle<CachedResource>> CachedResourceLoader::requ
 
     FrameLoader::addSameSiteInfoToRequestIfNeeded(request.resourceRequest(), document.get());
 
+    bool ignoreForRequestCount = request.ignoreForRequestCount();
     auto mayAddToMemoryCache = computeMayAddToMemoryCache(request, resource.get()) ? MayAddToMemoryCache::Yes : MayAddToMemoryCache::No;
     RevalidationPolicy policy = determineRevalidationPolicy(type, request, resource.get(), forPreload, imageLoading);
     switch (policy) {
@@ -1323,6 +1324,7 @@ ResourceErrorOr<CachedResourceHandle<CachedResource>> CachedResourceLoader::requ
         subresourceLoader->clearRequestCountTracker();
         resource->setIgnoreForRequestCount(false);
         subresourceLoader->resetRequestCountTracker(*this, *resource);
+        ignoreForRequestCount = false;
     }
 
     if ((policy != Use || resource->stillNeedsLoad()) && imageLoading == ImageLoading::Immediate) {
@@ -1339,6 +1341,17 @@ ResourceErrorOr<CachedResourceHandle<CachedResource>> CachedResourceLoader::requ
                 return makeUnexpected(ResourceError { String(), 0, url, String(), ResourceError::Type::AccessControl });
             return makeUnexpected(resourceError);
         }
+    } else if (policy == Use && !ignoreForRequestCount && resource->isLoading() && resource->loader()) {
+        ++m_requestCount;
+        resource->whenLoaded([weakThis = WeakPtr { *this }] {
+            RefPtr protectedThis = weakThis.get();
+            if (!protectedThis)
+                return;
+            if (--protectedThis->m_requestCount)
+                return;
+            if (RefPtr frame = protectedThis->frame())
+                frame->loader().checkCompleted();
+        });
     }
 
     if (document && !document->loadEventFinished() && !resource->resourceRequest().url().protocolIsData())

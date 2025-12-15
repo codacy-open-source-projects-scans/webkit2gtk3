@@ -285,7 +285,7 @@ public:
             data->setBoolean("enabled"_s, !!node->document().fullscreen().fullscreenElement());
 #endif // ENABLE(FULLSCREEN_API)
 
-        auto timestamp = m_domAgent->m_environment.executionStopwatch().elapsedTime().seconds();
+        auto timestamp = m_domAgent->checkedEnvironment()->executionStopwatch().elapsedTime().seconds();
         m_domAgent->m_frontendDispatcher->didFireEvent(nodeId, event.type(), timestamp, data->size() ? WTFMove(data) : nullptr);
     }
 
@@ -360,7 +360,7 @@ void InspectorDOMAgent::willDestroyFrontendAndBackend(Inspector::DisconnectReaso
 
     Inspector::Protocol::ErrorString ignored;
     setSearchingForNode(ignored, false, nullptr, nullptr, nullptr, false);
-    hideHighlight();
+    std::ignore = hideHighlight();
 
     Ref overlay = m_overlay.get();
     overlay->clearAllGridOverlays();
@@ -1367,7 +1367,7 @@ void InspectorDOMAgent::setSearchingForNode(Inspector::Protocol::ErrorString& er
 
         highlightMousedOverNode();
     } else
-        hideHighlight();
+        std::ignore = hideHighlight();
 
     protectedOverlay()->didSetSearchingForNode(m_searchingForNode);
 
@@ -1727,7 +1727,7 @@ Inspector::Protocol::ErrorStringOr<void> InspectorDOMAgent::showGridOverlay(Insp
     if (!config)
         return makeUnexpected(errorString);
 
-    protectedOverlay()->setGridOverlayForNode(*node, *config);
+    std::ignore = protectedOverlay()->setGridOverlayForNode(*node, *config);
 
     return { };
 }
@@ -1759,7 +1759,7 @@ Inspector::Protocol::ErrorStringOr<void> InspectorDOMAgent::showFlexOverlay(Insp
     if (!config)
         return makeUnexpected(errorString);
 
-    protectedOverlay()->setFlexOverlayForNode(*node, *config);
+    std::ignore = protectedOverlay()->setFlexOverlayForNode(*node, *config);
 
     return { };
 }
@@ -3067,7 +3067,7 @@ void InspectorDOMAgent::mediaMetricsTimerFired()
             iterator->value.isPowerEfficient = isPowerEfficient;
 
             if (auto nodeId = pushNodePathToFrontend(mediaElement.ptr())) {
-                auto timestamp = m_environment.executionStopwatch().elapsedTime().seconds();
+                auto timestamp = checkedEnvironment()->executionStopwatch().elapsedTime().seconds();
                 m_frontendDispatcher->powerEfficientPlaybackStateChanged(nodeId, timestamp, iterator->value.isPowerEfficient);
             }
         }

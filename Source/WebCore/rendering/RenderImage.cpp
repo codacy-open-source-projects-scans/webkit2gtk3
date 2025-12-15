@@ -250,14 +250,14 @@ ImageSizeChangeType RenderImage::setImageSizeForAltText(CachedImage* newImage /*
     return ImageSizeChangeForAltText;
 }
 
-void RenderImage::styleWillChange(StyleDifference diff, const RenderStyle& newStyle)
+void RenderImage::styleWillChange(Style::Difference diff, const RenderStyle& newStyle)
 {
     if (!hasInitializedStyle())
         imageResource().initialize(*this);
     RenderReplaced::styleWillChange(diff, newStyle);
 }
 
-void RenderImage::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle)
+void RenderImage::styleDidChange(Style::Difference diff, const RenderStyle* oldStyle)
 {
     RenderReplaced::styleDidChange(diff, oldStyle);
     if (m_needsToSetSizeForAltText) {
@@ -266,7 +266,7 @@ void RenderImage::styleDidChange(StyleDifference diff, const RenderStyle* oldSty
         m_needsToSetSizeForAltText = false;
     }
 
-    if (oldStyle && diff == StyleDifference::Layout) {
+    if (oldStyle && diff == Style::DifferenceResult::Layout) {
         if (oldStyle->imageOrientation() != style().imageOrientation())
             return repaintOrMarkForLayout(ImageSizeChangeNone);
 
@@ -702,7 +702,7 @@ void RenderImage::paintAreaElementFocusRing(PaintInfo& paintInfo, const LayoutPo
     if (!areaElementStyle)
         return;
 
-    auto outlineWidth = Style::evaluate<float>(areaElementStyle->outlineWidth(), areaElementStyle->usedZoomForLength());
+    auto outlineWidth = Style::evaluate<float>(areaElementStyle->outlineWidth(), Style::ZoomNeeded { });
     if (!outlineWidth)
         return;
 
@@ -749,13 +749,13 @@ ImageDrawResult RenderImage::paintIntoRect(PaintInfo& paintInfo, const FloatRect
         return ImageDrawResult::DidNothing;
 
     // FIXME: Document when image != img.get().
-    auto* image = imageResource().image().unsafeGet();
+    RefPtr image = imageResource().image();
 
     ImagePaintingOptions options = {
         CompositeOperator::SourceOver,
         decodingModeForImageDraw(*image, paintInfo),
         imageOrientation(),
-        image ? chooseInterpolationQuality(paintInfo.context(), *image, image, LayoutSize(rect.size())) : InterpolationQuality::Default,
+        image ? chooseInterpolationQuality(paintInfo.context(), *image, image.get(), LayoutSize(rect.size())) : InterpolationQuality::Default,
         settings().imageSubsamplingEnabled() ? AllowImageSubsampling::Yes : AllowImageSubsampling::No,
         settings().showDebugBorders() ? ShowDebugBackground::Yes : ShowDebugBackground::No,
 #if USE(SKIA)

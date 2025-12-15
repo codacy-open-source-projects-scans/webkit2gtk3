@@ -119,6 +119,7 @@ class MessagePort;
 class MockCDMFactory;
 class MockCaptionDisplaySettingsClientCallback;
 class MockContentFilterSettings;
+class MockMediaDeviceRouteController;
 class MockPageOverlay;
 class MockPaymentCoordinator;
 class NodeList;
@@ -129,6 +130,7 @@ class ReadableStream;
 class Range;
 class RenderedDocumentMarker;
 class SVGSVGElement;
+class ScrollTimeline;
 class ScrollableArea;
 class SerializedScriptValue;
 class ServiceWorker;
@@ -330,7 +332,13 @@ public:
         double speed;
         bool isThreaded;
     };
+    struct ScrollingNodeID {
+        uint64_t nodeIdentifier;
+        uint64_t processIdentifier;
+    };
     Vector<AcceleratedAnimation> acceleratedAnimationsForElement(Element&);
+    uint64_t identifierForTimeline(AnimationTimeline&) const;
+    ScrollingNodeID scrollingNodeIDForTimeline(AnimationTimeline&) const;
     unsigned numberOfAnimationTimelineInvalidations() const;
     double timeToNextAnimationTick(WebAnimation&) const;
 
@@ -345,7 +353,7 @@ public:
     String visiblePlaceholder(Element&);
     void setCanShowPlaceholder(Element&, bool);
 
-    Element* insertTextPlaceholder(int width, int height);
+    RefPtr<Element> insertTextPlaceholder(int width, int height);
     void removeTextPlaceholder(Element&);
 
     void selectColorInColorChooser(HTMLInputElement&, const String& colorValue);
@@ -544,8 +552,8 @@ public:
     ExceptionOr<String> layerTreeAsText(Document&, unsigned short flags) const;
     ExceptionOr<uint64_t> layerIDForElement(Element&);
     ExceptionOr<String> repaintRectsAsText() const;
-        
-    ExceptionOr<Vector<uint64_t>> scrollingNodeIDForNode(Node*);
+
+    ExceptionOr<ScrollingNodeID> scrollingNodeIDForNode(Node*);
 
     enum {
         // Values need to be kept in sync with Internals.idl.
@@ -1649,9 +1657,15 @@ public:
     bool isModelElementIntersectingViewport(HTMLModelElement&);
 #endif
 
+    ExceptionOr<void> copyImageAtLocation(int x, int y);
+
     bool hasMediaSessionManager() const;
 
     size_t fileConnectionHandleCount(const FileSystemHandle&) const;
+
+#if ENABLE(WIRELESS_PLAYBACK_MEDIA_PLAYER)
+    MockMediaDeviceRouteController& mockMediaDeviceRouteController();
+#endif
 
 private:
     explicit Internals(Document&);
@@ -1727,6 +1741,9 @@ private:
 #if ENABLE(VIDEO)
     std::unique_ptr<CaptionUserPreferencesTestingModeToken> m_testingModeToken;
     RefPtr<MockCaptionDisplaySettingsClientCallback> m_mockCaptionDisplaySettingsClientCallback;
+#endif
+#if ENABLE(WIRELESS_PLAYBACK_MEDIA_PLAYER)
+    RefPtr<MockMediaDeviceRouteController> m_mockMediaDeviceRouteController;
 #endif
 };
 

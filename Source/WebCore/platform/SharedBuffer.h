@@ -306,6 +306,9 @@ public:
 
     Ref<FragmentedSharedBuffer> asFragmentedSharedBuffer() const { return const_cast<SharedBuffer&>(*this); }
 
+    template<typename T>
+    bool isSpanWithinBounds(std::span<T> otherSpan) const;
+
 private:
     friend class SharedBufferBuilder;
 
@@ -383,18 +386,19 @@ public:
         m_buffer = nullptr;
     }
 
-    RefPtr<FragmentedSharedBuffer> get() const
+    FragmentedSharedBuffer* buffer() const LIFETIME_BOUND
     {
         updateBufferIfNeeded();
-        return m_buffer;
+        return m_buffer.get();
     }
-    Ref<FragmentedSharedBuffer> copy() const { return createBuffer(); }
+    RefPtr<FragmentedSharedBuffer> protectedBuffer() const { return buffer(); }
+    Ref<FragmentedSharedBuffer> copyBuffer() const { return createBuffer(); }
 
     WEBCORE_EXPORT RefPtr<ArrayBuffer> tryCreateArrayBuffer() const;
 
-    WEBCORE_EXPORT Ref<FragmentedSharedBuffer> take();
-    WEBCORE_EXPORT Ref<SharedBuffer> takeAsContiguous();
-    WEBCORE_EXPORT RefPtr<ArrayBuffer> takeAsArrayBuffer();
+    WEBCORE_EXPORT Ref<FragmentedSharedBuffer> takeBuffer();
+    WEBCORE_EXPORT Ref<SharedBuffer> takeBufferAsContiguous();
+    WEBCORE_EXPORT RefPtr<ArrayBuffer> takeBufferAsArrayBuffer();
 
     WEBCORE_EXPORT bool operator==(const SharedBufferBuilder&) const;
 
@@ -446,6 +450,17 @@ private:
 };
 
 RefPtr<SharedBuffer> utf8Buffer(const String&);
+
+template<typename T>
+inline bool SharedBuffer::isSpanWithinBounds(std::span<T> otherSpan) const
+{
+    auto thisSpan = this->span();
+    auto otherByteSpan = asByteSpan(otherSpan);
+    if (std::to_address(otherByteSpan.end()) < std::to_address(thisSpan.begin()))
+        return false;
+    size_t offset = std::to_address(otherByteSpan.end()) - std::to_address(thisSpan.begin());
+    return offset <= size(); // "<=" because end is included as valid.
+}
 
 } // namespace WebCore
 

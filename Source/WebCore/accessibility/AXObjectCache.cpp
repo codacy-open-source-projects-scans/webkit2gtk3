@@ -1249,16 +1249,16 @@ void AXObjectCache::updateLoadingProgress(double newProgressValue)
 #endif
 }
 
-void AXObjectCache::onTopDocumentLoaded(RenderObject& renderObject)
+void AXObjectCache::onTopDocumentLoaded(RenderObject& renderer)
 {
-    postNotification(getOrCreate(renderObject), AXNotification::NewDocumentLoadComplete);
+    postDeferredNotification(renderer, AXNotification::NewDocumentLoadComplete);
 }
 
-void AXObjectCache::onNonTopDocumentLoaded(RenderObject& renderObject)
+void AXObjectCache::onNonTopDocumentLoaded(RenderObject& renderer)
 {
     // AXLoadComplete can only be posted on the top document, so if it's a document
     // in an iframe that just finished loading, post AXLayoutComplete instead.
-    postNotification(getOrCreate(renderObject), AXNotification::LayoutComplete);
+    postDeferredNotification(renderer, AXNotification::LayoutComplete);
 }
 
 void AXObjectCache::onAutocorrectionOccured(Element& element)
@@ -1423,7 +1423,7 @@ void AXObjectCache::handleRowspanChanged(AccessibilityNodeObject& axCell)
 }
 #endif
 
-const Vector<Vector<AXID>>* AXObjectCache::stitchGroupsOwnedBy(AccessibilityObject& object)
+const Vector<AXStitchGroup>* AXObjectCache::stitchGroupsOwnedBy(AccessibilityObject& object)
 {
     CheckedPtr renderBlockFlow = dynamicDowncast<RenderBlockFlow>(object.renderer());
     if (!renderBlockFlow || renderBlockFlow->beingDestroyed())
@@ -1436,13 +1436,13 @@ const Vector<Vector<AXID>>* AXObjectCache::stitchGroupsOwnedBy(AccessibilityObje
     return groups.isEmpty() ? nullptr : &groups;
 }
 
-void AXObjectCache::onLaidOutInlineContent(const RenderBlockFlow& renderer)
+void AXObjectCache::setDirtyStitchGroups(const RenderBlock& renderBlock)
 {
-    if (std::optional groups = m_stitchGroups.takeOptional(renderer)) {
+    if (std::optional groups = m_stitchGroups.takeOptional(renderBlock)) {
         UNUSED_PARAM(groups);
 
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
-        if (std::optional axID = getAXID(const_cast<RenderBlockFlow&>(renderer))) {
+        if (std::optional axID = getAXID(const_cast<RenderBlock&>(renderBlock))) {
             if (RefPtr tree = AXIsolatedTree::treeForFrameID(m_frameID))
                 tree->queueNodeUpdate(*axID, { AXProperty::StitchGroups });
         }
@@ -1637,7 +1637,7 @@ void AXObjectCache::notificationPostTimerFired()
     auto notifications = std::exchange(m_notificationsToPost, { });
 
     // Filter out the notifications that are not going to be posted to platform clients.
-    Vector<std::pair<Ref<AccessibilityObject>, AXNotification>> notificationsToPost;
+    Vector<std::pair<Ref<AccessibilityObject>, AXNotificationWithData>> notificationsToPost;
     notificationsToPost.reserveInitialCapacity(notifications.size());
     for (auto& note : notifications) {
         if (note.first->isDetached() || !note.first->axObjectCache())
@@ -1652,7 +1652,7 @@ void AXObjectCache::notificationPostTimerFired()
         }
 #endif
 
-        if (note.second == AXNotification::MenuOpened) {
+        if (note.second.notification == AXNotification::MenuOpened) {
             // Only notify if the object is in fact a menu.
             note.first->updateChildrenIfNecessary();
             if (note.first->role() != AccessibilityRole::Menu)
@@ -1666,8 +1666,21 @@ void AXObjectCache::notificationPostTimerFired()
     updateIsolatedTree(notificationsToPost);
 #endif
 
-    for (const auto& note : notificationsToPost)
-        postPlatformNotification(note.first, note.second);
+    for (const auto& note : notificationsToPost) {
+        WTF::switchOn(note.second.data,
+            [&](const AriaNotifyData& data) {
+                postPlatformARIANotifyNotification(note.first, data);
+            },
+#if PLATFORM(COCOA)
+            [&](const LiveRegionAnnouncementData& data) {
+                postPlatformLiveRegionNotification(note.first, data);
+            },
+#endif
+            [&](std::monostate) {
+                postPlatformNotification(note.first, note.second.notification);
+            }
+        );
+    }
 }
 
 #if PLATFORM(COCOA)
@@ -1752,7 +1765,8 @@ void AXObjectCache::postNotification(AccessibilityObject* object, Document* docu
 void AXObjectCache::postNotification(AccessibilityObject& object, AXNotification notification)
 {
     AXTRACE(makeString("AXObjectCache::postNotification 0x"_s, hex(reinterpret_cast<uintptr_t>(this))));
-    AXLOG(std::make_pair(Ref { object }, notification));
+    auto dataNotification = AXNotificationWithData(notification);
+    AXLOG(std::make_pair(Ref { object }, dataNotification));
     ASSERT(isMainThread());
 
     stopCachingComputedObjectAttributes();
@@ -1763,14 +1777,14 @@ void AXObjectCache::postNotification(AccessibilityObject& object, AXNotification
         return;
 #endif
 
-    m_notificationsToPost.append(std::make_pair(Ref { object }, notification));
+    m_notificationsToPost.append(std::make_pair(Ref { object }, dataNotification));
     if (!m_notificationPostTimer.isActive())
         m_notificationPostTimer.startOneShot(0_s);
 }
 
 void AXObjectCache::postARIANotifyNotification(Node& node, const String& announcement, const AriaNotifyOptions& options)
 {
-    RefPtr object = getOrCreate(node);
+    RefPtr<AccessibilityObject> object = getOrCreate(node);
     if (!object)
         return;
 
@@ -1801,13 +1815,19 @@ void AXObjectCache::postARIANotifyNotification(Node& node, const String& announc
         }
     }
 
-    postPlatformARIANotifyNotification(announcement, priority, interruptBehavior, object->languageIncludingAncestors());
+    m_notificationsToPost.append(std::make_pair(Ref { *object }, AXNotificationWithData(AXNotification::ARIANotify, AriaNotifyData { announcement, priority, interruptBehavior, object->languageIncludingAncestors() })));
+    if (!m_notificationPostTimer.isActive())
+        m_notificationPostTimer.startOneShot(0_s);
 }
 
+#if PLATFORM(COCOA)
 void AXObjectCache::postLiveRegionNotification(AccessibilityObject& object, LiveRegionStatus status, const AttributedString& announcement)
 {
-    postPlatformLiveRegionNotification(object, status, announcement);
+    m_notificationsToPost.append(std::make_pair(Ref { object }, AXNotificationWithData(AXNotification::LiveRegionAnnouncement, LiveRegionAnnouncementData { announcement, status })));
+    if (!m_notificationPostTimer.isActive())
+        m_notificationPostTimer.startOneShot(0_s);
 }
+#endif
 
 void AXObjectCache::checkedStateChanged(Element& element)
 {
@@ -2216,7 +2236,7 @@ bool AXObjectCache::onTextColorChange(Element& element, const RenderStyle* oldSt
 }
 #endif // ENABLE(ACCESSIBILITY_ISOLATED_TREE)
 
-void AXObjectCache::onStyleChange(RenderText& renderText, StyleDifference difference, const RenderStyle* oldStyle, const RenderStyle& newStyle)
+void AXObjectCache::onStyleChange(RenderText& renderText, Style::Difference difference, const RenderStyle* oldStyle, const RenderStyle& newStyle)
 {
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
     if (!oldStyle)
@@ -2229,8 +2249,8 @@ void AXObjectCache::onStyleChange(RenderText& renderText, StyleDifference differ
         return;
 #endif // !ENABLE(AX_THREAD_TEXT_APIS)
 
-    bool diffIsEqual = difference == StyleDifference::Equal;
-    // When speak-as changes, style difference will be StyleDifference::Equal (so "equal"
+    bool diffIsEqual = difference == Style::DifferenceResult::Equal;
+    // When speak-as changes, style difference will be Style::DifferenceResult::Equal (so "equal"
     // is not exactly accurate). So if the styles are "equal" and speak-as hasn't changed,
     // we have nothing to do.
     if (diffIsEqual) {
@@ -2249,7 +2269,7 @@ void AXObjectCache::onStyleChange(RenderText& renderText, StyleDifference differ
     if (speakAsChanged) [[unlikely]]
         postNotification(*object, AXNotification::SpeakAsChanged);
 
-    // The following style changes will not have a StyleDifference::Equal, so we can
+    // The following style changes will not have a Style::DifferenceResult::Equal, so we can
     // exit early if the diff is equal.
     if (diffIsEqual)
         return;
@@ -3308,11 +3328,31 @@ void AXObjectCache::handleAttributeChange(Element* element, const QualifiedName&
         recomputeParentTableProperties(element, { TableProperty::CellSlots, TableProperty::Exposed });
     } else if (attrName == aria_sortAttr)
         postNotification(element, AXNotification::SortDirectionChanged);
-#if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
     else if (attrName == aria_ownsAttr) {
+#if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
         if (oldValue.isEmpty() || newValue.isEmpty())
             updateIsolatedTree(get(*element), AXProperty::SupportsARIAOwns);
-    } else if (attrName == aria_braillelabelAttr)
+#endif
+        auto updateStitchGroups = [&] (const AtomString& ariaOwnsValue) {
+            // Stitch groups are computed by the containing block-flow, so loop over the owned DOM id's
+            // to find the associated element's containing-block flow and mark it dirty.
+            SpaceSplitString ids(ariaOwnsValue, SpaceSplitString::ShouldFoldCase::No);
+            for (auto& id : ids) {
+                if (RefPtr ownsTarget = element->treeScope().elementByIdResolvingReferenceTarget(id)) {
+                    CheckedPtr renderer = ownsTarget->renderer();
+                    if (auto* containingBlock = renderer ? renderer->containingBlock() : nullptr)
+                        setDirtyStitchGroups(*containingBlock);
+                }
+            }
+        };
+
+        // FIXME: aria-owns relationships can also change when an object's ID changes. We should update
+        // stitch groups in that case too.
+        updateStitchGroups(oldValue);
+        updateStitchGroups(newValue);
+    }
+#if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
+    else if (attrName == aria_braillelabelAttr)
         postNotification(element, AXNotification::BrailleLabelChanged);
     else if (attrName == aria_brailleroledescriptionAttr)
         postNotification(element, AXNotification::BrailleRoleDescriptionChanged);
@@ -4933,6 +4973,10 @@ void AXObjectCache::performDeferredCacheUpdate(ForceLayout forceLayout)
     });
     m_deferredScrollbarUpdateChangeList.clear();
 
+    for (const auto& notificationData : m_deferredNotifications)
+        handleDeferredNotification(notificationData);
+    m_deferredNotifications.clear();
+
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
     if (m_deferredRegenerateIsolatedTree) {
         if (auto tree = AXIsolatedTree::treeForFrameID(m_frameID)) {
@@ -4968,6 +5012,26 @@ void AXObjectCache::performDeferredCacheUpdate(ForceLayout forceLayout)
     platformPerformDeferredCacheUpdate();
 }
 
+void AXObjectCache::handleDeferredNotification(const DeferredNotificationData& data)
+{
+    if (CheckedPtr renderer = data.renderer.get()) {
+        // The point of deferring the notification is to post it when style and layout
+        // are clean, so this function should not be called unless this is true.
+        ASSERT(!needsLayoutOrStyleRecalc(renderer->document()) && !renderer->needsLayout());
+        postNotification(getOrCreate(*renderer), data.notification);
+    } else if (RefPtr element = data.element.get()) {
+        ASSERT(!needsLayoutOrStyleRecalc(element->document()));
+        postNotification(getOrCreate(*element), data.notification);
+    }
+}
+
+void AXObjectCache::postDeferredNotification(RenderObject& renderer, AXNotification notification)
+{
+    // We want to post this notification, but it may not be safe to call getOrCreate right now
+    // (e.g. because style or layout is dirty). Defer to a time we know the page state is clean.
+    m_deferredNotifications.append(DeferredNotificationData { renderer, notification });
+}
+
 void AXObjectCache::handleMenuListValueChanged(Element& element)
 {
     RefPtr<AccessibilityObject> object = get(&element);
@@ -4993,7 +5057,7 @@ void AXObjectCache::updateIsolatedTree(AccessibilityObject& object, AXNotificati
     updateIsolatedTree({ std::make_pair(Ref { object }, notification) });
 }
 
-void AXObjectCache::updateIsolatedTree(const Vector<std::pair<Ref<AccessibilityObject>, AXNotification>>& notifications)
+void AXObjectCache::updateIsolatedTree(const Vector<std::pair<Ref<AccessibilityObject>, AXNotificationWithData>>& notifications)
 {
     AXTRACE(makeString("AXObjectCache::updateIsolatedTree 0x"_s, hex(reinterpret_cast<uintptr_t>(this))));
 
@@ -5019,7 +5083,7 @@ void AXObjectCache::updateIsolatedTree(const Vector<std::pair<Ref<AccessibilityO
         if (notification.first->isDetached())
             continue;
 
-        switch (notification.second) {
+        switch (notification.second.notification) {
         case AXNotification::AbbreviationChanged:
             tree->queueNodeUpdate(notification.first->objectID(), { AXProperty::Abbreviation });
             break;
@@ -5737,8 +5801,15 @@ bool AXObjectCache::removeRelation(Element& origin, AXRelation relation)
             removeRelationByID(targetID, object->objectID(), symmetric);
     }
 
-    if (removedRelation && relation == AXRelation::OwnerFor)
+    if (removedRelation && relation == AXRelation::OwnerFor) {
         childrenChanged(object.get());
+        // We also need to notify the object's natural parent it has changed children.
+        RefPtr node = object->node();
+        if (RefPtr parentNode = node ? composedParentIgnoringDocumentFragments(*node) : nullptr)
+            childrenChanged(get(*parentNode));
+        else if (CheckedPtr renderer = object->renderer())
+            childrenChanged(get(renderer->parent()));
+    }
 
     return removedRelation;
 }
