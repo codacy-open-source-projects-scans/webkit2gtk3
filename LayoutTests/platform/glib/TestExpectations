@@ -797,6 +797,7 @@ accessibility/password-notifications-timing.html [ Skip ]
 accessibility/aria-owns-text-stitching.html [ Skip ]
 accessibility/dynamic-text-stitching.html [ Skip ]
 accessibility/list-marker-text-stitching.html [ Skip ]
+accessibility/text-stitching-inside-links.html [ Skip ]
 
 # Timed out since it was introduced.
 accessibility/css-content-alt-text.html [ Skip ]
@@ -2400,8 +2401,6 @@ webkit.org/b/226807 imported/w3c/web-platform-tests/webaudio/the-audio-api/the-a
 webkit.org/b/218010 imported/w3c/web-platform-tests/webaudio/the-audio-api/the-audioworklet-interface/audioworkletnode-output-channel-count.https.html [ Failure Pass ]
 webkit.org/b/218010 imported/w3c/web-platform-tests/webaudio/the-audio-api/the-audioworklet-interface/suspended-context-messageport.https.html [ Failure Pass ]
 
-webkit.org/b/304132 imported/w3c/web-platform-tests/webaudio/the-audio-api/the-audioworklet-interface/audioworkletprocessor-promises.https.html [ Pass Crash ]
-
 #////////////////////////////////////////////////////////////////////////////////////////
 # End of WebAudio-related bugs
 #////////////////////////////////////////////////////////////////////////////////////////
@@ -2604,7 +2603,8 @@ webkit.org/b/235885 webrtc/video-addTransceiver.html [ Failure ]
 # Transceiver direction change support is incomplete.
 webkit.org/b/193641 webkit.org/b/235885 webrtc/video-setDirection.html [ Skip ]
 webkit.org/b/235885 webrtc/direction-change.html [ Failure ]
-webkit.org/b/235885 webrtc/remove-track.html [ Crash Failure ]
+#webkit.org/b/235885 webrtc/remove-track.html [ Crash Failure ]
+webkit.org/b/304182 webrtc/remove-track.html [ Timeout ]
 
 # Stopping a transceiver is unsupported in GstWebRTC.
 imported/w3c/web-platform-tests/webrtc/protocol/transceiver-mline-recycling.html [ Failure ]
@@ -4802,6 +4802,9 @@ webkit.org/b/299092 [ Debug ] accessibility/display-contents/tree-and-treeitems.
 webkit.org/b/299092 [ Debug ] accessibility/node-only-object-aria-owns-hang.html [ Skip ]
 webkit.org/b/299092 [ Debug ] accessibility/node-only-object-element-rect.html [ Skip ]
 webkit.org/b/299092 [ Debug ] accessibility/url-test.html [ Skip ]
+webkit.org/b/299092 [ Debug ] accessibility/non-data-table-cell-title-ui-element.html [ Crash ]
+webkit.org/b/299092 [ Debug ] imported/w3c/web-platform-tests/css/css-display/parsing/display-computed.html [ Crash Pass ]
+
 
 # Depends on 'UIScriptController::singleTapAtPointWithModifiers', which is not implemented yet for GLIB.
 webkit.org/b/278719 fast/events/touch/touch-fractional-coordinates.html [ Skip ]
@@ -4851,6 +4854,7 @@ http/tests/performance/performance-resource-timing-redirection-cross-origin-medi
 webkit.org/b/304053 imported/w3c/web-platform-tests/trusted-types/SharedWorker-eval.html [ Pass Crash ]
 
 webkit.org/b/304054 webgl/1.0.x/conformance/textures/image_data/tex-2d-alpha-alpha-unsigned_byte.html [ Pass Crash ]
+webkit.org/b/304180 media/modern-media-controls/tracks-support/on-off-text-track.html [ Failure ]
 
 # End: Common failures between GTK and WPE.
 

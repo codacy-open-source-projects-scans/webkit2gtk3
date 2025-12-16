@@ -2425,6 +2425,7 @@ accessibility/table-display-flex.html [ Pass ]
 accessibility/table-display-grid.html [ Pass ]
 accessibility/table-display-inline-block.html [ Pass ]
 accessibility/text-input-hit-test.html [ Pass ]
+accessibility/text-stitching-inside-links.html [ Pass ]
 accessibility/tree-update-with-dirty-layout.html [ Pass ]
 accessibility/tree-update-with-dynamically-ignored-inline-child-div.html [ Pass ]
 accessibility/tree-update-with-dynamically-ignored-tabindex-div.html [ Pass ]
@@ -8457,3 +8458,7 @@ webkit.org/b/303876 [ Debug ] ipc/serialized-type-info.html [ Failure ]
 webkit.org/b/304027 fast/block/basic/001.html [ Pass Failure Timeout ]
 
 webkit.org/b/304079 [ Debug ] http/tests/ipc/ipc-fetch-task-message-crash.html [ Timeout ]
+
+webkit.org/b/304192 fast/mediastream/granted-denied-request-management1.html [ Skip ]
+
+webkit.org/b/303650 fast/lists/marker-before-empty-inline.html [ ImageOnlyFailure ]

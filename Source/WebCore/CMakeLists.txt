@@ -132,6 +132,7 @@ set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/html/track"
     "${WEBCORE_DIR}/inspector"
     "${WEBCORE_DIR}/inspector/agents"
+    "${WEBCORE_DIR}/inspector/agents/frame"
     "${WEBCORE_DIR}/inspector/agents/page"
     "${WEBCORE_DIR}/inspector/agents/worker"
     "${WEBCORE_DIR}/layout"
@@ -490,6 +491,7 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/mediacapabilities/WorkerNavigator+MediaCapabilities.idl
 
     Modules/mediacontrols/DOMWindow+MediaControls.idl
+    Modules/mediacontrols/MediaControlsContextMenuItem.idl
     Modules/mediacontrols/MediaControlsHost.idl
     Modules/mediacontrols/MediaControlsUtils.idl
 
