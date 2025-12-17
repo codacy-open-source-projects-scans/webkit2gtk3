@@ -63,6 +63,7 @@
 #import "RemoteObjectRegistryMessages.h"
 #import "ResourceLoadDelegate.h"
 #import "RunJavaScriptParameters.h"
+#import "SafeBrowsingUtilities.h"
 #import "SessionStateCoding.h"
 #import "TextExtractionFilter.h"
 #import "TextExtractionToStringConversion.h"
@@ -287,6 +288,11 @@ static void *screenTimeWebpageControllerBlockedKVOContext = &screenTimeWebpageCo
 
 #define THROW_IF_SUSPENDED if (_page && _page->isSuspended()) [[unlikely]] \
     [NSException raise:NSInternalInconsistencyException format:@"The WKWebView is suspended"]
+
+static RetainPtr<NSError> unknownError()
+{
+    return adoptNS([[NSError alloc] initWithDomain:WKErrorDomain code:WKErrorUnknown userInfo:nil]);
+}
 
 RetainPtr<NSError> nsErrorFromExceptionDetails(const std::optional<WebCore::ExceptionDetails>& details)
 {
@@ -1483,18 +1489,18 @@ static WKMediaPlaybackState toWKMediaPlaybackState(WebKit::MediaPlaybackState me
         argumentsMap->append({ keyString.get(), WTFMove(*serializedValue) });
     }
 
-    if (errorMessage && handler) {
-        RetainPtr<NSMutableDictionary> userInfo = adoptNS([[NSMutableDictionary alloc] init]);
+    if (errorMessage) {
+        if (handler) {
+            RetainPtr<NSMutableDictionary> userInfo = adoptNS([[NSMutableDictionary alloc] init]);
+            [userInfo setObject:localizedDescriptionForErrorCode(WKErrorJavaScriptExceptionOccurred).get() forKey:NSLocalizedDescriptionKey];
+            [userInfo setObject:errorMessage forKey:_WKJavaScriptExceptionMessageErrorKey];
 
-        [userInfo setObject:localizedDescriptionForErrorCode(WKErrorJavaScriptExceptionOccurred).get() forKey:NSLocalizedDescriptionKey];
-        [userInfo setObject:errorMessage forKey:_WKJavaScriptExceptionMessageErrorKey];
-
-        auto error = adoptNS([[NSError alloc] initWithDomain:WKErrorDomain code:WKErrorJavaScriptExceptionOccurred userInfo:userInfo.get()]);
-        RunLoop::mainSingleton().dispatch([handler, error] {
-            auto rawHandler = (void (^)(id, NSError *))handler.get();
-            rawHandler(nil, error.get());
-        });
-
+            auto error = adoptNS([[NSError alloc] initWithDomain:WKErrorDomain code:WKErrorJavaScriptExceptionOccurred userInfo:userInfo.get()]);
+            RunLoop::mainSingleton().dispatch([handler, error] {
+                auto rawHandler = (void (^)(id, NSError *))handler.get();
+                rawHandler(nil, error.get());
+            });
+        }
         return;
     }
     
@@ -1503,8 +1509,20 @@ static WKMediaPlaybackState toWKMediaPlaybackState(WebKit::MediaPlaybackState me
         frameID = frame._handle->_frameHandle->frameID();
 
     auto removeTransientActivation = !_dontResetTransientActivationAfterRunJavaScript && WebKit::shouldEvaluateJavaScriptWithoutTransientActivation() ? WebCore::RemoveTransientActivation::Yes : WebCore::RemoveTransientActivation::No;
+
+    auto scriptString = IPC::TransferString::create(javaScriptString);
+    if (!scriptString) {
+        if (handler) {
+            RunLoop::mainSingleton().dispatch([handler = WTFMove(handler)] {
+                auto rawHandler = (void (^)(id, NSError *))handler.get();
+                rawHandler(nil, unknownError().get());
+            });
+        }
+        return;
+    }
+
     _page->runJavaScriptInFrameInScriptWorld(WebKit::RunJavaScriptParameters {
-        javaScriptString,
+        WTFMove(*scriptString),
         JSC::SourceTaintedOrigin::Untainted,
         sourceURL,
         asAsyncFunction ? WebCore::RunAsAsyncFunction::Yes : WebCore::RunAsAsyncFunction::No,
@@ -2266,11 +2284,6 @@ inline OptionSet<WebKit::FindOptions> toFindOptions(WKFindConfiguration *configu
         auto data = pdfData->createCFData();
         handler((NSData *)data.get(), nil);
     });
-}
-
-static RetainPtr<NSError> unknownError()
-{
-    return adoptNS([[NSError alloc] initWithDomain:WKErrorDomain code:WKErrorUnknown userInfo:nil]);
 }
 
 - (void)createWebArchiveDataWithCompletionHandler:(void (^)(NSData *, NSError *))completionHandler
@@ -6708,7 +6721,44 @@ static WebKit::TextExtractionOutputFormat textExtractionOutputFormat(_WKTextExtr
     }
 }
 
+#if USE(APPLE_INTERNAL_SDK) || (!PLATFORM(WATCHOS) && !PLATFORM(APPLETV))
+
+static RetainPtr<_WKTextExtractionResult> createEmptyTextExtractionResult()
+{
+    return adoptNS([[_WKTextExtractionResult alloc] initWithTextContent:@"" filteredOutAnyText:NO]);
+}
+
+#endif
+
 - (void)_extractDebugTextWithConfiguration:(_WKTextExtractionConfiguration *)configuration completionHandler:(void(^)(_WKTextExtractionResult *))completionHandler
+{
+#if USE(APPLE_INTERNAL_SDK) || (!PLATFORM(WATCHOS) && !PLATFORM(APPLETV))
+    if (_page->protectedPreferences()->textExtractionFilterEnabled() && (configuration.filterOptions & _WKTextExtractionFilterRules)) {
+        _page->hasTextExtractionFilterRules([configuration = RetainPtr { configuration }, completionHandler = makeBlockPtr(completionHandler), weakSelf = WeakObjCPtr { self }](bool hasRules) mutable {
+            RetainPtr strongSelf = weakSelf.get();
+            if (!strongSelf)
+                return completionHandler(createEmptyTextExtractionResult().get());
+
+            if (hasRules)
+                return [strongSelf _extractDebugTextWithConfigurationWithoutUpdatingFilterRules:configuration.get() completionHandler:completionHandler.get()];
+
+            WebKit::requestTextExtractionFilterRuleData([configuration = WTFMove(configuration), completionHandler = WTFMove(completionHandler), weakSelf](auto&& data) mutable {
+                RetainPtr strongSelf = weakSelf.get();
+                if (!strongSelf)
+                    return completionHandler(createEmptyTextExtractionResult().get());
+
+                strongSelf->_page->updateTextExtractionFilterRules(WTFMove(data));
+                [strongSelf _extractDebugTextWithConfigurationWithoutUpdatingFilterRules:configuration.get() completionHandler:completionHandler.get()];
+            });
+        });
+        return;
+    }
+#endif // USE(APPLE_INTERNAL_SDK) || (!PLATFORM(WATCHOS) && !PLATFORM(APPLETV))
+
+    [self _extractDebugTextWithConfigurationWithoutUpdatingFilterRules:configuration completionHandler:completionHandler];
+}
+
+- (void)_extractDebugTextWithConfigurationWithoutUpdatingFilterRules:(_WKTextExtractionConfiguration *)configuration completionHandler:(void(^)(_WKTextExtractionResult *))completionHandler
 {
     bool allowFiltering = _page->protectedPreferences()->textExtractionFilterEnabled();
     bool filterUsingClassifier = allowFiltering && configuration.filterOptions & _WKTextExtractionFilterClassifier;
