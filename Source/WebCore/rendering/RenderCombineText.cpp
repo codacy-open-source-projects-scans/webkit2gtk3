@@ -23,14 +23,14 @@
 
 #include "RenderBlock.h"
 #include "RenderObjectInlines.h"
-#include "RenderStyleInlines.h"
+#include "RenderStyle+GettersInlines.h"
 #include "StyleInheritedData.h"
 #include <wtf/NeverDestroyed.h>
 #include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
 
-WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderCombineText);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RenderCombineText);
 
 const float textCombineMargin = 1.15f; // Allow em + 15% margin
 
@@ -133,7 +133,7 @@ void RenderCombineText::combineTextIfNeeded()
     m_isCombined = combinedTextWidth <= emWidth;
     
     if (m_isCombined)
-        m_combineFontStyle->setFontDescription(WTFMove(description)); // Need to change font orientation to horizontal.
+        m_combineFontStyle->setFontDescription(WTF::move(description)); // Need to change font orientation to horizontal.
     else {
         // Need to try compressed glyphs.
         static const FontWidthVariant widthVariants[] = { FontWidthVariant::HalfWidth, FontWidthVariant::ThirdWidth, FontWidthVariant::QuarterWidth };
@@ -150,7 +150,7 @@ void RenderCombineText::combineTextIfNeeded()
                 m_isCombined = true;
 
                 // Replace my font with the new one.
-                m_combineFontStyle->setFontDescription(WTFMove(description));
+                m_combineFontStyle->setFontDescription(WTF::move(description));
                 break;
             }
             

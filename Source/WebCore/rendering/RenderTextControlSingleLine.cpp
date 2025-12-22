@@ -45,7 +45,7 @@
 #include "RenderLayerScrollableArea.h"
 #include "RenderObjectInlines.h"
 #include "RenderScrollbar.h"
-#include "RenderStyleSetters.h"
+#include "RenderStyle+SettersInlines.h"
 #include "RenderTheme.h"
 #include "RenderView.h"
 #include "StyleResolver.h"
@@ -61,11 +61,11 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderTextControlSingleLine);
-WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderTextControlInnerBlock);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RenderTextControlSingleLine);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RenderTextControlInnerBlock);
 
 RenderTextControlSingleLine::RenderTextControlSingleLine(Type type, HTMLInputElement& element, RenderStyle&& style)
-    : RenderTextControl(type, element, WTFMove(style))
+    : RenderTextControl(type, element, WTF::move(style))
 {
     ASSERT(isRenderTextControlSingleLine());
 }
@@ -523,7 +523,7 @@ RenderTextControlInnerBlock* RenderTextControlSingleLine::innerTextRenderer() co
 }
 
 RenderTextControlInnerBlock::RenderTextControlInnerBlock(Element& element, RenderStyle&& style)
-    : RenderBlockFlow(Type::TextControlInnerBlock, element, WTFMove(style))
+    : RenderBlockFlow(Type::TextControlInnerBlock, element, WTF::move(style))
 {
     ASSERT(isRenderTextControlInnerBlock());
 }

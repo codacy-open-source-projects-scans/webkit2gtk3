@@ -93,7 +93,7 @@ Pagination::Mode paginationModeForRenderStyle(const RenderStyle&);
 enum class LayoutViewportConstraint : bool { Unconstrained, ConstrainedToDocumentRect };
 
 class LocalFrameView final : public FrameView {
-    WTF_MAKE_TZONE_OR_ISO_ALLOCATED(LocalFrameView);
+    WTF_MAKE_TZONE_ALLOCATED(LocalFrameView);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(LocalFrameView);
 public:
     friend class Internals;
@@ -105,7 +105,7 @@ public:
 
     virtual ~LocalFrameView();
 
-    void setFrameRect(const IntRect&) final;
+    WEBCORE_EXPORT void setFrameRect(const IntRect&) final;
     Type viewType() const final { return Type::Local; }
     void writeRenderTreeAsText(TextStream&, OptionSet<RenderAsTextFlag>) override;
 
@@ -321,10 +321,12 @@ public:
     std::optional<LayoutRect> visualViewportOverrideRect() const { return m_visualViewportOverrideRect; }
 
     // These are in document coordinates, unaffected by page scale (but affected by zooming).
-    WEBCORE_EXPORT LayoutRect layoutViewportRect() const;
+    WEBCORE_EXPORT LayoutRect layoutViewportRect() const final;
     WEBCORE_EXPORT LayoutRect visualViewportRect() const;
 
     LayoutRect layoutViewportRectIncludingObscuredInsets() const;
+
+    std::optional<LayoutRect> visibleRectOfChild(const Frame&) const final;
     
     static LayoutRect visibleDocumentRect(const FloatRect& visibleContentRect, float headerHeight, float footerHeight, const FloatSize& totalContentsSize, float pageScaleFactor);
 

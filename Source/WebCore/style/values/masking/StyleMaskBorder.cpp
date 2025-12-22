@@ -30,7 +30,7 @@
 #include "CSSBorderImageSliceValue.h"
 #include "CSSBorderImageWidthValue.h"
 #include "CSSValueList.h"
-#include "RenderStyleInlines.h"
+#include "RenderStyle+InitialInlines.h"
 #include "StyleBuilderChecking.h"
 #include "StylePrimitiveKeyword+CSSValueCreation.h"
 #include "StylePrimitiveKeyword+Logging.h"
@@ -51,11 +51,11 @@ MaskBorder::MaskBorder()
 }
 
 MaskBorder::MaskBorder(MaskBorderSource&& source, MaskBorderSlice&& slice, MaskBorderWidth&& width, MaskBorderOutset&& outset, MaskBorderRepeat&& repeat)
-    : maskBorderSource { WTFMove(source) }
-    , maskBorderSlice { WTFMove(slice) }
-    , maskBorderWidth { WTFMove(width) }
-    , maskBorderOutset { WTFMove(outset) }
-    , maskBorderRepeat { WTFMove(repeat) }
+    : maskBorderSource { WTF::move(source) }
+    , maskBorderSlice { WTF::move(slice) }
+    , maskBorderWidth { WTF::move(width) }
+    , maskBorderOutset { WTF::move(outset) }
+    , maskBorderRepeat { WTF::move(repeat) }
 {
 }
 

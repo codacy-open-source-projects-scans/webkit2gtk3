@@ -42,6 +42,9 @@
 #include "FrameDestructionObserverInlines.h"
 #include "HTMLElement.h"
 #include "LocalFrame.h"
+#include "RenderStyle+GettersInlines.h"
+#include "RenderStyle+InitialInlines.h"
+#include "RenderStyle+SettersInlines.h"
 #include "SVGElement.h"
 #include "SVGElementTypeHelpers.h"
 #include "SVGPathElement.h"
@@ -256,6 +259,7 @@ private:
     static float largerFontSize(float size);
     static float smallerFontSize(float size);
     static float determineRubyTextSizeMultiplier(BuilderState&);
+    static float determineMathDepthScale(BuilderState&);
 };
 
 // MARK: - CoordinatedValueList Utilities
@@ -522,8 +526,8 @@ inline void BuilderCustom::applyValueLineHeight(BuilderState& builderState, CSSV
         return toStyleFromCSSValue<LineHeight>(builderState, *primitiveValue, multiplier);
     }();
 
-    builderState.style().setLineHeight(WTFMove(computedLineHeight));
-    builderState.style().setSpecifiedLineHeight(WTFMove(lineHeight));
+    builderState.style().setLineHeight(WTF::move(computedLineHeight));
+    builderState.style().setSpecifiedLineHeight(WTF::move(lineHeight));
 }
 
 #endif
@@ -926,7 +930,7 @@ inline void BuilderCustom::applyInitialFontSize(BuilderState& builderState)
 
     fontDescription.setKeywordSizeFromIdentifier(CSSValueMedium);
     builderState.setFontSize(fontDescription, size);
-    builderState.setFontDescription(WTFMove(fontDescription));
+    builderState.setFontDescription(WTF::move(fontDescription));
 }
 
 inline void BuilderCustom::applyInheritFontSize(BuilderState& builderState)
@@ -982,6 +986,59 @@ inline float BuilderCustom::determineRubyTextSizeMultiplier(BuilderState& builde
     return 0.25f;
 }
 
+// https://w3c.github.io/mathml-core/#the-math-script-level-property
+inline float BuilderCustom::determineMathDepthScale(BuilderState& builderState)
+{
+    // Step 1.
+    auto inherited = builderState.parentStyle().mathDepth();
+    auto computed = builderState.style().mathDepth();
+    float scale = 1.0f;
+    float scaleDown = 0.71f;
+
+    // Step 2.
+    if (inherited == computed)
+        return scale;
+    bool invertScaleFactor = false;
+    if (computed < inherited) {
+        std::swap(computed, inherited);
+        invertScaleFactor = true;
+    }
+
+    // Step 3.
+    int exponent = computed.value - inherited.value;
+
+    // Step 4.
+#if ENABLE(MATHML)
+    Ref primaryFont = builderState.style().fontCascade().primaryFont();
+    if (RefPtr mathData = primaryFont->mathData()) {
+        float scriptPercentScaleDown = mathData->getMathConstant(primaryFont, OpenTypeMathData::ScriptPercentScaleDown);
+        if (!scriptPercentScaleDown)
+            scriptPercentScaleDown = 0.71;
+
+        float scriptScriptPercentScaleDown = mathData->getMathConstant(primaryFont, OpenTypeMathData::ScriptScriptPercentScaleDown);
+        if (!scriptScriptPercentScaleDown)
+            scriptScriptPercentScaleDown = 0.5041;
+
+        if (inherited <= 0 && computed >= 2) {
+            scale *= scriptScriptPercentScaleDown;
+            exponent -= 2;
+        } else if (inherited == 1) {
+            scale *= scriptScriptPercentScaleDown / scriptPercentScaleDown;
+            exponent--;
+        } else if (computed == 1) {
+            scale *= scriptPercentScaleDown;
+            exponent--;
+        }
+    }
+#endif
+
+    // Step 5.
+    scale *= std::pow(scaleDown, exponent);
+
+    // Step 6.
+    return invertScaleFactor ? 1.f / scale : scale;
+}
+
 inline void BuilderCustom::applyValueFontSize(BuilderState& builderState, CSSValue& value)
 {
     auto& fontDescription = builderState.fontDescription();
@@ -996,7 +1053,7 @@ inline void BuilderCustom::applyValueFontSize(BuilderState& builderState, CSSVal
 
     float size = 0;
     if (CSSValueID ident = primitiveValue->valueID()) {
-        builderState.setFontDescriptionIsAbsoluteSize((parentIsAbsoluteSize && (ident == CSSValueLarger || ident == CSSValueSmaller || ident == CSSValueWebkitRubyText)) || CSSPropertyParserHelpers::isSystemFontShorthand(ident));
+        builderState.setFontDescriptionIsAbsoluteSize((parentIsAbsoluteSize && (ident == CSSValueLarger || ident == CSSValueSmaller || ident == CSSValueWebkitRubyText || ident == CSSValueMath)) || CSSPropertyParserHelpers::isSystemFontShorthand(ident));
 
         if (CSSPropertyParserHelpers::isSystemFontShorthand(ident))
             size = SystemFontDatabase::singleton().systemFontShorthandSize(CSSPropertyParserHelpers::lowerFontShorthand(ident));
@@ -1018,6 +1075,9 @@ inline void BuilderCustom::applyValueFontSize(BuilderState& builderState, CSSVal
             break;
         case CSSValueSmaller:
             size = smallerFontSize(parentSize);
+            break;
+        case CSSValueMath:
+            size = determineMathDepthScale(builderState) * parentSize;
             break;
         case CSSValueWebkitRubyText:
             size = determineRubyTextSizeMultiplier(builderState) * parentSize;

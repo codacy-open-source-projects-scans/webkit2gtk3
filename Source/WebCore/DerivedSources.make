@@ -1974,9 +1974,9 @@ all : \
     NodeName.cpp \
     NodeName.h \
     RenderStyleProperties.h \
-    RenderStylePropertiesGettersInlines.h \
-    RenderStylePropertiesInitialInlines.h \
-    RenderStylePropertiesSettersInlines.h \
+    RenderStyleProperties+GettersInlines.h \
+    RenderStyleProperties+InitialInlines.h \
+    RenderStyleProperties+SettersInlines.h \
     SVGElementFactory.cpp \
     SVGElementFactory.h \
     SVGElementTypeHelpers.h \
@@ -1985,6 +1985,11 @@ all : \
     SelectorPseudoClassAndCompatibilityElementMap.cpp \
     SelectorPseudoElementMap.cpp \
     StyleBuilderGenerated.cpp \
+    StyleComputedStyleProperties.h \
+    StyleComputedStyleProperties+GettersInlines.h \
+    StyleComputedStyleProperties+InitialInlines.h \
+    StyleComputedStyleProperties+SettersInlines.h \
+    StyleChangedAnimatablePropertiesGenerated.cpp \
     StyleExtractorGenerated.cpp \
     StyleInterpolationWrapperMap.cpp \
     StyleInterpolationWrapperMap.h \
@@ -2029,10 +2034,15 @@ CSS_PROPERTY_NAME_FILES = \
     CSSPropertyParsing.h \
     CSSStyleProperties+PropertyNames.idl \
     RenderStyleProperties.h \
-    RenderStylePropertiesGettersInlines.h \
-    RenderStylePropertiesInitialInlines.h \
-    RenderStylePropertiesSettersInlines.h \
+    RenderStyleProperties+GettersInlines.h \
+    RenderStyleProperties+InitialInlines.h \
+    RenderStyleProperties+SettersInlines.h \
     StyleBuilderGenerated.cpp \
+    StyleComputedStyleProperties.h \
+    StyleComputedStyleProperties+GettersInlines.h \
+    StyleComputedStyleProperties+InitialInlines.h \
+    StyleComputedStyleProperties+SettersInlines.h \
+    StyleChangedAnimatablePropertiesGenerated.cpp \
     StyleExtractorGenerated.cpp \
     StyleInterpolationWrapperMap.cpp \
     StyleInterpolationWrapperMap.h \
@@ -2206,6 +2216,8 @@ USER_AGENT_STYLE_SHEETS = \
     $(WebCore)/css/htmlSwitchControl.css \
     $(WebCore)/css/mathml.css \
     $(WebCore)/css/mathmlCoreExtras.css \
+    $(WebCore)/css/mathmlFontSizeMath.css \
+    $(WebCore)/css/mathmlLegacyFontSizeMath.css \
     $(WebCore)/css/popover.css \
     $(WebCore)/css/quirks.css \
     $(WebCore)/css/svg.css \

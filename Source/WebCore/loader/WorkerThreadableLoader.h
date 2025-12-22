@@ -54,7 +54,7 @@ public:
     static void loadResourceSynchronously(WorkerOrWorkletGlobalScope&, ResourceRequest&&, ThreadableLoaderClient&, const ThreadableLoaderOptions&);
     static Ref<WorkerThreadableLoader> create(WorkerOrWorkletGlobalScope& WorkerOrWorkletGlobalScope, ThreadableLoaderClient& client, const String& taskMode, ResourceRequest&& request, const ThreadableLoaderOptions& options, const String& referrer)
     {
-        return adoptRef(*new WorkerThreadableLoader(WorkerOrWorkletGlobalScope, client, taskMode, WTFMove(request), options, referrer));
+        return adoptRef(*new WorkerThreadableLoader(WorkerOrWorkletGlobalScope, client, taskMode, WTF::move(request), options, referrer));
     }
 
     ~WorkerThreadableLoader();
@@ -62,15 +62,11 @@ public:
     void cancel() override;
 
     bool done() const { return m_workerClientWrapper->done(); }
-
     void notifyIsDone(bool isDone);
 
-    using RefCounted<WorkerThreadableLoader>::ref;
-    using RefCounted<WorkerThreadableLoader>::deref;
-
-protected:
-    void refThreadableLoader() override { ref(); }
-    void derefThreadableLoader() override { deref(); }
+    // ThreadableLoader.
+    void ref() const final { RefCounted::ref(); }
+    void deref() const final { RefCounted::deref(); }
 
 private:
     // Creates a loader on the main thread and bridges communication between

@@ -1354,6 +1354,8 @@ http/tests/workers/service/other_resources [ Skip ]
 http/wpt/html/browsers/browsing-the-web/navigating-across-documents/click.html
 http/wpt/html/browsers/browsing-the-web/navigating-across-documents/href.html
 
+imported/w3c/web-platform-tests/html/browsers/browsing-the-web/navigating-across-documents/cross-origin-top-navigation-with-user-activation-in-parent.window.html [ Pass Failure ]
+
 # Tests in this directory take > 30 minutes to run on debug bots.
 [ Debug ] imported/w3c/web-platform-tests/encoding/legacy-mb-japanese
 [ Debug ] imported/w3c/web-platform-tests/encoding/legacy-mb-korean
@@ -2539,18 +2541,24 @@ imported/w3c/web-platform-tests/svg/text/reftests/text-multiline-002.svg [ Image
 imported/w3c/web-platform-tests/svg/text/reftests/text-multiline-003.svg [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/svg/text/reftests/text-shape-inside-001.svg [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/svg/text/reftests/text-shape-inside-002.svg [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/svg/text/reftests/text-text-anchor-001.svg [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/svg/text/reftests/text-text-anchor-002.svg [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/svg/text/reftests/text-text-anchor-003.svg [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/svg/text/reftests/text-text-anchor-102.svg [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/svg/text/reftests/text-text-anchor-201.svg [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/svg/text/reftests/text-text-anchor-202.svg [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/svg/text/reftests/text-text-anchor-203.svg [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/svg/text/reftests/text-xml-space-001.svg [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/svg/text/reftests/textpath-shape-001.svg [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/svg/text/reftests/xml-lang-attribute.svg [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/svg/text/reftests/textpath-side-001.svg [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/svg/text/reftests/text-font-face-load-image.html [ Skip ]
+imported/w3c/web-platform-tests/svg/styling/css-linked-parameters/css-linked-parameters-precedence-1.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/svg/styling/css-linked-parameters/css-linked-parameters-precedence-2.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/svg/styling/css-linked-parameters/img-with-linked-parameters-1.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/svg/styling/css-linked-parameters/img-with-linked-parameters-2.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/svg/styling/css-linked-parameters/img-with-url-fragment-identifiers-1.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/svg/styling/css-linked-parameters/img-with-url-fragment-identifiers-2.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/svg/styling/css-linked-parameters/img-with-url-function-1.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/svg/styling/css-linked-parameters/img-with-url-function-2.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/svg/animations/scripted/syncbase-after-removal.html [ Skip ]
+imported/w3c/web-platform-tests/svg/animations/scripted/eventbase-after-removal.html [ Skip ]
+imported/w3c/web-platform-tests/svg/animations/media-fragment-override-animation.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/svg/interact/use-instance-hover.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/svg/linking/reftests/media-fragment-override-multiple.html [ ImageOnlyFailure ]
 
 webkit.org/b/283954 imported/w3c/web-platform-tests/svg/text/reftests/transform-dynamic-change-root.html [ ImageOnlyFailure ]
 
@@ -3880,8 +3888,10 @@ webkit.org/b/196274 imported/w3c/web-platform-tests/xhr/send-redirect-post-uploa
 
 # If requestAnimationFrame is invoked before ResizeObserver timer fired, it would pass, otherwise it would fail same as eventloop-expected.txt
 webkit.org/b/157743 imported/w3c/web-platform-tests/resize-observer/eventloop.html [ Pass Failure ]
-imported/w3c/web-platform-tests/resize-observer/devicepixel.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/resize-observer/devicepixel2.html [ ImageOnlyFailure ]
+
+# These test ResizeObserverEntry.devicePixelContentBoxSize, which is not implemented yet.
+webkit.org/b/219005 imported/w3c/web-platform-tests/resize-observer/devicepixel.html [ Skip ]
+webkit.org/b/219005 imported/w3c/web-platform-tests/resize-observer/devicepixel2.html [ Skip ]
 
 webkit.org/b/198103 imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/offsets-into-the-media-resource/currentTime.html [ Pass Failure ]
 
@@ -4615,7 +4625,6 @@ webkit.org/b/206881 imported/w3c/web-platform-tests/css/css-fonts/font-family-na
 webkit.org/b/206881 imported/w3c/web-platform-tests/css/css-fonts/font-family-name-021.xht [ ImageOnlyFailure ]
 webkit.org/b/206881 imported/w3c/web-platform-tests/css/css-fonts/font-family-name-024.xht [ ImageOnlyFailure ]
 webkit.org/b/206881 imported/w3c/web-platform-tests/css/css-fonts/font-family-name-025.html [ ImageOnlyFailure ]
-webkit.org/b/206881 imported/w3c/web-platform-tests/css/css-fonts/math-script-level-and-math-style/math-script-level-auto-and-math-style-002.tentative.html [ ImageOnlyFailure ]
 webkit.org/b/206881 imported/w3c/web-platform-tests/css/css-fonts/font-kerning-04.html [ ImageOnlyFailure ]
 webkit.org/b/206882 imported/w3c/web-platform-tests/css/css-fonts/variations/at-font-face-font-matching.html [ Failure ]
 webkit.org/b/214300 imported/w3c/web-platform-tests/css/css-fonts/font-language-override-01.html [ ImageOnlyFailure ]
@@ -5792,6 +5801,7 @@ webkit.org/b/225035 imported/w3c/web-platform-tests/css/css-will-change/will-cha
 imported/w3c/web-platform-tests/css/css-will-change/will-change-fixpos-cb-webkit-perspective-1.html [ ImageOnlyFailure ]
 webkit.org/b/224902 [ Debug ] imported/w3c/web-platform-tests/css/css-will-change/parsing/will-change-invalid.html [ Skip ]
 webkit.org/b/224899 imported/w3c/web-platform-tests/css/css-will-change/will-change-fixedpos-cb-005.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-will-change/will-change-stacking-context-z-index-4.html [ ImageOnlyFailure ]
 
 # Needs display box support.
 fast/layoutformattingcontext/ [ Skip ]
@@ -8159,9 +8169,6 @@ imported/w3c/web-platform-tests/css/CSS2/normal-flow/width-applies-to-013.xht [ 
 imported/w3c/web-platform-tests/css/CSS2/normal-flow/width-applies-to-014.xht [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/CSS2/normal-flow/width-applies-to-015.xht [ ImageOnlyFailure ]
 
-# progression with blocks-in-inline
-webkit.org/b/303415 fast/inline/blocks-in-inline-offsetwidth.html [ Failure ]
-
 imported/w3c/web-platform-tests/intersection-observer/animating.html [ Pass Failure ]
 imported/w3c/web-platform-tests/intersection-observer/cross-origin-tall-iframe-rendering.sub.html [ Pass ImageOnlyFailure ]
 
@@ -8191,3 +8198,5 @@ media/wireless-playback-media-player/ [ Skip ]
 webkit.org/b/295810 [ Debug ] fast/dynamic/disappearing-content-on-size-change-crash.html [ Timeout ]
 
 [ Debug ] fast/inline/continuation-with-anon-wrappers.html [ Slow ]
+
+webkit.org/b/301250 ipc/dictionary-callbacks.html [ Skip ]

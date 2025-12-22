@@ -44,7 +44,7 @@ public:
     CSSSelectorList(CSSSelectorList&&) = default;
     explicit CSSSelectorList(MutableCSSSelectorList&&);
     explicit CSSSelectorList(UniqueArray<CSSSelector>&& array)
-        : m_selectorArray(WTFMove(array)) { }
+        : m_selectorArray(WTF::move(array)) { }
 
     static CSSSelectorList makeCopyingSimpleSelector(const CSSSelector&);
     static CSSSelectorList makeCopyingComplexSelector(const CSSSelector&);
@@ -126,5 +126,7 @@ private:
     // End of the array is indicated by m_isLastInSelectorList bit in the last item.
     UniqueArray<CSSSelector> m_selectorArray;
 };
+
+void add(Hasher&, const CSSSelectorList&);
 
 } // namespace WebCore

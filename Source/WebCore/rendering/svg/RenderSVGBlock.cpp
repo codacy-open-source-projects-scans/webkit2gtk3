@@ -36,10 +36,10 @@
 
 namespace WebCore {
 
-WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderSVGBlock);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RenderSVGBlock);
 
 RenderSVGBlock::RenderSVGBlock(Type type, SVGGraphicsElement& element, RenderStyle&& style)
-    : RenderBlockFlow(type, element, WTFMove(style), BlockFlowFlag::IsSVGBlock)
+    : RenderBlockFlow(type, element, WTF::move(style), BlockFlowFlag::IsSVGBlock)
 {
 }
 

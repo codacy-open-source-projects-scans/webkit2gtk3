@@ -55,7 +55,7 @@
 
 namespace WebCore {
 
-WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderGrid);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RenderGrid);
 
 enum class TrackSizeRestriction : uint8_t {
     AllowInfinity,
@@ -63,7 +63,7 @@ enum class TrackSizeRestriction : uint8_t {
 };
 
 RenderGrid::RenderGrid(Element& element, RenderStyle&& style)
-    : RenderBlock(Type::Grid, element, WTFMove(style), { })
+    : RenderBlock(Type::Grid, element, WTF::move(style), { })
     , m_grid(*this)
     , m_trackSizingAlgorithm(this, currentGrid())
     , m_masonryLayout(*this)
@@ -1944,7 +1944,7 @@ std::optional<LayoutUnit> RenderGrid::firstLineBaseline() const
         auto direction = isHorizontalWritingMode() ? LineDirection::Horizontal : LineDirection::Vertical;
         baseline = BaselineAlignmentState::synthesizedBaseline(*baselineGridItem, dominantBaseline, gridWritingMode, direction, BaselineSynthesisEdge::BorderBox);
     }
-    return logicalTopForChild(*baselineGridItem).toInt() + *baseline;
+    return (settings().subpixelInlineLayoutEnabled() ? LayoutUnit(logicalTopForChild(*baselineGridItem)) : LayoutUnit(logicalTopForChild(*baselineGridItem).toInt())) + *baseline;
 }
 
 std::optional<LayoutUnit> RenderGrid::lastLineBaseline() const
@@ -1966,7 +1966,7 @@ std::optional<LayoutUnit> RenderGrid::lastLineBaseline() const
         auto dominantBaseline = BaselineAlignmentState::dominantBaseline(gridWritingMode);
         baseline = BaselineAlignmentState::synthesizedBaseline(*baselineGridItem, dominantBaseline, gridWritingMode, direction, BaselineSynthesisEdge::BorderBox);
     }
-    return logicalTopForChild(*baselineGridItem).toInt() + *baseline;
+    return (settings().subpixelInlineLayoutEnabled() ? LayoutUnit(logicalTopForChild(*baselineGridItem)) : LayoutUnit(logicalTopForChild(*baselineGridItem).toInt())) + *baseline;
 }
 
 const RenderBox* RenderGrid::baselineGridItem(ItemPosition alignment) const

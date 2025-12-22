@@ -344,7 +344,7 @@ void RemoteInspector::setupXPCConnectionIfNeeded()
         return;
     }
 
-    Ref relayConnection = adoptRef(*new RemoteInspectorXPCConnection(connection.get(), m_xpcQueue.get(), this));
+    Ref relayConnection = RemoteInspectorXPCConnection::create(connection.get(), m_xpcQueue.get(), this);
     m_relayConnection = relayConnection.copyRef();
     relayConnection->sendMessage(@"syn", nil); // Send a simple message to initialize the XPC connection.
 
@@ -664,13 +664,13 @@ void RemoteInspector::receivedSetupMessage(NSDictionary *userInfo)
             connectionToTarget->close();
             return;
         }
-        m_targetConnectionMap.set(targetIdentifier, WTFMove(connectionToTarget));
+        m_targetConnectionMap.set(targetIdentifier, WTF::move(connectionToTarget));
     } else if (is<RemoteAutomationTarget>(target)) {
         if (!connectionToTarget->setup()) {
             connectionToTarget->close();
             return;
         }
-        m_targetConnectionMap.set(targetIdentifier, WTFMove(connectionToTarget));
+        m_targetConnectionMap.set(targetIdentifier, WTF::move(connectionToTarget));
     } else
         ASSERT_NOT_REACHED();
 
@@ -757,7 +757,7 @@ void RemoteInspector::receivedIndicateMessage(NSDictionary *userInfo)
 
             target = findResult->value;
         }
-        if (RefPtr inspectionTarget = dynamicDowncast<RemoteInspectionTarget>(WTFMove(target)))
+        if (RefPtr inspectionTarget = dynamicDowncast<RemoteInspectionTarget>(WTF::move(target)))
             inspectionTarget->setIndicating(indicateEnabled);
     });
 }

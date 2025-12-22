@@ -30,7 +30,7 @@
 
 #include "Gradient.h"
 #include "LegacyRenderSVGShapeInlines.h"
-#include "RenderStyleInlines.h"
+#include "RenderStyle+GettersInlines.h"
 #include "SVGElementTypeHelpers.h"
 #include "SVGPathElement.h"
 #include "SVGResources.h"
@@ -40,10 +40,10 @@
 
 namespace WebCore {
 
-WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(LegacyRenderSVGPath);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(LegacyRenderSVGPath);
 
 LegacyRenderSVGPath::LegacyRenderSVGPath(SVGGraphicsElement& element, RenderStyle&& style)
-    : LegacyRenderSVGShape(Type::LegacySVGPath, element, WTFMove(style))
+    : LegacyRenderSVGShape(Type::LegacySVGPath, element, WTF::move(style))
 {
     ASSERT(isLegacyRenderSVGPath());
 }

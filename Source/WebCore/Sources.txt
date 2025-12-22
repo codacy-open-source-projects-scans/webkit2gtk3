@@ -118,7 +118,6 @@ Modules/cookie-store/CookieStore.cpp
 Modules/cookie-store/CookieStoreManager.cpp
 Modules/cookie-store/ExtendableCookieChangeEvent.cpp
 Modules/credentialmanagement/BasicCredential.cpp
-Modules/credentialmanagement/CredentialRequestOptions.cpp
 Modules/credentialmanagement/CredentialsContainer.cpp
 Modules/credentialmanagement/NavigatorCredentials.cpp
 Modules/entriesapi/DOMFileSystem.cpp
@@ -459,10 +458,7 @@ Modules/webauthn/AuthenticatorAssertionResponse.cpp
 Modules/webauthn/AuthenticatorAttestationResponse.cpp
 Modules/webauthn/AuthenticatorCoordinator.cpp
 Modules/webauthn/AuthenticatorResponse.cpp
-Modules/webauthn/AuthenticatorSelectionCriteria.cpp
 Modules/webauthn/PublicKeyCredential.cpp
-Modules/webauthn/PublicKeyCredentialCreationOptions.cpp
-Modules/webauthn/PublicKeyCredentialRequestOptions.cpp
 Modules/webauthn/WebAuthenticationUtils.cpp
 Modules/webauthn/apdu/ApduCommand.cpp
 Modules/webauthn/apdu/ApduResponse.cpp
@@ -2990,8 +2986,6 @@ rendering/style/ReferenceFilterOperation.cpp
 rendering/style/RenderStyle.cpp
 rendering/style/RenderStyleBase.cpp
 rendering/style/RenderStyleConstants.cpp
-rendering/style/RenderStylePropertiesGettersCustom.cpp
-rendering/style/RenderStylePropertiesInitialCustom.cpp
 rendering/style/SVGRenderStyle.cpp
 rendering/style/SVGRenderStyleDefs.cpp
 rendering/style/StyleAppleColorFilterData.cpp
@@ -3184,6 +3178,10 @@ style/calc/StyleCalculationTree+Evaluation.cpp
 style/calc/StyleCalculationTree.cpp
 style/calc/StyleCalculationValue.cpp
 style/calc/StyleCalculationValueMap.cpp
+style/computed/StyleComputedStyle.cpp
+style/computed/StyleComputedStyleBase.cpp
+style/computed/StyleComputedStyleProperties+GettersCustom.cpp
+style/computed/StyleComputedStyleProperties+InitialCustom.cpp
 style/values/align/StyleAlignContent.cpp
 style/values/align/StyleAlignItems.cpp
 style/values/align/StyleAlignSelf.cpp
@@ -3673,6 +3671,7 @@ JSSVGElementWrapperFactory.cpp
 MathMLElementFactory.cpp
 SVGElementFactory.cpp
 StyleBuilderGenerated.cpp
+StyleChangedAnimatablePropertiesGenerated.cpp
 StyleExtractorGenerated.cpp
 StyleInterpolationWrapperMap.cpp
 StylePropertyShorthandFunctions.cpp

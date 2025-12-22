@@ -136,13 +136,13 @@ set(WTF_PUBLIC_HEADERS
     IndexSparseSet.h
     IndexedContainerIterator.h
     InlineASM.h
+    InlineWeakPtr.h
+    InlineWeakRef.h
     Insertion.h
     InstanceCounted.h
     Int128.h
     InterferenceGraph.h
     IntervalSet.h
-    IsoMalloc.h
-    IsoMallocInlines.h
     IterationStatus.h
     IteratorRange.h
     JSONValues.h
@@ -264,9 +264,11 @@ set(WTF_PUBLIC_HEADERS
     RedBlackTree.h
     Ref.h
     RefCountable.h
+    RefCountDebugger.h
     RefCounted.h
     RefCountedAndCanMakeWeakPtr.h
     RefCountedFixedVector.h
+    RefCountedWithInlineWeakPtr.h
     RefCounter.h
     RefPtr.h
     RefTrackerMixin.h
@@ -303,6 +305,8 @@ set(WTF_PUBLIC_HEADERS
     SingleThreadIntegralWrapper.h
     SinglyLinkedList.h
     SinglyLinkedListWithTail.h
+    UniquelyOwned.h
+    UniquelyOwnedPtr.h
     SixCharacterHash.h
     SmallMap.h
     SmallSet.h
@@ -589,7 +593,7 @@ set(WTF_SOURCES
     RAMSize.cpp
     RandomDevice.cpp
     ReadWriteLock.cpp
-    RefCounted.cpp
+    RefCountDebugger.cpp
     RefTrackerMixin.cpp
     RunLoop.cpp
     RuntimeApplicationChecks.cpp
@@ -714,6 +718,7 @@ elseif (APPLE)
         cocoa/TypeCastsCocoa.h
         cocoa/VectorCocoa.h
 
+        darwin/DispatchExtras.h
         darwin/OSLogPrintStream.h
         darwin/WeakLinking.h
         darwin/XPCExtras.h

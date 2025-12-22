@@ -58,6 +58,7 @@
 #include "RenderTableSectionInlines.h"
 #include "RenderTreeBuilder.h"
 #include "RenderView.h"
+#include "Settings.h"
 #include "StyleBoxShadow.h"
 #include "StyleInheritedData.h"
 #include "StylePrimitiveNumericTypes+Evaluation.h"
@@ -69,10 +70,10 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderTable);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RenderTable);
 
 RenderTable::RenderTable(Type type, Element& element, RenderStyle&& style)
-    : RenderBlock(type, element, WTFMove(style), { })
+    : RenderBlock(type, element, WTF::move(style), { })
     , m_columnPos(1, 0)
     , m_currentBorder(nullptr)
     , m_collapsedBordersValid(false)
@@ -92,7 +93,7 @@ RenderTable::RenderTable(Type type, Element& element, RenderStyle&& style)
 }
 
 RenderTable::RenderTable(Type type, Document& document, RenderStyle&& style)
-    : RenderBlock(type, document, WTFMove(style), { })
+    : RenderBlock(type, document, WTF::move(style), { })
     , m_columnPos(1, 0)
     , m_currentBorder(nullptr)
     , m_collapsedBordersValid(false)
@@ -1619,7 +1620,7 @@ std::optional<LayoutUnit> RenderTable::firstLineBaseline() const
         // The baseline of an empty row isn't specified by CSS 2.1.
         baseline = 0_lu;
     }
-    return baseline ? std::optional(topNonEmptySection->logicalTop().toInt() + *baseline) : std::nullopt;
+    return baseline ? std::optional((settings().subpixelInlineLayoutEnabled() ? LayoutUnit(topNonEmptySection->logicalTop()) : LayoutUnit(topNonEmptySection->logicalTop().toInt())) + *baseline) : std::nullopt;
 }
 
 std::optional<LayoutUnit> RenderTable::lastLineBaseline() const
@@ -1634,7 +1635,7 @@ std::optional<LayoutUnit> RenderTable::lastLineBaseline() const
         return { };
 
     if (auto lastLineBaseline = tableSection->lastLineBaseline())
-        return tableSection->logicalTop().toInt() + *lastLineBaseline;
+        return (settings().subpixelInlineLayoutEnabled() ? LayoutUnit(tableSection->logicalTop()) : LayoutUnit(tableSection->logicalTop().toInt())) + *lastLineBaseline;
     return { };
 }
 

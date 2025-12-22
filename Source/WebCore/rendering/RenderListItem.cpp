@@ -36,7 +36,7 @@
 #include "RenderBoxModelObjectInlines.h"
 #include "RenderElementStyleInlines.h"
 #include "RenderObjectInlines.h"
-#include "RenderStyleSetters.h"
+#include "RenderStyle+SettersInlines.h"
 #include "RenderTreeBuilder.h"
 #include "RenderView.h"
 #include "StyleInheritedData.h"
@@ -49,10 +49,10 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderListItem);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RenderListItem);
 
 RenderListItem::RenderListItem(Element& element, RenderStyle&& style)
-    : RenderBlockFlow(Type::ListItem, element, WTFMove(style))
+    : RenderBlockFlow(Type::ListItem, element, WTF::move(style))
 {
     ASSERT(isRenderListItem());
     setInline(false);
@@ -81,7 +81,7 @@ RenderStyle RenderListItem::computeMarkerStyle() const
     // ::after::marker. See bugs.webkit.org/b/218897.
     auto fontDescription = style().fontDescription();
     fontDescription.setVariantNumericSpacing(FontVariantNumericSpacing::TabularNumbers);
-    markerStyle.setFontDescription(WTFMove(fontDescription));
+    markerStyle.setFontDescription(WTF::move(fontDescription));
     markerStyle.setUnicodeBidi(UnicodeBidi::Isolate);
     markerStyle.setWhiteSpaceCollapse(WhiteSpaceCollapse::Preserve);
     markerStyle.setTextWrapMode(TextWrapMode::NoWrap);

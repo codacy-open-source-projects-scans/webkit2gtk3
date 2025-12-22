@@ -500,6 +500,7 @@
     [Legacy] StructureParam WebKit::RemoteLayerBackingStoreProperties.m_bufferHandle
     [Legacy] StructureParam WebKit::BufferSetBackendHandle.bufferHandle
     [Legacy] StructureParam WebKit::ImageBufferSetPrepareBufferForDisplayOutputData.backendHandle
+    [Legacy] StructureParam WebKit::WCBackingStore.handle()
 }
 
 [UnsafeWrapper] UniqueRef<WebKit::ObjectValue> {
@@ -530,6 +531,8 @@
 [UnsafeWrapper] Vector<WebKit::CoreIPCSecTrustData::PolicyType> {
     [Legacy] StructureParam WebKit::CoreIPCSecTrustData.policies
 }
+
+[Legacy] StructureParam WebCore::AccessibilityRemoteToken.bytes Vector<uint8_t>
 
 # GTK Specific
 [Legacy] StructureParam sk_sp<SkColorSpace>.dataReference() std::span<const uint8_t>

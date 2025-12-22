@@ -48,7 +48,7 @@ class InspectorThreadableLoaderClient final : public ThreadSafeRefCounted<Inspec
 public:
     static Ref<InspectorThreadableLoaderClient> create(RefPtr<LoadResourceCallback>&& callback)
     {
-        return adoptRef(*new InspectorThreadableLoaderClient(WTFMove(callback)));
+        return adoptRef(*new InspectorThreadableLoaderClient(WTF::move(callback)));
     }
 
     ~InspectorThreadableLoaderClient() final = default;
@@ -65,7 +65,7 @@ public:
 
 private:
     explicit InspectorThreadableLoaderClient(RefPtr<LoadResourceCallback>&& callback)
-        : m_callback(WTFMove(callback))
+        : m_callback(WTF::move(callback))
     {
         // FIXME: This is error-prone, we should avoid explicit calls to ref() / deref().
         ref(); // dispose() is in charge of calling deref();
@@ -73,7 +73,7 @@ private:
 
     void dispose();
 
-    RefPtr<LoadResourceCallback> m_callback;
+    const RefPtr<LoadResourceCallback> m_callback;
     RefPtr<WebCore::ThreadableLoader> m_loader;
     RefPtr<WebCore::TextResourceDecoder> m_decoder;
     String m_mimeType;

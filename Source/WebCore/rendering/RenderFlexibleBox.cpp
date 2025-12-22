@@ -51,8 +51,8 @@
 #include "RenderObjectInlines.h"
 #include "RenderReplaced.h"
 #include "RenderSVGRoot.h"
-#include "RenderStyleConstants.h"
-#include "RenderStyleInlines.h"
+#include "RenderStyle+GettersInlines.h"
+#include "RenderStyle+InitialInlines.h"
 #include "RenderTable.h"
 #include "RenderView.h"
 #include "StylePrimitiveNumericTypes+Evaluation.h"
@@ -65,7 +65,7 @@
 
 namespace WebCore {
 
-WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderFlexibleBox);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RenderFlexibleBox);
 
 RenderFlexibleBox::FlexLayoutItem::FlexLayoutItem(RenderBox& flexItem, LayoutUnit flexBaseContentSize, LayoutUnit mainAxisBorderAndPadding, LayoutUnit mainAxisMargin, std::pair<LayoutUnit, LayoutUnit> minMaxSizes, bool everHadLayout)
     : renderer(flexItem)
@@ -121,14 +121,14 @@ struct RenderFlexibleBox::LineState {
 };
 
 RenderFlexibleBox::RenderFlexibleBox(Type type, Element& element, RenderStyle&& style)
-    : RenderBlock(type, element, WTFMove(style), TypeFlag::IsFlexibleBox)
+    : RenderBlock(type, element, WTF::move(style), TypeFlag::IsFlexibleBox)
 {
     ASSERT(isRenderFlexibleBox());
     setChildrenInline(false); // All of our children must be block-level.
 }
 
 RenderFlexibleBox::RenderFlexibleBox(Type type, Document& document, RenderStyle&& style)
-    : RenderBlock(type, document, WTFMove(style), TypeFlag::IsFlexibleBox)
+    : RenderBlock(type, document, WTF::move(style), TypeFlag::IsFlexibleBox)
 {
     ASSERT(isRenderFlexibleBox());
     setChildrenInline(false); // All of our children must be block-level.
@@ -328,7 +328,7 @@ std::optional<LayoutUnit> RenderFlexibleBox::firstLineBaseline() const
         auto dominantBaseline = BaselineAlignmentState::dominantBaseline(flexboxWritingMode);
         baseline = BaselineAlignmentState::synthesizedBaseline(*baselineFlexItem, dominantBaseline, flexboxWritingMode, direction, BaselineSynthesisEdge::BorderBox);
     }
-    return baselineFlexItem->logicalTop().toInt() + *baseline;
+    return (settings().subpixelInlineLayoutEnabled() ? LayoutUnit(baselineFlexItem->logicalTop()) : LayoutUnit(baselineFlexItem->logicalTop().toInt())) + *baseline;
 }
 
 std::optional <LayoutUnit> RenderFlexibleBox::lastLineBaseline() const
@@ -355,7 +355,7 @@ std::optional <LayoutUnit> RenderFlexibleBox::lastLineBaseline() const
         auto dominantBaseline = BaselineAlignmentState::dominantBaseline(flexboxWritingMode);
         baseline = BaselineAlignmentState::synthesizedBaseline(*baselineFlexItem, dominantBaseline, flexboxWritingMode, direction, BaselineSynthesisEdge::BorderBox);
     }
-    return baselineFlexItem->logicalTop().toInt() + *baseline;
+    return (settings().subpixelInlineLayoutEnabled() ? LayoutUnit(baselineFlexItem->logicalTop()) : LayoutUnit(baselineFlexItem->logicalTop().toInt())) + *baseline;
 }
 
 static const StyleContentAlignmentData& contentAlignmentNormalBehavior()
@@ -1333,9 +1333,9 @@ public:
             return;
 
         if (m_mainAxisIsInlineAxis)
-            m_flexItem.setOverridingBorderBoxLogicalWidthForFlexBasisComputation(WTFMove(flexBasis));
+            m_flexItem.setOverridingBorderBoxLogicalWidthForFlexBasisComputation(WTF::move(flexBasis));
         else
-            m_flexItem.setOverridingBorderBoxLogicalHeightForFlexBasisComputation(WTFMove(flexBasis));
+            m_flexItem.setOverridingBorderBoxLogicalHeightForFlexBasisComputation(WTF::move(flexBasis));
         m_didOverride = true;
     }
 
@@ -2529,7 +2529,7 @@ void RenderFlexibleBox::layoutAndPlaceFlexItems(LayoutUnit& crossAxisOffset, Fle
         layoutColumnReverse(flexLayoutItems, crossAxisOffset, availableFreeSpace, gapBetweenItems);
     }
 
-    lineStates.append(LineState(crossAxisOffset, maxFlexItemCrossAxisExtent, baselineAlignmentState, WTFMove(flexLayoutItems)));
+    lineStates.append(LineState(crossAxisOffset, maxFlexItemCrossAxisExtent, baselineAlignmentState, WTF::move(flexLayoutItems)));
     crossAxisOffset += maxFlexItemCrossAxisExtent;
 }
 

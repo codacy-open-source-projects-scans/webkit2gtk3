@@ -129,7 +129,7 @@
 #include "RenderSVGViewportContainer.h"
 #include "RenderScrollbar.h"
 #include "RenderScrollbarPart.h"
-#include "RenderStyleSetters.h"
+#include "RenderStyle+SettersInlines.h"
 #include "RenderTableCell.h"
 #include "RenderTableRow.h"
 #include "RenderText.h"
@@ -267,7 +267,7 @@ public:
 
     void setClipRects(ClipRectsType clipRectsType, bool respectOverflowClip, RefPtr<ClipRects>&& clipRects)
     {
-        m_clipRects[getIndex(clipRectsType, respectOverflowClip)] = WTFMove(clipRects);
+        m_clipRects[getIndex(clipRectsType, respectOverflowClip)] = WTF::move(clipRects);
     }
 
 #if ASSERT_ENABLED
@@ -312,7 +312,7 @@ static ScrollingScope nextScrollingScope()
     return ++currentScope;
 }
 
-WTF_MAKE_PREFERABLY_COMPACT_TZONE_OR_ISO_ALLOCATED_IMPL(RenderLayer);
+WTF_MAKE_PREFERABLY_COMPACT_TZONE_ALLOCATED_IMPL(RenderLayer);
 
 RenderLayer::RenderLayer(RenderLayerModelObject& renderer)
     : m_isRenderViewLayer(renderer.isRenderView())
@@ -568,7 +568,7 @@ void RenderLayer::removeOnlyThisLayer()
         removeChild(*reflectionLayer);
 
     // Now walk our kids and reattach them to our parent.
-    RenderLayer* current = m_first;
+    RenderLayer* current = m_first.get();
     while (current) {
         RenderLayer* next = current->nextSibling();
         removeChild(*current);
@@ -997,11 +997,6 @@ String RenderLayer::name() const
     return makeString(renderer().debugDescription(), " (reflection)"_s);
 }
 
-RenderLayerCompositor& RenderLayer::compositor() const
-{
-    return renderer().view().compositor();
-}
-
 void RenderLayer::contentChanged(ContentChangeType changeType, const std::optional<FloatRect>& dirtyRect)
 {
     if (changeType == ContentChangeType::Canvas || changeType == ContentChangeType::Video || changeType == ContentChangeType::FullScreen || changeType == ContentChangeType::Model || changeType == ContentChangeType::HDRImage) {
@@ -1318,7 +1313,7 @@ void RenderLayer::recursiveUpdateLayerPositions(OptionSet<UpdateLayerPositionsFl
         if (checkForRepaint && shouldRepaintAfterLayout() && newRects) {
             auto needsFullRepaint = repaintStatus() == RepaintStatus::NeedsFullRepaint ? RequiresFullRepaint::Yes : RequiresFullRepaint::No;
             auto resolvedOldRects = valueOrDefault(oldRects);
-            renderer().repaintAfterLayoutIfNeeded(WTFMove(repaintContainer), needsFullRepaint, resolvedOldRects, *newRects);
+            renderer().repaintAfterLayoutIfNeeded(WTF::move(repaintContainer), needsFullRepaint, resolvedOldRects, *newRects);
         }
     };
 
@@ -2760,7 +2755,7 @@ static RenderLayer* findCommonAncestor(const RenderLayer& firstLayer, const Rend
     if (&firstLayer == &secondLayer)
         return const_cast<RenderLayer*>(&firstLayer);
 
-    SingleThreadWeakKeyHashSet<const RenderLayer> ancestorChain;
+    InlineWeakKeyHashSet<const RenderLayer> ancestorChain;
     for (auto* currLayer = &firstLayer; currLayer; currLayer = currLayer->parent())
         ancestorChain.add(*currLayer);
 
@@ -6372,8 +6367,8 @@ RenderLayerFilters& RenderLayer::ensureLayerFilters()
     if (m_filters)
         return *m_filters;
     
-    m_filters = RenderLayerFilters::create(*this);
-    m_filters->setFilterScale({ page().deviceScaleFactor(), page().deviceScaleFactor() });
+    auto scale = page().deviceScaleFactor();
+    m_filters = RenderLayerFilters::create(*this, { scale, scale });
     return *m_filters;
 }
 

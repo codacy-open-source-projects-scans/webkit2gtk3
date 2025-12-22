@@ -113,7 +113,7 @@ using namespace WebCore;
 
 Ref<GPUProcessConnection> GPUProcessConnection::create(Ref<IPC::Connection>&& connection)
 {
-    Ref instance = adoptRef(*new GPUProcessConnection(WTFMove(connection)));
+    Ref instance = adoptRef(*new GPUProcessConnection(WTF::move(connection)));
     RELEASE_LOG(Process, "GPUProcessConnection::create - %p", instance.ptr());
     return instance;
 }
@@ -157,14 +157,11 @@ std::optional<audit_token_t> GPUProcessConnection::auditToken()
 }
 #endif
 
-RemoteSharedResourceCacheProxy& GPUProcessConnection::sharedResourceCache()
+Ref<RemoteSharedResourceCacheProxy> GPUProcessConnection::sharedResourceCache()
 {
-    return WebProcess::singleton().gpuProcessSharedResourceCache();
-}
-
-Ref<RemoteSharedResourceCacheProxy> GPUProcessConnection::protectedSharedResourceCache()
-{
-    return sharedResourceCache();
+    if (!m_sharedResourceCache)
+        m_sharedResourceCache = RemoteSharedResourceCacheProxy::create();
+    return *m_sharedResourceCache;
 }
 
 void GPUProcessConnection::invalidate()
@@ -218,7 +215,9 @@ void GPUProcessConnection::resetAudioMediaStreamTrackRendererInternalUnit(AudioM
 #if ENABLE(VIDEO)
 RemoteVideoFrameObjectHeapProxy& GPUProcessConnection::videoFrameObjectHeapProxy()
 {
-    return protectedSharedResourceCache()->videoFrameObjectHeapProxy();
+    if (!m_videoFrameObjectHeapProxy)
+        m_videoFrameObjectHeapProxy = RemoteVideoFrameObjectHeapProxy::create(*this);
+    return *m_videoFrameObjectHeapProxy;
 }
 
 Ref<RemoteVideoFrameObjectHeapProxy> GPUProcessConnection::protectedVideoFrameObjectHeapProxy()
@@ -381,7 +380,7 @@ void GPUProcessConnection::didReceiveRemoteCommand(PlatformMediaSession::RemoteC
 void GPUProcessConnection::beginRoutingArbitrationWithCategory(AudioSession::CategoryType category, AudioSessionRoutingArbitrationClient::ArbitrationCallback&& callback)
 {
     if (auto* arbitrator = WebProcess::singleton().audioSessionRoutingArbitrator()) {
-        arbitrator->beginRoutingArbitrationWithCategory(category, WTFMove(callback));
+        arbitrator->beginRoutingArbitrationWithCategory(category, WTF::move(callback));
         return;
     }
 
@@ -459,7 +458,7 @@ void GPUProcessConnection::setMediaEnvironment(WebCore::PageIdentifier pageIdent
 
 void GPUProcessConnection::createRenderingBackend(RemoteRenderingBackendIdentifier identifier, IPC::StreamServerConnection::Handle&& serverHandle)
 {
-    m_connection->send(Messages::GPUConnectionToWebProcess::CreateRenderingBackend(identifier, WTFMove(serverHandle)), 0, IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
+    m_connection->send(Messages::GPUConnectionToWebProcess::CreateRenderingBackend(identifier, WTF::move(serverHandle)), 0, IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
 }
 
 void GPUProcessConnection::releaseRenderingBackend(RemoteRenderingBackendIdentifier identifier)
@@ -470,7 +469,7 @@ void GPUProcessConnection::releaseRenderingBackend(RemoteRenderingBackendIdentif
 #if ENABLE(WEBGL)
 void GPUProcessConnection::createGraphicsContextGL(RemoteGraphicsContextGLIdentifier identifier, const GraphicsContextGLAttributes& contextAttributes, RemoteRenderingBackendIdentifier renderingBackendIdentifier, IPC::StreamServerConnection::Handle&& serverHandle)
 {
-    m_connection->send(Messages::GPUConnectionToWebProcess::CreateGraphicsContextGL(identifier, contextAttributes, renderingBackendIdentifier, WTFMove(serverHandle)), 0, IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
+    m_connection->send(Messages::GPUConnectionToWebProcess::CreateGraphicsContextGL(identifier, contextAttributes, renderingBackendIdentifier, WTF::move(serverHandle)), 0, IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
 }
 
 void GPUProcessConnection::releaseGraphicsContextGL(RemoteGraphicsContextGLIdentifier identifier)
@@ -481,7 +480,7 @@ void GPUProcessConnection::releaseGraphicsContextGL(RemoteGraphicsContextGLIdent
 
 void GPUProcessConnection::createGPU(WebGPUIdentifier identifier, RemoteRenderingBackendIdentifier renderingBackendIdentifier, IPC::StreamServerConnection::Handle&& serverHandle)
 {
-    m_connection->send(Messages::GPUConnectionToWebProcess::CreateGPU(identifier, renderingBackendIdentifier, WTFMove(serverHandle)), 0, IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
+    m_connection->send(Messages::GPUConnectionToWebProcess::CreateGPU(identifier, renderingBackendIdentifier, WTF::move(serverHandle)), 0, IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
 }
 
 void GPUProcessConnection::releaseGPU(WebGPUIdentifier identifier)

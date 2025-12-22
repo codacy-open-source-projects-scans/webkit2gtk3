@@ -185,6 +185,16 @@ inline static RetainPtr<WKTextExtractionItem> createItemWithChildren(const TextE
                 ariaAttributes:ariaAttributes.get()
                 accessibilityRole:accessibilityRole.get()
                 nodeIdentifier:nodeIdentifier.get()]);
+        }, [&](const TextExtraction::FormData& data) -> RetainPtr<WKTextExtractionItem> {
+            return adoptNS([[WKTextExtractionFormItem alloc]
+                initWithAutocomplete:data.autocomplete.createNSString().get()
+                name:data.name.createNSString().get()
+                rectInWebView:rectInWebView
+                children:children
+                eventListeners:eventListeners
+                ariaAttributes:ariaAttributes.get()
+                accessibilityRole:accessibilityRole.get()
+                nodeIdentifier:nodeIdentifier.get()]);
         }, [&](const TextExtraction::TextFormControlData& data) -> RetainPtr<WKTextExtractionItem> {
             return adoptNS([[WKTextExtractionTextFormControlItem alloc]
                 initWithEditable:createWKEditable(data.editable).get()
@@ -241,7 +251,7 @@ RetainPtr<WKTextExtractionItem> createItem(const TextExtraction::Item& item, Roo
         return nil;
     }
 
-    return createItemRecursive(item, WTFMove(converter));
+    return createItemRecursive(item, WTF::move(converter));
 }
 
 std::optional<double> computeSimilarity(NSString *stringA, NSString *stringB, unsigned minimumLength)
@@ -288,9 +298,10 @@ std::optional<double> computeSimilarity(NSString *stringA, NSString *stringB, un
 
 void requestTextExtractionFilterRuleData(CompletionHandler<void(Vector<TextExtraction::FilterRuleData>&&)>&& completion)
 {
+#if HAVE(SAFE_BROWSING)
     using namespace WebKit::SafeBrowsingUtilities;
 
-    listsForNamespace(namespacedCollectionForTextExtraction(), [completion = WTFMove(completion)](NSDictionary<NSString *, NSArray<NSString *> *> *data, NSError *error) mutable {
+    listsForNamespace(namespacedCollectionForTextExtraction(), [completion = WTF::move(completion)](NSDictionary<NSString *, NSArray<NSString *> *> *data, NSError *error) mutable {
         if (error) {
             RELEASE_LOG_ERROR(TextExtraction, "Failed to request filtering rules: %@", error.localizedDescription);
             return completion({ });
@@ -328,8 +339,8 @@ void requestTextExtractionFilterRuleData(CompletionHandler<void(Vector<TextExtra
                         return domainRules.first();
                     }
 
-                    return makeStringByJoining(WTF::map(WTFMove(domainRules), [](auto&& group) {
-                        return makeString('(', WTFMove(group), ')');
+                    return makeStringByJoining(WTF::map(WTF::move(domainRules), [](auto&& group) {
+                        return makeString('(', WTF::move(group), ')');
                     }), "|"_s);
                 }();
                 continue;
@@ -341,6 +352,9 @@ void requestTextExtractionFilterRuleData(CompletionHandler<void(Vector<TextExtra
 
         completion(copyToVector(allData.values()));
     });
+#else
+    completion({ });
+#endif
 }
 
 } // namespace WebKit

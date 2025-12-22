@@ -40,11 +40,11 @@
 
 namespace WebCore {
 
-WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(FilterData);
-WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(LegacyRenderSVGResourceFilter);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(FilterData);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(LegacyRenderSVGResourceFilter);
 
 LegacyRenderSVGResourceFilter::LegacyRenderSVGResourceFilter(SVGFilterElement& element, RenderStyle&& style)
-    : LegacyRenderSVGResourceContainer(Type::LegacySVGResourceFilter, element, WTFMove(style))
+    : LegacyRenderSVGResourceContainer(Type::LegacySVGResourceFilter, element, WTF::move(style))
 {
 }
 

@@ -45,10 +45,10 @@
 
 namespace WebCore {
 
-WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderSVGResourceClipper);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RenderSVGResourceClipper);
 
 RenderSVGResourceClipper::RenderSVGResourceClipper(SVGClipPathElement& element, RenderStyle&& style)
-    : RenderSVGResourceContainer(Type::SVGResourceClipper, element, WTFMove(style))
+    : RenderSVGResourceContainer(Type::SVGResourceClipper, element, WTF::move(style))
 {
     ASSERT(isRenderSVGResourceClipper());
 }

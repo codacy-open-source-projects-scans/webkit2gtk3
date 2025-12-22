@@ -34,7 +34,7 @@
 #include "RenderLayer.h"
 #include "RenderSVGResourceMarkerInlines.h"
 #include "RenderSVGShapeInlines.h"
-#include "RenderStyleInlines.h"
+#include "RenderStyle+GettersInlines.h"
 #include "SVGElementTypeHelpers.h"
 #include "SVGMarkerElement.h"
 #include "SVGPathElement.h"
@@ -44,10 +44,10 @@
 
 namespace WebCore {
 
-WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(RenderSVGPath);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RenderSVGPath);
 
 RenderSVGPath::RenderSVGPath(SVGGraphicsElement& element, RenderStyle&& style)
-    : RenderSVGShape(Type::SVGPath, element, WTFMove(style))
+    : RenderSVGShape(Type::SVGPath, element, WTF::move(style))
 {
     ASSERT(isRenderSVGPath());
 }

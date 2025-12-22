@@ -49,7 +49,7 @@
 
 namespace WebCore {
 
-WTF_MAKE_TZONE_OR_ISO_ALLOCATED_IMPL(MathMLPresentationElement);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(MathMLPresentationElement);
 
 using namespace MathMLNames;
 
@@ -66,9 +66,9 @@ Ref<MathMLPresentationElement> MathMLPresentationElement::create(const Qualified
 RenderPtr<RenderElement> MathMLPresentationElement::createElementRenderer(RenderStyle&& style, const RenderTreePosition& insertionPosition)
 {
     if (hasTagName(mtableTag))
-        return createRenderer<RenderMathMLTable>(*this, WTFMove(style));
+        return createRenderer<RenderMathMLTable>(*this, WTF::move(style));
 
-    return MathMLElement::createElementRenderer(WTFMove(style), insertionPosition);
+    return MathMLElement::createElementRenderer(WTF::move(style), insertionPosition);
 }
 
 const MathMLElement::BooleanValue& MathMLPresentationElement::cachedBooleanAttribute(const QualifiedName& name, std::optional<BooleanValue>& attribute)

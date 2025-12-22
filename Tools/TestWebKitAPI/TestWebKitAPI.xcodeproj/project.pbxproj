@@ -207,8 +207,11 @@
 		4433A396208044140091ED57 /* SynchronousTimeoutTests.mm in Sources */ = {isa = PBXBuildFile; fileRef = 4433A395208044130091ED57 /* SynchronousTimeoutTests.mm */; };
 		44449DC12718B4B700E821B5 /* OSObjectPtrCocoaARC.mm in Sources */ = {isa = PBXBuildFile; fileRef = 44449DBF2718B4B600E821B5 /* OSObjectPtrCocoaARC.mm */; settings = {COMPILER_FLAGS = "-fobjc-arc"; }; };
 		44449DC22718B4B700E821B5 /* OSObjectPtrCocoa.mm in Sources */ = {isa = PBXBuildFile; fileRef = 44449DC02718B4B700E821B5 /* OSObjectPtrCocoa.mm */; };
+		44516FB12E4A9BD100B97106 /* TypeCastsOSObjectCocoaARC.mm in Sources */ = {isa = PBXBuildFile; fileRef = 44516FB02E4A9BD100B97106 /* TypeCastsOSObjectCocoaARC.mm */; settings = {COMPILER_FLAGS = "-fobjc-arc"; }; };
+		44516FB22E4A9BD100B97106 /* TypeCastsOSObjectCocoa.mm in Sources */ = {isa = PBXBuildFile; fileRef = 44516FAF2E4A9BD100B97106 /* TypeCastsOSObjectCocoa.mm */; };
 		44652CB726FCD405005EC272 /* TypeCastsCocoaARC.mm in Sources */ = {isa = PBXBuildFile; fileRef = 44652CB626FCD405005EC272 /* TypeCastsCocoaARC.mm */; settings = {COMPILER_FLAGS = "-fobjc-arc"; }; };
 		448110C2253F40300097FC33 /* WebPreferencesTest.mm in Sources */ = {isa = PBXBuildFile; fileRef = 448110C1253F40240097FC33 /* WebPreferencesTest.mm */; };
+		4482E8E02D94710800754D28 /* TypeCastsOSObjectCF.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 4482E8DF2D94710800754D28 /* TypeCastsOSObjectCF.cpp */; };
 		448D7E471EA6C55500ECC756 /* EnvironmentUtilitiesTest.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 448D7E451EA6C55500ECC756 /* EnvironmentUtilitiesTest.cpp */; };
 		44AC8BC621D0245A00CAFB34 /* RetainPtr.cpp in Sources */ = {isa = PBXBuildFile; fileRef = BC029B161486AD6400817DA9 /* RetainPtr.cpp */; };
 		44B28A0528D18AD20010172C /* RetainPtrHashing.cpp in Sources */ = {isa = PBXBuildFile; fileRef = C0991C50143C7D68007998F2 /* RetainPtrHashing.cpp */; };
@@ -763,6 +766,7 @@
 		A17991881E1C994E00A505ED /* SharedBuffer.mm in Sources */ = {isa = PBXBuildFile; fileRef = A17991861E1C994E00A505ED /* SharedBuffer.mm */; };
 		A179918B1E1CA24100A505ED /* SharedBufferTest.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A17991891E1CA24100A505ED /* SharedBufferTest.cpp */; };
 		A17C46592C98E4A80023F3C7 /* download.example.webarchive in Copy Resources */ = {isa = PBXBuildFile; fileRef = D20C03AE2B704A26004C414A /* download.example.webarchive */; };
+		A17C465A2C98E4A80023F3C7 /* example.webarchive in Copy Resources */ = {isa = PBXBuildFile; fileRef = D20C03AE2B704A26004C414B /* example.webarchive */; };
 		A17C465A2C98E4BB0023F3C7 /* active-touch-events.html in Copy Resources */ = {isa = PBXBuildFile; fileRef = F4A7CE792662D83E00228685 /* active-touch-events.html */; };
 		A17C465B2C98E4BB0023F3C7 /* animated-red-green-blue-repeat-infinite.gif in Copy Resources */ = {isa = PBXBuildFile; fileRef = 48354DD129F08036003E566D /* animated-red-green-blue-repeat-infinite.gif */; };
 		A17C465C2C98E4BB0023F3C7 /* composited.html in Copy Resources */ = {isa = PBXBuildFile; fileRef = 0F16BED72304A1D100B4A167 /* composited.html */; };
@@ -2002,6 +2006,7 @@
 				A17C475F2C98E5C20023F3C7 /* enormous.svg in Copy Resources */,
 				A17C46AF2C98E54B0023F3C7 /* enumerateMediaDevices.html in Copy Resources */,
 				A17C47602C98E5C20023F3C7 /* event.ics in Copy Resources */,
+				A17C465A2C98E4A80023F3C7 /* example.webarchive in Copy Resources */,
 				A17C46B02C98E54B0023F3C7 /* execCopy.html in Copy Resources */,
 				A17C47612C98E5C20023F3C7 /* exif-orientation-8-llo.jpg in Copy Resources */,
 				A17C47622C98E5C20023F3C7 /* ExitFullscreenOnEnterPiP.html in Copy Resources */,
@@ -2903,9 +2908,12 @@
 		4433A395208044130091ED57 /* SynchronousTimeoutTests.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = SynchronousTimeoutTests.mm; sourceTree = "<group>"; };
 		44449DBF2718B4B600E821B5 /* OSObjectPtrCocoaARC.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = OSObjectPtrCocoaARC.mm; sourceTree = "<group>"; };
 		44449DC02718B4B700E821B5 /* OSObjectPtrCocoa.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = OSObjectPtrCocoa.mm; sourceTree = "<group>"; };
+		44516FAF2E4A9BD100B97106 /* TypeCastsOSObjectCocoa.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = TypeCastsOSObjectCocoa.mm; sourceTree = "<group>"; };
+		44516FB02E4A9BD100B97106 /* TypeCastsOSObjectCocoaARC.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = TypeCastsOSObjectCocoaARC.mm; sourceTree = "<group>"; };
 		44652CB626FCD405005EC272 /* TypeCastsCocoaARC.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = TypeCastsCocoaARC.mm; sourceTree = "<group>"; };
 		448110C1253F40240097FC33 /* WebPreferencesTest.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = WebPreferencesTest.mm; sourceTree = "<group>"; };
 		44817A2E1F0486BF00003810 /* WKRequestActivatedElementInfo.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = WKRequestActivatedElementInfo.mm; sourceTree = "<group>"; };
+		4482E8DF2D94710800754D28 /* TypeCastsOSObjectCF.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; path = TypeCastsOSObjectCF.cpp; sourceTree = "<group>"; };
 		448D7E451EA6C55500ECC756 /* EnvironmentUtilitiesTest.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = EnvironmentUtilitiesTest.cpp; sourceTree = "<group>"; };
 		44A622C114A0E2B60048515B /* WTFTestUtilities.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = WTFTestUtilities.h; sourceTree = "<group>"; };
 		44ABED4A2DA6E46600F472EF /* WKFragmentDirectiveGeneration.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = WKFragmentDirectiveGeneration.mm; sourceTree = "<group>"; };
@@ -4104,6 +4112,7 @@
 		CEDA12402437C9EA00C28A9E /* editable-region-composited-and-non-composited-overlap.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = "editable-region-composited-and-non-composited-overlap.html"; path = "ios/editable-region-composited-and-non-composited-overlap.html"; sourceTree = SOURCE_ROOT; };
 		D04CF93E285C77C9005D6337 /* MachSendRight.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = MachSendRight.cpp; sourceTree = "<group>"; };
 		D20C03AE2B704A26004C414A /* download.example.webarchive */ = {isa = PBXFileReference; lastKnownFileType = file.bplist; name = download.example.webarchive; path = Tests/WebKitCocoa/download.example.webarchive; sourceTree = "<group>"; };
+		D20C03AE2B704A26004C414B /* example.webarchive */ = {isa = PBXFileReference; lastKnownFileType = file.bplist; name = example.webarchive; path = Tests/WebKitCocoa/example.webarchive; sourceTree = "<group>"; };
 		D2CC7CF22D9A8D6B00011B9E /* TestCocoaImageAndCocoaColor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; lineEnding = 0; name = TestCocoaImageAndCocoaColor.h; path = cocoa/TestCocoaImageAndCocoaColor.h; sourceTree = "<group>"; };
 		D2CC7CF32D9A8D6B00011B9E /* TestCocoaImageAndCocoaColor.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; lineEnding = 0; name = TestCocoaImageAndCocoaColor.mm; path = cocoa/TestCocoaImageAndCocoaColor.mm; sourceTree = "<group>"; };
 		D2D9A6BD2D96B539004A2C92 /* icon-with-subresource.svg */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; lineEnding = 0; path = "icon-with-subresource.svg"; sourceTree = "<group>"; };
@@ -4594,6 +4603,7 @@
 			isa = PBXGroup;
 			children = (
 				D20C03AE2B704A26004C414A /* download.example.webarchive */,
+				D20C03AE2B704A26004C414B /* example.webarchive */,
 				3AA7856029B6C8AA00C4374A /* TestWebKitAPIPrefix.h */,
 				DDF3A82928930475005920CF /* gtest.xcodeproj */,
 				49AEEF682407276F00C87E4C /* Info.plist */,
@@ -5613,6 +5623,9 @@
 				7CBBA07619BB8A9100BBF025 /* OSObjectPtr.cpp */,
 				44449DC02718B4B700E821B5 /* OSObjectPtrCocoa.mm */,
 				44449DBF2718B4B600E821B5 /* OSObjectPtrCocoaARC.mm */,
+				4482E8DF2D94710800754D28 /* TypeCastsOSObjectCF.cpp */,
+				44516FAF2E4A9BD100B97106 /* TypeCastsOSObjectCocoa.mm */,
+				44516FB02E4A9BD100B97106 /* TypeCastsOSObjectCocoaARC.mm */,
 				37C7CC2B1EA4146B007BD956 /* WeakLinking.cpp */,
 			);
 			path = darwin;
@@ -7732,6 +7745,9 @@
 				0F2C20B81DCD545000542D9E /* Time.cpp in Sources */,
 				44CDE4D426EE6E4A009F6ACB /* TypeCastsCocoa.mm in Sources */,
 				44652CB726FCD405005EC272 /* TypeCastsCocoaARC.mm in Sources */,
+				4482E8E02D94710800754D28 /* TypeCastsOSObjectCF.cpp in Sources */,
+				44516FB22E4A9BD100B97106 /* TypeCastsOSObjectCocoa.mm in Sources */,
+				44516FB12E4A9BD100B97106 /* TypeCastsOSObjectCocoaARC.mm in Sources */,
 				E324A6F02041C82000A76593 /* UniqueArray.cpp in Sources */,
 				7429D38C2CCA2AC500858726 /* UniqueRef.cpp in Sources */,
 				3A1337B328F9177600F29B73 /* UniqueRefVector.cpp in Sources */,
