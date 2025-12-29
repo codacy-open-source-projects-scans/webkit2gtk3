@@ -691,7 +691,7 @@ void Internals::resetToConsistentState(Page& page)
 #if ENABLE(WEB_RTC)
     auto& rtcProvider = page.webRTCProvider();
 #if USE(LIBWEBRTC)
-    auto& webRTCProvider = reinterpret_cast<LibWebRTCProvider&>(rtcProvider);
+    auto& webRTCProvider = downcast<LibWebRTCProvider>(rtcProvider);
     WebCore::useRealRTCPeerConnectionFactory(webRTCProvider);
     webRTCProvider.disableNonLocalhostConnections();
     webRTCProvider.setVP9HardwareSupportForTesting({ });
@@ -1822,17 +1822,17 @@ void Internals::enableMockSpeechSynthesizer()
     if (!synthesis)
         return;
 
-    auto mock = PlatformSpeechSynthesizerMock::create(*synthesis);
-    m_platformSpeechSynthesizer = static_cast<PlatformSpeechSynthesizerMock*>(mock.ptr());
+    Ref mock = PlatformSpeechSynthesizerMock::create(*synthesis);
+    m_platformSpeechSynthesizer = mock.copyRef();
     synthesis->setPlatformSynthesizer(WTF::move(mock));
 }
 
 void Internals::enableMockSpeechSynthesizerForMediaElement(HTMLMediaElement& element)
 {
     auto& synthesis = element.speechSynthesis();
-    auto mock = PlatformSpeechSynthesizerMock::create(synthesis);
+    Ref mock = PlatformSpeechSynthesizerMock::create(synthesis);
 
-    m_platformSpeechSynthesizer = static_cast<PlatformSpeechSynthesizerMock*>(mock.ptr());
+    m_platformSpeechSynthesizer = mock.copyRef();
     synthesis.setPlatformSynthesizer(WTF::move(mock));
 }
 
@@ -1861,14 +1861,6 @@ unsigned Internals::minimumExpectedVoiceCount()
 
 #if ENABLE(WEB_RTC)
 
-void Internals::emulateRTCPeerConnectionPlatformEvent(RTCPeerConnection& connection, const String& action)
-{
-    if (!WebRTCProvider::webRTCAvailable())
-        return;
-
-    connection.emulatePlatformEvent(action);
-}
-
 void Internals::useMockRTCPeerConnectionFactory(const String& testCase)
 {
     if (!WebRTCProvider::webRTCAvailable())
@@ -1876,7 +1868,7 @@ void Internals::useMockRTCPeerConnectionFactory(const String& testCase)
 
 #if USE(LIBWEBRTC)
     Document* document = contextDocument();
-    auto* provider = (document && document->page()) ? &static_cast<LibWebRTCProvider&>(document->page()->webRTCProvider()) : nullptr;
+    auto* provider = (document && document->page()) ? &downcast<LibWebRTCProvider>(document->page()->webRTCProvider()) : nullptr;
     WebCore::useMockRTCPeerConnectionFactory(provider, testCase);
 #else
     UNUSED_PARAM(testCase);
@@ -1903,7 +1895,7 @@ void Internals::setEnumeratingAllNetworkInterfacesEnabled(bool enabled)
     auto* page = document->page();
     if (!page)
         return;
-    auto& rtcProvider = static_cast<LibWebRTCProvider&>(page->webRTCProvider());
+    auto& rtcProvider = downcast<LibWebRTCProvider>(page->webRTCProvider());
     if (enabled)
         rtcProvider.enableEnumeratingAllNetworkInterfaces();
     else
@@ -1950,7 +1942,7 @@ void Internals::disableWebRTCHardwareVP9()
 {
 #if USE(LIBWEBRTC)
     if (auto* page = contextDocument()->page()) {
-        auto& rtcProvider = static_cast<LibWebRTCProvider&>(page->webRTCProvider());
+        auto& rtcProvider = downcast<LibWebRTCProvider>(page->webRTCProvider());
         rtcProvider.setVP9HardwareSupportForTesting(false);
         rtcProvider.clearFactory();
     }
@@ -1961,7 +1953,7 @@ bool Internals::isSupportingVP9HardwareDecoder() const
 {
 #if USE(LIBWEBRTC)
     if (auto* page = contextDocument()->page()) {
-        auto& rtcProvider = static_cast<LibWebRTCProvider&>(page->webRTCProvider());
+        auto& rtcProvider = downcast<LibWebRTCProvider>(page->webRTCProvider());
         return rtcProvider.isSupportingVP9HardwareDecoder();
     }
 #endif
@@ -3166,10 +3158,11 @@ void Internals::toggleOverwriteModeEnabled()
 
 static ExceptionOr<FindOptions> parseFindOptions(const Vector<String>& optionList)
 {
-    const struct {
+    struct FlagListEntry {
         ASCIILiteral name;
         FindOption value;
-    } flagList[] = {
+    };
+    static constexpr auto flagList = std::to_array<FlagListEntry>({
         { "CaseInsensitive"_s, FindOption::CaseInsensitive },
         { "AtWordStarts"_s, FindOption::AtWordStarts },
         { "TreatMedialCapitalAsWordStart"_s, FindOption::TreatMedialCapitalAsWordStart },
@@ -3179,7 +3172,7 @@ static ExceptionOr<FindOptions> parseFindOptions(const Vector<String>& optionLis
         { "DoNotRevealSelection"_s, FindOption::DoNotRevealSelection },
         { "AtWordEnds"_s, FindOption::AtWordEnds },
         { "DoNotTraverseFlatTree"_s, FindOption::DoNotTraverseFlatTree },
-    };
+    });
     FindOptions result;
     for (auto& option : optionList) {
         bool found = false;
@@ -7625,12 +7618,19 @@ void Internals::setContentSizeCategory(Internals::ContentSizeCategory category)
 #endif
 }
 
-#if ENABLE(ATTACHMENT_ELEMENT) && ENABLE(SERVICE_CONTROLS)
+#if ENABLE(ATTACHMENT_ELEMENT)
+#if ENABLE(SERVICE_CONTROLS)
 bool Internals::hasImageControls(const HTMLImageElement& element) const
 {
     return ImageControlsMac::hasImageControls(element);
 }
-#endif // ENABLE(ATTACHMENT_ELEMENT) && ENABLE(SERVICE_CONTROLS)
+#endif // ENABLE(SERVICE_CONTROLS)
+
+String Internals::attachmentElementShadowUserAgentStyleSheet() const
+{
+    return HTMLAttachmentElement::shadowUserAgentStyleSheetText();
+}
+#endif // ENABLE(ATTACHMENT_ELEMENT)
 
 #if ENABLE(MEDIA_SESSION)
 ExceptionOr<double> Internals::currentMediaSessionPosition(const MediaSession& session)

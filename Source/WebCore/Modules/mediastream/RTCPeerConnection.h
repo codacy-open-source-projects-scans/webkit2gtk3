@@ -173,9 +173,6 @@ public:
     ScriptExecutionContext* scriptExecutionContext() const final;
     using ActiveDOMObject::protectedScriptExecutionContext;
 
-    // Used for testing with a mock
-    WEBCORE_EXPORT void emulatePlatformEvent(const String& action);
-
     // API used by PeerConnectionBackend and relatives
     void updateIceGatheringState(RTCIceGatheringState);
     void updateIceConnectionState(RTCIceConnectionState);
@@ -283,6 +280,7 @@ private:
     RTCConfiguration m_configuration;
     WeakPtr<RTCController> m_controller;
     Vector<RefPtr<RTCCertificate>> m_certificates;
+    Vector<RTCDataChannelIdentifier> m_channels;
     bool m_shouldDelayTasks { false };
     Deque<std::pair<Ref<DeferredPromise>, Function<void(Ref<DeferredPromise>&&)>>> m_operations;
     bool m_hasPendingOperation { false };
@@ -301,5 +299,7 @@ private:
 };
 
 } // namespace WebCore
+
+SPECIALIZE_TYPE_TRAITS_EVENTTARGET(RTCPeerConnection)
 
 #endif // ENABLE(WEB_RTC)

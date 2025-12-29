@@ -601,6 +601,15 @@ imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-mode
 imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/embedded_style_urls.html [ Pass ]
 imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/evil/media_404_omit_subtitles.html [ Pass ]
 imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/evil/media_height_19.html [ Pass ]
+imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/2_cues_overlapping_completely_move_up.html [ Pass ]
+imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/decode_escaped_entities.html [ Pass ]
+imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/dom_override_cue_align_position_line_size_while_paused.html [ Pass ]
+imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/dom_override_cue_align_position_line_size.html [ Pass ]
+imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/dom_override_cue_line.html  [ Pass ]
+imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/line_0_is_top.html [ Pass ]
+imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/line_1_wrapped_cue_grow_downwards.html [ Pass ]
+imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/line_50_percent.html [ Pass ]
+imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/size_50.html [ Pass ]
 
 # These WebVTT rendering WPT are flaky.
 imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/evil/non-standard-pseudo-elements.html [ ImageOnlyFailure Pass Failure ]
@@ -656,7 +665,6 @@ imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customiz
 imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/select-picker-starting-style.html [ Skip ]
 imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/select-popover-exit-animation.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/select-second-child-button.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/select-size-multiple-new-content.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/select-text-only.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/selectedcontent-color.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/selectedcontent-restore.html [ Skip ]
@@ -2077,9 +2085,6 @@ webkit.org/b/187034 imported/w3c/web-platform-tests/webmessaging/broadcastchanne
 
 # This webmessaging WPT test is flaky.
 webkit.org/b/289126 imported/w3c/web-platform-tests/webmessaging/broadcastchannel/cross-partition.https.tentative.html [ Skip ]
-
-# This webmessaging WPT test crashes in debug.
-webkit.org/b/260895 [ Debug ] imported/w3c/web-platform-tests/webmessaging/broadcastchannel/opaque-origin.html [ Crash ]
 
 webkit.org/b/244022 imported/w3c/web-platform-tests/quirks/body-fills-html-quirk-vertical.html [ ImageOnlyFailure ]
 webkit.org/b/244022 imported/w3c/web-platform-tests/quirks/body-fills-html-quirk.html [ ImageOnlyFailure ]
@@ -3584,8 +3589,6 @@ webkit.org/b/175288 imported/w3c/web-platform-tests/css/css-ui/outline-016.html 
 
 webkit.org/b/171945 perf/class-list-remove.html [ Pass Failure Timeout ]
 
-webkit.org/b/176183 fast/block/inside-inlines/opacity-on-inline.html [ ImageOnlyFailure ]
-
 webkit.org/b/166025 http/tests/fetch/fetching-same-resource-with-different-options.html [ Pass Failure ]
 
 # WPT css/css-pseudo import (webkit.org/b/235197, webkit.org/b/266986, webkit.org/b/277692)
@@ -4558,7 +4561,6 @@ webkit.org/b/228994 imported/w3c/web-platform-tests/css/css-position/position-ab
 webkit.org/b/228994 imported/w3c/web-platform-tests/css/css-position/position-absolute-iframe-print-002.sub.html [ ImageOnlyFailure ]
 webkit.org/b/228994 imported/w3c/web-platform-tests/css/css-position/position-absolute-center-001.html [ ImageOnlyFailure ]
 webkit.org/b/228994 imported/w3c/web-platform-tests/css/css-position/position-absolute-center-002.html [ ImageOnlyFailure ]
-webkit.org/b/203449 imported/w3c/web-platform-tests/css/css-position/position-relative-002.html [ ImageOnlyFailure ]
 webkit.org/b/203449 imported/w3c/web-platform-tests/css/css-position/position-relative-011.html [ ImageOnlyFailure ]
 webkit.org/b/203449 imported/w3c/web-platform-tests/css/css-position/position-relative-012.html [ ImageOnlyFailure ]
 webkit.org/b/203449 imported/w3c/web-platform-tests/css/css-position/position-relative-013.html [ ImageOnlyFailure ]
@@ -7768,7 +7770,6 @@ ipc/validate-message-check-in-networkconnectiontowebprocess.html [ Skip ]
 media/video-presentation-mode.html [ Skip ]
 
 # CSS2/floats failures
-imported/w3c/web-platform-tests/css/CSS2/floats/block-in-inline-become-float.html [ ImageOnlyFailure ]
 webkit.org/b/286882 imported/w3c/web-platform-tests/css/CSS2/floats/computed-float-position-absolute.html [ Skip ]
 imported/w3c/web-platform-tests/css/CSS2/floats/float-nowrap-4.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/CSS2/floats/float-nowrap-7.html [ ImageOnlyFailure ]
@@ -8188,8 +8189,6 @@ webkit.org/b/303807 imported/w3c/web-platform-tests/digital-credentials/create.t
 
 # Hits assert in debug, tracked by https://bugs.webkit.org/show_bug.cgi?id=303414
 [ Debug ] fullscreen/fullscreen-grid-item-container-type-crash.html [ Skip ]
-imported/w3c/web-platform-tests/css/CSS2/stacking-context/opacity-affects-block-in-inline.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/CSS2/stacking-context/zindex-affects-block-in-inline.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/webrtc/RTCDataChannel-worker-GC.html [ Failure Pass ]
 imported/w3c/web-platform-tests/webrtc/RTCRtpReceiver-track-settings.tentative.html [ Failure Pass ]
 

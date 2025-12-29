@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		07AC4F0E2EF5A68600468BCB /* module.modulemap in Headers */ = {isa = PBXBuildFile; fileRef = 07AC4F0D2EF5A62500468BCB /* module.modulemap */; settings = {ATTRIBUTES = (Private, ); }; };
 		07F5EA6F2EE8A7630085B185 /* generate-tapi-filelist.py in Headers */ = {isa = PBXBuildFile; fileRef = DD28DF2329D368BD00BBB459 /* generate-tapi-filelist.py */; settings = {ATTRIBUTES = (Private, ); }; };
 		07F5EA702EE8A7660085B185 /* GenerateModuleVerifierInputsTask.py in Headers */ = {isa = PBXBuildFile; fileRef = 076382182EE550F300DB47BC /* GenerateModuleVerifierInputsTask.py */; settings = {ATTRIBUTES = (Private, ); }; };
 		07F5EA712EE8A76A0085B185 /* library-modules-verifier.py in Headers */ = {isa = PBXBuildFile; fileRef = 077FEABB2EE007FF0071F92D /* library-modules-verifier.py */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -39,7 +40,6 @@
 		0FA6F38F20CC580F00A03DCD /* SegmentedVector.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0FA6F38E20CC580E00A03DCD /* SegmentedVector.cpp */; };
 		0FA6F39320CC73A300A03DCD /* SmallSet.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0FA6F39220CC73A200A03DCD /* SmallSet.cpp */; };
 		0FA6F39520CCACE900A03DCD /* UniqueArray.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0FA6F39420CCACE900A03DCD /* UniqueArray.cpp */; };
-		0FC0CD722AF1ADC5009E2AD4 /* TextStreamCocoa.h in Headers */ = {isa = PBXBuildFile; fileRef = 0FC0CD712AF1ADC5009E2AD4 /* TextStreamCocoa.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		0FDDBFA71666DFA300C55FEF /* StringPrintStream.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0FDDBFA51666DFA300C55FEF /* StringPrintStream.cpp */; };
 		0FE1646A1B6FFC9600400E7C /* Lock.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0FE164681B6FFC9600400E7C /* Lock.cpp */; };
 		0FE4479C1B7AAA03009498EB /* WordLock.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0FE4479A1B7AAA03009498EB /* WordLock.cpp */; };
@@ -108,6 +108,8 @@
 		461229722ACF6B3100BB1CCC /* FastCharacterComparison.h in Headers */ = {isa = PBXBuildFile; fileRef = 461229712ACF6B3100BB1CCC /* FastCharacterComparison.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		4628C0952E9D026A00462A50 /* AbstractCanMakeCheckedPtr.h in Headers */ = {isa = PBXBuildFile; fileRef = 4628C0942E9D026A00462A50 /* AbstractCanMakeCheckedPtr.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		46335BED2E778B1300860373 /* DispatchExtras.h in Headers */ = {isa = PBXBuildFile; fileRef = 46335BEC2E778B1300860373 /* DispatchExtras.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		46335BEE2E778B1300860374 /* DispatchOSObject.h in Headers */ = {isa = PBXBuildFile; fileRef = 46335BED2E778B1300860374 /* DispatchOSObject.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		46335BEF2E778B1300860375 /* NetworkOSObject.h in Headers */ = {isa = PBXBuildFile; fileRef = 46335BEE2E778B1300860375 /* NetworkOSObject.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		463CCFBC2B251D77009AB04E /* SingleThreadIntegralWrapper.h in Headers */ = {isa = PBXBuildFile; fileRef = 463CCFBB2B251D77009AB04E /* SingleThreadIntegralWrapper.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		46449E8B2822E5680005A8BC /* WeakHashCountedSet.h in Headers */ = {isa = PBXBuildFile; fileRef = 46449E8A2822E5670005A8BC /* WeakHashCountedSet.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		465005D82CD2840A00950C5F /* MallocSpan.h in Headers */ = {isa = PBXBuildFile; fileRef = 465005D72CD2840A00950C5F /* MallocSpan.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -1100,6 +1102,7 @@
 		077CD86A1FD9CFD200828587 /* Logger.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Logger.h; sourceTree = "<group>"; };
 		077CD86B1FD9CFD300828587 /* LoggerHelper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = LoggerHelper.h; sourceTree = "<group>"; };
 		077FEABB2EE007FF0071F92D /* library-modules-verifier.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = "library-modules-verifier.py"; sourceTree = "<group>"; };
+		07AC4F0D2EF5A62500468BCB /* module.modulemap */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.module-map"; path = module.modulemap; sourceTree = "<group>"; };
 		0F0C03CF29981BEB0064230A /* EmbeddedFixedVector.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = EmbeddedFixedVector.cpp; sourceTree = "<group>"; };
 		0F0C03D7299820EB0064230A /* WeakPtr.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = WeakPtr.cpp; sourceTree = "<group>"; };
 		0F0C03E6299828E50064230A /* BloomFilter.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = BloomFilter.cpp; sourceTree = "<group>"; };
@@ -1176,7 +1179,6 @@
 		0FB399B820AF5A580017E213 /* BooleanLattice.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = BooleanLattice.h; sourceTree = "<group>"; };
 		0FB467821FDE282B003FCB09 /* ConcurrentBuffer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ConcurrentBuffer.h; sourceTree = "<group>"; };
 		0FB467831FDE282C003FCB09 /* ConcurrentVector.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ConcurrentVector.h; sourceTree = "<group>"; };
-		0FC0CD712AF1ADC5009E2AD4 /* TextStreamCocoa.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TextStreamCocoa.h; sourceTree = "<group>"; };
 		0FC4488216FE9FE100844BE9 /* ProcessID.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ProcessID.h; sourceTree = "<group>"; };
 		0FC4EDE51696149600F65041 /* CommaPrinter.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CommaPrinter.h; sourceTree = "<group>"; };
 		0FD81AC4154FB22E00983E72 /* FastBitVector.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = FastBitVector.h; sourceTree = "<group>"; };
@@ -1332,6 +1334,8 @@
 		46209A27266D543A007F8F4A /* CancellableTask.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CancellableTask.h; sourceTree = "<group>"; };
 		4628C0942E9D026A00462A50 /* AbstractCanMakeCheckedPtr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AbstractCanMakeCheckedPtr.h; sourceTree = "<group>"; };
 		46335BEC2E778B1300860373 /* DispatchExtras.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DispatchExtras.h; sourceTree = "<group>"; };
+		46335BED2E778B1300860374 /* DispatchOSObject.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DispatchOSObject.h; sourceTree = "<group>"; };
+		46335BEE2E778B1300860375 /* NetworkOSObject.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NetworkOSObject.h; sourceTree = "<group>"; };
 		463CCFBB2B251D77009AB04E /* SingleThreadIntegralWrapper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SingleThreadIntegralWrapper.h; sourceTree = "<group>"; };
 		46449E8A2822E5670005A8BC /* WeakHashCountedSet.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = WeakHashCountedSet.h; sourceTree = "<group>"; };
 		465005D72CD2840A00950C5F /* MallocSpan.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MallocSpan.h; sourceTree = "<group>"; };
@@ -2208,8 +2212,10 @@
 			isa = PBXGroup;
 			children = (
 				46335BEC2E778B1300860373 /* DispatchExtras.h */,
+				46335BED2E778B1300860374 /* DispatchOSObject.h */,
 				6311592428989A55006A9A12 /* LibraryPathDiagnostics.h */,
 				6311592528989A55006A9A12 /* LibraryPathDiagnostics.mm */,
+				46335BEE2E778B1300860375 /* NetworkOSObject.h */,
 				53FC70CE23FB950C005B1990 /* OSLogPrintStream.h */,
 				53FC70CF23FB950C005B1990 /* OSLogPrintStream.mm */,
 				449EEC7D2D93788B008E7C80 /* TypeCastsOSObject.h */,
@@ -2248,6 +2254,7 @@
 				5D247B6E14689C4700E78B76 /* Base.xcconfig */,
 				5D247B7014689C4700E78B76 /* DebugRelease.xcconfig */,
 				DDF308DD27C44F84006A526F /* icu.xcconfig */,
+				07AC4F0D2EF5A62500468BCB /* module.modulemap */,
 				5D247B7314689C4700E78B76 /* WTF.xcconfig */,
 			);
 			path = Configurations;
@@ -2665,7 +2672,6 @@
 				5C6222A52ED864D100AFEC2D /* RefCountable.h */,
 				14DFC2882ED23C5A0072E4A6 /* RefCountDebugger.cpp */,
 				14DFC2862ED23C3C0072E4A6 /* RefCountDebugger.h */,
-				46BEB6E922FFDDD500269867 /* RefCounted.cpp */,
 				A8A472FF151A825B004123FF /* RefCounted.h */,
 				140ECC332C99057100473E19 /* RefCountedAndCanMakeWeakPtr.h */,
 				E3E8162F2764799300BAA45B /* RefCountedFixedVector.h */,
@@ -2969,7 +2975,6 @@
 				A8A4732C151A825B004123FF /* TextPosition.h */,
 				A3E4DD911F3A803400DED0B4 /* TextStream.cpp */,
 				A3E4DD921F3A803400DED0B4 /* TextStream.h */,
-				0FC0CD712AF1ADC5009E2AD4 /* TextStreamCocoa.h */,
 				70ECA60C1B02426800449739 /* UniquedStringImpl.h */,
 				FEF295BF20B49DCB00CF283A /* UTF8ConversionError.h */,
 				A8A4732D151A825B004123FF /* WTFString.cpp */,
@@ -3581,6 +3586,7 @@
 				DD3DC94B27A4BF8E007E5B61 /* Deque.h in Headers */,
 				E361DB68289115D000B2A2B8 /* digit_comparison.h in Headers */,
 				46335BED2E778B1300860373 /* DispatchExtras.h in Headers */,
+				46335BEE2E778B1300860374 /* DispatchOSObject.h in Headers */,
 				DDF306E727C08654006A526F /* DispatchSPI.h in Headers */,
 				FFE39CB32B1D7472004972B0 /* div.h in Headers */,
 				DDF3079427C086CD006A526F /* diy-fp.h in Headers */,
@@ -3731,6 +3737,7 @@
 				DD3DC87027A4BF8E007E5B61 /* MetaAllocatorHandle.h in Headers */,
 				DDF306DB27C08654006A526F /* MetadataSPI.h in Headers */,
 				46F071BB2CDEA45300074E61 /* MmapSpan.h in Headers */,
+				07AC4F0E2EF5A68600468BCB /* module.modulemap in Headers */,
 				07F5EA722EE8A76D0085B185 /* ModuleVerifierLanguage.py in Headers */,
 				07F5EA732EE8A76F0085B185 /* ModuleVerifierTypes.py in Headers */,
 				DD3DC96827A4BF8E007E5B61 /* MonotonicTime.h in Headers */,
@@ -3738,6 +3745,7 @@
 				5164042D2AB1D46B0042B1C3 /* NativePromise.h in Headers */,
 				DD3DC8D827A4BF8E007E5B61 /* NaturalLoops.h in Headers */,
 				E396C11D2BE885D9000CBAE1 /* neon.h in Headers */,
+				46335BEF2E778B1300860375 /* NetworkOSObject.h in Headers */,
 				DD3DC8AC27A4BF8E007E5B61 /* NeverDestroyed.h in Headers */,
 				DD3DC98C27A4BF8E007E5B61 /* NoLock.h in Headers */,
 				DD3DC8EF27A4BF8E007E5B61 /* Noncopyable.h in Headers */,
@@ -3946,7 +3954,6 @@
 				DDF307E727C086DF006A526F /* TextBreakIteratorInternalICU.h in Headers */,
 				DDF307E027C086DF006A526F /* TextPosition.h in Headers */,
 				DDF307EE27C086DF006A526F /* TextStream.h in Headers */,
-				0FC0CD722AF1ADC5009E2AD4 /* TextStreamCocoa.h in Headers */,
 				DD3DC8AB27A4BF8E007E5B61 /* ThreadAssertions.h in Headers */,
 				DD3DC87327A4BF8E007E5B61 /* ThreadGroup.h in Headers */,
 				DD3DC8A327A4BF8E007E5B61 /* Threading.h in Headers */,
@@ -4260,7 +4267,6 @@
 				DD07DF4C2A7DB6640091EACE /* Symlink public SDK headers */,
 				DD3DC85D27A4BF87007E5B61 /* Headers */,
 				DDA35E4929CA74D4006C1018 /* Generate TAPI filelist */,
-				DDC9D68C2DEBE87000E175C0 /* Generate modulemap */,
 				5D247B5E14689B8600E78B76 /* Sources */,
 				5D247B5F14689B8600E78B76 /* Frameworks */,
 				077FEABC2EE0084F0071F92D /* Verify Module */,
@@ -4350,7 +4356,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ ${DEPLOYMENT_LOCATION} != YES ]; then\n    \"${SCRIPT_INPUT_FILE_0}\" --relative-to=\"${BUILT_PRODUCTS_DIR}${WTF_INSTALL_PATH_PREFIX}${WK_LIBRARY_HEADERS_FOLDER_PATH}\" \"${SCRIPT_INPUT_FILE_1}\"\nelse\n    \"${SCRIPT_INPUT_FILE_0}\" --relative-to=\"${DSTROOT}${PRIVATE_HEADERS_FOLDER_PATH}\"  \"${SCRIPT_INPUT_FILE_2}\"\nfi\n";
+			shellScript = "if [ ${DEPLOYMENT_LOCATION} != YES ]; then\n    \"${SCRIPT_INPUT_FILE_0}\" --relative-to=\"${BUILT_PRODUCTS_DIR}${WTF_INSTALL_PATH_PREFIX}${WK_LIBRARY_HEADERS_FOLDER_PATH}\" \"${SCRIPT_INPUT_FILE_1}\"\nelse\n    \"${SCRIPT_INPUT_FILE_0}\" --relative-to=\"<SDKROOT>${WK_LIBRARY_HEADERS_FOLDER_PATH}\"  \"${SCRIPT_INPUT_FILE_2}\"\nfi\n";
 		};
 		520CF9492BDA9B4800C27FD2 /* Generate clangd configuration file */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -4436,29 +4442,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${SCRIPT_INPUT_FILE_0}\"\n";
-		};
-		DDC9D68C2DEBE87000E175C0 /* Generate modulemap */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$(SRCROOT)/Scripts/modulemap-from-tapi-filelist.py",
-				"$(BUILT_PRODUCTS_DIR)/$(PRIVATE_HEADERS_FOLDER_PATH)/WTF.json",
-				"$(SRCROOT)/Configurations/modulemap.toml",
-			);
-			name = "Generate modulemap";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(BUILT_PRODUCTS_DIR)/$(PRIVATE_HEADERS_FOLDER_PATH)/module.modulemap",
-				"$(DSTROOT)/$(PRIVATE_HEADERS_FOLDER_PATH)/module.modulemap",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "if [ \"${GENERATE_WTF_MODULEMAP}\" != YES ] && [ \"${DEPLOYMENT_LOCATION}\" != YES ]; then\nrm -f \"${SCRIPT_OUTPUT_FILE_0}\"\nelif [ \"${GENERATE_WTF_MODULEMAP}\" != YES ]; then\nrm -f \"${SCRIPT_OUTPUT_FILE_1}\"\nelif [ \"${DEPLOYMENT_LOCATION}\" != YES ]; then\n\"${SCRIPT_INPUT_FILE_0}\" \"${SCRIPT_INPUT_FILE_1}\" --config \"${SCRIPT_INPUT_FILE_2}\" --relative-to \"${BUILT_PRODUCTS_DIR}${PRIVATE_HEADERS_FOLDER_PATH}\" > \"${SCRIPT_OUTPUT_FILE_0}\"\nelse\n\"${SCRIPT_INPUT_FILE_0}\" ${DSTROOT}/${PRIVATE_HEADERS_FOLDER_PATH}/WTF.json --config \"${SCRIPT_INPUT_FILE_2}\" --relative-to \"<SDKROOT>/${PRIVATE_HEADERS_FOLDER_PATH}\" > \"${SCRIPT_OUTPUT_FILE_1}\"\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

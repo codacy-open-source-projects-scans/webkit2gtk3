@@ -13,7 +13,6 @@ Modules/mediasession/MediaSession.cpp
 Modules/mediasource/MediaSourceHandle.cpp
 Modules/mediastream/MediaStreamTrack.cpp
 Modules/mediastream/MediaStreamTrackProcessor.cpp
-Modules/mediastream/PeerConnectionBackend.cpp
 Modules/mediastream/RTCController.cpp
 Modules/mediastream/RTCDTMFSender.cpp
 Modules/mediastream/RTCDataChannelRemoteHandler.cpp
@@ -195,7 +194,6 @@ bindings/js/WebAssemblyScriptBufferSourceProvider.h
 bindings/js/WebCoreJSClientData.cpp
 bindings/js/WebCoreTypedArrayController.cpp
 bindings/js/WindowProxy.cpp
-bindings/js/WorkerModuleScriptLoader.cpp
 bridge/jsc/BridgeJSC.cpp
 bridge/objc/WebScriptObject.mm
 bridge/objc/objc_runtime.mm
@@ -425,7 +423,6 @@ html/parser/HTMLParserScheduler.cpp
 html/parser/HTMLScriptRunner.cpp
 html/parser/HTMLTreeBuilder.cpp
 html/shadow/MediaControlTextTrackContainerElement.cpp
-inspector/CommandLineAPIModule.cpp
 inspector/DOMEditor.cpp
 inspector/DOMPatchSupport.cpp
 inspector/InspectorAuditAccessibilityObject.cpp
@@ -443,7 +440,6 @@ inspector/InspectorShaderProgram.cpp
 inspector/InspectorStyleSheet.cpp
 inspector/NetworkResourcesData.cpp
 inspector/PageDebugger.cpp
-inspector/PageInspectorController.cpp
 inspector/WebInjectedScriptManager.cpp
 inspector/WorkerDebugger.cpp
 inspector/agents/InspectorAnimationAgent.cpp
@@ -580,7 +576,6 @@ platform/graphics/DisplayRefreshMonitorManager.h
 platform/graphics/FontCache.cpp
 platform/graphics/FontRanges.cpp
 platform/graphics/GraphicsLayer.cpp
-platform/graphics/GraphicsLayer.h
 platform/graphics/ImageAdapter.cpp
 platform/graphics/ImageBackingStore.h
 platform/graphics/ImageBufferContextSwitcher.cpp

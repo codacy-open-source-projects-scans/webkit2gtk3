@@ -192,16 +192,14 @@ static inline std::tuple<FloatRect, FloatSize> calculateGradientGeometry(RenderE
     auto* textRootBlock = RenderSVGText::locateRenderSVGTextAncestor(renderer);
     ASSERT(textRootBlock);
 
-    // FIXME: This needs to be bounding box and should not use repaint rect.
-    // https://bugs.webkit.org/show_bug.cgi?id=278551
-    FloatRect repaintRect = textRootBlock->repaintRectInLocalCoordinates(RepaintRectCalculation::Accurate);
+    FloatRect decoratedBounds = textRootBlock->decoratedBoundingBox();
 
     AffineTransform absoluteTransform = SVGRenderingContext::calculateTransformationToOutermostCoordinateSystem(*textRootBlock);
 
     // Ignore 2D rotation, as it doesn't affect the size of the target.
     FloatSize scale(absoluteTransform.xScale(), absoluteTransform.yScale());
 
-    return { repaintRect, scale };
+    return { decoratedBounds, scale };
 }
 
 static inline AffineTransform calculateGradientUserspaceTransform(RenderElement& renderer, SVGUnitTypes::SVGUnitType gradientUnits, const AffineTransform& gradientTransform)
@@ -320,10 +318,10 @@ auto LegacyRenderSVGResourceGradient::applyResource(RenderElement& renderer, con
 #if USE(CG)
     if (resourceMode.contains(RenderSVGResourceMode::ApplyToText)) {
         // PDF does not support some CompositeOperation
-        if (context->renderingMode() == RenderingMode::PDFDocument)
-            m_gradientApplier = makeUnique<TextGradientClipper>();
-        else
+        if (context->renderingMode() != RenderingMode::PDFDocument && style.paintOrder() == Style::SVGPaintOrder::Type::FillStrokeMarkers)
             m_gradientApplier = makeUnique<TextGradientCompositor>();
+        else
+            m_gradientApplier = makeUnique<TextGradientClipper>();
     }
 #endif
 

@@ -26,6 +26,7 @@
 #include "ElementChildIteratorInlines.h"
 #include "FilterResults.h"
 #include "GeometryUtilities.h"
+#include "Logging.h"
 #include "SVGFilterEffectGraph.h"
 #include "SVGFilterElement.h"
 #include "SVGFilterPrimitiveGraph.h"
@@ -53,6 +54,8 @@ RefPtr<SVGFilterRenderer> SVGFilterRenderer::create(SVGElement *contextElement, 
     filter->setEffects(WTF::move(effects));
 
     filter->setFilterRenderingModes(preferredRenderingModes);
+
+    LOG_WITH_STREAM(Filters, stream << "SVGFilterRenderer::create - rendering modes " << filter->filterRenderingModes());
     return filter;
 }
 
@@ -258,8 +261,14 @@ OptionSet<FilterRenderingMode> SVGFilterRenderer::supportedFilterRenderingModes(
 {
     OptionSet<FilterRenderingMode> modes = allFilterRenderingModes;
 
-    for (auto& effect : m_effects)
-        modes = modes & effect->supportedFilterRenderingModes(preferredFilterRenderingModes);
+    for (auto& effect : m_effects) {
+        auto effectModes = effect->supportedFilterRenderingModes(preferredFilterRenderingModes);
+#if !LOG_DISABLED
+        if (preferredFilterRenderingModes.contains(FilterRenderingMode::Accelerated) && !effectModes.contains(FilterRenderingMode::Accelerated))
+            LOG_WITH_STREAM(Filters, stream << "SVGFilterRenderer::supportedFilterRenderingModes: accelerated rendering not supported by " << effect.get());
+#endif
+        modes = modes & effectModes;
+    }
 
     ASSERT(modes);
     return modes;

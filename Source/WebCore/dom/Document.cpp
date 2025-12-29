@@ -504,12 +504,12 @@ static void CallbackForContainIntrinsicSize(const Vector<Ref<ResizeObserverEntry
             ASSERT(box->style().hasAutoLengthContainIntrinsicSize());
 
             auto contentBoxSize = entry->contentBoxSize().at(0);
-            if (box->style().containIntrinsicLogicalWidth().hasAuto()) {
+            if (box->style().logicalContainIntrinsicWidth().hasAuto()) {
                 auto adjustedWidth = LayoutUnit { applyZoom(contentBoxSize->inlineSize(), box->style()) };
                 target->setLastRememberedLogicalWidth(adjustedWidth);
             }
 
-            if (box->style().containIntrinsicLogicalHeight().hasAuto()) {
+            if (box->style().logicalContainIntrinsicHeight().hasAuto()) {
                 auto adjustedHeight = LayoutUnit { applyZoom(contentBoxSize->blockSize(), box->style()) };
                 target->setLastRememberedLogicalHeight(adjustedHeight);
             }
@@ -1881,7 +1881,7 @@ CustomElementRegistry* Document::effectiveGlobalCustomElementRegistry()
 
 static inline bool isPotentialCustomElementNameCharacter(char32_t character)
 {
-    static const UnicodeCodePointRange ranges[] = {
+    static constexpr auto ranges = std::to_array<UnicodeCodePointRange>({
         { '-', '.' },
         { '0', '9' },
         { '_', '_' },
@@ -1899,7 +1899,7 @@ static inline bool isPotentialCustomElementNameCharacter(char32_t character)
         { 0xF900, 0xFDCF },
         { 0xFDF0, 0xFFFD },
         { 0x10000, 0xEFFFF },
-    };
+    });
 
     ASSERT(std::is_sorted(std::begin(ranges), std::end(ranges)));
     return std::binary_search(std::begin(ranges), std::end(ranges), character);

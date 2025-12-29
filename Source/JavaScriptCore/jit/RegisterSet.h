@@ -25,6 +25,8 @@
 
 #pragma once
 
+#include <wtf/Platform.h>
+
 #if !ENABLE(C_LOOP)
 
 #include <JavaScriptCore/FPRInfo.h>
@@ -518,6 +520,14 @@ public:
     inline constexpr size_t numberOfSetRegisters() const
     {
         return m_bits.count();
+    }
+
+    template<typename Func>
+    inline constexpr void forEachReg(const Func& func) const
+    {
+        m_bits.forEachSetBit([&] (size_t index) {
+            func(Reg::fromIndex(index));
+        });
     }
 
     void dump(PrintStream& out) const { toRegisterSet().dump(out); }
