@@ -3156,6 +3156,7 @@ style/StyleBuilder.cpp
 style/StyleBuilderState.cpp
 style/StyleChange.cpp
 style/StyleChangedAnimatableProperties.cpp
+style/StyleColorResolver.cpp
 style/StyleCustomProperty.cpp
 style/StyleCustomPropertyRegistry.cpp
 style/StyleDifference.cpp
@@ -3397,6 +3398,7 @@ style/values/transforms/StyleTranslate.cpp
 style/values/transitions/StyleSingleTransitionProperty.cpp
 style/values/transitions/StyleTransition.cpp
 style/values/ui/StyleAccentColor.cpp
+style/values/ui/StyleCaretColor.cpp
 style/values/ui/StyleCursor.cpp
 style/values/ui/StyleResize.cpp
 style/values/view-transitions/StyleViewTransitionName.cpp
@@ -3677,6 +3679,7 @@ MathMLElementFactory.cpp
 SVGElementFactory.cpp
 StyleBuilderGenerated.cpp
 StyleChangedAnimatablePropertiesGenerated.cpp
+StyleComputedStyleProperties.cpp
 StyleExtractorGenerated.cpp
 StyleInterpolationWrapperMap.cpp
 StylePropertyShorthandFunctions.cpp

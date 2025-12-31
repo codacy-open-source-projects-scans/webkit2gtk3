@@ -3254,6 +3254,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     style/ResolvedScopedName.h
     style/ScopedName.h
     style/StyleChange.h
+    style/StyleColorResolver.h
     style/StyleCustomProperty.h
     style/StyleDifference.h
     style/StyleForVisitedLink.h
@@ -3599,6 +3600,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     style/values/transitions/StyleTransitions.h
 
     style/values/ui/StyleAccentColor.h
+    style/values/ui/StyleCaretColor.h
     style/values/ui/StyleCursor.h
     style/values/ui/StyleResize.h
 

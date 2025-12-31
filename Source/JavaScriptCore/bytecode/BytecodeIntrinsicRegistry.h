@@ -212,6 +212,12 @@ enum class LinkTimeConstant : int32_t;
     macro(asyncDisposableStackFieldCapability) \
     macro(AsyncDisposableStackStatePending) \
     macro(AsyncDisposableStackStateDisposed) \
+    macro(InternalMicrotaskAsyncFromSyncIteratorContinue) \
+    macro(InternalMicrotaskAsyncFromSyncIteratorDone) \
+    macro(InternalMicrotaskAsyncGeneratorYieldAwaited) \
+    macro(InternalMicrotaskAsyncGeneratorBodyCallNormal) \
+    macro(InternalMicrotaskAsyncGeneratorBodyCallReturn) \
+    macro(InternalMicrotaskAsyncGeneratorResumeNext) \
 
 
 #define JSC_COMMON_BYTECODE_INTRINSIC_CONSTANTS_CUSTOM_EACH_NAME(macro) \

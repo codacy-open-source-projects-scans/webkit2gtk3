@@ -11,6 +11,56 @@
 
 namespace WebCore {
 
+inline void RenderStyleProperties::setTestColor(Style::Color&& value)
+{
+    m_computedStyle.setTestColor(WTF::move(value));
+}
+
+inline void RenderStyleProperties::setTestColorAllowsTypesAbsolute(Style::Color&& value)
+{
+    m_computedStyle.setTestColorAllowsTypesAbsolute(WTF::move(value));
+}
+
+inline void RenderStyleProperties::setTestColorPropertyWithVisitedLinkSupport(Style::Color&& value)
+{
+    m_computedStyle.setTestColorPropertyWithVisitedLinkSupport(WTF::move(value));
+}
+
+inline void RenderStyleProperties::setVisitedLinkTestColorPropertyWithVisitedLinkSupport(Style::Color&& value)
+{
+    m_computedStyle.setVisitedLinkTestColorPropertyWithVisitedLinkSupport(WTF::move(value));
+}
+
+inline void RenderStyleProperties::setTestRenderStyleHasExplicitlySetPolicyAllAuthorOrigin(Style::Number<> value)
+{
+    m_computedStyle.setTestRenderStyleHasExplicitlySetPolicyAllAuthorOrigin(value);
+}
+
+inline void RenderStyleProperties::setHasExplicitlySetTestRenderStyleHasExplicitlySetPolicyAllAuthorOrigin(bool value)
+{
+    m_computedStyle.setHasExplicitlySetTestRenderStyleHasExplicitlySetPolicyAllAuthorOrigin(value);
+}
+
+inline void RenderStyleProperties::setTestRenderStyleHasExplicitlySetPolicyAllBorderRadius(Style::Number<> value)
+{
+    m_computedStyle.setTestRenderStyleHasExplicitlySetPolicyAllBorderRadius(value);
+}
+
+inline void RenderStyleProperties::setHasExplicitlySetTestRenderStyleHasExplicitlySetPolicyAllBorderRadius(bool value)
+{
+    m_computedStyle.setHasExplicitlySetTestRenderStyleHasExplicitlySetPolicyAllBorderRadius(value);
+}
+
+inline void RenderStyleProperties::setTestRenderStyleHasExplicitlySetPolicyValueOnly(Style::Number<> value)
+{
+    m_computedStyle.setTestRenderStyleHasExplicitlySetPolicyValueOnly(value);
+}
+
+inline void RenderStyleProperties::setHasExplicitlySetTestRenderStyleHasExplicitlySetPolicyValueOnly(bool value)
+{
+    m_computedStyle.setHasExplicitlySetTestRenderStyleHasExplicitlySetPolicyValueOnly(value);
+}
+
 inline void RenderStyleProperties::setTestRenderStyleStorageOneLevelEnum(Style::TestEnumeration value)
 {
     m_computedStyle.setTestRenderStyleStorageOneLevelEnum(value);
