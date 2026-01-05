@@ -1,8 +1,4 @@
 Modules/credentialmanagement/CredentialsContainer.cpp
-Modules/mediacontrols/MediaControlsHost.cpp
-Modules/mediastream/RTCController.cpp
-Modules/mediastream/RTCPeerConnection.cpp
-Modules/model-element/HTMLModelElement.cpp
 Modules/pictureinpicture/HTMLVideoElementPictureInPicture.cpp
 Modules/push-api/PushDatabase.cpp
 Modules/push-api/PushManager.cpp
@@ -160,7 +156,6 @@ editing/ReplaceSelectionCommand.cpp
 editing/ReplaceSelectionCommand.h
 editing/SimplifyMarkupCommand.cpp
 editing/SpellChecker.cpp
-editing/TextCheckingHelper.cpp
 editing/TextInsertionBaseCommand.cpp
 editing/TextIterator.cpp
 editing/TextManipulationController.cpp
@@ -212,7 +207,6 @@ html/shadow/DateTimeNumericFieldElement.cpp
 html/shadow/DateTimeSymbolicFieldElement.cpp
 html/shadow/SliderThumbElement.cpp
 inspector/DOMEditor.cpp
-inspector/DOMPatchSupport.cpp
 inspector/InspectorAuditAccessibilityObject.cpp
 inspector/InspectorCanvas.cpp
 inspector/InspectorFrontendAPIDispatcher.cpp
@@ -639,6 +633,7 @@ style/StyleExtractorCustom.h
 style/StyleInterpolation.cpp
 style/StyleInvalidationFunctions.h
 style/StyleInvalidator.cpp
+style/StyleResolveForDocument.cpp
 style/StyleResolveForFont.cpp
 style/StyleResolver.cpp
 style/StyleScope.cpp
@@ -650,7 +645,6 @@ style/Styleable.h
 style/computed/StyleComputedStyle.cpp
 style/computed/StyleComputedStyleBase.cpp
 style/values/color/StyleColor.cpp
-style/values/color/StyleKeywordColor.cpp
 style/values/content/StyleContent.cpp
 style/values/fonts/StyleFontWeight.cpp
 style/values/grid/StyleGridPositionsResolver.cpp
@@ -676,7 +670,6 @@ svg/animation/SVGSMILElement.cpp
 svg/graphics/SVGImage.cpp
 svg/properties/SVGAnimatedString.cpp
 testing/Internals.cpp
-[ Mac ] testing/Internals.mm
 workers/WorkerGlobalScope.cpp
 workers/WorkerMessagingProxy.cpp
 workers/WorkerNotificationClient.cpp

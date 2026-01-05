@@ -42,15 +42,15 @@
 #include "FrameDestructionObserverInlines.h"
 #include "HTMLElement.h"
 #include "LocalFrame.h"
-#include "RenderStyle+GettersInlines.h"
-#include "RenderStyle+SettersInlines.h"
 #include "SVGElement.h"
 #include "SVGElementTypeHelpers.h"
 #include "SVGPathElement.h"
 #include "Settings.h"
 #include "StyleBuilderChecking.h"
 #include "StyleBuilderStateInlines.h"
+#include "StyleComputedStyle+GettersInlines.h"
 #include "StyleComputedStyle+InitialInlines.h"
+#include "StyleComputedStyle+SettersInlines.h"
 #include "StyleFontSizeFunctions.h"
 #include "StyleLengthWrapper+CSSValueConversion.h"
 #include "StylePrimitiveKeyword+CSSValueConversion.h"
@@ -91,6 +91,9 @@ inline BoxShadows forwardInheritedValue(const BoxShadows& value) { auto copy = v
 inline CaretColor forwardInheritedValue(const CaretColor& value) { auto copy = value; return copy; }
 inline ContainIntrinsicSize forwardInheritedValue(const ContainIntrinsicSize& value) { auto copy = value; return copy; }
 inline ContainerNames forwardInheritedValue(const ContainerNames& value) { auto copy = value; return copy; }
+inline CounterIncrement forwardInheritedValue(const CounterIncrement& value) { auto copy = value; return copy; }
+inline CounterReset forwardInheritedValue(const CounterReset& value) { auto copy = value; return copy; }
+inline CounterSet forwardInheritedValue(const CounterSet& value) { auto copy = value; return copy; }
 inline Content forwardInheritedValue(const Content& value) { auto copy = value; return copy; }
 inline WebCore::Color forwardInheritedValue(const WebCore::Color& value) { auto copy = value; return copy; }
 inline Color forwardInheritedValue(const Color& value) { auto copy = value; return copy; }
@@ -100,6 +103,7 @@ inline FontFamilies forwardInheritedValue(const FontFamilies& value) { auto copy
 inline FilterOperations forwardInheritedValue(const FilterOperations& value) { auto copy = value; return copy; }
 inline ScrollMarginEdge forwardInheritedValue(const ScrollMarginEdge& value) { auto copy = value; return copy; }
 inline ScrollPaddingEdge forwardInheritedValue(const ScrollPaddingEdge& value) { auto copy = value; return copy; }
+inline LineWidth forwardInheritedValue(const LineWidth& value) { auto copy = value; return copy; }
 inline MaskBorderSource forwardInheritedValue(const MaskBorderSource& value) { auto copy = value; return copy; }
 inline MaskBorderSlice forwardInheritedValue(const MaskBorderSlice& value) { auto copy = value; return copy; }
 inline MaskBorderWidth forwardInheritedValue(const MaskBorderWidth& value) { auto copy = value; return copy; }
@@ -197,9 +201,6 @@ inline WordSpacing forwardInheritedValue(const WordSpacing& value) { auto copy =
 class BuilderCustom {
 public:
     // Custom handling of inherit, initial and value setting.
-    DECLARE_PROPERTY_CUSTOM_HANDLERS(CounterIncrement);
-    DECLARE_PROPERTY_CUSTOM_HANDLERS(CounterReset);
-    DECLARE_PROPERTY_CUSTOM_HANDLERS(CounterSet);
     DECLARE_PROPERTY_CUSTOM_HANDLERS(FontFamily);
     DECLARE_PROPERTY_CUSTOM_HANDLERS(FontSize);
     DECLARE_PROPERTY_CUSTOM_HANDLERS(LetterSpacing);
@@ -432,7 +433,7 @@ inline void BuilderCustom::applyInitialLineHeight(BuilderState& builderState)
     builderState.style().setSpecifiedLineHeight(Style::ComputedStyle::initialSpecifiedLineHeight());
 }
 
-static inline float computeBaseSpecifiedFontSize(const Document& document, const RenderStyle& style, bool percentageAutosizingEnabled)
+static inline float computeBaseSpecifiedFontSize(const Document& document, const ComputedStyle& style, bool percentageAutosizingEnabled)
 {
     float result = style.specifiedFontSize();
     auto* frame = document.frame();
@@ -445,7 +446,7 @@ static inline float computeBaseSpecifiedFontSize(const Document& document, const
     return result;
 }
 
-static inline float computeLineHeightMultiplierDueToFontSize(const Document& document, const RenderStyle& style, const CSSPrimitiveValue& value)
+static inline float computeLineHeightMultiplierDueToFontSize(const Document& document, const ComputedStyle& style, const CSSPrimitiveValue& value)
 {
     bool percentageAutosizingEnabled = document.settings().textAutosizingEnabled() && style.textSizeAdjust().isPercentage();
 
@@ -616,106 +617,6 @@ inline void BuilderCustom::applyInitialColumnRuleWidth(BuilderState& builderStat
     builderState.style().setColumnRuleWidth(Style::LineWidth { Style::ComputedStyle::initialColumnRuleWidth().value.unresolvedValue() * builderState.style().usedZoom() });
 }
 
-template<BuilderCustom::CounterBehavior counterBehavior>
-inline void BuilderCustom::applyInheritCounter(BuilderState& builderState)
-{
-    auto& map = builderState.style().accessCounterDirectives().map;
-    for (auto& keyValue : builderState.parentStyle().counterDirectives().map) {
-        auto& directives = map.add(keyValue.key, CounterDirectives { }).iterator->value;
-        if (counterBehavior == Reset)
-            directives.resetValue = keyValue.value.resetValue;
-        else if (counterBehavior == Increment)
-            directives.incrementValue = keyValue.value.incrementValue;
-        else
-            directives.setValue = keyValue.value.setValue;
-    }
-}
-
-template<BuilderCustom::CounterBehavior counterBehavior>
-inline void BuilderCustom::applyValueCounter(BuilderState& builderState, CSSValue& value)
-{
-    bool setCounterIncrementToNone = counterBehavior == Increment && value.valueID() == CSSValueNone;
-
-    if (!is<CSSValueList>(value) && !setCounterIncrementToNone)
-        return;
-
-    auto& map = builderState.style().accessCounterDirectives().map;
-    for (auto& keyValue : map) {
-        if (counterBehavior == Reset)
-            keyValue.value.resetValue = std::nullopt;
-        else if (counterBehavior == Increment)
-            keyValue.value.incrementValue = std::nullopt;
-        else
-            keyValue.value.setValue = std::nullopt;
-    }
-
-    if (setCounterIncrementToNone)
-        return;
-
-    auto& conversionData = builderState.cssToLengthConversionData();
-
-    auto list = requiredListDowncast<CSSValueList, CSSValuePair>(builderState, value);
-    if (!list)
-        return;
-
-    for (auto& pairValue : *list) {
-        auto pair = requiredPairDowncast<CSSPrimitiveValue>(builderState, pairValue);
-        if (!pair)
-            return;
-        AtomString identifier { pair->first->stringValue() };
-        int value =  pair->second->resolveAsNumber<int>(conversionData);
-        auto& directives = map.add(identifier, CounterDirectives { }).iterator->value;
-        if (counterBehavior == Reset)
-            directives.resetValue = value;
-        else if (counterBehavior == Increment)
-            directives.incrementValue = saturatedSum(directives.incrementValue.value_or(0), value);
-        else
-            directives.setValue = value;
-    }
-}
-
-inline void BuilderCustom::applyInitialCounterIncrement(BuilderState&)
-{
-}
-
-inline void BuilderCustom::applyInheritCounterIncrement(BuilderState& builderState)
-{
-    applyInheritCounter<Increment>(builderState);
-}
-
-inline void BuilderCustom::applyValueCounterIncrement(BuilderState& builderState, CSSValue& value)
-{
-    applyValueCounter<Increment>(builderState, value);
-}
-
-inline void BuilderCustom::applyInitialCounterReset(BuilderState&)
-{
-}
-
-inline void BuilderCustom::applyInheritCounterReset(BuilderState& builderState)
-{
-    applyInheritCounter<Reset>(builderState);
-}
-
-inline void BuilderCustom::applyValueCounterReset(BuilderState& builderState, CSSValue& value)
-{
-    applyValueCounter<Reset>(builderState, value);
-}
-
-inline void BuilderCustom::applyInitialCounterSet(BuilderState&)
-{
-}
-
-inline void BuilderCustom::applyInheritCounterSet(BuilderState& builderState)
-{
-    applyInheritCounter<Set>(builderState);
-}
-
-inline void BuilderCustom::applyValueCounterSet(BuilderState& builderState, CSSValue& value)
-{
-    applyValueCounter<Set>(builderState, value);
-}
-
 inline void BuilderCustom::applyInitialFontSize(BuilderState& builderState)
 {
     auto fontDescription = builderState.fontDescription();
@@ -760,26 +661,28 @@ inline float BuilderCustom::smallerFontSize(float size)
 
 inline float BuilderCustom::determineRubyTextSizeMultiplier(BuilderState& builderState)
 {
-    if (!builderState.style().isInterCharacterRubyPosition())
+    switch (builderState.style().rubyPosition()) {
+    case RubyPosition::Over:
+    case RubyPosition::Under:
         return 0.5f;
 
-    auto rubyPosition = builderState.style().rubyPosition();
-    if (rubyPosition == RubyPosition::InterCharacter) {
+    case RubyPosition::InterCharacter:
         // If the writing mode of the enclosing ruby container is vertical, 'inter-character' value has the same effect as over.
         return !builderState.parentStyle().writingMode().isVerticalTypographic() ? 0.3f : 0.5f;
-    }
 
-    // Legacy inter-character behavior.
-    // FIXME: This hack is to ensure tone marks are the same size as
-    // the bopomofo. This code will go away if we make a special renderer
-    // for the tone marks eventually.
-    if (auto* element = builderState.element()) {
-        for (auto& ancestor : ancestorsOfType<HTMLElement>(*element)) {
-            if (ancestor.hasTagName(HTMLNames::rtTag))
-                return 1.0f;
+    case RubyPosition::LegacyInterCharacter:
+        // FIXME: This hack is to ensure tone marks are the same size as
+        // the bopomofo. This code will go away if we make a special renderer
+        // for the tone marks eventually.
+        if (auto* element = builderState.element()) {
+            for (auto& ancestor : ancestorsOfType<HTMLElement>(*element)) {
+                if (ancestor.hasTagName(HTMLNames::rtTag))
+                    return 1.0f;
+            }
         }
+        return 0.25f;
     }
-    return 0.25f;
+    RELEASE_ASSERT_NOT_REACHED();
 }
 
 // https://w3c.github.io/mathml-core/#the-math-script-level-property

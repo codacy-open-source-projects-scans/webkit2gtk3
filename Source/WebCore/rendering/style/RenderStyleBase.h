@@ -230,7 +230,11 @@ public:
     inline float usedLetterSpacing() const;
     inline float usedWordSpacing() const;
 
-    // MARK: Writing Modes
+    // MARK: - Used Counter Directives
+
+    inline const CounterDirectiveMap& usedCounterDirectives() const;
+
+    // MARK: - Writing Modes
 
     // FIXME: Rename to something that doesn't conflict with a property name.
     // Aggregates `writing-mode`, `direction` and `text-orientation`.
@@ -239,7 +243,7 @@ public:
     // FIXME: *Deprecated* Deprecated due to confusion between physical inline directions and bidi / line-relative directions.
     bool isLeftToRightDirection() const { return writingMode().isBidiLTR(); }
 
-    // MARK: Aggregates
+    // MARK: - Aggregates
 
     inline Style::Animations& ensureAnimations();
     inline Style::BackgroundLayers& ensureBackgroundLayers();
@@ -291,30 +295,27 @@ public:
     // `cursor`
     inline CursorType cursorType() const;
 
-    // `counter-*`
-    inline const CounterDirectiveMap& counterDirectives() const;
-    inline CounterDirectiveMap& accessCounterDirectives();
-
     // `@page size`
     inline const Style::PageSize& pageSize() const;
     inline void setPageSize(Style::PageSize&&);
 
-    using NonInheritedFlags = Style::ComputedStyle::NonInheritedFlags;
-    using InheritedFlags = Style::ComputedStyle::InheritedFlags;
+    // MARK: - Underlying ComputedStyle
 
-    const StyleNonInheritedData& nonInheritedData() const { return m_computedStyle.nonInheritedData(); }
-    const NonInheritedFlags& nonInheritedFlags() const { return m_computedStyle.nonInheritedFlags(); }
-
-    const StyleRareInheritedData& rareInheritedData() const { return m_computedStyle.rareInheritedData(); }
-    const StyleInheritedData& inheritedData() const { return m_computedStyle.inheritedData(); }
-    const InheritedFlags& inheritedFlags() const { return m_computedStyle.inheritedFlags(); }
-
-    const SVGRenderStyle& svgStyle() const { return m_computedStyle.svgStyle(); }
-
+    Style::ComputedStyle& computedStyle() { return m_computedStyle; }
     const Style::ComputedStyle& computedStyle() const { return m_computedStyle; }
 
 protected:
     friend class RenderStyle;
+    friend class Style::DifferenceFunctions;
+
+    const Style::NonInheritedData& nonInheritedData() const { return computedStyle().nonInheritedData(); }
+    const Style::ComputedStyle::NonInheritedFlags& nonInheritedFlags() const { return computedStyle().nonInheritedFlags(); }
+
+    const Style::InheritedRareData& inheritedRareData() const { return computedStyle().inheritedRareData(); }
+    const Style::InheritedData& inheritedData() const { return computedStyle().inheritedData(); }
+    const Style::ComputedStyle::InheritedFlags& inheritedFlags() const { return computedStyle().inheritedFlags(); }
+
+    const Style::SVGData& svgData() const { return computedStyle().svgData(); }
 
     enum CloneTag { Clone };
     enum CreateDefaultStyleTag { CreateDefaultStyle };
