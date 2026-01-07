@@ -359,6 +359,9 @@ RetainPtr<_WKTextExtractionConfiguration> createTextExtractionConfiguration(WKWe
         if (equalLettersIgnoringASCIICase(inclusion, "interactive"_s))
             return _WKTextExtractionNodeIdentifierInclusionInteractive;
 
+        if (equalLettersIgnoringASCIICase(inclusion, "allcontainers"_s))
+            return _WKTextExtractionNodeIdentifierInclusionAllContainers;
+
         if (equalLettersIgnoringASCIICase(inclusion, "editableonly"_s))
             return _WKTextExtractionNodeIdentifierInclusionEditableOnly;
 
@@ -381,6 +384,9 @@ RetainPtr<_WKTextExtractionConfiguration> createTextExtractionConfiguration(WKWe
 
         if (equalLettersIgnoringASCIICase(outputFormat, "texttree"_s))
             return _WKTextExtractionOutputFormatTextTree;
+
+        if (equalLettersIgnoringASCIICase(outputFormat, "json"_s))
+            return _WKTextExtractionOutputFormatJSON;
 
         return std::nullopt;
     }();

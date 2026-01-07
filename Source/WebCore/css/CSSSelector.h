@@ -178,13 +178,8 @@ WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
     Relation relation() const { return static_cast<Relation>(m_relation); }
     Match match() const { return static_cast<Match>(m_match); }
 
-    bool isLastInSelectorList() const { return m_isLastInSelectorList; }
     bool isFirstInComplexSelector() const { return m_isFirstInComplexSelector; }
     bool isLastInComplexSelector() const { return m_isLastInComplexSelector; }
-
-    // FIXME: This should ideally be private, but StyleRule uses it.
-    void setLastInSelectorList() { m_isLastInSelectorList = true; }
-
     bool isForPage() const { return m_isForPage; }
 
     // Implicit means that this selector is not author/UA written.
@@ -223,8 +218,7 @@ private:
     unsigned m_relation : 4 { enumToUnderlyingType(Relation::DescendantSpace) };
     mutable unsigned m_match : 5 { enumToUnderlyingType(Match::Unknown) };
     mutable unsigned m_pseudoType : 8 { 0 }; // PseudoType.
-    // 17 bits
-    unsigned m_isLastInSelectorList : 1 { false };
+    // 18 bits
 
     // These are in logical order, which is reversed from the memory order.
     unsigned m_isFirstInComplexSelector : 1 { true };

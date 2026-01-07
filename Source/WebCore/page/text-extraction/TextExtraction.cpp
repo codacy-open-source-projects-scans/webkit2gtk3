@@ -595,6 +595,9 @@ static inline Variant<SkipExtraction, ItemData, URL, Editable> extractItemData(N
     if (element->hasTagName(HTMLNames::subTag))
         return { ItemData { ContainerType::Subscript } };
 
+    if (element->hasTagName(HTMLNames::delTag) || element->hasTagName(HTMLNames::sTag) || element->hasTagName(HTMLNames::strikeTag))
+        return { ItemData { ContainerType::Strikethrough } };
+
     if (CheckedPtr renderElement = dynamicDowncast<RenderBox>(*renderer); renderElement && renderElement->style().hasViewportConstrainedPosition())
         return { ItemData { ContainerType::ViewportConstrained } };
 
@@ -611,8 +614,14 @@ static inline Variant<SkipExtraction, ItemData, URL, Editable> extractItemData(N
 static inline bool shouldIncludeNodeIdentifier(NodeIdentifierInclusion inclusion, OptionSet<EventListenerCategory> eventListeners, AccessibilityRole role, const ItemData& data)
 {
     using enum NodeIdentifierInclusion;
-    if (inclusion == None)
+    switch (inclusion) {
+    case None:
         return false;
+    case AllContainers:
+        return !std::holds_alternative<TextItemData>(data);
+    default:
+        break;
+    }
 
     return WTF::switchOn(data,
         [inclusion, eventListeners, role](ContainerType type) {
@@ -631,6 +640,7 @@ static inline bool shouldIncludeNodeIdentifier(NodeIdentifierInclusion inclusion
             case ContainerType::Nav:
             case ContainerType::Subscript:
             case ContainerType::Superscript:
+            case ContainerType::Strikethrough:
             case ContainerType::Generic:
                 return eventListeners || AccessibilityObject::isARIAControl(role);
             case ContainerType::Button:

@@ -2179,7 +2179,6 @@ page/OriginAccessPatterns.cpp
 page/Page.cpp
 page/PageColorSampler.cpp
 page/PageConfiguration.cpp
-page/PageDebuggable.cpp
 page/PageGroup.cpp
 page/PageGroupLoadDeferrer.cpp
 page/PageOverlay.cpp
@@ -3109,6 +3108,7 @@ style/AttributeChangeInvalidation.cpp
 style/ChildChangeInvalidation.cpp
 style/ClassChangeInvalidation.cpp
 style/ContainerQueryEvaluator.cpp
+style/CustomFunctionRegistry.cpp
 style/ElementRuleCollector.cpp
 style/HasSelectorFilter.cpp
 style/IdChangeInvalidation.cpp

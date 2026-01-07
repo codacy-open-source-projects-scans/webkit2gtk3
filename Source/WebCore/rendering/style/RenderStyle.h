@@ -5,7 +5,7 @@
  * Copyright (C) 2003-2023 Apple Inc. All rights reserved.
  * Copyright (C) 2014-2021 Google Inc. All rights reserved.
  * Copyright (C) 2006 Graham Dennis (graham.dennis@gmail.com)
- * Copyright (C) 2025 Samuel Weinig <sam@webkit.org>
+ * Copyright (C) 2025-2026 Samuel Weinig <sam@webkit.org>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -165,7 +165,6 @@ public:
 
     // MARK: - Used Values
 
-    float outlineSize() const; // used value combining `outline-width` and `outline-offset`
     String altFromContent() const;
     const AtomString& hyphenString() const;
     float usedStrokeWidth(const IntSize& viewportSize) const;
@@ -183,6 +182,28 @@ public:
     Color usedAccentColor(OptionSet<StyleColorOptions>) const;
     static UsedFloat usedFloat(const RenderElement&); // Returns logical left/right (block-relative).
     static UsedClear usedClear(const RenderElement&); // Returns logical left/right (block-relative).
+
+    Style::Length<> usedOutlineOffset() const;
+    Style::LineWidth usedOutlineWidth() const;
+    float usedOutlineSize() const; // used value combining `outline-width` and `outline-offset`
+
+    inline decltype(auto) usedBorderWidths() const;
+    inline Style::LineWidth usedBorderBottomWidth() const;
+    inline Style::LineWidth usedBorderLeftWidth() const;
+    inline Style::LineWidth usedBorderRightWidth() const;
+    inline Style::LineWidth usedBorderTopWidth() const;
+    inline Style::LineWidth usedBorderWidthStart(WritingMode) const;
+    inline Style::LineWidth usedBorderWidthEnd(WritingMode) const;
+    inline Style::LineWidth usedBorderWidthBefore(WritingMode) const;
+    inline Style::LineWidth usedBorderWidthAfter(WritingMode) const;
+    inline Style::LineWidth usedBorderWidthLogicalLeft(WritingMode) const;
+    inline Style::LineWidth usedBorderWidthLogicalRight(WritingMode) const;
+    inline Style::LineWidth usedBorderWidthStart() const;
+    inline Style::LineWidth usedBorderWidthEnd() const;
+    inline Style::LineWidth usedBorderWidthBefore() const;
+    inline Style::LineWidth usedBorderWidthAfter() const;
+    inline Style::LineWidth usedBorderWidthLogicalLeft() const;
+    inline Style::LineWidth usedBorderWidthLogicalRight() const;
 
     // MARK: - has*()
 

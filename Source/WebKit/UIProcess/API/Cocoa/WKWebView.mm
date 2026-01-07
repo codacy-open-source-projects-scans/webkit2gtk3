@@ -6722,6 +6722,8 @@ static WebKit::TextExtractionOutputFormat textExtractionOutputFormat(_WKTextExtr
         return WebKit::TextExtractionOutputFormat::HTMLMarkup;
     case _WKTextExtractionOutputFormatMarkdown:
         return WebKit::TextExtractionOutputFormat::Markdown;
+    case _WKTextExtractionOutputFormatJSON:
+        return WebKit::TextExtractionOutputFormat::MinifiedJSON;
     default:
         ASSERT_NOT_REACHED();
         return WebKit::TextExtractionOutputFormat::TextTree;
@@ -7159,6 +7161,8 @@ static HashMap<String, HashMap<WebCore::JSHandleIdentifier, String>> extractClie
             return WebCore::TextExtraction::NodeIdentifierInclusion::EditableOnly;
         case _WKTextExtractionNodeIdentifierInclusionInteractive:
             return WebCore::TextExtraction::NodeIdentifierInclusion::Interactive;
+        case _WKTextExtractionNodeIdentifierInclusionAllContainers:
+            return WebCore::TextExtraction::NodeIdentifierInclusion::AllContainers;
         }
         return WebCore::TextExtraction::NodeIdentifierInclusion::None;
     }();

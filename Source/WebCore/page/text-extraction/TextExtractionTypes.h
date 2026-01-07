@@ -83,6 +83,7 @@ enum class NodeIdentifierInclusion : uint8_t {
     None,
     EditableOnly,
     Interactive,
+    AllContainers,
 };
 
 struct Request {
@@ -175,6 +176,7 @@ enum class ContainerType : uint8_t {
     Canvas,
     Subscript,
     Superscript,
+    Strikethrough,
     Generic,
 };
 

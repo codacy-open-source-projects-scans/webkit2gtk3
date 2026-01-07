@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2025 Samuel Weinig <sam@webkit.org>
+ * Copyright (C) 2025-2026 Samuel Weinig <sam@webkit.org>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -488,19 +488,9 @@ inline const Style::PerspectiveOrigin& RenderStyleBase::perspectiveOrigin() cons
     return m_computedStyle.perspectiveOrigin();
 }
 
-inline const OutlineValue& RenderStyleBase::outline() const
-{
-    return m_computedStyle.outline();
-}
-
 inline const BorderData& RenderStyleBase::border() const
 {
     return m_computedStyle.border();
-}
-
-inline Style::LineWidthBox RenderStyleBase::borderWidth() const
-{
-    return m_computedStyle.borderWidth();
 }
 
 inline const Style::BorderRadius& RenderStyleBase::borderRadii() const

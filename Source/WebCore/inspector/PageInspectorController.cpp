@@ -82,10 +82,6 @@
 #include <wtf/Stopwatch.h>
 #include <wtf/TZoneMallocInlines.h>
 
-#if ENABLE(REMOTE_INSPECTOR)
-#include "PageDebuggable.h"
-#endif
-
 namespace WebCore {
 
 using namespace JSC;
@@ -153,8 +149,6 @@ void PageInspectorController::createLazyAgents()
 
     m_debugger = makeUnique<PageDebugger>(m_page);
 
-    m_injectedScriptManager->connect();
-
     auto pageContext = pageAgentContext();
 
     ensureInspectorAgent();
@@ -188,9 +182,6 @@ void PageInspectorController::createLazyAgents()
     m_agents.append(makeUniqueRef<PageCanvasAgent>(pageContext));
     m_agents.append(makeUniqueRef<PageTimelineAgent>(pageContext));
     m_agents.append(makeUniqueRef<InspectorAnimationAgent>(pageContext));
-
-    if (RefPtr commandLineAPIHost = m_injectedScriptManager->commandLineAPIHost())
-        commandLineAPIHost->init(m_instrumentingAgents.get());
 }
 
 void PageInspectorController::inspectedPageDestroyed()
@@ -261,15 +252,11 @@ void PageInspectorController::connectFrontend(Inspector::FrontendChannel& fronte
 
     if (connectedFirstFrontend) {
         InspectorInstrumentation::registerInstrumentingAgents(m_instrumentingAgents.get());
+        m_injectedScriptManager->addClient();
         m_agents.didCreateFrontendAndBackend();
     }
 
     m_inspectorBackendClient->frontendCountChanged(m_frontendRouter->frontendCount());
-
-#if ENABLE(REMOTE_INSPECTOR)
-    if (hasLocalFrontend())
-        page->remoteInspectorInformationDidChange();
-#endif
 }
 
 void PageInspectorController::disconnectFrontend(FrontendChannel& frontendChannel)
@@ -287,18 +274,13 @@ void PageInspectorController::disconnectFrontend(FrontendChannel& frontendChanne
         m_agents.willDestroyFrontendAndBackend(DisconnectReason::InspectorDestroyed);
 
         // Clean up inspector resources.
-        m_injectedScriptManager->discardInjectedScripts();
+        m_injectedScriptManager->removeClient();
 
         // Unplug all instrumentations since they aren't needed now.
         InspectorInstrumentation::unregisterInstrumentingAgents(m_instrumentingAgents.get());
     }
 
     m_inspectorBackendClient->frontendCountChanged(m_frontendRouter->frontendCount());
-
-#if ENABLE(REMOTE_INSPECTOR)
-    if (disconnectedLastFrontend)
-        protectedInspectedPage()->remoteInspectorInformationDidChange();
-#endif
 }
 
 void PageInspectorController::disconnectAllFrontends()
@@ -323,7 +305,7 @@ void PageInspectorController::disconnectAllFrontends()
     m_agents.willDestroyFrontendAndBackend(DisconnectReason::InspectedTargetDestroyed);
 
     // Clean up inspector resources.
-    m_injectedScriptManager->disconnect();
+    m_injectedScriptManager->removeClient();
 
     // Disconnect any remaining remote frontends.
     m_frontendRouter->disconnectAllFrontends();
@@ -331,10 +313,6 @@ void PageInspectorController::disconnectAllFrontends()
     m_pauseAfterInitialization = false;
 
     m_inspectorBackendClient->frontendCountChanged(m_frontendRouter->frontendCount());
-
-#if ENABLE(REMOTE_INSPECTOR)
-    protectedInspectedPage()->remoteInspectorInformationDidChange();
-#endif
 }
 
 void PageInspectorController::show()
@@ -448,7 +426,7 @@ InspectorAgent& PageInspectorController::ensureInspectorAgent()
         auto pageContext = pageAgentContext();
         auto inspectorAgent = makeUniqueRef<InspectorAgent>(pageContext);
         m_inspectorAgent = inspectorAgent.ptr();
-        m_instrumentingAgents->setPersistentInspectorAgent(m_inspectorAgent);
+        m_instrumentingAgents->setPersistentInspectorAgent(m_inspectorAgent.get());
         m_agents.append(WTF::move(inspectorAgent));
     }
     return *m_inspectorAgent;
@@ -509,11 +487,6 @@ void PageInspectorController::frontendInitialized()
         if (auto* debuggerAgent = m_instrumentingAgents->enabledPageDebuggerAgent())
             std::ignore = debuggerAgent->pause();
     }
-
-#if ENABLE(REMOTE_INSPECTOR)
-    if (m_isAutomaticInspection)
-        m_page->inspectorDebuggable().unpauseForResolvedAutomaticInspection();
-#endif
 }
 
 Stopwatch& PageInspectorController::executionStopwatch() const
