@@ -101,6 +101,7 @@ void nw_parameters_set_traffic_class(nw_parameters_t, uint32_t traffic_class);
 OS_OBJECT_RETURNS_RETAINED nw_interface_t nw_path_copy_interface(nw_path_t);
 
 bool nw_settings_get_unified_http_enabled(void);
+bool nw_settings_get_unified_http_enabled_webkit(void);
 
 void nw_parameters_set_server_mode(nw_parameters_t, bool);
 OS_OBJECT_RETURNS_RETAINED nw_parameters_t nw_parameters_create_webtransport_http(nw_parameters_configure_protocol_block_t, nw_parameters_configure_protocol_block_t, nw_parameters_configure_protocol_block_t, nw_parameters_configure_protocol_block_t);
@@ -115,6 +116,7 @@ void nw_webtransport_options_set_allow_joining_before_ready(nw_protocol_options_
 void nw_webtransport_options_set_initial_max_streams_uni(nw_protocol_options_t, uint64_t);
 void nw_webtransport_options_set_initial_max_streams_bidi(nw_protocol_options_t, uint64_t);
 
+bool nw_webtransport_metadata_get_is_peer_initiated(nw_protocol_metadata_t);
 bool nw_webtransport_metadata_get_is_unidirectional(nw_protocol_metadata_t);
 uint32_t nw_webtransport_metadata_get_session_error_code(nw_protocol_metadata_t);
 void nw_webtransport_metadata_set_session_error_code(nw_protocol_metadata_t, uint32_t);
