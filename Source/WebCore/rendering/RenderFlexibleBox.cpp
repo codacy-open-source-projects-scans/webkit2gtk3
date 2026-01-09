@@ -480,7 +480,8 @@ void RenderFlexibleBox::layoutBlock(RelayoutChildren relayoutChildren, LayoutUni
 
         repaintFlexItemsDuringLayoutIfMoved(oldFlexItemRects);
         // FIXME: css3/flexbox/repaint-rtl-column.html seems to repaint more overflow than it needs to.
-        computeOverflow(layoutOverflowLogicalBottom(*this));
+        computeOverflow(flippedContentBoxRect(), ComputeOverflowOptions::MarginsExtendContentArea);
+        // FIXME: Only the items at the edges should contribute to the content area. But this distinction only matters in some weird cases with extreme negative margins.
 
         updateDescendantTransformsAfterLayout();
     }
@@ -2252,6 +2253,23 @@ void RenderFlexibleBox::resetAutoMarginsAndLogicalTopInCrossAxis(RenderBox& flex
                 flexItem.setMarginRight(0_lu);
         }
     }
+}
+
+bool RenderFlexibleBox::willStretchItem(const RenderBox& item, LogicalBoxAxis containingAxis, StretchingMode mode) const
+{
+    auto physicalAxis = mapAxisLogicalToPhysical(writingMode(), containingAxis);
+    if (isHorizontalFlow() == (BoxAxis::Horizontal == physicalAxis))
+        return false;
+
+    auto& itemStyle = item.style();
+
+    if (!itemStyle.alignSelf().resolve(&style()).isStretchy(mode == StretchingMode::Explicit ? ItemPosition::Normal : ItemPosition::Stretch))
+        return false;
+
+    bool isItemBlockAxis = (LogicalBoxAxis::Block == containingAxis) == !writingMode().isOrthogonal(itemStyle.writingMode());
+    return isItemBlockAxis
+        ? itemStyle.logicalHeight().isAuto() && !itemStyle.marginBefore().isAuto() && !itemStyle.marginAfter().isAuto()
+        : itemStyle.logicalWidth().isAuto() && !itemStyle.marginStart().isAuto() && !itemStyle.marginEnd().isAuto();
 }
 
 bool RenderFlexibleBox::needToStretchFlexItemLogicalHeight(const RenderBox& flexItem) const

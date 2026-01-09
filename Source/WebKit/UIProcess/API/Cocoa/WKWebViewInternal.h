@@ -123,7 +123,6 @@ enum class TextSuggestionState : uint8_t;
 struct DigitalCredentialsRequestData;
 struct DigitalCredentialsResponseData;
 struct MobileDocumentRequest;
-struct OpenID4VPRequest;
 #endif
 
 struct NodeIdentifierType;
@@ -644,6 +643,16 @@ struct PerWebProcessState {
 @property (nonatomic, setter=_setHasActiveNowPlayingSession:) BOOL _hasActiveNowPlayingSession;
 
 @property (nonatomic, readonly) RetainPtr<WKWebView> _horizontallyAttachedInspectorWebView;
+
+@end
+
+@interface WKWebView (WKTextExtraction)
+
+- (void)_requestTextExtractionInternal:(_WKTextExtractionConfiguration *)configuration completion:(CompletionHandler<void(std::optional<WebCore::TextExtraction::Item>&&)>&&)completion;
+- (void)_requestJSHandleForNodeIdentifier:(NSString *)nodeIdentifier searchText:(NSString *)searchText completionHandler:(void (^)(_WKJSHandle *))completionHandler;
+#if ENABLE(TEXT_EXTRACTION_FILTER)
+- (void)_validateText:(const String&)text inNode:(std::optional<WebCore::NodeIdentifier>&&)nodeIdentifier completionHandler:(CompletionHandler<void(const String&)>&&)completionHandler;
+#endif
 
 @end
 

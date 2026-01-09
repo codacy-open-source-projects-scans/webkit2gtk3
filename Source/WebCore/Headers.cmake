@@ -510,7 +510,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/identity/protocols/ISO18013/ISO18013PresentmentRequest.h
     Modules/identity/protocols/ISO18013/MobileDocumentRequest.h
     Modules/identity/protocols/ISO18013/ValidatedMobileDocumentRequest.h
-    Modules/identity/protocols/openid/OpenID4VPRequest.h
 
     Modules/indexeddb/IDBActiveDOMObject.h
     Modules/indexeddb/IDBActiveDOMObjectInlines.h
@@ -3398,8 +3397,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     style/values/fonts/StyleFontWeight.h
     style/values/fonts/StyleFontWidth.h
 
+    style/values/grid/StyleFlowTolerance.h
     style/values/grid/StyleGridAutoFlow.h
-    style/values/grid/StyleItemTolerance.h
     style/values/grid/StyleGridNamedAreaMap.h
     style/values/grid/StyleGridNamedLinesMap.h
     style/values/grid/StyleGridOrderedNamedLinesMap.h

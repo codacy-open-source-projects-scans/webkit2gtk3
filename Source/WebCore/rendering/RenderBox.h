@@ -48,7 +48,7 @@ enum class AvailableLogicalHeightType : bool { ExcludeMarginBorderPadding, Inclu
 
 enum class ShouldComputePreferred : bool { ComputeActual, ComputePreferred };
 
-enum class StretchingMode { Any, Explicit };
+enum class StretchingMode { Normal, Explicit };
 
 class RenderBox : public RenderBoxModelObject {
     WTF_MAKE_TZONE_ALLOCATED(RenderBox);
@@ -119,6 +119,7 @@ public:
     // The content area of the box (excludes padding - and intrinsic padding for table cells, etc... - and border).
     inline LayoutRect contentBoxRect() const;
     LayoutPoint contentBoxLocation() const;
+    inline LayoutRect flippedContentBoxRect() const;
 
     // https://www.w3.org/TR/css-transforms-1/#reference-box
     FloatRect referenceBoxRect(CSSBoxType) const override;
@@ -175,6 +176,8 @@ public:
     enum class ComputeOverflowOptions {
         None,
         RecomputeFloats = 1 << 0,
+        MarginsExtendContentArea = 1 << 1,
+        MarginsExtendLayoutOverflow = 1 << 2,
     };
     virtual void addOverflowFromInFlowChildren(OptionSet<ComputeOverflowOptions> = { });
     void addOverflowFromContainedBox(const RenderBox& child, OptionSet<ComputeOverflowOptions> = { });
@@ -392,10 +395,9 @@ public:
     // of a containing block).  HTML4 buttons, <select>s, <input>s, legends, and floating/compact elements do this.
     bool sizesPreferredLogicalWidthToFitContent() const;
 
-    bool hasStretchedLogicalHeight() const;
-    bool hasStretchedLogicalWidth(StretchingMode = StretchingMode::Any) const;
+    inline bool hasStretchedLogicalHeight(StretchingMode = StretchingMode::Normal) const;
+    inline bool hasStretchedLogicalWidth(StretchingMode = StretchingMode::Normal) const;
     bool isStretchingColumnFlexItem() const;
-    bool columnFlexItemHasStretchAlignment() const;
     
     LayoutUnit shrinkLogicalWidthToAvoidFloats(LayoutUnit childMarginStart, LayoutUnit childMarginEnd, const RenderBlock& containingBlock) const;
 
@@ -643,8 +645,6 @@ protected:
     virtual bool shouldResetLogicalHeightBeforeLayout() const;
     void resetLogicalHeightBeforeLayoutIfNeeded();
 
-    virtual ItemPosition selfAlignmentNormalBehavior(const RenderBox* = nullptr) const { return ItemPosition::Stretch; }
-
     // Returns false if it could not cheaply compute the extent (e.g. fixed background), in which case the returned rect may be incorrect.
     bool getBackgroundPaintedExtent(const LayoutPoint& paintOffset, LayoutRect&) const;
     virtual bool foregroundIsKnownToBeOpaqueInRect(const LayoutRect& localRect, unsigned maxDepthToTest) const;
@@ -698,7 +698,7 @@ protected:
 private:
     void addOverflowWithRendererOffset(const RenderBox&, LayoutSize, OptionSet<ComputeOverflowOptions> = { });
 
-    void updateShapeOutsideInfoAfterStyleChange(const RenderStyle&, const RenderStyle* oldStyle);
+    void updateShapeOutsideInfoAfterStyleChange(const RenderStyle&, const RenderStyle* oldStyle, Style::Difference);
 
     void updateGridPositionAfterStyleChange(const RenderStyle&, const RenderStyle* oldStyle);
 

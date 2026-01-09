@@ -3156,9 +3156,6 @@ void WebPageProxy::activityStateDidChange(OptionSet<ActivityState> mayHaveChange
         return;
     }
     scheduleActivityStateUpdate();
-#elif PLATFORM(GTK) || PLATFORM(WPE)
-    UNUSED_PARAM(dispatchMode);
-    scheduleActivityStateUpdate();
 #else
     UNUSED_PARAM(dispatchMode);
     dispatchActivityStateChange();
@@ -9771,7 +9768,7 @@ void WebPageProxy::showDigitalCredentialsPicker(IPC::Connection& connection, con
 #endif
 }
 
-void WebPageProxy::fetchRawDigitalCredentialRequests(CompletionHandler<void(Vector<Variant<WebCore::MobileDocumentRequest, WebCore::OpenID4VPRequest>>)>&& completionHandler)
+void WebPageProxy::fetchRawDigitalCredentialRequests(CompletionHandler<void(Vector<WebCore::MobileDocumentRequest>)>&& completionHandler)
 {
 #if HAVE(DIGITAL_CREDENTIALS_UI)
     sendWithAsyncReply(Messages::DigitalCredentialsCoordinator::ProvideRawDigitalCredentialRequests(), WTF::move(completionHandler));

@@ -1566,7 +1566,7 @@ public:
     WEBCORE_EXPORT unsigned styleRecalcCount() const;
 
 #if ENABLE(TOUCH_EVENTS)
-    bool hasTouchEventHandlers() const { return !m_touchEventTargets.isEmptyIgnoringNullReferences(); }
+    bool hasTouchEventHandlers() const;
     bool touchEventTargetsContain(Node& node) const { return m_touchEventTargets.contains(node); }
 #else
     bool hasTouchEventHandlers() const { return false; }
@@ -1869,8 +1869,8 @@ public:
     void runPostRenderingUpdateAnimationTasks();
     WEBCORE_EXPORT DocumentTimeline& timeline();
     DocumentTimeline* existingTimeline() const { return m_timeline.get(); }
-    Vector<RefPtr<WebAnimation>> getAnimations();
-    Vector<RefPtr<WebAnimation>> matchingAnimations(NOESCAPE const Function<bool(Element&)>&);
+    Vector<Ref<WebAnimation>> getAnimations();
+    Vector<Ref<WebAnimation>> matchingAnimations(NOESCAPE const Function<bool(Element&)>&);
     AnimationTimelinesController* timelinesController() const { return m_timelinesController.get(); }
     WEBCORE_EXPORT AnimationTimelinesController& ensureTimelinesController();
     WEBCORE_EXPORT CheckedRef<AnimationTimelinesController> ensureCheckedTimelinesController();
