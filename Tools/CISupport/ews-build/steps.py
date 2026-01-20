@@ -45,7 +45,7 @@ import socket
 import sys
 import time
 
-from Shared.steps import ShellMixin, SetBuildSummary
+from Shared.steps import ShellMixin, SetBuildSummary, SetO3OptimizationLevel
 
 if sys.version_info < (3, 9):  # noqa: UP036
     print('ERROR: Minimum supported Python version for this code is Python 3.9')
@@ -3746,6 +3746,11 @@ class RunJavaScriptCoreTests(shell.Test, AddToLogMixin, ShellMixin):
         if SHOULD_FILTER_LOGS is True:
             self.command = self.shell_command(' '.join(quote(str(c)) for c in self.command) + ' 2>&1 | Tools/Scripts/filter-test-logs jsc')
         rc = yield super().run()
+        defer.returnValue(rc)
+
+    @defer.inlineCallbacks
+    def runCommand(self, command):
+        yield super().runCommand(command)
 
         yield self._addToLog('json', '\n')
         logLines = self.log_observer_json.getStdout().rstrip()
@@ -3754,7 +3759,7 @@ class RunJavaScriptCoreTests(shell.Test, AddToLogMixin, ShellMixin):
             jsc_results = json.loads(json_text)
         except Exception as ex:
             yield self._addToLog('stderr', f'ERROR: unable to parse data, exception: {ex}')
-            defer.returnValue(rc)
+            return
 
         if jsc_results.get('allMasmTestsPassed') is False:
             self.binaryFailures.append('testmasm')
@@ -3776,7 +3781,7 @@ class RunJavaScriptCoreTests(shell.Test, AddToLogMixin, ShellMixin):
         if len(self.stressTestFailures) > self.FAILURE_THRESHOLD:
             self.setProperty(self.prefix + 'stress_test_failures', [f'Too many failures: {len(self.stressTestFailures)} jsc tests failed'])
             yield self._addToLog('stderr', f'Too many failures: {len(self.stressTestFailures)} jsc tests failed\n')
-            defer.returnValue(rc)
+            return
 
         self.setProperty(self.prefix + 'stress_test_failures', self.stressTestFailures)
         is_main = self.getProperty('github.base.ref', DEFAULT_BRANCH) == DEFAULT_BRANCH
@@ -3785,8 +3790,6 @@ class RunJavaScriptCoreTests(shell.Test, AddToLogMixin, ShellMixin):
             self.setProperty('jsc_stress_test_failures_filtered', sorted(self.stressTestFailures_filtered))
             self.setProperty('jsc_binary_failures_filtered', sorted(self.binaryFailures_filtered))
             self.setProperty('results-db_jsc_pre_existing', sorted(self.preexisting_failures_in_results_db))
-
-        defer.returnValue(rc)
 
     def evaluateCommand(self, cmd):
         rc = super().evaluateCommand(cmd)
@@ -3823,6 +3826,7 @@ class RunJavaScriptCoreTests(shell.Test, AddToLogMixin, ShellMixin):
                 RevertAppliedChanges(),
                 CleanWorkingDirectory(),
                 ValidateChange(verifyBugClosed=False, addURLs=False),
+                SetO3OptimizationLevel(),
                 CompileJSCWithoutChange(),
                 ValidateChange(verifyBugClosed=False, addURLs=False),
                 KillOldProcesses(),
@@ -4354,7 +4358,7 @@ class RunWebKitTests(shell.Test, AddToLogMixin, ShellMixin):
                     ReRunWebKitTests(),
                 ]
             else:
-                if platform not in ('win'):
+                if platform != 'win':
                     steps_to_add += [
                         RevertAppliedChanges(),
                         CleanWorkingDirectory(),
@@ -4527,7 +4531,7 @@ class ReRunWebKitTests(RunWebKitTests):
 
             # The significant additional build time isn't worth it on Windows, we'd rather
             # the worker start on another job in the queue.
-            if platform not in ('win'):
+            if platform != 'win':
                 steps_to_add += [
                     ArchiveTestResults(),
                     UploadTestResults(identifier='rerun'),
@@ -6097,7 +6101,7 @@ class ExtractTestResults(master.MasterShellCommand):
         defer.returnValue(rc)
 
 
-class PrintConfiguration(steps.ShellSequence):
+class PrintConfiguration(steps.ShellSequence, ShellMixin):
     name = 'configuration'
     description = ['configuration']
     haltOnFailure = False
@@ -6125,7 +6129,7 @@ class PrintConfiguration(steps.ShellSequence):
         elif platform in ('gtk', 'wpe', 'jsc-only'):
             command_list.extend(self.command_list_linux)
             if platform in ('gtk', 'wpe'):
-                command_list.append(['if test -f /etc/build-info; then cat /etc/build-info; else cat /etc/os-release; fi'])
+                command_list.append(self.shell_command('if test -f /etc/build-info; then cat /etc/build-info; else cat /etc/os-release; fi'))
 
         for command in command_list:
             self.commands.append(util.ShellArg(command=command, logname='stdio'))

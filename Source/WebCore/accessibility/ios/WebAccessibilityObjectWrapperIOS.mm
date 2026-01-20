@@ -30,6 +30,7 @@
 
 #import "AXAttributeCacheScope.h"
 #import "AXLogger.h"
+#import "AXLoggerBase.h"
 #import "AXNotifications.h"
 #import "AXObjectCacheInlines.h"
 #import "AXSearchManager.h"
@@ -68,24 +69,6 @@
 
 #if ENABLE(MODEL_ELEMENT_ACCESSIBILITY)
 #import "ModelPlayerAccessibilityChildren.h"
-#endif
-
-#if ENABLE(SPATIAL_IMAGE_CONTROLS)
-#import "HTMLImageElement.h"
-#import "SpatialImageControls.h"
-
-OBJC_CLASS UIAccessibilityElement;
-
-typedef uint64_t UIAccessibilityTraits;
-
-@interface UIAccessibilityElement : NSObject
-- (instancetype)initWithAccessibilityContainer:(id)container;
-- (void)setAccessibilityLabel:(NSString *)label;
-- (void)setAccessibilityFrame:(CGRect)frame;
-- (void)setAccessibilityTraits:(UIAccessibilityTraits)traits;
-- (void)setAccessibilityHint:(NSString *)hint;
-@end
-
 #endif
 
 @interface NSObject (AccessibilityPrivate)
@@ -277,43 +260,12 @@ static AccessibilityObjectWrapper* AccessibilityUnignoredAncestor(AccessibilityO
 
     if ([self respondsToSelector:@selector(_accessibilityUnregister)])
         [self _accessibilityUnregister];
-
-#if ENABLE(SPATIAL_IMAGE_CONTROLS)
-    m_cachedMockImageElement = nil;
-#endif
 }
-
-#if ENABLE(SPATIAL_IMAGE_CONTROLS)
-- (id)mockImageElement
-{
-    if (m_cachedMockImageElement)
-        return m_cachedMockImageElement.get();
-
-    auto mockElement = adoptNS([[UIAccessibilityElement alloc] initWithAccessibilityContainer:self]);
-    [mockElement setAccessibilityLabel:[self accessibilityLabel]];
-    [mockElement setAccessibilityFrame:[self accessibilityFrame]];
-    [mockElement setAccessibilityTraits:[self accessibilityTraits]];
-    [mockElement setAccessibilityHint:[self accessibilityHint]];
-
-    m_cachedMockImageElement = mockElement;
-    return m_cachedMockImageElement.get();
-}
-
-- (BOOL)hasImageControls
-{
-    auto* backingObject = self.axBackingObject;
-    if (!backingObject || !backingObject->isImage())
-        return NO;
-
-    RefPtr imageElement = dynamicDowncast<HTMLImageElement>(backingObject->node());
-    return imageElement && SpatialImageControls::hasSpatialImageControls(*imageElement);
-}
-#endif
 
 - (void)dealloc
 {
     // We should have been detached before deallocated.
-    ASSERT(!self.axBackingObject);
+    AX_ASSERT(!self.axBackingObject);
     [super dealloc];
 }
 
@@ -448,12 +400,6 @@ static AccessibilityObjectWrapper* AccessibilityUnignoredAncestor(AccessibilityO
     }
 
     auto array = adoptNS([[NSMutableArray alloc] init]);
-
-#if ENABLE(SPATIAL_IMAGE_CONTROLS)
-    if ([self hasImageControls])
-        [array addObject:[self mockImageElement]];
-#endif
-
     for (const auto& child : self.axBackingObject->stitchedUnignoredChildren()) {
         auto* wrapper = child->wrapper();
         if (child->isRemoteFrame()) {
@@ -486,14 +432,7 @@ static AccessibilityObjectWrapper* AccessibilityUnignoredAncestor(AccessibilityO
             return [attachmentView accessibilityElementCount];
     }
 
-    NSInteger count = self.axBackingObject->stitchedUnignoredChildren().size();
-
-#if ENABLE(SPATIAL_IMAGE_CONTROLS)
-    if ([self hasImageControls])
-        count += 1;
-#endif
-
-    return count;
+    return self.axBackingObject->stitchedUnignoredChildren().size();
 }
 
 - (id)accessibilityElementAtIndex:(NSInteger)index
@@ -508,16 +447,6 @@ static AccessibilityObjectWrapper* AccessibilityUnignoredAncestor(AccessibilityO
 
     const auto& children = self.axBackingObject->stitchedUnignoredChildren();
     size_t elementIndex = static_cast<size_t>(index);
-
-#if ENABLE(SPATIAL_IMAGE_CONTROLS)
-    if ([self hasImageControls]) {
-        if (!index)
-            return [self mockImageElement];
-
-        elementIndex -= 1;
-    }
-#endif
-
     if (elementIndex >= children.size())
         return nil;
 
@@ -543,24 +472,12 @@ static AccessibilityObjectWrapper* AccessibilityUnignoredAncestor(AccessibilityO
             return [attachmentView indexOfAccessibilityElement:element];
     }
 
-#if ENABLE(SPATIAL_IMAGE_CONTROLS)
-    if ([self hasImageControls]) {
-        if (element == [self mockImageElement])
-            return 0;
-    }
-#endif
-
     const auto& children = self.axBackingObject->stitchedUnignoredChildren();
     unsigned count = children.size();
     for (unsigned k = 0; k < count; ++k) {
         AccessibilityObjectWrapper* wrapper = children[k]->wrapper();
-        if (wrapper == element || (children[k]->isAttachment() && [wrapper attachmentView] == element)) {
-#if ENABLE(SPATIAL_IMAGE_CONTROLS)
-            if ([self hasImageControls])
-                return k + 1;
-#endif
+        if (wrapper == element || (children[k]->isAttachment() && [wrapper attachmentView] == element))
             return k;
-        }
     }
 
     return NSNotFound;
@@ -988,13 +905,6 @@ static AccessibilityObjectWrapper *ancestorWithRole(const AXCoreObject& descenda
     if (backingObject->isIgnored())
         return NO;
 
-#if ENABLE(SPATIAL_IMAGE_CONTROLS)
-    // Images with image controls should not be accessibility elements themselves
-    // Instead, their accessibilityElements will contain a mock element plus the controls
-    if ([self hasImageControls])
-        return false;
-#endif
-
     switch (backingObject->role()) {
     case AccessibilityRole::TextField:
     case AccessibilityRole::TextArea:
@@ -1164,7 +1074,7 @@ static AccessibilityObjectWrapper *ancestorWithRole(const AXCoreObject& descenda
         return false;
     }
 
-    ASSERT_NOT_REACHED();
+    AX_ASSERT_NOT_REACHED();
     return false;
 }
 
@@ -1176,7 +1086,7 @@ static AccessibilityObjectWrapper *ancestorWithRole(const AXCoreObject& descenda
     if (m_isAccessibilityElement == IsAccessibilityElement::Unknown)
         m_isAccessibilityElement = [self determineIsAccessibilityElement] ? IsAccessibilityElement::Yes : IsAccessibilityElement::No;
 
-    ASSERT(m_isAccessibilityElement != IsAccessibilityElement::Unknown);
+    AX_ASSERT(m_isAccessibilityElement != IsAccessibilityElement::Unknown);
     switch (m_isAccessibilityElement) {
     case IsAccessibilityElement::Yes:
         return YES;
@@ -1189,9 +1099,6 @@ static AccessibilityObjectWrapper *ancestorWithRole(const AXCoreObject& descenda
 - (void)_clearCachedIsAccessibilityElementState
 {
     m_isAccessibilityElement = IsAccessibilityElement::Unknown;
-#if ENABLE(SPATIAL_IMAGE_CONTROLS)
-    m_cachedMockImageElement = nil;
-#endif
 }
 
 - (BOOL)stringValueShouldBeUsedInLabel
@@ -1206,7 +1113,7 @@ static AccessibilityObjectWrapper *ancestorWithRole(const AXCoreObject& descenda
 
 static void appendStringToResult(NSMutableString *result, NSString *string)
 {
-    ASSERT(result);
+    AX_ASSERT(result);
     if (![string length])
         return;
     if ([result length])
@@ -1649,7 +1556,7 @@ static void appendStringToResult(NSMutableString *result, NSString *string)
         case AccessibilityButtonState::Mixed:
             return @"2";
         }
-        ASSERT_NOT_REACHED();
+        AX_ASSERT_NOT_REACHED();
         return @"0";
     }
 
@@ -1658,10 +1565,12 @@ static void appendStringToResult(NSMutableString *result, NSString *string)
 
     // If self has the header trait, value should be the heading level.
     if (self.accessibilityTraits & self._axHeaderTrait) {
-        auto* heading = Accessibility::findAncestor(backingObject.get(), true, [] (const auto& ancestor) {
+        RefPtr heading = Accessibility::findAncestor(backingObject.get(), true, [] (const auto& ancestor) {
             return ancestor.role() == AccessibilityRole::Heading;
         });
-        ASSERT(heading);
+        // If we have the header trait, we should either be a heading, or have a heading ancestor.
+        // Not finding one means our traits our stale.
+        AX_ASSERT(heading);
 
         if (heading)
             return [NSString stringWithFormat:@"%d", heading->headingLevel()];
@@ -1960,7 +1869,7 @@ static void appendStringToResult(NSMutableString *result, NSString *string)
         return nil;
 
     // The only object without a parent wrapper at this point should be a scroll view.
-    ASSERT(self.axBackingObject->isScrollView());
+    AX_ASSERT(self.axBackingObject->isScrollView());
 
     // Verify this is the top document. If not, we might need to go through the platform widget.
     auto* frameView = self.axBackingObject->documentFrameView();
@@ -2006,7 +1915,7 @@ static void appendStringToResult(NSMutableString *result, NSString *string)
     // The parentView should have an accessibilityContainer, if the UIKit accessibility bundle was loaded.
     // The exception is DRT, which tests accessibility without the entire system turning accessibility on. Hence,
     // this check should be valid for everything except DRT.
-    ASSERT([parentView accessibilityContainer] || WTF::CocoaApplication::isDumpRenderTree());
+    AX_ASSERT([parentView accessibilityContainer] || WTF::CocoaApplication::isDumpRenderTree());
 
     return [parentView accessibilityContainer];
 }
@@ -2084,7 +1993,7 @@ static void appendStringToResult(NSMutableString *result, NSString *string)
 
     return createNSArray(self.axBackingObject->flowToObjects(), [] (auto&& child) -> id {
         auto wrapper = child->wrapper();
-        ASSERT(wrapper);
+        AX_ASSERT(wrapper);
 
         if (child->isAttachment()) {
             if (auto attachmentView = wrapper.attachmentView)
@@ -2116,7 +2025,7 @@ static NSArray *accessibleElementsForObjects(const AXCoreObject::AccessibilityCh
 
     return createNSArray(self.axBackingObject->detailedByObjects(), [] (auto&& detailedByObject) -> id {
         auto wrapper = detailedByObject->wrapper();
-        ASSERT(wrapper);
+        AX_ASSERT(wrapper);
         return wrapper;
     }).autorelease();
 }
@@ -2198,7 +2107,7 @@ static NSArray *accessibleElementsForObjects(const AXCoreObject::AccessibilityCh
     if (![self _prepareAccessibilityCall])
         return nil;
 
-    ASSERT([self isAttachment]);
+    AX_ASSERT([self isAttachment]);
     Widget* widget = self.axBackingObject->widgetForAttachmentView();
     if (!widget)
         return nil;
@@ -2536,6 +2445,18 @@ static RenderObject* rendererForView(WAKView* view)
     if (!webRange)
         return nil;
     return AXTextMarkerRange { webRange }.toString().createNSString().autorelease();
+}
+
+- (NSAttributedString *)_attributedStringForTextMarkerRangeForTesting:(NSArray *)inputMarkerRange
+{
+    if (![self _prepareAccessibilityCall])
+        return nil;
+
+    RefPtr<AccessibilityObject> object = self.axBackingObject;
+    if (!object)
+        return nil;
+
+    return object->attributedStringForTextMarkerRange(AXTextMarkerRange { inputMarkerRange }).autorelease();
 }
 
 - (NSAttributedString *)attributedStringForRange:(NSRange)range

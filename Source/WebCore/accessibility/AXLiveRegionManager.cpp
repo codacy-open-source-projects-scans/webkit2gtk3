@@ -34,7 +34,6 @@
 #include "AXNotifications.h"
 #include "AXObjectCache.h"
 #include "AccessibilityObject.h"
-#include "LocalizedStrings.h"
 #include <wtf/TZoneMallocInlines.h>
 
 namespace WebCore {
@@ -43,8 +42,10 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(AXLiveRegionManager);
 
 #if PLATFORM(MAC)
 static constexpr ASCIILiteral accessibilityLanguageAttributeKey = "AXLanguage"_s;
+static constexpr ASCIILiteral accessibilityIsLiveRegionRemovalAttributeKey = "AXIsLiveRegionRemoval"_s;
 #else
 static constexpr ASCIILiteral accessibilityLanguageAttributeKey = "UIAccessibilitySpeechAttributeLanguage"_s;
+static constexpr ASCIILiteral accessibilityIsLiveRegionRemovalAttributeKey = "UIAccessibilityTokenIsLiveRegionRemoval"_s;
 #endif
 
 struct LiveRegionObjectMetadata {
@@ -199,12 +200,12 @@ LiveRegionSnapshot AXLiveRegionManager::buildLiveRegionSnapshot(AccessibilityObj
             for (auto& child : object.unignoredChildren())
                 collectDescendants(downcast<AccessibilityObject>(child.get()));
 
-            snapshot.objects.append({ object.objectID(), textForObject(object), object.languageIncludingAncestors(), WTF::move(descendants) });
+            snapshot.objects.append({ object.objectID(), object.announcementText(), object.languageIncludingAncestors(), WTF::move(descendants) });
             return;
         }
 
         if (shouldIncludeInSnapshot(object))
-            snapshot.objects.append({ object.objectID(), textForObject(object), object.languageIncludingAncestors(), { } });
+            snapshot.objects.append({ object.objectID(), object.announcementText(), object.languageIncludingAncestors(), { } });
         else {
             for (auto& child : object.unignoredChildren())
                 buildObjectList(downcast<AccessibilityObject>(child.get()));
@@ -247,18 +248,6 @@ bool AXLiveRegionManager::shouldIncludeInSnapshot(AccessibilityObject& object) c
         return true;
 
     return false;
-}
-
-String AXLiveRegionManager::textForObject(AccessibilityObject& object) const
-{
-    if (String description = object.description(); description.length())
-        return description;
-
-    TextUnderElementMode mode;
-    mode.includeListMarkers = IncludeListMarkerText::Yes;
-    // We want all of the text beneath this object when speaking live regions.
-    mode.descendIntoContainers = DescendIntoContainers::Yes;
-    return object.textUnderElement(mode);
 }
 
 AXLiveRegionManager::LiveRegionDiff AXLiveRegionManager::computeChanges(const Vector<LiveRegionObject>& oldObjects, const Vector<LiveRegionObject>& newObjects) const
@@ -317,6 +306,7 @@ AXLiveRegionManager::LiveRegionDiff AXLiveRegionManager::computeChanges(const Ve
 }
 
 static const size_t maximumAnnouncementLength = 2500;
+enum class IsLiveRegionRemoval : bool { No, Yes };
 
 AttributedString AXLiveRegionManager::computeAnnouncement(const LiveRegionSnapshot& newSnapshot, const LiveRegionDiff& diff) const
 {
@@ -336,7 +326,7 @@ AttributedString AXLiveRegionManager::computeAnnouncement(const LiveRegionSnapsh
     // Determines whether we should add a space before adding the next object. Should only be false the first call.
     bool needsSpace = false;
 
-    auto appendStringAndLanguage = [&](const LiveRegionObject& object) {
+    auto appendStringAndLanguage = [&](const LiveRegionObject& object, IsLiveRegionRemoval isRemoval = IsLiveRegionRemoval::No) {
         if (object.text.isEmpty() || spokenObjects.contains(object.objectID))
             return;
 
@@ -356,6 +346,12 @@ AttributedString AXLiveRegionManager::computeAnnouncement(const LiveRegionSnapsh
             attributes.append({ { needsSpace && startLocation ? startLocation - 1 : startLocation, needsSpace && startLocation ? object.text.length() + 1 : object.text.length() }, WTF::move(languageAttribute) });
         }
 
+        if (isRemoval == IsLiveRegionRemoval::Yes) {
+            HashMap<String, AttributedString::AttributeValue> removalAttribute;
+            removalAttribute.set(accessibilityIsLiveRegionRemovalAttributeKey, AttributedString::AttributeValue { 1.0 });
+            attributes.append({ { needsSpace && startLocation ? startLocation - 1 : startLocation, needsSpace && startLocation ? object.text.length() + 1 : object.text.length() }, WTF::move(removalAttribute) });
+        }
+
         // If the preceeding object already ends with a space (e.g., list markers), no need to add another.
         needsSpace = object.text.isEmpty() || object.text[object.text.length() - 1] != ' ';
         spokenObjects.add(object.objectID);
@@ -373,18 +369,8 @@ AttributedString AXLiveRegionManager::computeAnnouncement(const LiveRegionSnapsh
     }
 
     if (!reachedCharacterLimit && hasRemovals && !diff.removed.isEmpty()) {
-        if (needsSpace) {
-            stringBuilder.append(' ');
-            characterCount++;
-        }
-
-        String removalPrefix = AXRemovedText();
-        characterCount += removalPrefix.length();
-        stringBuilder.append(WTF::move(removalPrefix));
-        needsSpace = true;
-
         for (auto& object : diff.removed) {
-            appendStringAndLanguage(object);
+            appendStringAndLanguage(object, IsLiveRegionRemoval::Yes);
 
             if (characterCount > maximumAnnouncementLength) {
                 reachedCharacterLimit = true;

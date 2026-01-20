@@ -149,6 +149,7 @@
 #include <wtf/Scope.h>
 #include <wtf/SetForScope.h>
 #include <wtf/TZoneMallocInlines.h>
+#include <wtf/text/CharacterProperties.h>
 #include <wtf/text/MakeString.h>
 #include <wtf/text/ParsingUtilities.h>
 #include <wtf/unicode/CharacterNames.h>
@@ -168,7 +169,7 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(IgnoreSelectionChangeForScope);
 WTF_MAKE_TZONE_ALLOCATED_IMPL(Editor);
 
 static bool dispatchBeforeInputEvent(Element& element, const AtomString& inputType, IsInputMethodComposing isInputMethodComposing, const String& data = { },
-    RefPtr<DataTransfer>&& dataTransfer = nullptr, const Vector<RefPtr<StaticRange>>& targetRanges = { }, Event::IsCancelable cancelable = Event::IsCancelable::Yes)
+    RefPtr<DataTransfer>&& dataTransfer = nullptr, const Vector<Ref<StaticRange>>& targetRanges = { }, Event::IsCancelable cancelable = Event::IsCancelable::Yes)
 {
     auto event = InputEvent::create(eventNames().beforeinputEvent, inputType, cancelable, element.document().windowProxy(), data,
         WTF::move(dataTransfer), targetRanges, 0, isInputMethodComposing);
@@ -177,7 +178,7 @@ static bool dispatchBeforeInputEvent(Element& element, const AtomString& inputTy
 }
 
 static void dispatchInputEvent(Element& element, const AtomString& inputType, IsInputMethodComposing isInputMethodComposing, const String& data = { },
-    RefPtr<DataTransfer>&& dataTransfer = nullptr, const Vector<RefPtr<StaticRange>>& targetRanges = { })
+    RefPtr<DataTransfer>&& dataTransfer = nullptr, const Vector<Ref<StaticRange>>& targetRanges = { })
 {
     // FIXME: We should not be dispatching to the scoped queue here. Normally, input events are dispatched in CompositeEditCommand::apply after the end of the scope,
     // but TypingCommands are special in that existing TypingCommands that are applied again fire input events *from within* the scope by calling typingAddedToOpenCommand.
@@ -1203,7 +1204,7 @@ static inline void adjustMarkerTypesToRemoveForWordsAffectedByEditing(OptionSet<
 }
 
 static bool dispatchBeforeInputEvents(RefPtr<Element> startRoot, RefPtr<Element> endRoot, const AtomString& inputTypeName, IsInputMethodComposing isInputMethodComposing,
-    const String& data = { }, RefPtr<DataTransfer>&& dataTransfer = nullptr, const Vector<RefPtr<StaticRange>>& targetRanges = { }, Event::IsCancelable cancelable = Event::IsCancelable::Yes)
+    const String& data = { }, RefPtr<DataTransfer>&& dataTransfer = nullptr, const Vector<Ref<StaticRange>>& targetRanges = { }, Event::IsCancelable cancelable = Event::IsCancelable::Yes)
 {
     bool continueWithDefaultBehavior = true;
     if (startRoot)
@@ -1214,7 +1215,7 @@ static bool dispatchBeforeInputEvents(RefPtr<Element> startRoot, RefPtr<Element>
 }
 
 static void dispatchInputEvents(RefPtr<Element> startRoot, RefPtr<Element> endRoot, const AtomString& inputTypeName, IsInputMethodComposing isInputMethodComposing,
-    const String& data = { }, RefPtr<DataTransfer>&& dataTransfer = nullptr, const Vector<RefPtr<StaticRange>>& targetRanges = { })
+    const String& data = { }, RefPtr<DataTransfer>&& dataTransfer = nullptr, const Vector<Ref<StaticRange>>& targetRanges = { })
 {
     if (startRoot)
         dispatchInputEvent(*startRoot, inputTypeName, isInputMethodComposing, data, WTF::move(dataTransfer), targetRanges);
@@ -1222,7 +1223,7 @@ static void dispatchInputEvents(RefPtr<Element> startRoot, RefPtr<Element> endRo
         dispatchInputEvent(*endRoot, inputTypeName, isInputMethodComposing, data, WTF::move(dataTransfer), targetRanges);
 }
 
-bool Editor::willApplyEditing(CompositeEditCommand& command, Vector<RefPtr<StaticRange>>&& targetRanges)
+bool Editor::willApplyEditing(CompositeEditCommand& command, Vector<Ref<StaticRange>>&& targetRanges)
 {
 #if ENABLE(WRITING_TOOLS)
     if (suppressEditingForWritingTools()) {
@@ -2306,7 +2307,27 @@ void Editor::confirmComposition()
 
     if (!m_compositionNode)
         return;
-    setComposition(m_compositionNode->data().substring(m_compositionStart, m_compositionEnd - m_compositionStart), ConfirmComposition);
+    setComposition(compositionText(), ConfirmComposition);
+}
+
+String Editor::compositionText() const
+{
+    if (!m_compositionNode)
+        return { };
+
+    return protectedCompositionNode()->data().substring(m_compositionStart, m_compositionEnd - m_compositionStart);
+}
+
+bool Editor::hasDeadKeyComposition() const
+{
+    if (!m_compositionNode)
+        return false;
+
+    if (m_compositionStart + 1 != m_compositionEnd)
+        return false;
+
+    auto compositionText = this->compositionText();
+    return compositionText.length() == 1 && isLetterOrSymbolModifier(compositionText[0]);
 }
 
 void Editor::confirmOrCancelCompositionAndNotifyClient()

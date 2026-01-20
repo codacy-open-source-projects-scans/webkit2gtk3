@@ -216,7 +216,7 @@ std::optional<uint64_t> Frame::indexInFrameTreeSiblings() const
         return std::nullopt;
 
     for (uint64_t i = 0; i < tree().parent()->tree().childCount(); i++) {
-        if (auto child = tree().parent()->tree().child(i); child->frameID() == this->frameID())
+        if (RefPtr child = tree().parent()->tree().child(i); child->frameID() == this->frameID())
             return i;
     }
 
@@ -322,13 +322,13 @@ void Frame::setOwnerElement(HTMLFrameOwnerElement* element)
 
 void Frame::setOwnerPermissionsPolicy(OwnerPermissionsPolicyData&& ownerPermissionsPolicy)
 {
-    m_ownerPermisssionsPolicyOverride = makeUnique<OwnerPermissionsPolicyData>(WTF::move(ownerPermissionsPolicy));
+    m_ownerPermissionsPolicyOverride = makeUnique<OwnerPermissionsPolicyData>(WTF::move(ownerPermissionsPolicy));
 }
 
 std::optional<OwnerPermissionsPolicyData> Frame::ownerPermissionsPolicy() const
 {
-    if (m_ownerPermisssionsPolicyOverride)
-        return *m_ownerPermisssionsPolicyOverride;
+    if (m_ownerPermissionsPolicyOverride)
+        return *m_ownerPermissionsPolicyOverride;
 
     RefPtr owner = ownerElement();
     if (!owner)

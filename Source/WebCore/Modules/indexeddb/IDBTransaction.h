@@ -83,7 +83,7 @@ public:
     Ref<DOMStringList> objectStoreNames() const;
     IDBTransactionMode mode() const { return m_info.mode(); }
     IDBTransactionDurability durability() const { return m_info.durability(); }
-    IDBDatabase* db();
+    IDBDatabase& db();
     DOMException* error() const;
     ExceptionOr<Ref<IDBObjectStore>> objectStore(const String& name);
     ExceptionOr<void> abort();
@@ -257,11 +257,11 @@ private:
     RefPtr<IDBOpenDBRequest> m_openDBRequest;
     WeakHashSet<IDBRequest, WeakPtrImplWithEventTargetData> m_cursorRequests;
 
-    Deque<RefPtr<IDBClient::TransactionOperation>> m_pendingTransactionOperationQueue;
-    Deque<RefPtr<IDBClient::TransactionOperation>> m_transactionOperationsInProgressQueue;
-    Deque<RefPtr<IDBClient::TransactionOperation>> m_abortQueue;
-    HashMap<RefPtr<IDBClient::TransactionOperation>, IDBResultData> m_transactionOperationResultMap;
-    HashMap<IDBResourceIdentifier, RefPtr<IDBClient::TransactionOperation>> m_transactionOperationMap;
+    Deque<Ref<IDBClient::TransactionOperation>> m_pendingTransactionOperationQueue;
+    Deque<Ref<IDBClient::TransactionOperation>> m_transactionOperationsInProgressQueue;
+    Deque<Ref<IDBClient::TransactionOperation>> m_abortQueue;
+    HashMap<Ref<IDBClient::TransactionOperation>, IDBResultData> m_transactionOperationResultMap;
+    HashMap<IDBResourceIdentifier, Ref<IDBClient::TransactionOperation>> m_transactionOperationMap;
 
     mutable Lock m_referencedObjectStoreLock;
     HashMap<String, std::unique_ptr<IDBObjectStore>> m_referencedObjectStores WTF_GUARDED_BY_LOCK(m_referencedObjectStoreLock);

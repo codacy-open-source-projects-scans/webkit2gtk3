@@ -143,6 +143,7 @@ set(WTF_PUBLIC_HEADERS
     Int128.h
     InterferenceGraph.h
     IntervalSet.h
+    IsIncreasing.h
     IterationStatus.h
     IteratorRange.h
     JSONValues.h
@@ -247,6 +248,7 @@ set(WTF_PUBLIC_HEADERS
     PrintStream.h
     PriorityQueue.h
     ProcessID.h
+    ProcessMemoryStatus.h
     ProcessPrivilege.h
     PtrTag.h
     RAMSize.h
@@ -828,6 +830,7 @@ else ()
         text/Base64.cpp
         text/StringImpl.cpp
         unicode/UTF8Conversion.cpp
+        text/StringCommon.cpp
         PROPERTIES COMPILE_FLAGS "-Wno-error=undef -Wno-undef")
 endif ()
 

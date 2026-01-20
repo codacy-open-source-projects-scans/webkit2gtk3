@@ -53,7 +53,7 @@ public:
     GraphicsLayer& layerWithViewOverlays();
     Ref<GraphicsLayer> protectedLayerWithViewOverlays();
 
-    const Vector<RefPtr<PageOverlay>>& pageOverlays() const { return m_pageOverlays; }
+    const Vector<Ref<PageOverlay>>& pageOverlays() const { return m_pageOverlays; }
 
     WEBCORE_EXPORT void installPageOverlay(PageOverlay&, PageOverlay::FadeMode);
     WEBCORE_EXPORT void uninstallPageOverlay(PageOverlay&, PageOverlay::FadeMode);
@@ -85,7 +85,10 @@ private:
     void createRootLayersIfNeeded();
 
     WEBCORE_EXPORT GraphicsLayer* documentOverlayRootLayer() const;
+    RefPtr<GraphicsLayer> protectedDocumentOverlayRootLayer() const;
+
     WEBCORE_EXPORT GraphicsLayer* viewOverlayRootLayer() const;
+    RefPtr<GraphicsLayer> protectedViewOverlayRootLayer() const;
 
     void installedPageOverlaysChanged();
     void attachViewOverlayLayers();
@@ -109,7 +112,7 @@ private:
     RefPtr<GraphicsLayer> m_viewOverlayRootLayer;
 
     WeakHashMap<PageOverlay, Ref<GraphicsLayer>> m_overlayGraphicsLayers;
-    Vector<RefPtr<PageOverlay>> m_pageOverlays;
+    Vector<Ref<PageOverlay>> m_pageOverlays;
     bool m_initialized { false };
 };
 

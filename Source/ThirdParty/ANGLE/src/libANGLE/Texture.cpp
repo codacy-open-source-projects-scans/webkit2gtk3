@@ -2648,16 +2648,6 @@ void Texture::onSubjectStateChange(angle::SubjectIndex index, angle::SubjectMess
 {
     switch (message)
     {
-        case angle::SubjectMessage::ContentsChanged:
-            if (index != kBufferSubjectIndex)
-            {
-                // ContentsChange originates from TextureStorage11::resolveAndReleaseTexture
-                // which resolves the underlying multisampled texture if it exists and so
-                // Texture will signal dirty storage to invalidate its own cache and the
-                // attached framebuffer's cache.
-                signalDirtyStorage(InitState::Initialized);
-            }
-            break;
         case angle::SubjectMessage::DirtyBitsFlagged:
             signalDirtyState(DIRTY_BIT_IMPLEMENTATION);
 
@@ -2739,11 +2729,7 @@ void Texture::onBufferContentsChange()
 
 void Texture::onBindToMSRTTFramebuffer()
 {
-    if (!mState.mHasBeenBoundToMSRTTFramebuffer)
-    {
-        mDirtyBits.set(DIRTY_BIT_BOUND_TO_MSRTT_FRAMEBUFFER);
-        mState.mHasBeenBoundToMSRTTFramebuffer = true;
-    }
+    mState.mHasBeenBoundToMSRTTFramebuffer = true;
 }
 
 GLenum Texture::getImplementationColorReadFormat(const Context *context) const

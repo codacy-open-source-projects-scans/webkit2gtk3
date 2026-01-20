@@ -172,7 +172,7 @@ ExceptionOr<void> RTCPeerConnection::removeTrack(RTCRtpSender& sender)
     RTCRtpTransceiver* senderTransceiver = nullptr;
     for (auto& transceiver : m_transceiverSet.list()) {
         if (&sender == &transceiver->sender()) {
-            senderTransceiver = transceiver.get();
+            senderTransceiver = transceiver.ptr();
             shouldAbort = sender.isStopped() || !sender.track();
             break;
         }
@@ -861,7 +861,7 @@ RTCPeerConnectionState RTCPeerConnection::computeConnectionState()
         if (m_sctpTransport && &m_sctpTransport->transport().iceTransport() == iceTransport.ptr())
             return false;
         return std::ranges::all_of(m_transceiverSet.list(), [&iceTransport](auto& transceiver) {
-            return !isIceTransportUsedByTransceiver(iceTransport.get(), *transceiver);
+            return !isIceTransportUsedByTransceiver(iceTransport.get(), transceiver);
         });
     });
 
@@ -915,7 +915,7 @@ RTCIceConnectionState RTCPeerConnection::computeIceConnectionStateFromIceTranspo
         if (m_sctpTransport && &m_sctpTransport->transport().iceTransport() == iceTransport.ptr())
             return false;
         return std::ranges::all_of(m_transceiverSet.list(), [&iceTransport](auto& transceiver) {
-            return !isIceTransportUsedByTransceiver(iceTransport.get(), *transceiver);
+            return !isIceTransportUsedByTransceiver(iceTransport.get(), transceiver);
         });
     });
 
@@ -1027,7 +1027,7 @@ static inline ExceptionOr<PeerConnectionBackend::CertificateInformation> certifi
 
     auto parametersConversionResult = convertDictionary<RTCPeerConnection::CertificateParameters>(lexicalGlobalObject, value.get());
     if (parametersConversionResult.hasException(scope)) [[unlikely]] {
-        scope.clearException();
+        TRY_CLEAR_EXCEPTION(scope, Exception(ExceptionCode::TypeError, "Termination"_s));
         return Exception { ExceptionCode::TypeError, "Unable to read certificate parameters"_s };
     }
     auto parameters = parametersConversionResult.releaseReturnValue();
@@ -1083,7 +1083,7 @@ Vector<std::reference_wrapper<RTCRtpReceiver>> RTCPeerConnection::getReceivers()
     return m_transceiverSet.receivers();
 }
 
-const Vector<RefPtr<RTCRtpTransceiver>>& RTCPeerConnection::getTransceivers() const
+const Vector<Ref<RTCRtpTransceiver>>& RTCPeerConnection::getTransceivers() const
 {
     return m_transceiverSet.list();
 }

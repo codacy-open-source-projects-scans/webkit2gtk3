@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2010 Google Inc. All rights reserved.
- * Copyright (C) 2016-2025 Apple Inc. All rights reserved.
+ * Copyright (C) 2016-2026 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -45,6 +45,7 @@
 #include "Performance.h"
 #include "PlatformMediaSessionManager.h"
 #include "Settings.h"
+#include <wtf/CryptographicallyRandomNumber.h>
 #include <wtf/MediaTime.h>
 #include <wtf/TZoneMallocInlines.h>
 
@@ -550,10 +551,11 @@ static bool hasPlayBackAudioSession(Document* document)
     RefPtr window = document ? document->window() : nullptr;
 
     RefPtr navigator = window ? window->optionalNavigator() : nullptr;
-    RefPtr audioSession = navigator ? NavigatorAudioSession::audioSession(*navigator) : nullptr;
+    if (!navigator)
+        return false;
 
-    auto audioSessionType = audioSession ? audioSession->type() : DOMAudioSessionType::Auto;
-    return audioSessionType == DOMAudioSessionType::Playback || audioSessionType == DOMAudioSessionType::PlayAndRecord;
+    Ref audioSession = NavigatorAudioSession::audioSession(*navigator);
+    return audioSession->type() == DOMAudioSessionType::Playback || audioSession->type() == DOMAudioSessionType::PlayAndRecord;
 #else
     UNUSED_PARAM(document);
     return false;
@@ -595,8 +597,9 @@ std::optional<NowPlayingInfo> AudioContext::nowPlayingInfo() const
             { },
             { }
         },
-        MediaPlayer::invalidTime(),
-        MediaPlayer::invalidTime(),
+        cryptographicallyRandomNumber<uint64_t>(),
+        std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::quiet_NaN(),
         1.0,
         false,
         m_currentIdentifier,

@@ -2134,7 +2134,7 @@ void Graph::dumpAndReleaseIonGraph()
 
 void Graph::appendIonGraphPass(const String& passName)
 {
-    if (m_form == LoadStore) // It is having orphan blocks etc., so we cannot compute dominators.
+    if (m_form == LoadStore) // This is even not setting up predecessors. It is not meaningful to have a graph at this point yet.
         return;
 
     auto pass = JSON::Object::create();
@@ -2147,25 +2147,6 @@ void Graph::appendIonGraphPass(const String& passName)
         DumpContext context;
         context.graph = this;
 
-        std::optional<CPSDominators> cpsDominators;
-        std::optional<CPSNaturalLoops> cpsNaturalLoops;
-
-        std::optional<SSADominators> ssaDominators;
-        std::optional<SSANaturalLoops> ssaNaturalLoops;
-
-        switch (m_form) {
-        case ThreadedCPS:
-            cpsDominators.emplace(*this);
-            cpsNaturalLoops.emplace(*this, cpsDominators.value());
-            break;
-        case SSA:
-            ssaDominators.emplace(*this);
-            ssaNaturalLoops.emplace(*this, ssaDominators.value());
-            break;
-        case LoadStore:
-            break;
-        }
-
         for (auto* block : blocksInNaturalOrder()) {
             if (!block)
                 continue;
@@ -2175,6 +2156,12 @@ void Graph::appendIonGraphPass(const String& passName)
             auto predecessors = JSON::Array::create();
             auto successors = JSON::Array::create();
             auto instructions = JSON::Array::create();
+
+            if (block->isOSRTarget)
+                attributes->pushString("osr"_s);
+
+            if (block->isCatchEntrypoint)
+                attributes->pushString("catch"_s);
 
             for (size_t i = 0; i < block->size(); ++i) {
                 auto instruction = JSON::Object::create();
@@ -2209,33 +2196,6 @@ void Graph::appendIonGraphPass(const String& passName)
                 instructions->pushObject(WTF::move(instruction));
             }
 
-            unsigned loopDepth = 0;
-            auto computeWithNaturalLoops = [&](auto& naturalLoops, auto& dominators) {
-                auto isBackEdge = [&](auto* block) -> bool {
-                    for (auto* successor : block->successors()) {
-                        if (dominators.dominates(successor, block))
-                            return true;
-                    }
-                    return false;
-                };
-
-                loopDepth = naturalLoops.loopDepth(block);
-                if (isBackEdge(block))
-                    attributes->pushString("backedge"_s);
-                if (auto* loop = naturalLoops.headerOf(block))
-                    attributes->pushString("loopheader"_s);
-            };
-
-            switch (m_form) {
-            case ThreadedCPS:
-                computeWithNaturalLoops(cpsNaturalLoops.value(), cpsDominators.value());
-                break;
-            case SSA:
-                computeWithNaturalLoops(ssaNaturalLoops.value(), ssaDominators.value());
-                break;
-            case LoadStore:
-                break;
-            }
             for (auto* predecessor : block->predecessors)
                 predecessors->pushInteger(predecessor->index);
 
@@ -2244,7 +2204,7 @@ void Graph::appendIonGraphPass(const String& passName)
 
             ionBlock->setInteger("ptr"_s, block->index + 1);
             ionBlock->setInteger("id"_s, block->index);
-            ionBlock->setInteger("loopDepth"_s, loopDepth);
+            ionBlock->setInteger("loopDepth"_s, 0);
             ionBlock->setArray("attributes"_s, WTF::move(attributes));
             ionBlock->setArray("predecessors"_s, WTF::move(predecessors));
             ionBlock->setArray("successors"_s, WTF::move(successors));

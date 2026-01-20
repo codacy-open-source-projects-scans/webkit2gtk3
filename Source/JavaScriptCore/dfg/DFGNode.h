@@ -693,6 +693,7 @@ public:
         children.setChild3(children.child2());
         children.setChild2(base);
         children.setChild1(storage);
+        children.child1().setUseKind(KnownStorageUse);
         m_op = PutByOffset;
     }
     
@@ -3244,6 +3245,11 @@ public:
     bool shouldSpeculateProxyObject()
     {
         return isProxyObjectSpeculation(prediction());
+    }
+
+    bool shouldSpeculateSetObject()
+    {
+        return isSetObjectSpeculation(prediction());
     }
 
     bool shouldSpeculateGlobalProxy()

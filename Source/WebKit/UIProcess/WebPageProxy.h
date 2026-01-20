@@ -33,6 +33,7 @@
 #include <wtf/ApproximateTime.h>
 #include <wtf/CheckedRef.h>
 #include <wtf/CompletionHandler.h>
+#include <wtf/Deque.h>
 #include <wtf/ObjectIdentifier.h>
 #include <wtf/OptionSet.h>
 #include <wtf/ProcessID.h>
@@ -190,7 +191,7 @@ enum class HasInsecureContent : bool;
 enum class HighlightRequestOriginatedInApp : bool;
 enum class HighlightVisibility : bool;
 enum class InputMode : uint8_t;
-enum class NavigationUpgradeToHTTPSBehavior : bool;
+enum class NavigationUpgradeToHTTPSBehavior : uint8_t;
 enum class LayerTreeAsTextOptions : uint16_t;
 enum class LayoutViewportConstraint : bool;
 enum class LockBackForwardList : bool;
@@ -610,6 +611,7 @@ struct WebPopupItem;
 struct WebPreferencesStore;
 struct WebSpeechSynthesisVoice;
 struct WebURLSchemeHandlerIdentifierType;
+struct WebUndoStepIDType;
 struct WebsitePoliciesData;
 
 #if (PLATFORM(GTK) || PLATFORM(WPE)) && (USE(GBM) || OS(ANDROID))
@@ -682,7 +684,7 @@ using TransactionIdentifier = MonotonicObjectIdentifier<TransactionIDType>;
 using TransactionID = WebCore::ProcessQualified<TransactionIdentifier>;
 using WebPageProxyIdentifier = ObjectIdentifier<WebPageProxyIdentifierType>;
 using WebURLSchemeHandlerIdentifier = ObjectIdentifier<WebURLSchemeHandlerIdentifierType>;
-using WebUndoStepID = uint64_t;
+using WebUndoStepID = ObjectIdentifier<WebUndoStepIDType>;
 
 class WebPageProxy final : public API::ObjectImpl<API::Object::Type::Page>, public IPC::MessageReceiver {
 public:
@@ -833,6 +835,10 @@ public:
     VideoPresentationManagerProxy* videoPresentationManager();
     RefPtr<VideoPresentationManagerProxy> protectedVideoPresentationManager();
     void setMockVideoPresentationModeEnabled(bool);
+#endif
+
+#if PLATFORM(IOS_FAMILY) && ENABLE(DEVICE_ORIENTATION)
+    RefPtr<WebDeviceOrientationUpdateProviderProxy> protectedWebDeviceOrientationUpdateProviderProxy();
 #endif
 
     WebScreenOrientationManagerProxy* screenOrientationManager() { return m_screenOrientationManager.get(); }
@@ -1770,6 +1776,10 @@ public:
 
     bool canUndo();
     bool canRedo();
+    void addPendingUndoRedo(WebUndoStepID, UndoOrRedo);
+    void removePendingUndoRedo(WebUndoStepID);
+    uint32_t undoVersion() const { return m_undoVersion; }
+    void updateUndoVersion() { ++m_undoVersion; }
 
 #if PLATFORM(COCOA)
     void registerKeypressCommandName(const String& name) { m_knownKeypressCommandNames.add(name); }
@@ -2408,8 +2418,6 @@ public:
     void didEnterFullscreen(PlaybackSessionContextIdentifier);
     void didExitFullscreen(PlaybackSessionContextIdentifier);
     void didCleanupFullscreen(PlaybackSessionContextIdentifier);
-    void didChangePlaybackRate(PlaybackSessionContextIdentifier);
-    void didChangeCurrentTime(PlaybackSessionContextIdentifier);
 #if PLATFORM(IOS_FAMILY)
     void didEnterStandby(PlaybackSessionContextIdentifier);
     void didExitStandby(PlaybackSessionContextIdentifier);
@@ -2576,7 +2584,7 @@ public:
     void requestCookieConsent(CompletionHandler<void(WebCore::CookieConsentDecisionResult)>&&);
 
 #if ENABLE(IMAGE_ANALYSIS) && ENABLE(VIDEO)
-    void beginTextRecognitionForVideoInElementFullScreen(WebCore::MediaPlayerIdentifier, WebCore::FloatRect videoBounds);
+    void beginTextRecognitionForVideoInElementFullScreen(WebCore::ShareableBitmapHandle&&, WebCore::FloatRect);
     void cancelTextRecognitionForVideoInElementFullScreen();
 #endif
 
@@ -2901,6 +2909,8 @@ private:
 
     bool shouldForceForegroundPriorityForClientNavigation() const;
 
+    void updateMouseEventTargetAfterWindowAndViewFramesChanged(const WebCore::FloatRect&);
+
     bool canCreateFrame(WebCore::FrameIdentifier) const;
     Ref<WebPageProxy> downloadOriginatingPage(const API::Navigation*);
     Ref<WebPageProxy> navigationOriginatingPage(const FrameInfoData&);
@@ -3131,11 +3141,11 @@ private:
     std::optional<IPC::AsyncReplyID> willPerformPasteCommand(WebCore::DOMPasteAccessCategory, CompletionHandler<void()>&&, std::optional<WebCore::FrameIdentifier> = std::nullopt);
 
     // Undo management
-    void registerEditCommandForUndo(IPC::Connection&, WebUndoStepID commandID, String&& label);
+    void registerEditCommandForUndo(IPC::Connection&, WebUndoStepID, String&& label);
     void registerInsertionUndoGrouping();
     void clearAllEditCommands();
     void canUndoRedo(UndoOrRedo, CompletionHandler<void(bool)>&&);
-    void executeUndoRedo(UndoOrRedo, CompletionHandler<void()>&&);
+    void executeUndoRedo(UndoOrRedo, CompletionHandler<void(uint32_t undoVersion, Vector<std::pair<WebUndoStepID, UndoOrRedo>>&&)>&&);
 
     // Keyboard handling
 #if PLATFORM(COCOA)
@@ -3452,7 +3462,6 @@ private:
 
 #if ENABLE(VIDEO_PRESENTATION_MODE)
     void updateFullscreenVideoTextRecognition();
-    void fullscreenVideoTextRecognitionTimerFired();
     bool tryToSendCommandToActiveControlledVideo(WebCore::PlatformMediaSessionRemoteControlCommandType);
 #endif
 
@@ -3630,6 +3639,9 @@ private:
     String m_openedMainFrameName;
 
     RefPtr<WebInspectorUIProxy> m_inspector;
+
+    Deque<std::pair<WebUndoStepID, UndoOrRedo>> m_pendingUndoRedo;
+    uint32_t m_undoVersion { 0 };
 
 #if ENABLE(FULLSCREEN_API)
     RefPtr<WebFullScreenManagerProxy> m_fullScreenManager;
@@ -4051,8 +4063,6 @@ private:
 #if ENABLE(IMAGE_ANALYSIS) && PLATFORM(MAC)
     RetainPtr<WKQuickLookPreviewController> m_quickLookPreviewController;
 #endif
-
-    bool m_isPerformingTextRecognitionInElementFullScreen { false };
 
 #if ENABLE(NETWORK_ISSUE_REPORTING)
     std::unique_ptr<NetworkIssueReporter> m_networkIssueReporter;

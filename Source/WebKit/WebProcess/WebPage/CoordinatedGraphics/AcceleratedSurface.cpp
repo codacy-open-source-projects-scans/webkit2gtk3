@@ -1006,7 +1006,10 @@ void AcceleratedSurface::willRenderFrame(const IntSize& size)
 
     if (sizeDidChange)
         glViewport(0, 0, size.width(), size.height());
+}
 
+void AcceleratedSurface::clear()
+{
     if (!m_isOpaque) {
         glClearColor(0, 0, 0, 0);
         glClear(GL_COLOR_BUFFER_BIT);
@@ -1048,7 +1051,7 @@ void AcceleratedSurface::setFrameDamage(Damage&& damage)
         m_frameDamage = std::nullopt;
 }
 
-const std::optional<Damage>& AcceleratedSurface::frameDamageSinceLastUse()
+const std::optional<Damage>& AcceleratedSurface::renderTargetDamage()
 {
     m_swapChain.addDamage(m_frameDamage);
     ASSERT(m_target);

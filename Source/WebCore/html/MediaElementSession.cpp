@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2025 Apple Inc. All rights reserved.
+ * Copyright (C) 2014-2026 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -63,6 +63,7 @@
 #include "VideoTrack.h"
 #include "VideoTrackConfiguration.h"
 #include "VideoTrackList.h"
+#include <wtf/CryptographicallyRandomNumber.h>
 #include <wtf/RuntimeApplicationChecks.h>
 #include <wtf/TZoneMallocInlines.h>
 #include <wtf/text/StringBuilder.h>
@@ -1466,9 +1467,21 @@ bool MediaElementSession::hasNowPlayingInfo() const
         return false;
 
 #if ENABLE(MEDIA_STREAM)
-    RefPtr session = mediaSession();
-    if (element->hasMediaStreamSrcObject() && (!session || (!session->hasActiveActionHandlers() && !session->metadata())))
-        return false;
+    if (RefPtr session = mediaSession()) {
+        auto isActiveMediaElementPreventingNowPlayingInfo = [&] {
+            RefPtr activeMediaElement = session->activeMediaElement();
+            if (!activeMediaElement || activeMediaElement.get() == element.get())
+                return false;
+            return activeMediaElement->hasMediaStreamSrcObject() && (!session->hasActiveActionHandlers() && !session->metadata());
+        };
+        if (element->hasMediaStreamSrcObject()) {
+            if (!session->hasActiveActionHandlers() && !session->metadata())
+                return false;
+        } else if (isActiveMediaElementPreventingNowPlayingInfo()) {
+            ALWAYS_LOG(LOGIDENTIFIER, "MediaElementSession::hasNowPlayingInfo returning false due to active media element");
+            return false;
+        }
+    }
 #endif // ENABLE(MEDIA_STREAM)
 #endif // ENABLE(MEDIA_SESSION)
 
@@ -1492,11 +1505,11 @@ std::optional<NowPlayingInfo> MediaElementSession::computeNowPlayingInfo() const
     bool isPlaying = state() == PlatformMediaSession::State::Playing;
 
     bool supportsSeeking = element->supportsSeeking();
-    double rate = 1.0;
-    double duration = supportsSeeking ? element->duration() : MediaPlayer::invalidTime();
+    double rate = element->playbackRate();
+    double duration = supportsSeeking ? element->duration() : std::numeric_limits<double>::quiet_NaN();
     double currentTime = element->currentTime();
     if (!std::isfinite(currentTime) || !supportsSeeking)
-        currentTime = MediaPlayer::invalidTime();
+        currentTime = std::numeric_limits<double>::quiet_NaN();
     auto sourceApplicationIdentifier = element->sourceApplicationIdentifier();
 #if PLATFORM(COCOA)
     // FIXME: Eventually, this should be moved into HTMLMediaElement, so all clients
@@ -1514,6 +1527,7 @@ std::optional<NowPlayingInfo> MediaElementSession::computeNowPlayingInfo() const
             sourceApplicationIdentifier,
             { }
         },
+        cryptographicallyRandomNumber<uint64_t>(),
         duration,
         currentTime,
         rate,
@@ -1687,6 +1701,10 @@ void MediaElementSession::clientCharacteristicsChanged(bool positionChanged)
             session->setPositionState(MediaPositionState { positionState->duration, positionState->playbackRate, element->currentTime() });
     }
 #endif
+    if (positionChanged) {
+        if (RefPtr manager = sessionManager())
+            manager->updateNowPlayingInfo();
+    }
     PlatformMediaSession::clientCharacteristicsChanged(positionChanged);
 }
 

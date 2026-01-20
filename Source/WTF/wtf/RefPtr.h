@@ -67,20 +67,16 @@ public:
 
     T* get() const LIFETIME_BOUND { return PtrTraits::unwrap(m_ptr); }
     T* unsafeGet() const { return PtrTraits::unwrap(m_ptr); } // FIXME: Replace with get() then remove.
+    operator T*() const LIFETIME_BOUND { return PtrTraits::unwrap(m_ptr); }
 
     Ref<T> releaseNonNull() { ASSERT(m_ptr); Ref<T> tmp(adoptRef(*m_ptr)); m_ptr = nullptr; return tmp; }
 
-    WARN_UNUSED_RETURN T* leakRef();
+    [[nodiscard]] T* leakRef();
 
     ALWAYS_INLINE T& operator*() const LIFETIME_BOUND { ASSERT(m_ptr); return *PtrTraits::unwrap(m_ptr); }
     ALWAYS_INLINE T* operator->() const LIFETIME_BOUND { return &**this; }
 
     bool operator!() const { return !m_ptr; }
-
-    // This conversion operator allows implicit conversion to bool but not to other integer types.
-    using UnspecifiedBoolType = void (RefPtr::*)() const;
-    operator UnspecifiedBoolType() const { return m_ptr ? &RefPtr::unspecifiedBoolTypeInstance : nullptr; }
-
     explicit operator bool() const { return !!m_ptr; }
     
     RefPtr& operator=(const RefPtr&);
@@ -94,11 +90,9 @@ public:
     template<typename X, typename Y, typename Z> void swap(RefPtr<X, Y, Z>&);
 
     RefPtr copyRef() && = delete;
-    WARN_UNUSED_RETURN RefPtr copyRef() const & { return RefPtr(m_ptr); }
+    [[nodiscard]] RefPtr copyRef() const & { return RefPtr(m_ptr); }
 
 private:
-    void unspecifiedBoolTypeInstance() const { }
-
     friend RefPtr adoptRef<T, PtrTraits, RefDerefTraits>(T*);
     template<typename X, typename Y, typename Z> friend class RefPtr;
 

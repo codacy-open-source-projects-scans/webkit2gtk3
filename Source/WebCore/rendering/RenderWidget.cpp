@@ -74,8 +74,8 @@ void WidgetHierarchyUpdatesSuspensionScope::moveWidgets()
     while (!widgetNewParentMap().isEmpty()) {
         auto map = std::exchange(widgetNewParentMap(), { });
         for (auto& entry : map) {
-            auto& child = *entry.key;
-            auto* currentParent = child.parent();
+            Ref child = entry.key;
+            auto* currentParent = child->parent();
             CheckedPtr newParent = entry.value.get();
             if (newParent != currentParent) {
                 if (currentParent)
@@ -371,7 +371,8 @@ void RenderWidget::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 
     if (hasLayer() && layer()->canResize()) {
         ASSERT(layer()->scrollableArea());
-        layer()->scrollableArea()->paintResizer(paintInfo.context(), roundedIntPoint(adjustedPaintOffset), paintInfo.rect);
+        auto controlsRects = layer()->scrollableArea()->overflowControlsRects();
+        layer()->scrollableArea()->paintResizer(paintInfo.context(), roundedIntPoint(adjustedPaintOffset), controlsRects.resizer, paintInfo.rect);
     }
 }
 

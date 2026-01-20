@@ -6,22 +6,15 @@
 #
 # main.star: lucicfg configuration for ANGLE's standalone builders.
 
-lucicfg.check_version(min = "1.31.3", message = "Update depot_tools")
+"""
+main.star: lucicfg configuration for Angle's standalone builders.
+"""
 
 # Use LUCI Scheduler BBv2 names and add Scheduler realms configs.
 lucicfg.enable_experiment("crbug.com/1182002")
 
 # Fail build when merge script fails.
 build_experiments = {"chromium_swarming.expose_merge_script_failures": 100}
-
-lucicfg.config(
-    fail_on_warnings = True,
-    lint_checks = [
-        "default",
-        "-module-docstring",
-        "-function-docstring",
-    ],
-)
 
 luci.project(
     name = "angle",
@@ -173,6 +166,14 @@ build_recipe(
 )
 
 def get_os_from_name(name):
+    """Returns os enum given the name.
+
+    Args:
+        name: A name to check against.
+
+    Returns:
+        An os enum given the name.
+    """
     if name.startswith("android"):
         return os.ANDROID
     if name.startswith("linux"):
@@ -188,6 +189,12 @@ def get_gpu_type_from_builder_name(name):
 
 # Adds both the CI and Try standalone builders.
 def angle_builder(name, cpu):
+    """Adds a CI and Try standalone builder.
+
+    Args:
+        name: string representing name of the builder.
+        cpu: string representing CPU archiecture of builder.
+    """
     config_os = get_os_from_name(name)
     dimensions = {}
     dimensions["os"] = config_os.dimension
@@ -212,6 +219,7 @@ def angle_builder(name, cpu):
     is_debug = "-dbg" in name
     is_exp = "-exp" in name
     is_perf = name.endswith("-perf")
+    is_pixel10 = "pixel10" in name
     is_s24 = "s24" in name
     is_trace = name.endswith("-trace")
     is_uwp = "winuwp" in name
@@ -219,6 +227,8 @@ def angle_builder(name, cpu):
 
     location_filters = None
 
+    test_mode = ""
+    category = ""
     if name.endswith("-compile"):
         test_mode = "compile_only"
         category = "compile"
@@ -273,35 +283,37 @@ def angle_builder(name, cpu):
         if is_s24:
             # This is a little clunky, but we'd like this to be cleanly "s24" rather than "s24-exp"
             short_name = "s24"
+        elif is_pixel10:
+            short_name = "p10"
     else:
         short_name = "rel"
 
     properties = {
-        "builder_group": "angle",
         "$build/siso": {
-            "project": "rbe-chromium-untrusted",
             "configs": ["builder"],
             "enable_cloud_monitoring": True,
             "enable_cloud_profiler": True,
             "enable_cloud_trace": True,
+            "project": "rbe-chromium-untrusted",
         },
+        "builder_group": "angle",
         "platform": config_os.console_name,
-        "toolchain": toolchain,
         "test_mode": test_mode,
+        "toolchain": toolchain,
     }
 
     ci_properties = {
-        "builder_group": "angle",
         "$build/siso": {
-            "project": "rbe-chromium-trusted",
             "configs": ["builder"],
             "enable_cloud_monitoring": True,
             "enable_cloud_profiler": True,
             "enable_cloud_trace": True,
+            "project": "rbe-chromium-trusted",
         },
+        "builder_group": "angle",
         "platform": config_os.console_name,
-        "toolchain": toolchain,
         "test_mode": test_mode,
+        "toolchain": toolchain,
     }
 
     # TODO(343503161): Remove sheriff_rotations after SoM is updated.
@@ -338,6 +350,7 @@ def angle_builder(name, cpu):
 
     active_experimental_builders = [
         "android-arm64-exp-test",
+        "android-arm64-exp-pixel10-test",
         "android-arm64-exp-s24-test",
         "linux-exp-test",
         "mac-exp-test",
@@ -536,6 +549,7 @@ luci.gitiles_poller(
 angle_builder("android-arm-compile", cpu = "arm")
 angle_builder("android-arm-dbg-compile", cpu = "arm")
 angle_builder("android-arm64-dbg-compile", cpu = "arm64")
+angle_builder("android-arm64-exp-pixel10-test", cpu = "arm64")
 angle_builder("android-arm64-exp-s24-test", cpu = "arm64")
 angle_builder("android-arm64-exp-test", cpu = "arm64")
 angle_builder("android-arm64-test", cpu = "arm64")

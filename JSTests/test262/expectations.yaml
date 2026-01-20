@@ -356,8 +356,8 @@ test/built-ins/Temporal/PlainTime/from/options-wrong-type.js:
   default: 'Test262Error: Invalid string processed before throwing TypeError Expected a RangeError but got a TypeError'
   strict mode: 'Test262Error: Invalid string processed before throwing TypeError Expected a RangeError but got a TypeError'
 test/built-ins/Temporal/PlainTime/from/order-of-operations.js:
-  default: 'Test262Error: Actual [get options.overflow, get options.overflow.toString, call options.overflow.toString, get fields.hour, get fields.hour.valueOf, call fields.hour.valueOf, get fields.microsecond, get fields.microsecond.valueOf, call fields.microsecond.valueOf, get fields.millisecond, get fields.millisecond.valueOf, call fields.millisecond.valueOf, get fields.minute, get fields.minute.valueOf, call fields.minute.valueOf, get fields.nanosecond, get fields.nanosecond.valueOf, call fields.nanosecond.valueOf, get fields.second, get fields.second.valueOf, call fields.second.valueOf] and expected [get fields.hour, get fields.hour.valueOf, call fields.hour.valueOf, get fields.microsecond, get fields.microsecond.valueOf, call fields.microsecond.valueOf, get fields.millisecond, get fields.millisecond.valueOf, call fields.millisecond.valueOf, get fields.minute, get fields.minute.valueOf, call fields.minute.valueOf, get fields.nanosecond, get fields.nanosecond.valueOf, call fields.nanosecond.valueOf, get fields.second, get fields.second.valueOf, call fields.second.valueOf, get options.overflow, get options.overflow.toString, call options.overflow.toString] should have the same contents. order of operations'
-  strict mode: 'Test262Error: Actual [get options.overflow, get options.overflow.toString, call options.overflow.toString, get fields.hour, get fields.hour.valueOf, call fields.hour.valueOf, get fields.microsecond, get fields.microsecond.valueOf, call fields.microsecond.valueOf, get fields.millisecond, get fields.millisecond.valueOf, call fields.millisecond.valueOf, get fields.minute, get fields.minute.valueOf, call fields.minute.valueOf, get fields.nanosecond, get fields.nanosecond.valueOf, call fields.nanosecond.valueOf, get fields.second, get fields.second.valueOf, call fields.second.valueOf] and expected [get fields.hour, get fields.hour.valueOf, call fields.hour.valueOf, get fields.microsecond, get fields.microsecond.valueOf, call fields.microsecond.valueOf, get fields.millisecond, get fields.millisecond.valueOf, call fields.millisecond.valueOf, get fields.minute, get fields.minute.valueOf, call fields.minute.valueOf, get fields.nanosecond, get fields.nanosecond.valueOf, call fields.nanosecond.valueOf, get fields.second, get fields.second.valueOf, call fields.second.valueOf, get options.overflow, get options.overflow.toString, call options.overflow.toString] should have the same contents. order of operations'
+  default: "TypeError: undefined is not a constructor (evaluating 'new Temporal.ZonedDateTime(0n, \"UTC\")')"
+  strict mode: "TypeError: undefined is not a constructor (evaluating 'new Temporal.ZonedDateTime(0n, \"UTC\")')"
 test/built-ins/Temporal/PlainTime/prototype/toString/options-read-before-algorithmic-validation.js:
   default: 'Test262Error: Actual [get options.smallestUnit, get options.smallestUnit.toString, call options.smallestUnit.toString] and expected [get options.fractionalSecondDigits, get options.fractionalSecondDigits.toString, call options.fractionalSecondDigits.toString, get options.roundingMode, get options.roundingMode.toString, call options.roundingMode.toString, get options.smallestUnit, get options.smallestUnit.toString, call options.smallestUnit.toString] should have the same contents. all options should be read first'
   strict mode: 'Test262Error: Actual [get options.smallestUnit, get options.smallestUnit.toString, call options.smallestUnit.toString] and expected [get options.fractionalSecondDigits, get options.fractionalSecondDigits.toString, call options.fractionalSecondDigits.toString, get options.roundingMode, get options.roundingMode.toString, call options.roundingMode.toString, get options.smallestUnit, get options.smallestUnit.toString, call options.smallestUnit.toString] should have the same contents. all options should be read first'
@@ -373,9 +373,6 @@ test/built-ins/TypedArray/prototype/set/array-arg-value-conversion-resizes-array
 test/built-ins/TypedArray/prototype/slice/speciesctor-return-same-buffer-with-offset.js:
   default: 'Test262Error: Actual [20, 30, 40, 60] and expected [20, 20, 20, 60] should have the same contents.  (Testing with Float64Array.)'
   strict mode: 'Test262Error: Actual [20, 30, 40, 60] and expected [20, 20, 20, 60] should have the same contents.  (Testing with Float64Array.)'
-test/built-ins/TypedArray/prototype/subarray/byteoffset-with-detached-buffer.js:
-  default: 'Test262Error: Expected SameValue(«8», «16») to be true (Testing with Float64Array.)'
-  strict mode: 'Test262Error: Expected SameValue(«8», «16») to be true (Testing with Float64Array.)'
 test/built-ins/TypedArrayConstructors/ctors/object-arg/iterated-array-changed-by-tonumber.js:
   default: 'Test262Error: Expected SameValue(«NaN», «2») to be true (Testing with Float64Array.)'
   strict mode: 'Test262Error: Expected SameValue(«NaN», «2») to be true (Testing with Float64Array.)'
@@ -752,9 +749,6 @@ test/staging/sm/RegExp/replace-sticky.js:
 test/staging/sm/RegExp/split-limit.js:
   default: 'Test262Error: Expected SameValue(«3», «1») to be true'
   strict mode: 'Test262Error: Expected SameValue(«3», «1») to be true'
-test/staging/sm/RegExp/split-trace.js:
-  default: 'Test262Error: Expected SameValue(«"get:constructor,get:species,get:flags,call:constructor,set:lastIndex,get:exec,call:exec,set:lastIndex,get:exec,call:exec,get:lastIndex,get:result[length],get:result[length],get:result[1],get:result[2],set:lastIndex,get:exec,call:exec,"», «"get:constructor,get:species,get:flags,call:constructor,set:lastIndex,get:exec,call:exec,set:lastIndex,get:exec,call:exec,get:lastIndex,get:result[length],get:result[1],get:result[2],set:lastIndex,get:exec,call:exec,"») to be true'
-  strict mode: 'Test262Error: Expected SameValue(«"get:constructor,get:species,get:flags,call:constructor,set:lastIndex,get:exec,call:exec,set:lastIndex,get:exec,call:exec,get:lastIndex,get:result[length],get:result[length],get:result[1],get:result[2],set:lastIndex,get:exec,call:exec,"», «"get:constructor,get:species,get:flags,call:constructor,set:lastIndex,get:exec,call:exec,set:lastIndex,get:exec,call:exec,get:lastIndex,get:result[length],get:result[1],get:result[2],set:lastIndex,get:exec,call:exec,"») to be true'
 test/staging/sm/RegExp/unicode-braced.js:
   default: 'SyntaxError: Invalid regular expression: regular expression too large'
   strict mode: 'SyntaxError: Invalid regular expression: regular expression too large'
@@ -773,9 +767,6 @@ test/staging/sm/TypedArray/set-with-receiver.js:
 test/staging/sm/TypedArray/slice-memcpy.js:
   default: 'Test262Error: Actual [1, 2, 1, 2, 3, 4] and expected [1, 2, 1, 2, 1, 2] should have the same contents. '
   strict mode: 'Test262Error: Actual [1, 2, 1, 2, 3, 4] and expected [1, 2, 1, 2, 1, 2] should have the same contents. '
-test/staging/sm/TypedArray/subarray.js:
-  default: 'Test262Error: Expected SameValue(«0», «1») to be true'
-  strict mode: 'Test262Error: Expected SameValue(«0», «1») to be true'
 test/staging/sm/class/defaultConstructorDerivedSpread.js:
   default: 'Error: unexpected call'
   strict mode: 'Error: unexpected call'

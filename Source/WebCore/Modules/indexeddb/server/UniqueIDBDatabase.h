@@ -168,11 +168,11 @@ private:
     WeakPtr<UniqueIDBDatabaseManager> m_manager;
     IDBDatabaseIdentifier m_identifier;
 
-    ListHashSet<RefPtr<ServerOpenDBRequest>> m_pendingOpenDBRequests;
+    ListHashSet<Ref<ServerOpenDBRequest>> m_pendingOpenDBRequests;
     RefPtr<ServerOpenDBRequest> m_currentOpenDBRequest;
     HashSet<IDBResourceIdentifier> m_openDBRequestsForSpaceCheck;
 
-    ListHashSet<RefPtr<UniqueIDBDatabaseConnection>> m_openDatabaseConnections;
+    ListHashSet<Ref<UniqueIDBDatabaseConnection>> m_openDatabaseConnections;
 
     RefPtr<UniqueIDBDatabaseConnection> m_versionChangeDatabaseConnection;
     RefPtr<UniqueIDBDatabaseTransaction> m_versionChangeTransaction;
@@ -181,8 +181,8 @@ private:
     std::unique_ptr<IDBDatabaseInfo> m_databaseInfo;
     std::unique_ptr<IDBDatabaseInfo> m_mostRecentDeletedDatabaseInfo;
 
-    Deque<RefPtr<UniqueIDBDatabaseTransaction>> m_pendingTransactions;
-    HashMap<IDBResourceIdentifier, RefPtr<UniqueIDBDatabaseTransaction>> m_inProgressTransactions;
+    Deque<Ref<UniqueIDBDatabaseTransaction>> m_pendingTransactions;
+    HashMap<IDBResourceIdentifier, Ref<UniqueIDBDatabaseTransaction>> m_inProgressTransactions;
 
     // The keys into these sets are the object store ID.
     // These sets help to decide which transactions can be started and which must be deferred.

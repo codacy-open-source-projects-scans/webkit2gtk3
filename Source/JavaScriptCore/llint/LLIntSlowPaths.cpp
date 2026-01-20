@@ -2084,7 +2084,7 @@ static UGPRPair handleHostCall(CallFrame* calleeFrame, JSValue callee, CodeSpeci
 
     ASSERT(kind == CodeSpecializationKind::CodeForConstruct);
 
-    auto constructData = JSC::getConstructData(callee);
+    auto constructData = JSC::getConstructDataInline(callee);
     ASSERT(constructData.type != CallData::Type::JS);
 
     if (constructData.type == CallData::Type::Native) {
@@ -2468,13 +2468,12 @@ LLINT_SLOW_PATH_DECL(slow_path_retrieve_and_clear_exception_if_catchable)
     RELEASE_ASSERT(!!throwScope.exception());
 
     Exception* exception = throwScope.exception();
-    if (vm.isTerminationException(exception))
-        LLINT_RETURN_TWO(pc, nullptr);
-
     // We want to clear the exception here rather than in the catch prologue
     // JIT code because clearing it also entails clearing a bit in an Atomic
     // bit field in VMTraps.
-    throwScope.clearException();
+    if (!throwScope.tryClearException())
+        LLINT_RETURN_TWO(pc, nullptr);
+
     LLINT_RETURN_TWO(pc, exception);
 }
 
@@ -2862,7 +2861,7 @@ extern "C" void SYSV_ABI llint_write_barrier_slow(CallFrame* callFrame, JSCell* 
 
 extern "C" UGPRPair SYSV_ABI llint_check_vm_entry_permission(VM*, ProtoCallFrame*)
 {
-    Interpreter::checkVMEntryPermission();
+    VM::checkVMEntryPermission();
     return encodeResult(nullptr, nullptr);
 }
 

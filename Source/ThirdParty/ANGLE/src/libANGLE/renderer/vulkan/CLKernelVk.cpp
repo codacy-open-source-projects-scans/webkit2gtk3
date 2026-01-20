@@ -25,6 +25,8 @@
 #include "libANGLE/CLProgram.h"
 #include "spirv/unified1/NonSemanticClspvReflection.h"
 
+#include <algorithm>
+
 namespace rx
 {
 
@@ -133,11 +135,11 @@ angle::Result CLKernelVk::init()
                 descType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
                 break;
             case NonSemanticClspvReflectionArgumentUniform:
-            case NonSemanticClspvReflectionArgumentPointerUniform:
                 descType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
                 break;
             case NonSemanticClspvReflectionArgumentPodUniform:
             case NonSemanticClspvReflectionArgumentPodStorageBuffer:
+            case NonSemanticClspvReflectionArgumentPointerUniform:
             {
                 uint32_t newPodBufferSize = arg.podStorageBufferOffset + arg.podStorageBufferSize;
                 podBufferSize = newPodBufferSize > podBufferSize ? newPodBufferSize : podBufferSize;
@@ -145,13 +147,14 @@ angle::Result CLKernelVk::init()
                 {
                     continue;
                 }
-                descType = arg.type == NonSemanticClspvReflectionArgumentPodUniform
-                               ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
-                               : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                descType = arg.type == NonSemanticClspvReflectionArgumentPodStorageBuffer
+                               ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
+                               : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
                 podFound = true;
                 break;
             }
             case NonSemanticClspvReflectionArgumentPodPushConstant:
+            case NonSemanticClspvReflectionArgumentPointerPushConstant:
                 // Get existing push constant range and see if we need to update
                 if (arg.pushConstOffset + arg.pushConstantSize > pcRange.offset + pcRange.size)
                 {
@@ -190,7 +193,7 @@ angle::Result CLKernelVk::init()
                 nullptr, cl::MemFlags(CL_MEM_READ_ONLY), podBufferSize, nullptr)));
     }
 
-    if (usesPrintf())
+    if (usesPrintf() && !usesPrintfBufferPointerPushConstant())
     {
         mDescriptorSetLayoutDescs[DescriptorSetIndex::Printf].addBinding(
             deviceProgramData->reflectionData.printfBufferStorage.binding,
@@ -222,7 +225,7 @@ angle::Result CLKernelVk::init()
 
     // initialize the descriptor pools
     // descriptor pools are setup as per their indices
-    return initializeDescriptorPools();
+    return mContext->initializeDescriptorPools(this);
 }
 
 angle::Result CLKernelVk::setArg(cl_uint argIndex, size_t argSize, const void *argValue)
@@ -236,7 +239,7 @@ angle::Result CLKernelVk::setArg(cl_uint argIndex, size_t argSize, const void *a
                 ASSERT(mPodArgumentPushConstants.size() >=
                        arg.pushConstantSize + arg.pushConstOffset);
                 arg.handle     = &mPodArgumentPushConstants[arg.pushConstOffset];
-                arg.handleSize = argSize;
+                arg.handleSize = std::min(argSize, static_cast<size_t>(arg.pushConstantSize));
                 if (argSize > 0 && argValue != nullptr)
                 {
                     // Copy the contents since app is free to delete/reassign the contents after
@@ -258,6 +261,8 @@ angle::Result CLKernelVk::setArg(cl_uint argIndex, size_t argSize, const void *a
             case NonSemanticClspvReflectionArgumentSampledImage:
             case NonSemanticClspvReflectionArgumentUniformTexelBuffer:
             case NonSemanticClspvReflectionArgumentStorageTexelBuffer:
+            case NonSemanticClspvReflectionArgumentPointerPushConstant:
+            case NonSemanticClspvReflectionArgumentPointerUniform:
                 ASSERT(argSize == sizeof(cl_mem *));
                 arg.handle     = *static_cast<const cl_mem *>(argValue);
                 arg.handleSize = argSize;
@@ -418,6 +423,13 @@ bool CLKernelVk::usesPrintf() const
 {
     return mProgram->getDeviceProgramData(mName.c_str())->getKernelFlags(mName) &
            NonSemanticClspvReflectionMayUsePrintf;
+}
+
+bool CLKernelVk::usesPrintfBufferPointerPushConstant() const
+{
+    return mProgram->getDeviceProgramData(mName.c_str())
+        ->reflectionData.pushConstants.contains(
+            NonSemanticClspvReflectionPrintfBufferPointerPushConstant);
 }
 
 angle::Result CLKernelVk::initializeDescriptorPools()

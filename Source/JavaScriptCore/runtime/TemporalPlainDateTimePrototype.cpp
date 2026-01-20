@@ -256,7 +256,7 @@ JSC_DEFINE_HOST_FUNCTION(temporalPlainDateTimePrototypeFuncWithPlainTime, (JSGlo
     TemporalPlainTime* plainTime = nullptr;
     JSValue plainTimeLike = callFrame->argument(0);
     if (!plainTimeLike.isUndefined()) {
-        plainTime = TemporalPlainTime::from(globalObject, plainTimeLike, std::nullopt);
+        plainTime = TemporalPlainTime::from(globalObject, plainTimeLike, nullptr);
         RETURN_IF_EXCEPTION(scope, { });
     }
 
@@ -290,7 +290,7 @@ JSC_DEFINE_HOST_FUNCTION(temporalPlainDateTimePrototypeFuncEquals, (JSGlobalObje
     if (!plainDateTime)
         return throwVMTypeError(globalObject, scope, "Temporal.PlainDateTime.prototype.equals called on value that's not a PlainDateTime"_s);
 
-    auto* other = TemporalPlainDateTime::from(globalObject, callFrame->argument(0), std::nullopt);
+    auto* other = TemporalPlainDateTime::from(globalObject, callFrame->argument(0), nullptr);
     RETURN_IF_EXCEPTION(scope, { });
 
     if (plainDateTime->plainDate() != other->plainDate() || plainDateTime->plainTime() != other->plainTime())

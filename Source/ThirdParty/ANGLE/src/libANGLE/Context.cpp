@@ -708,6 +708,7 @@ Context::Context(egl::Display *display,
       mDisplay(display),
       mWebGLContext(GetWebGLContext(attribs)),
       mBufferAccessValidationEnabled(false),
+      mRequiresRobustBehavior(false),
       mExtensionsEnabled(GetExtensionsEnabled(attribs, mWebGLContext)),
       mMemoryProgramCache(memoryProgramCache),
       mMemoryShaderCache(memoryShaderCache),
@@ -977,14 +978,13 @@ egl::Error Context::onDestroy(const egl::Display *display)
     }
     mQueryMap.clear();
 
-    for (auto vertexArray : UnsafeResourceMapIter(mVertexArrayMap))
+    for (auto vertexArray : UnsafeResourceMapIter(getPrivateState().getVertexArrayMap()))
     {
         if (vertexArray.second)
         {
             vertexArray.second->onDestroy(this);
         }
     }
-    mVertexArrayMap.clear();
 
     for (auto transformFeedback : UnsafeResourceMapIter(mTransformFeedbackMap))
     {
@@ -1393,11 +1393,6 @@ Sync *Context::getSync(SyncID syncPacked) const
     return mState.mSyncManager->getSync(syncPacked);
 }
 
-VertexArray *Context::getVertexArray(VertexArrayID handle) const
-{
-    return mVertexArrayMap.query(handle);
-}
-
 Sampler *Context::getSampler(SamplerID handle) const
 {
     return mState.mSamplerManager->getSampler(handle);
@@ -1428,7 +1423,7 @@ gl::LabeledObject *Context::getLabeledObject(GLenum identifier, GLuint name) con
             return getProgramNoResolveLink({name});
         case GL_VERTEX_ARRAY:
         case GL_VERTEX_ARRAY_OBJECT_EXT:
-            return getVertexArray({name});
+            return getPrivateState().getVertexArray({name});
         case GL_QUERY:
         case GL_QUERY_OBJECT_EXT:
             return getQuery({name});
@@ -3202,18 +3197,20 @@ EGLenum Context::getRenderBuffer() const
     return backAttachment->getSurface()->getRenderBuffer();
 }
 
+// This function should only be called by the thread where the context is current (i.e., it's not
+// thread safe).
 VertexArray *Context::checkVertexArrayAllocation(VertexArrayID vertexArrayHandle)
 {
     // Only called after a prior call to Gen.
-    VertexArray *vertexArray = getVertexArray(vertexArrayHandle);
+    VertexArray *vertexArray = getPrivateState().getVertexArray(vertexArrayHandle);
     if (!vertexArray)
     {
         vertexArray = new VertexArray(mImplementation.get(), vertexArrayHandle,
                                       mState.getCaps().maxVertexAttributes,
                                       mState.getCaps().maxVertexAttribBindings);
-        vertexArray->setBufferAccessValidationEnabled(mBufferAccessValidationEnabled);
+        vertexArray->setRobustBufferAccessEnabled(mRequiresRobustBehavior);
 
-        mVertexArrayMap.assign(vertexArrayHandle, vertexArray);
+        getMutablePrivateState()->setVertexArray(vertexArrayHandle, vertexArray);
     }
 
     return vertexArray;
@@ -3233,12 +3230,6 @@ TransformFeedback *Context::checkTransformFeedbackAllocation(
     }
 
     return transformFeedback;
-}
-
-bool Context::isVertexArrayGenerated(VertexArrayID vertexArray) const
-{
-    ASSERT(mVertexArrayMap.contains({0}));
-    return mVertexArrayMap.contains(vertexArray);
 }
 
 bool Context::isTransformFeedbackGenerated(TransformFeedbackID transformFeedback) const
@@ -3576,7 +3567,7 @@ void Context::initVersionStrings()
     else
     {
         versionString << "OpenGL ES ";
-        versionString << clientVersion.getMajor() << "." << clientVersion.getMinor() << ".0 (ANGLE "
+        versionString << clientVersion.getMajor() << "." << clientVersion.getMinor() << " (ANGLE "
                       << angle::GetANGLEVersionString() << ")";
     }
 
@@ -3764,6 +3755,7 @@ void Context::setExtensionEnabled(const char *name, bool enabled)
             enableIfRequestable("GL_EXT_draw_buffers_indexed");
             enableIfRequestable("GL_EXT_color_buffer_float");
             enableIfRequestable("GL_EXT_color_buffer_half_float");
+            enableIfRequestable("GL_EXT_shader_framebuffer_fetch_non_coherent");
             enableIfRequestable("GL_ANGLE_shader_pixel_local_storage_coherent");
             enableIfRequestable("GL_ANGLE_shader_pixel_local_storage");
         }
@@ -4113,12 +4105,14 @@ Extensions Context::generateSupportedExtensions() const
     // Blob cache extension is provided by the ANGLE frontend
     supportedExtensions.blobCacheANGLE = true;
 
-    // Disable extensions that are implemented through shader compiler transformations
+    // Disable extensions that are implemented through shader compiler transformations or require
+    // shader translator reflection data
     if (mState.usesPassthroughShaders())
     {
         supportedExtensions.multiDrawANGLE                       = false;
         supportedExtensions.shaderPixelLocalStorageANGLE         = false;
         supportedExtensions.shaderPixelLocalStorageCoherentANGLE = false;
+        supportedExtensions.blendFuncExtendedEXT                 = false;
         if (frontendFeatures.clipCullDistanceBrokenWithPassthroughShaders.enabled)
         {
             supportedExtensions.clipCullDistanceEXT = false;
@@ -4471,6 +4465,10 @@ void Context::initCaps()
                   "mobile";
         extensions->depth32OES = false;
 
+        // https://issuetracker.google.com/445241477
+        INFO() << "Disabling GL_EXT_texture_norm16 during capture, which is not widely supported";
+        extensions->textureNorm16EXT = false;
+
         // The corresponding Vulkan extension is presently limited to ARM and Qualcomm
         INFO()
             << "Disabling GL_EXT_texture_compression_astc_decode_mode and "
@@ -4720,17 +4718,18 @@ void Context::updateCaps()
         mTilingDirtyObjects.set(state::DIRTY_OBJECT_DRAW_ATTACHMENTS);
     }
 
-    // We need to validate buffer bounds if we are in a WebGL or robust access context and the
-    // back-end does not support robust buffer access behaviour.
-    mBufferAccessValidationEnabled = (!mSupportedExtensions.robustBufferAccessBehaviorKHR &&
-                                      (mState.isWebGL() || mState.hasRobustAccess()));
+    // If we are in a WebGL or robust access context and the back-end does not support robust buffer
+    // access behaviour, we need to validate the buffer bounds manually.
+    mRequiresRobustBehavior = mState.isWebGL() || mState.hasRobustAccess();
+    mBufferAccessValidationEnabled =
+        !mSupportedExtensions.robustBufferAccessBehaviorKHR && mRequiresRobustBehavior;
 
     // Cache this in the VertexArrays. They need to check it in state change notifications.
     // Note: vertex array objects are private to context and so the map doesn't need locking
-    for (auto vaoIter : UnsafeResourceMapIter(mVertexArrayMap))
+    for (auto vaoIter : UnsafeResourceMapIter(getPrivateState().getVertexArrayMap()))
     {
         VertexArray *vao = vaoIter.second;
-        vao->setBufferAccessValidationEnabled(mBufferAccessValidationEnabled);
+        vao->setRobustBufferAccessEnabled(mRequiresRobustBehavior);
     }
 
     // Reinitialize state cache after extension changes.
@@ -7700,39 +7699,14 @@ void Context::deleteVertexArrays(GLsizei n, const VertexArrayID *arrays)
         if (arrays[arrayIndex].value != 0)
         {
             VertexArray *vertexArrayObject = nullptr;
-            if (mVertexArrayMap.erase(vertexArray, &vertexArrayObject))
+            getMutablePrivateState()->eraseVertexArray(vertexArray, &vertexArrayObject);
+            if (vertexArrayObject != nullptr)
             {
-                if (vertexArrayObject != nullptr)
-                {
-                    detachVertexArray(vertexArray);
-                    vertexArrayObject->onDestroy(this);
-                }
-
-                mVertexArrayHandleAllocator.release(vertexArray.value);
+                detachVertexArray(vertexArray);
+                vertexArrayObject->onDestroy(this);
             }
         }
     }
-}
-
-void Context::genVertexArrays(GLsizei n, VertexArrayID *arrays)
-{
-    for (int arrayIndex = 0; arrayIndex < n; arrayIndex++)
-    {
-        VertexArrayID vertexArray = {mVertexArrayHandleAllocator.allocate()};
-        mVertexArrayMap.assign(vertexArray, nullptr);
-        arrays[arrayIndex] = vertexArray;
-    }
-}
-
-GLboolean Context::isVertexArray(VertexArrayID array) const
-{
-    if (array.value == 0)
-    {
-        return GL_FALSE;
-    }
-
-    VertexArray *vao = getVertexArray(array);
-    return ConvertToGLBoolean(vao != nullptr);
 }
 
 void Context::endTransformFeedback()
@@ -8989,11 +8963,6 @@ bool Context::areBlobCacheFuncsSet() const
 
 void Context::pixelLocalStorageBarrier()
 {
-    if (getExtensions().shaderPixelLocalStorageCoherentANGLE)
-    {
-        return;
-    }
-
     Framebuffer *framebuffer = mState.getDrawFramebuffer();
     ASSERT(framebuffer);
     PixelLocalStorage &pls = framebuffer->getPixelLocalStorage(this);
@@ -10303,12 +10272,6 @@ void StateCache::initialize(Context *context)
     updateCanDraw(context);
 }
 
-void PrivateStateCache::initialize(const Context *context)
-{
-    updateVertexAttribTypesValidation(context);
-    mCachedBasicDrawElementsError = kInvalidPointer;
-}
-
 void StateCache::updateActiveAttribsMask(const Context *context)
 {
     bool isGLES1         = context->isGLES1();
@@ -10658,58 +10621,6 @@ void StateCache::updateTransformFeedbackActiveUnpaused(Context *context)
     mCachedTransformFeedbackActiveUnpaused = xfb && xfb->isActive() && !xfb->isPaused();
 }
 
-void PrivateStateCache::updateVertexAttribTypesValidation(const Context *context)
-{
-    VertexAttribTypeCase halfFloatValidity = (context->getExtensions().vertexHalfFloatOES)
-                                                 ? VertexAttribTypeCase::Valid
-                                                 : VertexAttribTypeCase::Invalid;
-
-    VertexAttribTypeCase vertexType1010102Validity = (context->getExtensions().vertexType1010102OES)
-                                                         ? VertexAttribTypeCase::ValidSize3or4
-                                                         : VertexAttribTypeCase::Invalid;
-
-    if (context->getClientVersion() < ES_3_0)
-    {
-        mCachedVertexAttribTypesValidation = {{
-            {VertexAttribType::Byte, VertexAttribTypeCase::Valid},
-            {VertexAttribType::Short, VertexAttribTypeCase::Valid},
-            {VertexAttribType::UnsignedByte, VertexAttribTypeCase::Valid},
-            {VertexAttribType::UnsignedShort, VertexAttribTypeCase::Valid},
-            {VertexAttribType::Float, VertexAttribTypeCase::Valid},
-            {VertexAttribType::Fixed, VertexAttribTypeCase::Valid},
-            {VertexAttribType::HalfFloatOES, halfFloatValidity},
-        }};
-    }
-    else
-    {
-        mCachedVertexAttribTypesValidation = {{
-            {VertexAttribType::Byte, VertexAttribTypeCase::Valid},
-            {VertexAttribType::Short, VertexAttribTypeCase::Valid},
-            {VertexAttribType::Int, VertexAttribTypeCase::Valid},
-            {VertexAttribType::UnsignedByte, VertexAttribTypeCase::Valid},
-            {VertexAttribType::UnsignedShort, VertexAttribTypeCase::Valid},
-            {VertexAttribType::UnsignedInt, VertexAttribTypeCase::Valid},
-            {VertexAttribType::Float, VertexAttribTypeCase::Valid},
-            {VertexAttribType::HalfFloat, VertexAttribTypeCase::Valid},
-            {VertexAttribType::Fixed, VertexAttribTypeCase::Valid},
-            {VertexAttribType::Int2101010, VertexAttribTypeCase::ValidSize4Only},
-            {VertexAttribType::HalfFloatOES, halfFloatValidity},
-            {VertexAttribType::UnsignedInt2101010, VertexAttribTypeCase::ValidSize4Only},
-            {VertexAttribType::Int1010102, vertexType1010102Validity},
-            {VertexAttribType::UnsignedInt1010102, vertexType1010102Validity},
-        }};
-
-        mCachedIntegerVertexAttribTypesValidation = {{
-            {VertexAttribType::Byte, VertexAttribTypeCase::Valid},
-            {VertexAttribType::Short, VertexAttribTypeCase::Valid},
-            {VertexAttribType::Int, VertexAttribTypeCase::Valid},
-            {VertexAttribType::UnsignedByte, VertexAttribTypeCase::Valid},
-            {VertexAttribType::UnsignedShort, VertexAttribTypeCase::Valid},
-            {VertexAttribType::UnsignedInt, VertexAttribTypeCase::Valid},
-        }};
-    }
-}
-
 void StateCache::updateActiveShaderStorageBufferIndices(Context *context)
 {
     mCachedActiveShaderStorageBufferIndices.reset();
@@ -10763,6 +10674,7 @@ bool StateCache::isCurrentContext(const Context *context,
            &context->getPrivateStateCache() == privateStateCache;
 }
 
+// PrivateStateCache implementation
 PrivateStateCache::PrivateStateCache()
     : mIsCachedBasicDrawStatesErrorValid(true),
       mIsCachedActiveAttribMasksValid(true),
@@ -10772,4 +10684,61 @@ PrivateStateCache::PrivateStateCache()
 
 PrivateStateCache::~PrivateStateCache() = default;
 
+void PrivateStateCache::initialize(const Context *context)
+{
+    updateVertexAttribTypesValidation(context);
+    mCachedBasicDrawElementsError = kInvalidPointer;
+}
+
+void PrivateStateCache::updateVertexAttribTypesValidation(const Context *context)
+{
+    VertexAttribTypeCase halfFloatValidity = (context->getExtensions().vertexHalfFloatOES)
+                                                 ? VertexAttribTypeCase::Valid
+                                                 : VertexAttribTypeCase::Invalid;
+
+    VertexAttribTypeCase vertexType1010102Validity = (context->getExtensions().vertexType1010102OES)
+                                                         ? VertexAttribTypeCase::ValidSize3or4
+                                                         : VertexAttribTypeCase::Invalid;
+
+    if (context->getClientVersion() < ES_3_0)
+    {
+        mCachedVertexAttribTypesValidation = {{
+            {VertexAttribType::Byte, VertexAttribTypeCase::Valid},
+            {VertexAttribType::Short, VertexAttribTypeCase::Valid},
+            {VertexAttribType::UnsignedByte, VertexAttribTypeCase::Valid},
+            {VertexAttribType::UnsignedShort, VertexAttribTypeCase::Valid},
+            {VertexAttribType::Float, VertexAttribTypeCase::Valid},
+            {VertexAttribType::Fixed, VertexAttribTypeCase::Valid},
+            {VertexAttribType::HalfFloatOES, halfFloatValidity},
+        }};
+    }
+    else
+    {
+        mCachedVertexAttribTypesValidation = {{
+            {VertexAttribType::Byte, VertexAttribTypeCase::Valid},
+            {VertexAttribType::Short, VertexAttribTypeCase::Valid},
+            {VertexAttribType::Int, VertexAttribTypeCase::Valid},
+            {VertexAttribType::UnsignedByte, VertexAttribTypeCase::Valid},
+            {VertexAttribType::UnsignedShort, VertexAttribTypeCase::Valid},
+            {VertexAttribType::UnsignedInt, VertexAttribTypeCase::Valid},
+            {VertexAttribType::Float, VertexAttribTypeCase::Valid},
+            {VertexAttribType::HalfFloat, VertexAttribTypeCase::Valid},
+            {VertexAttribType::Fixed, VertexAttribTypeCase::Valid},
+            {VertexAttribType::Int2101010, VertexAttribTypeCase::ValidSize4Only},
+            {VertexAttribType::HalfFloatOES, halfFloatValidity},
+            {VertexAttribType::UnsignedInt2101010, VertexAttribTypeCase::ValidSize4Only},
+            {VertexAttribType::Int1010102, vertexType1010102Validity},
+            {VertexAttribType::UnsignedInt1010102, vertexType1010102Validity},
+        }};
+
+        mCachedIntegerVertexAttribTypesValidation = {{
+            {VertexAttribType::Byte, VertexAttribTypeCase::Valid},
+            {VertexAttribType::Short, VertexAttribTypeCase::Valid},
+            {VertexAttribType::Int, VertexAttribTypeCase::Valid},
+            {VertexAttribType::UnsignedByte, VertexAttribTypeCase::Valid},
+            {VertexAttribType::UnsignedShort, VertexAttribTypeCase::Valid},
+            {VertexAttribType::UnsignedInt, VertexAttribTypeCase::Valid},
+        }};
+    }
+}
 }  // namespace gl

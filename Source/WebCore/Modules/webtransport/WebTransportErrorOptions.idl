@@ -25,8 +25,8 @@
 
 [
     EnabledBySetting=WebTransportEnabled,
+    LegacyNativeDictionaryRequiredInterfaceNullability,
 ] dictionary WebTransportErrorOptions {
     WebTransportErrorSource source = "stream";
-    DOMString message = "";
     [Clamp] unsigned long? streamErrorCode = null;
 };

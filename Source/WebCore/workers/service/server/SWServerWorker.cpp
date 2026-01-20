@@ -37,7 +37,7 @@
 
 namespace WebCore {
 
-static constexpr size_t maxRouteConditionCount = 256;
+static constexpr size_t maxRouteConditionCount = 1024;
 
 HashMap<ServiceWorkerIdentifier, WeakRef<SWServerWorker>>& SWServerWorker::allWorkers()
 {
@@ -96,7 +96,7 @@ ServiceWorkerContextData SWServerWorker::contextData() const
     RefPtr registration = m_registration.get();
     ASSERT(registration);
 
-    return { std::nullopt, registration->data(), m_data.identifier, m_script, m_certificateInfo, m_contentSecurityPolicy, m_crossOriginEmbedderPolicy, m_referrerPolicy, m_data.scriptURL, m_data.type, false, m_lastNavigationWasAppInitiated, m_scriptResourceMap, registration->serviceWorkerPageIdentifier(), registration->navigationPreloadState() };
+    return { std::nullopt, registration->data(), m_data.identifier, m_script, m_certificateInfo, m_contentSecurityPolicy, m_crossOriginEmbedderPolicy, m_referrerPolicy, m_data.scriptURL, m_data.type, false, m_lastNavigationWasAppInitiated, m_scriptResourceMap, registration->serviceWorkerPageIdentifier(), registration->navigationPreloadState(), WTF::map(m_routes, [](auto& route) { return route.copy(); }) };
 }
 
 void SWServerWorker::updateAppInitiatedValue(LastNavigationWasAppInitiated lastNavigationWasAppInitiated)
@@ -498,6 +498,25 @@ void SWServerWorker::unregisterServiceWorkerConnection(SWServerConnectionIdentif
     m_connectionsWithServiceWorker.remove(connectionIdentifier);
 }
 
+// https://w3c.github.io/ServiceWorker/#check-router-registration-limit-algorithm
+static bool checkRouterRegistrationLimit(const Vector<ServiceWorkerRoute>& currentRoutes, const Vector<ServiceWorkerRoute>& newRoutes)
+{
+    size_t result = 1024;
+    for (auto& route : currentRoutes) {
+        auto countResult = countRouterInnerConditions(route.condition, result, 10);
+        if (!countResult)
+            return false;
+        result = *countResult;
+    }
+    for (auto& route : newRoutes) {
+        auto countResult = countRouterInnerConditions(route.condition, result, 10);
+        if (!countResult)
+            return false;
+        result = *countResult;
+    }
+    return true;
+}
+
 std::optional<ExceptionData> SWServerWorker::addRoutes(Vector<ServiceWorkerRoute>&& routes)
 {
     for (auto& route : routes) {
@@ -505,14 +524,8 @@ std::optional<ExceptionData> SWServerWorker::addRoutes(Vector<ServiceWorkerRoute
             return exception;
     }
 
-    size_t routesConditionCount = 0;
-    for (auto& route : routes)
-        routesConditionCount += computeServiceWorkerRouteConditionCount(route);
-    for (auto& route : m_routes)
-        routesConditionCount += computeServiceWorkerRouteConditionCount(route);
-
-    if (routesConditionCount > maxRouteConditionCount)
-        return ExceptionData { ExceptionCode::TypeError, "Too many routes are registered"_s };
+    if (!checkRouterRegistrationLimit(m_routes, routes))
+        return ExceptionData { ExceptionCode::TypeError, "Router registration limit is hit"_s };
 
     m_routes.appendVector(WTF::move(routes));
 
@@ -522,14 +535,12 @@ std::optional<ExceptionData> SWServerWorker::addRoutes(Vector<ServiceWorkerRoute
 // https://w3c.github.io/ServiceWorker/#get-router-source
 RouterSource SWServerWorker::getRouterSource(const FetchOptions& options, const ResourceRequest& request) const
 {
-    if (m_shouldSkipHandleFetch)
-        return RouterSourceEnum::Network;
-
     for (auto& route : m_routes) {
         if (matchRouterCondition(route.condition, options, request, isRunning()))
             return route.source;
     }
-    return RouterSourceEnum::FetchEvent;
+
+    return m_shouldSkipHandleFetch ? RouterSourceEnum::Network : RouterSourceEnum::FetchEvent;
 }
 
 } // namespace WebCore

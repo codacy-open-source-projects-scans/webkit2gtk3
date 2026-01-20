@@ -45,7 +45,7 @@
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
 #include <skia/core/SkColorFilter.h>
 #include <skia/core/SkImage.h>
-#include <skia/core/SkPath.h>
+#include <skia/core/SkPathBuilder.h>
 #include <skia/core/SkPathEffect.h>
 #include <skia/core/SkPathTypes.h>
 #include <skia/core/SkPictureRecorder.h>
@@ -347,7 +347,7 @@ void GraphicsContextSkia::drawNativeImage(NativeImage& nativeImage, const FloatR
 
     m_canvas.drawImageRect(imageForDrawing, normalizedSrcRect, normalizedDestRect, toSkSamplingOptions(m_state.imageInterpolationQuality()), &paint, clampingConstraint);
     if (inExtraTransparencyLayer)
-        endTransparencyLayer();
+        restoreLayer();
 
     if (options.orientation() != ImageOrientation::Orientation::None)
         m_canvas.restore();
@@ -433,7 +433,7 @@ void GraphicsContextSkia::drawSkiaPath(const SkPath& path, SkPaint& paint)
     }
     m_canvas.drawPath(path, paint);
     if (inExtraTransparencyLayer)
-        endTransparencyLayer();
+        restoreLayer();
 }
 
 bool GraphicsContextSkia::drawPathAsSingleElement(const Path& path, SkPaint& paint)
@@ -592,10 +592,9 @@ bool GraphicsContextSkia::drawOutsetShadow(SkPaint& paint, Function<void(const S
     drawFunction(paint);
     paint.setImageFilter(nullptr);
     if (!m_layerStateStack.isEmpty()) {
-        if (auto compositeMode = m_layerStateStack.last().compositeMode) {
-            beginTransparencyLayer(compositeMode->operation, compositeMode->blendMode);
-            return true;
-        }
+        auto& layerState = m_layerStateStack.last();
+        saveLayer(layerState.opacity, layerState.compositeMode);
+        return true;
     }
     return false;
 }
@@ -657,7 +656,7 @@ void GraphicsContextSkia::drawSkiaRect(const SkRect& boundaries, SkPaint& paint)
     }
     m_canvas.drawRect(boundaries, paint);
     if (inExtraTransparencyLayer)
-        endTransparencyLayer();
+        restoreLayer();
 }
 
 void GraphicsContextSkia::fillRect(const FloatRect& boundaries, RequiresClipToRect)
@@ -781,22 +780,22 @@ static SkPath createErrorUnderlinePath(const FloatRect& boundaries)
     const double bottom = y + height;
     const double top = y;
 
-    SkPath path;
+    SkPathBuilder builder;
 
     // Bottom triangle wave, left to right.
-    path.moveTo(SkDoubleToScalar(x - halfSquare), SkDoubleToScalar(top + halfSquare));
+    builder.moveTo(SkDoubleToScalar(x - halfSquare), SkDoubleToScalar(top + halfSquare));
 
     int i = 0;
     for (i = 0; i < widthUnits; i += 2) {
         const double middle = x + (i + 1) * unitWidth;
         const double right = x + (i + 2) * unitWidth;
 
-        path.lineTo(SkDoubleToScalar(middle), SkDoubleToScalar(bottom));
+        builder.lineTo(SkDoubleToScalar(middle), SkDoubleToScalar(bottom));
 
         if (i + 2 == widthUnits)
-            path.lineTo(SkDoubleToScalar(right + halfSquare), SkDoubleToScalar(top + halfSquare));
+            builder.lineTo(SkDoubleToScalar(right + halfSquare), SkDoubleToScalar(top + halfSquare));
         else if (i + 1 != widthUnits)
-            path.lineTo(SkDoubleToScalar(right), SkDoubleToScalar(top + square));
+            builder.lineTo(SkDoubleToScalar(right), SkDoubleToScalar(top + square));
     }
 
     // Top triangle wave, right to left.
@@ -806,18 +805,18 @@ static SkPath createErrorUnderlinePath(const FloatRect& boundaries)
         const double right = x + (i + 2) * unitWidth;
 
         if (i + 1 == widthUnits)
-            path.lineTo(SkDoubleToScalar(middle + halfSquare), SkDoubleToScalar(bottom - halfSquare));
+            builder.lineTo(SkDoubleToScalar(middle + halfSquare), SkDoubleToScalar(bottom - halfSquare));
         else {
             if (i + 2 == widthUnits)
-                path.lineTo(SkDoubleToScalar(right), SkDoubleToScalar(top));
+                builder.lineTo(SkDoubleToScalar(right), SkDoubleToScalar(top));
 
-            path.lineTo(SkDoubleToScalar(middle), SkDoubleToScalar(bottom - halfSquare));
+            builder.lineTo(SkDoubleToScalar(middle), SkDoubleToScalar(bottom - halfSquare));
         }
 
-        path.lineTo(SkDoubleToScalar(left), SkDoubleToScalar(top));
+        builder.lineTo(SkDoubleToScalar(left), SkDoubleToScalar(top));
     }
 
-    return path;
+    return builder.detach();
 }
 
 void GraphicsContextSkia::drawDotsForDocumentMarker(const FloatRect& boundaries, DocumentMarkerLineStyle style)
@@ -854,18 +853,36 @@ void GraphicsContextSkia::setCTM(const AffineTransform& ctm)
     m_canvas.setMatrix(ctm);
 }
 
+void GraphicsContextSkia::saveLayer(float opacity, CompositeMode compositeMode)
+{
+    m_layerStateStack.append({ m_state.compositeMode(), m_state.alpha() });
+
+    SkPaint paint;
+    paint.setAlphaf(opacity);
+    paint.setBlendMode(toSkiaBlendMode(compositeMode.operation, compositeMode.blendMode));
+    m_canvas.saveLayer(nullptr, &paint);
+
+    // When on transparency layer, we don't want to apply opacity and blend operations as when layer ends, we apply them as a whole.
+    setCompositeMode({ CompositeOperator::SourceOver, BlendMode::Normal });
+    setAlpha(1);
+}
+
+void GraphicsContextSkia::restoreLayer()
+{
+    m_canvas.restore();
+    ASSERT(!m_layerStateStack.isEmpty());
+    auto layerState = m_layerStateStack.takeLast();
+    setCompositeMode(layerState.compositeMode);
+    setAlpha(layerState.opacity);
+}
+
 void GraphicsContextSkia::beginTransparencyLayer(float opacity)
 {
     if (!makeGLContextCurrentIfNeeded())
         return;
 
     GraphicsContext::beginTransparencyLayer(opacity);
-    m_layerStateStack.append({ });
-
-    SkPaint paint;
-    paint.setAlphaf(opacity);
-    paint.setBlendMode(toSkiaBlendMode(m_state.compositeMode().operation, m_state.compositeMode().blendMode));
-    m_canvas.saveLayer(nullptr, &paint);
+    saveLayer(opacity, m_state.compositeMode());
 }
 
 void GraphicsContextSkia::beginTransparencyLayer(CompositeOperator operation, BlendMode blendMode)
@@ -874,13 +891,7 @@ void GraphicsContextSkia::beginTransparencyLayer(CompositeOperator operation, Bl
         return;
 
     GraphicsContext::beginTransparencyLayer(operation, blendMode);
-    m_layerStateStack.append({ CompositeMode(operation, blendMode) });
-
-    SkPaint paint;
-    paint.setBlendMode(toSkiaBlendMode(operation, blendMode));
-    m_canvas.saveLayer(nullptr, &paint);
-    // When on transparency layer, we don't want to blend operations as when layer ends, we blend it as a whole.
-    setCompositeMode({ CompositeOperator::SourceOver, BlendMode::Normal });
+    saveLayer(m_state.alpha(), CompositeMode(operation, blendMode));
 }
 
 void GraphicsContextSkia::endTransparencyLayer()
@@ -889,12 +900,7 @@ void GraphicsContextSkia::endTransparencyLayer()
         return;
 
     GraphicsContext::endTransparencyLayer();
-    m_canvas.restore();
-    if (!m_layerStateStack.isEmpty()) {
-        auto layerState = m_layerStateStack.takeLast();
-        if (layerState.compositeMode)
-            setCompositeMode(*layerState.compositeMode);
-    }
+    restoreLayer();
 }
 
 void GraphicsContextSkia::clearRect(const FloatRect& rect)
@@ -1027,7 +1033,7 @@ void GraphicsContextSkia::fillRoundedRectImpl(const FloatRoundedRect& rect, cons
     }
     m_canvas.drawRRect(rect, paint);
     if (inExtraTransparencyLayer)
-        endTransparencyLayer();
+        restoreLayer();
 }
 
 void GraphicsContextSkia::fillRectWithRoundedHole(const FloatRect& outerRect, const FloatRoundedRect& innerRRect, const Color& color)
@@ -1234,7 +1240,7 @@ void GraphicsContextSkia::drawSkiaText(const sk_sp<SkTextBlob>& blob, SkScalar x
         }
         m_canvas.drawTextBlob(blob, x, y, paint);
         if (inExtraTransparencyLayer)
-            endTransparencyLayer();
+            restoreLayer();
     }
 
     if (textDrawingMode().contains(TextDrawingMode::Stroke)) {

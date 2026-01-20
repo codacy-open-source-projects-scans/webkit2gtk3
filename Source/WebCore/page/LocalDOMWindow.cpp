@@ -2583,13 +2583,13 @@ EventTimingInteractionID LocalDOMWindow::computeInteractionID(Event& event, Even
     }
     case EventType::click: {
         auto clickEvent = downcast<MouseEvent>(&event);
-        bool isBeingSimulatedDuringDefaultDispatch = clickEvent->isSimulated() && clickEvent->underlyingEvent() && clickEvent->underlyingEvent()->isKeyboardEvent();
-        if (isBeingSimulatedDuringDefaultDispatch) {
-            auto keyboardEvent = downcast<KeyboardEvent>(clickEvent->underlyingEvent());
-            if (keyboardEvent->interactionID().isUnassigned())
-                keyboardEvent->setInteractionID(generateInteractionID());
+        if (clickEvent->isSimulated()) {
+            if (auto* keyboardEvent = dynamicDowncast<KeyboardEvent>(clickEvent->underlyingEvent())) {
+                if (keyboardEvent->interactionID().isUnassigned())
+                    keyboardEvent->setInteractionID(generateInteractionID());
 
-            return keyboardEvent->interactionID();
+                return keyboardEvent->interactionID();
+            }
         }
 
         if (m_pointerMap.isUnassigned())
@@ -2986,7 +2986,7 @@ ExceptionOr<RefPtr<WindowProxy>> LocalDOMWindow::open(LocalDOMWindow& activeWind
         return newFrameOrException.releaseException();
 
     auto newFrame = newFrameOrException.releaseReturnValue();
-    return newFrame ? &newFrame->windowProxy() : RefPtr<WindowProxy> { nullptr };
+    return newFrame ? &newFrame->windowProxy() : nullptr;
 }
 
 void LocalDOMWindow::showModalDialog(const String& urlString, const String& dialogFeaturesString, LocalDOMWindow& activeWindow, LocalDOMWindow& firstWindow, NOESCAPE const Function<void(LocalDOMWindow&)>& prepareDialogFunction)

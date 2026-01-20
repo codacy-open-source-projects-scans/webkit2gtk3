@@ -190,12 +190,12 @@ bool CanSupportYuvInternalFormat(const Renderer *renderer)
 
     const Format &twoPlane8bitYuvFormat = renderer->getFormat(GL_G8_B8R8_2PLANE_420_UNORM_ANGLE);
     bool twoPlane8bitYuvFormatSupported = renderer->hasImageFormatFeatureBits(
-        twoPlane8bitYuvFormat.getActualImageFormatID(vk::ImageAccess::SampleOnly),
+        twoPlane8bitYuvFormat.getActualImageFormatID(vk::ImageFormatSupport::SampleOnly),
         VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT);
 
     const Format &threePlane8bitYuvFormat = renderer->getFormat(GL_G8_B8_R8_3PLANE_420_UNORM_ANGLE);
     bool threePlane8bitYuvFormatSupported = renderer->hasImageFormatFeatureBits(
-        threePlane8bitYuvFormat.getActualImageFormatID(vk::ImageAccess::SampleOnly),
+        threePlane8bitYuvFormat.getActualImageFormatID(vk::ImageFormatSupport::SampleOnly),
         VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT);
 
     return twoPlane8bitYuvFormatSupported && threePlane8bitYuvFormatSupported;
@@ -900,9 +900,10 @@ void Renderer::ensureCapsInitialized() const
     mNativeCaps.maxAtomicCounterBufferSize     = maxStorageBufferRange;
 
     // There is no particular limit to how many atomic counters there can be, other than the size of
-    // a storage buffer.  We nevertheless limit this to something reasonable (4096 arbitrarily).
+    // a storage buffer.  We nevertheless limit this to something reasonable; 32 arbitrarily, which
+    // is more than what most GLES drivers support (8, the minimum required value).
     const int32_t maxAtomicCounters =
-        std::min<int32_t>(4096, maxStorageBufferRange / sizeof(uint32_t));
+        std::min<int32_t>(32, maxStorageBufferRange / sizeof(uint32_t));
     for (gl::ShaderType shaderType : gl::AllShaderTypes())
     {
         mNativeCaps.maxShaderAtomicCounters[shaderType] = maxAtomicCounters;
@@ -1355,9 +1356,10 @@ void Renderer::ensureCapsInitialized() const
     // GL_QCOM_shading_rate
     mNativeExtensions.shadingRateQCOM = mFeatures.supportsFragmentShadingRate.enabled;
 
-    // GL_EXT_fragment_shading_rate, will enable after CTS fix patch merged.
-    mNativeExtensions.fragmentShadingRateEXT = false;
-    mNativeExtensions.fragmentShadingRatePrimitiveEXT = false;
+    // GL_EXT_fragment_shading_rate
+    mNativeExtensions.fragmentShadingRateEXT = mFeatures.supportsFragmentShadingRate.enabled;
+    mNativeExtensions.fragmentShadingRatePrimitiveEXT =
+        mFeatures.supportsPrimitiveFragmentShadingRate.enabled;
 
     // GL_QCOM_framebuffer_foveated
     mNativeExtensions.framebufferFoveatedQCOM = mFeatures.supportsFoveatedRendering.enabled;
@@ -1370,25 +1372,21 @@ void Renderer::ensureCapsInitialized() const
     //   * The Vulkan backend limits the ES version to 2.0 when drawBuffersIndexed is not supported.
     //   * The frontend disables all ES 3.x extensions when the context version is too low for them.
     //   * This means it is impossible on Vulkan to have pixel local storage without DBI.
-    if (mNativeExtensions.drawBuffersIndexedAny())
+    if (mFeatures.supportShaderPixelLocalStorageAngle.enabled &&
+        mNativeExtensions.drawBuffersIndexedAny())
     {
-        // With drawBuffersIndexed, we can always at least support non-coherent PLS with input
-        // attachments.
         mNativeExtensions.shaderPixelLocalStorageANGLE = true;
 
-        if (!mIsColorFramebufferFetchCoherent &&
-            getFeatures().supportsFragmentShaderPixelInterlock.enabled)
-        {
-            // Use shader images with VK_EXT_fragment_shader_interlock, instead of input
-            // attachments, if they're our only option to be coherent.
-            mNativeExtensions.shaderPixelLocalStorageCoherentANGLE = true;
-            mNativePLSOptions.type = ShPixelLocalStorageType::ImageLoadStore;
-            // GL_ARB_fragment_shader_interlock compiles to SPV_EXT_fragment_shader_interlock.
-            mNativePLSOptions.fragmentSyncType =
-                ShFragmentSynchronizationType::FragmentShaderInterlock_ARB_GL;
-            mNativePLSOptions.supportsNativeRGBA8ImageFormats = true;
-        }
-        else
+        // Prefer framebuffer fetch in almost all cases if it's available, except if framebuffer
+        // fetch isn't coherent *and* fragment shader pixel interlock is available. This is the case
+        // on many desktop GPUs. Fall back to using shader images with interlock to provide coherent
+        // PLS in this case.
+        bool fetchIsNonCoherentButHasInterlock =
+            !mIsColorFramebufferFetchCoherent &&
+            getFeatures().supportsFragmentShaderPixelInterlock.enabled;
+
+        if (getFeatures().supportsShaderFramebufferFetch.enabled &&
+            !fetchIsNonCoherentButHasInterlock)
         {
             // Input attachments are the preferred implementation for PLS on Vulkan.
             mNativeExtensions.shaderPixelLocalStorageCoherentANGLE =
@@ -1397,6 +1395,27 @@ void Renderer::ensureCapsInitialized() const
             mNativePLSOptions.fragmentSyncType = mIsColorFramebufferFetchCoherent
                                                      ? ShFragmentSynchronizationType::Automatic
                                                      : ShFragmentSynchronizationType::NotSupported;
+        }
+        else
+        {
+            mNativePLSOptions.type = ShPixelLocalStorageType::ImageLoadStore;
+            mNativePLSOptions.supportsNativeRGBA8ImageFormats = true;
+
+            if (getFeatures().supportsFragmentShaderPixelInterlock.enabled)
+            {
+                // Use shader images with VK_EXT_fragment_shader_interlock, instead of input
+                // attachments, if they're our only option to be coherent.
+                mNativeExtensions.shaderPixelLocalStorageCoherentANGLE = true;
+                // GL_ARB_fragment_shader_interlock compiles to SPV_EXT_fragment_shader_interlock.
+                mNativePLSOptions.fragmentSyncType =
+                    ShFragmentSynchronizationType::FragmentShaderInterlock_ARB_GL;
+            }
+            else
+            {
+                // If fragment shader pixel interlock isn't supported, then only non-coherent PLS is
+                // supported.
+                mNativePLSOptions.fragmentSyncType = ShFragmentSynchronizationType::NotSupported;
+            }
         }
     }
 

@@ -254,9 +254,6 @@ class Renderer : angle::NonCopyable
                                                   size_t *pipelineCacheSizeOut,
                                                   size_t lastSyncSize,
                                                   std::vector<uint8_t> *pipelineCacheDataOut);
-    angle::Result syncPipelineCacheVk(vk::ErrorContext *context,
-                                      vk::GlobalOps *globalOps,
-                                      const gl::Context *contextGL);
 
     const angle::FeaturesVk &getFeatures() const { return mFeatures; }
     uint32_t getMaxVertexAttribDivisor() const { return mMaxVertexAttribDivisor; }
@@ -516,9 +513,13 @@ class Renderer : angle::NonCopyable
         return mEventStageToPipelineStageFlagsMap[eventStage];
     }
 
-    const ImageMemoryBarrierData &getImageMemoryBarrierData(ImageLayout layout) const
+    const ImageMemoryBarrierData &getImageMemoryBarrierData(ImageAccess imageAccess) const
     {
-        return mImageLayoutAndMemoryBarrierDataMap[layout];
+        return mImageLayoutAndMemoryBarrierDataMap[imageAccess];
+    }
+    VkImageLayout getVkImageLayout(ImageAccess imageAccess) const
+    {
+        return getImageMemoryBarrierData(imageAccess).layout;
     }
 
     VkShaderStageFlags getSupportedVulkanShaderStageMask() const
@@ -716,6 +717,21 @@ class Renderer : angle::NonCopyable
     uint32_t getPreferredVectorWidthDouble() const { return mPreferredVectorWidthDouble; }
     uint32_t getPreferredVectorWidthHalf() const { return mPreferredVectorWidthHalf; }
 
+    bool isVertexAttributeInstanceRateZeroDivisorAllowed() const
+    {
+        return !mFeatures.supportsVertexInputDynamicState.enabled ||
+               mVertexAttributeDivisorFeatures.vertexAttributeInstanceRateZeroDivisor == VK_TRUE;
+    }
+
+    uint32_t getMinCommandCountToSubmit() const { return mMinCommandCountToSubmit; }
+
+    angle::Result onFrameBoundary(const gl::Context *contextGL);
+
+    uint32_t getMinRenderPassWriteCommandCountToEarlySubmit() const
+    {
+        return mMinRPWriteCommandCountToEarlySubmit;
+    }
+
   private:
     angle::Result setupDevice(vk::ErrorContext *context,
                               const angle::FeatureOverrides &featureOverrides,
@@ -772,6 +788,7 @@ class Renderer : angle::NonCopyable
                                     vk::PipelineCache *pipelineCache,
                                     bool *success);
     angle::Result ensurePipelineCacheInitialized(vk::ErrorContext *context);
+    angle::Result syncPipelineCacheVk(const gl::Context *contextGL);
 
     template <VkFormatFeatureFlags VkFormatProperties::*features>
     VkFormatFeatureFlags getFormatFeatureBits(angle::FormatID formatID,
@@ -917,10 +934,13 @@ class Renderer : angle::NonCopyable
     VkPhysicalDeviceMaintenance3Properties mMaintenance3Properties;
     VkPhysicalDeviceFaultFeaturesEXT mFaultFeatures;
     VkPhysicalDeviceASTCDecodeFeaturesEXT mPhysicalDeviceAstcDecodeFeatures;
+    VkPhysicalDeviceUnifiedImageLayoutsFeaturesKHR mUnifiedImageLayoutsFeatures;
     VkPhysicalDeviceShaderIntegerDotProductFeatures mShaderIntegerDotProductFeatures;
     VkPhysicalDeviceShaderIntegerDotProductProperties mShaderIntegerDotProductProperties;
     VkPhysicalDeviceGlobalPriorityQueryFeaturesEXT mPhysicalDeviceGlobalPriorityQueryFeatures;
     VkPhysicalDeviceExternalMemoryHostPropertiesEXT mExternalMemoryHostProperties;
+    VkPhysicalDeviceBufferDeviceAddressFeaturesKHR mBufferDeviceAddressFeatures;
+    VkPhysicalDeviceShaderAtomicInt64Features mShaderAtomicInt64Features;
 
     uint32_t mLegacyDitheringVersion = 0;
 
@@ -981,8 +1001,8 @@ class Renderer : angle::NonCopyable
     // 1. initialization of the cache
     // 2. Vulkan driver guarantees synchronization for read and write operations but the spec
     //    requires external synchronization when mPipelineCache is the dstCache of
-    //    vkMergePipelineCaches. Lock the mutex if mergeProgramPipelineCachesToGlobalCache is
-    //    enabled
+    //    vkMergePipelineCaches. Though some buggy vulkan drivers need external synchronization
+    //    for all access. Lock the mutex if externallySynchronizePipelineCacheAccess is enabled
     angle::SimpleMutex mPipelineCacheMutex;
     vk::PipelineCache mPipelineCache;
     size_t mCurrentPipelineCacheBlobCacheSlotIndex;
@@ -1077,7 +1097,7 @@ class Renderer : angle::NonCopyable
     VkShaderStageFlags mSupportedVulkanShaderStageMask;
     // The 1:1 mapping between EventStage and VkPipelineStageFlags
     EventStageToVkPipelineStageFlagsMap mEventStageToPipelineStageFlagsMap;
-    ImageLayoutToMemoryBarrierDataMap mImageLayoutAndMemoryBarrierDataMap;
+    ImageAccessToMemoryBarrierDataMap mImageLayoutAndMemoryBarrierDataMap;
 
     // Use thread pool to compress cache data.
     std::shared_ptr<angle::WaitableEvent> mCompressEvent;
@@ -1111,6 +1131,14 @@ class Renderer : angle::NonCopyable
     uint32_t mNativeVectorWidthHalf;
     uint32_t mPreferredVectorWidthDouble;
     uint32_t mPreferredVectorWidthHalf;
+
+    // The number of minimum commands in the command buffer to prefer submit at FBO boundary or
+    // immediately submit when the device is idle after calling to flush.
+    uint32_t mMinCommandCountToSubmit;
+
+    // The number of minimum write commands in the command buffer to trigger one submission of
+    // pending commands at draw call time
+    uint32_t mMinRPWriteCommandCountToEarlySubmit;
 };
 
 ANGLE_INLINE Serial Renderer::generateQueueSerial(SerialIndex index)

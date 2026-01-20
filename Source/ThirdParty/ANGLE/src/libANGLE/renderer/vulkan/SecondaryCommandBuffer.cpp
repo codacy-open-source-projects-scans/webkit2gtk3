@@ -52,6 +52,12 @@ const char *GetCommandString(CommandID id)
             return "BindVertexBuffers";
         case CommandID::BindVertexBuffers2:
             return "BindVertexBuffers2";
+        case CommandID::BindVertexBuffers2NoSize:
+            return "BindVertexBuffers2NoSize";
+        case CommandID::BindVertexBuffers2NoSizeNoStride:
+            return "BindVertexBuffers2NoSizeNoStride";
+        case CommandID::BindVertexBuffers2NoStride:
+            return "BindVertexBuffers2NoStride";
         case CommandID::BlitImage:
             return "BlitImage";
         case CommandID::BufferBarrier:
@@ -323,18 +329,56 @@ void SecondaryCommandBuffer::executeCommands(PrimaryCommandBuffer *primary)
                     const VkBuffer *buffers = GetFirstArrayParameter<VkBuffer>(params);
                     const VkDeviceSize *offsets =
                         GetNextArrayParameter<VkDeviceSize>(buffers, params->bindingCount);
+                    const VkDeviceSize *sizes =
+                        GetNextArrayParameter<VkDeviceSize>(offsets, params->bindingCount);
+                    const VkDeviceSize *strides =
+                        GetNextArrayParameter<VkDeviceSize>(sizes, params->bindingCount);
+                    vkCmdBindVertexBuffers2EXT(cmdBuffer, 0, params->bindingCount, buffers, offsets,
+                                               sizes, strides);
+                    break;
+                }
+                case CommandID::BindVertexBuffers2NoSize:
+                {
+                    const BindVertexBuffers2NoSizeParams *params =
+                        getParamPtr<BindVertexBuffers2NoSizeParams>(currentCommand);
+                    const VkBuffer *buffers = GetFirstArrayParameter<VkBuffer>(params);
+                    const VkDeviceSize *offsets =
+                        GetNextArrayParameter<VkDeviceSize>(buffers, params->bindingCount);
                     const VkDeviceSize *strides =
                         GetNextArrayParameter<VkDeviceSize>(offsets, params->bindingCount);
                     vkCmdBindVertexBuffers2EXT(cmdBuffer, 0, params->bindingCount, buffers, offsets,
                                                nullptr, strides);
                     break;
                 }
+                case CommandID::BindVertexBuffers2NoSizeNoStride:
+                {
+                    const BindVertexBuffers2NoSizeNoStrideParams *params =
+                        getParamPtr<BindVertexBuffers2NoSizeNoStrideParams>(currentCommand);
+                    const VkBuffer *buffers = GetFirstArrayParameter<VkBuffer>(params);
+                    const VkDeviceSize *offsets =
+                        GetNextArrayParameter<VkDeviceSize>(buffers, params->bindingCount);
+                    vkCmdBindVertexBuffers2EXT(cmdBuffer, 0, params->bindingCount, buffers, offsets,
+                                               nullptr, nullptr);
+                    break;
+                }
+                case CommandID::BindVertexBuffers2NoStride:
+                {
+                    const BindVertexBuffers2NoStrideParams *params =
+                        getParamPtr<BindVertexBuffers2NoStrideParams>(currentCommand);
+                    const VkBuffer *buffers = GetFirstArrayParameter<VkBuffer>(params);
+                    const VkDeviceSize *offsets =
+                        GetNextArrayParameter<VkDeviceSize>(buffers, params->bindingCount);
+                    const VkDeviceSize *sizes =
+                        GetNextArrayParameter<VkDeviceSize>(offsets, params->bindingCount);
+                    vkCmdBindVertexBuffers2EXT(cmdBuffer, 0, params->bindingCount, buffers, offsets,
+                                               sizes, nullptr);
+                    break;
+                }
                 case CommandID::BlitImage:
                 {
                     const BlitImageParams *params = getParamPtr<BlitImageParams>(currentCommand);
-                    vkCmdBlitImage(cmdBuffer, params->srcImage,
-                                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, params->dstImage,
-                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &params->region,
+                    vkCmdBlitImage(cmdBuffer, params->srcImage, params->srcImageLayout,
+                                   params->dstImage, params->dstImageLayout, 1, &params->region,
                                    params->filter);
                     break;
                 }
@@ -688,9 +732,8 @@ void SecondaryCommandBuffer::executeCommands(PrimaryCommandBuffer *primary)
                 {
                     const ResolveImageParams *params =
                         getParamPtr<ResolveImageParams>(currentCommand);
-                    vkCmdResolveImage(cmdBuffer, params->srcImage,
-                                      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, params->dstImage,
-                                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &params->region);
+                    vkCmdResolveImage(cmdBuffer, params->srcImage, params->srcImageLayout,
+                                      params->dstImage, params->dstImageLayout, 1, &params->region);
                     break;
                 }
                 case CommandID::SetBlendConstants:
@@ -893,7 +936,7 @@ void SecondaryCommandBuffer::executeCommands(PrimaryCommandBuffer *primary)
                 {
                     const WriteTimestampParams *params =
                         getParamPtr<WriteTimestampParams>(currentCommand);
-                    vkCmdWriteTimestamp(cmdBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                    vkCmdWriteTimestamp(cmdBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                                         params->queryPool, params->query);
                     break;
                 }
@@ -901,7 +944,7 @@ void SecondaryCommandBuffer::executeCommands(PrimaryCommandBuffer *primary)
                 {
                     const WriteTimestampParams *params =
                         getParamPtr<WriteTimestampParams>(currentCommand);
-                    vkCmdWriteTimestamp2KHR(cmdBuffer, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
+                    vkCmdWriteTimestamp2KHR(cmdBuffer, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
                                             params->queryPool, params->query);
                     break;
                 }

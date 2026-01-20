@@ -278,7 +278,8 @@ AllowMultiElementImplicitSubmission:
 
 AllowMultipleCommitLayerTreePending:
   type: bool
-  status: internal
+  status: testable
+  category: dom
   humanReadableName: "Allow requesting CommitLayerTree before the previous has completed"
   humanReadableDescription: "Allow requesting CommitLayerTree before the previous has completed"
   defaultValue:
@@ -741,20 +742,6 @@ AutomaticallyForceEnableScrollingIfNeededToRevealUI:
     WebCore:
       default: true
 
-AuxclickEventEnabled:
-  type: bool
-  status: stable
-  category: dom
-  humanReadableName: "Enable `auxclick` event"
-  humanReadableDescription: "Enable the `auxclick` UI event"
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
-
 AzimuthAngleEnabled:
   type: bool
   status: stable
@@ -1129,20 +1116,6 @@ CSSConstrainedDynamicRangeLimitEnabled:
     WebCore:
       default: false
 
-CSSContrastColorEnabled:
-  type: bool
-  category: css
-  status: stable
-  humanReadableName: "CSS contrast-color()"
-  humanReadableDescription: "Enable support for CSS Color Module Level 5 contrast-color()"
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
-
 CSSCornerShapeEnabled:
   type: bool
   category: css
@@ -1460,20 +1433,6 @@ CSSSelectorJITCompilerEnabled:
   humanReadableName: "CSS Selector JIT Compiler"
   humanReadableDescription: "Enable the JIT compiler for CSS selectors"
   condition: ENABLE(CSS_SELECTOR_JIT)
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
-
-CSSShapeFunctionEnabled:
-  type: bool
-  status: stable
-  category: css
-  humanReadableName: "CSS shape() function"
-  humanReadableDescription: "Enable the CSS shape() function"
   defaultValue:
     WebKitLegacy:
       default: true
@@ -3554,20 +3513,6 @@ HTMLEnhancedSelectSelectedContentEnabled:
    category: dom
    humanReadableName: "Enhanced HTML select: selectedcontent element"
    humanReadableDescription: "Enable enhanced HTML select: selectedcontent element"
-   defaultValue:
-     WebKitLegacy:
-       default: false
-     WebKit:
-       default: false
-     WebCore:
-       default: false
-
-HTMLLegacyAttributeValueSerializationEnabled:
-   type: bool
-   status: internal
-   category: dom
-   humanReadableName: "HTML legacy attribute value serialization"
-   humanReadableDescription: "Enable HTML legacy attribute value serialization"
    defaultValue:
      WebKitLegacy:
        default: false
@@ -5963,17 +5908,17 @@ OptInPartitionedCookiesEnabled:
 
 OriginAPIEnabled:
   type: bool
-  status: testable
+  status: stable
   category: dom
   humanReadableName: "Origin API"
   humanReadableDescription: "Enable the Origin API"
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 OverlappingBackingStoreProvidersEnabled:
   type: bool
@@ -6545,17 +6490,17 @@ ReadableByteStreamFetchSourceEnabled:
 
 ReadableStreamIterableEnabled:
   type: bool
-  status: preview
+  status: stable
   category: dom
   humanReadableName: "ReadableStream async iterable"
   humanReadableDescription: "Enable ReadableStream async iterable"
   defaultValue:
     WebCore:
-      default: false
+      default: true
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
 
 RemoteMediaSessionManagerEnabled:
   type: bool
@@ -7028,20 +6973,6 @@ ScrollAnimatorEnabled:
       default: false
     WebCore:
       default: false
-
-ScrollDrivenAnimationsEnabled:
-  type: bool
-  status: stable
-  category: animation
-  humanReadableName: "Scroll-driven Animations"
-  humanReadableDescription: "Enable Scroll-driven Animations"
-  defaultValue:
-    WebKitLegacy:
-      default: false
-    WebKit:
-      default: true
-    WebCore:
-      default: true
 
 ScrollToTextFragmentEnabled:
   type: bool
@@ -7820,17 +7751,17 @@ SpeakerSelectionRequiresUserGesture:
 
 SpeculationRulesPrefetchEnabled:
   type: bool
-  status: testable
+  status: stable
   category: html
   humanReadableName: "SpeculationRules prefetch"
   humanReadableDescription: "SpeculationRules prefetch"
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
   disableInLockdownMode: true
   sharedPreferenceForWebProcess: true
   richJavaScript: true
@@ -9159,20 +9090,6 @@ WebAnimationsCustomFrameRateEnabled:
       default: false
     WebCore:
       default: false
-
-WebAnimationsOverallProgressPropertyEnabled:
-  type: bool
-  status: stable
-  category: animation
-  humanReadableName: "Web Animations 'overallProgress' property"
-  humanReadableDescription: "Support for Animation's overallProgress property"
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
 
 WebArchiveDebugModeEnabled:
   type: bool

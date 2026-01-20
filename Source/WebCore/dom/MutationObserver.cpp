@@ -143,14 +143,13 @@ void MutationObserver::observationEnded(MutationObserverRegistration& registrati
 void MutationObserver::enqueueMutationRecord(Ref<MutationRecord>&& mutation)
 {
     ASSERT(isMainThread());
-    ASSERT(mutation->target());
-    Ref document = mutation->target()->document();
+    Ref document = mutation->target().document();
 
-    m_pendingTargets.add(*mutation->target());
+    m_pendingTargets.add(mutation->target());
     m_records.append(WTF::move(mutation));
 
     Ref eventLoop = document->windowEventLoop();
-    eventLoop->activeMutationObservers().add(this);
+    eventLoop->activeMutationObservers().add(*this);
     eventLoop->queueMutationObserverCompoundMicrotask();
 }
 
@@ -179,7 +178,7 @@ void MutationObserver::enqueueShadowRootAttachedEvent(Element& element)
 void MutationObserver::setHasTransientRegistration(Document& document)
 {
     Ref eventLoop = document.windowEventLoop();
-    eventLoop->activeMutationObservers().add(this);
+    eventLoop->activeMutationObservers().add(*this);
     eventLoop->queueMutationObserverCompoundMicrotask();
 }
 

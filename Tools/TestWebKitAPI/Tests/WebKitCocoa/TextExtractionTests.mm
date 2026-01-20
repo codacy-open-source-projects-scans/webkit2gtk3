@@ -29,6 +29,7 @@
 #import "PlatformUtilities.h"
 #import "SafeBrowsingSPI.h"
 #import "Test.h"
+#import "TestNavigationDelegate.h"
 #import "TestWKWebView.h"
 #import "Utilities.h"
 #import <WebKit/WKContentWorldPrivate.h>
@@ -46,6 +47,8 @@ SOFT_LINK_CLASS(SafariSafeBrowsing, SSBLookupContext);
 - (NSString *)synchronouslyGetDebugText:(_WKTextExtractionConfiguration *)configuration;
 - (_WKTextExtractionResult *)synchronouslyExtractDebugTextResult:(_WKTextExtractionConfiguration *)configuration;
 - (_WKTextExtractionInteractionResult *)synchronouslyPerformInteraction:(_WKTextExtractionInteraction *)interaction;
+- (NSData *)synchronouslyGetSelectorPathDataForNode:(_WKJSHandle *)node;
+- (_WKJSHandle *)synchronouslyGetNodeForSelectorPathData:(NSData *)data;
 @end
 
 @interface _WKTextExtractionInteraction (TextExtractionTests)
@@ -85,6 +88,30 @@ SOFT_LINK_CLASS(SafariSafeBrowsing, SSBLookupContext);
     __block RetainPtr<_WKTextExtractionInteractionResult> result;
     [self _performInteraction:interaction completionHandler:^(_WKTextExtractionInteractionResult *theResult) {
         result = theResult;
+        done = true;
+    }];
+    TestWebKitAPI::Util::run(&done);
+    return result.autorelease();
+}
+
+- (NSData *)synchronouslyGetSelectorPathDataForNode:(_WKJSHandle *)node
+{
+    __block bool done = false;
+    __block RetainPtr<NSData> result;
+    [self _getSelectorPathDataForNode:node completionHandler:^(NSData *data) {
+        result = data;
+        done = true;
+    }];
+    TestWebKitAPI::Util::run(&done);
+    return result.autorelease();
+}
+
+- (_WKJSHandle *)synchronouslyGetNodeForSelectorPathData:(NSData *)data
+{
+    __block bool done = false;
+    __block RetainPtr<_WKJSHandle> result;
+    [self _getNodeForSelectorPathData:data completionHandler:^(_WKJSHandle *handle) {
+        result = handle;
         done = true;
     }];
     TestWebKitAPI::Util::run(&done);
@@ -137,7 +164,7 @@ static NSString *extractNodeIdentifier(NSString *debugText, NSString *searchText
         if (![line containsString:searchText])
             continue;
 
-        RetainPtr regex = [NSRegularExpression regularExpressionWithPattern:@"uid=(\\d+)" options:0 error:nil];
+        RetainPtr regex = [NSRegularExpression regularExpressionWithPattern:@"uid=(((?:\\d+_)+)?\\d+)" options:0 error:nil];
         RetainPtr match = [regex firstMatchInString:line options:0 range:NSMakeRange(0, line.length)];
         if (!match)
             continue;
@@ -452,9 +479,8 @@ TEST(TextExtractionTests, NodesToSkip)
     }()];
 
     NSArray<NSString *> *lines = [debugText componentsSeparatedByString:@"\n"];
-    EXPECT_EQ([lines count], 3u);
-    EXPECT_WK_STREQ("Test", lines[0]);
-    EXPECT_WK_STREQ("0", lines[1]);
+    EXPECT_EQ([lines count], 2u);
+    EXPECT_WK_STREQ("Test 0", lines[0]);
 }
 
 TEST(TextExtractionTests, RequestJSHandleForNodeIdentifier)
@@ -497,6 +523,45 @@ TEST(TextExtractionTests, RequestJSHandleForNodeIdentifier)
     }()];
 
     EXPECT_WK_STREQ(debugTextForBody.get(), @"root,'“The quick brown fox jumped over the lazy dog”'\nversion=2");
+}
+
+TEST(TextExtractionTests, ResolveTargetNodeFromSelectorData)
+{
+    RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
+    [[configuration preferences] _setTextExtractionEnabled:YES];
+
+    RetainPtr selectorData = [&] {
+        RetainPtr originalWebView = adoptNS([[TestWKWebView alloc] initWithFrame:CGRectMake(0, 0, 800, 600) configuration:configuration.get()]);
+        [originalWebView synchronouslyLoadTestPageNamed:@"debug-text-extraction"];
+
+        RetainPtr world = [WKContentWorld _worldWithConfiguration:^{
+            RetainPtr configuration = adoptNS([_WKContentWorldConfiguration new]);
+            [configuration setAllowJSHandleCreation:YES];
+            return configuration.autorelease();
+        }()];
+
+        RetainPtr subjectHandle = [originalWebView querySelector:@"h3" frame:nil world:world.get()];
+        return [originalWebView synchronouslyGetSelectorPathDataForNode:subjectHandle.get()];
+    }();
+
+    EXPECT_NOT_NULL(selectorData.get());
+
+    RetainPtr newWebView = adoptNS([[TestWKWebView alloc] initWithFrame:CGRectMake(0, 0, 800, 600) configuration:configuration.get()]);
+    [newWebView synchronouslyLoadTestPageNamed:@"debug-text-extraction"];
+
+    RetainPtr resolvedHandle = [newWebView synchronouslyGetNodeForSelectorPathData:selectorData.get()];
+    EXPECT_NOT_NULL(resolvedHandle.get());
+
+    RetainPtr debugText = [newWebView synchronouslyGetDebugText:^{
+        RetainPtr configuration = adoptNS([_WKTextExtractionConfiguration new]);
+        [configuration setIncludeRects:NO];
+        [configuration setIncludeURLs:NO];
+        [configuration setNodeIdentifierInclusion:_WKTextExtractionNodeIdentifierInclusionNone];
+        [configuration setTargetNode:resolvedHandle.get()];
+        return configuration.autorelease();
+    }()];
+
+    EXPECT_WK_STREQ(debugText.get(), @"root\n\taria-label='Heading','Subject'\nversion=2");
 }
 
 #if HAVE(SAFARI_SAFE_BROWSING_NAMESPACED_LISTS)
@@ -546,5 +611,120 @@ TEST(TextExtractionTests, FilteringRules)
 }
 
 #endif // HAVE(SAFARI_SAFE_BROWSING_NAMESPACED_LISTS)
+
+static String mainFrameMarkup(uint16_t port)
+{
+    return makeString(R"(<!DOCTYPE html>
+        <html>
+            <head>
+                <meta name='viewport' content='width=device-width, initial-scale=1'>
+                <style>
+                    iframe {
+                        width: 300px;
+                        height: 300px;
+                    }
+                </style>
+            </head>
+            <body>
+                <iframe class='same'></iframe>
+                <iframe class='cross'></iframe>
+                <a href='https://webkit.org'>Link to WebKit home page</a>
+                <script>
+                    subframeLoadedCount = 0;
+                    sameOriginFrame = document.querySelector('iframe.same');
+                    sameOriginFrame.addEventListener('load', () => subframeLoadedCount++, { once: true });
+                    sameOriginFrame.src = 'subframe-same.html';
+
+                    crossOriginFrame = document.querySelector('iframe.cross');
+                    crossOriginFrame.addEventListener('load', () => subframeLoadedCount++, { once: true });
+                    crossOriginFrame.src = 'http://localhost:)"_s, port, R"(/subframe-cross.html';
+                </script>
+            </body>
+        </html>)"_s);
+}
+
+static String subFrameMarkup(ASCIILiteral buttonText)
+{
+    return makeString(R"(<!DOCTYPE html>
+        <html>
+            <body>
+                <h1>Click count: <span id='click-count'>0</span></h1>
+                <article aria-label='Button container'>
+                    <button>)"_s, buttonText, R"(</button>
+                </article>
+                <script>
+                    const clickCount = document.getElementById('click-count');
+                    const button = document.querySelector('button');
+                    button.addEventListener('click', () => {
+                        clickCount.textContent = 1 + parseInt(clickCount.textContent);
+                    });
+                </script>
+            </body>
+        </html>)"_s);
+}
+
+TEST(TextExtractionTests, SubframeInteractions)
+{
+    HTTPServer server { {
+        { "/subframe-cross.html"_s, { subFrameMarkup("Cross origin: click here"_s) } },
+        { "/subframe-same.html"_s, { subFrameMarkup("Same origin: click here"_s) } },
+    }, HTTPServer::Protocol::Http };
+
+    server.addResponse("/"_s, { mainFrameMarkup(server.port()) });
+
+    RetainPtr webView = adoptNS([[TestWKWebView alloc] initWithFrame:CGRectMake(0, 0, 400, 400) configuration:^{
+        RetainPtr configuration = adoptNS([[WKWebViewConfiguration alloc] init]);
+        [[configuration preferences] _setTextExtractionEnabled:YES];
+        return configuration.autorelease();
+    }()]);
+
+    __block RetainPtr subframes = adoptNS([NSMutableArray new]);
+    RetainPtr navigationDelegate = adoptNS([TestNavigationDelegate new]);
+    [navigationDelegate setDidCommitLoadWithRequestInFrame:^(WKWebView *, NSURLRequest *, WKFrameInfo *frame) {
+        if (!frame.mainFrame && ![frame.request.URL.scheme isEqualToString:@"about:blank"])
+            [subframes addObject:frame];
+    }];
+    [webView setNavigationDelegate:navigationDelegate.get()];
+    [webView loadRequest:server.request()];
+    [navigationDelegate waitForDidFinishNavigation];
+
+    Util::waitForConditionWithLogging([webView] {
+        return [[webView objectByEvaluatingJavaScript:@"subframeLoadedCount"] intValue] == 2;
+    }, 2, @"Expected subframes to finish loading.");
+
+    RetainPtr extractionConfiguration = adoptNS([_WKTextExtractionConfiguration new]);
+    [extractionConfiguration setIncludeRects:NO];
+    [extractionConfiguration setIncludeURLs:NO];
+    [extractionConfiguration setAdditionalFrames:subframes.get()];
+
+    RetainPtr debugText = [webView synchronouslyGetDebugText:extractionConfiguration.get()];
+    {
+        RetainPtr interaction = adoptNS([[_WKTextExtractionInteraction alloc] initWithAction:_WKTextExtractionActionClick]);
+        [interaction setNodeIdentifier:extractNodeIdentifier(debugText.get(), @"Same origin: click here")];
+
+        NSError *error = nil;
+        RetainPtr description = [interaction debugDescriptionInWebView:webView.get() error:&error];
+        EXPECT_WK_STREQ(description.get(), @"Click on button under article labeled “Button container”, with rendered text “Same origin: click here”");
+
+        RetainPtr result = [webView synchronouslyPerformInteraction:interaction.get()];
+        EXPECT_NULL([result error]);
+    }
+    {
+        RetainPtr interaction = adoptNS([[_WKTextExtractionInteraction alloc] initWithAction:_WKTextExtractionActionClick]);
+        [interaction setNodeIdentifier:extractNodeIdentifier(debugText.get(), @"Cross origin: click here")];
+
+        NSError *error = nil;
+        RetainPtr description = [interaction debugDescriptionInWebView:webView.get() error:&error];
+        EXPECT_WK_STREQ(description.get(), @"Click on button under article labeled “Button container”, with rendered text “Cross origin: click here”");
+
+        RetainPtr result = [webView synchronouslyPerformInteraction:interaction.get()];
+        EXPECT_NULL([result error]);
+    }
+
+    RetainPtr debugTextAfterClicks = [webView synchronouslyGetDebugText:extractionConfiguration.get()];
+    RetainPtr clickCountPattern = [NSRegularExpression regularExpressionWithPattern:@"Click count: 1" options:0 error:nil];
+    NSUInteger numberOfMatches = [clickCountPattern numberOfMatchesInString:debugTextAfterClicks.get() options:0 range:NSMakeRange(0, [debugTextAfterClicks length])];
+    EXPECT_EQ(numberOfMatches, 2u);
+}
 
 } // namespace TestWebKitAPI

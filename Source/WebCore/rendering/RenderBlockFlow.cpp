@@ -4049,7 +4049,7 @@ std::pair<float, float> RenderBlockFlow::inlineContentTopAndBottomIncludingInkOv
 
 RenderBlockFlow::InlineContentStatus RenderBlockFlow::markInlineContentDirtyForLayout(RelayoutChildren relayoutChildren)
 {
-    auto contentNeedsNormalChildLayoutOnly = true;
+    auto contentNeedsNormalChildLayoutOnly = std::optional<bool> { };
     auto hasInFlowBlockLevelElement = false;
     auto hasSimpleOutOfFlowContentOnly = !hasLineIfEmpty();
     auto hasSimpleStaticPositionForInlineLevelOutOfFlowContentByStyle = hasSimpleStaticPositionForInlineLevelOutOfFlowChildrenByStyle(style());
@@ -4101,7 +4101,7 @@ RenderBlockFlow::InlineContentStatus RenderBlockFlow::markInlineContentDirtyForL
 
         // Non inline box inline level elements (e.g. <img>) report self-needs-layout on style change, and RenderText also reports self-needs-layout on content change.
         // Inline boxes report normal-child-needs-layout when their children need (any) layout.
-        contentNeedsNormalChildLayoutOnly = contentNeedsNormalChildLayoutOnly && (!renderer.needsLayout() || renderer.needsNormalChildOrSimplifiedLayoutOnly());
+        contentNeedsNormalChildLayoutOnly = contentNeedsNormalChildLayoutOnly.value_or(true) && (!renderer.needsLayout() || renderer.needsNormalChildOrSimplifiedLayoutOnly());
 
         if (is<RenderLineBreak>(renderer) || is<RenderInline>(renderer) || is<RenderText>(renderer))
             renderer.clearNeedsLayout();
@@ -4116,7 +4116,7 @@ RenderBlockFlow::InlineContentStatus RenderBlockFlow::markInlineContentDirtyForL
             continue;
         }
     }
-    return { hasSimpleOutOfFlowContentOnly, hasInFlowBlockLevelElement ? std::make_optional(contentNeedsNormalChildLayoutOnly) : std::nullopt };
+    return { hasSimpleOutOfFlowContentOnly, hasInFlowBlockLevelElement ? contentNeedsNormalChildLayoutOnly : std::nullopt };
 }
 
 std::optional<LayoutUnit> RenderBlockFlow::updateLineClampStateAndLogicalHeightAfterLayout()
@@ -4482,7 +4482,7 @@ void RenderBlockFlow::checkForPaginationLogicalHeightChange(RelayoutChildren& re
         LayoutUnit newColumnHeight;
         if (hasDefiniteLogicalHeight() || view().frameView().pagination().mode != Pagination::Mode::Unpaginated) {
             auto computedValues = computeLogicalHeight(0_lu, logicalTop());
-            newColumnHeight = std::max<LayoutUnit>(computedValues.m_extent - borderAndPaddingLogicalHeight() - scrollbarLogicalHeight(), 0);
+            newColumnHeight = std::max<LayoutUnit>(computedValues.extent - borderAndPaddingLogicalHeight() - scrollbarLogicalHeight(), 0);
             if (fragmentedFlow->columnHeightAvailable() != newColumnHeight)
                 relayoutChildren = RelayoutChildren::Yes;
         }
@@ -4997,7 +4997,7 @@ void RenderBlockFlow::computeInlinePreferredLogicalWidths(LayoutUnit& minLogical
             LayoutUnit childMaxPreferredLogicalWidth;
             CheckedPtr box = dynamicDowncast<RenderBox>(*child);
             if (box->isHorizontalWritingMode() != isHorizontalWritingMode()) {
-                auto extent = box->computeLogicalHeight(box->borderAndPaddingLogicalHeight(), 0).m_extent;
+                auto extent = box->computeLogicalHeight(box->borderAndPaddingLogicalHeight(), 0).extent;
                 childMinPreferredLogicalWidth = extent;
                 childMaxPreferredLogicalWidth = extent;
             } else

@@ -1967,6 +1967,7 @@ void GenerateCaps(const FunctionsGL *functions,
     // Unlike the ANGLE variant, this extension is exposed only if supported natively.
     extensions->baseInstanceEXT = !features.disableBaseInstanceVertex.enabled &&
                                   (functions->isAtLeastGL(gl::Version(4, 2)) ||
+                                   functions->hasGLExtension("GL_ARB_base_instance") ||
                                    functions->hasGLESExtension("GL_EXT_base_instance"));
 
     // ANGLE_base_vertex_base_instance_shader_builtin
@@ -1974,13 +1975,15 @@ void GenerateCaps(const FunctionsGL *functions,
 
     // OES_draw_elements_base_vertex
     extensions->drawElementsBaseVertexOES =
-        functions->isAtLeastGL(gl::Version(3, 2)) || functions->isAtLeastGLES(gl::Version(3, 2)) ||
-        functions->hasGLESExtension("GL_OES_draw_elements_base_vertex");
+        !features.disableBaseInstanceVertex.enabled &&
+        (functions->isAtLeastGL(gl::Version(3, 2)) || functions->isAtLeastGLES(gl::Version(3, 2)) ||
+         functions->hasGLESExtension("GL_OES_draw_elements_base_vertex"));
 
     // EXT_draw_elements_base_vertex
     extensions->drawElementsBaseVertexEXT =
-        functions->isAtLeastGL(gl::Version(3, 2)) || functions->isAtLeastGLES(gl::Version(3, 2)) ||
-        functions->hasGLESExtension("GL_EXT_draw_elements_base_vertex");
+        !features.disableBaseInstanceVertex.enabled &&
+        (functions->isAtLeastGL(gl::Version(3, 2)) || functions->isAtLeastGLES(gl::Version(3, 2)) ||
+         functions->hasGLESExtension("GL_EXT_draw_elements_base_vertex"));
 
     // ANGLE_compressed_texture_etc
     // Expose this extension only when we support the formats or we're running on top of a native
@@ -2655,8 +2658,10 @@ void InitializeFeatures(const FunctionsGL *functions, angle::FeaturesGL *feature
                             functions->standard == STANDARD_GL_ES && isMesa &&
                                 mesaVersion < (std::array<int, 3>{23, 1, 7}));
 
-    // http://anglebug.com/42266610
-    ANGLE_FEATURE_CONDITION(features, disableBaseInstanceVertex, IsMaliValhall(functions));
+    // Mali bug: http://anglebug.com/42266610
+    // Linux speculative bugs: http://crbug.com/427956856, http://anglebug.com/431097618
+    ANGLE_FEATURE_CONDITION(features, disableBaseInstanceVertex,
+                            IsMaliValhall(functions) || IsLinux());
 
     // Mali: http://crbug.com/40063287
     // Nvidia: http://crbug.com/328015191
@@ -2712,8 +2717,10 @@ void InitializeFrontendFeatures(const FunctionsGL *functions, angle::FrontendFea
     std::array<int, 3> mesaVersion = {0, 0, 0};
     bool isMesa                    = IsMesa(functions, &mesaVersion);
 
+    // Program binaries don't contain transform feedback varyings on multiple vendors' GPUs.
+    // https://crbug.com/442879525 for the latest example on Imagination / PowerVR.
     ANGLE_FEATURE_CONDITION(features, disableProgramCachingForTransformFeedback,
-                            !isMesa && isQualcomm);
+                            (!isMesa && isQualcomm) || IsPowerVR(vendor));
     // https://crbug.com/480992
     // Disable shader program cache to workaround PowerVR Rogue issues.
     ANGLE_FEATURE_CONDITION(features, disableProgramBinary, IsPowerVrRogue(functions));

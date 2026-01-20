@@ -2039,6 +2039,11 @@ LayoutRect LocalFrameView::layoutViewportRect() const
     return LayoutRect(m_layoutViewportOrigin, baseLayoutViewportSize());
 }
 
+void LocalFrameView::updateLayoutViewportRect()
+{
+    m_frame->loader().client().broadcastFrameLayoutViewportRectToOtherProcesses(layoutViewportRect());
+}
+
 // visibleContentRect is in the bounds of the scroll view content. That consists of an
 // optional header, the document, and an optional footer. Only the document is scaled,
 // so we have to compute the visible part of the document in unscaled document coordinates.
@@ -5496,11 +5501,6 @@ void LocalFrameView::invalidateControlTints()
     traverseForPaintInvalidation(NullGraphicsContext::PaintInvalidationReasons::InvalidatingControlTints);
 }
 
-void LocalFrameView::invalidateImagesWithAsyncDecodes()
-{
-    traverseForPaintInvalidation(NullGraphicsContext::PaintInvalidationReasons::InvalidatingImagesWithAsyncDecodes);
-}
-
 void LocalFrameView::updateAccessibilityObjectRegions()
 {
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
@@ -5777,8 +5777,8 @@ void LocalFrameView::updateLayoutAndStyleIfNeededRecursive(OptionSet<LayoutOptio
             // Append renderered children after processing the parent, in case the processing
             // affects the set of rendered children.
             auto previousView = descendantsDeque.takeFirst();
-            for (auto* frame = previousView->m_frame->tree().firstRenderedChild(); frame; frame = frame->tree().nextRenderedSibling()) {
-                auto* localFrame = dynamicDowncast<LocalFrame>(frame);
+            for (RefPtr frame = previousView->m_frame->tree().firstRenderedChild(); frame; frame = frame->tree().nextRenderedSibling()) {
+                RefPtr localFrame = dynamicDowncast<LocalFrame>(frame);
                 if (!localFrame)
                     continue;
                 if (auto* view = localFrame->view())

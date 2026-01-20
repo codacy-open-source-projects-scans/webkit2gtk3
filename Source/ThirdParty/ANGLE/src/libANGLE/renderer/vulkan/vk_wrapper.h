@@ -224,6 +224,20 @@ class CommandBuffer : public WrappedObject<CommandBuffer, VkCommandBuffer>
                             const VkDeviceSize *offsets,
                             const VkDeviceSize *sizes,
                             const VkDeviceSize *strides);
+    void bindVertexBuffers2NoSize(uint32_t firstBinding,
+                                  uint32_t bindingCount,
+                                  const VkBuffer *buffers,
+                                  const VkDeviceSize *offsets,
+                                  const VkDeviceSize *strides);
+    void bindVertexBuffers2NoSizeNoStride(uint32_t firstBinding,
+                                          uint32_t bindingCount,
+                                          const VkBuffer *buffers,
+                                          const VkDeviceSize *offsets);
+    void bindVertexBuffers2NoStride(uint32_t firstBinding,
+                                    uint32_t bindingCount,
+                                    const VkBuffer *buffers,
+                                    const VkDeviceSize *offsets,
+                                    const VkDeviceSize *sizes);
 
     void blitImage(const Image &srcImage,
                    VkImageLayout srcImageLayout,
@@ -479,7 +493,7 @@ class Semaphore final : public WrappedObject<Semaphore, VkSemaphore>
     Semaphore() = default;
     void destroy(VkDevice device);
 
-    VkResult init(VkDevice device);
+    VkResult init(VkDevice device, VkSemaphoreType semaphoreType);
     VkResult importFd(VkDevice device, const VkImportSemaphoreFdInfoKHR &importFdInfo) const;
 };
 
@@ -1431,6 +1445,32 @@ ANGLE_INLINE void CommandBuffer::bindVertexBuffers2(uint32_t firstBinding,
                                strides);
 }
 
+ANGLE_INLINE void CommandBuffer::bindVertexBuffers2NoSize(uint32_t firstBinding,
+                                                          uint32_t bindingCount,
+                                                          const VkBuffer *buffers,
+                                                          const VkDeviceSize *offsets,
+                                                          const VkDeviceSize *strides)
+{
+    bindVertexBuffers2(firstBinding, bindingCount, buffers, offsets, nullptr, strides);
+}
+
+ANGLE_INLINE void CommandBuffer::bindVertexBuffers2NoSizeNoStride(uint32_t firstBinding,
+                                                                  uint32_t bindingCount,
+                                                                  const VkBuffer *buffers,
+                                                                  const VkDeviceSize *offsets)
+{
+    bindVertexBuffers2(firstBinding, bindingCount, buffers, offsets, nullptr, nullptr);
+}
+
+ANGLE_INLINE void CommandBuffer::bindVertexBuffers2NoStride(uint32_t firstBinding,
+                                                            uint32_t bindingCount,
+                                                            const VkBuffer *buffers,
+                                                            const VkDeviceSize *offsets,
+                                                            const VkDeviceSize *sizes)
+{
+    bindVertexBuffers2(firstBinding, bindingCount, buffers, offsets, sizes, nullptr);
+}
+
 ANGLE_INLINE void CommandBuffer::beginTransformFeedback(uint32_t firstCounterBuffer,
                                                         uint32_t counterBufferCount,
                                                         const VkBuffer *counterBuffers,
@@ -1579,13 +1619,23 @@ ANGLE_INLINE void Semaphore::destroy(VkDevice device)
     }
 }
 
-ANGLE_INLINE VkResult Semaphore::init(VkDevice device)
+ANGLE_INLINE VkResult Semaphore::init(VkDevice device, VkSemaphoreType semaphoreType)
 {
     ASSERT(!valid());
 
     VkSemaphoreCreateInfo semaphoreInfo = {};
     semaphoreInfo.sType                 = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     semaphoreInfo.flags                 = 0;
+
+    VkSemaphoreTypeCreateInfoKHR semaphoreTypeInfo = {};
+    if (semaphoreType != VK_SEMAPHORE_TYPE_BINARY)
+    {
+        semaphoreTypeInfo.sType         = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO_KHR;
+        semaphoreTypeInfo.semaphoreType = semaphoreType;
+
+        // vk::AddToPNextChain is not available in this header.
+        semaphoreInfo.pNext = &semaphoreTypeInfo;
+    }
 
     return vkCreateSemaphore(device, &semaphoreInfo, nullptr, &mHandle);
 }

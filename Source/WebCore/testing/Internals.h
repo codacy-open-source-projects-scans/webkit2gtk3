@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2012 Google Inc. All rights reserved.
- * Copyright (C) 2013-2024 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2026 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -297,7 +297,7 @@ public:
 
     Ref<CSSComputedStyleDeclaration> computedStyleIncludingVisitedInfo(Element&) const;
 
-    Node* ensureUserAgentShadowRoot(Element& host);
+    Node& ensureUserAgentShadowRoot(Element& host);
     Node* shadowRoot(Element& host);
     ExceptionOr<String> shadowRootType(const Node&) const;
     const AtomString& userAgentPart(Element&);
@@ -347,7 +347,7 @@ public:
 
     double preferredRenderingUpdateInterval();
 
-    Node* treeScopeRootNode(Node&);
+    Node& treeScopeRootNode(Node&);
     Node* parentTreeScope(Node&);
 
     String visiblePlaceholder(Element&);
@@ -775,6 +775,7 @@ public:
     void simulateSpeechSynthesizerVoiceListChange();
     void enableMockSpeechSynthesizer();
     void enableMockSpeechSynthesizerForMediaElement(HTMLMediaElement&);
+    void setInitialVoiceListToEmpty();
     ExceptionOr<void> setSpeechUtteranceDuration(double);
     unsigned minimumExpectedVoiceCount();
 #endif
@@ -967,6 +968,8 @@ public:
     void setTrackingPreventionEnabled(bool);
 
     bool isReadableStreamDisturbed(ReadableStream&);
+    void observeReadableStreamLifetime(ReadableStream&);
+    unsigned observedLiveReadableStreamCount();
     JSC::JSValue cloneArrayBuffer(JSC::JSGlobalObject&, JSC::JSValue, JSC::JSValue, JSC::JSValue);
 
     String composedTreeAsText(Node&);
@@ -1204,6 +1207,7 @@ public:
         bool haveEverRegisteredAsNowPlayingApplication;
     };
     ExceptionOr<NowPlayingState> nowPlayingState() const;
+    void setNowPlayingUpdateInterval(double);
 
     struct MediaUsageState {
         String mediaURL;
@@ -1522,7 +1526,7 @@ public:
     Vector<Ref<AbstractRange>> textExtractionHighlightRanges() const;
 
 #if ENABLE(WEBXR)
-    ExceptionOr<RefPtr<WebXRTest>> xrTest();
+    ExceptionOr<Ref<WebXRTest>> xrTest();
 #endif
 
 #if ENABLE(ENCRYPTED_MEDIA)
@@ -1750,6 +1754,7 @@ private:
 #if ENABLE(WIRELESS_PLAYBACK_MEDIA_PLAYER)
     RefPtr<MockMediaDeviceRouteController> m_mockMediaDeviceRouteController;
 #endif
+    WeakHashSet<ReadableStream> m_observedLiveReadableStreams;
 };
 
 } // namespace WebCore

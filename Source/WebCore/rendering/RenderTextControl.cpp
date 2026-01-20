@@ -114,9 +114,9 @@ RenderBox::LogicalExtentComputedValues RenderTextControl::computeLogicalHeight(L
             CheckedPtr placeholderBox = placeholder->renderBox();
             if (!placeholderBox)
                 return { };
-            return placeholderBox->computeLogicalHeight(placeholderBox->logicalHeight(), placeholderBox->logicalTop()).m_extent;
+            return placeholderBox->computeLogicalHeight(placeholderBox->logicalHeight(), placeholderBox->logicalTop()).extent;
         };
-        logicalHeightExtent.m_extent = std::max(logicalHeightExtent.m_extent, placeholderLogicalHeight());
+        logicalHeightExtent.extent = std::max(logicalHeightExtent.extent, placeholderLogicalHeight());
         return logicalHeightExtent;
     }
 
@@ -224,7 +224,7 @@ void RenderTextControl::layoutExcludedChildren(RelayoutChildren relayoutChildren
 {
     RenderBlockFlow::layoutExcludedChildren(relayoutChildren);
 
-    auto* placeholder = textFormControlElement().placeholderElement();
+    RefPtr placeholder = textFormControlElement().placeholderElement();
     if (!placeholder)
         return;
 

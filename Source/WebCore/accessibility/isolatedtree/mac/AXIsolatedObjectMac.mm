@@ -221,7 +221,7 @@ AXCoreObject::AccessibilityChildrenVector AXIsolatedObject::allSortedNonRootWebA
 
 std::optional<NSRange> AXIsolatedObject::visibleCharacterRange() const
 {
-    ASSERT(!isMainThread());
+    AX_ASSERT(!isMainThread());
 
     RefPtr tree = this->tree();
     if (!tree)
@@ -341,7 +341,13 @@ AXTextMarkerRange AXIsolatedObject::textMarkerRange() const
         // {ID 5, Role Group}
         //
         // We would expect the returned range to be: {ID 2, offset 0} to {ID 4, offset 3}
-        std::optional stopAtID = idOfNextSiblingIncludingIgnoredOrParent();
+        Ref stopAfterObject = *this;
+
+        if (std::optional stitchGroup = stitchGroupIfRepresentative()) {
+            if (RefPtr lastGroupMember = tree()->objectForID(stitchGroup->members().last()))
+                stopAfterObject = lastGroupMember.releaseNonNull();
+        }
+        std::optional<AXID> stopAtID = stopAfterObject->idOfNextSiblingIncludingIgnoredOrParent();
 
         auto thisMarker = AXTextMarker { *this, 0 };
         AXTextMarkerRange range { thisMarker, thisMarker };
@@ -404,7 +410,7 @@ std::optional<String> AXIsolatedObject::platformStringValue() const
 
 unsigned AXIsolatedObject::textLength() const
 {
-    ASSERT(isTextControl());
+    AX_ASSERT(isTextControl());
 
 #if ENABLE(AX_THREAD_TEXT_APIS)
     if (AXObjectCache::useAXThreadTextApis())
@@ -477,7 +483,7 @@ RetainPtr<NSAttributedString> AXIsolatedObject::attributedStringForTextMarkerRan
         [result removeAttribute:NSAccessibilityMarkedMisspelledTextAttribute range:resultRange];
     } else if (AXObjectCache::shouldSpellCheck()) {
         // For ITM, we should only ever eagerly spellcheck for testing purposes.
-        ASSERT(_AXGetClientForCurrentRequestUntrusted() == kAXClientTypeWebKitTesting);
+        AX_ASSERT(_AXGetClientForCurrentRequestUntrusted() == kAXClientTypeWebKitTesting);
         // We're going to spellcheck, so remove AXDidSpellCheck: NO.
         [result removeAttribute:NSAccessibilityDidSpellCheckAttribute range:resultRange];
         performFunctionOnMainThreadAndWait([result = RetainPtr { result }, &resultRange] (AccessibilityObject* axObject) {
@@ -490,8 +496,8 @@ RetainPtr<NSAttributedString> AXIsolatedObject::attributedStringForTextMarkerRan
 
 void AXIsolatedObject::setPreventKeyboardDOMEventDispatch(bool value)
 {
-    ASSERT(!isMainThread());
-    ASSERT(isWebArea());
+    AX_ASSERT(!isMainThread());
+    AX_ASSERT(isWebArea());
 
     setProperty(AXProperty::PreventKeyboardDOMEventDispatch, value);
     performFunctionOnMainThread([value] (auto* object) {
@@ -501,8 +507,8 @@ void AXIsolatedObject::setPreventKeyboardDOMEventDispatch(bool value)
 
 void AXIsolatedObject::setCaretBrowsingEnabled(bool value)
 {
-    ASSERT(!isMainThread());
-    ASSERT(isWebArea());
+    AX_ASSERT(!isMainThread());
+    AX_ASSERT(isWebArea());
 
     setProperty(AXProperty::CaretBrowsingEnabled, value);
     performFunctionOnMainThread([value] (auto* object) {
@@ -514,7 +520,7 @@ void AXIsolatedObject::setCaretBrowsingEnabled(bool value)
 // and not cached because we don't expect AX clients to ever request them.
 IntPoint AXIsolatedObject::clickPoint()
 {
-    ASSERT(_AXGetClientForCurrentRequestUntrusted() != kAXClientTypeVoiceOver);
+    AX_ASSERT(_AXGetClientForCurrentRequestUntrusted() != kAXClientTypeVoiceOver);
 
     return Accessibility::retrieveValueFromMainThread<IntPoint>([context = mainThreadContext()] () -> IntPoint {
         if (RefPtr object = context.axObjectOnMainThread())
@@ -525,7 +531,7 @@ IntPoint AXIsolatedObject::clickPoint()
 
 bool AXIsolatedObject::pressedIsPresent() const
 {
-    ASSERT(_AXGetClientForCurrentRequestUntrusted() != kAXClientTypeVoiceOver);
+    AX_ASSERT(_AXGetClientForCurrentRequestUntrusted() != kAXClientTypeVoiceOver);
 
     return Accessibility::retrieveValueFromMainThread<bool>([context = mainThreadContext()] () -> bool {
         if (RefPtr object = context.axObjectOnMainThread())
@@ -536,7 +542,7 @@ bool AXIsolatedObject::pressedIsPresent() const
 
 Vector<String> AXIsolatedObject::determineDropEffects() const
 {
-    ASSERT(_AXGetClientForCurrentRequestUntrusted() != kAXClientTypeVoiceOver);
+    AX_ASSERT(_AXGetClientForCurrentRequestUntrusted() != kAXClientTypeVoiceOver);
 
     return Accessibility::retrieveValueFromMainThread<Vector<String>>([context = mainThreadContext()] () -> Vector<String> {
         if (RefPtr object = context.axObjectOnMainThread())
@@ -547,7 +553,7 @@ Vector<String> AXIsolatedObject::determineDropEffects() const
 
 int AXIsolatedObject::layoutCount() const
 {
-    ASSERT(_AXGetClientForCurrentRequestUntrusted() != kAXClientTypeVoiceOver);
+    AX_ASSERT(_AXGetClientForCurrentRequestUntrusted() != kAXClientTypeVoiceOver);
 
     return Accessibility::retrieveValueFromMainThread<int>([context = mainThreadContext()] () -> int {
         if (RefPtr object = context.axObjectOnMainThread())
@@ -558,7 +564,7 @@ int AXIsolatedObject::layoutCount() const
 
 Vector<String> AXIsolatedObject::classList() const
 {
-    ASSERT(_AXGetClientForCurrentRequestUntrusted() != kAXClientTypeVoiceOver);
+    AX_ASSERT(_AXGetClientForCurrentRequestUntrusted() != kAXClientTypeVoiceOver);
 
     return Accessibility::retrieveValueFromMainThread<Vector<String>>([context = mainThreadContext()] () -> Vector<String> {
         if (RefPtr object = context.axObjectOnMainThread())
@@ -569,7 +575,7 @@ Vector<String> AXIsolatedObject::classList() const
 
 String AXIsolatedObject::computedRoleString() const
 {
-    ASSERT(_AXGetClientForCurrentRequestUntrusted() != kAXClientTypeVoiceOver);
+    AX_ASSERT(_AXGetClientForCurrentRequestUntrusted() != kAXClientTypeVoiceOver);
 
     return Accessibility::retrieveValueFromMainThread<String>([context = mainThreadContext()] () -> String {
         if (RefPtr object = context.axObjectOnMainThread())

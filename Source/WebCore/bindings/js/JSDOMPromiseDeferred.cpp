@@ -110,14 +110,14 @@ void DeferredPromise::callFunction(JSGlobalObject& lexicalGlobalObject, ResolveM
         clear();
 }
 
-void DeferredPromise::whenSettled(Function<void()>&& callback)
+void DeferredPromise::whenSettledWithResult(Function<void(JSDOMGlobalObject*, bool, JSC::JSValue)>&& callback)
 {
     if (shouldIgnoreRequestToFulfill())
         return;
 
     if (activeDOMObjectsAreSuspended()) {
         scriptExecutionContext()->eventLoop().queueTask(TaskSource::Networking, [this, protectedThis = Ref { *this }, callback = WTF::move(callback)]() mutable {
-            whenSettled(WTF::move(callback));
+            whenSettledWithResult(WTF::move(callback));
         });
         return;
     }
@@ -252,7 +252,7 @@ JSC::EncodedJSValue createRejectedPromiseWithTypeError(JSC::JSGlobalObject& lexi
 {
     auto& globalObject = lexicalGlobalObject;
 
-    auto* rejectionValue = static_cast<ErrorInstance*>(createTypeError(&lexicalGlobalObject, errorMessage));
+    auto* rejectionValue = jsCast<ErrorInstance*>(createTypeError(&lexicalGlobalObject, errorMessage));
     if (cause == RejectedPromiseWithTypeErrorCause::NativeGetter)
         rejectionValue->setNativeGetterTypeError();
 
@@ -309,9 +309,9 @@ bool DeferredPromise::handleTerminationExceptionIfNeeded(CatchScope& scope, JSDO
     auto* exception = scope.exception();
     VM& vm = scope.vm();
 
-    auto& scriptExecutionContext = *lexicalGlobalObject.scriptExecutionContext();
-    if (auto* globalScope = dynamicDowncast<WorkerGlobalScope>(scriptExecutionContext)) {
-        auto* scriptController = globalScope->script();
+    CheckedRef scriptExecutionContext = *lexicalGlobalObject.scriptExecutionContext();
+    if (CheckedPtr globalScope = dynamicDowncast<WorkerGlobalScope>(scriptExecutionContext)) {
+        CheckedPtr scriptController = globalScope->script();
         bool terminatorCausedException = vm.isTerminationException(exception);
         if (terminatorCausedException || (scriptController && scriptController->isTerminatingExecution())) {
             scriptController->forbidExecution();

@@ -522,18 +522,18 @@ void UniqueIDBDatabase::notifyCurrentRequestConnectionClosedOrFiredVersionChange
 
 void UniqueIDBDatabase::clearTransactionsOnConnection(UniqueIDBDatabaseConnection& connection)
 {
-    Deque<RefPtr<UniqueIDBDatabaseTransaction>> pendingTransactions;
+    Deque<Ref<UniqueIDBDatabaseTransaction>> pendingTransactions;
     while (!m_pendingTransactions.isEmpty()) {
         auto transaction = m_pendingTransactions.takeFirst();
         if (transaction->databaseConnection() != &connection)
             pendingTransactions.append(WTF::move(transaction));
         else
-            connection.deleteTransaction(*transaction);
+            connection.deleteTransaction(transaction);
     }
     if (!pendingTransactions.isEmpty())
         m_pendingTransactions.swap(pendingTransactions);
 
-    Deque<RefPtr<UniqueIDBDatabaseTransaction>> transactionsToAbort;
+    Deque<Ref<UniqueIDBDatabaseTransaction>> transactionsToAbort;
     for (auto& transaction : m_inProgressTransactions.values()) {
         if (transaction->databaseConnection() == &connection)
             transactionsToAbort.append(transaction);
@@ -1393,10 +1393,10 @@ void UniqueIDBDatabase::handleTransactions()
     LOG(IndexedDB, "UniqueIDBDatabase::handleTransactions - There are %zu pending", m_pendingTransactions.size());
 
     bool hadDeferredTransactions = false;
-    auto transaction = takeNextRunnableTransaction(hadDeferredTransactions);
+    RefPtr transaction = takeNextRunnableTransaction(hadDeferredTransactions);
 
     while (transaction) {
-        m_inProgressTransactions.set(transaction->info().identifier(), transaction);
+        m_inProgressTransactions.set(transaction->info().identifier(), *transaction);
         for (auto objectStore : transaction->objectStoreIdentifiers()) {
             m_objectStoreTransactionCounts.add(objectStore);
             if (!transaction->isReadOnly()) {
@@ -1448,7 +1448,7 @@ RefPtr<UniqueIDBDatabaseTransaction> UniqueIDBDatabase::takeNextRunnableTransact
     bool hasReadWriteTransactionInProgress = std::ranges::any_of(m_inProgressTransactions, [&](auto& entry) {
         return !entry.value->isReadOnly();
     });
-    Deque<RefPtr<UniqueIDBDatabaseTransaction>> deferredTransactions;
+    Deque<Ref<UniqueIDBDatabaseTransaction>> deferredTransactions;
     RefPtr<UniqueIDBDatabaseTransaction> currentTransaction;
 
     HashSet<IDBObjectStoreIdentifier> deferredReadWriteScopes;
@@ -1462,7 +1462,7 @@ RefPtr<UniqueIDBDatabaseTransaction> UniqueIDBDatabase::takeNextRunnableTransact
             hasOverlappingScopes |= scopesOverlap(m_objectStoreWriteTransactions, currentTransaction->objectStoreIdentifiers());
 
             if (hasOverlappingScopes)
-                deferredTransactions.append(WTF::move(currentTransaction));
+                deferredTransactions.append(currentTransaction.releaseNonNull());
 
             break;
         }
@@ -1473,7 +1473,7 @@ RefPtr<UniqueIDBDatabaseTransaction> UniqueIDBDatabase::takeNextRunnableTransact
             if (hasOverlappingScopes || !hasBackingStoreSupport) {
                 for (auto objectStore : currentTransaction->objectStoreIdentifiers())
                     deferredReadWriteScopes.add(objectStore);
-                deferredTransactions.append(WTF::move(currentTransaction));
+                deferredTransactions.append(currentTransaction.releaseNonNull());
             }
 
             break;
@@ -1539,11 +1539,11 @@ void UniqueIDBDatabase::immediateClose()
     // or they may get started right away after aborting in-progress transactions.
     for (auto& transaction : m_pendingTransactions) {
         if (RefPtr databaseConnection = transaction->databaseConnection())
-            databaseConnection->deleteTransaction(*transaction);
+            databaseConnection->deleteTransaction(transaction);
     }
     m_pendingTransactions.clear();
 
-    for (RefPtr transaction : copyToVector(m_inProgressTransactions.values()))
+    for (Ref transaction : copyToVector(m_inProgressTransactions.values()))
         transaction->abortWithoutCallback();
 
     ASSERT(m_inProgressTransactions.isEmpty());
@@ -1556,14 +1556,14 @@ void UniqueIDBDatabase::immediateClose()
         errorOpenDBRequestForUserDelete(*request);
 
     for (auto& request : m_pendingOpenDBRequests)
-        errorOpenDBRequestForUserDelete(*request);
+        errorOpenDBRequestForUserDelete(request);
 
     m_pendingOpenDBRequests.clear();
 
     // Close all open connections
     auto openDatabaseConnections = m_openDatabaseConnections;
     for (auto& connection : openDatabaseConnections)
-        connectionClosedFromServer(*connection);
+        connectionClosedFromServer(connection);
 
     if (RefPtr versionChangeDatabaseConnection = m_versionChangeDatabaseConnection) {
         if (!openDatabaseConnections.contains(versionChangeDatabaseConnection.get()))

@@ -130,7 +130,7 @@ public:
         }
 
         if (m_tagId == TagId::Source && !pictureState.isEmpty() && !pictureState.last() && m_mediaMatched && m_typeMatched && !m_srcSetAttribute.isEmpty()) {
-            auto sourceSize = SizesAttributeParser(m_sizesAttribute, document).length();
+            auto sourceSize = SizesAttributeParser(m_sizesAttribute, document).effectiveSize();
             ImageCandidate imageCandidate = bestFitSourceForImageAttributes(m_deviceScaleFactor, AtomString { m_urlToLoad }, m_srcSetAttribute, sourceSize);
             if (!imageCandidate.isEmpty()) {
                 pictureState.last() = true;
@@ -140,7 +140,7 @@ public:
 
         // Resolve between src and srcSet if we have them and the tag is img.
         if (m_tagId == TagId::Img && !m_srcSetAttribute.isEmpty()) {
-            auto sourceSize = SizesAttributeParser(m_sizesAttribute, document).length();
+            auto sourceSize = SizesAttributeParser(m_sizesAttribute, document).effectiveSize();
             ImageCandidate imageCandidate = bestFitSourceForImageAttributes(m_deviceScaleFactor, AtomString { m_urlToLoad }, m_srcSetAttribute, sourceSize);
             setURLToLoadAllowingReplacement(imageCandidate.string.view);
         }
@@ -180,6 +180,7 @@ public:
         auto request = makeUnique<PreloadRequest>(initiatorFor(m_tagId), m_urlToLoad, predictedBaseURL, type.value(), m_mediaAttribute, scriptType.value_or(ScriptType::Classic), m_referrerPolicy, m_fetchPriority);
         request->setCrossOriginMode(m_crossOriginMode);
         request->setNonce(m_nonceAttribute);
+        request->setIntegrity(m_integrityAttribute);
         request->setScriptIsAsync(m_scriptIsAsync);
 
         // According to the spec, the module tag ignores the "charset" attribute as the same to the worker's
@@ -281,6 +282,9 @@ private:
                 break;
             } else if (match(attributeName, nonceAttr)) {
                 m_nonceAttribute = attributeValue.toString();
+                break;
+            } else if (match(attributeName, integrityAttr)) {
+                m_integrityAttribute = attributeValue.toString();
                 break;
             } else if (match(attributeName, referrerpolicyAttr)) {
                 m_referrerPolicy = parseReferrerPolicy(attributeValue, ReferrerPolicySource::ReferrerPolicyAttribute).value_or(ReferrerPolicy::EmptyString);
@@ -439,6 +443,7 @@ private:
     String m_asAttribute;
     String m_typeAttribute;
     String m_languageAttribute;
+    String m_integrityAttribute;
     String m_lazyloadAttribute;
     bool m_metaIsViewport;
     bool m_metaIsDisabledAdaptations;

@@ -97,6 +97,12 @@ void SWServer::close()
     for (auto& callback : std::exchange(m_importCompletedCallbacks, { }))
         callback();
 
+    for (auto& callback : std::exchange(m_clearCompletionCallbacks, { }))
+        callback();
+
+    for (auto& callback : std::exchange(m_getOriginsWithRegistrationsCallbacks, { }))
+        callback({ });
+
     Vector<Ref<SWServerWorker>> runningWorkers;
     for (auto& worker : m_runningOrTerminatingWorkers.values()) {
         if (worker->isRunning())
@@ -882,7 +888,7 @@ void SWServer::unregisterServiceWorkerConnection(Connection& connection, Service
 
 void SWServer::updateWorker(const ServiceWorkerJobDataIdentifier& jobDataIdentifier, const std::optional<ProcessIdentifier>& requestingProcessIdentifier, SWServerRegistration& registration, const URL& url, const ScriptBuffer& script, const CertificateInfo& certificateInfo, const ContentSecurityPolicyResponseHeaders& contentSecurityPolicy, const CrossOriginEmbedderPolicy& coep, const String& referrerPolicy, WorkerType type, MemoryCompactRobinHoodHashMap<URL, ServiceWorkerContextData::ImportedScript>&& scriptResourceMap, std::optional<ScriptExecutionContextIdentifier> serviceWorkerPageIdentifier)
 {
-    tryInstallContextData(requestingProcessIdentifier, ServiceWorkerContextData { jobDataIdentifier, registration.data(), ServiceWorkerIdentifier::generate(), script, certificateInfo, contentSecurityPolicy, coep, referrerPolicy, url, type, false, clientIsAppInitiatedForRegistrableDomain(RegistrableDomain(url)), WTF::move(scriptResourceMap), serviceWorkerPageIdentifier, { } });
+    tryInstallContextData(requestingProcessIdentifier, ServiceWorkerContextData { jobDataIdentifier, registration.data(), ServiceWorkerIdentifier::generate(), script, certificateInfo, contentSecurityPolicy, coep, referrerPolicy, url, type, false, clientIsAppInitiatedForRegistrableDomain(RegistrableDomain(url)), WTF::move(scriptResourceMap), serviceWorkerPageIdentifier, { }, { } });
 }
 
 LastNavigationWasAppInitiated SWServer::clientIsAppInitiatedForRegistrableDomain(const RegistrableDomain& domain)
@@ -1496,7 +1502,7 @@ void SWServer::Connection::resolveRegistrationReadyRequests(SWServerRegistration
     });
 }
 
-void SWServer::getOriginsWithRegistrations(Function<void(const HashSet<SecurityOriginData>&)>&& callback)
+void SWServer::getOriginsWithRegistrations(CompletionHandler<void(const HashSet<SecurityOriginData>&)>&& callback)
 {
     m_getOriginsWithRegistrationsCallbacks.append(WTF::move(callback));
 

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2012 Google Inc. All rights reserved.
- * Copyright (C) 2013-2024 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2026 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -272,6 +272,7 @@
 #include "WritingDirection.h"
 #include "XMLHttpRequest.h"
 #include <JavaScriptCore/CodeBlock.h>
+#include <JavaScriptCore/FunctionExecutable.h>
 #include <JavaScriptCore/InspectorAgentBase.h>
 #include <JavaScriptCore/InspectorFrontendChannel.h>
 #include <JavaScriptCore/JSCInlines.h>
@@ -1369,10 +1370,9 @@ void Internals::setSpeculativeTilingDelayDisabledForTesting(bool disabled)
         frameView->setSpeculativeTilingDelayDisabledForTesting(disabled);
 }
 
-
-Node* Internals::treeScopeRootNode(Node& node)
+Node& Internals::treeScopeRootNode(Node& node)
 {
-    return &node.treeScope().rootNode();
+    return node.treeScope().rootNode();
 }
 
 Node* Internals::parentTreeScope(Node& node)
@@ -1587,9 +1587,9 @@ Ref<CSSComputedStyleDeclaration> Internals::computedStyleIncludingVisitedInfo(El
     return CSSComputedStyleDeclaration::create(element, CSSComputedStyleDeclaration::AllowVisited::Yes);
 }
 
-Node* Internals::ensureUserAgentShadowRoot(Element& host)
+Node& Internals::ensureUserAgentShadowRoot(Element& host)
 {
-    return &host.ensureUserAgentShadowRoot();
+    return host.ensureUserAgentShadowRoot();
 }
 
 Node* Internals::shadowRoot(Element& host)
@@ -1801,6 +1801,8 @@ ExceptionOr<void> Internals::setFormControlStateOfPreviousHistoryItem(const Vect
 void Internals::simulateSpeechSynthesizerVoiceListChange()
 {
     if (m_platformSpeechSynthesizer) {
+        m_platformSpeechSynthesizer->setInitialVoiceListToEmpty(false);
+        m_platformSpeechSynthesizer->initializeVoiceList();
         m_platformSpeechSynthesizer->client().voicesDidChange();
         return;
     }
@@ -1834,6 +1836,12 @@ void Internals::enableMockSpeechSynthesizerForMediaElement(HTMLMediaElement& ele
 
     m_platformSpeechSynthesizer = mock.copyRef();
     synthesis.setPlatformSynthesizer(WTF::move(mock));
+}
+
+void Internals::setInitialVoiceListToEmpty()
+{
+    if (m_platformSpeechSynthesizer)
+        m_platformSpeechSynthesizer->setInitialVoiceListToEmpty(true);
 }
 
 ExceptionOr<void> Internals::setSpeechUtteranceDuration(double duration)
@@ -2937,9 +2945,9 @@ String Internals::parserMetaData(JSC::JSValue code)
     String functionName;
     ASCIILiteral suffix = ""_s;
 
-    if (executable->isFunctionExecutable()) {
+    if (auto* functionExecutable = jsDynamicCast<FunctionExecutable*>(executable)) {
         prefix = "function \""_s;
-        functionName = static_cast<FunctionExecutable*>(executable)->ecmaName().string();
+        functionName = functionExecutable->ecmaName().string();
         suffix = "\""_s;
     } else if (executable->isEvalExecutable())
         prefix = "eval"_s;
@@ -5445,6 +5453,13 @@ ExceptionOr<Internals::NowPlayingState> Internals::nowPlayingState() const
 #endif
 }
 
+void Internals::setNowPlayingUpdateInterval(double interval)
+{
+    if (RefPtr manager = sessionManager())
+        manager->setNowPlayingUpdateInterval(interval);
+}
+
+
 #if ENABLE(VIDEO)
 RefPtr<HTMLMediaElement> Internals::bestMediaElementForRemoteControls(Internals::PlaybackControlsPurpose purpose)
 {
@@ -5993,6 +6008,16 @@ void Internals::setShowAllPlugins(bool show)
 bool Internals::isReadableStreamDisturbed(ReadableStream& stream)
 {
     return stream.isDisturbed();
+}
+
+void Internals::observeReadableStreamLifetime(ReadableStream& stream)
+{
+    m_observedLiveReadableStreams.add(stream);
+}
+
+unsigned Internals::observedLiveReadableStreamCount()
+{
+    return m_observedLiveReadableStreams.computeSize();
 }
 
 JSValue Internals::cloneArrayBuffer(JSC::JSGlobalObject& lexicalGlobalObject, JSValue buffer, JSValue srcByteOffset, JSValue srcLength)
@@ -7569,7 +7594,7 @@ bool Internals::destroySleepDisabler(unsigned identifier)
 
 #if ENABLE(WEBXR)
 
-ExceptionOr<RefPtr<WebXRTest>> Internals::xrTest()
+ExceptionOr<Ref<WebXRTest>> Internals::xrTest()
 {
     auto* document = contextDocument();
     if (!document || !document->window() || !document->settings().webXREnabled())
@@ -7582,7 +7607,7 @@ ExceptionOr<RefPtr<WebXRTest>> Internals::xrTest()
 
         m_xrTest = WebXRTest::create(NavigatorWebXR::xr(*navigator));
     }
-    return m_xrTest.get();
+    return Ref<WebXRTest> { *m_xrTest };
 }
 
 #endif
