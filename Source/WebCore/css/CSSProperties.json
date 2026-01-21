@@ -2245,15 +2245,8 @@
                 "border-box",
                 "padding-box",
                 "content-box",
-                {
-                    "value": "border-area",
-                    "settings-flag": "cssBackgroundClipBorderAreaEnabled",
-                    "url": "https://drafts.csswg.org/css-backgrounds-4/#background-clip"
-                },
-                {
-                    "value": "text",
-                    "url": "https://drafts.csswg.org/css-backgrounds-4/#background-clip"
-                },
+                "border-area",
+                "text",
                 {
                     "value": "-webkit-text",
                     "status": "non-standard"
@@ -2271,7 +2264,7 @@
             },
             "specification": {
                 "category": "css-backgrounds",
-                "url": "https://drafts.csswg.org/css-backgrounds/#propdef-background-clip"
+                "url": "https://www.w3.org/TR/css-backgrounds-4/#background-clip"
             }
         },
         "background-color": {
@@ -7895,7 +7888,6 @@
                 "space-around"
             ],
             "codegen-properties": {
-                "settings-flag": "cssRubyAlignEnabled",
                 "computed-style-storage-path": ["m_inheritedRareData"],
                 "computed-style-storage-kind": "enum",
                 "computed-style-type": "RubyAlign",
@@ -7916,7 +7908,6 @@
                 "none"
             ],
             "codegen-properties": {
-                "settings-flag": "cssRubyOverhangEnabled",
                 "computed-style-storage-path": ["m_inheritedRareData"],
                 "computed-style-storage-kind": "enum",
                 "computed-style-type": "RubyOverhang",
@@ -14440,13 +14431,13 @@
             }
         },
         "<single-background-clip>": {
-            "grammar": "<box> | border-area@(settings-flag=cssBackgroundClipBorderAreaEnabled) | text | -webkit-text",
+            "grammar": "<box> | border-area | text | -webkit-text",
             "exported": true,
             "specification": {
                 "category": "css-backgrounds",
-                "url": "https://www.w3.org/TR/css-backgrounds-3/#background-clip"
+                "url": "https://www.w3.org/TR/css-backgrounds-4/#background-clip"
             },
-            "comment": "Out of spec. 'background-clip' is currently defined to '<box>#'."
+            "comment": "-webkit-text is non-standard."
         },
         "<single-background-origin>": {
             "grammar": "<box>",

@@ -278,17 +278,20 @@ AllowMultiElementImplicitSubmission:
 
 AllowMultipleCommitLayerTreePending:
   type: bool
-  status: testable
+  status: internal
   category: dom
   humanReadableName: "Allow requesting CommitLayerTree before the previous has completed"
   humanReadableDescription: "Allow requesting CommitLayerTree before the previous has completed"
   defaultValue:
     WebKitLegacy:
-      default: false
+      "PLATFORM(IOS_FAMILY)": false
+      default: true
     WebKit:
-      default: false
+      "PLATFORM(IOS_FAMILY)": false
+      default: true
     WebCore:
-      default: false
+      "PLATFORM(IOS_FAMILY)": false
+      default: true
 
 AllowPrivacySensitiveOperationsInNonPersistentDataStores:
   type: bool
@@ -1074,20 +1077,6 @@ CSSAxisRelativePositionKeywordsEnabled:
     WebCore:
       default: true
 
-CSSBackgroundClipBorderAreaEnabled:
-  type: bool
-  status: stable
-  category: css
-  humanReadableName: "CSS background-clip: border-area"
-  humanReadableDescription: "Enable the border-area value for background-clip"
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
-
 CSSColorLayersEnabled:
   type: bool
   category: css
@@ -1300,20 +1289,6 @@ CSSPaintingAPIEnabled:
     WebCore:
       default: false
 
-CSSProgressFunctionEnabled:
-  type: bool
-  category: css
-  status: stable
-  humanReadableName: "CSS progress()"
-  humanReadableDescription: "Enable support for CSS Values and Units Module Level 5 progress()"
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
-
 CSSRandomFunctionEnabled:
   type: bool
   category: css
@@ -1341,34 +1316,6 @@ CSSRhythmicSizingEnabled:
       default: false
     WebCore:
       default: false
-
-CSSRubyAlignEnabled:
-  type: bool
-  status: stable
-  category: css
-  humanReadableName: "CSS ruby-align property"
-  humanReadableDescription: "Enable ruby-align"
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
-
-CSSRubyOverhangEnabled:
-  type: bool
-  status: stable
-  category: css
-  humanReadableName: "CSS ruby-overhang property"
-  humanReadableDescription: "Enable ruby-overhang"
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
 
 CSSScrollAnchoringEnabled:
   type: bool
@@ -3393,34 +3340,6 @@ GetBoundingClientRectZoomedEnabled:
     WebCore:
       default: true
 
-GetCoalescedEventsEnabled:
-  type: bool
-  status: stable
-  category: dom
-  humanReadableName: "Pointer Events getCoalescedEvents API"
-  humanReadableDescription: "Enable the `getCoalescedEvents` function of the Pointer Events API"
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
-
-GetPredictedEventsEnabled:
-  type: bool
-  status: stable
-  category: dom
-  humanReadableName: "Pointer Events getPredictedEvents API"
-  humanReadableDescription: "Enable the `getPredictedEvents` function of the Pointer Events API"
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
-
 GetUserMediaRequiresFocus:
   type: bool
   status: internal
@@ -3506,6 +3425,20 @@ HTMLEnhancedSelectParsingEnabled:
        default: true
      WebCore:
        default: true
+
+HTMLEnhancedSelectPseudoElementsEnabled:
+   type: bool
+   status: unstable
+   category: css
+   humanReadableName: "Enhanced HTML select element pseudo-elements"
+   humanReadableDescription: "Enable enhanced HTML select element pseudo-elements"
+   defaultValue:
+     WebKitLegacy:
+       default: false
+     WebKit:
+       default: false
+     WebCore:
+       default: false
 
 HTMLEnhancedSelectSelectedContentEnabled:
    type: bool
@@ -8122,6 +8055,20 @@ TextAutosizingUsesIdempotentMode:
       "PLATFORM(IOS_FAMILY) && !PLATFORM(VISION)": defaultTextAutosizingUsesIdempotentMode()
       default: false
     WebCore:
+      default: false
+
+TextExtractionDebugUIEnabled:
+  type: bool
+  status: internal
+  humanReadableName: "Text Extraction Debug UI"
+  humanReadableDescription: "Enable Text Extraction Debug UI"
+  exposed: [ WebKit ]
+  defaultValue:
+    WebCore:
+      default: false
+    WebKitLegacy:
+      default: false
+    WebKit:
       default: false
 
 TextExtractionEnabled:

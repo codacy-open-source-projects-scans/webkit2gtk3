@@ -111,7 +111,10 @@
 #include "RenderTableCell.h"
 #include "RenderView.h"
 #include "RuleFeature.h"
+#include "SVGAElement.h"
 #include "SVGElement.h"
+#include "SVGElementTypeHelpers.h"
+#include "SVGTitleElement.h"
 #include "ShadowRoot.h"
 #include "StyleListStyleType.h"
 #include "StyleResolver.h"
@@ -121,6 +124,7 @@
 #include "TypedElementDescendantIteratorInlines.h"
 #include "UserGestureIndicator.h"
 #include "VisibleUnits.h"
+#include "XLinkNames.h"
 #include <numeric>
 #include <wtf/Scope.h>
 #include <wtf/SetForScope.h>
@@ -3245,7 +3249,7 @@ String AccessibilityNodeObject::textForLabelElements(Vector<Ref<HTMLElement>>&& 
             appendNameToStringBuilder(result, axLabel->textAsLabelFor(*this));
 #endif
         else
-            appendNameToStringBuilder(result, accessibleNameForNode(labelElement.get()));
+            appendNameToStringBuilder(result, accessibleNameForNode(labelElement.get(), /* labelledByNode */ node()));
     }
 
     return result.toString();
@@ -3476,12 +3480,10 @@ void AccessibilityNodeObject::helpText(Vector<AccessibilityText>& textOrder) con
 
     // The title attribute should be used as help text unless it is already being used as descriptive text.
     // However, when the title attribute is the only text alternative provided, it may be exposed as the
-    // descriptive text. This is problematic in the case of meters because the HTML spec suggests authors
-    // can expose units through this attribute. Therefore, if the element is a meter, change its source
-    // type to AccessibilityTextSource::Help.
+    // descriptive text.
     const AtomString& title = getAttribute(titleAttr);
     if (!title.isEmpty()) {
-        if (!isMeter() && !roleIgnoresTitle())
+        if (!roleIgnoresTitle())
             textOrder.append(AccessibilityText(title, AccessibilityTextSource::TitleTag));
         else
             textOrder.append(AccessibilityText(title, AccessibilityTextSource::Help));
@@ -4177,6 +4179,12 @@ static String accessibleNameForNode(Node& node, Node* labelledbyNode)
     if (!alt.isEmpty())
         return alt;
 
+    if (RefPtr svgElement = dynamicDowncast<SVGElement>(element)) {
+        // For SVG elements, check for SVG-specific labeling mechanisms per SVG-AAM spec.
+        if (String title = svgElement->title(); !title.isEmpty())
+            return title;
+    }
+
     // If the node can be turned into an AX object, we can use standard name computation rules.
     // If however, the node cannot (because there's no renderer e.g.) fallback to using the basic text underneath.
     CheckedPtr cache = node.document().axObjectCache();
@@ -4210,18 +4218,52 @@ static String accessibleNameForNode(Node& node, Node* labelledbyNode)
     }
 
     if (RefPtr input = dynamicDowncast<HTMLInputElement>(element)) {
-        String inputValue = input->value();
-        if (input->isPasswordField()) {
-            StringBuilder passwordValue;
-            passwordValue.reserveCapacity(inputValue.length());
-            for (size_t i = 0; i < inputValue.length(); i++)
-                passwordValue.append(String::fromUTF8("•"));
-            return passwordValue.toString();
+        // Checkboxes and radio buttons derive their accessible name from labels, not their value attribute.
+        if (input->isCheckbox() || input->isRadioButton()) {
+            auto labels = Accessibility::labelsForElement(element);
+            if (!labels.isEmpty()) {
+                StringBuilder builder;
+                for (auto& label : labels)
+                    appendNameToStringBuilder(builder, accessibleNameForNode(label.get()));
+                String labelText = builder.toString();
+                if (!labelText.isEmpty())
+                    return labelText;
+            }
+            // Fall through to other name computation methods.
+        } else {
+            String inputValue = input->value();
+            if (input->isPasswordField()) {
+                StringBuilder passwordValue;
+                passwordValue.reserveCapacity(inputValue.length());
+                for (size_t i = 0; i < inputValue.length(); i++)
+                    passwordValue.append(String::fromUTF8("•"));
+                return passwordValue.toString();
+            }
+            return inputValue;
         }
-        return inputValue;
     }
     if (RefPtr option = dynamicDowncast<HTMLOptionElement>(element))
         return option->value();
+
+    if (auto* slotElement = dynamicDowncast<HTMLSlotElement>(node); slotElement && labelledbyNode) {
+        // Compute the accessible name for a slot's assigned nodes only if it's being used to label
+        // another node. If no assigned nodes exist, or all assigned nodes are hidden, fall through to
+        // textUnderElement, which will return the slot's fallback content.
+        if (auto* assignedNodes = slotElement->assignedNodes()) {
+            StringBuilder builder;
+            for (const auto& assignedNode : *assignedNodes) {
+                // Skip hidden assigned nodes, e.g. those with display:none.
+                RefPtr assignedElement = dynamicDowncast<Element>(assignedNode.get());
+                if (assignedElement && isRenderHidden(safeStyleFrom(*assignedElement)))
+                    continue;
+                appendNameToStringBuilder(builder, accessibleNameForNode(*assignedNode));
+            }
+
+            auto assignedNodesText = builder.toString();
+            if (!assignedNodesText.isEmpty())
+                return assignedNodesText;
+        }
+    }
 
     String text;
     if (axObject) {
@@ -4236,18 +4278,6 @@ static String accessibleNameForNode(Node& node, Node* labelledbyNode)
     const AtomString& title = element ? element->attributeWithoutSynchronization(titleAttr) : nullAtom();
     if (!title.isEmpty())
         return title;
-
-    auto* slotElement = dynamicDowncast<HTMLSlotElement>(node);
-    // Compute the accessible name for a slot's contents only if it's being used to label another node.
-    if (auto* assignedNodes = (slotElement && labelledbyNode) ? slotElement->assignedNodes() : nullptr) {
-        StringBuilder builder;
-        for (const auto& assignedNode : *assignedNodes)
-            appendNameToStringBuilder(builder, accessibleNameForNode(*assignedNode));
-
-        auto assignedNodesText = builder.toString();
-        if (!assignedNodesText.isEmpty())
-            return assignedNodesText;
-    }
 
     return { };
 }
