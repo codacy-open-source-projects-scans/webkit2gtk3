@@ -201,13 +201,13 @@ AccessibilityTextStitchingEnabled:
       "ENABLE(ACCESSIBILITY_TEXT_STITCHING)": true
       default: false
 
-AccessibilityThreadTextApisEnabled:
+AccessibilityThreadHitTestingEnabled:
   type: bool
-  status: embedder
-  humanReadableName: "Off Main-Thread Accessibility Text APIs"
-  humanReadableDescription: "Serve accessibility text APIs off the main-thread"
+  status: internal
+  defaultsOverridable: true
+  humanReadableName: "Off Main-Thread Accessibility Hit Testing"
+  humanReadableDescription: "Serve accessibility hit tests off the main-thread"
   webcoreBinding: DeprecatedGlobalSettings
-  condition: ENABLE(AX_THREAD_TEXT_APIS)
   defaultValue:
     WebKitLegacy:
       default: true
@@ -1380,34 +1380,6 @@ CSSSelectorJITCompilerEnabled:
   humanReadableName: "CSS Selector JIT Compiler"
   humanReadableDescription: "Enable the JIT compiler for CSS selectors"
   condition: ENABLE(CSS_SELECTOR_JIT)
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
-
-CSSTextAutospaceEnabled:
-  type: bool
-  status: stable
-  category: css
-  humanReadableName: "CSS text-autospace property"
-  humanReadableDescription: "Enable the property text-autospace, defined in CSS Text 4"
-  defaultValue:
-    WebKitLegacy:
-      default: true
-    WebKit:
-      default: true
-    WebCore:
-      default: true
-
-CSSTextBoxTrimEnabled:
-  type: bool
-  status: stable
-  category: css
-  humanReadableName: "CSS text-box-trim property"
-  humanReadableDescription: "Enable text-box-trim"
   defaultValue:
     WebKitLegacy:
       default: true
@@ -5796,6 +5768,20 @@ OffscreenCanvasInWorkersEnabled:
       "PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WPE)": true
       default: false
 
+OpenPseudoClassEnabled:
+  type: bool
+  status: testable
+  humanReadableName: ":open pseudo-class"
+  humanReadableDescription: "Enable the :open CSS pseudo-class"
+  category: css
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 OpenXRDMABufRelaxedForTesting:
   type: bool
   status: internal
@@ -6870,6 +6856,20 @@ ScriptTrackingPrivacyLoggingEnabled:
   status: internal
   humanReadableName: "Script Tracking Privacy Logging"
   humanReadableDescription: "Script tracking privacy logging enabled"
+  exposed: [ WebKit ]
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
+ScriptTrackingPrivacyNetworkRequestBlockingEnabled:
+  type: bool
+  status: internal
+  humanReadableName: "Script Tracking Privacy Network Requests Blocking"
+  humanReadableDescription: "Block network requests made from tracking scripts"
   exposed: [ WebKit ]
   defaultValue:
     WebKitLegacy:
@@ -8375,7 +8375,7 @@ UnifyDamagedRegions:
        default: false
      WebCore:
        default: false
-       
+
 UpdateSceneGeometryEnabled:
   type: bool
   status: internal

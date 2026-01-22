@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2026 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,31 +23,22 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
+#include "config.h"
+#include "B3WasmStructNewValue.h"
 
 #if ENABLE(B3_JIT)
 
-#include "CPU.h"
-#include "Options.h"
+#include "B3ValueInlines.h"
 
-namespace JSC { namespace B3 { namespace Air {
+namespace JSC::B3 {
 
-class Code;
+WasmStructNewValue::~WasmStructNewValue() = default;
 
-// This implements the Poletto and Sarkar register allocator called "linear scan":
-// http://dl.acm.org/citation.cfm?id=330250
-//
-// This is not Air's primary register allocator. We use it only when running at optLevel<2.
-// That's not the default level. This register allocator is optimized primarily for running
-// quickly. It's expected that improvements to this register allocator should focus on improving
-// its execution time without much regard for the quality of generated code. If you want good
-// code, use graph coloring.
-//
-// For Air's primary register allocator, see AirAllocateRegistersByGraphColoring.h|cpp.
-//
-// This also does stack allocation as an afterthought. It does not do any spill coalescing.
-void allocateRegistersAndStackByLinearScan(Code&);
+void WasmStructNewValue::dumpMeta(CommaPrinter& comma, PrintStream& out) const
+{
+    out.print(comma, "typeIndex = ", m_typeIndex, comma, "fieldCount = ", m_structType->fieldCount());
+}
 
-} } } // namespace JSC::B3::Air
+} // namespace JSC::B3
 
 #endif // ENABLE(B3_JIT)
