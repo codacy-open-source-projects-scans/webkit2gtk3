@@ -4512,6 +4512,9 @@ header: <WebCore/MediaPlayer.h>
     std::optional<Vector<WebCore::FourCC>> allowedMediaVideoCodecIDs;
     std::optional<Vector<WebCore::FourCC>> allowedMediaAudioCodecIDs;
     std::optional<Vector<WebCore::FourCC>> allowedMediaCaptionFormatTypes;
+#if ENABLE(WIRELESS_PLAYBACK_TARGET)
+    WebCore::MediaPlaybackTargetType playbackTargetType;
+#endif
 };
 
 header: <WebCore/MediaPlayer.h>
@@ -6408,11 +6411,11 @@ struct WebCore::DigitalCredentialsRequestData {
 };
 
 struct WebCore::DigitalCredentialsResponseData {
-    WebCore::IdentityCredentialProtocol protocol;
+    WebCore::DigitalCredentialPresentationProtocol protocol;
     String responseDataJSON;
 };
 
-[Nested] enum class WebCore::IdentityCredentialProtocol : uint8_t {
+[Nested] enum class WebCore::DigitalCredentialPresentationProtocol : uint8_t {
     OrgIsoMdoc
 };
 
@@ -9082,6 +9085,11 @@ enum class WebCore::ShouldGoToHistoryItem : uint8_t {
     No,
     Yes,
     ItemUnknown
+};
+
+struct WebCore::DocumentSecurityPolicy {
+    WebCore::CrossOriginEmbedderPolicy crossOriginEmbedderPolicy;
+    WebCore::CrossOriginOpenerPolicy crossOriginOpenerPolicy;
 };
 
 header: <WebCore/ProcessSwapDisposition.h>

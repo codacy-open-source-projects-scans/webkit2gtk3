@@ -810,6 +810,7 @@ public:
     uint64_t sframeCounter(const RTCRtpSFrameTransform&);
     uint64_t sframeKeyId(const RTCRtpSFrameTransform&);
     void setEnableWebRTCEncryption(bool);
+    bool hasPeerConnectionEnabledServiceClass(const RTCPeerConnection&);
 #endif
 
     String getImageSourceURL(Element&);

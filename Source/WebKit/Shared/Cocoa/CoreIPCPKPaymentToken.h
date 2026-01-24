@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2025 Apple Inc. All rights reserved.
+ * Copyright (C) 2026 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,6 +23,41 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-enum IdentityCredentialProtocol {
-    "org-iso-mdoc",
+#pragma once
+
+#include <wtf/ArgumentCoder.h>
+#include <wtf/RetainPtr.h>
+
+OBJC_CLASS PKPaymentMethod;
+OBJC_CLASS PKPaymentToken;
+
+#if USE(PASSKIT) && HAVE(WK_SECURE_CODING_PKPAYMENTTOKEN)
+
+namespace WebKit {
+
+struct CoreIPCPKPaymentTokenData {
+    RetainPtr<NSString> paymentInstrumentName;
+    RetainPtr<NSString> paymentNetwork;
+    RetainPtr<NSString> transactionIdentifier;
+    RetainPtr<NSData> paymentData;
+    RetainPtr<PKPaymentMethod> paymentMethod;
+    RetainPtr<NSURL> redeemURL;
+    RetainPtr<NSString> retryNonce;
 };
+
+class CoreIPCPKPaymentToken {
+    WTF_MAKE_TZONE_ALLOCATED(CoreIPCPKPaymentToken);
+public:
+    CoreIPCPKPaymentToken(PKPaymentToken *);
+    RetainPtr<id> toID() const;
+
+private:
+    friend struct IPC::ArgumentCoder<CoreIPCPKPaymentToken>;
+    CoreIPCPKPaymentToken(std::optional<CoreIPCPKPaymentTokenData>&&);
+
+    std::optional<CoreIPCPKPaymentTokenData> m_data;
+};
+
+} // namespace WebKit
+
+#endif
