@@ -2717,6 +2717,7 @@
 		6C4C96DF1AD4483500365672 /* JSReadableStreamBYOBRequest.h in Headers */ = {isa = PBXBuildFile; fileRef = 6C4C96DB1AD4483500365672 /* JSReadableStreamBYOBRequest.h */; };
 		6C4C96DF1AD4483500365A50 /* JSReadableStreamDefaultController.h in Headers */ = {isa = PBXBuildFile; fileRef = 6C4C96DB1AD4483500365A50 /* JSReadableStreamDefaultController.h */; };
 		6C638895A96CCEE50C8C946C /* CachedResourceRequestInitiatorTypes.h in Headers */ = {isa = PBXBuildFile; fileRef = 6C638893A96CCEE50C8C946C /* CachedResourceRequestInitiatorTypes.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		6DC9C7142F0C5BF300A93E65 /* DragEventTargetData.h in Headers */ = {isa = PBXBuildFile; fileRef = 6DC9C7132F0C5BC600A93E65 /* DragEventTargetData.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		6DD53F3D2C49D37F0049F1C5 /* IsLoggedIn.h in Headers */ = {isa = PBXBuildFile; fileRef = 6D46FE012C49C9DA00743D07 /* IsLoggedIn.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		6E0B90692321A68D006223B2 /* WebGLCompressedTextureETC1.h in Headers */ = {isa = PBXBuildFile; fileRef = 6E0B90652321A68C006223B2 /* WebGLCompressedTextureETC1.h */; };
 		6E0E569C183BFFE600E0E8D5 /* FloatRoundedRect.h in Headers */ = {isa = PBXBuildFile; fileRef = 6E0E569A183BFFE600E0E8D5 /* FloatRoundedRect.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -13457,6 +13458,7 @@
 		6D46FE012C49C9DA00743D07 /* IsLoggedIn.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = IsLoggedIn.h; sourceTree = "<group>"; };
 		6D61E3752C2E016F00F1C6AA /* NavigatorLoginStatus.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NavigatorLoginStatus.h; sourceTree = "<group>"; };
 		6D61E3762C2E016F00F1C6AA /* NavigatorLoginStatus.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = NavigatorLoginStatus.cpp; sourceTree = "<group>"; };
+		6DC9C7132F0C5BC600A93E65 /* DragEventTargetData.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DragEventTargetData.h; sourceTree = "<group>"; };
 		6DD53F3E2C49D4E20049F1C5 /* IsLoggedIn.idl */ = {isa = PBXFileReference; lastKnownFileType = text; path = IsLoggedIn.idl; sourceTree = "<group>"; };
 		6E0B90652321A68C006223B2 /* WebGLCompressedTextureETC1.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = WebGLCompressedTextureETC1.h; sourceTree = "<group>"; };
 		6E0B90672321A68C006223B2 /* WebGLCompressedTextureETC1.idl */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = WebGLCompressedTextureETC1.idl; sourceTree = "<group>"; };
@@ -38235,6 +38237,7 @@
 				07E4BDBE2A3A5FAB000D5509 /* DictationCaretAnimator.h */,
 				A79546420B5C4CB4007B438F /* DragData.cpp */,
 				A7B6E69D0B291A9600D0529F /* DragData.h */,
+				6DC9C7132F0C5BC600A93E65 /* DragEventTargetData.h */,
 				A7CFB3CF0B7ED10A0070C32D /* DragImage.cpp */,
 				A7CFB3D00B7ED10A0070C32D /* DragImage.h */,
 				1AF5E4D71E5677A9004A1F01 /* DragItem.h */,
@@ -43811,6 +43814,7 @@
 				A7CA595D0B27BD9E00FA021D /* DragController.h in Headers */,
 				A7B6E69F0B291A9600D0529F /* DragData.h in Headers */,
 				46E0C0DE23C006E9005E47AE /* DragEvent.h in Headers */,
+				6DC9C7142F0C5BF300A93E65 /* DragEventTargetData.h in Headers */,
 				A7CFB3D20B7ED10A0070C32D /* DragImage.h in Headers */,
 				1AF5E4D91E5677A9004A1F01 /* DragItem.h in Headers */,
 				81F65FF613788FAA00FF6F2D /* DragState.h in Headers */,

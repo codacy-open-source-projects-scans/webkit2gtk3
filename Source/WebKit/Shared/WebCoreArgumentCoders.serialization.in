@@ -4477,9 +4477,12 @@ struct WebCore::BackgroundFetchRecordInformation {
     String referrer;
 };
 
-struct WebCore::BackgroundFetchOptions {
-    Vector<WebCore::ImageResource> icons;
+struct WebCore::BackgroundFetchUIOptions {
+    std::optional<Vector<WebCore::ImageResource>> icons;
     String title;
+};
+
+struct WebCore::BackgroundFetchOptions : WebCore::BackgroundFetchUIOptions {
     uint64_t downloadTotal;
 };
 
@@ -5197,6 +5200,9 @@ enum class WebCore::FirstPartyWebsiteDataRemovalMode : uint8_t {
     AllButCookiesLiveOnTestingTimeout,
     AllButCookiesReproTestingTimeout
 };
+
+header: <WebCore/DragData.h>
+[CustomHeader] enum class WebCore::DragEventHandled : bool;
 
 header: <WebCore/DragData.h>
 [OptionSet, CustomHeader] enum class WebCore::DragApplicationFlags : uint8_t {
