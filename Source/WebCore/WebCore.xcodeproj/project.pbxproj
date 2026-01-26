@@ -11760,6 +11760,7 @@
 		4869472C2E54CE1800C708D8 /* PerformanceEventTimingCandidate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PerformanceEventTimingCandidate.h; sourceTree = "<group>"; };
 		486B8DC62A043C0600E00E73 /* AXGeometryManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AXGeometryManager.h; sourceTree = "<group>"; };
 		486B8DC82A04500F00E00E73 /* AXGeometryManager.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = AXGeometryManager.cpp; sourceTree = "<group>"; };
+		486FC93E2F24204300F72E13 /* AXTextStateChangeIntent.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = AXTextStateChangeIntent.cpp; sourceTree = "<group>"; };
 		48AA91ED2DD7BDFD0038F076 /* AXTreeStore.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = AXTreeStore.cpp; sourceTree = "<group>"; };
 		48B024282B2A65AA0083D122 /* AXTextRun.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AXTextRun.h; sourceTree = "<group>"; };
 		48B187722E54CC65009B57A9 /* AXObjectRareData.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AXObjectRareData.h; sourceTree = "<group>"; };
@@ -25980,6 +25981,7 @@
 				C0E208A029379C6E00C0D2D3 /* AXTextMarker.h */,
 				48C4E83C2B34D8380083460A /* AXTextRun.cpp */,
 				48B024282B2A65AA0083D122 /* AXTextRun.h */,
+				486FC93E2F24204300F72E13 /* AXTextStateChangeIntent.cpp */,
 				91C9F2F81AE3BE240095B61C /* AXTextStateChangeIntent.h */,
 				48AA91ED2DD7BDFD0038F076 /* AXTreeStore.cpp */,
 				C0E8ADC4294B5A620076CBDC /* AXTreeStore.h */,
