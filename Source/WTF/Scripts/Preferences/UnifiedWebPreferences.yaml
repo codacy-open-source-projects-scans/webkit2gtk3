@@ -6529,18 +6529,6 @@ RequestVideoFrameCallbackEnabled:
       "USE(GSTREAMER)": true
       default: false
 
-RequireUAGetDisplayMediaPrompt:
-  type: bool
-  status: internal
-  humanReadableName: "Require User Agent getDisplayMedia prompt"
-  humanReadableDescription: "Require and use User Agent getDisplayMedia prompt"
-  condition: HAVE(SC_CONTENT_SHARING_PICKER)
-  defaultValue:
-    WebKit:
-      default: true
-    WebCore:
-      default: true
-
 RequiresPageVisibilityForVideoToBeNowPlaying:
   type: bool
   status: embedder
@@ -7093,16 +7081,18 @@ ServiceWorkerEntitlementDisabledForTesting:
 
 ServiceWorkerInstallEventEnabled:
   type: bool
-  status: testable
+  status: stable
   category: networking
   humanReadableName: "Service Worker Install Event"
   humanReadableDescription: "Enable Service Worker Install Event API"
   defaultValue:
     WebKit:
+      "PLATFORM(COCOA)" : true
       default: false
     WebKitLegacy:
       default: false
     WebCore:
+      "PLATFORM(COCOA)" : true
       default: false
   disableInLockdownMode: true
 

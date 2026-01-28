@@ -192,6 +192,14 @@ void WebPageProxy::didCommitLayerTree(const RemoteLayerTreeTransaction& layerTre
     }
 }
 
+WebCore::DestinationColorSpace WebPageProxy::colorSpace() const
+{
+    if (RefPtr pageClient = this->pageClient())
+        return pageClient->colorSpace();
+
+    return WebCore::DestinationColorSpace::SRGB();
+}
+
 void WebPageProxy::didCommitMainFrameData(const MainFrameData& mainFrameData, const TransactionID& transactionID)
 {
     themeColorChanged(mainFrameData.themeColor);
@@ -349,7 +357,7 @@ void WebPageProxy::createSandboxExtensionsIfNeeded(const Vector<String>& files, 
         return;
 
     auto createSandboxExtension = [protectedThis = Ref { *this }] (const String& path) {
-        auto token = protect(protectedThis->legacyMainFrameProcess())->protectedConnection()->getAuditToken();
+        auto token = protect(protect(protectedThis->legacyMainFrameProcess())->connection())->getAuditToken();
         ASSERT(token);
 
         if (token) {
@@ -1610,7 +1618,7 @@ bool WebPageProxy::tryToSendCommandToActiveControlledVideo(PlatformMediaSession:
     if (!hasActiveVideoForControlsManager())
         return false;
 
-    WeakPtr model = protect(playbackSessionManager())->protectedControlsManagerInterface()->playbackSessionModel();
+    WeakPtr model = protect(protect(playbackSessionManager())->controlsManagerInterface())->playbackSessionModel();
     if (!model)
         return false;
 

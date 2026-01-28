@@ -293,6 +293,9 @@ http/tests/app-privacy-report/ [ Skip ]
 # Only partial support on Cocoa platforms.
 imported/w3c/web-platform-tests/speech-api/ [ Skip ]
 
+# Requires caLayerTreeAsText
+compositing/background-color/background-color-clamping.html [ Skip ]
+
 # Support for COEP violation reporting is missing.
 imported/w3c/web-platform-tests/html/cross-origin-opener-policy/reporting/access-reporting/
 imported/w3c/web-platform-tests/html/cross-origin-opener-policy/reporting/document-reporting/
@@ -6775,7 +6778,6 @@ webkit.org/b/285971 imported/w3c/web-platform-tests/css/css-tables/table-as-item
 webkit.org/b/285971 imported/w3c/web-platform-tests/css/css-tables/table-as-item-cell-percentage-004.html [ ImageOnlyFailure ]
 webkit.org/b/285971 imported/w3c/web-platform-tests/css/css-tables/table-intrinsic-size-003.html [ ImageOnlyFailure ]
 webkit.org/b/285971 imported/w3c/web-platform-tests/css/css-tables/table-intrinsic-size-004.html [ ImageOnlyFailure ]
-webkit.org/b/285971 imported/w3c/web-platform-tests/css/css-tables/tentative/padding-percentage.html [ ImageOnlyFailure ]
 webkit.org/b/285971 imported/w3c/web-platform-tests/css/css-tables/visibility-collapse-border-spacing-001.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-tables/html5-table-formatting-3.html [ Pass Failure ]
 
@@ -8208,3 +8210,13 @@ webkit.org/b/301250 ipc/dictionary-callbacks.html [ Skip ]
 imported/w3c/web-platform-tests/fetch/security/dangling-markup/dangling-markup-mitigation.tentative.https.html [ Skip ]
 
 webkit.org/b/305054 [ Debug ] ipc/serialized-type-info.html [ Failure ]
+
+webkit.org/b/89153 http/tests/websocket/tests/hybi/workers/close.html [ Pass Failure ]
+
+# webkit.org/b/287997 4X imported/w3c/web-platform-tests/editing/other/insertparagraph-in-child-of-html.tentative.html?designMode=on&white-space= are flaky text failures
+imported/w3c/web-platform-tests/editing/other/insertparagraph-in-child-of-html.tentative.html?designMode=on&white-space=normal [ Pass Failure ]
+imported/w3c/web-platform-tests/editing/other/insertparagraph-in-child-of-html.tentative.html?designMode=on&white-space=pre [ Pass Failure ]
+imported/w3c/web-platform-tests/editing/other/insertparagraph-in-child-of-html.tentative.html?designMode=on&white-space=pre-line [ Pass Failure ]
+imported/w3c/web-platform-tests/editing/other/insertparagraph-in-child-of-html.tentative.html?designMode=on&white-space=pre-wrap [ Pass Failure ]
+
+webkit.org/b/288546 imported/w3c/web-platform-tests/fullscreen/api/element-ready-allowed.html [ Pass Failure ]

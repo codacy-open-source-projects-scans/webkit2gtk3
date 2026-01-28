@@ -122,8 +122,8 @@
 		071C004B270B864900D027C7 /* ReplayKitCaptureSource.mm in Sources */ = {isa = PBXBuildFile; fileRef = 071C00322707D94300D027C7 /* ReplayKitCaptureSource.mm */; };
 		071E49701AD5AB5E008A50B4 /* MediaPlaybackTargetCocoa.h in Headers */ = {isa = PBXBuildFile; fileRef = 071E496F1AD5AB5E008A50B4 /* MediaPlaybackTargetCocoa.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		072207672E597DE900F2F778 /* SVGPropertyAnimator.h in Headers */ = {isa = PBXBuildFile; fileRef = 7266F0162241C0FE00833975 /* SVGPropertyAnimator.h */; };
-		07257B5C2E506C8000AD0DF1 /* PlatformPathImpl.h in Headers */ = {isa = PBXBuildFile; fileRef = 7246F0282A15415900FD74F1 /* PlatformPathImpl.h */; };
-		07257B5D2E506CBF00AD0DF1 /* PathCG.h in Headers */ = {isa = PBXBuildFile; fileRef = 7246F02E2A1549CB00FD74F1 /* PathCG.h */; };
+		07257B5C2E506C8000AD0DF1 /* PlatformPathImpl.h in Headers */ = {isa = PBXBuildFile; fileRef = 7246F0282A15415900FD74F1 /* PlatformPathImpl.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		07257B5D2E506CBF00AD0DF1 /* PathCG.h in Headers */ = {isa = PBXBuildFile; fileRef = 7246F02E2A1549CB00FD74F1 /* PathCG.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		07257B5E2E506D8E00AD0DF1 /* AudioEncoder.h in Headers */ = {isa = PBXBuildFile; fileRef = 9ACB2F152AA5ECFF006E9556 /* AudioEncoder.h */; };
 		07257B5F2E50726400AD0DF1 /* WebCodecsAudioEncoder.h in Headers */ = {isa = PBXBuildFile; fileRef = 9ACB2F0C2AA5E980006E9556 /* WebCodecsAudioEncoder.h */; };
 		07257B602E5072E600AD0DF1 /* AudioEncoderActiveConfiguration.h in Headers */ = {isa = PBXBuildFile; fileRef = 9ACB2F162AA5ECFF006E9556 /* AudioEncoderActiveConfiguration.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -11532,6 +11532,8 @@
 		4650851728E4AA3C00DB9BDF /* RFC7230.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = RFC7230.cpp; sourceTree = "<group>"; };
 		4650AD1726FCCA5A0047F7AD /* WorkerThreadMode.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = WorkerThreadMode.h; sourceTree = "<group>"; };
 		465305F72B7EB2BF00BCC812 /* SVGLength.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = SVGLength.cpp; sourceTree = "<group>"; };
+		465C37382F2717E90060ED47 /* SVGAnimatedPropertyBase.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SVGAnimatedPropertyBase.h; sourceTree = "<group>"; };
+		465C37392F2717E90060ED47 /* SVGAnimatedPropertyBase.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = SVGAnimatedPropertyBase.cpp; sourceTree = "<group>"; };
 		465EDD9F222F4EC300B46E16 /* DeviceOrientationOrMotionPermissionState.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DeviceOrientationOrMotionPermissionState.h; sourceTree = "<group>"; };
 		465EDDA0222F4EC400B46E16 /* DeviceOrientationOrMotionPermissionState.idl */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = DeviceOrientationOrMotionPermissionState.idl; sourceTree = "<group>"; };
 		4664D1A12964FCD4006FE0C5 /* GamepadHapticActuator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GamepadHapticActuator.h; sourceTree = "<group>"; };
@@ -12800,7 +12802,6 @@
 		55BE025A223B29C20032F08A /* SVGPointerMemberAccessor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SVGPointerMemberAccessor.h; sourceTree = "<group>"; };
 		55BE025B223B29C20032F08A /* SVGAnimationFunction.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SVGAnimationFunction.h; sourceTree = "<group>"; };
 		55BE025C223B29C30032F08A /* SVGPropertyOwnerRegistry.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SVGPropertyOwnerRegistry.h; sourceTree = "<group>"; };
-		55BE025D223B29C40032F08A /* SVGAnimatedProperty.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = SVGAnimatedProperty.cpp; sourceTree = "<group>"; };
 		55BE025E223B29C40032F08A /* SVGAnimatedPropertyPairAccessor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SVGAnimatedPropertyPairAccessor.h; sourceTree = "<group>"; };
 		55BE025F223B29C50032F08A /* SVGAnimationAdditiveFunction.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SVGAnimationAdditiveFunction.h; sourceTree = "<group>"; };
 		55D408F71A7C631800C78450 /* SVGImageClients.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SVGImageClients.h; sourceTree = "<group>"; };
@@ -19790,6 +19791,13 @@
 		BCD8F9802F21529300B42872 /* JSAudioWorkletProcessor.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = JSAudioWorkletProcessor.cpp; sourceTree = "<group>"; };
 		BCD8F9812F21529300B42872 /* JSAudioWorkletProcessorConstructor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JSAudioWorkletProcessorConstructor.h; sourceTree = "<group>"; };
 		BCD8F9822F21529300B42872 /* JSAudioWorkletProcessorConstructor.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = JSAudioWorkletProcessorConstructor.cpp; sourceTree = "<group>"; };
+		BCD8F9C32F266A2A00B42872 /* JSElementCreationOptions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JSElementCreationOptions.h; sourceTree = "<group>"; };
+		BCD8F9C42F266A2A00B42872 /* JSElementCreationOptions.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = JSElementCreationOptions.cpp; sourceTree = "<group>"; };
+		BCD8F9C52F26852100B42872 /* JSElementInternals.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JSElementInternals.h; sourceTree = "<group>"; };
+		BCD8F9C62F26852100B42872 /* JSElementInternals.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = JSElementInternals.cpp; sourceTree = "<group>"; };
+		BCD8F9DE2F27D7FF00B42872 /* InspectorAuditAccessibilityObject.idl */ = {isa = PBXFileReference; lastKnownFileType = text; path = InspectorAuditAccessibilityObject.idl; sourceTree = "<group>"; };
+		BCD8F9DF2F27D80500B42872 /* InspectorAuditDOMObject.idl */ = {isa = PBXFileReference; lastKnownFileType = text; path = InspectorAuditDOMObject.idl; sourceTree = "<group>"; };
+		BCD8F9E02F27D80B00B42872 /* InspectorAuditResourcesObject.idl */ = {isa = PBXFileReference; lastKnownFileType = text; path = InspectorAuditResourcesObject.idl; sourceTree = "<group>"; };
 		BCD9C25E0C17AA67005C90A2 /* JSDOMWindowCustom.cpp */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.cpp.cpp; path = JSDOMWindowCustom.cpp; sourceTree = "<group>"; };
 		BCD9C2600C17AA67005C90A2 /* JSNodeCustom.cpp */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.cpp.cpp; path = JSNodeCustom.cpp; sourceTree = "<group>"; };
 		BCD9C2610C17AA67005C90A2 /* JSNodeListCustom.cpp */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.cpp.cpp; path = JSNodeListCustom.cpp; sourceTree = "<group>"; };
@@ -23782,12 +23790,13 @@
 			children = (
 				5553592022441A16008F5EC9 /* SVGAnimatedDecoratedProperty.h */,
 				55EE5357223B29F800FBA944 /* SVGAnimatedPrimitiveProperty.h */,
-				55BE025D223B29C40032F08A /* SVGAnimatedProperty.cpp */,
 				55EE5362223B2A2300FBA944 /* SVGAnimatedProperty.h */,
 				55EE5359223B29FA00FBA944 /* SVGAnimatedPropertyAccessor.h */,
 				55EE5358223B29F900FBA944 /* SVGAnimatedPropertyAccessorImpl.h */,
 				55EE535A223B29FB00FBA944 /* SVGAnimatedPropertyAnimator.h */,
 				55EE5356223B29F700FBA944 /* SVGAnimatedPropertyAnimatorImpl.h */,
+				465C37392F2717E90060ED47 /* SVGAnimatedPropertyBase.cpp */,
+				465C37382F2717E90060ED47 /* SVGAnimatedPropertyBase.h */,
 				55EE535C223B2A0D00FBA944 /* SVGAnimatedPropertyImpl.h */,
 				7266F02A2243149B00833975 /* SVGAnimatedPropertyList.h */,
 				55BE025E223B29C40032F08A /* SVGAnimatedPropertyPairAccessor.h */,
@@ -25411,10 +25420,13 @@
 				F30EE46A2E721B9D00935B60 /* FrameInspectorController.h */,
 				9175CE5921E281EC00DF2C27 /* InspectorAuditAccessibilityObject.cpp */,
 				9175CE5A21E281ED00DF2C27 /* InspectorAuditAccessibilityObject.h */,
+				BCD8F9DE2F27D7FF00B42872 /* InspectorAuditAccessibilityObject.idl */,
 				9175CE5721E281EB00DF2C27 /* InspectorAuditDOMObject.cpp */,
 				9175CE5821E281EC00DF2C27 /* InspectorAuditDOMObject.h */,
+				BCD8F9DF2F27D80500B42872 /* InspectorAuditDOMObject.idl */,
 				9109E9C7222CABC900BB6264 /* InspectorAuditResourcesObject.cpp */,
 				9109E9C5222CABC800BB6264 /* InspectorAuditResourcesObject.h */,
+				BCD8F9E02F27D80B00B42872 /* InspectorAuditResourcesObject.idl */,
 				1C81B9580E97330800266E07 /* InspectorBackendClient.h */,
 				6A22E8721F1042C400F546C3 /* InspectorCanvas.cpp */,
 				6A22E86F1F10418600F546C3 /* InspectorCanvas.h */,
@@ -34523,6 +34535,10 @@
 				BC64649611D82349006455B0 /* JSDOMStringMap.h */,
 				65DF31E509D1CC60000BE325 /* JSElement.cpp */,
 				65DF31E609D1CC60000BE325 /* JSElement.h */,
+				BCD8F9C42F266A2A00B42872 /* JSElementCreationOptions.cpp */,
+				BCD8F9C32F266A2A00B42872 /* JSElementCreationOptions.h */,
+				BCD8F9C62F26852100B42872 /* JSElementInternals.cpp */,
+				BCD8F9C52F26852100B42872 /* JSElementInternals.h */,
 				7CD344121F3108E2000DCD49 /* JSMutationCallback.cpp */,
 				7CD344111F3108DD000DCD49 /* JSMutationCallback.h */,
 				C6F0902414327D4F00685849 /* JSMutationObserver.cpp */,
