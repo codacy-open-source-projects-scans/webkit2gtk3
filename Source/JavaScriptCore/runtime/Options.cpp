@@ -657,7 +657,10 @@ void Options::setAllJITCodeValidations(bool value)
 
 static inline void disableAllWasmJITOptions()
 {
+#if ENABLE(WEBASSEMBLY)
+    // This really only makes sense if could use wasm, otherwise we should not override this.
     Options::useLLInt() = true;
+#endif
     Options::useBBQJIT() = false;
     Options::useOMGJIT() = false;
 
@@ -688,7 +691,10 @@ static inline void disableAllWasmOptions()
 
 static inline void disableAllJITOptions()
 {
+#if ENABLE(WEBASSEMBLY)
+    // This really only makes sense if could use wasm, otherwise we should not override this.
     Options::useLLInt() = true;
+#endif
     Options::useJIT() = false;
     disableAllWasmJITOptions();
 
@@ -1523,8 +1529,6 @@ bool canUseHandlerIC()
 
 bool canUseWasm()
 {
-    if constexpr (useCompressedHeap)
-        return false;
 #if ENABLE(WEBASSEMBLY) && !PLATFORM(WATCHOS)
     return true;
 #else

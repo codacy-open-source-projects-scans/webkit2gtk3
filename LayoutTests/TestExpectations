@@ -1817,7 +1817,6 @@ imported/w3c/web-platform-tests/css/css-grid/grid-lanes/tentative/subgrid/column
 imported/w3c/web-platform-tests/css/css-grid/grid-lanes/tentative/subgrid/column/grid-lanes-subgrid-002g.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-grid/grid-lanes/tentative/subgrid/column/grid-lanes-subgrid-002h.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-grid/grid-lanes/tentative/subgrid/column/grid-lanes-subgrid-002i.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-grid/grid-lanes/tentative/subgrid/row/grid-lanes-subgrid-001a.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-grid/grid-lanes/tentative/subgrid/row/grid-lanes-subgrid-002a.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-grid/grid-lanes/tentative/subgrid/row/grid-lanes-subgrid-002b.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-grid/grid-lanes/tentative/subgrid/row/grid-lanes-subgrid-002c.html [ ImageOnlyFailure ]
@@ -3091,6 +3090,9 @@ imported/blink/http/tests/security/shape-image-cors-port.html [ ImageOnlyFailure
 
 # 1px off
 webkit.org/b/163706 imported/w3c/web-platform-tests/css/css-shapes/shape-outside/shape-image/shape-image-024.html [ ImageOnlyFailure ]
+# subpixel inline layout
+# This old test case fails with Firefox and Chrome.
+webkit.org/b/163706 imported/w3c/web-platform-tests/css/css-shapes/spec-examples/shape-outside-008.html [ ImageOnlyFailure ]
 
 # Temporary failure until we start using ANGLE as a WebGL backend
 webkit.org/b/163924 fast/canvas/webgl/bufferData-offset-length.html [ Pass Failure ]

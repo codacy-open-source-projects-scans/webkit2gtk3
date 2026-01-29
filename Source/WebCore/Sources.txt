@@ -658,6 +658,7 @@ bindings/js/BindingsJSTZoneImpls.cpp
 bindings/js/CachedModuleScriptLoader.cpp
 bindings/js/CachedScriptFetcher.cpp
 bindings/js/CommonVM.cpp
+bindings/js/DOMAsyncIterator.cpp
 bindings/js/DOMGCOutputConstraint.cpp
 bindings/js/DOMWrapperWorld.cpp
 bindings/js/GarbageCollectionController.cpp
@@ -2317,6 +2318,7 @@ platform/FileMonitor.cpp
 platform/FileStream.cpp
 platform/FixedContainerEdges.cpp
 platform/FrameRateMonitor.cpp
+platform/SelectionGeometry.cpp
 platform/StringEntropyHelpers.cpp
 platform/KeyboardScroll.cpp
 platform/KeyboardScrollingAnimator.cpp

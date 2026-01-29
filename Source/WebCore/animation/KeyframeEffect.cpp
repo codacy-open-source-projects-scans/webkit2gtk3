@@ -1927,7 +1927,7 @@ const TimingFunction* KeyframeEffect::timingFunctionForKeyframeAtIndex(size_t in
 
 bool KeyframeEffect::canBeAccelerated() const
 {
-    if (!animation() || !animation()->timeline())
+    if (!animation() || !animation()->timeline() || animation()->isSkippedContentAnimation())
         return false;
 
     if (m_acceleratedPropertiesState == AcceleratedProperties::None)
@@ -2292,6 +2292,11 @@ void KeyframeEffect::animationSuspensionStateDidChange(bool animationIsSuspended
 {
 #if ENABLE(THREADED_ANIMATIONS)
     if (canHaveAcceleratedRepresentation()) {
+        // Ensure we mark the target as dirty since suspension will affect the accelerated state
+        // and, as a result, the computed style, which may not have accounted for accelerated
+        // effects previously, may now need to.
+        invalidate();
+
         scheduleAssociatedAcceleratedEffectStackUpdate();
         return;
     }
