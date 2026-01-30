@@ -1335,12 +1335,19 @@ Ref<WebPageProxy> WebProcessPool::createWebPage(PageClient& pageClient, Ref<API:
 
     RefPtr<WebProcessProxy> process;
     auto lockdownMode = pageConfiguration->lockdownModeEnabled() ? WebProcessProxy::LockdownMode::Enabled : WebProcessProxy::LockdownMode::Disabled;
-    auto enhancedSecurity = (protect(pageConfiguration->preferences())->forceEnhancedSecurity() || pageConfiguration->isEnhancedSecurityEnabled()) ? EnhancedSecurity::EnabledPolicy : EnhancedSecurity::Disabled;
-    RefPtr relatedPage = pageConfiguration->relatedPage();
 
-    if (auto& openerInfo = pageConfiguration->openerInfo(); openerInfo && protect(pageConfiguration->preferences())->siteIsolationEnabled())
+    bool useEnhancedSecurityFallback = lockdownMode == WebProcessProxy::LockdownMode::Disabled && lockdownModeEnabledBySystem();
+    auto enhancedSecurity = (protect(pageConfiguration->preferences())->forceEnhancedSecurity() || pageConfiguration->isEnhancedSecurityEnabled() || useEnhancedSecurityFallback) ? EnhancedSecurity::EnabledPolicy : EnhancedSecurity::Disabled;
+
+    RefPtr relatedPage = pageConfiguration->relatedPage();
+    bool siteIsolationEnabled = protect(pageConfiguration->preferences())->siteIsolationEnabled();
+    RefPtr preferredBrowsingContextGroup = pageConfiguration->preferredBrowsingContextGroup();
+    RefPtr preferredFrameProcess = preferredBrowsingContextGroup ? preferredBrowsingContextGroup->processForSite(pageConfiguration->openedSite()) : nullptr;
+    if (auto& openerInfo = pageConfiguration->openerInfo(); openerInfo && siteIsolationEnabled)
         process = openerInfo->process.ptr();
-    else if (relatedPage && !relatedPage->isClosed() && relatedPage->hasSameGPUAndNetworkProcessPreferencesAs(pageConfiguration)) {
+    else if (preferredFrameProcess)
+        process = preferredFrameProcess->process();
+    else if (relatedPage && !relatedPage->isClosed() && relatedPage->hasSameGPUAndNetworkProcessPreferencesAs(pageConfiguration) && !siteIsolationEnabled) {
         // Sharing processes, e.g. when creating the page via window.open().
         process = relatedPage->ensureRunningProcess();
         // We do not support several WebsiteDataStores sharing a single process.

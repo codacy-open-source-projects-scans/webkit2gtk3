@@ -1010,7 +1010,7 @@ static void addBrowsingContextControllerMethodStubsIfNeeded()
 - (WKBackForwardList *)backForwardList
 {
     [self _didAccessBackForwardList];
-    return wrapper(_page->backForwardList());
+    return wrapper(_page->backForwardListWrapper());
 }
 
 - (id <WKNavigationDelegate>)navigationDelegate
@@ -4448,32 +4448,32 @@ static RetainPtr<NSArray> wkTextManipulationErrors(NSArray<_WKTextManipulationIt
 
 - (void)_setStatusBarIsVisible:(BOOL)visible
 {
-    _page->setStatusBarIsVisible(visible);
+    UNUSED_PARAM(visible);
 }
 
 - (BOOL)_statusBarIsVisible
 {
-    return _page->statusBarIsVisible();
+    return NO;
 }
 
 - (void)_setMenuBarIsVisible:(BOOL)visible
 {
-    _page->setMenuBarIsVisible(visible);
+    UNUSED_PARAM(visible);
 }
 
 - (BOOL)_menuBarIsVisible
 {
-    return _page->menuBarIsVisible();
+    return NO;
 }
 
 - (void)_setToolbarsAreVisible:(BOOL)visible
 {
-    _page->setToolbarsAreVisible(visible);
+    UNUSED_PARAM(visible);
 }
 
 - (BOOL)_toolbarsAreVisible
 {
-    return _page->toolbarsAreVisible();
+    return NO;
 }
 
 - (void)_toggleInWindow
