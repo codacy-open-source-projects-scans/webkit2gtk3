@@ -568,12 +568,25 @@ void WebPage::getAccessibilityWebProcessDebugInfo(CompletionHandler<void(WebCore
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
     isAXThreadInitialized = WebCore::AXObjectCache::isAXThreadInitialized();
 #endif
+    Vector<String> warnings;
 
-    if (std::optional treeData = protect(corePage())->accessibilityTreeData(IncludeDOMInfo::No)) {
-        completionHandler({ WebCore::AXObjectCache::accessibilityEnabled(), isAXThreadInitialized, WTF::move(treeData->liveTree), WTF::move(treeData->isolatedTree), WTF::move(treeData->warnings), [m_mockAccessibilityElement remoteTokenHash], [accessibilityRemoteTokenData() hash] });
-        return;
-    }
-    completionHandler({ WebCore::AXObjectCache::accessibilityEnabled(), isAXThreadInitialized, emptyString(), emptyString(), { }, 0, 0 });
+    RefPtr focusedFrame = [m_mockAccessibilityElement focusedLocalFrame];
+    RefPtr document = focusedFrame ? focusedFrame->document() : nullptr;
+
+    if (document) {
+        if (CheckedPtr cache = document->axObjectCache()) {
+            auto treeData = cache->treeData();
+            warnings = WTF::move(treeData.warnings);
+            completionHandler({ WebCore::AXObjectCache::accessibilityEnabled(), isAXThreadInitialized, WTF::move(treeData.liveTree), WTF::move(treeData.isolatedTree), WTF::move(warnings), [m_mockAccessibilityElement remoteTokenHash], [accessibilityRemoteTokenData() hash] });
+            return;
+        }
+        warnings.append("No AXObjectCache"_s);
+    } else if (!focusedFrame)
+        warnings.append("No focused LocalFrame found"_s);
+    else
+        warnings.append("Focused LocalFrame has no document"_s);
+
+    completionHandler({ WebCore::AXObjectCache::accessibilityEnabled(), isAXThreadInitialized, emptyString(), emptyString(), WTF::move(warnings), [m_mockAccessibilityElement remoteTokenHash], [accessibilityRemoteTokenData() hash] });
 }
 
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
@@ -678,7 +691,7 @@ static void convertContentToRootView(const LocalFrameView& view, Vector<Selectio
         geometry.setQuad(view.contentsToRootView(geometry.quad()));
 }
 
-void WebPage::getPlatformEditorStateCommon(const LocalFrame& frame, EditorState& result) const
+void WebPage::getPlatformEditorStateCommon(LocalFrame& frame, EditorState& result) const
 {
     if (!result.hasPostLayoutAndVisualData())
         return;
@@ -773,7 +786,17 @@ void WebPage::getPlatformEditorStateCommon(const LocalFrame& frame, EditorState&
         result.visualData->selectionClipRect = result.visualData->editableRootBounds;
 #endif
 
-    if (selection.isRange()) {
+    bool startNodeIsInsideFixedPosition = false;
+    bool endNodeIsInsideFixedPosition = false;
+
+    if (selection.isCaret()) {
+        visualData.caretRectAtStart = view->contentsToRootView(WTF::protect(frame.selection())->absoluteCaretBounds(&startNodeIsInsideFixedPosition));
+        endNodeIsInsideFixedPosition = startNodeIsInsideFixedPosition;
+        visualData.caretRectAtEnd = visualData.caretRectAtStart;
+    } else if (selection.isRange()) {
+        visualData.caretRectAtStart = view->contentsToRootView(VisiblePosition(selection.start()).absoluteCaretBounds(&startNodeIsInsideFixedPosition));
+        visualData.caretRectAtEnd = view->contentsToRootView(VisiblePosition(selection.end()).absoluteCaretBounds(&endNodeIsInsideFixedPosition));
+
         auto selectedRange = selection.toNormalizedRange();
         if (selectedRange) {
             auto [selectionGeometries, intersectingLayerIDs] = RenderObject::collectSelectionGeometries(*selectedRange);
@@ -783,6 +806,8 @@ void WebPage::getPlatformEditorStateCommon(const LocalFrame& frame, EditorState&
             visualData.intersectingLayerIDs = WTF::move(intersectingLayerIDs);
         }
     }
+
+    postLayoutData.insideFixedPosition = startNodeIsInsideFixedPosition || endNodeIsInsideFixedPosition;
 }
 
 void WebPage::getPDFFirstPageSize(WebCore::FrameIdentifier frameID, CompletionHandler<void(WebCore::FloatSize)>&& completionHandler)

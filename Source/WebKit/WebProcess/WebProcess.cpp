@@ -715,6 +715,12 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters,
 #if PLATFORM(COCOA)
     if (m_processType == ProcessType::PrewarmedWebContent)
         prewarmGlobally();
+    else {
+        // Prewarm some commonly used caches soon even for non-prewarmed web content.
+        RunLoop::currentSingleton().dispatch([]() {
+            defaultLanguage();
+        });
+    }
 #endif
 
     updateStorageAccessUserAgentStringQuirks(WTF::move(parameters.storageAccessUserAgentStringQuirksData));
@@ -1373,7 +1379,7 @@ NetworkProcessConnection& WebProcess::ensureNetworkProcessConnection()
         m_networkProcessConnection->connection().send(Messages::NetworkConnectionToWebProcess::RegisterURLSchemesAsCORSEnabled(WebCore::LegacySchemeRegistry::allURLSchemesRegisteredAsCORSEnabled()), 0);
 
         if (!Document::allDocuments().isEmpty() || SharedWorkerThreadProxy::hasInstances())
-            protectedNetworkProcessConnection()->protectedServiceWorkerConnection()->registerServiceWorkerClients();
+            protect(protectedNetworkProcessConnection()->serviceWorkerConnection())->registerServiceWorkerClients();
 
 #if HAVE(LSDATABASECONTEXT)
         // On Mac, this needs to be called before NSApplication is being initialized.

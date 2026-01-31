@@ -1081,7 +1081,7 @@ class UpdateWorkingDirectory(steps.ShellSequence, ShellMixin):
         commands = [
             ['git', 'checkout', '--progress', 'remotes/{}/{}'.format(remote, base), '-f'],
             self.shell_command('git branch -D {} || {}'.format(base, self.shell_exit_0())),
-            ['git', 'checkout', '--progress', '-b', base],
+            ['git', 'checkout', '--progress', '-B', base],
         ]
         if base != DEFAULT_BRANCH:
             commands.append(self.shell_command('git branch -D {} || {}'.format(DEFAULT_BRANCH, self.shell_exit_0())))
@@ -1195,7 +1195,7 @@ class CheckOutPullRequest(steps.ShellSequence, ShellMixin):
             self.shell_command(f'git remote add {remote} {GITHUB_URL}{project}.git || {self.shell_exit_0()}'),
             ['git', 'remote', 'set-url', remote, f'{GITHUB_URL}{project}.git'],
             ['git', 'fetch', remote, pr_branch],
-            ['git', 'checkout', '--progress', '-b', pr_branch],
+            ['git', 'checkout', '--progress', '-B', pr_branch],
             ['git', 'cherry-pick', '--allow-empty', f'HEAD..remotes/{remote}/{pr_branch}'],
         ]
 
@@ -5371,17 +5371,17 @@ class AnalyzeLayoutTestsResultsRedTree(AnalyzeLayoutTestsResults):
             return defer.returnValue(rc)
 
         # The checks below need to be after the timeout ones (above) because when a timeout is trigerred no results will be generated for the step.
-        # The step with_change_repeat_failures generated no list of failures or flakies, which should only happen when the return code of the step is SUCESS or WARNINGS.
+        # The step with_change_repeat_failures generated an error code. That means there should be either tests failing or tests flakies. Check that.
         with_change_repeat_failures_retcode = self.getProperty('with_change_repeat_failures_retcode', FAILURE)
         if with_change_repeat_failures_retcode not in [SUCCESS, WARNINGS]:
             if not with_change_repeat_failures_results_nonflaky_failures and not with_change_repeat_failures_results_flakies:
                 return defer.returnValue(self.report_infrastructure_issue_and_maybe_retry_build('The step "layout-tests-repeat-failures" failed to generate any list of failures or flakies and returned an error code.'))
-
-            # Check the same for the step without_change_repeat_failures but only if with_change_repeat_failures also returned an error code.
-            without_change_repeat_failures_retcode = self.getProperty('without_change_repeat_failures_retcode', FAILURE)
-            if without_change_repeat_failures_retcode not in [SUCCESS, WARNINGS]:
-                if not without_change_repeat_failures_results_nonflaky_failures and not without_change_repeat_failures_results_flakies:
-                    return defer.returnValue(self.report_infrastructure_issue_and_maybe_retry_build('The step "layout-tests-repeat-failures-without-change" failed to generate any list of failures or flakies and returned an error code.'))
+            elif with_change_repeat_failures_results_nonflaky_failures:
+                # Check the same for the step without_change_repeat_failures but only if there where failures on the previous step (with_change_repeat_failures), because otherwise the check doesn't make sense (the step would have not run at all)
+                without_change_repeat_failures_retcode = self.getProperty('without_change_repeat_failures_retcode', FAILURE)
+                if without_change_repeat_failures_retcode not in [SUCCESS, WARNINGS]:
+                    if not without_change_repeat_failures_results_nonflaky_failures and not without_change_repeat_failures_results_flakies:
+                        return defer.returnValue(self.report_infrastructure_issue_and_maybe_retry_build('The step "layout-tests-repeat-failures-without-change" failed to generate any list of failures or flakies and returned an error code.'))
 
         # Warn EWS bot watchers about flakies so they can garden those. Include the step where the flaky was found in the e-mail to know if it was found with change or without it.
         # Due to the way this class works most of the flakies are filtered on the step with change even when those were pre-existent issues (so this is also useful for bot watchers).

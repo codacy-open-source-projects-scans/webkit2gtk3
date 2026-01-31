@@ -55,7 +55,7 @@ WTF_OS_OBJECT_XPC_TYPES(WTF_IMPLEMENT_IS_OS_OBJECT_FUNCTIONS_XPC)
 
 // XPC protect() functions.
 #define WTF_DECLARE_XPC_PROTECT(TypeName) \
-ALWAYS_INLINE OSObjectPtr<TypeName##_t> protect(TypeName##_t ptr) \
+ALWAYS_INLINE CLANG_POINTER_CONVERSION OSObjectPtr<TypeName##_t> protect(TypeName##_t ptr) \
 { \
     return ptr; \
 }
@@ -82,3 +82,5 @@ WTF_OS_OBJECT_XPC_TYPES(WTF_DECLARE_XPC_OSOBJECT_RETAIN_TRAITS)
 #endif // !__has_feature(objc_arc)
 
 } // namespace WTF
+
+using WTF::protect;
