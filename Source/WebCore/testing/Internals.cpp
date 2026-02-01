@@ -155,7 +155,6 @@
 #include "MallocStatistics.h"
 #include "MediaControlsHost.h"
 #include "MediaDevices.h"
-#include "MediaEngineConfigurationFactory.h"
 #include "MediaKeySession.h"
 #include "MediaKeys.h"
 #include "MediaMetadata.h"
@@ -185,6 +184,7 @@
 #include "PathUtilities.h"
 #include "PictureInPictureSupport.h"
 #include "PlatformKeyboardEvent.h"
+#include "PlatformMediaEngineConfigurationFactory.h"
 #include "PlatformMediaSession.h"
 #include "PlatformMediaSessionManager.h"
 #include "PlatformScreen.h"
@@ -205,7 +205,6 @@
 #include "RenderLayerCompositor.h"
 #include "RenderLayerScrollableArea.h"
 #include "RenderListBox.h"
-#include "RenderMenuList.h"
 #include "RenderObjectInlines.h"
 #include "RenderSearchField.h"
 #include "RenderTheme.h"
@@ -261,6 +260,7 @@
 #include "UserContentURLPattern.h"
 #include "UserGestureIndicator.h"
 #include "UserMediaController.h"
+#include "VideoConfiguration.h"
 #include "ViewportArguments.h"
 #include "VoidCallback.h"
 #include "WebAnimation.h"
@@ -711,7 +711,7 @@ void Internals::resetToConsistentState(Page& page)
     page.setFullscreenAutoHideDuration(0_s);
     page.setFullscreenInsets({ });
 
-    MediaEngineConfigurationFactory::disableMock();
+    PlatformMediaEngineConfigurationFactory::disableMock();
 
 #if ENABLE(MEDIA_STREAM)
     page.settings().setInterruptAudioOnPageVisibilityChangeEnabled(false);
@@ -4819,8 +4819,7 @@ bool Internals::isSelectPopupVisible(HTMLSelectElement& element)
     element.document().updateLayout(LayoutOptions::IgnorePendingStylesheets);
 
 #if !PLATFORM(IOS_FAMILY)
-    auto* renderer = dynamicDowncast<RenderMenuList>(element.renderer());
-    return renderer && renderer->popupIsVisible();
+    return element.popupIsVisible();
 #else
     return false;
 #endif
@@ -5095,7 +5094,7 @@ size_t Internals::evictableSize(SourceBuffer& buffer)
 
 void Internals::enableMockMediaCapabilities()
 {
-    MediaEngineConfigurationFactory::enableMock();
+    PlatformMediaEngineConfigurationFactory::enableMock();
 }
 
 #if ENABLE(VIDEO)
@@ -7239,10 +7238,10 @@ String Internals::createAV1CodecParametersString(const AV1CodecConfigurationReco
     return WebCore::createAV1CodecParametersString(configuration);
 }
 
-bool Internals::validateAV1PerLevelConstraints(const String& parameters, const VideoConfiguration& configuration)
+bool Internals::validateAV1PerLevelConstraints(const String& parameters, VideoConfiguration&& configuration)
 {
     if (auto record = WebCore::parseAV1CodecParameters(parameters))
-        return WebCore::validateAV1PerLevelConstraints(*record, configuration);
+        return WebCore::validateAV1PerLevelConstraints(*record, toPlatform(WTF::move(configuration)));
     return false;
 }
 

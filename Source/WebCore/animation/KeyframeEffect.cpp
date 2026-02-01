@@ -791,14 +791,14 @@ ExceptionOr<Ref<KeyframeEffect>> KeyframeEffect::create(JSGlobalObject& lexicalG
             keyframeEffect->setIterationComposite(options.iterationComposite);
 
             return OptionalEffectTiming {
-                *convertedDuration,
-                options.iterations,
                 options.delay,
                 options.endDelay,
-                options.iterationStart,
-                options.easing,
                 options.fill,
-                options.direction
+                options.iterationStart,
+                options.iterations,
+                *convertedDuration,
+                options.direction,
+                options.easing
             };
         }
     );
@@ -1938,6 +1938,9 @@ bool KeyframeEffect::canBeAccelerated() const
         return false;
 
     if (m_blendingKeyframes.hasDiscreteTransformInterval())
+        return false;
+
+    if (!m_needsComputedKeyframeOffsetsUpdate && m_blendingKeyframes.hasKeyframeWithUnresolvedComputedOffset())
         return false;
 
     if (RefPtr document = this->document()) {
