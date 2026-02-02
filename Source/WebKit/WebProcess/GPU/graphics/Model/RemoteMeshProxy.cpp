@@ -24,24 +24,26 @@
  */
 
 #include "config.h"
-#include "RemoteDDMeshProxy.h"
+#include "RemoteMeshProxy.h"
 
 #if ENABLE(GPU_PROCESS)
 
 #include "ModelConvertToBackingContext.h"
-#include "RemoteDDMeshMessages.h"
-#include <WebCore/DDFloat4x4.h>
-#include <WebCore/DDMeshDescriptor.h>
-#include <WebCore/DDMeshPart.h>
-#include <WebCore/DDUpdateMeshDescriptor.h>
-#include <WebCore/DDUpdateTextureDescriptor.h>
+#include "RemoteMeshMessages.h"
 #include <WebCore/StageModeOperations.h>
 #include <WebCore/TransformationMatrix.h>
+#include <WebCore/WebModel.h>
 #include <wtf/TZoneMallocInlines.h>
 
-namespace WebKit::DDModel {
+#if ENABLE(GPU_PROCESS_MODEL)
+#include <WebGPU/Float3.h>
+#include <WebGPU/Float4x4.h>
+#include <WebGPU/ModelTypes.h>
+#endif
 
-WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteDDMeshProxy);
+namespace WebKit {
+
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteMeshProxy);
 
 #if ENABLE(GPU_PROCESS_MODEL)
 constexpr float tolerance = 1e-5f;
@@ -55,12 +57,12 @@ static bool areSameSignAndAlmostEqual(float a, float b)
     return std::abs(absA - absB) < tolerance * std::min(absA, absB);
 }
 
-static WebCore::DDModel::DDFloat4x4 makeTransformMatrix(
+static WebModel::Float4x4 makeTransformMatrix(
     const simd_float3& translation,
     const simd_float3& scale,
-    const WebCore::DDModel::DDFloat3x3& rotation)
+    const WebModel::Float3x3& rotation)
 {
-    WebCore::DDModel::DDFloat4x4 result;
+    WebModel::Float4x4 result;
     result.column0 = simd_make_float4(rotation.column0 * scale[0], 0.f);
     result.column1 = simd_make_float4(rotation.column1 * scale[1], 0.f);
     result.column2 = simd_make_float4(rotation.column2 * scale[2], 0.f);
@@ -69,11 +71,11 @@ static WebCore::DDModel::DDFloat4x4 makeTransformMatrix(
     return result;
 }
 
-static std::pair<simd_float4, simd_float4> computeMinAndMaxCorners(const Vector<WebCore::DDModel::DDMeshPart>& parts, const Vector<WebCore::DDModel::DDFloat4x4>& instanceTransforms)
+static std::pair<simd_float4, simd_float4> computeMinAndMaxCorners(const Vector<WebModel::MeshPart>& parts, const Vector<WebModel::Float4x4>& instanceTransforms)
 {
     simd_float3 minCorner = simd_make_float3(FLT_MAX, FLT_MAX, FLT_MAX);
     simd_float3 maxCorner = simd_make_float3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
-    for (const WebCore::DDModel::DDMeshPart& part : parts) {
+    for (const WebModel::MeshPart& part : parts) {
         minCorner = simd_min(part.boundsMin, minCorner);
         maxCorner = simd_max(part.boundsMax, maxCorner);
     }
@@ -102,7 +104,7 @@ static std::pair<simd_float4, simd_float4> computeMinAndMaxCorners(const Vector<
 }
 #endif
 
-RemoteDDMeshProxy::RemoteDDMeshProxy(Ref<RemoteGPUProxy>&& root, ConvertToBackingContext& convertToBackingContext, DDModelIdentifier identifier)
+RemoteMeshProxy::RemoteMeshProxy(Ref<RemoteGPUProxy>&& root, ModelConvertToBackingContext& convertToBackingContext, WebModelIdentifier identifier)
     : m_backing(identifier)
     , m_convertToBackingContext(convertToBackingContext)
     , m_root(WTF::move(root))
@@ -113,24 +115,24 @@ RemoteDDMeshProxy::RemoteDDMeshProxy(Ref<RemoteGPUProxy>&& root, ConvertToBackin
 {
 }
 
-RemoteDDMeshProxy::~RemoteDDMeshProxy()
+RemoteMeshProxy::~RemoteMeshProxy()
 {
 #if ENABLE(GPU_PROCESS_MODEL)
-    auto sendResult = send(Messages::RemoteDDMesh::Destruct());
+    auto sendResult = send(Messages::RemoteMesh::Destruct());
     UNUSED_VARIABLE(sendResult);
 #endif
 }
 
 #if ENABLE(GPU_PROCESS_MODEL)
-static WebCore::DDModel::DDFloat4x4 buildTranslation(float x, float y, float z)
+static WebModel::Float4x4 buildTranslation(float x, float y, float z)
 {
-    WebCore::DDModel::DDFloat4x4 result = matrix_identity_float4x4;
+    WebModel::Float4x4 result = matrix_identity_float4x4;
     result.column3 = simd_make_float4(x, y, z, 1.f);
     return result;
 }
 #endif
 
-void RemoteDDMeshProxy::update(const WebCore::DDModel::DDUpdateMeshDescriptor& descriptor)
+void RemoteMeshProxy::update(const WebModel::UpdateMeshDescriptor& descriptor)
 {
 #if ENABLE(GPU_PROCESS_MODEL)
     auto [minCorner, maxCorner] = computeMinAndMaxCorners(descriptor.parts, descriptor.instanceTransforms);
@@ -144,7 +146,7 @@ void RemoteDDMeshProxy::update(const WebCore::DDModel::DDUpdateMeshDescriptor& d
     if (boundingBoxChanged)
         setCameraDistance(std::max(extents.x, extents.y) * .5f);
 
-    auto sendResult = send(Messages::RemoteDDMesh::Update(descriptor));
+    auto sendResult = send(Messages::RemoteMesh::Update(descriptor));
     UNUSED_PARAM(sendResult);
     if (boundingBoxChanged)
         setEntityTransform(buildTranslation(-center.x, -center.y, -center.z));
@@ -153,38 +155,38 @@ void RemoteDDMeshProxy::update(const WebCore::DDModel::DDUpdateMeshDescriptor& d
 #endif
 }
 
-void RemoteDDMeshProxy::render()
+void RemoteMeshProxy::render()
 {
 #if ENABLE(GPU_PROCESS_MODEL)
-    auto sendResult = send(Messages::RemoteDDMesh::Render());
+    auto sendResult = send(Messages::RemoteMesh::Render());
     UNUSED_PARAM(sendResult);
 #endif
 }
 
-void RemoteDDMeshProxy::setLabelInternal(const String& label)
+void RemoteMeshProxy::setLabelInternal(const String& label)
 {
 #if ENABLE(GPU_PROCESS_MODEL)
-    auto sendResult = send(Messages::RemoteDDMesh::SetLabel(label));
+    auto sendResult = send(Messages::RemoteMesh::SetLabel(label));
     UNUSED_VARIABLE(sendResult);
 #else
     UNUSED_PARAM(label);
 #endif
 }
 
-void RemoteDDMeshProxy::updateTexture(const WebCore::DDModel::DDUpdateTextureDescriptor& descriptor)
+void RemoteMeshProxy::updateTexture(const WebModel::UpdateTextureDescriptor& descriptor)
 {
 #if ENABLE(GPU_PROCESS_MODEL)
-    auto sendResult = send(Messages::RemoteDDMesh::UpdateTexture(descriptor));
+    auto sendResult = send(Messages::RemoteMesh::UpdateTexture(descriptor));
     UNUSED_PARAM(sendResult);
 #else
     UNUSED_PARAM(descriptor);
 #endif
 }
 
-void RemoteDDMeshProxy::updateMaterial(const WebCore::DDModel::DDUpdateMaterialDescriptor& descriptor)
+void RemoteMeshProxy::updateMaterial(const WebModel::UpdateMaterialDescriptor& descriptor)
 {
 #if ENABLE(GPU_PROCESS_MODEL)
-    auto sendResult = send(Messages::RemoteDDMesh::UpdateMaterial(descriptor));
+    auto sendResult = send(Messages::RemoteMesh::UpdateMaterial(descriptor));
     UNUSED_PARAM(sendResult);
 #else
     UNUSED_PARAM(descriptor);
@@ -192,7 +194,7 @@ void RemoteDDMeshProxy::updateMaterial(const WebCore::DDModel::DDUpdateMaterialD
 }
 
 #if PLATFORM(COCOA)
-std::pair<simd_float4, simd_float4> RemoteDDMeshProxy::getCenterAndExtents() const
+std::pair<simd_float4, simd_float4> RemoteMeshProxy::getCenterAndExtents() const
 {
     auto center = .5f * (m_minCorner + m_maxCorner);
     auto extents = 2.f * (m_maxCorner - center);
@@ -200,46 +202,50 @@ std::pair<simd_float4, simd_float4> RemoteDDMeshProxy::getCenterAndExtents() con
 }
 #endif
 
-void RemoteDDMeshProxy::setEntityTransform(const WebCore::DDModel::DDFloat4x4& transform)
+void RemoteMeshProxy::setEntityTransform(const WebModel::Float4x4& transform)
 {
+#if ENABLE(GPU_PROCESS_MODEL)
     if (m_transform && *m_transform == transform)
         return;
 
     m_transform = transform;
-#if ENABLE(GPU_PROCESS_MODEL)
-    auto sendResult = send(Messages::RemoteDDMesh::UpdateTransform(transform));
+    auto sendResult = send(Messages::RemoteMesh::UpdateTransform(transform));
     UNUSED_PARAM(sendResult);
+#else
+    UNUSED_PARAM(transform);
 #endif
 }
 
-void RemoteDDMeshProxy::play(bool playing)
+void RemoteMeshProxy::play(bool playing)
 {
 #if ENABLE(GPU_PROCESS_MODEL)
-    auto sendResult = send(Messages::RemoteDDMesh::Play(playing));
+    auto sendResult = send(Messages::RemoteMesh::Play(playing));
     UNUSED_PARAM(sendResult);
 #endif
 }
 
-void RemoteDDMeshProxy::setEnvironmentMap(const WebCore::DDModel::DDImageAsset& imageAsset)
+void RemoteMeshProxy::setEnvironmentMap(const WebModel::ImageAsset& imageAsset)
 {
 #if ENABLE(GPU_PROCESS_MODEL)
-    auto sendResult = send(Messages::RemoteDDMesh::SetEnvironmentMap(imageAsset));
+    auto sendResult = send(Messages::RemoteMesh::SetEnvironmentMap(imageAsset));
     UNUSED_PARAM(sendResult);
 #endif
 }
 
-std::optional<WebCore::DDModel::DDFloat4x4> RemoteDDMeshProxy::entityTransform() const
+#if PLATFORM(COCOA)
+std::optional<WebModel::Float4x4> RemoteMeshProxy::entityTransform() const
 {
     return m_transform;
 }
+#endif
 
-void RemoteDDMeshProxy::setCameraDistance(float distance)
+void RemoteMeshProxy::setCameraDistance(float distance)
 {
 #if ENABLE(GPU_PROCESS_MODEL)
     if (areSameSignAndAlmostEqual(distance, m_cameraDistance))
         return;
 
-    auto sendResult = send(Messages::RemoteDDMesh::SetCameraDistance(distance));
+    auto sendResult = send(Messages::RemoteMesh::SetCameraDistance(distance));
     UNUSED_PARAM(sendResult);
     m_cameraDistance = distance;
 #else
@@ -247,12 +253,12 @@ void RemoteDDMeshProxy::setCameraDistance(float distance)
 #endif
 }
 
-bool RemoteDDMeshProxy::supportsTransform(const WebCore::TransformationMatrix& transformationMatrix) const
+bool RemoteMeshProxy::supportsTransform(const WebCore::TransformationMatrix& transformationMatrix) const
 {
 #if ENABLE(GPU_PROCESS_MODEL)
-    const WebCore::DDModel::DDFloat4x4 matrix = static_cast<simd_float4x4>(transformationMatrix);
+    const WebModel::Float4x4 matrix = static_cast<simd_float4x4>(transformationMatrix);
 
-    WebCore::DDModel::DDFloat3x3 upperLeft;
+    WebModel::Float3x3 upperLeft;
     upperLeft.column0 = simd_make_float3(matrix.column0);
     upperLeft.column1 = simd_make_float3(matrix.column1);
     upperLeft.column2 = simd_make_float3(matrix.column2);
@@ -262,13 +268,13 @@ bool RemoteDDMeshProxy::supportsTransform(const WebCore::TransformationMatrix& t
     if (!areSameSignAndAlmostEqual(simd_reduce_max(scale), simd_reduce_min(scale)))
         return false;
 
-    WebCore::DDModel::DDFloat3x3 rotation;
+    WebModel::Float3x3 rotation;
     rotation.column0 = upperLeft.column0 / scale[0];
     rotation.column1 = upperLeft.column1 / scale[1];
     rotation.column2 = upperLeft.column2 / scale[2];
 
     simd_float3 translation = simd_make_float3(matrix.column3);
-    WebCore::DDModel::DDFloat4x4 noShearMatrix = makeTransformMatrix(translation, scale, rotation);
+    WebModel::Float4x4 noShearMatrix = makeTransformMatrix(translation, scale, rotation);
     if (!simd_almost_equal_elements(matrix, noShearMatrix, tolerance))
         return false;
 
@@ -279,12 +285,12 @@ bool RemoteDDMeshProxy::supportsTransform(const WebCore::TransformationMatrix& t
 #endif
 }
 
-void RemoteDDMeshProxy::setScale(float scale)
+void RemoteMeshProxy::setScale(float scale)
 {
+#if ENABLE(GPU_PROCESS_MODEL)
     if (!m_transform)
         return;
-#if ENABLE(GPU_PROCESS_MODEL)
-    WebCore::DDModel::DDFloat4x4 transform = *m_transform;
+    WebModel::Float4x4 transform = *m_transform;
     transform.column0 = simd_normalize(transform.column0) * scale;
     transform.column1 = simd_normalize(transform.column1) * scale;
     transform.column2 = simd_normalize(transform.column2) * scale;
@@ -296,7 +302,7 @@ void RemoteDDMeshProxy::setScale(float scale)
 #endif
 }
 
-void RemoteDDMeshProxy::setStageMode(WebCore::StageModeOperation stageMode)
+void RemoteMeshProxy::setStageMode(WebCore::StageModeOperation stageMode)
 {
 #if ENABLE(GPU_PROCESS_MODEL)
     if (stageMode == WebCore::StageModeOperation::None || !m_transform)
@@ -304,7 +310,7 @@ void RemoteDDMeshProxy::setStageMode(WebCore::StageModeOperation stageMode)
 
     m_stageMode = stageMode;
     auto [center, extents] = getCenterAndExtents();
-    WebCore::DDModel::DDFloat4x4 result = matrix_identity_float4x4;
+    WebModel::Float4x4 result = matrix_identity_float4x4;
     if (auto existingTransform = entityTransform())
         result = *existingTransform;
 
@@ -341,7 +347,7 @@ static simd_float4x4 buildRotation(float azimuth, float elevation)
     return matrix;
 }
 
-void RemoteDDMeshProxy::setRotation(float yaw, float pitch, float roll)
+void RemoteMeshProxy::setRotation(float yaw, float pitch, float roll)
 {
     if (!m_transform)
         return;

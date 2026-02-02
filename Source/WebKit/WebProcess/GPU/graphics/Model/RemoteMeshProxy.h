@@ -27,47 +27,51 @@
 
 #if ENABLE(GPU_PROCESS)
 
-#include "DDModelIdentifier.h"
 #include "RemoteDeviceProxy.h"
-#include <WebCore/DDFloat4x4.h>
-#include <WebCore/DDMesh.h>
-#include <WebCore/DDMeshDescriptor.h>
+#include "WebModelIdentifier.h"
+#include <WebCore/Mesh.h>
+#include <WebCore/WebModel.h>
 #include <wtf/HashMap.h>
 #include <wtf/TZoneMalloc.h>
 
 #if PLATFORM(COCOA)
+#include <WebGPU/Float4x4.h>
 #include <simd/simd.h>
 #endif
 
-namespace WebKit::DDModel {
+namespace WebModel {
+struct Float4x4;
+}
 
-class ConvertToBackingContext;
+namespace WebKit {
 
-class RemoteDDMeshProxy final : public WebCore::DDModel::DDMesh {
-    WTF_MAKE_TZONE_ALLOCATED(RemoteDDMeshProxy);
+class ModelConvertToBackingContext;
+
+class RemoteMeshProxy final : public WebCore::Mesh {
+    WTF_MAKE_TZONE_ALLOCATED(RemoteMeshProxy);
 public:
-    static Ref<RemoteDDMeshProxy> create(Ref<RemoteGPUProxy>&& root, ConvertToBackingContext& convertToBackingContext, DDModelIdentifier identifier)
+    static Ref<RemoteMeshProxy> create(Ref<RemoteGPUProxy>&& root, ModelConvertToBackingContext& convertToBackingContext, WebModelIdentifier identifier)
     {
-        return adoptRef(*new RemoteDDMeshProxy(WTF::move(root), convertToBackingContext, identifier));
+        return adoptRef(*new RemoteMeshProxy(WTF::move(root), convertToBackingContext, identifier));
     }
 
-    virtual ~RemoteDDMeshProxy();
+    virtual ~RemoteMeshProxy();
 
     RemoteGPUProxy& root() const { return m_root; }
 
 private:
-    friend class DowncastConvertToBackingContext;
+    friend class ModelDowncastConvertToBackingContext;
 
-    RemoteDDMeshProxy(Ref<RemoteGPUProxy>&&, ConvertToBackingContext&, DDModelIdentifier);
+    RemoteMeshProxy(Ref<RemoteGPUProxy>&&, ModelConvertToBackingContext&, WebModelIdentifier);
 
-    RemoteDDMeshProxy(const RemoteDDMeshProxy&) = delete;
-    RemoteDDMeshProxy(RemoteDDMeshProxy&&) = delete;
-    RemoteDDMeshProxy& operator=(const RemoteDDMeshProxy&) = delete;
-    RemoteDDMeshProxy& operator=(RemoteDDMeshProxy&&) = delete;
+    RemoteMeshProxy(const RemoteMeshProxy&) = delete;
+    RemoteMeshProxy(RemoteMeshProxy&&) = delete;
+    RemoteMeshProxy& operator=(const RemoteMeshProxy&) = delete;
+    RemoteMeshProxy& operator=(RemoteMeshProxy&&) = delete;
 
-    bool isRemoteDDMeshProxy() const final { return true; }
+    bool isRemoteMeshProxy() const final { return true; }
 
-    DDModelIdentifier backing() const { return m_backing; }
+    WebModelIdentifier backing() const { return m_backing; }
 
     template<typename T>
     [[nodiscard]] IPC::Error send(T&& message)
@@ -75,9 +79,9 @@ private:
         return root().protectedStreamClientConnection()->send(WTF::move(message), backing());
     }
 
-    void update(const WebCore::DDModel::DDUpdateMeshDescriptor&) final;
-    void updateTexture(const WebCore::DDModel::DDUpdateTextureDescriptor&) final;
-    void updateMaterial(const WebCore::DDModel::DDUpdateMaterialDescriptor&) final;
+    void update(const WebModel::UpdateMeshDescriptor&) final;
+    void updateTexture(const WebModel::UpdateTextureDescriptor&) final;
+    void updateMaterial(const WebModel::UpdateMaterialDescriptor&) final;
 #if PLATFORM(COCOA)
     std::pair<simd_float4, simd_float4> getCenterAndExtents() const final;
 #endif
@@ -85,8 +89,10 @@ private:
 
     void render() final;
     void setLabelInternal(const String&) final;
-    void setEntityTransform(const WebCore::DDModel::DDFloat4x4&) final;
-    std::optional<WebCore::DDModel::DDFloat4x4> entityTransform() const final;
+    void setEntityTransform(const WebModel::Float4x4&) final;
+#if PLATFORM(COCOA)
+    std::optional<WebModel::Float4x4> entityTransform() const final;
+#endif
     bool supportsTransform(const WebCore::TransformationMatrix&) const final;
     void setScale(float) final;
     void setCameraDistance(float) final;
@@ -94,16 +100,16 @@ private:
 #if ENABLE(GPU_PROCESS_MODEL)
     void setRotation(float yaw, float pitch, float roll) final;
 #endif
-    void setEnvironmentMap(const WebCore::DDModel::DDImageAsset&) final;
+    void setEnvironmentMap(const WebModel::ImageAsset&) final;
 
-    const DDModelIdentifier m_backing;
-    const Ref<ConvertToBackingContext> m_convertToBackingContext;
+    const WebModelIdentifier m_backing;
+    const Ref<ModelConvertToBackingContext> m_convertToBackingContext;
     const Ref<RemoteGPUProxy> m_root;
 #if PLATFORM(COCOA)
     simd_float4 m_minCorner;
     simd_float4 m_maxCorner;
+    std::optional<WebModel::Float4x4> m_transform;
 #endif
-    std::optional<WebCore::DDModel::DDFloat4x4> m_transform;
 #if ENABLE(GPU_PROCESS_MODEL)
     float m_cameraDistance { 1.f };
     WebCore::StageModeOperation m_stageMode;
@@ -112,8 +118,8 @@ private:
 
 }
 
-SPECIALIZE_TYPE_TRAITS_BEGIN(WebKit::DDModel::RemoteDDMeshProxy)
-    static bool isType(const WebCore::DDModel::DDMesh& mesh) { return mesh.isRemoteDDMeshProxy(); }
+SPECIALIZE_TYPE_TRAITS_BEGIN(WebKit::RemoteMeshProxy)
+    static bool isType(const WebCore::Mesh& mesh) { return mesh.isRemoteMeshProxy(); }
 SPECIALIZE_TYPE_TRAITS_END()
 
 #endif // ENABLE(GPU_PROCESS)

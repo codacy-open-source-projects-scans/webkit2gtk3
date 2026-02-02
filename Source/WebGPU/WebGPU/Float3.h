@@ -25,15 +25,43 @@
 
 #pragma once
 
-#if ENABLE(GPU_PROCESS)
+#include <wtf/Platform.h>
 
-#include <wtf/ObjectIdentifier.h>
+#if PLATFORM(COCOA)
+#include <simd/simd.h>
+#endif
 
-namespace WebKit {
+#ifdef __cplusplus
 
-struct DDModelIdentifierType;
-using DDModelIdentifier = AtomicObjectIdentifier<DDModelIdentifierType>;
+namespace WebModel {
 
-} // namespace WebKit
+struct Float3 {
+    union {
+#if PLATFORM(COCOA)
+        simd_float3 v;
+#endif
+        struct {
+            float x, y, z, w;
+        };
+    };
+#if PLATFORM(COCOA)
+    Float3(const simd_float3& s)
+        : v(s)
+    {
+    }
+    operator simd_float3() { return v; } // NOLINT
+    operator const simd_float3() const { return v; } // NOLINT
+#endif
+
+    Float3(float vx, float vy, float vz, float vw)
+        : x(vx)
+        , y(vy)
+        , z(vz)
+        , w(vw)
+    {
+    }
+};
+
+}
 
 #endif

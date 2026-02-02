@@ -28,8 +28,8 @@
 #if HAVE(WEBGPU_IMPLEMENTATION)
 
 #include "WebGPUPtr.h"
-#include <WebCore/DDMesh.h>
-#include <WebCore/DDMeshDescriptor.h>
+#include <WebCore/Mesh.h>
+#include <WebCore/Model.h>
 #include <WebCore/WebGPUPredefinedColorSpace.h>
 #include <WebGPU/WebGPU.h>
 #include <WebGPU/WebGPUExt.h>
@@ -39,54 +39,54 @@ namespace WebCore {
 class IOSurface;
 }
 
-namespace WebCore::DDModel {
+namespace WebCore {
 
-class ConvertToBackingContext;
+class ModelConvertToBackingContext;
 
-struct DDMeshDescriptor;
-
-class DDMeshImpl final : public DDMesh {
-    WTF_MAKE_TZONE_ALLOCATED(DDMeshImpl);
+class MeshImpl final : public Mesh {
+    WTF_MAKE_TZONE_ALLOCATED(MeshImpl);
 public:
-    static Ref<DDMeshImpl> create(WebGPU::WebGPUPtr<WGPUDDMesh>&& ddMesh, Vector<UniqueRef<WebCore::IOSurface>>&& renderBuffers, ConvertToBackingContext& convertToBackingContext)
+    static Ref<MeshImpl> create(WebGPU::WebGPUPtr<WebMesh>&& mesh, Vector<UniqueRef<WebCore::IOSurface>>&& renderBuffers, ModelConvertToBackingContext& convertToBackingContext)
     {
-        return adoptRef(*new DDMeshImpl(WTF::move(ddMesh), WTF::move(renderBuffers), convertToBackingContext));
+        return adoptRef(*new MeshImpl(WTF::move(mesh), WTF::move(renderBuffers), convertToBackingContext));
     }
 
-    virtual ~DDMeshImpl();
+    virtual ~MeshImpl();
 
-    WGPUDDMesh backing() const { return m_backing.get(); };
+    WebMesh backing() const { return m_backing.get(); };
 #if PLATFORM(COCOA)
     Vector<MachSendRight> ioSurfaceHandles() final;
 #endif
 
 private:
-    friend class DowncastConvertToBackingContext;
+    friend class ModelDowncastConvertToBackingContext;
 
-    DDMeshImpl(WebGPU::WebGPUPtr<WGPUDDMesh>&&, Vector<UniqueRef<WebCore::IOSurface>>&&, ConvertToBackingContext&);
+    MeshImpl(WebGPU::WebGPUPtr<WebMesh>&&, Vector<UniqueRef<WebCore::IOSurface>>&&, ModelConvertToBackingContext&);
 
-    DDMeshImpl(const DDMeshImpl&) = delete;
-    DDMeshImpl(DDMeshImpl&&) = delete;
-    DDMeshImpl& operator=(const DDMeshImpl&) = delete;
-    DDMeshImpl& operator=(DDMeshImpl&&) = delete;
+    MeshImpl(const MeshImpl&) = delete;
+    MeshImpl(MeshImpl&&) = delete;
+    MeshImpl& operator=(const MeshImpl&) = delete;
+    MeshImpl& operator=(MeshImpl&&) = delete;
 
-    bool isDDMeshImpl() const final { return true; }
+    bool isMeshImpl() const final { return true; }
 
     void setLabelInternal(const String&) final;
-    void update(const DDUpdateMeshDescriptor&) final;
-    void updateTexture(const DDUpdateTextureDescriptor&) final;
-    void updateMaterial(const DDUpdateMaterialDescriptor&) final;
-    void setEntityTransform(const DDFloat4x4&) final;
-    std::optional<DDFloat4x4> entityTransform() const final;
+    void update(const WebModel::UpdateMeshDescriptor&) final;
+    void updateTexture(const WebModel::UpdateTextureDescriptor&) final;
+    void updateMaterial(const WebModel::UpdateMaterialDescriptor&) final;
+    void setEntityTransform(const WebModel::Float4x4&) final;
+#if PLATFORM(COCOA)
+    std::optional<WebModel::Float4x4> entityTransform() const final;
+#endif
     void setCameraDistance(float) final;
     void play(bool) final;
-    void setEnvironmentMap(const WebCore::DDModel::DDImageAsset&) final;
+    void setEnvironmentMap(const WebModel::ImageAsset&) final;
 
     void render() final;
 
-    const Ref<ConvertToBackingContext> m_convertToBackingContext;
+    const Ref<ModelConvertToBackingContext> m_convertToBackingContext;
 
-    WebGPU::WebGPUPtr<WGPUDDMesh> m_backing;
+    WebGPU::WebGPUPtr<WebMesh> m_backing;
 #if PLATFORM(COCOA)
     Vector<UniqueRef<WebCore::IOSurface>> m_renderBuffers;
 #endif
@@ -94,8 +94,8 @@ private:
 
 }
 
-SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::DDModel::DDMeshImpl)
-    static bool isType(const WebCore::DDModel::DDMesh& mesh) { return mesh.isDDMeshImpl(); }
+SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::MeshImpl)
+    static bool isType(const WebCore::Mesh& mesh) { return mesh.isMeshImpl(); }
 SPECIALIZE_TYPE_TRAITS_END()
 
 #endif // HAVE(WEBGPU_IMPLEMENTATION)

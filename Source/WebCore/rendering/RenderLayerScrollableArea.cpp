@@ -388,7 +388,7 @@ void RenderLayerScrollableArea::scrollTo(const ScrollPosition& position)
         }
 
         // Update regions, scrolling may change the clip of a particular region.
-        renderer.protectedDocument()->invalidateRenderingDependentRegions();
+        protect(renderer.document())->invalidateRenderingDependentRegions();
         DebugPageOverlays::didLayout(renderer.protectedFrame());
     }
 
@@ -432,7 +432,7 @@ void RenderLayerScrollableArea::scrollTo(const ScrollPosition& position)
     // Schedule the scroll and scroll-related DOM events.
     if (RefPtr element = renderer.element()) {
         setIsAwaitingScrollend(true);
-        element->protectedDocument()->addPendingScrollEventTarget(*element, ScrollEventType::Scroll);
+        protect(element->document())->addPendingScrollEventTarget(*element, ScrollEventType::Scroll);
     }
 
     if (scrollsOverflow())
@@ -448,7 +448,7 @@ void RenderLayerScrollableArea::scrollDidEnd()
         return;
     setIsAwaitingScrollend(false);
     if (RefPtr element = m_layer.renderer().element())
-        element->protectedDocument()->addPendingScrollEventTarget(*element, ScrollEventType::Scrollend);
+        protect(element->document())->addPendingScrollEventTarget(*element, ScrollEventType::Scrollend);
 }
 
 void RenderLayerScrollableArea::updateCompositingLayersAfterScroll()
@@ -1831,7 +1831,7 @@ void RenderLayerScrollableArea::updateScrollCornerStyle()
     }
 
     if (!m_scrollCorner) {
-        m_scrollCorner = createRenderer<RenderScrollbarPart>(renderer.protectedDocument(), WTF::move(*corner));
+        m_scrollCorner = createRenderer<RenderScrollbarPart>(protect(renderer.document()), WTF::move(*corner));
         // FIXME: A renderer should be a child of its parent!
         m_scrollCorner->setParent(&renderer);
         m_scrollCorner->initializeStyle();
@@ -1862,7 +1862,7 @@ void RenderLayerScrollableArea::updateResizerStyle()
     }
 
     if (!m_resizer) {
-        m_resizer = createRenderer<RenderScrollbarPart>(renderer.protectedDocument(), WTF::move(*resizer));
+        m_resizer = createRenderer<RenderScrollbarPart>(protect(renderer.document()), WTF::move(*resizer));
         // FIXME: A renderer should be a child of its parent!
         m_resizer->setParent(&renderer);
         m_resizer->initializeStyle();
@@ -2041,7 +2041,7 @@ bool RenderLayerScrollableArea::mockScrollbarsControllerEnabled() const
 
 void RenderLayerScrollableArea::logMockScrollbarsControllerMessage(const String& message) const
 {
-    m_layer.renderer().protectedDocument()->addConsoleMessage(MessageSource::Other, MessageLevel::Debug, makeString("RenderLayer: "_s, message));
+    protect(m_layer.renderer().document())->addConsoleMessage(MessageSource::Other, MessageLevel::Debug, makeString("RenderLayer: "_s, message));
 }
 
 String RenderLayerScrollableArea::debugDescription() const
@@ -2066,7 +2066,7 @@ void RenderLayerScrollableArea::animatedScrollDidEnd()
 
 float RenderLayerScrollableArea::deviceScaleFactor() const
 {
-    return m_layer.renderer().protectedDocument()->deviceScaleFactor();
+    return protect(m_layer.renderer().document())->deviceScaleFactor();
 }
 
 void RenderLayerScrollableArea::updateAnchorPositionedAfterScroll()

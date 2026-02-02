@@ -25,12 +25,15 @@
 
 #pragma once
 
-#include <wtf/text/WTFString.h>
+#if ENABLE(GPU_PROCESS)
 
-namespace WebKit::DDModel {
+#include <wtf/ObjectIdentifier.h>
 
-struct ObjectDescriptorBase {
-    String label;
-};
+namespace WebKit {
 
-}
+struct WebModelIdentifierType;
+using WebModelIdentifier = AtomicObjectIdentifier<WebModelIdentifierType>;
+
+} // namespace WebKit
+
+#endif

@@ -23,12 +23,7 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#import <Foundation/Foundation.h>
+#pragma once
 
-#import <simd/simd.h>
+#include <wtf/Platform.h>
 
-NS_HEADER_AUDIT_BEGIN(nullability, sendability)
-
-
-
-NS_HEADER_AUDIT_END(nullability, sendability)

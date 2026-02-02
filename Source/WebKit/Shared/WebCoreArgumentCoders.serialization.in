@@ -1560,7 +1560,7 @@ struct WebCore::CredentialPropertiesOutput {
 };
 
 [Nested] struct WebCore::AuthenticationExtensionsClientOutputs::PRFValues {
-    RefPtr<JSC::ArrayBuffer> first;
+    Ref<JSC::ArrayBuffer> first;
     RefPtr<JSC::ArrayBuffer> second;
 };
 
@@ -8973,6 +8973,8 @@ enum class WebCore::EncryptionBoxType : uint8_t {
     TransportStreamEncryptionInitData
 };
 
+using WebCore::TrackInfoAtomData = std::pair<WebCore::FourCC, Ref<WebCore::SharedBuffer>>;
+
 #if ENABLE(ENCRYPTED_MEDIA)
 using WebCore::TrackInfoEncryptionData = std::pair<WebCore::EncryptionBoxType, Ref<WebCore::SharedBuffer>>;
 using WebCore::TrackInfoEncryptionInitData = WebCore::TrackInfoAtomData;
@@ -8989,7 +8991,7 @@ header: <WebCore/TrackInfo.h>
 [CustomHeader] struct WebCore::TrackInfoData {
     WebCore::FourCC codecName;
     String codecString;
-    TrackID trackID;
+    WebCore::TrackID trackID;
 
 #if ENABLE(ENCRYPTED_MEDIA)
     std::optional<WebCore::EncryptionDataCollection> encryptionData;
@@ -9262,13 +9264,13 @@ header: <WebCore/FocusOptions.h>
 };
 
 struct WebCore::FocusOptions {
+    bool preventScroll;
+    std::optional<bool> focusVisible;
     WebCore::SelectionRestorationMode selectionRestorationMode;
     WebCore::FocusDirection direction;
     WebCore::FocusRemovalEventsMode removalEventsMode;
     WebCore::FocusTrigger trigger;
     WebCore::FocusVisibility visibility;
-    bool preventScroll;
-    std::optional<bool> focusVisible;
 };
 
 enum class WebKit::CommitTiming : bool;

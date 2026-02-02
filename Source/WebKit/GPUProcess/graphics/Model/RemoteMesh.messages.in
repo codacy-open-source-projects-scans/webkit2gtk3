@@ -28,16 +28,16 @@
     DispatchedTo=GPU,
     EnabledBy=ModelElementEnabled
 ]
-messages -> RemoteDDMesh Stream {
+messages -> RemoteMesh Stream {
     void SetLabel(String label)
     void Destruct()
-    void Update(WebCore::DDModel::DDUpdateMeshDescriptor descriptor)
+    void Update(struct WebModel::UpdateMeshDescriptor descriptor)
     void Render()
-    void UpdateTexture(WebCore::DDModel::DDUpdateTextureDescriptor descriptor)
-    void UpdateMaterial(WebCore::DDModel::DDUpdateMaterialDescriptor descriptor)
-    void UpdateTransform(WebCore::DDModel::DDFloat4x4 transform)
+    void UpdateTexture(struct WebModel::UpdateTextureDescriptor descriptor)
+    void UpdateMaterial(struct WebModel::UpdateMaterialDescriptor descriptor)
+    void UpdateTransform(struct WebModel::Float4x4 transform)
     void SetCameraDistance(float distance)
     void Play(bool playing)
-    void SetEnvironmentMap(WebCore::DDModel::DDImageAsset imageAsset)
+    void SetEnvironmentMap(struct WebModel::ImageAsset imageAsset)
 }
 #endif

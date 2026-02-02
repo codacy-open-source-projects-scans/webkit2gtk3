@@ -25,7 +25,6 @@
 
 #pragma once
 
-#include <WebCore/DDFloat4x4.h>
 #include <wtf/Ref.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RefCountedAndCanMakeWeakPtr.h>
@@ -42,20 +41,22 @@ class TransformationMatrix;
 enum class StageModeOperation : bool;
 }
 
-namespace WebCore::DDModel {
+namespace WebModel {
+struct Float4x4;
+struct ImageAsset;
+struct MaterialDescriptor;
+struct MeshDescriptor;
+struct TextureDescriptor;
+struct UpdateMaterialDescriptor;
+struct UpdateMeshDescriptor;
+struct UpdateTextureDescriptor;
+}
 
-struct DDFloat4x4;
-struct DDImageAsset;
-struct DDMaterialDescriptor;
-struct DDMeshDescriptor;
-struct DDTextureDescriptor;
-struct DDUpdateMaterialDescriptor;
-struct DDUpdateMeshDescriptor;
-struct DDUpdateTextureDescriptor;
+namespace WebCore {
 
-class DDMesh : public RefCountedAndCanMakeWeakPtr<DDMesh> {
+class Mesh : public RefCountedAndCanMakeWeakPtr<Mesh> {
 public:
-    virtual ~DDMesh() = default;
+    virtual ~Mesh() = default;
 
     String label() const { return m_label; }
 
@@ -65,35 +66,35 @@ public:
         setLabelInternal(m_label);
     }
 
-    virtual void update(const DDUpdateMeshDescriptor&) = 0;
-    virtual void updateTexture(const DDUpdateTextureDescriptor&) = 0;
-    virtual void updateMaterial(const DDUpdateMaterialDescriptor&) = 0;
-    virtual bool isRemoteDDMeshProxy() const { return false; }
-    virtual bool isDDMeshImpl() const { return false; }
-    virtual void setEntityTransform(const DDFloat4x4&) = 0;
-    virtual std::optional<DDFloat4x4> entityTransform() const = 0;
+    virtual void update(const WebModel::UpdateMeshDescriptor&) = 0;
+    virtual void updateTexture(const WebModel::UpdateTextureDescriptor&) = 0;
+    virtual void updateMaterial(const WebModel::UpdateMaterialDescriptor&) = 0;
+    virtual bool isRemoteMeshProxy() const { return false; }
+    virtual bool isMeshImpl() const { return false; }
+    virtual void setEntityTransform(const WebModel::Float4x4&) = 0;
     virtual bool supportsTransform(const WebCore::TransformationMatrix&) const { return false; }
     virtual void setScale(float) { }
     virtual void setCameraDistance(float) = 0;
     virtual void setStageMode(WebCore::StageModeOperation) { }
     virtual void setRotation(float, float = 0.f, float = 0.f) { }
     virtual void play(bool) = 0;
-    virtual void setEnvironmentMap(const DDImageAsset&) = 0;
+    virtual void setEnvironmentMap(const WebModel::ImageAsset&) = 0;
 
     virtual void render() = 0;
 #if PLATFORM(COCOA)
+    virtual std::optional<WebModel::Float4x4> entityTransform() const = 0;
     virtual Vector<MachSendRight> ioSurfaceHandles() { return { }; }
     virtual std::pair<simd_float4, simd_float4> getCenterAndExtents() const { return std::make_pair(simd_make_float4(0.f), simd_make_float4(0.f)); }
 #endif
 
 protected:
-    DDMesh() = default;
+    Mesh() = default;
 
 private:
-    DDMesh(const DDMesh&) = delete;
-    DDMesh(DDMesh&&) = delete;
-    DDMesh& operator=(const DDMesh&) = delete;
-    DDMesh& operator=(DDMesh&&) = delete;
+    Mesh(const Mesh&) = delete;
+    Mesh(Mesh&&) = delete;
+    Mesh& operator=(const Mesh&) = delete;
+    Mesh& operator=(Mesh&&) = delete;
 
     virtual void setLabelInternal(const String&) = 0;
 

@@ -95,7 +95,7 @@ Ref<HTMLTextAreaElement> HTMLTextAreaElement::create(Document& document)
 void HTMLTextAreaElement::didAddUserAgentShadowRoot(ShadowRoot& root)
 {
     ScriptDisallowedScope::EventAllowedScope rootScope { root };
-    root.appendChild(TextControlInnerTextElement::create(protectedDocument(), isInnerTextElementEditable()));
+    root.appendChild(TextControlInnerTextElement::create(protect(document()), isInnerTextElementEditable()));
 }
 
 const AtomString& HTMLTextAreaElement::formControlType() const
@@ -214,7 +214,7 @@ bool HTMLTextAreaElement::appendFormData(DOMFormData& formData)
     if (name().isEmpty())
         return false;
 
-    protectedDocument()->updateLayout();
+    protect(document())->updateLayout();
 
     formData.append(name(), m_wrap == HardWrap ? valueWithHardLineBreaks() : value().get());
     if (auto& dirname = attributeWithoutSynchronization(dirnameAttr); !dirname.isNull())
@@ -535,8 +535,8 @@ void HTMLTextAreaElement::updatePlaceholderText()
         return;
     }
     if (!m_placeholder) {
-        m_placeholder = TextControlPlaceholderElement::create(protectedDocument());
-        protectedUserAgentShadowRoot()->insertBefore(*protectedPlaceholderElement(), innerTextElement()->protectedNextSibling());
+        m_placeholder = TextControlPlaceholderElement::create(protect(document()));
+        protectedUserAgentShadowRoot()->insertBefore(*protectedPlaceholderElement(), protect(innerTextElement()->nextSibling()));
     }
     protectedPlaceholderElement()->setInnerText(String { placeholderText });
 }

@@ -27,22 +27,25 @@
 
 #if ENABLE(GPU_PROCESS_MODEL)
 
-#include "DDModelIdentifier.h"
 #include "RemoteGPU.h"
 #include "StreamMessageReceiver.h"
+#include "WebModelIdentifier.h"
 #include <wtf/Ref.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/WeakRef.h>
 #include <wtf/text/WTFString.h>
 
-namespace WebCore::DDModel {
-class DDMesh;
-struct DDMaterialDescriptor;
-struct DDMeshDescriptor;
-struct DDTextureDescriptor;
-struct DDUpdateMaterialDescriptor;
-struct DDUpdateMeshDescriptor;
-struct DDUpdateTextureDescriptor;
+namespace WebCore {
+class Mesh;
+}
+namespace WebModel {
+struct Float4x4;
+struct MaterialDescriptor;
+struct MeshDescriptor;
+struct TextureDescriptor;
+struct UpdateMaterialDescriptor;
+struct UpdateMeshDescriptor;
+struct UpdateTextureDescriptor;
 }
 
 namespace IPC {
@@ -53,36 +56,33 @@ class StreamServerConnection;
 namespace WebKit {
 
 class GPUConnectionToWebProcess;
-
-namespace DDModel {
 class ObjectHeap;
-}
 
-class RemoteDDMesh final : public IPC::StreamMessageReceiver {
-    WTF_MAKE_TZONE_ALLOCATED(RemoteDDMesh);
+class RemoteMesh final : public IPC::StreamMessageReceiver {
+    WTF_MAKE_TZONE_ALLOCATED(RemoteMesh);
 public:
-    static Ref<RemoteDDMesh> create(GPUConnectionToWebProcess& gpuConnectionToWebProcess, RemoteGPU& gpu, WebCore::DDModel::DDMesh& mesh, DDModel::ObjectHeap& objectHeap, Ref<IPC::StreamServerConnection>&& streamConnection, DDModelIdentifier identifier)
+    static Ref<RemoteMesh> create(GPUConnectionToWebProcess& gpuConnectionToWebProcess, RemoteGPU& gpu, WebCore::Mesh& mesh, ModelObjectHeap& objectHeap, Ref<IPC::StreamServerConnection>&& streamConnection, WebModelIdentifier identifier)
     {
-        return adoptRef(*new RemoteDDMesh(gpuConnectionToWebProcess, gpu, mesh, objectHeap, WTF::move(streamConnection), identifier));
+        return adoptRef(*new RemoteMesh(gpuConnectionToWebProcess, gpu, mesh, objectHeap, WTF::move(streamConnection), identifier));
     }
 
-    virtual ~RemoteDDMesh();
+    virtual ~RemoteMesh();
 
     std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess() const { return m_gpu->sharedPreferencesForWebProcess(); }
 
     void stopListeningForIPC();
 
 private:
-    friend class DDModel::ObjectHeap;
+    friend class ModelObjectHeap;
 
-    RemoteDDMesh(GPUConnectionToWebProcess&, RemoteGPU&, WebCore::DDModel::DDMesh&, DDModel::ObjectHeap&, Ref<IPC::StreamServerConnection>&&, DDModelIdentifier);
+    RemoteMesh(GPUConnectionToWebProcess&, RemoteGPU&, WebCore::Mesh&, ModelObjectHeap&, Ref<IPC::StreamServerConnection>&&, WebModelIdentifier);
 
-    RemoteDDMesh(const RemoteDDMesh&) = delete;
-    RemoteDDMesh(RemoteDDMesh&&) = delete;
-    RemoteDDMesh& operator=(const RemoteDDMesh&) = delete;
-    RemoteDDMesh& operator=(RemoteDDMesh&&) = delete;
+    RemoteMesh(const RemoteMesh&) = delete;
+    RemoteMesh(RemoteMesh&&) = delete;
+    RemoteMesh& operator=(const RemoteMesh&) = delete;
+    RemoteMesh& operator=(RemoteMesh&&) = delete;
 
-    WebCore::DDModel::DDMesh& backing() { return m_backing; }
+    WebCore::Mesh& backing() { return m_backing; }
 
     RefPtr<IPC::Connection> connection() const;
 
@@ -91,20 +91,20 @@ private:
     void destruct();
 
     void setLabel(String&&);
-    void update(const WebCore::DDModel::DDUpdateMeshDescriptor&);
-    void updateTexture(const WebCore::DDModel::DDUpdateTextureDescriptor&);
-    void updateMaterial(const WebCore::DDModel::DDUpdateMaterialDescriptor&);
-    void updateTransform(const WebCore::DDModel::DDFloat4x4& transform);
+    void update(const WebModel::UpdateMeshDescriptor&);
+    void updateTexture(const WebModel::UpdateTextureDescriptor&);
+    void updateMaterial(const WebModel::UpdateMaterialDescriptor&);
+    void updateTransform(const WebModel::Float4x4& transform);
     void setCameraDistance(float);
     void play(bool);
-    void setEnvironmentMap(const WebCore::DDModel::DDImageAsset&);
+    void setEnvironmentMap(const WebModel::ImageAsset&);
 
     void render();
 
-    const Ref<WebCore::DDModel::DDMesh> m_backing;
-    WeakRef<DDModel::ObjectHeap> m_objectHeap;
+    const Ref<WebCore::Mesh> m_backing;
+    WeakRef<ModelObjectHeap> m_objectHeap;
     const Ref<IPC::StreamServerConnection> m_streamConnection;
-    DDModelIdentifier m_identifier;
+    const WebModelIdentifier m_identifier;
     ThreadSafeWeakPtr<GPUConnectionToWebProcess> m_gpuConnectionToWebProcess;
     WeakRef<RemoteGPU> m_gpu;
 };

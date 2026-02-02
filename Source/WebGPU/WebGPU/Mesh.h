@@ -25,6 +25,7 @@
 
 #pragma once
 
+#import <WebGPU/ModelTypes.h>
 #import <wtf/Ref.h>
 #import <wtf/RefCountedAndCanMakeWeakPtr.h>
 #import <wtf/TZoneMalloc.h>
@@ -33,63 +34,60 @@
 
 typedef struct CF_BRIDGED_TYPE(id) __CVBuffer* CVPixelBufferRef;
 
-struct WGPUDDMeshImpl {
+struct WebMeshImpl {
 };
 
-@class DDBridgeImageAsset;
-@class DDBridgeReceiver;
-@class DDBridgeUpdateMaterial;
-@class DDBridgeUpdateMesh;
-@class DDBridgeUpdateTexture;
+@class WebBridgeImageAsset;
+@class WebBridgeReceiver;
+@class WebBridgeUpdateMaterial;
+@class WebBridgeUpdateMesh;
+@class WebBridgeUpdateTexture;
 
 namespace WebGPU {
-
 class Instance;
+}
 
-class DDMesh : public ThreadSafeRefCounted<DDMesh>, public WGPUDDMeshImpl {
-    WTF_MAKE_TZONE_ALLOCATED(DDMesh);
+namespace WebModel {
+
+class Mesh : public ThreadSafeRefCounted<Mesh>, public WebMeshImpl {
+    WTF_MAKE_TZONE_ALLOCATED(Mesh);
 public:
-    static Ref<DDMesh> create(const WGPUDDCreateMeshDescriptor& descriptor, Instance& instance)
+    static Ref<Mesh> create(const WebModelCreateMeshDescriptor& descriptor, WebGPU::Instance& instance)
     {
-        return adoptRef(*new DDMesh(descriptor, instance));
-    }
-    static Ref<DDMesh> createInvalid(Instance& instance)
-    {
-        return adoptRef(*new DDMesh(instance));
+        return adoptRef(*new Mesh(descriptor, instance));
     }
 
-    ~DDMesh();
+    ~Mesh();
 
     bool isValid() const;
-    void update(DDBridgeUpdateMesh*);
-    void updateTexture(DDBridgeUpdateTexture*);
-    void updateMaterial(DDBridgeUpdateMaterial*);
+    void update(WebBridgeUpdateMesh*);
+    void updateTexture(WebBridgeUpdateTexture*);
+    void updateMaterial(const WebModel::UpdateMaterialDescriptor&);
     void play(bool);
 
     id<MTLTexture> texture() const;
     void render() const;
     void setTransform(const simd_float4x4&);
     void setCameraDistance(float);
-    void setEnvironmentMap(DDBridgeImageAsset *);
+    void setEnvironmentMap(WebBridgeImageAsset *);
 
 private:
-    DDMesh(const WGPUDDCreateMeshDescriptor&, Instance&);
-    DDMesh(Instance&);
+    Mesh(const WebModelCreateMeshDescriptor&, WebGPU::Instance&);
     void processUpdates() const;
 
-    const Ref<Instance> m_instance;
-    WGPUDDCreateMeshDescriptor m_descriptor;
+    const Ref<WebGPU::Instance> m_instance;
+    WebModelCreateMeshDescriptor m_descriptor;
     NSMutableArray<id<MTLTexture>>* m_textures { nil };
 
 #if ENABLE(GPU_PROCESS_MODEL)
-    DDBridgeReceiver* m_ddReceiver;
+    WebBridgeReceiver* m_ddReceiver;
     simd_float4x4 m_transform { matrix_identity_float4x4 };
-    NSUUID* m_ddMeshIdentifier;
+    NSUUID* m_meshIdentifier;
     mutable uint32_t m_currentTexture { 0 };
     mutable bool m_meshDataExists { false };
-    mutable NSMutableDictionary<NSString *, DDBridgeUpdateMesh *> *m_batchedUpdates;
+    mutable NSMutableDictionary<NSString *, WebBridgeUpdateMesh *> *m_batchedUpdates;
 #endif
 };
 
-} // namespace WebGPU
+}
 

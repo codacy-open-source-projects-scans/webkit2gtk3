@@ -2242,7 +2242,7 @@ static Vector<FloatRect> borderAndTextRects(const SimpleRange& range, Coordinate
 {
     Vector<FloatRect> rects;
 
-    range.start.protectedDocument()->updateLayoutIgnorePendingStylesheets();
+    protect(range.start.document())->updateLayoutIgnorePendingStylesheets();
 
     bool useVisibleBounds = behavior.contains(RenderObject::BoundingRectBehavior::UseVisibleBounds);
 
@@ -2284,7 +2284,7 @@ static Vector<FloatRect> borderAndTextRects(const SimpleRange& range, Coordinate
                         continue;
                     auto snappedBounds = snapRectToDevicePixels(rootClippedBounds->clippedOverflowRect, node->document().deviceScaleFactor());
                     if (space == CoordinateSpace::Client)
-                        node->protectedDocument()->convertAbsoluteToClientRect(snappedBounds, renderer->style());
+                        protect(node->document())->convertAbsoluteToClientRect(snappedBounds, renderer->style());
                     rects.append(snappedBounds);
                     continue;
                 }
@@ -2292,14 +2292,14 @@ static Vector<FloatRect> borderAndTextRects(const SimpleRange& range, Coordinate
                 Vector<FloatQuad> elementQuads;
                 renderer->absoluteQuads(elementQuads);
                 if (space == CoordinateSpace::Client)
-                    node->protectedDocument()->convertAbsoluteToClientQuads(elementQuads, renderer->style());
+                    protect(node->document())->convertAbsoluteToClientQuads(elementQuads, renderer->style());
                 rects.appendVector(boundingBoxes(elementQuads));
             }
         } else if (auto* textNode = dynamicDowncast<Text>(node.get())) {
             if (CheckedPtr renderer = textNode->renderer()) {
                 auto clippedRects = absoluteRectsForRangeInText(range, *textNode, behavior);
                 if (space == CoordinateSpace::Client)
-                    node->protectedDocument()->convertAbsoluteToClientRects(clippedRects, renderer->style());
+                    protect(node->document())->convertAbsoluteToClientRects(clippedRects, renderer->style());
                 rects.appendVector(clippedRects);
             }
         }
@@ -2445,7 +2445,7 @@ static bool usesVisuallyContiguousBidiTextSelection(const SimpleRange& range)
     UNUSED_PARAM(range);
     return false;
 #else
-    return range.protectedStartContainer()->protectedDocument()->settings().visuallyContiguousBidiTextSelectionEnabled();
+    return protect(range.protectedStartContainer()->document())->settings().visuallyContiguousBidiTextSelectionEnabled();
 #endif
 }
 

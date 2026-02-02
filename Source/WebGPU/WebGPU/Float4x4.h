@@ -25,13 +25,19 @@
 
 #pragma once
 
+#include <wtf/Platform.h>
+
 #if PLATFORM(COCOA)
 #include <simd/simd.h>
 #endif
 
-namespace WebCore::DDModel {
+#ifdef __cplusplus
 
-struct DDFloat4x4 {
+#include <wtf/StdLibExtras.h>
+
+namespace WebModel {
+
+struct Float4x4 {
     union {
 #if PLATFORM(COCOA)
         simd_float4x4 v;
@@ -50,11 +56,11 @@ struct DDFloat4x4 {
         };
     };
 #if PLATFORM(COCOA)
-    DDFloat4x4(const simd_float4x4& s)
+    Float4x4(const simd_float4x4& s)
         : v(s)
     {
     }
-    DDFloat4x4(simd_float4x4&& s)
+    Float4x4(simd_float4x4&& s)
         : v(WTF::move(s))
     {
     }
@@ -63,7 +69,7 @@ struct DDFloat4x4 {
     operator const simd_float4x4() const { return v; } // NOLINT
 #endif
 
-    DDFloat4x4(float vm00, float vm01, float vm02, float vm03,
+    Float4x4(float vm00, float vm01, float vm02, float vm03,
         float vm10, float vm11, float vm12, float vm13,
         float vm20, float vm21, float vm22, float vm23,
         float vm30, float vm31, float vm32, float vm33)
@@ -74,11 +80,11 @@ struct DDFloat4x4 {
     {
     }
 
-    DDFloat4x4()
+    Float4x4()
     {
     }
 
-    bool operator==(const DDFloat4x4& a) const
+    bool operator==(const Float4x4& a) const
     {
         return m00 == a.m00 && m01 == a.m01 && m02 == a.m02 && m03 == a.m03
             && m10 == a.m10 && m11 == a.m11 && m12 == a.m12 && m13 == a.m13
@@ -88,7 +94,7 @@ struct DDFloat4x4 {
 };
 
 #if PLATFORM(COCOA)
-struct DDFloat3x3 {
+struct Float3x3 {
     union {
         simd_float3x3 v;
         struct {
@@ -97,11 +103,11 @@ struct DDFloat3x3 {
             simd_float3 column2;
         };
     };
-    DDFloat3x3(const simd_float3x3& s)
+    Float3x3(const simd_float3x3& s)
         : v(s)
     {
     }
-    DDFloat3x3(simd_float3x3&& s)
+    Float3x3(simd_float3x3&& s)
         : v(WTF::move(s))
     {
     }
@@ -109,10 +115,12 @@ struct DDFloat3x3 {
     operator simd_float3x3() { return v; } // NOLINT
     operator const simd_float3x3() const { return v; } // NOLINT
 
-    DDFloat3x3()
+    Float3x3()
     {
     }
 };
 #endif
 
 }
+
+#endif

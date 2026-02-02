@@ -28,78 +28,81 @@
 
 #if ENABLE(GPU_PROCESS_MODEL)
 
-#include <WebCore/DDImageAsset.h>
 #include <WebCore/Model.h>
 #include <WebCore/ModelPlayer.h>
 #include <WebCore/ModelPlayerClient.h>
 #include <WebCore/StageModeOperations.h>
+#include <WebCore/WebModel.h>
 #include <wtf/Forward.h>
 #include <wtf/RetainPtr.h>
 #include <wtf/URL.h>
 
-OBJC_CLASS DDBridgeModelLoader;
+OBJC_CLASS WebBridgeModelLoader;
 
-namespace WebCore::DDModel {
-class DDMesh;
-struct DDImageAsset;
+namespace WebModel {
+struct ImageAsset;
 }
 
 namespace WebCore {
 
 class GraphicsLayerContentsDisplayDelegate;
+class Mesh;
 class ModelDisplayBufferDisplayDelegate;
 class ModelPlayerClient;
 class Page;
 
-class WEBCORE_EXPORT DDModelPlayer final : public ModelPlayer {
+class WEBCORE_EXPORT WebModelPlayer final : public ModelPlayer {
 public:
-    static Ref<DDModelPlayer> create(Page&, ModelPlayerClient&);
-    virtual ~DDModelPlayer();
+    static Ref<WebModelPlayer> create(Page&, ModelPlayerClient&);
+    virtual ~WebModelPlayer();
 
     WebCore::ModelPlayerIdentifier identifier() const final;
     void update();
 
 private:
-    DDModelPlayer(Page&, ModelPlayerClient&);
+    WebModelPlayer(Page&, ModelPlayerClient&);
 
     void updateScene();
 
-    // ModelPlayer overrides.
-    void load(Model&, LayoutSize) override;
-    void sizeDidChange(LayoutSize) override;
-    void configureGraphicsLayer(GraphicsLayer&, ModelPlayerGraphicsLayerConfiguration&&) override;
-    void enterFullscreen() override;
-    void handleMouseDown(const LayoutPoint&, MonotonicTime) override;
-    void handleMouseMove(const LayoutPoint&, MonotonicTime) override;
-    void handleMouseUp(const LayoutPoint&, MonotonicTime) override;
-    void getCamera(CompletionHandler<void(std::optional<HTMLModelElementCamera>&&)>&&) override;
-    void setCamera(HTMLModelElementCamera, CompletionHandler<void(bool success)>&&) override;
-    void isPlayingAnimation(CompletionHandler<void(std::optional<bool>&&)>&&) override;
-    void setAnimationIsPlaying(bool, CompletionHandler<void(bool success)>&&) override;
-    void isLoopingAnimation(CompletionHandler<void(std::optional<bool>&&)>&&) override;
-    void setIsLoopingAnimation(bool, CompletionHandler<void(bool success)>&&) override;
-    void animationDuration(CompletionHandler<void(std::optional<Seconds>&&)>&&) override;
-    void animationCurrentTime(CompletionHandler<void(std::optional<Seconds>&&)>&&) override;
-    void setAnimationCurrentTime(Seconds, CompletionHandler<void(bool success)>&&) override;
-    void hasAudio(CompletionHandler<void(std::optional<bool>&&)>&&) override;
-    void isMuted(CompletionHandler<void(std::optional<bool>&&)>&&) override;
-    void setIsMuted(bool, CompletionHandler<void(bool success)>&&) override;
-    ModelPlayerAccessibilityChildren accessibilityChildren() override;
+    // ModelPlayer finals.
+    void load(Model&, LayoutSize) final;
+    void sizeDidChange(LayoutSize) final;
+    void configureGraphicsLayer(GraphicsLayer&, ModelPlayerGraphicsLayerConfiguration&&) final;
+    void enterFullscreen() final;
+    void handleMouseDown(const LayoutPoint&, MonotonicTime) final;
+    void handleMouseMove(const LayoutPoint&, MonotonicTime) final;
+    void handleMouseUp(const LayoutPoint&, MonotonicTime) final;
+    void getCamera(CompletionHandler<void(std::optional<HTMLModelElementCamera>&&)>&&) final;
+    void setCamera(HTMLModelElementCamera, CompletionHandler<void(bool success)>&&) final;
+    void isPlayingAnimation(CompletionHandler<void(std::optional<bool>&&)>&&) final;
+    void setAnimationIsPlaying(bool, CompletionHandler<void(bool success)>&&) final;
+    void isLoopingAnimation(CompletionHandler<void(std::optional<bool>&&)>&&) final;
+    void setIsLoopingAnimation(bool, CompletionHandler<void(bool success)>&&) final;
+    void animationDuration(CompletionHandler<void(std::optional<Seconds>&&)>&&) final;
+    void animationCurrentTime(CompletionHandler<void(std::optional<Seconds>&&)>&&) final;
+    void setAnimationCurrentTime(Seconds, CompletionHandler<void(bool success)>&&) final;
+    void hasAudio(CompletionHandler<void(std::optional<bool>&&)>&&) final;
+    void isMuted(CompletionHandler<void(std::optional<bool>&&)>&&) final;
+    void setIsMuted(bool, CompletionHandler<void(bool success)>&&) final;
+    ModelPlayerAccessibilityChildren accessibilityChildren() final;
+#if PLATFORM(COCOA)
     std::optional<TransformationMatrix> entityTransform() const final;
+#endif
     void setEntityTransform(TransformationMatrix) final;
-    bool supportsTransform(TransformationMatrix) override;
-    bool supportsMouseInteraction() override;
+    bool supportsTransform(TransformationMatrix) final;
+    bool supportsMouseInteraction() final;
 
     const MachSendRight* displayBuffer() const;
     GraphicsLayerContentsDisplayDelegate* contentsDisplayDelegate();
 
-    void setAutoplay(bool) override;
-    void setPaused(bool, CompletionHandler<void(bool succeeded)>&&) override;
-    bool paused() const override;
+    void setPlaybackRate(double, CompletionHandler<void(double effectivePlaybackRate)>&&) final;
+    void setAutoplay(bool) final;
+    void setPaused(bool, CompletionHandler<void(bool succeeded)>&&) final;
+    bool paused() const final;
     void play(bool);
     void simulate(float elapsedTime);
 
-    void ensureOnMainThreadWithProtectedThis(Function<void(Ref<DDModelPlayer>)>&& task);
+    void ensureOnMainThreadWithProtectedThis(Function<void(Ref<WebModelPlayer>)>&& task);
     void setStageMode(WebCore::StageModeOperation) final;
     void notifyEntityTransformUpdated();
     void setEnvironmentMap(Ref<WebCore::SharedBuffer>&&) final;
@@ -107,9 +110,9 @@ private:
     WeakPtr<ModelPlayerClient> m_client;
 
     WebCore::ModelPlayerIdentifier m_id;
-    RetainPtr<DDBridgeModelLoader> m_modelLoader;
+    RetainPtr<WebBridgeModelLoader> m_modelLoader;
     Vector<MachSendRight> m_displayBuffers;
-    RefPtr<WebCore::DDModel::DDMesh> m_currentModel;
+    RefPtr<WebCore::Mesh> m_currentModel;
     WeakRef<Page> m_page;
     mutable RefPtr<ModelDisplayBufferDisplayDelegate> m_contentsDisplayDelegate;
     uint32_t m_currentTexture { 0 };
@@ -123,11 +126,12 @@ private:
     };
     PauseState m_pauseState { PauseState::None };
     std::optional<LayoutPoint> m_currentPoint;
-    std::optional<WebCore::DDModel::DDImageAsset> m_environmentMap;
+    std::optional<Ref<WebCore::SharedBuffer>> m_environmentMap;
     float m_yawAcceleration { 0.f };
     float m_pitchAcceleration { 0.f };
     float m_yaw { 0.f };
     float m_pitch { 0.f };
+    float m_playbackRate { 1.0f };
 };
 
 }

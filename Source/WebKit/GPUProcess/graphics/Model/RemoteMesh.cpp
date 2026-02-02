@@ -24,30 +24,26 @@
  */
 
 #include "config.h"
-#include "RemoteDDMesh.h"
+#include "RemoteMesh.h"
 
 #if ENABLE(GPU_PROCESS_MODEL)
 
 #include "GPUConnectionToWebProcess.h"
 #include "Logging.h"
 #include "ModelObjectHeap.h"
-#include "RemoteDDMeshMessages.h"
+#include "RemoteMeshMessages.h"
 #include "StreamServerConnection.h"
-#include <WebCore/DDMaterialDescriptor.h>
-#include <WebCore/DDMesh.h>
-#include <WebCore/DDMeshDescriptor.h>
-#include <WebCore/DDUpdateMaterialDescriptor.h>
-#include <WebCore/DDUpdateMeshDescriptor.h>
-#include <WebCore/DDUpdateTextureDescriptor.h>
+#include <WebCore/Mesh.h>
+#include <WebCore/WebModel.h>
 #include <wtf/TZoneMallocInlines.h>
 
 #define MESSAGE_CHECK(assertion) MESSAGE_CHECK_OPTIONAL_CONNECTION_BASE(assertion, connection())
 
 namespace WebKit {
 
-WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteDDMesh);
+WTF_MAKE_TZONE_ALLOCATED_IMPL(RemoteMesh);
 
-RemoteDDMesh::RemoteDDMesh(GPUConnectionToWebProcess& gpuConnectionToWebProcess, RemoteGPU& gpu, WebCore::DDModel::DDMesh& mesh, DDModel::ObjectHeap& objectHeap, Ref<IPC::StreamServerConnection>&& streamConnection, DDModelIdentifier identifier)
+RemoteMesh::RemoteMesh(GPUConnectionToWebProcess& gpuConnectionToWebProcess, RemoteGPU& gpu, WebCore::Mesh& mesh, ModelObjectHeap& objectHeap, Ref<IPC::StreamServerConnection>&& streamConnection, WebModelIdentifier identifier)
     : m_backing(mesh)
     , m_objectHeap(objectHeap)
     , m_streamConnection(WTF::move(streamConnection))
@@ -55,12 +51,12 @@ RemoteDDMesh::RemoteDDMesh(GPUConnectionToWebProcess& gpuConnectionToWebProcess,
     , m_gpuConnectionToWebProcess(gpuConnectionToWebProcess)
     , m_gpu(gpu)
 {
-    Ref { m_streamConnection }->startReceivingMessages(*this, Messages::RemoteDDMesh::messageReceiverName(), m_identifier.toUInt64());
+    Ref { m_streamConnection }->startReceivingMessages(*this, Messages::RemoteMesh::messageReceiverName(), m_identifier.toUInt64());
 }
 
-RemoteDDMesh::~RemoteDDMesh() = default;
+RemoteMesh::~RemoteMesh() = default;
 
-RefPtr<IPC::Connection> RemoteDDMesh::connection() const
+RefPtr<IPC::Connection> RemoteMesh::connection() const
 {
     RefPtr connection = m_gpuConnectionToWebProcess.get();
     if (!connection)
@@ -68,57 +64,57 @@ RefPtr<IPC::Connection> RemoteDDMesh::connection() const
     return &connection->connection();
 }
 
-void RemoteDDMesh::stopListeningForIPC()
+void RemoteMesh::stopListeningForIPC()
 {
-    Ref { m_streamConnection }->stopReceivingMessages(Messages::RemoteDDMesh::messageReceiverName(), m_identifier.toUInt64());
+    Ref { m_streamConnection }->stopReceivingMessages(Messages::RemoteMesh::messageReceiverName(), m_identifier.toUInt64());
 }
 
-void RemoteDDMesh::destruct()
+void RemoteMesh::destruct()
 {
     Ref { m_objectHeap.get() }->removeObject(m_identifier);
 }
 
-void RemoteDDMesh::setLabel(String&& label)
+void RemoteMesh::setLabel(String&& label)
 {
     m_backing->setLabel(WTF::move(label));
 }
 
-void RemoteDDMesh::update(const WebCore::DDModel::DDUpdateMeshDescriptor& descriptor)
+void RemoteMesh::update(const WebModel::UpdateMeshDescriptor& descriptor)
 {
     m_backing->update(descriptor);
 }
 
-void RemoteDDMesh::render()
+void RemoteMesh::render()
 {
     m_backing->render();
 }
 
-void RemoteDDMesh::updateTexture(const WebCore::DDModel::DDUpdateTextureDescriptor& descriptor)
+void RemoteMesh::updateTexture(const WebModel::UpdateTextureDescriptor& descriptor)
 {
     m_backing->updateTexture(descriptor);
 }
 
-void RemoteDDMesh::updateMaterial(const WebCore::DDModel::DDUpdateMaterialDescriptor& descriptor)
+void RemoteMesh::updateMaterial(const WebModel::UpdateMaterialDescriptor& descriptor)
 {
     m_backing->updateMaterial(descriptor);
 }
 
-void RemoteDDMesh::updateTransform(const WebCore::DDModel::DDFloat4x4& transform)
+void RemoteMesh::updateTransform(const WebModel::Float4x4& transform)
 {
     m_backing->setEntityTransform(transform);
 }
 
-void RemoteDDMesh::setCameraDistance(float distance)
+void RemoteMesh::setCameraDistance(float distance)
 {
     m_backing->setCameraDistance(distance);
 }
 
-void RemoteDDMesh::play(bool playing)
+void RemoteMesh::play(bool playing)
 {
     m_backing->play(playing);
 }
 
-void RemoteDDMesh::setEnvironmentMap(const WebCore::DDModel::DDImageAsset& imageAsset)
+void RemoteMesh::setEnvironmentMap(const WebModel::ImageAsset& imageAsset)
 {
     m_backing->setEnvironmentMap(imageAsset);
 }

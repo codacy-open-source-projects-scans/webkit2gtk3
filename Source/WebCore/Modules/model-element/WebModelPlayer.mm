@@ -25,7 +25,7 @@
  */
 
 #import "config.h"
-#import "DDModelPlayer.h"
+#import "WebModelPlayer.h"
 
 #if ENABLE(GPU_PROCESS_MODEL)
 
@@ -35,15 +35,14 @@
 #import "GraphicsLayer.h"
 #import "GraphicsLayerContentsDisplayDelegate.h"
 #import "HTMLModelElement.h"
-#import "ModelDDInlineConverters.h"
-#import "ModelDDTypes.h"
+#import "ModelInlineConverters.h"
 #import "ModelPlayerGraphicsLayerConfiguration.h"
 #import "Navigator.h"
 #import "Page.h"
 #import "PlatformCALayer.h"
 #import "PlatformCALayerDelegatedContents.h"
-#import <WebCore/DDMesh.h>
-#import <WebGPU/DDModelTypes.h>
+#import <WebCore/Mesh.h>
+#import <WebGPU/ModelTypes.h>
 #import <wtf/RetainPtr.h>
 
 #if PLATFORM(COCOA)
@@ -54,7 +53,7 @@ namespace WebCore {
 
 class ModelDisplayBufferDisplayDelegate final : public GraphicsLayerContentsDisplayDelegate {
 public:
-    static Ref<ModelDisplayBufferDisplayDelegate> create(DDModelPlayer& modelPlayer, bool isOpaque = false, float contentsScale = 1)
+    static Ref<ModelDisplayBufferDisplayDelegate> create(WebModelPlayer& modelPlayer, bool isOpaque = false, float contentsScale = 1)
     {
         return adoptRef(*new ModelDisplayBufferDisplayDelegate(modelPlayer, isOpaque, contentsScale));
     }
@@ -106,36 +105,36 @@ public:
         m_isOpaque = opaque;
     }
 private:
-    ModelDisplayBufferDisplayDelegate(DDModelPlayer& modelPlayer, bool isOpaque, float contentsScale)
+    ModelDisplayBufferDisplayDelegate(WebModelPlayer& modelPlayer, bool isOpaque, float contentsScale)
         : m_modelPlayer(modelPlayer)
         , m_contentsScale(contentsScale)
         , m_isOpaque(isOpaque)
     {
     }
-    ThreadSafeWeakPtr<DDModelPlayer> m_modelPlayer;
+    ThreadSafeWeakPtr<WebModelPlayer> m_modelPlayer;
     WTF::MachSendRight m_displayBuffer;
     const float m_contentsScale;
     bool m_isOpaque;
     ContentsFormat m_contentsFormat { ContentsFormat::RGBA8 };
 };
 
-Ref<DDModelPlayer> DDModelPlayer::create(Page& page, ModelPlayerClient& client)
+Ref<WebModelPlayer> WebModelPlayer::create(Page& page, ModelPlayerClient& client)
 {
-    return adoptRef(*new DDModelPlayer(page, client));
+    return adoptRef(*new WebModelPlayer(page, client));
 }
 
-DDModelPlayer::DDModelPlayer(Page& page, ModelPlayerClient& client)
+WebModelPlayer::WebModelPlayer(Page& page, ModelPlayerClient& client)
 : m_client { client }
 , m_id { ModelPlayerIdentifier::generate() }
 , m_page(page)
 {
 }
 
-DDModelPlayer::~DDModelPlayer()
+WebModelPlayer::~WebModelPlayer()
 {
 }
 
-void DDModelPlayer::ensureOnMainThreadWithProtectedThis(Function<void(Ref<DDModelPlayer>)>&& task)
+void WebModelPlayer::ensureOnMainThreadWithProtectedThis(Function<void(Ref<WebModelPlayer>)>&& task)
 {
     ensureOnMainThread([protectedThis = Ref { *this }, task = WTF::move(task)]() mutable {
         task(protectedThis);
@@ -145,363 +144,9 @@ void DDModelPlayer::ensureOnMainThreadWithProtectedThis(Function<void(Ref<DDMode
 static Vector<uint8_t> loadData(RetainPtr<CFStringRef> filename)
 {
     RetainPtr<NSBundle> myBundle = [NSBundle bundleWithIdentifier:@"com.apple.WebCore"];
-    RetainPtr<NSURL> nsFileURL = [myBundle URLForResource:(NSString *)filename.get() withExtension:@""];
+    RetainPtr<NSURL> nsFileURL = [myBundle URLForResource:(__bridge NSString *)filename.get() withExtension:@""];
     RetainPtr<NSData> data = [NSData dataWithContentsOfURL:nsFileURL.get() options:0 error:nil];
     return makeVector(data.get());
-}
-
-// MARK: - ModelPlayer overrides.
-
-void DDModelPlayer::load(Model& modelSource, LayoutSize size)
-{
-    RefPtr corePage = m_page.get();
-    m_modelLoader = nil;
-    m_didFinishLoading = false;
-    RefPtr document = corePage->localTopDocument();
-    if (!document)
-        return;
-
-    RefPtr window = document->window();
-    if (!window)
-        return;
-
-    RefPtr gpu = window->protectedNavigator()->gpu();
-    if (!gpu)
-        return;
-
-    DDModel::DDImageAsset diffuseTexture {
-        .data = loadData(adoptCF(static_cast<CFStringRef>(@"modelDefaultDiffuseData"))),
-        .width = 64,
-        .height = 64,
-        .depth = 1,
-        .bytesPerPixel = 2,
-        .textureType = MTLTextureTypeCube,
-        .pixelFormat = MTLPixelFormatR16Float,
-        .mipmapLevelCount = 0,
-        .arrayLength = 6,
-        .textureUsage = MTLTextureUsageShaderRead,
-        .swizzle = { }
-    };
-    DDModel::DDImageAsset specularTexture {
-        .data = loadData(adoptCF(static_cast<CFStringRef>(@"modelDefaultSpecularData"))),
-        .width = 256,
-        .height = 256,
-        .depth = 1,
-        .bytesPerPixel = 2,
-        .textureType = MTLTextureTypeCube,
-        .pixelFormat = MTLPixelFormatR16Float,
-        .mipmapLevelCount = 0,
-        .arrayLength = 6,
-        .textureUsage = MTLTextureUsageShaderRead,
-        .swizzle = { }
-    };
-
-    m_currentModel = gpu->backing().createModelBacking(size.width().toUnsigned(), size.height().toUnsigned(), diffuseTexture, specularTexture, [protectedThis = Ref { *this }] (Vector<MachSendRight>&& surfaceHandles) {
-        if (surfaceHandles.size())
-            protectedThis->m_displayBuffers = WTF::move(surfaceHandles);
-    });
-
-    m_modelLoader = adoptNS([[DDBridgeModelLoader alloc] init]);
-    RetainPtr nsURL = modelSource.url().createNSURL();
-    Ref protectedThis = Ref { *this };
-    [m_modelLoader setCallbacksWithModelUpdatedCallback:^(DDBridgeUpdateMesh *updateRequest) {
-        ensureOnMainThreadWithProtectedThis([updateRequest] (Ref<DDModelPlayer> protectedThis) {
-            RefPtr model = protectedThis->m_currentModel;
-            if (model) {
-                model->update(toCpp(updateRequest));
-                protectedThis->setStageMode(protectedThis->m_stageMode);
-            }
-
-            [protectedThis->m_modelLoader requestCompleted:updateRequest];
-
-            if (RefPtr client = protectedThis->m_client.get(); client && !protectedThis->m_didFinishLoading) {
-                protectedThis->m_didFinishLoading = true;
-                client->didFinishLoading(protectedThis.get());
-                auto [simdCenter, simdExtents] = model->getCenterAndExtents();
-                client->didUpdateBoundingBox(protectedThis.get(), FloatPoint3D(simdCenter.x, simdCenter.y, simdCenter.z), FloatPoint3D(simdExtents.x, simdExtents.y, simdExtents.z));
-                protectedThis->notifyEntityTransformUpdated();
-
-                auto environmentMap = protectedThis->m_environmentMap;
-                if (model && environmentMap) {
-                    model->setEnvironmentMap(*environmentMap);
-                    protectedThis->m_environmentMap = std::nullopt;
-                }
-            }
-        });
-    } textureUpdatedCallback:^(DDBridgeUpdateTexture *updateTexture) {
-        ensureOnMainThreadWithProtectedThis([updateTexture] (Ref<DDModelPlayer> protectedThis) {
-            if (protectedThis->m_currentModel)
-                protectedThis->m_currentModel->updateTexture(toCpp(updateTexture));
-
-            [protectedThis->m_modelLoader requestCompleted:updateTexture];
-        });
-    } materialUpdatedCallback:^(DDBridgeUpdateMaterial *updateMaterial) {
-        ensureOnMainThreadWithProtectedThis([updateMaterial] (Ref<DDModelPlayer> protectedThis) {
-            if (protectedThis->m_currentModel)
-                protectedThis->m_currentModel->updateMaterial(toCpp(updateMaterial));
-
-            [protectedThis->m_modelLoader requestCompleted:updateMaterial];
-        });
-    }];
-    [m_modelLoader loadModelFrom:nsURL.get()];
-}
-
-void DDModelPlayer::notifyEntityTransformUpdated()
-{
-    RefPtr model = m_currentModel;
-    RefPtr client = m_client.get();
-    if (!model || !client || !model->entityTransform())
-        return;
-
-    auto scaledTransform = *model->entityTransform();
-    auto scale = m_currentScale;
-    scaledTransform.column0 *= scale;
-    scaledTransform.column1 *= scale;
-    scaledTransform.column2 *= scale;
-    client->didUpdateEntityTransform(*this, TransformationMatrix(static_cast<simd_float4x4>(scaledTransform)));
-}
-
-void DDModelPlayer::sizeDidChange(LayoutSize layoutSize)
-{
-    m_currentScale = static_cast<float>(layoutSize.minDimension());
-}
-
-void DDModelPlayer::enterFullscreen()
-{
-}
-
-void DDModelPlayer::handleMouseDown(const LayoutPoint& startingPoint, MonotonicTime)
-{
-    m_currentPoint = startingPoint;
-    m_yawAcceleration = 0.f;
-    m_pitchAcceleration = 0.f;
-}
-
-void DDModelPlayer::handleMouseMove(const LayoutPoint& currentPoint, MonotonicTime)
-{
-    if (!m_currentPoint)
-        return;
-
-    float deltaX = static_cast<float>(m_currentPoint->x() - currentPoint.x());
-    float deltaY = static_cast<float>(currentPoint.y() - m_currentPoint->y());
-    m_currentPoint = currentPoint;
-    if (RefPtr model = m_currentModel) {
-        if (m_yawAcceleration * deltaX < 0.f)
-            m_yawAcceleration = 0.f;
-        if (m_pitchAcceleration * deltaY < 0.f)
-            m_pitchAcceleration = 0.f;
-
-        m_yawAcceleration += 0.1f * deltaX;
-        m_pitchAcceleration += 0.1f * deltaY;
-    }
-}
-
-bool DDModelPlayer::supportsMouseInteraction()
-{
-    return true;
-}
-
-void DDModelPlayer::handleMouseUp(const LayoutPoint&, MonotonicTime)
-{
-    m_currentPoint = std::nullopt;
-}
-
-void DDModelPlayer::getCamera(CompletionHandler<void(std::optional<HTMLModelElementCamera>&&)>&&)
-{
-}
-
-void DDModelPlayer::setCamera(HTMLModelElementCamera, CompletionHandler<void(bool success)>&&)
-{
-}
-
-void DDModelPlayer::isPlayingAnimation(CompletionHandler<void(std::optional<bool>&&)>&&)
-{
-}
-
-void DDModelPlayer::setAnimationIsPlaying(bool, CompletionHandler<void(bool success)>&&)
-{
-}
-
-void DDModelPlayer::isLoopingAnimation(CompletionHandler<void(std::optional<bool>&&)>&&)
-{
-}
-
-void DDModelPlayer::setIsLoopingAnimation(bool, CompletionHandler<void(bool success)>&&)
-{
-}
-
-void DDModelPlayer::animationDuration(CompletionHandler<void(std::optional<Seconds>&&)>&&)
-{
-}
-
-void DDModelPlayer::animationCurrentTime(CompletionHandler<void(std::optional<Seconds>&&)>&&)
-{
-}
-
-void DDModelPlayer::setAnimationCurrentTime(Seconds, CompletionHandler<void(bool success)>&&)
-{
-}
-
-void DDModelPlayer::hasAudio(CompletionHandler<void(std::optional<bool>&&)>&&)
-{
-}
-
-void DDModelPlayer::isMuted(CompletionHandler<void(std::optional<bool>&&)>&&)
-{
-}
-
-void DDModelPlayer::setIsMuted(bool, CompletionHandler<void(bool success)>&&)
-{
-}
-
-void DDModelPlayer::updateScene()
-{
-}
-
-ModelPlayerAccessibilityChildren DDModelPlayer::accessibilityChildren()
-{
-    return { };
-}
-
-WebCore::ModelPlayerIdentifier DDModelPlayer::identifier() const
-{
-    return m_id;
-}
-
-void DDModelPlayer::configureGraphicsLayer(GraphicsLayer& graphicsLayer, ModelPlayerGraphicsLayerConfiguration&&)
-{
-    graphicsLayer.setContentsDisplayDelegate(contentsDisplayDelegate(), GraphicsLayer::ContentsLayerPurpose::Canvas);
-}
-
-const MachSendRight* DDModelPlayer::displayBuffer() const
-{
-    if (m_currentTexture >= m_displayBuffers.size())
-        return nullptr;
-
-    return &m_displayBuffers[m_currentTexture];
-}
-
-GraphicsLayerContentsDisplayDelegate* DDModelPlayer::contentsDisplayDelegate()
-{
-    if (!m_contentsDisplayDelegate) {
-        RefPtr modelDisplayDelegate = ModelDisplayBufferDisplayDelegate::create(*this);
-        m_contentsDisplayDelegate = modelDisplayDelegate;
-        modelDisplayDelegate->setDisplayBuffer(*displayBuffer());
-    }
-
-    return m_contentsDisplayDelegate.get();
-}
-
-void DDModelPlayer::simulate(float elapsedTime)
-{
-    RefPtr model = m_currentModel;
-    if (!model || !m_didFinishLoading)
-        return;
-
-    m_yawAcceleration *= 0.95f;
-    m_pitchAcceleration *= 0.95f;
-
-    m_yawAcceleration = std::clamp(m_yawAcceleration, -5.f, 5.f);
-    m_pitchAcceleration = std::clamp(m_pitchAcceleration, -5.f, 5.f);
-    if (fabs(m_yawAcceleration) < 0.01f)
-        m_yawAcceleration = 0.f;
-    if (fabs(m_pitchAcceleration) < 0.01f)
-        m_pitchAcceleration = 0.f;
-
-    m_yaw += m_yawAcceleration * elapsedTime;
-    m_pitch += m_pitchAcceleration * elapsedTime;
-    m_pitch *= (1.f - elapsedTime);
-
-    model->setRotation(m_yaw, m_pitch);
-}
-
-void DDModelPlayer::update()
-{
-    constexpr float elapsedTime = 1.f / 60.f;
-    simulate(elapsedTime);
-
-    [m_modelLoader update:elapsedTime];
-    if (m_didFinishLoading) {
-        if (RefPtr currentModel = m_currentModel)
-            currentModel->render();
-
-        if (++m_currentTexture >= m_displayBuffers.size())
-            m_currentTexture = 0;
-        if (auto* machSendRight = displayBuffer(); machSendRight && contentsDisplayDelegate())
-            RefPtr { m_contentsDisplayDelegate }->setDisplayBuffer(*machSendRight);
-    }
-
-    if (RefPtr client = m_client.get())
-        client->didUpdate(*this);
-}
-
-bool DDModelPlayer::supportsTransform(TransformationMatrix transformationMatrix)
-{
-    if (m_stageMode != StageModeOperation::None)
-        return false;
-
-    if (RefPtr currentModel = m_currentModel)
-        return currentModel->supportsTransform(transformationMatrix);
-
-    return false;
-}
-
-void DDModelPlayer::play(bool playing)
-{
-    if (RefPtr model = m_currentModel) {
-        model->play(playing);
-        m_pauseState = playing ? PauseState::Playing : PauseState::Paused;
-    }
-}
-
-void DDModelPlayer::setAutoplay(bool autoplay)
-{
-    if (m_pauseState == PauseState::Paused)
-        return;
-
-    play(autoplay);
-    m_pauseState = autoplay ? PauseState::Playing : PauseState::Paused;
-}
-
-void DDModelPlayer::setPaused(bool paused, CompletionHandler<void(bool succeeded)>&& completion)
-{
-    play(!paused);
-    completion(!!m_currentModel);
-}
-
-bool DDModelPlayer::paused() const
-{
-    return m_pauseState != PauseState::Playing;
-}
-
-std::optional<TransformationMatrix> DDModelPlayer::entityTransform() const
-{
-    if (RefPtr model = m_currentModel) {
-        if (auto transform = model->entityTransform())
-            return static_cast<simd_float4x4>(*transform);
-    }
-
-    return std::nullopt;
-}
-
-void DDModelPlayer::setStageMode(StageModeOperation stageMode)
-{
-    m_stageMode = stageMode;
-    if (m_stageMode == StageModeOperation::None)
-        return;
-
-    if (RefPtr model = m_currentModel) {
-        model->setStageMode(m_stageMode);
-        notifyEntityTransformUpdated();
-    }
-}
-
-void DDModelPlayer::setEntityTransform(TransformationMatrix matrix)
-{
-    if (RefPtr model = m_currentModel) {
-        model->setEntityTransform(static_cast<simd_float4x4>(matrix));
-        notifyEntityTransformUpdated();
-    }
 }
 
 static MTLPixelFormat computePixelFormat(size_t bytesPerComponent, size_t channelCount)
@@ -547,7 +192,7 @@ static MTLPixelFormat computePixelFormat(size_t bytesPerComponent, size_t channe
     }
 }
 
-static std::optional<WebCore::DDModel::DDImageAsset> loadIBL(Ref<WebCore::SharedBuffer>&& data)
+static std::optional<WebModel::ImageAsset> loadIBL(Ref<WebCore::SharedBuffer>&& data)
 {
     RetainPtr imageAssetData = data->createNSData();
     RetainPtr imageSource = adoptCF(CGImageSourceCreateWithData((CFDataRef)imageAssetData.get(), nullptr));
@@ -572,7 +217,7 @@ static std::optional<WebCore::DDModel::DDImageAsset> loadIBL(Ref<WebCore::Shared
 
     MTLPixelFormat pixelFormat = computePixelFormat(bytesPerComponent, bytesPerPixel / bytesPerComponent);
 
-    return WebCore::DDModel::DDImageAsset {
+    return WebModel::ImageAsset {
         .data = Vector<uint8_t> { byteSpan },
         .width = static_cast<long>(width),
         .height = static_cast<long>(height),
@@ -583,7 +228,7 @@ static std::optional<WebCore::DDModel::DDImageAsset> loadIBL(Ref<WebCore::Shared
         .mipmapLevelCount = 1,
         .arrayLength = 1,
         .textureUsage = MTLTextureUsageShaderRead,
-        .swizzle = WebCore::DDModel::DDImageAssetSwizzle {
+        .swizzle = WebModel::ImageAssetSwizzle {
             .red = MTLTextureSwizzleRed,
             .green = MTLTextureSwizzleGreen,
             .blue = MTLTextureSwizzleBlue,
@@ -592,16 +237,380 @@ static std::optional<WebCore::DDModel::DDImageAsset> loadIBL(Ref<WebCore::Shared
     };
 }
 
-void DDModelPlayer::setEnvironmentMap(Ref<WebCore::SharedBuffer>&& data)
+// MARK: - ModelPlayer overrides.
+
+void WebModelPlayer::load(Model& modelSource, LayoutSize size)
+{
+    RefPtr corePage = m_page.get();
+    m_modelLoader = nil;
+    m_didFinishLoading = false;
+    RefPtr document = corePage->localTopDocument();
+    if (!document)
+        return;
+
+    RefPtr window = document->window();
+    if (!window)
+        return;
+
+    RefPtr gpu = window->protectedNavigator()->gpu();
+    if (!gpu)
+        return;
+
+    WebModel::ImageAsset diffuseTexture {
+        .data = loadData(adoptCF(static_cast<CFStringRef>(@"modelDefaultDiffuseData"))),
+        .width = 64,
+        .height = 64,
+        .depth = 1,
+        .bytesPerPixel = 2,
+        .textureType = MTLTextureTypeCube,
+        .pixelFormat = MTLPixelFormatR16Float,
+        .mipmapLevelCount = 0,
+        .arrayLength = 6,
+        .textureUsage = MTLTextureUsageShaderRead,
+        .swizzle = { }
+    };
+    WebModel::ImageAsset specularTexture {
+        .data = loadData(adoptCF(static_cast<CFStringRef>(@"modelDefaultSpecularData"))),
+        .width = 256,
+        .height = 256,
+        .depth = 1,
+        .bytesPerPixel = 2,
+        .textureType = MTLTextureTypeCube,
+        .pixelFormat = MTLPixelFormatR16Float,
+        .mipmapLevelCount = 0,
+        .arrayLength = 6,
+        .textureUsage = MTLTextureUsageShaderRead,
+        .swizzle = { }
+    };
+
+    m_currentModel = gpu->backing().createModelBacking(size.width().toUnsigned(), size.height().toUnsigned(), diffuseTexture, specularTexture, [protectedThis = Ref { *this }] (Vector<MachSendRight>&& surfaceHandles) {
+        if (surfaceHandles.size())
+            protectedThis->m_displayBuffers = WTF::move(surfaceHandles);
+    });
+
+    m_modelLoader = adoptNS([[WebBridgeModelLoader alloc] init]);
+    RetainPtr nsURL = modelSource.url().createNSURL();
+    Ref protectedThis = Ref { *this };
+    [m_modelLoader setCallbacksWithModelUpdatedCallback:^(WebBridgeUpdateMesh *updateRequest) {
+        ensureOnMainThreadWithProtectedThis([updateRequest] (Ref<WebModelPlayer> protectedThis) {
+            RefPtr model = protectedThis->m_currentModel;
+            if (model) {
+                model->update(toCpp(updateRequest));
+                protectedThis->setStageMode(protectedThis->m_stageMode);
+            }
+
+            [protectedThis->m_modelLoader requestCompleted:updateRequest];
+
+            if (RefPtr client = protectedThis->m_client.get(); client && !protectedThis->m_didFinishLoading) {
+                protectedThis->m_didFinishLoading = true;
+                client->didFinishLoading(protectedThis.get());
+                auto [simdCenter, simdExtents] = model->getCenterAndExtents();
+                client->didUpdateBoundingBox(protectedThis.get(), FloatPoint3D(simdCenter.x, simdCenter.y, simdCenter.z), FloatPoint3D(simdExtents.x, simdExtents.y, simdExtents.z));
+                protectedThis->notifyEntityTransformUpdated();
+
+                auto environmentMap = protectedThis->m_environmentMap;
+                if (model && environmentMap) {
+                    if (auto environmentMapImage = loadIBL(WTF::move(*environmentMap))) {
+                        model->setEnvironmentMap(*environmentMapImage);
+                        protectedThis->m_environmentMap = std::nullopt;
+                    }
+                }
+            }
+        });
+    } textureUpdatedCallback:^(WebBridgeUpdateTexture *updateTexture) {
+        ensureOnMainThreadWithProtectedThis([updateTexture] (Ref<WebModelPlayer> protectedThis) {
+            if (protectedThis->m_currentModel)
+                protectedThis->m_currentModel->updateTexture(toCpp(updateTexture));
+
+            [protectedThis->m_modelLoader requestCompleted:updateTexture];
+        });
+    } materialUpdatedCallback:^(WebBridgeUpdateMaterial *updateMaterial) {
+        ensureOnMainThreadWithProtectedThis([updateMaterial] (Ref<WebModelPlayer> protectedThis) {
+            if (protectedThis->m_currentModel)
+                protectedThis->m_currentModel->updateMaterial(toCpp(updateMaterial));
+
+            [protectedThis->m_modelLoader requestCompleted:updateMaterial];
+        });
+    }];
+    [m_modelLoader loadModelFrom:nsURL.get()];
+}
+
+void WebModelPlayer::notifyEntityTransformUpdated()
+{
+    RefPtr model = m_currentModel;
+    RefPtr client = m_client.get();
+    if (!model || !client || !model->entityTransform())
+        return;
+
+    auto scaledTransform = *model->entityTransform();
+    auto scale = m_currentScale;
+    scaledTransform.column0 *= scale;
+    scaledTransform.column1 *= scale;
+    scaledTransform.column2 *= scale;
+    client->didUpdateEntityTransform(*this, TransformationMatrix(static_cast<simd_float4x4>(scaledTransform)));
+}
+
+void WebModelPlayer::sizeDidChange(LayoutSize layoutSize)
+{
+    m_currentScale = static_cast<float>(layoutSize.minDimension());
+}
+
+void WebModelPlayer::enterFullscreen()
+{
+}
+
+void WebModelPlayer::handleMouseDown(const LayoutPoint& startingPoint, MonotonicTime)
+{
+    m_currentPoint = startingPoint;
+    m_yawAcceleration = 0.f;
+    m_pitchAcceleration = 0.f;
+}
+
+void WebModelPlayer::handleMouseMove(const LayoutPoint& currentPoint, MonotonicTime)
+{
+    if (!m_currentPoint)
+        return;
+
+    float deltaX = static_cast<float>(m_currentPoint->x() - currentPoint.x());
+    float deltaY = static_cast<float>(currentPoint.y() - m_currentPoint->y());
+    m_currentPoint = currentPoint;
+    if (RefPtr model = m_currentModel) {
+        if (m_yawAcceleration * deltaX < 0.f)
+            m_yawAcceleration = 0.f;
+        if (m_pitchAcceleration * deltaY < 0.f)
+            m_pitchAcceleration = 0.f;
+
+        m_yawAcceleration += 0.1f * deltaX;
+        m_pitchAcceleration += 0.1f * deltaY;
+    }
+}
+
+bool WebModelPlayer::supportsMouseInteraction()
+{
+    return true;
+}
+
+void WebModelPlayer::handleMouseUp(const LayoutPoint&, MonotonicTime)
+{
+    m_currentPoint = std::nullopt;
+}
+
+void WebModelPlayer::getCamera(CompletionHandler<void(std::optional<HTMLModelElementCamera>&&)>&&)
+{
+}
+
+void WebModelPlayer::setCamera(HTMLModelElementCamera, CompletionHandler<void(bool success)>&&)
+{
+}
+
+void WebModelPlayer::isPlayingAnimation(CompletionHandler<void(std::optional<bool>&&)>&&)
+{
+}
+
+void WebModelPlayer::setAnimationIsPlaying(bool, CompletionHandler<void(bool success)>&&)
+{
+}
+
+void WebModelPlayer::isLoopingAnimation(CompletionHandler<void(std::optional<bool>&&)>&&)
+{
+}
+
+void WebModelPlayer::setIsLoopingAnimation(bool, CompletionHandler<void(bool success)>&&)
+{
+}
+
+void WebModelPlayer::animationDuration(CompletionHandler<void(std::optional<Seconds>&&)>&&)
+{
+}
+
+void WebModelPlayer::animationCurrentTime(CompletionHandler<void(std::optional<Seconds>&&)>&&)
+{
+}
+
+void WebModelPlayer::setAnimationCurrentTime(Seconds, CompletionHandler<void(bool success)>&&)
+{
+}
+
+void WebModelPlayer::hasAudio(CompletionHandler<void(std::optional<bool>&&)>&&)
+{
+}
+
+void WebModelPlayer::isMuted(CompletionHandler<void(std::optional<bool>&&)>&&)
+{
+}
+
+void WebModelPlayer::setIsMuted(bool, CompletionHandler<void(bool success)>&&)
+{
+}
+
+void WebModelPlayer::updateScene()
+{
+}
+
+ModelPlayerAccessibilityChildren WebModelPlayer::accessibilityChildren()
+{
+    return { };
+}
+
+WebCore::ModelPlayerIdentifier WebModelPlayer::identifier() const
+{
+    return m_id;
+}
+
+void WebModelPlayer::configureGraphicsLayer(GraphicsLayer& graphicsLayer, ModelPlayerGraphicsLayerConfiguration&&)
+{
+    graphicsLayer.setContentsDisplayDelegate(contentsDisplayDelegate(), GraphicsLayer::ContentsLayerPurpose::Canvas);
+}
+
+const MachSendRight* WebModelPlayer::displayBuffer() const
+{
+    if (m_currentTexture >= m_displayBuffers.size())
+        return nullptr;
+
+    return &m_displayBuffers[m_currentTexture];
+}
+
+GraphicsLayerContentsDisplayDelegate* WebModelPlayer::contentsDisplayDelegate()
+{
+    if (!m_contentsDisplayDelegate) {
+        RefPtr modelDisplayDelegate = ModelDisplayBufferDisplayDelegate::create(*this);
+        m_contentsDisplayDelegate = modelDisplayDelegate;
+        modelDisplayDelegate->setDisplayBuffer(*displayBuffer());
+    }
+
+    return m_contentsDisplayDelegate.get();
+}
+
+void WebModelPlayer::simulate(float elapsedTime)
+{
+    RefPtr model = m_currentModel;
+    if (!model || !m_didFinishLoading)
+        return;
+
+    m_yawAcceleration *= 0.95f;
+    m_pitchAcceleration *= 0.95f;
+
+    m_yawAcceleration = std::clamp(m_yawAcceleration, -5.f, 5.f);
+    m_pitchAcceleration = std::clamp(m_pitchAcceleration, -5.f, 5.f);
+    if (fabs(m_yawAcceleration) < 0.01f)
+        m_yawAcceleration = 0.f;
+    if (fabs(m_pitchAcceleration) < 0.01f)
+        m_pitchAcceleration = 0.f;
+
+    m_yaw += m_yawAcceleration * elapsedTime;
+    m_pitch += m_pitchAcceleration * elapsedTime;
+    m_pitch *= (1.f - elapsedTime);
+
+    model->setRotation(m_yaw, m_pitch);
+}
+
+void WebModelPlayer::setPlaybackRate(double newRate, CompletionHandler<void(double effectivePlaybackRate)>&& completion)
+{
+    m_playbackRate = newRate;
+    completion(newRate);
+}
+
+void WebModelPlayer::update()
+{
+    constexpr float elapsedTime = 1.f / 60.f;
+    simulate(elapsedTime);
+
+    [m_modelLoader update:paused() ? 0.f : (m_playbackRate * elapsedTime)];
+    if (m_didFinishLoading) {
+        if (RefPtr currentModel = m_currentModel)
+            currentModel->render();
+
+        if (++m_currentTexture >= m_displayBuffers.size())
+            m_currentTexture = 0;
+        if (auto* machSendRight = displayBuffer(); machSendRight && contentsDisplayDelegate())
+            RefPtr { m_contentsDisplayDelegate }->setDisplayBuffer(*machSendRight);
+    }
+
+    if (RefPtr client = m_client.get())
+        client->didUpdate(*this);
+}
+
+bool WebModelPlayer::supportsTransform(TransformationMatrix transformationMatrix)
+{
+    if (m_stageMode != StageModeOperation::None)
+        return false;
+
+    if (RefPtr currentModel = m_currentModel)
+        return currentModel->supportsTransform(transformationMatrix);
+
+    return false;
+}
+
+void WebModelPlayer::play(bool playing)
+{
+    if (RefPtr model = m_currentModel) {
+        model->play(playing);
+        m_pauseState = playing ? PauseState::Playing : PauseState::Paused;
+    }
+}
+
+void WebModelPlayer::setAutoplay(bool autoplay)
+{
+    if (m_pauseState == PauseState::Paused)
+        return;
+
+    play(autoplay);
+    m_pauseState = autoplay ? PauseState::Playing : PauseState::Paused;
+}
+
+void WebModelPlayer::setPaused(bool paused, CompletionHandler<void(bool succeeded)>&& completion)
+{
+    play(!paused);
+    completion(!!m_currentModel);
+}
+
+bool WebModelPlayer::paused() const
+{
+    return m_pauseState != PauseState::Playing;
+}
+
+std::optional<TransformationMatrix> WebModelPlayer::entityTransform() const
+{
+#if PLATFORM(COCOA)
+    if (RefPtr model = m_currentModel) {
+        if (auto transform = model->entityTransform())
+            return static_cast<simd_float4x4>(*transform);
+    }
+#endif
+    return std::nullopt;
+}
+
+void WebModelPlayer::setStageMode(StageModeOperation stageMode)
+{
+    m_stageMode = stageMode;
+    if (m_stageMode == StageModeOperation::None)
+        return;
+
+    if (RefPtr model = m_currentModel) {
+        model->setStageMode(m_stageMode);
+        notifyEntityTransformUpdated();
+    }
+}
+
+void WebModelPlayer::setEntityTransform(TransformationMatrix matrix)
+{
+    if (RefPtr model = m_currentModel) {
+        model->setEntityTransform(static_cast<simd_float4x4>(matrix));
+        notifyEntityTransformUpdated();
+    }
+}
+
+void WebModelPlayer::setEnvironmentMap(Ref<WebCore::SharedBuffer>&& data)
 {
     bool success = false;
-    if ((m_environmentMap = loadIBL(WTF::move(data)))) {
-        if (RefPtr currentModel = m_currentModel; currentModel && m_didFinishLoading) {
-            currentModel->setEnvironmentMap(*m_environmentMap);
+    if (RefPtr currentModel = m_currentModel; currentModel && m_didFinishLoading) {
+        if (auto environmentMap = loadIBL(WTF::move(data))) {
+            currentModel->setEnvironmentMap(*environmentMap);
             m_environmentMap = std::nullopt;
         }
         success = true;
-    }
+    } else
+        m_environmentMap = WTF::move(data);
 
     if (RefPtr client = m_client.get())
         client->didFinishEnvironmentMapLoading(*this, success);
