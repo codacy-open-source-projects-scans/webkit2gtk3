@@ -1729,7 +1729,7 @@ void Element::setScrollLeft(int newLeft)
     if (document->scrollingElement() == this) {
         if (RefPtr frame = documentFrameWithNonNullView()) {
             IntPoint position(static_cast<int>(newLeft * frame->pageZoomFactor() * frame->frameScaleFactor()), frame->view()->scrollY());
-            frame->protectedView()->setScrollPosition(position, options);
+            protect(frame->view())->setScrollPosition(position, options);
         }
         return;
     }
@@ -1755,7 +1755,7 @@ void Element::setScrollTop(int newTop)
     if (document->scrollingElement() == this) {
         if (RefPtr frame = documentFrameWithNonNullView()) {
             IntPoint position(frame->view()->scrollX(), static_cast<int>(newTop * frame->pageZoomFactor() * frame->frameScaleFactor()));
-            frame->protectedView()->setScrollPosition(position, options);
+            protect(frame->view())->setScrollPosition(position, options);
         }
         return;
     }
@@ -3510,11 +3510,6 @@ ShadowRoot* Element::userAgentShadowRoot() const
     return shadowRoot();
 }
 
-RefPtr<ShadowRoot> Element::protectedUserAgentShadowRoot() const
-{
-    return userAgentShadowRoot();
-}
-
 ShadowRoot& Element::ensureUserAgentShadowRoot()
 {
     if (auto* shadow = userAgentShadowRoot())
@@ -4273,7 +4268,7 @@ void Element::blur()
 {
     if (treeScope().focusedElementInScope() == this) {
         if (RefPtr frame = document().frame())
-            frame->protectedPage()->focusController().setFocusedElement(nullptr, frame.get());
+            protect(frame->page())->focusController().setFocusedElement(nullptr, frame.get());
         else
             protect(document())->setFocusedElement(nullptr);
     }
@@ -5018,11 +5013,6 @@ DOMTokenList& Element::classList()
     if (!data.classList())
         data.setClassList(makeUniqueWithoutRefCountedCheck<DOMTokenList>(*this, HTMLNames::classAttr));
     return *data.classList();
-}
-
-Ref<DOMTokenList> Element::protectedClassList()
-{
-    return classList();
 }
 
 SpaceSplitString Element::partNames() const

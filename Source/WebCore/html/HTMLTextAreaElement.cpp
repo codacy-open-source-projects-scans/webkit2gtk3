@@ -264,7 +264,7 @@ void HTMLTextAreaElement::subtreeHasChanged()
     setChangedSinceLastFormControlChangeEvent(true);
 
     if (RefPtr frame = document().frame())
-        frame->protectedEditor()->textDidChangeInTextArea(*this);
+        protect(frame->editor())->textDidChangeInTextArea(*this);
     // When typing in a textarea, childrenChanged is not called, so we need to force the directionality check.
     if (selfOrPrecedingNodesAffectDirAuto())
         updateEffectiveTextDirection();
@@ -529,14 +529,14 @@ void HTMLTextAreaElement::updatePlaceholderText()
     auto& placeholderText = attributeWithoutSynchronization(placeholderAttr);
     if (placeholderText.isEmpty()) {
         if (RefPtr placeholder = m_placeholder) {
-            protectedUserAgentShadowRoot()->removeChild(*placeholder);
+            protect(userAgentShadowRoot())->removeChild(*placeholder);
             m_placeholder = nullptr;
         }
         return;
     }
     if (!m_placeholder) {
         m_placeholder = TextControlPlaceholderElement::create(protect(document()));
-        protectedUserAgentShadowRoot()->insertBefore(*protectedPlaceholderElement(), protect(innerTextElement()->nextSibling()));
+        protect(userAgentShadowRoot())->insertBefore(*protectedPlaceholderElement(), protect(innerTextElement()->nextSibling()));
     }
     protectedPlaceholderElement()->setInnerText(String { placeholderText });
 }
