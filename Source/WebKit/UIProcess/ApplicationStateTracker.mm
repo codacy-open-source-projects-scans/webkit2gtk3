@@ -116,9 +116,9 @@ void* WKUIWindowSceneObserverContext = &WKUIWindowSceneObserverContext;
 
         id scene = [change valueForKey:NSKeyValueChangeNewKey];
         if ([scene isKindOfClass:UIWindowScene.class])
-            _parent->setScene((UIWindowScene *)scene);
+            protect(_parent)->setScene((UIWindowScene *)scene);
         else
-            _parent->setScene(nil);
+            protect(_parent)->setScene(nil);
     });
 }
 @end
@@ -245,20 +245,20 @@ void ApplicationStateTracker::setWindow(UIWindow *window)
 
     case ApplicationType::Extension:
     case ApplicationType::ViewService: {
-        UIViewController *serviceViewController = nil;
+        RetainPtr<UIViewController> serviceViewController;
 
         for (RetainPtr view = m_view.get(); view; view = view.get().superview) {
-            auto viewController = WebCore::viewController(view.get());
+            RetainPtr viewController = WebCore::viewController(view.get());
 
-            if (viewController._hostProcessIdentifier) {
-                serviceViewController = viewController;
+            if (viewController.get()._hostProcessIdentifier) {
+                serviceViewController = WTF::move(viewController);
                 break;
             }
         }
 
         ASSERT(serviceViewController);
         setScene(nil);
-        setViewController(serviceViewController);
+        setViewController(serviceViewController.get());
         break;
     }
     }

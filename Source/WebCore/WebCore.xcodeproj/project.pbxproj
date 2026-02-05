@@ -601,7 +601,6 @@
 		1A58E8651D19D4EB00C0EA73 /* ApplePaySessionPaymentRequest.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A58E8641D19D4DF00C0EA73 /* ApplePaySessionPaymentRequest.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		1A58E8661D19D4F000C0EA73 /* PaymentCoordinatorClient.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A58E8621D19D3BF00C0EA73 /* PaymentCoordinatorClient.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		1A58E86E1D19E42D00C0EA73 /* PaymentCoordinator.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A58E86C1D19E42D00C0EA73 /* PaymentCoordinator.h */; settings = {ATTRIBUTES = (Private, ); }; };
-		1A71D57C0F33819000F9CE4E /* IdentifierRep.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A71D57A0F33819000F9CE4E /* IdentifierRep.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		1A7398472CA4A2A300FDD4F8 /* TimelineRangeOffset.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A7398462CA4A10900FDD4F8 /* TimelineRangeOffset.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		1A750D5D0A90DEE1000FF215 /* JSTreeWalker.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A750D5B0A90DEE1000FF215 /* JSTreeWalker.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		1A750D8E0A90E521000FF215 /* JSNodeIterator.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A750D8C0A90E521000FF215 /* JSNodeIterator.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -5568,6 +5567,7 @@
 		BCEC09A72F2EE479009A3938 /* CryptoAlgorithmEcdhKeyDeriveParamsInit.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEC09722F2EE473009A3938 /* CryptoAlgorithmEcdhKeyDeriveParamsInit.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BCEC09A82F2EE479009A3938 /* CryptoAlgorithmX25519ParamsInit.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEC09882F2EE473009A3938 /* CryptoAlgorithmX25519ParamsInit.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BCEC09AC2F2EF02A009A3938 /* CryptoAlgorithmParametersInit.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEC09682F2EE418009A3938 /* CryptoAlgorithmParametersInit.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		BCEC09E42F31331E009A3938 /* StylePrimitiveNumericTypes+Rounding.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEC09E32F3132C1009A3938 /* StylePrimitiveNumericTypes+Rounding.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BCEF43CF0E673DA1001C1287 /* StyleImage.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEF43CE0E673DA1001C1287 /* StyleImage.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BCEF444A0E6745E0001C1287 /* StyleGeneratedImage.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEF44490E6745E0001C1287 /* StyleGeneratedImage.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BCEF444D0E674628001C1287 /* StyleCachedImage.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEF444C0E674628001C1287 /* StyleCachedImage.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -8488,8 +8488,6 @@
 		1A58E8641D19D4DF00C0EA73 /* ApplePaySessionPaymentRequest.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ApplePaySessionPaymentRequest.h; sourceTree = "<group>"; };
 		1A58E86B1D19E42D00C0EA73 /* PaymentCoordinator.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = PaymentCoordinator.cpp; sourceTree = "<group>"; };
 		1A58E86C1D19E42D00C0EA73 /* PaymentCoordinator.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PaymentCoordinator.h; sourceTree = "<group>"; };
-		1A71D5790F33819000F9CE4E /* IdentifierRep.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = IdentifierRep.cpp; sourceTree = "<group>"; };
-		1A71D57A0F33819000F9CE4E /* IdentifierRep.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = IdentifierRep.h; sourceTree = "<group>"; };
 		1A7398452CA4A08700FDD4F8 /* TimelineRangeOffset.idl */ = {isa = PBXFileReference; lastKnownFileType = text; path = TimelineRangeOffset.idl; sourceTree = "<group>"; };
 		1A7398462CA4A10900FDD4F8 /* TimelineRangeOffset.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TimelineRangeOffset.h; sourceTree = "<group>"; };
 		1A750D3C0A90DE35000FF215 /* TreeWalker.idl */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = TreeWalker.idl; sourceTree = "<group>"; };
@@ -20052,6 +20050,7 @@
 		BCEC09862F2EE473009A3938 /* CryptoAlgorithmRsaPssParamsInit.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CryptoAlgorithmRsaPssParamsInit.h; sourceTree = "<group>"; };
 		BCEC09872F2EE473009A3938 /* CryptoAlgorithmX25519Params.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CryptoAlgorithmX25519Params.h; sourceTree = "<group>"; };
 		BCEC09882F2EE473009A3938 /* CryptoAlgorithmX25519ParamsInit.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CryptoAlgorithmX25519ParamsInit.h; sourceTree = "<group>"; };
+		BCEC09E32F3132C1009A3938 /* StylePrimitiveNumericTypes+Rounding.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "StylePrimitiveNumericTypes+Rounding.h"; sourceTree = "<group>"; };
 		BCEE0BC92EEF46CF00195597 /* StyleChangedAnimatablePropertiesCustom.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StyleChangedAnimatablePropertiesCustom.h; sourceTree = "<group>"; };
 		BCEE0BD72EF08B6100195597 /* StyleChangedAnimatableProperties.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = StyleChangedAnimatableProperties.cpp; sourceTree = "<group>"; };
 		BCEE0BD82EF08D6200195597 /* StyleChangedAnimatablePropertiesGenerated.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StyleChangedAnimatablePropertiesGenerated.h; sourceTree = "<group>"; };
@@ -24524,8 +24523,6 @@
 			children = (
 				59B5977111086556007159E8 /* jsc */,
 				1A569CE20D7E2B82007C3983 /* objc */,
-				1A71D5790F33819000F9CE4E /* IdentifierRep.cpp */,
-				1A71D57A0F33819000F9CE4E /* IdentifierRep.h */,
 				1A569CEF0D7E2B82007C3983 /* runtime_array.cpp */,
 				1A569CF00D7E2B82007C3983 /* runtime_array.h */,
 				1A569CF10D7E2B82007C3983 /* runtime_method.cpp */,
@@ -37877,6 +37874,7 @@
 				BC3CC1B62DE1368D0032971C /* StylePrimitiveNumericTypes+CSSValueCreation.h */,
 				BCB271F42CC018F100265123 /* StylePrimitiveNumericTypes+Evaluation.h */,
 				BC9BE3EF2CFE297D00D8C2CA /* StylePrimitiveNumericTypes+Logging.h */,
+				BCEC09E32F3132C1009A3938 /* StylePrimitiveNumericTypes+Rounding.h */,
 				BC3CC1B52DE136830032971C /* StylePrimitiveNumericTypes+Serialization.h */,
 				BCB271EE2CC0156E00265123 /* StylePrimitiveNumericTypes.h */,
 				BCD9F05B2E1C297600D1C3DF /* StyleRatio.cpp */,
@@ -44566,7 +44564,6 @@
 				516103AF1CADBA770016B4C7 /* IDBValue.h in Headers */,
 				5185FCB01BB4C4E80012898F /* IDBVersionChangeEvent.h in Headers */,
 				E4A814E01C7338EB00BF85AC /* IdChangeInvalidation.h in Headers */,
-				1A71D57C0F33819000F9CE4E /* IdentifierRep.h in Headers */,
 				49E911C50EF86D47009D0CAF /* IdentityTransformOperation.h in Headers */,
 				7CE9A12B1EA2F1DB00651AD1 /* IDLAttributes.json in Headers */,
 				9B864F06234C0893006D10EB /* IdleCallbackController.h in Headers */,
@@ -47631,6 +47628,7 @@
 				BCE434672D4320630030D140 /* StylePrimitiveNumericOrKeyword.h in Headers */,
 				BC22AAE52E37F567009AC0C3 /* StylePrimitiveNumericTypes+Calculation.h in Headers */,
 				BC22AAE42E37F534009AC0C3 /* StylePrimitiveNumericTypes+Evaluation.h in Headers */,
+				BCEC09E42F31331E009A3938 /* StylePrimitiveNumericTypes+Rounding.h in Headers */,
 				BCB272042CC1EF9F00265123 /* StylePrimitiveNumericTypes.h in Headers */,
 				BC2A0F0D2E12FFD5003CBA0E /* StyleProgressTimelineAxes.h in Headers */,
 				BC2A0F0B2E12FFD5003CBA0E /* StyleProgressTimelineName.h in Headers */,

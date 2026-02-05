@@ -613,7 +613,7 @@ void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters& para
     disableURLSchemeCheckInDataDetectors();
 
 #if ENABLE(QUICKLOOK_SANDBOX_RESTRICTIONS)
-    if (auto auditToken = parentProcessConnection()->getAuditToken()) {
+    if (auto auditToken = protect(parentProcessConnection())->getAuditToken()) {
         bool parentCanSetStateFlags = WTF::hasEntitlementValueInArray(auditToken.value(), "com.apple.private.security.enable-state-flags"_s, "EnableQuickLookSandboxResources"_s);
         if (parentCanSetStateFlags) {
             auto auditToken = auditTokenForSelf();
@@ -757,7 +757,7 @@ void WebProcess::updateProcessName(IsInProcessInitialization isInProcessInitiali
 #if PLATFORM(IOS_FAMILY)
 static NSString *webProcessLoaderAccessibilityBundlePath()
 {
-    NSString *path = (__bridge NSString *)GSSystemRootDirectory();
+    RetainPtr path = (__bridge NSString *)GSSystemRootDirectory();
 #if PLATFORM(MACCATALYST)
     path = [path stringByAppendingPathComponent:@"System/iOSSupport"];
 #endif
@@ -766,7 +766,7 @@ static NSString *webProcessLoaderAccessibilityBundlePath()
 
 static NSString *webProcessAccessibilityBundlePath()
 {
-    NSString *path = (__bridge NSString *)GSSystemRootDirectory();
+    RetainPtr path = (__bridge NSString *)GSSystemRootDirectory();
 #if PLATFORM(MACCATALYST)
     path = [path stringByAppendingPathComponent:@"System/iOSSupport"];
 #endif
@@ -781,20 +781,20 @@ static void registerWithAccessibility()
 #endif
 
 #if PLATFORM(IOS_FAMILY)
-    NSString *bundlePath = webProcessLoaderAccessibilityBundlePath();
+    RetainPtr bundlePath = webProcessLoaderAccessibilityBundlePath();
     NSError *error = nil;
-    if (![[NSBundle bundleWithPath:bundlePath] loadAndReturnError:&error])
-        LOG_ERROR("Failed to load accessibility bundle at %@: %@", bundlePath, error);
+    if (![[NSBundle bundleWithPath:bundlePath.get()] loadAndReturnError:&error])
+        LOG_ERROR("Failed to load accessibility bundle at %@: %@", bundlePath.get(), error);
 
     // This code will eagerly start the in-process AX server.
     // This enables us to revoke the Mach bootstrap sandbox extension.
-    NSString *webProcessAXBundlePath = webProcessAccessibilityBundlePath();
-    NSBundle *bundle = [NSBundle bundleWithPath:webProcessAXBundlePath];
+    RetainPtr webProcessAXBundlePath = webProcessAccessibilityBundlePath();
+    RetainPtr bundle = [NSBundle bundleWithPath:webProcessAXBundlePath.get()];
     error = nil;
     if ([bundle loadAndReturnError:&error])
         [[bundle principalClass] safeValueForKey:@"accessibilityInitializeBundle"];
     else
-        LOG_ERROR("Failed to load accessibility bundle at %@: %@", webProcessAXBundlePath, error);
+        LOG_ERROR("Failed to load accessibility bundle at %@: %@", webProcessAXBundlePath.get(), error);
 #endif
 }
 
@@ -944,7 +944,7 @@ void WebProcess::initializeLogForwarding(const WebProcessCreationParameters& par
     if (!connectionPair)
         CRASH();
     auto [connection, handle] = WTF::move(*connectionPair);
-    connection->open(*this, RunLoop::currentSingleton());
+    connection->open(protect(*this), RunLoop::currentSingleton());
     std::unique_ptr newLogClient = makeUnique<LogClient>(Ref { connection });
     parentConnection->sendWithAsyncReply(Messages::WebProcessProxy::CreateLogStream(WTF::move(handle), newLogClient->identifier()), [newLogClient = WTF::move(newLogClient), connection = WTF::move(connection), isDebugLoggingEnabled = parameters.isDebugLoggingEnabled] (IPC::Semaphore&& wakeUpSemaphore, IPC::Semaphore&& clientWaitSemaphore) mutable {
         connection->setSemaphores(WTF::move(wakeUpSemaphore), WTF::move(clientWaitSemaphore));
@@ -1022,7 +1022,7 @@ RetainPtr<CFDataRef> WebProcess::sourceApplicationAuditData() const
     ASSERT(parentProcessConnection());
     if (!parentProcessConnection())
         return nullptr;
-    std::optional<audit_token_t> auditToken = parentProcessConnection()->getAuditToken();
+    std::optional<audit_token_t> auditToken = protect(parentProcessConnection())->getAuditToken();
     if (!auditToken)
         return nullptr;
     return adoptCF(CFDataCreate(nullptr, (const UInt8*)&*auditToken, sizeof(*auditToken)));

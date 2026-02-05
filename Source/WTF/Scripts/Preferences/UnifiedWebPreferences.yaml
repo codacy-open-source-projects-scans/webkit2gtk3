@@ -5251,7 +5251,7 @@ MediaSourcePrefersDecompressionSession:
 
 MediaSourceUseRemoteAudioVideoRenderer:
   type: bool
-  status: stable
+  status: testable
   category: media
   humanReadableName: "MSE player uses GPU renderer"
   humanReadableDescription: "MSE player uses GPU renderer"
@@ -5260,9 +5260,9 @@ MediaSourceUseRemoteAudioVideoRenderer:
     WebKitLegacy:
       default: false
     WebKit:
-      default: true
+      default: false
     WebCore:
-      default: true
+      default: false
   sharedPreferenceForWebProcess: true
 
 MediaStreamTrackProcessingEnabled:
@@ -6386,17 +6386,17 @@ ReadableByteStreamFetchSourceEnabled:
 
 ReadableStreamFromEnabled:
   type: bool
-  status: testable
+  status: stable
   category: dom
   humanReadableName: "ReadableStream.from"
   humanReadableDescription: "Enable ReadableStream.from"
   defaultValue:
     WebCore:
-      default: false
+      default: true
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
 
 ReadableStreamIterableEnabled:
   type: bool
@@ -6411,6 +6411,20 @@ ReadableStreamIterableEnabled:
       default: true
     WebKit:
       default: true
+
+ReadableStreamTransferEnabled:
+  type: bool
+  status: testable
+  category: dom
+  humanReadableName: "ReadableStream transfer"
+  humanReadableDescription: "Enable ReadableStream transfer"
+  defaultValue:
+    WebCore:
+      default: false
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
 
 RemoteMediaSessionManagerEnabled:
   type: bool

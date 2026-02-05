@@ -141,6 +141,10 @@
 		029D6BB42C407AA30068CF99 /* JSWebExtensionAPISidePanel.h in Headers */ = {isa = PBXBuildFile; fileRef = 029D6BAF2C407AA30068CF99 /* JSWebExtensionAPISidePanel.h */; };
 		0701789E23BE9CFC005F0FAA /* RemoteMediaPlayerMIMETypeCache.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0701789B23BAE261005F0FAA /* RemoteMediaPlayerMIMETypeCache.cpp */; };
 		071467782DFE84E500F77867 /* WebPage+Transferable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 071467772DFE84E500F77867 /* WebPage+Transferable.swift */; };
+		07152D072F2F037D00B56C0E /* WKTextSelectionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07152D062F2F037D00B56C0E /* WKTextSelectionController.swift */; };
+		07152D092F2F038A00B56C0E /* WKTextSelectionController.h in Headers */ = {isa = PBXBuildFile; fileRef = 07152D082F2F038A00B56C0E /* WKTextSelectionController.h */; };
+		0715310D2F3036F400B56C0E /* Logger+Extras.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0715310C2F3036F400B56C0E /* Logger+Extras.swift */; };
+		0715310F2F3037C100B56C0E /* WebPageProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0715310E2F3037C100B56C0E /* WebPageProxy.swift */; };
 		07187E0B2F2DC28E005FC058 /* GestureTypes.h in Headers */ = {isa = PBXBuildFile; fileRef = 07187E092F2DC276005FC058 /* GestureTypes.h */; };
 		071BC59023CE1EAA00680D7C /* RemoteMediaPlayerProxyMessages.h in Headers */ = {isa = PBXBuildFile; fileRef = 071BC58D23CE1EAA00680D7C /* RemoteMediaPlayerProxyMessages.h */; };
 		07275C612D00CD24002315A5 /* CrossImportOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07275C602D00CD24002315A5 /* CrossImportOverlay.swift */; };
@@ -2365,7 +2369,7 @@
 		E31869C42B1A7C2400571519 /* WKProcessExtension.mm in Sources */ = {isa = PBXBuildFile; fileRef = E31869C22B1A7C2400571519 /* WKProcessExtension.mm */; };
 		E31869C52B1A7C2400571519 /* WKProcessExtension.h in Headers */ = {isa = PBXBuildFile; fileRef = E31869C32B1A7C2400571519 /* WKProcessExtension.h */; };
 		E326E357284E580E00157372 /* AuxiliaryProcessProxyCocoa.mm in Sources */ = {isa = PBXBuildFile; fileRef = E326E356284E580E00157372 /* AuxiliaryProcessProxyCocoa.mm */; };
-		E326F4DC2CA6C44F00182187 /* LogStream.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E326F4DA2CA6C44F00182187 /* LogStream.cpp */; };
+		E326F4DC2CA6C44F00182187 /* LogStream.mm in Sources */ = {isa = PBXBuildFile; fileRef = E326F4DA2CA6C44F00182187 /* LogStream.mm */; };
 		E326F4DD2CA6C44F00182187 /* LogStream.h in Headers */ = {isa = PBXBuildFile; fileRef = E326F4D92CA6C44F00182187 /* LogStream.h */; };
 		E33E8FFD2C7FD2980002BEB3 /* UseDownloadPlaceholder.h in Headers */ = {isa = PBXBuildFile; fileRef = E33E8FFC2C7FD2980002BEB3 /* UseDownloadPlaceholder.h */; };
 		E34DAD392B753FA700FABEE2 /* ExtensionProcess.mm in Sources */ = {isa = PBXBuildFile; fileRef = E34DAD372B753FA700FABEE2 /* ExtensionProcess.mm */; };
@@ -2548,6 +2552,8 @@
 		F4ABDB732B0417AD00C5471A /* CoreIPCLocale.h in Headers */ = {isa = PBXBuildFile; fileRef = F4ABDB722B0417AD00C5471A /* CoreIPCLocale.h */; };
 		F4AF72492F22FCC400861236 /* CoreIPCPKPaymentToken.mm in Sources */ = {isa = PBXBuildFile; fileRef = F4AF72472F22CE2B00861236 /* CoreIPCPKPaymentToken.mm */; };
 		F4AF724A2F23025700861236 /* CoreIPCPKPaymentToken.h in Headers */ = {isa = PBXBuildFile; fileRef = F4AF72462F22CE2B00861236 /* CoreIPCPKPaymentToken.h */; };
+		F4AF77882F27CFC800861236 /* CoreIPCPKPaymentSetupFeature.h in Headers */ = {isa = PBXBuildFile; fileRef = F4AF77852F27CFBC00861236 /* CoreIPCPKPaymentSetupFeature.h */; };
+		F4AF77892F27CFCF00861236 /* CoreIPCPKPaymentSetupFeature.mm in Sources */ = {isa = PBXBuildFile; fileRef = F4AF77862F27CFBC00861236 /* CoreIPCPKPaymentSetupFeature.mm */; };
 		F4B021E72D0BAC2D00D9145E /* CoreIPCSecTrust.mm in Sources */ = {isa = PBXBuildFile; fileRef = F4B021E62D0BAB6D00D9145E /* CoreIPCSecTrust.mm */; };
 		F4B24AA72D5ED4D300725993 /* CoreIPCAVOutputContext.mm in Sources */ = {isa = PBXBuildFile; fileRef = F4B24AA62D5ED3CD00725993 /* CoreIPCAVOutputContext.mm */; };
 		F4B24AA82D5ED4DE00725993 /* CoreIPCAVOutputContext.h in Headers */ = {isa = PBXBuildFile; fileRef = F4B24AA52D5ED3CD00725993 /* CoreIPCAVOutputContext.h */; };
@@ -3305,6 +3311,10 @@
 		0701789C23BAE262005F0FAA /* RemoteMediaPlayerMIMETypeCache.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RemoteMediaPlayerMIMETypeCache.h; sourceTree = "<group>"; };
 		070259BE2522841C00153405 /* UserMediaPermissionRequestManagerProxy.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = UserMediaPermissionRequestManagerProxy.mm; sourceTree = "<group>"; };
 		071467772DFE84E500F77867 /* WebPage+Transferable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WebPage+Transferable.swift"; sourceTree = "<group>"; };
+		07152D062F2F037D00B56C0E /* WKTextSelectionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WKTextSelectionController.swift; sourceTree = "<group>"; };
+		07152D082F2F038A00B56C0E /* WKTextSelectionController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = WKTextSelectionController.h; sourceTree = "<group>"; };
+		0715310C2F3036F400B56C0E /* Logger+Extras.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Logger+Extras.swift"; sourceTree = "<group>"; };
+		0715310E2F3037C100B56C0E /* WebPageProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebPageProxy.swift; sourceTree = "<group>"; };
 		07187E092F2DC276005FC058 /* GestureTypes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GestureTypes.h; sourceTree = "<group>"; };
 		07187E0A2F2DC284005FC058 /* GestureTypes.serialization.in */ = {isa = PBXFileReference; lastKnownFileType = text; path = GestureTypes.serialization.in; sourceTree = "<group>"; };
 		071BC57723C93BB700680D7C /* AudioTrackPrivateRemote.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AudioTrackPrivateRemote.h; sourceTree = "<group>"; };
@@ -8460,7 +8470,7 @@
 		E31869C32B1A7C2400571519 /* WKProcessExtension.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = WKProcessExtension.h; sourceTree = "<group>"; };
 		E326E356284E580E00157372 /* AuxiliaryProcessProxyCocoa.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = AuxiliaryProcessProxyCocoa.mm; sourceTree = "<group>"; };
 		E326F4D92CA6C44F00182187 /* LogStream.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = LogStream.h; sourceTree = "<group>"; };
-		E326F4DA2CA6C44F00182187 /* LogStream.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = LogStream.cpp; sourceTree = "<group>"; };
+		E326F4DA2CA6C44F00182187 /* LogStream.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = LogStream.mm; sourceTree = "<group>"; };
 		E33E8FFC2C7FD2980002BEB3 /* UseDownloadPlaceholder.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = UseDownloadPlaceholder.h; sourceTree = "<group>"; };
 		E3439B632345463A0011DE0B /* NetworkProcessConnectionInfo.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = NetworkProcessConnectionInfo.h; path = Network/NetworkProcessConnectionInfo.h; sourceTree = "<group>"; };
 		E34B110C27C46BC6006D2F2E /* libWebCoreTestShim.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; path = libWebCoreTestShim.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -8783,6 +8793,9 @@
 		F4AF72462F22CE2B00861236 /* CoreIPCPKPaymentToken.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CoreIPCPKPaymentToken.h; sourceTree = "<group>"; };
 		F4AF72472F22CE2B00861236 /* CoreIPCPKPaymentToken.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = CoreIPCPKPaymentToken.mm; sourceTree = "<group>"; };
 		F4AF72482F22CE2B00861236 /* CoreIPCPKPaymentToken.serialization.in */ = {isa = PBXFileReference; lastKnownFileType = text; path = CoreIPCPKPaymentToken.serialization.in; sourceTree = "<group>"; };
+		F4AF77852F27CFBC00861236 /* CoreIPCPKPaymentSetupFeature.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CoreIPCPKPaymentSetupFeature.h; sourceTree = "<group>"; };
+		F4AF77862F27CFBC00861236 /* CoreIPCPKPaymentSetupFeature.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = CoreIPCPKPaymentSetupFeature.mm; sourceTree = "<group>"; };
+		F4AF77872F27CFBC00861236 /* CoreIPCPKPaymentSetupFeature.serialization.in */ = {isa = PBXFileReference; lastKnownFileType = text; path = CoreIPCPKPaymentSetupFeature.serialization.in; sourceTree = "<group>"; };
 		F4B021E62D0BAB6D00D9145E /* CoreIPCSecTrust.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = CoreIPCSecTrust.mm; sourceTree = "<group>"; };
 		F4B24AA52D5ED3CD00725993 /* CoreIPCAVOutputContext.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CoreIPCAVOutputContext.h; sourceTree = "<group>"; };
 		F4B24AA62D5ED3CD00725993 /* CoreIPCAVOutputContext.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = CoreIPCAVOutputContext.mm; sourceTree = "<group>"; };
@@ -10140,8 +10153,8 @@
 				5C37A5BE2970DB6000D222A0 /* LoadedWebArchive.h */,
 				2D10875F1D2C573E00B85F82 /* LoadParameters.h */,
 				46B9E2372B04228A008346A5 /* LoadParameters.serialization.in */,
-				E326F4DA2CA6C44F00182187 /* LogStream.cpp */,
 				E326F4D92CA6C44F00182187 /* LogStream.h */,
+				E326F4DA2CA6C44F00182187 /* LogStream.mm */,
 				E3DC5B1A2C9AE09700D73BB3 /* LogStreamIdentifier.h */,
 				462CD80B28204DF100F0EA04 /* MarkSurfacesAsVolatileRequestIdentifier.h */,
 				49917DB0252E30750050313F /* MediaPlaybackState.h */,
@@ -12768,6 +12781,7 @@
 				7CEFA9601AC0999300B910FD /* APIContentRuleListStoreCocoa.mm */,
 				FAB751D12BACB65D00AC26DB /* APIPageConfigurationCocoa.mm */,
 				1AFDE64319510B5500C48FFA /* LegacyBundleForClass.mm */,
+				0715310C2F3036F400B56C0E /* Logger+Extras.swift */,
 				1C20935E22318CB000026A39 /* NSAttributedString.h */,
 				1C20935F22318CB000026A39 /* NSAttributedString.mm */,
 				1C2184012233872800BAC700 /* NSAttributedStringPrivate.h */,
@@ -13071,6 +13085,9 @@
 				F4E2D8742F0D88F6007B52E7 /* CoreIPCPKPaymentMerchantSession.h */,
 				F4E2D8752F0D88F6007B52E7 /* CoreIPCPKPaymentMerchantSession.mm */,
 				F4E2D8772F0D91ED007B52E7 /* CoreIPCPKPaymentMerchantSession.serialization.in */,
+				F4AF77852F27CFBC00861236 /* CoreIPCPKPaymentSetupFeature.h */,
+				F4AF77862F27CFBC00861236 /* CoreIPCPKPaymentSetupFeature.mm */,
+				F4AF77872F27CFBC00861236 /* CoreIPCPKPaymentSetupFeature.serialization.in */,
 				F4AF72462F22CE2B00861236 /* CoreIPCPKPaymentToken.h */,
 				F4AF72472F22CE2B00861236 /* CoreIPCPKPaymentToken.mm */,
 				F4AF72482F22CE2B00861236 /* CoreIPCPKPaymentToken.serialization.in */,
@@ -15566,6 +15583,7 @@
 				BC111B0B112F5E4F00337BAB /* WebPageProxy.cpp */,
 				BC032DCB10F4389F0058C15A /* WebPageProxy.h */,
 				BCBD38FA125BAB9A00D2C29F /* WebPageProxy.messages.in */,
+				0715310E2F3037C100B56C0E /* WebPageProxy.swift */,
 				46C392282316EC4D008EED9B /* WebPageProxyIdentifier.h */,
 				939EF86D29D0C16400F23AEE /* WebPageProxyInternals.h */,
 				5CEB40A32A535E8E00563C91 /* WebPageProxyMessageReceiverRegistration.cpp */,
@@ -16390,6 +16408,8 @@
 				440C0BE22BBCA9E00086046E /* WKTextAnimationManagerMac.mm */,
 				2DD67A331BD861060053B251 /* WKTextFinderClient.h */,
 				2DD67A341BD861060053B251 /* WKTextFinderClient.mm */,
+				07152D082F2F038A00B56C0E /* WKTextSelectionController.h */,
+				07152D062F2F037D00B56C0E /* WKTextSelectionController.swift */,
 				2D28A4951AF965A100F190C9 /* WKViewLayoutStrategy.h */,
 				2D28A4961AF965A100F190C9 /* WKViewLayoutStrategy.mm */,
 			);
@@ -17859,6 +17879,7 @@
 				5157AE0A2B23E96A00C0E095 /* CoreIPCPassKit.h in Headers */,
 				51AD56912B1C4704001A0ECB /* CoreIPCPersonNameComponents.h in Headers */,
 				F458B8EA2E8F46E900948328 /* CoreIPCPKDateComponentsRange.h in Headers */,
+				F4AF77882F27CFC800861236 /* CoreIPCPKPaymentSetupFeature.h in Headers */,
 				F4AF724A2F23025700861236 /* CoreIPCPKPaymentToken.h in Headers */,
 				564599992B71C3D100BC59E6 /* CoreIPCPresentationIntent.h in Headers */,
 				5C5786922B6EFFFF005D51D5 /* CoreIPCRetainPtr.h in Headers */,
@@ -19217,6 +19238,7 @@
 				F4D5F51D206087A10038BBA8 /* WKTextInputListViewController.h in Headers */,
 				F4C359532AF19BC40083B0EA /* WKTextInteractionWrapper.h in Headers */,
 				CE21215F240EE571006ED443 /* WKTextPlaceholder.h in Headers */,
+				07152D092F2F038A00B56C0E /* WKTextSelectionController.h in Headers */,
 				CE45945C240F88550078019F /* WKTextSelectionRect.h in Headers */,
 				2EB6FC01203021960017E619 /* WKTimePickerViewController.h in Headers */,
 				71A676A622C62325007D6295 /* WKTouchActionGestureRecognizer.h in Headers */,
@@ -21479,6 +21501,7 @@
 				51AD56902B1C46FE001A0ECB /* CoreIPCPersonNameComponents.mm in Sources */,
 				F458B8EB2E8F46F000948328 /* CoreIPCPKDateComponentsRange.mm in Sources */,
 				F4E2D8762F0D88FF007B52E7 /* CoreIPCPKPaymentMerchantSession.mm in Sources */,
+				F4AF77892F27CFCF00861236 /* CoreIPCPKPaymentSetupFeature.mm in Sources */,
 				F4AF72492F22FCC400861236 /* CoreIPCPKPaymentToken.mm in Sources */,
 				FAF27D302D2851EB00F1F0BB /* CoreIPCPKSecureElementPass.mm in Sources */,
 				F4F12CB32C48B8C100BC1254 /* CoreIPCPlistArray.mm in Sources */,
@@ -21579,7 +21602,8 @@
 				C1710CF724AA643200D7C112 /* LaunchServicesDatabaseObserver.mm in Sources */,
 				41A0EB142641714900794471 /* LibWebRTCCodecsProxy.mm in Sources */,
 				449D90DA21FDC30B00F677C0 /* LocalAuthenticationSoftLink.mm in Sources */,
-				E326F4DC2CA6C44F00182187 /* LogStream.cpp in Sources */,
+				0715310D2F3036F400B56C0E /* Logger+Extras.swift in Sources */,
+				E326F4DC2CA6C44F00182187 /* LogStream.mm in Sources */,
 				9B4790912531563200EC11AB /* MessageArgumentDescriptions.cpp in Sources */,
 				EBA8D3B627A5E33F00CB7900 /* MockPushServiceConnection.mm in Sources */,
 				57B826452304F14000B72EB0 /* NearFieldSoftLink.mm in Sources */,
@@ -21924,6 +21948,7 @@
 				078B04A02CF18EAB00B453A6 /* WebPage+NavigationPreferences.swift in Sources */,
 				071467782DFE84E500F77867 /* WebPage+Transferable.swift in Sources */,
 				07CB79962CE9435700199C49 /* WebPage.swift in Sources */,
+				0715310F2F3037C100B56C0E /* WebPageProxy.swift in Sources */,
 				7CE9CE101FA0767A000177DE /* WebPageUpdatePreferences.cpp in Sources */,
 				079A4DA12D72CC0D00CA387F /* WebPageWebView.swift in Sources */,
 				7CEB00DD1FA69ABE0065473B /* WebPreferencesFeatures.cpp in Sources */,
@@ -21960,6 +21985,7 @@
 				B68905162EF46B0A009187D8 /* WKSeparatedImageViewConstants.swift in Sources */,
 				1DB01944211CF005009FB3E8 /* WKShareSheet.mm in Sources */,
 				7A78FF332241919B0096483E /* WKStorageAccessAlert.mm in Sources */,
+				07152D072F2F037D00B56C0E /* WKTextSelectionController.swift in Sources */,
 				076897F02D07B330006F9FA7 /* WKUIDelegateAdapter.swift in Sources */,
 				079A4DB02D73EA4A00CA387F /* WKURLSchemeHandlerAdapter.swift in Sources */,
 				079A4DA52D72CE3F00CA387F /* WKWebpagePreferences+Extras.swift in Sources */,

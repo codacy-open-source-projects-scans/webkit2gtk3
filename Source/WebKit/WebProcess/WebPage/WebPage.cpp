@@ -1233,9 +1233,6 @@ void WebPage::updateAfterDrawingAreaCreation(const WebPageCreationParameters& pa
             protect(drawingArea())->setViewExposedRect(viewExposedRect);
     }
 #endif
-#if USE(COORDINATED_GRAPHICS)
-    protect(drawingArea())->updatePreferences(parameters.store);
-#endif
 }
 
 void WebPage::constructFrameTree(WebFrame& parent, const FrameTreeCreationParameters& treeCreationParameters)
@@ -1432,12 +1429,13 @@ void WebPage::reinitializeWebPage(WebPageCreationParameters&& parameters)
         updateAfterDrawingAreaCreation(parameters);
         addRootFramesToNewDrawingArea(m_mainFrame.get(), *drawingArea);
 
+        drawingArea->setShouldScaleViewToFitDocument(parameters.shouldScaleViewToFitDocument);
+        drawingArea->updatePreferences(parameters.store);
+
 #if USE(COORDINATED_GRAPHICS) || USE(TEXTURE_MAPPER)
         if (drawingArea->enterAcceleratedCompositingModeIfNeeded() && !parameters.isProcessSwap)
             drawingArea->sendEnterAcceleratedCompositingModeIfNeeded();
 #endif
-        drawingArea->setShouldScaleViewToFitDocument(parameters.shouldScaleViewToFitDocument);
-        drawingArea->updatePreferences(parameters.store);
 
         drawingArea->adoptLayersFromDrawingArea(*oldDrawingArea);
         drawingArea->adoptDisplayRefreshMonitorsFromDrawingArea(*oldDrawingArea);
@@ -1523,12 +1521,12 @@ WebPage::~WebPage()
     WebStorageNamespaceProvider::decrementUseCount(sessionStorageNamespaceIdentifier());
 
 #if ENABLE(GPU_PROCESS) && HAVE(VISIBILITY_PROPAGATION_VIEW)
-    if (auto* gpuProcessConnection = WebProcess::singleton().existingGPUProcessConnection())
+    if (RefPtr gpuProcessConnection = WebProcess::singleton().existingGPUProcessConnection())
         gpuProcessConnection->destroyVisibilityPropagationContextForPage(*this);
 #endif // ENABLE(GPU_PROCESS)
 
 #if ENABLE(MODEL_PROCESS) && HAVE(VISIBILITY_PROPAGATION_VIEW)
-    if (auto* modelProcessConnection = WebProcess::singleton().existingModelProcessConnection())
+    if (RefPtr modelProcessConnection = WebProcess::singleton().existingModelProcessConnection())
         modelProcessConnection->destroyVisibilityPropagationContextForPage(*this);
 #endif // ENABLE(MODEL_PROCESS) && HAVE(VISIBILITY_PROPAGATION_VIEW)
 
@@ -5306,12 +5304,12 @@ void WebPage::startPlayingPredominantVideo(CompletionHandler<void(bool)>&& compl
 void WebPage::setSceneIdentifier(String&& sceneIdentifier)
 {
     AudioSession::singleton().setSceneIdentifier(sceneIdentifier);
-    m_page->setSceneIdentifier(WTF::move(sceneIdentifier));
+    protect(m_page)->setSceneIdentifier(WTF::move(sceneIdentifier));
 }
 
 void WebPage::setAllowsMediaDocumentInlinePlayback(bool allows)
 {
-    m_page->setAllowsMediaDocumentInlinePlayback(allows);
+    protect(m_page)->setAllowsMediaDocumentInlinePlayback(allows);
 }
 #endif
 
@@ -6074,6 +6072,32 @@ void WebPage::capitalizeWord(FrameIdentifier frameID)
 
 
     coreFrame->protectedEditor()->capitalizeWord();
+}
+
+void WebPage::convertToTraditionalChinese(FrameIdentifier frameID)
+{
+    RefPtr frame = WebProcess::singleton().webFrame(frameID);
+    if (!frame)
+        return;
+
+    RefPtr coreFrame = frame->coreLocalFrame();
+    if (!coreFrame)
+        return;
+
+    coreFrame->protectedEditor()->convertToTraditionalChinese();
+}
+
+void WebPage::convertToSimplifiedChinese(FrameIdentifier frameID)
+{
+    RefPtr frame = WebProcess::singleton().webFrame(frameID);
+    if (!frame)
+        return;
+
+    RefPtr coreFrame = frame->coreLocalFrame();
+    if (!coreFrame)
+        return;
+
+    coreFrame->protectedEditor()->convertToSimplifiedChinese();
 }
 #endif
 
@@ -7220,7 +7244,7 @@ static bool isTextFormControlOrEditableContent(const WebCore::Element& element)
 #if PLATFORM(IOS_FAMILY) && ENABLE(FULLSCREEN_API)
 static bool shouldExitFullscreenAfterFocusingElement(const WebCore::Element& element)
 {
-    if (!element.document().fullscreen().isFullscreen())
+    if (!protect(element.document().fullscreen())->isFullscreen())
         return false;
 
     if (RefPtr input = dynamicDowncast<const HTMLInputElement>(element))
@@ -7254,7 +7278,7 @@ void WebPage::elementDidFocus(Element& element, const FocusOptions& options)
 
 #if ENABLE(FULLSCREEN_API)
     if (shouldExitFullscreenAfterFocusingElement(element))
-        element.document().fullscreen().fullyExitFullscreen();
+        protect(element.document().fullscreen())->fullyExitFullscreen();
 #endif
         if (isChangingFocusedElement && (m_userIsInteracting || m_keyboardIsAttached))
             m_sendAutocorrectionContextAfterFocusingElement = true;
@@ -7265,7 +7289,7 @@ void WebPage::elementDidFocus(Element& element, const FocusOptions& options)
 
         RefPtr<API::Object> userData;
 
-        m_formClient->willBeginInputSession(this, &element, WebFrame::fromCoreFrame(*element.document().frame()).get(), m_userIsInteracting, userData);
+        m_formClient->willBeginInputSession(this, &element, protect(WebFrame::fromCoreFrame(*element.document().frame())).get(), m_userIsInteracting, userData);
 
         if (!userData) {
             auto userInfo = element.userInfo();
@@ -7697,10 +7721,10 @@ void WebPage::didCommitLoad(WebFrame* frame)
     m_viewportConfiguration.setPrefersHorizontalScrollingBelowDesktopViewportWidths(shouldEnableViewportBehaviorsForResizableWindows());
 
     LOG_WITH_STREAM(VisibleRects, stream << "WebPage " << m_identifier.toUInt64() << " didCommitLoad setting content size to " << coreFrame->view()->contentsSize());
-    if (m_viewportConfiguration.setContentsSize(coreFrame->view()->contentsSize()))
+    if (m_viewportConfiguration.setContentsSize(protect(coreFrame->view())->contentsSize()))
         viewportChanged = true;
 
-    if (m_viewportConfiguration.setViewportArguments(coreFrame->document()->viewportArguments()))
+    if (m_viewportConfiguration.setViewportArguments(protect(coreFrame->document())->viewportArguments()))
         viewportChanged = true;
 
     if (m_viewportConfiguration.setIsKnownToLayOutWiderThanViewport(false))

@@ -164,10 +164,6 @@ enum FullScreenState : NSInteger {
 #else
 static constexpr auto baseScale = 1;
 static constexpr auto baseMinimumEffectiveDeviceWidth = 0;
-
-#if PLATFORM(VISION)
-static void configureElementFullscreenLayer(CALayer *) { }
-#endif
 #endif
 
 struct WKWebViewState {
@@ -232,7 +228,7 @@ struct WKWebViewState {
         else
             [webView _clearOverrideLayoutParameters];
 
-        if (auto page = webView._page) {
+        if (RefPtr page = webView._page.get()) {
             page->setObscuredContentInsets(_savedWebPageObscuredContentInsets);
             page->setForceAlwaysUserScalable(_savedForceAlwaysUserScalable);
         }
@@ -257,7 +253,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 #if !PLATFORM(WATCHOS) && !PLATFORM(APPLETV)
         _savedContentInsetAdjustmentBehaviorWasExternallyOverridden = scrollView._contentInsetAdjustmentBehaviorWasExternallyOverridden;
 #endif
-        if (auto page = webView._page) {
+        if (RefPtr page = webView._page.get()) {
             _savedWebPageObscuredContentInsets = page->obscuredContentInsets();
             _savedForceAlwaysUserScalable = page->forceAlwaysUserScalable();
         }
@@ -989,10 +985,10 @@ ALLOW_DEPRECATED_DECLARATIONS_END
             return completionHandler(false);
         }
 
-        UIWindowScene *windowScene;
-        if (UIWindowScene *presentingWindowScene = viewController.view.window.windowScene) {
+        RetainPtr<UIWindowScene> windowScene;
+        if (RetainPtr<UIWindowScene> presentingWindowScene = viewController.view.window.windowScene) {
             OBJC_ALWAYS_LOG_WITH_SELF(strongSelf, logIdentifier, "using window scene from presenting view controller");
-            windowScene = presentingWindowScene;
+            windowScene = WTF::move(presentingWindowScene);
         } else {
             OBJC_ALWAYS_LOG_WITH_SELF(strongSelf, logIdentifier, "using window scene from web view");
             windowScene = [strongSelf _webView].window.windowScene;
@@ -1004,7 +1000,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
             return completionHandler(false);
         }
 
-        [strongSelf _enterFullScreen:mediaDimensions windowScene:windowScene completionHandler:WTF::move(completionHandler)];
+        [strongSelf _enterFullScreen:mediaDimensions windowScene:windowScene.get() completionHandler:WTF::move(completionHandler)];
     });
 }
 
@@ -1042,8 +1038,8 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     ASSERT(windowScene);
 
     RetainPtr<WKWebView> webView = self._webView;
-    auto page = [webView _page];
-    auto* manager = self._manager;
+    RefPtr page = [webView _page].get();
+    RefPtr<WebKit::WebFullScreenManagerProxy> manager = self._manager;
     if (!page || !manager)
         return completionHandler(false);
 
@@ -1114,7 +1110,6 @@ ALLOW_DEPRECATED_DECLARATIONS_END
         [_window setNeedsLayout];
         [_window layoutIfNeeded];
     }
-    WebKit::configureElementFullscreenLayer([_window layer]);
 #endif
 
     _rootViewController = adoptNS([[UIViewController alloc] init]);
@@ -1166,7 +1161,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     auto logIdentifier = OBJC_LOGIDENTIFIER;
     [webView takeSnapshotWithConfiguration:config completionHandler:makeBlockPtr([self, protectedSelf = RetainPtr { self }, logIdentifier, completionHandler = WTF::move(completionHandler)] (UIImage * snapshotImage, NSError * error) mutable {
         RetainPtr<WKWebView> webView = self._webView;
-        auto page = [self._webView _page];
+        RefPtr page = [self._webView _page].get();
         if (!page)
             return completionHandler(false);
 
@@ -1193,7 +1188,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
         [webView setNeedsLayout];
         [webView layoutIfNeeded];
 
-        if (auto* manager = self._manager)
+        if (RefPtr<WebKit::WebFullScreenManagerProxy> manager = self._manager)
             manager->setAnimatingFullScreen(true);
 
         page->updateRenderingWithForcedRepaint([protectedSelf, self, logIdentifier = logIdentifier, completionHandler = WTF::move(completionHandler)] mutable {
@@ -1226,7 +1221,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 - (void)updateImageSource
 {
     RetainPtr<WKWebView> webView = self._webView;
-    auto* manager = self._manager;
+    RefPtr<WebKit::WebFullScreenManagerProxy> manager = self._manager;
     if (!manager)
         return;
 
@@ -1292,8 +1287,8 @@ ALLOW_DEPRECATED_DECLARATIONS_END
             return completionHandler(false);
         }
 
-        auto page = [[strongSelf _webView] _page];
-        auto* manager = [strongSelf _manager];
+        RefPtr page = [[strongSelf _webView] _page].get();
+        RefPtr manager = [strongSelf _manager];
 
         if (page && manager) {
             OBJC_ALWAYS_LOG_WITH_SELF(strongSelf, logIdentifier, "presentation completed");
@@ -1318,7 +1313,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
             }
 #endif
 
-            if (auto* videoPresentationManager = [strongSelf _videoPresentationManager]) {
+            if (RefPtr videoPresentationManager = [strongSelf _videoPresentationManager]) {
                 if (!strongSelf->_pipObserver) {
                     strongSelf->_pipObserver = WebKit::VideoPresentationManagerProxy::VideoInPictureInPictureDidChangeObserver::create([weakSelf = WeakObjCPtr { strongSelf.get() }] (bool inPiP) {
                         RetainPtr strongSelf = weakSelf.get();
@@ -1329,7 +1324,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
                         else
                             [strongSelf didExitPictureInPicture];
                     });
-                    videoPresentationManager->addVideoInPictureInPictureDidChangeObserver(*strongSelf->_pipObserver);
+                    videoPresentationManager->addVideoInPictureInPictureDidChangeObserver(protect(*strongSelf->_pipObserver));
                 }
                 if (RefPtr videoPresentationInterface = videoPresentationManager ? videoPresentationManager->returningToStandbyInterface() : nullptr) {
                     if (strongSelf->_returnToFullscreenFromPictureInPicture)
@@ -1363,10 +1358,10 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     }
 
     // Switch the active tab if needed
-    if (auto* page = [self._webView _page].get())
+    if (RefPtr page = [self._webView _page].get())
         page->fullscreenMayReturnToInline();
 
-    if (auto* manager = self._manager) {
+    if (RefPtr<WebKit::WebFullScreenManagerProxy> manager = self._manager) {
         OBJC_ALWAYS_LOG(OBJC_LOGIDENTIFIER);
         manager->requestRestoreFullScreen(WTF::move(completionHandler));
         return;
@@ -1385,7 +1380,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
         return;
     }
 
-    if (auto* manager = self._manager) {
+    if (RefPtr<WebKit::WebFullScreenManagerProxy> manager = self._manager) {
         OBJC_ALWAYS_LOG(OBJC_LOGIDENTIFIER);
         manager->requestExitFullScreen();
         _exitingFullScreen = YES;
@@ -1440,7 +1435,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     _fullScreenState = WebKit::WaitingToExitFullScreen;
     _exitingFullScreen = YES;
 
-    if (auto* manager = self._manager) {
+    if (RefPtr<WebKit::WebFullScreenManagerProxy> manager = self._manager) {
         OBJC_ALWAYS_LOG(OBJC_LOGIDENTIFIER);
         manager->setAnimatingFullScreen(true);
         [self _startWatchdogTimer];
@@ -1470,7 +1465,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     _finalFrame.size = WebKit::sizeExpandedToSize(_finalFrame.size, CGSizeMake(1, 1));
     _finalFrame = WebKit::safeInlineRect(_finalFrame, [_rootViewController view].frame.size);
 
-    if (auto page = [self._webView _page]) {
+    if (RefPtr page = [self._webView _page].get()) {
         page->setSuppressVisibilityUpdates(true);
         page->startDeferringResizeEvents();
         page->startDeferringScrollEvents();
@@ -1503,7 +1498,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 
     [webView _setForcesInitialScaleFactor:NO];
     _viewState.applyTo(webView.get());
-    if (auto page = [webView _page])
+    if (RefPtr page = [webView _page].get())
         page->setOverrideViewportArguments(std::nullopt);
 
     [webView setNeedsLayout];
@@ -1532,17 +1527,17 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 
     [self _reinsertWebViewUnderPlaceholder];
 
-    if (auto* manager = self._manager)
+    if (RefPtr<WebKit::WebFullScreenManagerProxy> manager = self._manager)
         manager->setAnimatingFullScreen(false);
     completionHandler();
 
-    if (auto page = [self._webView _page]) {
+    if (RefPtr page = [self._webView _page].get()) {
         page->flushDeferredResizeEvents();
         page->flushDeferredScrollEvents();
         page->flushDeferredIntersectionObservations();
     }
 
-    RefPtr videoPresentationInterface = self._videoPresentationManager ? self._videoPresentationManager->controlsManagerInterface() : nullptr;
+    RefPtr videoPresentationInterface = self._videoPresentationManager ? protect(self._videoPresentationManager)->controlsManagerInterface() : nullptr;
     _shouldReturnToFullscreenFromPictureInPicture = videoPresentationInterface && videoPresentationInterface->inPictureInPicture();
 
     [_window setHidden:YES];
@@ -1559,7 +1554,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
         _webViewPlaceholder.get().parent = nil;
         [_webViewPlaceholder removeFromSuperview];
 
-        if (auto page = [self._webView _page]) {
+        if (RefPtr page = [self._webView _page].get()) {
             page->setSuppressVisibilityUpdates(false);
             page->setNeedsDOMWindowResizeEvent();
             page->flushDeferredResizeEvents();
@@ -1581,7 +1576,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
         [CATransaction commit];
     });
 
-    auto* page = [self._webView _page].get();
+    RefPtr page = [self._webView _page].get();
     if (page && page->isViewFocused())
         page->updateRenderingWithForcedRepaint(WTF::move(completionHandlerAfterRenderingUpdateIfFocused));
     else
@@ -1643,7 +1638,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 - (void)didExitPictureInPicture
 {
     if (!_enterFullscreenNeedsExitPictureInPicture && _shouldReturnToFullscreenFromPictureInPicture) {
-        RefPtr videoPresentationInterface = self._videoPresentationManager ? self._videoPresentationManager->returningToStandbyInterface() : nullptr;
+        RefPtr videoPresentationInterface = self._videoPresentationManager ? protect(self._videoPresentationManager)->returningToStandbyInterface() : nullptr;
         if (videoPresentationInterface && videoPresentationInterface->returningToStandby()) {
             OBJC_ALWAYS_LOG(OBJC_LOGIDENTIFIER, "returning to standby");
             if (!_exitingFullScreen) {
@@ -1788,7 +1783,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 
     [self _reinsertWebViewUnderPlaceholder];
 
-    if (auto* manager = self._manager)
+    if (RefPtr<WebKit::WebFullScreenManagerProxy> manager = self._manager)
         manager->requestExitFullScreen();
 
     [_webViewPlaceholder removeFromSuperview];
@@ -1833,17 +1828,17 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     ASSERT(!_EVOrganizationName.get());
     _EVOrganizationNameIsValid = YES;
 
-    SecTrustRef trust = [self _serverTrust];
+    RetainPtr trust = [self _serverTrust];
     if (!trust)
         return nil;
 
-    auto infoDictionary = adoptCF(SecTrustCopyInfo(trust));
+    auto infoDictionary = adoptCF(SecTrustCopyInfo(trust.get()));
     // If SecTrustCopyInfo returned NULL then it's likely that the SecTrustRef has not been evaluated
     // and the only way to get the information we need is to call SecTrustEvaluate ourselves.
     if (!infoDictionary) {
-        if (!SecTrustEvaluateWithError(trust, nullptr))
+        if (!SecTrustEvaluateWithError(trust.get(), nullptr))
             return nil;
-        infoDictionary = adoptCF(SecTrustCopyInfo(trust));
+        infoDictionary = adoptCF(SecTrustCopyInfo(trust.get()));
         if (!infoDictionary)
             return nil;
     }
@@ -1893,14 +1888,14 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 
 - (WebKit::WebFullScreenManagerProxy*)_manager
 {
-    if (auto page = [self._webView _page])
+    if (RefPtr page = [self._webView _page].get())
         return page->fullScreenManager();
     return nullptr;
 }
 
 - (WebKit::VideoPresentationManagerProxy*)_videoPresentationManager
 {
-    if (auto page = [self._webView _page])
+    if (RefPtr page = [self._webView _page].get())
         return page->videoPresentationManager();
     return nullptr;
 }

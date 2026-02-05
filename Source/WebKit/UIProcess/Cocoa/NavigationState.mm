@@ -453,7 +453,7 @@ static bool isMarketplaceKitURL(const URL& url)
 static void interceptMarketplaceKitNavigation(Ref<API::NavigationAction>&& action, WebPageProxy& page)
 {
     std::optional<FrameIdentifier> sourceFrameID;
-    if (auto sourceFrame = action->sourceFrame())
+    if (RefPtr sourceFrame = action->sourceFrame())
         sourceFrameID = sourceFrame->handle()->frameID();
 
     auto addConsoleError = [sourceFrameID, url = action->request().url(), weakPage = WeakPtr { page }](const String& error) {
@@ -475,7 +475,7 @@ static void interceptMarketplaceKitNavigation(Ref<API::NavigationAction>&& actio
         return;
     }
 
-    RetainPtr requesterTopOriginURL = requester->topOrigin->toURL().createNSURL();
+    RetainPtr requesterTopOriginURL = protect(requester->topOrigin)->toURL().createNSURL();
     RetainPtr url = action->request().url().createNSURL();
 
     if (!requesterTopOriginURL || !url) {
@@ -1602,7 +1602,7 @@ void NavigationState::didChangeIsLoading()
         return;
 
 #if USE(RUNNINGBOARD)
-    if (webView->_page->pageLoadState().isLoading()) {
+    if (protect(*webView->_page)->pageLoadState().isLoading()) {
 #if PLATFORM(IOS_FAMILY)
         // We do not start a network activity if a load starts after the screen has been locked.
         if (UIApplication.sharedApplication.isSuspendedUnderLock)
@@ -1747,7 +1747,7 @@ void NavigationState::didSwapWebProcesses()
 #if USE(RUNNINGBOARD)
     // Transfer our background assertion from the old process to the new one.
     auto webView = this->webView();
-    if (webView && webView->_page->pageLoadState().isLoading())
+    if (webView && protect(*webView->_page)->pageLoadState().isLoading())
         webView->_page->takeNetworkActivity();
 #endif
 }
