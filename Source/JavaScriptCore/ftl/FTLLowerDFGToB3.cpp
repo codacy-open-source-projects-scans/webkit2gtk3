@@ -1776,9 +1776,6 @@ private:
         case CreateRest:
             compileCreateRest();
             break;
-        case GetRestLength:
-            compileGetRestLength();
-            break;
         case RegExpExec:
             compileRegExpExec();
             break;
@@ -9248,26 +9245,6 @@ IGNORE_CLANG_WARNINGS_END
             Int64, operationCreateRest, weakPointer(globalObject), argumentStart, m_out.constInt32(numberOfArgumentsToSkip), arrayLength));
     }
 
-    void compileGetRestLength()
-    {
-        LBasicBlock nonZeroLength = m_out.newBlock();
-        LBasicBlock continuation = m_out.newBlock();
-
-        ValueFromBlock zeroLengthResult = m_out.anchor(m_out.constInt32(0));
-
-        LValue numberOfArgumentsToSkip = m_out.constInt32(m_node->numberOfArgumentsToSkip());
-        LValue argumentsLength = getArgumentsLength().value;
-        m_out.branch(m_out.above(argumentsLength, numberOfArgumentsToSkip),
-            unsure(nonZeroLength), unsure(continuation));
-
-        LBasicBlock lastNext = m_out.appendTo(nonZeroLength, continuation);
-        ValueFromBlock nonZeroLengthResult = m_out.anchor(m_out.sub(argumentsLength, numberOfArgumentsToSkip));
-        m_out.jump(continuation);
-
-        m_out.appendTo(continuation, lastNext);
-        setInt32(m_out.phi(Int32, zeroLengthResult, nonZeroLengthResult));
-    }
-
     const AbstractHeap& abstractHeapForOwnPropertyKeysCache(NodeType type)
     {
         switch (type) {
@@ -10189,8 +10166,6 @@ IGNORE_CLANG_WARNINGS_END
             speculateArray(m_node->child1());
         else if (m_node->child1().useKind() == SetObjectUse)
             speculateSetObject(m_node->child1());
-        else if (m_node->child1().useKind() == MapIteratorObjectUse)
-            speculateMapIteratorObject(m_node->child1());
 
         if (m_graph.canDoFastSpread(m_node, m_state.forNode(m_node->child1()))) {
             LBasicBlock copyOnWriteContiguousCheck = m_out.newBlock();
@@ -10355,9 +10330,6 @@ IGNORE_CLANG_WARNINGS_END
             m_out.appendTo(continuation, lastNext);
             result = m_out.phi(pointerType(), fastResult, slowResult);
             mutatorFence();
-        } else if (m_node->child1().useKind() == MapIteratorObjectUse) {
-            // MapIterator spread does not use inline fast path; call the C++ operation directly.
-            result = vmCall(pointerType(), operationSpreadMapIterator, weakPointer(globalObject), argument);
         } else
             result = vmCall(pointerType(), operationSpreadGeneric, weakPointer(globalObject), argument);
 

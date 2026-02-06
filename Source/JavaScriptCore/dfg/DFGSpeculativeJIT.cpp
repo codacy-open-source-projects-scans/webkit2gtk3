@@ -8994,8 +8994,6 @@ void SpeculativeJIT::compileSpread(Node* node)
         speculateArray(node->child1(), argument);
     else if (node->child1().useKind() == SetObjectUse)
         speculateSetObject(node->child1(), argument);
-    else if (node->child1().useKind() == MapIteratorObjectUse)
-        speculateMapIteratorObject(node->child1(), argument);
 
     if (m_graph.canDoFastSpread(node, m_state.forNode(node->child1()))) {
 #if USE(JSVALUE64)
@@ -9169,14 +9167,6 @@ void SpeculativeJIT::compileSpread(Node* node)
         callOperation(operationSpreadSet, resultGPR, LinkableConstant::globalObject(*this, node), argument);
         cellResult(resultGPR, node);
 #endif // USE(JSVALUE64)
-    } else if (node->child1().useKind() == MapIteratorObjectUse) {
-        // MapIterator spread does not use inline fast path; call the C++ operation directly.
-        flushRegisters();
-
-        GPRFlushedCallResult result(this);
-        GPRReg resultGPR = result.gpr();
-        callOperation(operationSpreadMapIterator, resultGPR, LinkableConstant::globalObject(*this, node), argument);
-        cellResult(resultGPR, node);
     } else {
         flushRegisters();
 
@@ -9481,24 +9471,6 @@ void SpeculativeJIT::compileNewArrayWithSpread(Node* node)
     callOperation(operationNewArrayWithSpreadSlow, resultGPR, LinkableConstant::globalObject(*this, node), TrustedImmPtr(buffer), node->numChildren());
 
     cellResult(resultGPR, node);
-}
-
-void SpeculativeJIT::compileGetRestLength(Node* node)
-{
-    ASSERT(node->op() == GetRestLength);
-
-    GPRTemporary result(this);
-    GPRReg resultGPR = result.gpr();
-
-    emitGetArgumentCount(node->origin.semantic, resultGPR);
-    Jump hasNonZeroLength = branch32(Above, resultGPR, Imm32(node->numberOfArgumentsToSkip()));
-    move(TrustedImm32(0), resultGPR);
-    Jump done = jump();
-    hasNonZeroLength.link(this);
-    if (node->numberOfArgumentsToSkip())
-        sub32(TrustedImm32(node->numberOfArgumentsToSkip()), resultGPR);
-    done.link(this);
-    strictInt32Result(resultGPR, node);
 }
 
 void SpeculativeJIT::emitPopulateSliceIndex(Edge& target, std::optional<GPRReg> indexGPR, GPRReg lengthGPR, GPRReg resultGPR)
