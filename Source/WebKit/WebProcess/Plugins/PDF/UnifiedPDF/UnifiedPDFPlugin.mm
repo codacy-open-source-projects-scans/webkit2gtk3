@@ -4335,6 +4335,13 @@ void UnifiedPDFPlugin::setPDFDisplayModeForTesting(const String& mode)
 
 void UnifiedPDFPlugin::setDisplayMode(PDFDisplayMode mode)
 {
+#if PLATFORM(IOS_FAMILY)
+    if (RefPtr frame = m_frame.get()) {
+        if (RefPtr webPage = frame->page())
+            webPage->setPDFDisplayMode(mode);
+    }
+#endif
+
     m_documentLayout.setDisplayMode(mode);
 
     if (RefPtr presentationController = m_presentationController; presentationController && presentationController->supportsDisplayMode(mode)) {
@@ -4420,7 +4427,7 @@ void UnifiedPDFPlugin::handleSyntheticClick(PlatformMouseEvent&& event)
         if (!page)
             return;
 
-        [selection addSelection:selectionAtPoint(pointInPage, page.get(), TextGranularity::WordGranularity)];
+        [selection addSelection:protect(selectionAtPoint(pointInPage, page.get(), TextGranularity::WordGranularity)).get()];
 
         auto [startPage, startPointInPage] = selectionCaretPointInPage(selection.get(), SelectionEndpoint::Start);
         if (!startPage)
