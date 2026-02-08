@@ -3405,7 +3405,7 @@ HTMLEnhancedSelectParsingEnabled:
 
 HTMLEnhancedSelectPseudoElementsEnabled:
    type: bool
-   status: unstable
+   status: testable
    category: css
    humanReadableName: "Enhanced HTML select element pseudo-elements"
    humanReadableDescription: "Enable enhanced HTML select element pseudo-elements"
@@ -6823,8 +6823,7 @@ ScreenCaptureEnabled:
     WebKitLegacy:
       default: false
     WebKit:
-      "PLATFORM(MAC) || USE(GSTREAMER)": true
-      default: false
+      default: WebKit::defaultShouldEnableScreenCapture()
     WebCore:
       default: false
 
