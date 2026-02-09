@@ -1901,15 +1901,15 @@
 		49C7B99E1042D2D30009D447 /* JSWebGLRenderbuffer.h in Headers */ = {isa = PBXBuildFile; fileRef = 49C7B98B1042D2D30009D447 /* JSWebGLRenderbuffer.h */; };
 		49C7B9A31042D2D30009D447 /* JSWebGLShader.h in Headers */ = {isa = PBXBuildFile; fileRef = 49C7B9901042D2D30009D447 /* JSWebGLShader.h */; };
 		49C7B9A51042D2D30009D447 /* JSWebGLTexture.h in Headers */ = {isa = PBXBuildFile; fileRef = 49C7B9921042D2D30009D447 /* JSWebGLTexture.h */; };
-		49C7B9C91042D32F0009D447 /* WebGLBuffer.h in Headers */ = {isa = PBXBuildFile; fileRef = 49C7B9A91042D32E0009D447 /* WebGLBuffer.h */; };
-		49C7B9CF1042D32F0009D447 /* WebGLFramebuffer.h in Headers */ = {isa = PBXBuildFile; fileRef = 49C7B9AF1042D32E0009D447 /* WebGLFramebuffer.h */; };
-		49C7B9D51042D32F0009D447 /* WebGLObject.h in Headers */ = {isa = PBXBuildFile; fileRef = 49C7B9B51042D32F0009D447 /* WebGLObject.h */; };
-		49C7B9D71042D32F0009D447 /* WebGLProgram.h in Headers */ = {isa = PBXBuildFile; fileRef = 49C7B9B71042D32F0009D447 /* WebGLProgram.h */; };
-		49C7B9DA1042D32F0009D447 /* WebGLRenderbuffer.h in Headers */ = {isa = PBXBuildFile; fileRef = 49C7B9BA1042D32F0009D447 /* WebGLRenderbuffer.h */; };
+		49C7B9C91042D32F0009D447 /* WebGLBuffer.h in Headers */ = {isa = PBXBuildFile; fileRef = 49C7B9A91042D32E0009D447 /* WebGLBuffer.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		49C7B9CF1042D32F0009D447 /* WebGLFramebuffer.h in Headers */ = {isa = PBXBuildFile; fileRef = 49C7B9AF1042D32E0009D447 /* WebGLFramebuffer.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		49C7B9D51042D32F0009D447 /* WebGLObject.h in Headers */ = {isa = PBXBuildFile; fileRef = 49C7B9B51042D32F0009D447 /* WebGLObject.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		49C7B9D71042D32F0009D447 /* WebGLProgram.h in Headers */ = {isa = PBXBuildFile; fileRef = 49C7B9B71042D32F0009D447 /* WebGLProgram.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		49C7B9DA1042D32F0009D447 /* WebGLRenderbuffer.h in Headers */ = {isa = PBXBuildFile; fileRef = 49C7B9BA1042D32F0009D447 /* WebGLRenderbuffer.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		49C7B9DD1042D32F0009D447 /* CanvasRenderingContext.h in Headers */ = {isa = PBXBuildFile; fileRef = 49C7B9BD1042D32F0009D447 /* CanvasRenderingContext.h */; };
 		49C7B9E01042D32F0009D447 /* WebGLRenderingContext.h in Headers */ = {isa = PBXBuildFile; fileRef = 49C7B9C01042D32F0009D447 /* WebGLRenderingContext.h */; };
 		49C7B9E31042D32F0009D447 /* WebGLShader.h in Headers */ = {isa = PBXBuildFile; fileRef = 49C7B9C31042D32F0009D447 /* WebGLShader.h */; };
-		49C7B9E61042D32F0009D447 /* WebGLTexture.h in Headers */ = {isa = PBXBuildFile; fileRef = 49C7B9C61042D32F0009D447 /* WebGLTexture.h */; };
+		49C7B9E61042D32F0009D447 /* WebGLTexture.h in Headers */ = {isa = PBXBuildFile; fileRef = 49C7B9C61042D32F0009D447 /* WebGLTexture.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		49D5DC2C0F423A73008F20FD /* Matrix3DTransformOperation.h in Headers */ = {isa = PBXBuildFile; fileRef = 49D5DC280F423A73008F20FD /* Matrix3DTransformOperation.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		49D5DC2E0F423A73008F20FD /* PerspectiveTransformOperation.h in Headers */ = {isa = PBXBuildFile; fileRef = 49D5DC2A0F423A73008F20FD /* PerspectiveTransformOperation.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		49E911C40EF86D47009D0CAF /* TransformationMatrix.h in Headers */ = {isa = PBXBuildFile; fileRef = 49E911B40EF86D47009D0CAF /* TransformationMatrix.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -2741,10 +2741,10 @@
 		6F7CA3CA208C2B2E002F29AB /* InlineFormattingContext.h in Headers */ = {isa = PBXBuildFile; fileRef = 6F7CA3C8208C2B2E002F29AB /* InlineFormattingContext.h */; };
 		6F91421125152138004E4FEA /* InlineDisplayLine.h in Headers */ = {isa = PBXBuildFile; fileRef = 6F91420F25152137004E4FEA /* InlineDisplayLine.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		6F995A161A70756200A735F4 /* WebGLSync.h in Headers */ = {isa = PBXBuildFile; fileRef = 6F995A141A70756200A735F4 /* WebGLSync.h */; };
-		6F995A201A7078B100A735F4 /* WebGLQuery.h in Headers */ = {isa = PBXBuildFile; fileRef = 6F995A181A7078B100A735F4 /* WebGLQuery.h */; };
-		6F995A221A7078B100A735F4 /* WebGLSampler.h in Headers */ = {isa = PBXBuildFile; fileRef = 6F995A1A1A7078B100A735F4 /* WebGLSampler.h */; };
-		6F995A241A7078B100A735F4 /* WebGLTransformFeedback.h in Headers */ = {isa = PBXBuildFile; fileRef = 6F995A1C1A7078B100A735F4 /* WebGLTransformFeedback.h */; };
-		6F995A261A7078B100A735F4 /* WebGLVertexArrayObject.h in Headers */ = {isa = PBXBuildFile; fileRef = 6F995A1E1A7078B100A735F4 /* WebGLVertexArrayObject.h */; };
+		6F995A201A7078B100A735F4 /* WebGLQuery.h in Headers */ = {isa = PBXBuildFile; fileRef = 6F995A181A7078B100A735F4 /* WebGLQuery.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		6F995A221A7078B100A735F4 /* WebGLSampler.h in Headers */ = {isa = PBXBuildFile; fileRef = 6F995A1A1A7078B100A735F4 /* WebGLSampler.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		6F995A241A7078B100A735F4 /* WebGLTransformFeedback.h in Headers */ = {isa = PBXBuildFile; fileRef = 6F995A1C1A7078B100A735F4 /* WebGLTransformFeedback.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		6F995A261A7078B100A735F4 /* WebGLVertexArrayObject.h in Headers */ = {isa = PBXBuildFile; fileRef = 6F995A1E1A7078B100A735F4 /* WebGLVertexArrayObject.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		6F995A321A70833700A735F4 /* JSWebGLQuery.h in Headers */ = {isa = PBXBuildFile; fileRef = 6F995A281A70833700A735F4 /* JSWebGLQuery.h */; };
 		6F995A341A70833700A735F4 /* JSWebGLSampler.h in Headers */ = {isa = PBXBuildFile; fileRef = 6F995A2A1A70833700A735F4 /* JSWebGLSampler.h */; };
 		6F995A361A70833700A735F4 /* JSWebGLSync.h in Headers */ = {isa = PBXBuildFile; fileRef = 6F995A2C1A70833700A735F4 /* JSWebGLSync.h */; };
@@ -2964,7 +2964,7 @@
 		7728698414FD9ADA00F484DC /* JSEXTTextureFilterAnisotropic.h in Headers */ = {isa = PBXBuildFile; fileRef = 7728698214FD9ADA00F484DC /* JSEXTTextureFilterAnisotropic.h */; };
 		7779BD961F32246A00C21417 /* JSVisualViewport.h in Headers */ = {isa = PBXBuildFile; fileRef = 7779BD921F2FDBF700C21417 /* JSVisualViewport.h */; };
 		77A17A7212F28182004E02F6 /* OESVertexArrayObject.h in Headers */ = {isa = PBXBuildFile; fileRef = 77A17A6F12F28182004E02F6 /* OESVertexArrayObject.h */; };
-		77A17A7812F28642004E02F6 /* WebGLVertexArrayObjectOES.h in Headers */ = {isa = PBXBuildFile; fileRef = 77A17A7512F28642004E02F6 /* WebGLVertexArrayObjectOES.h */; };
+		77A17A7812F28642004E02F6 /* WebGLVertexArrayObjectOES.h in Headers */ = {isa = PBXBuildFile; fileRef = 77A17A7512F28642004E02F6 /* WebGLVertexArrayObjectOES.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		77A17A7B12F2890B004E02F6 /* GraphicsTypesGL.h in Headers */ = {isa = PBXBuildFile; fileRef = 77A17A7A12F2890B004E02F6 /* GraphicsTypesGL.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		77A17AA712F28B2A004E02F6 /* JSOESVertexArrayObject.h in Headers */ = {isa = PBXBuildFile; fileRef = 77A17AA312F28B2A004E02F6 /* JSOESVertexArrayObject.h */; };
 		77D510041ED4F71E00DA4C87 /* JSCredentialRequestOptions.h in Headers */ = {isa = PBXBuildFile; fileRef = 77D50FFF1ED4F70C00DA4C87 /* JSCredentialRequestOptions.h */; };
@@ -3482,7 +3482,7 @@
 		8A283E0A2A6A809800954A79 /* OESSampleVariables.h in Headers */ = {isa = PBXBuildFile; fileRef = 8A283E092A6A808E00954A79 /* OESSampleVariables.h */; };
 		8A28C3C228E4EC07001018B9 /* ValidityStateFlags.h in Headers */ = {isa = PBXBuildFile; fileRef = 8A28C3C128E4EC07001018B9 /* ValidityStateFlags.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		8A3017F12998332B00261006 /* EXTDisjointTimerQuery.h in Headers */ = {isa = PBXBuildFile; fileRef = 8A3017E82998325D00261006 /* EXTDisjointTimerQuery.h */; };
-		8A3017F3299833A200261006 /* WebGLTimerQueryEXT.h in Headers */ = {isa = PBXBuildFile; fileRef = 8A3017DB299830E700261006 /* WebGLTimerQueryEXT.h */; };
+		8A3017F3299833A200261006 /* WebGLTimerQueryEXT.h in Headers */ = {isa = PBXBuildFile; fileRef = 8A3017DB299830E700261006 /* WebGLTimerQueryEXT.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		8A309C9F123950BE00CB9204 /* NestingLevelIncrementer.h in Headers */ = {isa = PBXBuildFile; fileRef = 8A309C9E123950BE00CB9204 /* NestingLevelIncrementer.h */; };
 		8A3FCB16293C12FF00D1728A /* ValidatedFormListedElement.h in Headers */ = {isa = PBXBuildFile; fileRef = 8A3FCB14293C12FE00D1728A /* ValidatedFormListedElement.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		8A3FCB1B293C131F00D1728A /* HTMLMaybeFormAssociatedCustomElement.h in Headers */ = {isa = PBXBuildFile; fileRef = 8A3FCB19293C131F00D1728A /* HTMLMaybeFormAssociatedCustomElement.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -5533,6 +5533,7 @@
 		BCEC01BE0C274DAC009F4EC9 /* Screen.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEC01BB0C274DAC009F4EC9 /* Screen.h */; };
 		BCEC01C30C274DDD009F4EC9 /* JSScreen.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEC01C10C274DDD009F4EC9 /* JSScreen.h */; };
 		BCEC01D70C274EB4009F4EC9 /* PlatformScreen.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEC01D60C274EB4009F4EC9 /* PlatformScreen.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		BCEC09F62F33C915009A3938 /* WebGLVertexArrayObjectBase.h in Headers */ = {isa = PBXBuildFile; fileRef = 6F222B741AB52D640094651A /* WebGLVertexArrayObjectBase.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BCEC09892F2EE479009A3938 /* CryptoAlgorithmEcKeyParamsInit.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEC09762F2EE473009A3938 /* CryptoAlgorithmEcKeyParamsInit.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BCEC098A2F2EE479009A3938 /* CryptoAlgorithmRsaHashedKeyGenParamsInit.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEC09802F2EE473009A3938 /* CryptoAlgorithmRsaHashedKeyGenParamsInit.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BCEC098B2F2EE479009A3938 /* CryptoAlgorithmX25519Params.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEC09872F2EE473009A3938 /* CryptoAlgorithmX25519Params.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -48463,6 +48464,7 @@
 				6F995A241A7078B100A735F4 /* WebGLTransformFeedback.h in Headers */,
 				0C3F1F5B10C8871200D72CE1 /* WebGLUniformLocation.h in Headers */,
 				6F995A261A7078B100A735F4 /* WebGLVertexArrayObject.h in Headers */,
+				BCEC09F62F33C915009A3938 /* WebGLVertexArrayObjectBase.h in Headers */,
 				77A17A7812F28642004E02F6 /* WebGLVertexArrayObjectOES.h in Headers */,
 				1CFAE3CD2A4D8A140004AE37 /* WebGPU.h in Headers */,
 				F491A6742AA26FF400F96146 /* WebGPU.serialization.in in Headers */,

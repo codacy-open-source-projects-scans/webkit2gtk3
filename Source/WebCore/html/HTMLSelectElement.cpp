@@ -277,14 +277,14 @@ ExceptionOr<void> HTMLSelectElement::add(const OptionOrOptGroupElement& element,
     Ref<ContainerNode> parent = *this;
     if (before) {
         beforeElement = WTF::switchOn(before.value(),
-            [](const RefPtr<HTMLElement>& element) -> HTMLElement* { return element.get(); },
-            [this](int index) -> HTMLElement* { return item(index); }
+            [](const Ref<HTMLElement>& element) -> RefPtr<HTMLElement> { return element.ptr(); },
+            [this](int index) -> RefPtr<HTMLElement> { return item(index); }
         );
         if (std::holds_alternative<int>(before.value()) && beforeElement && beforeElement->parentNode())
             parent = *beforeElement->parentNode();
     }
     Ref toInsert = WTF::switchOn(element,
-        [](const auto& htmlElement) -> HTMLElement& { return *htmlElement; }
+        [](const auto& htmlElement) -> HTMLElement& { return htmlElement; }
     );
 
     return parent->insertBefore(toInsert, WTF::move(beforeElement));
@@ -530,7 +530,7 @@ ExceptionOr<void> HTMLSelectElement::setItem(unsigned index, HTMLOptionElement* 
 
     int diff = index - length();
     
-    RefPtr<HTMLOptionElement> before;
+    std::optional<HTMLElementOrInt> before;
     // Out of array bounds? First insert empty dummies.
     if (diff > 0) {
         auto result = setLength(index);
@@ -538,12 +538,13 @@ ExceptionOr<void> HTMLSelectElement::setItem(unsigned index, HTMLOptionElement* 
             return result;
         // Replace an existing entry?
     } else if (diff < 0) {
-        before = item(index + 1);
+        if (RefPtr itemBefore = item(index + 1))
+            before = itemBefore.releaseNonNull();
         remove(index);
     }
 
     // Finally add the new element.
-    auto result = add(option, HTMLElementOrInt { before.get() });
+    auto result = add(*option, before);
     if (result.hasException())
         return result;
 
@@ -565,7 +566,7 @@ ExceptionOr<void> HTMLSelectElement::setLength(unsigned newLength)
 
     if (diff < 0) { // Add dummy elements.
         do {
-            auto result = add(HTMLOptionElement::create(protect(document())).ptr(), std::nullopt);
+            auto result = add(HTMLOptionElement::create(protect(document())), std::nullopt);
             if (result.hasException())
                 return result;
         } while (++diff);
@@ -1245,7 +1246,7 @@ bool HTMLSelectElement::platformHandleKeydownEvent(KeyboardEvent* event)
             // Calling focus() may cause us to lose our renderer. Return true so
             // that our caller doesn't process the event further, but don't set
             // the event as handled.
-            if (!is<RenderMenuList>(renderer()))
+            if (!renderer() || !usesMenuList())
                 return true;
 
             // Save the selection so it can be compared to the new selection
@@ -1267,7 +1268,7 @@ bool HTMLSelectElement::platformHandleKeydownEvent(KeyboardEvent* event)
 void HTMLSelectElement::menuListDefaultEventHandler(Event& event)
 {
     ASSERT(renderer());
-    ASSERT(renderer()->isRenderMenuList());
+    ASSERT(usesMenuList());
 
     auto& eventNames = WebCore::eventNames();
     if (event.type() == eventNames.keydownEvent) {
@@ -1343,7 +1344,7 @@ void HTMLSelectElement::menuListDefaultEventHandler(Event& event)
                 protect(document())->updateStyleIfNeeded();
 
                 // Calling focus() may remove the renderer or change the renderer type.
-                if (!is<RenderMenuList>(renderer()))
+                if (!renderer() || !usesMenuList())
                     return;
 
                 // Save the selection so it can be compared to the new selection
@@ -1360,7 +1361,7 @@ void HTMLSelectElement::menuListDefaultEventHandler(Event& event)
                 protect(document())->updateStyleIfNeeded();
 
                 // Calling focus() may remove the renderer or change the renderer type.
-                if (!is<RenderMenuList>(renderer()))
+                if (!renderer() || !usesMenuList())
                     return;
 
                 // Save the selection so it can be compared to the new selection
@@ -1387,7 +1388,7 @@ void HTMLSelectElement::menuListDefaultEventHandler(Event& event)
 #if !PLATFORM(IOS_FAMILY)
         protect(document())->updateStyleIfNeeded();
 
-        if (is<RenderMenuList>(renderer())) {
+        if (renderer() && usesMenuList()) {
             ASSERT(!m_popupIsVisible);
             // Save the selection so it can be compared to the new
             // selection when we call onChange during selectOption,
@@ -1667,7 +1668,7 @@ void HTMLSelectElement::defaultEventHandler(Event& event)
         return;
     }
 
-    if (is<RenderMenuList>(renderer))
+    if (usesMenuList())
         menuListDefaultEventHandler(event);
     else 
         listBoxDefaultEventHandler(event);
@@ -1777,8 +1778,8 @@ void HTMLSelectElement::showPopup()
     if (m_popupIsVisible)
         return;
 
-    CheckedPtr renderer = dynamicDowncast<RenderMenuList>(this->renderer());
-    if (!renderer)
+    CheckedPtr renderer = this->renderer();
+    if (!renderer || !usesMenuList())
         return;
 
     RefPtr frame = document().frame();
@@ -2042,8 +2043,8 @@ FontSelector* HTMLSelectElement::fontSelector() const
 
 HostWindow* HTMLSelectElement::hostWindow() const
 {
-    if (CheckedPtr renderer = dynamicDowncast<RenderMenuList>(this->renderer()))
-        return renderer->hostWindow();
+    if (renderer() && usesMenuList())
+        return renderer()->hostWindow();
     return nullptr;
 }
 #endif

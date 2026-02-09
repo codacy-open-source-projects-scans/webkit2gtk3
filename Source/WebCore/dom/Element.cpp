@@ -1867,7 +1867,7 @@ static bool layoutOverflowRectContainsAllDescendants(const RenderBox& renderBox)
         for (CheckedRef viewPositionedOutOfFlowBox : *viewPositionedOutOfFlowBoxes) {
             if (viewPositionedOutOfFlowBox.ptr() == &renderBox)
                 continue;
-            if (viewPositionedOutOfFlowBox->isFixedPositioned() && renderBox.element()->contains(viewPositionedOutOfFlowBox->protectedElement().get()))
+            if (viewPositionedOutOfFlowBox->isFixedPositioned() && renderBox.element()->contains(protect(viewPositionedOutOfFlowBox->element()).get()))
                 return false;
         }
     }
@@ -1883,7 +1883,7 @@ static bool layoutOverflowRectContainsAllDescendants(const RenderBox& renderBox)
             for (CheckedRef outOfFlowBox : *outOfFlowBoxes) {
                 if (outOfFlowBox.ptr() == &renderBox)
                     continue;
-                if (renderBox.protectedElement()->contains(outOfFlowBox->protectedElement().get()))
+                if (protect(renderBox.element())->contains(protect(outOfFlowBox->element()).get()))
                     return false;
             }
         }
@@ -4399,7 +4399,7 @@ ExceptionOr<void> Element::replaceChildrenWithMarkup(const String& markup, Optio
     return result;
 }
 
-ExceptionOr<void> Element::setHTMLUnsafe(Variant<RefPtr<TrustedHTML>, String>&& html)
+ExceptionOr<void> Element::setHTMLUnsafe(Variant<Ref<TrustedHTML>, String>&& html)
 {
     auto stringValueHolder = trustedTypeCompliantString(document().contextDocument(), WTF::move(html), "Element setHTMLUnsafe"_s);
 
@@ -4433,7 +4433,7 @@ String Element::outerHTML() const
     return serializeFragment(*this, SerializedNodes::SubtreeIncludingNode, nullptr, ResolveURLs::NoExcludingURLsForPrivacy);
 }
 
-ExceptionOr<void> Element::setOuterHTML(Variant<RefPtr<TrustedHTML>, String>&& html)
+ExceptionOr<void> Element::setOuterHTML(Variant<Ref<TrustedHTML>, String>&& html)
 {
     auto stringValueHolder = trustedTypeCompliantString(document().contextDocument(), WTF::move(html), "Element outerHTML"_s);
 
@@ -4474,7 +4474,7 @@ ExceptionOr<void> Element::setOuterHTML(Variant<RefPtr<TrustedHTML>, String>&& h
     return { };
 }
 
-ExceptionOr<void> Element::setInnerHTML(Variant<RefPtr<TrustedHTML>, String>&& html)
+ExceptionOr<void> Element::setInnerHTML(Variant<Ref<TrustedHTML>, String>&& html)
 {
     auto stringValueHolder = trustedTypeCompliantString(document().contextDocument(), WTF::move(html), "Element innerHTML"_s);
 
@@ -6080,7 +6080,7 @@ ExceptionOr<void> Element::insertAdjacentHTML(const String& where, const String&
     return { };
 }
 
-ExceptionOr<void> Element::insertAdjacentHTML(const String& where, Variant<RefPtr<TrustedHTML>, String>&& markup)
+ExceptionOr<void> Element::insertAdjacentHTML(const String& where, Variant<Ref<TrustedHTML>, String>&& markup)
 {
     auto stringValueHolder = trustedTypeCompliantString(document().contextDocument(), WTF::move(markup), "Element insertAdjacentHTML"_s);
 
