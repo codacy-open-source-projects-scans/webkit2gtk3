@@ -40,6 +40,7 @@
 #import "PrintInfo.h"
 #import "RemoteLayerTreeCommitBundle.h"
 #import "RemoteLayerTreeDrawingAreaProxyIOS.h"
+#import "RemotePageProxy.h"
 #import "SmartMagnificationController.h"
 #import "UIKitSPI.h"
 #import "UIKitUtilities.h"
@@ -358,8 +359,14 @@ typedef NS_ENUM(NSInteger, _WKPrintRenderingCallbackType) {
         return;
 
 #if USE(EXTENSIONKIT)
+    auto& mainFrameProcess = _page->siteIsolatedProcess();
     for (WKVisibilityPropagationView *visibilityPropagationView in _visibilityPropagationViews.get())
-        [visibilityPropagationView propagateVisibilityToProcess:_page->legacyMainFrameProcess()];
+        [visibilityPropagationView propagateVisibilityToProcess:mainFrameProcess];
+    auto remotePages = mainFrameProcess.remotePages();
+    for (auto& remotePage : remotePages) {
+        for (WKVisibilityPropagationView *visibilityPropagationView in _visibilityPropagationViews.get())
+            [visibilityPropagationView propagateVisibilityToProcess:remotePage->process()];
+    }
 #else
 
     auto processID = _page->legacyMainFrameProcess().processID();
@@ -436,8 +443,14 @@ typedef NS_ENUM(NSInteger, _WKPrintRenderingCallbackType) {
 {
 #if USE(EXTENSIONKIT)
     if (RefPtr page = _page.get()) {
+        auto& mainFrameProcess = _page->siteIsolatedProcess();
         for (WKVisibilityPropagationView *visibilityPropagationView in _visibilityPropagationViews.get())
-            [visibilityPropagationView stopPropagatingVisibilityToProcess:page->legacyMainFrameProcess()];
+            [visibilityPropagationView stopPropagatingVisibilityToProcess:mainFrameProcess];
+        auto remotePages = mainFrameProcess.remotePages();
+        for (auto& remotePage : remotePages) {
+            for (WKVisibilityPropagationView *visibilityPropagationView in _visibilityPropagationViews.get())
+                [visibilityPropagationView stopPropagatingVisibilityToProcess:remotePage->process()];
+        }
     }
 #endif
 
@@ -1109,7 +1122,7 @@ static void storeAccessibilityRemoteConnectionInformation(id element, pid_t pid,
 
 - (BOOL)_shouldExposeRollAngleAsTwist
 {
-    return protect(_page)->preferences().exposeRollAngleAsTwistEnabled();
+    return protect(protect(_page)->preferences())->exposeRollAngleAsTwistEnabled();
 }
 
 @end
@@ -1307,7 +1320,7 @@ static void storeAccessibilityRemoteConnectionInformation(id element, pid_t pid,
         if (!callbackID)
             return;
 
-        protect(_page)->legacyMainFrameProcess().connection().waitForAsyncReplyAndDispatchImmediately<Messages::WebPage::DrawToPDFiOS>(*callbackID, Seconds::infinity());
+        protect(protect(_page)->legacyMainFrameProcess().connection())->waitForAsyncReplyAndDispatchImmediately<Messages::WebPage::DrawToPDFiOS>(*callbackID, Seconds::infinity());
         return;
     }
 
@@ -1351,7 +1364,7 @@ static void storeAccessibilityRemoteConnectionInformation(id element, pid_t pid,
         if (!callbackID)
             return;
 
-        protect(_page)->legacyMainFrameProcess().connection().waitForAsyncReplyAndDispatchImmediately<Messages::WebPage::DrawRectToImage>(*callbackID, Seconds::infinity());
+        protect(protect(_page)->legacyMainFrameProcess().connection())->waitForAsyncReplyAndDispatchImmediately<Messages::WebPage::DrawRectToImage>(*callbackID, Seconds::infinity());
         return;
     }
 

@@ -77,6 +77,7 @@
 #import "RenderView.h"
 #import "RenderWidget.h"
 #import "ScrollView.h"
+#import "Settings.h"
 #import "TextIterator.h"
 #import "VisibleUnits.h"
 #import "WebCoreFrameView.h"
@@ -1184,7 +1185,7 @@ static id scrollViewParent(AXCoreObject& axObject)
 
     RefPtr<AXCoreObject> backingObject = self.axBackingObject;
     RefPtr axScrollView = backingObject ? backingObject->axScrollView() : nullptr;
-    return axScrollView ? [axScrollView->protectedPlatformWidget() window] : nil;
+    return axScrollView ? [protect(axScrollView->platformWidget()) window] : nil;
 }
 
 // FIXME: split up this function in a better way.
@@ -1233,7 +1234,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_BEGIN
         // In WebKit1, the scroll view is provided by the system (the attachment view), so the parent
         // should be reported directly as such.
         if (backingObject->isWebArea() && parent->isAttachment())
-            return [parent->protectedWrapper() attachmentView];
+            return [protect(parent->wrapper()) attachmentView];
 #endif // !ENABLE_ACCESSIBILITY_LOCAL_FRAME
 
         return parent->wrapper();
@@ -1936,6 +1937,9 @@ id attributeValueForTesting(const RefPtr<AXCoreObject>& backingObject, NSString 
 
     if ([attributeName isEqualToString:NSAccessibilityControllersAttribute])
         return makeNSArray(backingObject->controllers());
+
+    if ([attributeName isEqualToString:NSAccessibilityActionTargetsAttribute])
+        return makeNSArray(backingObject->associatedActionElements());
 
     if ([attributeName isEqualToString:NSAccessibilityControllerForAttribute])
         return makeNSArray(backingObject->controlledObjects());
@@ -3051,7 +3055,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_BEGIN
                 return nil;
 
             RetainPtr result = adoptNS([[NSMutableDictionary alloc] initWithObjectsAndKeys:
-                object->protectedWrapper().get(), NSAccessibilitySearchResultElementKey,
+                protect(object->wrapper()).get(), NSAccessibilitySearchResultElementKey,
                 textMarkerRange->platformData().bridgingAutorelease(), NSAccessibilitySearchResultRangeKey,
                 nil]);
             return [[[NSArray alloc] initWithObjects:result.get(), nil] autorelease];
@@ -3699,6 +3703,27 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     }
 
     return subarray;
+}
+
+- (NSArray<NSAccessibilityCustomAction *> *)accessibilityCustomActions
+{
+    RefPtr<AXCoreObject> backingObject = self.updateObjectBackingStore;
+    if (!backingObject)
+        return nil;
+
+    auto actionsData = [self baseAccessibilityCustomActionsData];
+    if (actionsData.isEmpty())
+        return nil;
+
+    RetainPtr<NSMutableArray<NSAccessibilityCustomAction *>> actions = adoptNS([[NSMutableArray alloc] init]);
+    for (auto& actionData : actionsData) {
+        auto action = adoptNS([[NSAccessibilityCustomAction alloc] initWithName:actionData.name.createNSString().autorelease() handler:^BOOL {
+            return Accessibility::performCustomActionPress(actionData.treeID, actionData.targetID);
+        }]);
+        [actions addObject:action.get()];
+    }
+
+    return actions.autorelease();
 }
 
 - (NSString *)debugDescription

@@ -94,6 +94,7 @@
 #include "JSPromiseReaction.h"
 #include "JSRegExpStringIterator.h"
 #include "JSSetIterator.h"
+#include "JSStringIterator.h"
 #include "JSWeakMap.h"
 #include "JSWebAssemblyInstance.h"
 #include "JSWrapForValidIterator.h"
@@ -1658,6 +1659,9 @@ private:
             break;
         case MapOrSetSize:
             compileMapOrSetSize();
+            break;
+        case GetRegExpFlag:
+            compileGetRegExpFlag();
             break;
         case SetAdd:
             compileSetAdd();
@@ -9513,6 +9517,9 @@ IGNORE_CLANG_WARNINGS_END
         case JSSetIteratorType:
             compileNewInternalFieldObjectImpl<JSSetIterator>(operationNewSetIterator);
             break;
+        case JSStringIteratorType:
+            compileNewInternalFieldObjectImpl<JSStringIterator>(operationNewStringIterator);
+            break;
         case JSIteratorHelperType:
             compileNewInternalFieldObjectImpl<JSIteratorHelper>(operationNewIteratorHelper);
             break;
@@ -13966,7 +13973,7 @@ IGNORE_CLANG_WARNINGS_END
         bool wasmBaseMemoryPointerConfiguredAsInputContraints = false;
         auto* instance = wasmFunction->instance();
         arguments.append(ConstrainedValue(frozenPointer(m_graph.freeze(instance)), ValueRep::reg(GPRInfo::wasmContextInstancePointer)));
-        if (!!instance->module().moduleInformation().memory) {
+        if (instance->module().moduleInformation().memoryCount()) {
             auto mode = instance->memoryMode();
             if (mode == MemoryMode::Signaling || (mode == MemoryMode::BoundsChecking && instance->memory()->sharingMode() == MemorySharingMode::Shared)) {
                 // Capacity and basePointer will not be changed.
@@ -14050,7 +14057,7 @@ IGNORE_CLANG_WARNINGS_END
                 constexpr GPRReg scratchGPR = GPRInfo::nonPreservedNonArgumentGPR0;
                 static_assert(noOverlap(GPRInfo::wasmBoundsCheckingSizeRegister, GPRInfo::wasmBaseMemoryPointer, scratchGPR));
                 ASSERT(!RegisterSetBuilder::macroClobberedGPRs().contains(scratchGPR, IgnoreVectors));
-                if (!!instance->module().moduleInformation().memory) {
+                if (instance->module().moduleInformation().memoryCount()) {
                     auto mode = instance->memoryMode();
                     if (!(mode == MemoryMode::Signaling || (mode == MemoryMode::BoundsChecking && instance->memory()->sharingMode() == MemorySharingMode::Shared))) {
                         // We always clobber GPRInfo::wasmBoundsCheckingSizeRegister regardless of mode. It is OK since patchpoint already said it is clobbered.
@@ -15843,6 +15850,23 @@ IGNORE_CLANG_WARNINGS_END
 
         m_out.appendTo(continuation, lastNext);
         setInt32(m_out.phi(Int32, noStorageResult, hasStorageResult));
+    }
+
+    void compileGetRegExpFlag()
+    {
+        LValue regExpObject = lowRegExpObject(m_node->child1());
+
+        // Load RegExp* from RegExpObject (mask off low 2 flag bits).
+        LValue regExpAndFlags = m_out.loadPtr(regExpObject, m_heaps.RegExpObject_regExpAndFlags);
+        LValue regExp = m_out.bitAnd(regExpAndFlags, m_out.constIntPtr(RegExpObject::regExpMask));
+
+        // Load m_flags (uint16_t) from RegExp.
+        LValue flags = m_out.load16ZeroExt32(regExp, m_heaps.RegExp_flags);
+
+        // Test specific flag bit.
+        Yarr::Flags flag = m_node->regExpFlag();
+        LValue test = m_out.bitAnd(flags, m_out.constInt32(static_cast<uint16_t>(flag)));
+        setBoolean(m_out.notZero32(test));
     }
 
     void compileSetAdd()
@@ -18155,6 +18179,9 @@ IGNORE_CLANG_WARNINGS_END
             break;
         case JSSetIteratorType:
             compileMaterializeNewInternalFieldObjectImpl<JSSetIterator>(operationNewSetIterator);
+            break;
+        case JSStringIteratorType:
+            compileMaterializeNewInternalFieldObjectImpl<JSStringIterator>(operationNewStringIterator);
             break;
         case JSIteratorHelperType:
             compileMaterializeNewInternalFieldObjectImpl<JSIteratorHelper>(operationNewIteratorHelper);

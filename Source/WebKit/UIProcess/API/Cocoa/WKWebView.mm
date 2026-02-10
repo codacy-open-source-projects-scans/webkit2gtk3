@@ -2262,6 +2262,13 @@ inline OptionSet<WebKit::FindOptions> toFindOptions(WKFindConfiguration *configu
     return _page.get();
 }
 
+#if PLATFORM(MAC)
+- (WebKit::WebViewImpl *)_impl
+{
+    return _impl.get();
+}
+#endif // PLATFORM(MAC)
+
 #if ENABLE(SCREEN_TIME)
 - (STWebpageController *)_screenTimeWebpageController
 {
@@ -3789,15 +3796,6 @@ struct WKWebViewData {
 {
     self._protectedPage->scrollToEdge(toRectEdges(edge), animated ? WebCore::ScrollIsAnimated::Yes : WebCore::ScrollIsAnimated::No);
 }
-
-#if PLATFORM(MAC)
-
-- (WebKit::WebViewImpl *)_impl
-{
-    return _impl.get();
-}
-
-#endif
 
 @end
 
@@ -6721,6 +6719,11 @@ static Vector<Ref<API::TargetedElementInfo>> elementsFromWKElements(NSArray<_WKT
     return _impl->hasRemoteAccessibilityChild();
 }
 
+- (NSData *)_remoteAccessibilityChildToken
+{
+    return _impl->remoteAccessibilityChildToken();
+}
+
 - (RetainPtr<NSPopUpButtonCell>)_activePopupButtonCell
 {
     RefPtr popupMenu = dynamicDowncast<WebKit::WebPopupMenuProxyMac>(_page->activePopupMenu());
@@ -7320,6 +7323,7 @@ static OptionSet<WebCore::DataDetectorType> coreDataDetectorTypes(_WKTextExtract
             .includeEventListeners = !!configuration.includeEventListeners,
             .includeAccessibilityAttributes = !!configuration.includeAccessibilityAttributes,
             .includeTextInAutoFilledControls = !!configuration.includeTextInAutoFilledControls,
+            .includeOffscreenPasswordFields = !!configuration.includeOffscreenPasswordFields,
 #if ENABLE(DATA_DETECTION)
             .dataDetectorTypes = coreDataDetectorTypes(configuration.dataDetectorTypes),
 #endif

@@ -675,6 +675,7 @@ SERIALIZATION_DESCRIPTION_FILES = \
 	Shared/Cocoa/CoreIPCPersonNameComponents.serialization.in \
 	Shared/Cocoa/CoreIPCPKDateComponentsRange.serialization.in \
 	Shared/Cocoa/CoreIPCPKPaymentMerchantSession.serialization.in \
+	Shared/Cocoa/CoreIPCPKPaymentMethod.serialization.in \
 	Shared/Cocoa/CoreIPCPKPaymentSetupFeature.serialization.in \
 	Shared/Cocoa/CoreIPCPKPaymentToken.serialization.in \
 	Shared/Cocoa/CoreIPCPKShippingMethod.serialization.in \
@@ -943,7 +944,6 @@ SERIALIZATION_DESCRIPTION_FILES = \
 WEBCORE_SERIALIZATION_DESCRIPTION_FILES = \
 	HTTPHeaderNames.serialization.in \
 	ActivityState.serialization.in \
-	WebModel.serialization.in \
 	DocumentSyncData.serialization.in \
 	DragActions.serialization.in \
 	FrameTreeSyncData.serialization.in \

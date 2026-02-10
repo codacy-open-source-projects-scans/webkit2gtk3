@@ -710,7 +710,7 @@ Ref<AccessibilityRenderObject> AXObjectCache::createObjectFromRenderer(RenderObj
         return AccessibilityMathMLElement::create(AXID::generate(), renderer, *this, isAnonymousOperator);
 #endif
 
-    if (RefPtr select = dynamicDowncast<HTMLSelectElement>(node); select && select->usesMenuListDeprecated())
+    if (RefPtr select = dynamicDowncast<HTMLSelectElement>(node); select && select->usesMenuList())
         return AccessibilityMenuList::create(AXID::generate(), renderer, *this);
 
     // Progress indicator.
@@ -835,7 +835,7 @@ AccessibilityObject* AXObjectCache::getOrCreateSlow(Node& node, IsPartOfRelation
         if (!select)
             return nullptr;
         RefPtr<AccessibilityObject> object;
-        if (select->usesMenuListDeprecated()) {
+        if (select->usesMenuList()) {
             if (!optionElement || !select->renderer())
                 return nullptr;
             object = AccessibilityMenuListOption::create(AXID::generate(), *optionElement, *this);
@@ -1536,7 +1536,7 @@ void AXObjectCache::handleMenuOpened(Element& element)
         return;
     }
 
-    postNotification(getOrCreate(element), protectedDocument().get(), AXNotification::MenuOpened);
+    postNotification(getOrCreate(element), protect(document()).get(), AXNotification::MenuOpened);
 }
 
 void AXObjectCache::handleLiveRegionCreated(Element& element)
@@ -1570,7 +1570,7 @@ void AXObjectCache::handleLiveRegionCreated(Element& element)
 
 #if PLATFORM(COCOA)
         if (!m_liveRegionManager)
-            postNotification(axObject.get(), protectedDocument().get(), AXNotification::LiveRegionCreated);
+            postNotification(axObject.get(), protect(document()).get(), AXNotification::LiveRegionCreated);
 #endif
     }
 }
@@ -1920,7 +1920,7 @@ void AXObjectCache::handleMenuItemSelected(Element* element)
     if (!element->focused() && !equalLettersIgnoringASCIICase(element->attributeWithoutSynchronization(aria_selectedAttr), "true"_s))
         return;
 
-    postNotification(getOrCreate(*element), protectedDocument().get(), AXNotification::MenuListItemSelected);
+    postNotification(getOrCreate(*element), protect(document()).get(), AXNotification::MenuListItemSelected);
 }
 
 void AXObjectCache::handleTabPanelSelected(Element* oldElement, Element* newElement)
@@ -2087,7 +2087,7 @@ void AXObjectCache::onPopoverToggle(const HTMLElement& popover)
         return;
     // There may be multiple elements with popovertarget attributes that point at |popover|.
     for (const auto& invoker : axPopover->controllers())
-        postNotification(dynamicDowncast<AccessibilityObject>(invoker.get()), protectedDocument().get(), AXNotification::ExpandedChanged);
+        postNotification(dynamicDowncast<AccessibilityObject>(invoker.get()), protect(document()).get(), AXNotification::ExpandedChanged);
 }
 
 void AXObjectCache::deferMenuListValueChange(Element* element)
@@ -2877,14 +2877,14 @@ void AXObjectCache::handleAriaExpandedChange(Element& element)
 
         // Post that the ancestor's row count changed.
         if (ancestor)
-            handleRowCountChanged(ancestor.get(), protectedDocument().get());
+            handleRowCountChanged(ancestor.get(), protect(document()).get());
 
         // Post that the specific row either collapsed or expanded.
         auto role = object->role();
         if (role == AccessibilityRole::Row || role == AccessibilityRole::TreeItem)
-            postNotification(object.get(), protectedDocument().get(), object->isExpanded() ? AXNotification::RowExpanded : AXNotification::RowCollapsed);
+            postNotification(object.get(), protect(document()).get(), object->isExpanded() ? AXNotification::RowExpanded : AXNotification::RowCollapsed);
         else
-            postNotification(object.get(), protectedDocument().get(), AXNotification::ExpandedChanged);
+            postNotification(object.get(), protect(document()).get(), AXNotification::ExpandedChanged);
     }
 }
 
@@ -3440,11 +3440,11 @@ void AXObjectCache::handleLabelChanged(AccessibilityObject* object)
         auto labeledObjects = object->labelForObjects();
         for (auto& labeledObject : labeledObjects) {
             updateLabeledBy(RefPtr { labeledObject->element() }.get());
-            postNotification(&downcast<AccessibilityObject>(labeledObject.get()), protectedDocument().get(), AXNotification::ValueChanged);
+            postNotification(&downcast<AccessibilityObject>(labeledObject.get()), protect(document()).get(), AXNotification::ValueChanged);
         }
     }
 
-    postNotification(object, protectedDocument().get(), AXNotification::LabelChanged);
+    postNotification(object, protect(document()).get(), AXNotification::LabelChanged);
 }
 
 bool AXObjectCache::updateLabelFor(HTMLLabelElement& label)
@@ -3502,11 +3502,6 @@ void AXObjectCache::startCachingComputedObjectAttributesUntilTreeMutates()
 void AXObjectCache::stopCachingComputedObjectAttributes()
 {
     m_computedObjectAttributeCache = nullptr;
-}
-
-RefPtr<Document> AXObjectCache::protectedDocument() const
-{
-    return document();
 }
 
 VisiblePosition AXObjectCache::visiblePositionForTextMarkerData(const TextMarkerData& textMarkerData)
@@ -5612,6 +5607,7 @@ AXTreeData AXObjectCache::treeData(std::optional<OptionSet<AXStreamOptions>> add
 Vector<QualifiedName>& AXObjectCache::relationAttributes()
 {
     static NeverDestroyed<Vector<QualifiedName>> relationAttributes = Vector<QualifiedName> {
+        aria_actionsAttr,
         aria_activedescendantAttr,
         aria_controlsAttr,
         aria_describedbyAttr,
@@ -5631,6 +5627,10 @@ Vector<QualifiedName>& AXObjectCache::relationAttributes()
 AXRelation AXObjectCache::symmetricRelation(AXRelation relation)
 {
     switch (relation) {
+    case AXRelation::Actions:
+        return AXRelation::ActionsOf;
+    case AXRelation::ActionsOf:
+        return AXRelation::Actions;
     case AXRelation::ActiveDescendant:
         return AXRelation::ActiveDescendantOf;
     case AXRelation::ActiveDescendantOf:
@@ -5675,6 +5675,8 @@ AXRelation AXObjectCache::symmetricRelation(AXRelation relation)
 
 AXRelation AXObjectCache::attributeToRelationType(const QualifiedName& attribute)
 {
+    if (attribute == aria_actionsAttr && m_document && m_document->settings().aRIAActionsSupportEnabled())
+        return AXRelation::Actions;
     if (attribute == aria_activedescendantAttr)
         return AXRelation::ActiveDescendant;
     if (attribute == aria_controlsAttr || attribute == commandforAttr || attribute == popovertargetAttr)
