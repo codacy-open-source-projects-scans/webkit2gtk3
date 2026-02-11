@@ -14430,6 +14430,7 @@
 		7BC9642B291E765D00377DF1 /* AudioDestinationResampler.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = AudioDestinationResampler.cpp; sourceTree = "<group>"; };
 		7BC9642D291E770300377DF1 /* AudioUtilitiesCocoa.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = AudioUtilitiesCocoa.cpp; sourceTree = "<group>"; };
 		7BC9642E291E770400377DF1 /* AudioUtilitiesCocoa.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AudioUtilitiesCocoa.h; sourceTree = "<group>"; };
+		7BCBCD982EF559D0005B0ACE /* PlatformVideoColorSpace.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = PlatformVideoColorSpace.cpp; sourceTree = "<group>"; };
 		7BCD42D8270599EF00EB2127 /* ANGLEUtilities.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = ANGLEUtilities.cpp; sourceTree = "<group>"; };
 		7BCD42DA2705C94900EB2127 /* ANGLEUtilitiesCocoa.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = ANGLEUtilitiesCocoa.mm; sourceTree = "<group>"; };
 		7BCD42DC2705C94900EB2127 /* ANGLEUtilitiesCocoa.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ANGLEUtilitiesCocoa.h; sourceTree = "<group>"; };
@@ -35923,6 +35924,7 @@
 				074E82B918A69F0E007EF54C /* PlatformTimeRanges.h */,
 				CDD08ABC277E542600EA3755 /* PlatformTrackConfiguration.h */,
 				CD1F9AFB26FD38C900617EB6 /* PlatformVideoColorPrimaries.h */,
+				7BCBCD982EF559D0005B0ACE /* PlatformVideoColorSpace.cpp */,
 				CD1F9AFA26FD385900617EB6 /* PlatformVideoColorSpace.h */,
 				CD1F9AFD26FD38CB00617EB6 /* PlatformVideoMatrixCoefficients.h */,
 				A19759462A4F9AC700FEC5EA /* PlatformVideoPresentationInterface.h */,

@@ -165,8 +165,6 @@ static MTLPixelFormat computePixelFormat(size_t bytesPerComponent, size_t channe
             return MTLPixelFormatR8Unorm;
         case 2:
             return MTLPixelFormatRG8Unorm;
-        case 3:
-            return MTLPixelFormatRGB8Unorm;
         case 4:
         default:
             return MTLPixelFormatRGBA8Unorm;
@@ -177,8 +175,6 @@ static MTLPixelFormat computePixelFormat(size_t bytesPerComponent, size_t channe
             return MTLPixelFormatR16Float;
         case 2:
             return MTLPixelFormatRG16Float;
-        case 3:
-            return MTLPixelFormatRGB16Float;
         case 4:
         default:
             return MTLPixelFormatRGBA16Float;
@@ -189,8 +185,6 @@ static MTLPixelFormat computePixelFormat(size_t bytesPerComponent, size_t channe
             return MTLPixelFormatR32Float;
         case 2:
             return MTLPixelFormatRG32Float;
-        case 3:
-            return MTLPixelFormatRGB32Float;
         case 4:
         default:
             return MTLPixelFormatRGBA32Float;
@@ -563,6 +557,14 @@ void WebModelPlayer::play(bool playing)
         model->play(playing);
         m_pauseState = playing ? PauseState::Playing : PauseState::Paused;
     }
+}
+
+void WebModelPlayer::setLoop(bool loop)
+{
+    if (m_isLooping == loop)
+        return;
+
+    m_isLooping = loop;
 }
 
 void WebModelPlayer::setAutoplay(bool autoplay)

@@ -36,24 +36,25 @@ namespace Layout {
 class IntegrationUtils;
 
 struct GridItemSizingFunctions {
-    GridItemSizingFunctions(Function<LayoutUnit(const PlacedGridItem&, const IntegrationUtils&)> minContentContributionFunction, Function<LayoutUnit(const PlacedGridItem&, const IntegrationUtils&)> maxContentContributionFunction,
-        Function<LayoutUnit(const PlacedGridItem&, const TrackSizingFunctionsList&, LayoutUnit borderAndPadding, LayoutUnit availableSpace, const IntegrationUtils&)> usedMinimumSizeFunction)
+    GridItemSizingFunctions(Function<LayoutUnit(const PlacedGridItem&, LayoutUnit oppositeAxisConstraint)> minContentContributionFunction, Function<LayoutUnit(const PlacedGridItem&, LayoutUnit oppositeAxisConstraint)> maxContentContributionFunction,
+        Function<LayoutUnit(const PlacedGridItem&, const TrackSizingFunctionsList&, LayoutUnit borderAndPadding, LayoutUnit availableSpace)> usedMinimumSizeFunction)
             : minContentContribution(WTF::move(minContentContributionFunction))
             , maxContentContribution(WTF::move(maxContentContributionFunction))
             , usedMinimumSize(WTF::move(usedMinimumSizeFunction))
     {
     }
 
-    Function<LayoutUnit(const PlacedGridItem&, const IntegrationUtils&)> minContentContribution;
-    Function<LayoutUnit(const PlacedGridItem&, const IntegrationUtils&)> maxContentContribution;
-    Function<LayoutUnit(const PlacedGridItem&, const TrackSizingFunctionsList&, LayoutUnit borderAndPadding, LayoutUnit availableSpace, const IntegrationUtils&)> usedMinimumSize;
+    Function<LayoutUnit(const PlacedGridItem&, LayoutUnit oppositeAxisConstraint)> minContentContribution;
+    Function<LayoutUnit(const PlacedGridItem&, LayoutUnit oppositeAxisConstraint)> maxContentContribution;
+    Function<LayoutUnit(const PlacedGridItem&, const TrackSizingFunctionsList&, LayoutUnit borderAndPadding, LayoutUnit availableSpace)> usedMinimumSize;
 };
 
 class TrackSizingAlgorithm {
 public:
     static TrackSizes sizeTracks(const PlacedGridItems&, const ComputedSizesList&, const UsedBorderAndPaddingList&,
-    const PlacedGridItemSpanList&, const TrackSizingFunctionsList&, std::optional<LayoutUnit> availableGridSpace,
-    const GridItemSizingFunctions&, const IntegrationUtils&, const FreeSpaceScenario&, const LayoutUnit& gapSize);
+        const PlacedGridItemSpanList&, const TrackSizingFunctionsList&, std::optional<LayoutUnit> availableGridSpace,
+        const TrackSizingGridItemConstraintList& oppositeAxisConstraints, const GridItemSizingFunctions&,
+        const FreeSpaceScenario&, const LayoutUnit& gapSize, const StyleContentAlignmentData& usedContentAlignment);
 
 private:
 

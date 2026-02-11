@@ -26,7 +26,7 @@ internal import OSLog
 internal import WebKit_Internal
 internal import simd
 
-#if canImport(RealityCoreRenderer, _version: 8) && !os(iOS)
+#if canImport(RealityCoreRenderer, _version: 9) && os(macOS) && canImport(_USDKit_RealityKit)
 @_spi(RealityCoreRendererAPI) internal import RealityKit
 @_spi(RealityCoreTextureProcessingAPI) internal import RealityCoreTextureProcessing
 @_spi(UsdLoaderAPI) internal import _USDKit_RealityKit
@@ -56,6 +56,7 @@ extension _USDKit_RealityKit._Proto_DeformationData_v1.SkinningData {
     internal func inverseBindPosesCompat() -> [simd_float4x4]
 }
 
+#if canImport(ShaderGraph, _version: 9999)
 extension RealityCoreRenderer._Proto_LowLevelRenderContext_v1 {
     @_silgen_name(
         "$s19RealityCoreRenderer16MaterialCompilerC24makeShaderGraphFunctionsyAA015_Proto_LowLevelD11Resource_v1C0gH6OutputV10Foundation4DataVSg_ScA_pSgYitYaKF"
@@ -669,12 +670,13 @@ private func fromSGGraphEdge(_ edge: (ShaderGraph.ModuleGraph.Node.ID, ShaderGra
 
 private func fromSGType(_ functionRef: ShaderGraph.FunctionReference?) -> WKBridgeFunctionReference? {
     guard let functionRef else { return nil }
-    #if canImport(RealityCoreRenderer, _version: 8)
+    #if canImport(RealityCoreRenderer, _version: 9)
     return WKBridgeFunctionReference(moduleName: functionRef.module, functionIndex: 0)
     #else
     return WKBridgeFunctionReference(moduleName: "functionRef.module", functionIndex: 0)
     #endif
 }
+#endif
 
 extension MTLCaptureDescriptor {
     fileprivate convenience init(from device: MTLDevice?) {
@@ -806,6 +808,7 @@ private func makeMTLTextureFromImageAsset(
     let bytesPerRow = imageAsset.width * imageAsset.bytesPerPixel
     let bytesPerImage = bytesPerRow * imageAsset.height
 
+#if compiler(>=6.2)
     unsafe imageAssetData.bytes.withUnsafeBytes { textureBytes in
         guard let textureBytesBaseAddress = textureBytes.baseAddress else {
             return
@@ -824,6 +827,26 @@ private func makeMTLTextureFromImageAsset(
             )
         }
     }
+#else
+    imageAssetData.bytes.withUnsafeBytes { textureBytes in
+        guard let textureBytesBaseAddress = textureBytes.baseAddress else {
+            return
+        }
+        for face in 0..<sliceCount {
+            let offset = face * bytesPerImage
+            let facePointer = textureBytesBaseAddress.advanced(by: offset)
+
+            mtlTexture.replace(
+                region: MTLRegionMake2D(0, 0, imageAsset.width, imageAsset.height),
+                mipmapLevel: 0,
+                slice: face,
+                withBytes: facePointer,
+                bytesPerRow: bytesPerRow,
+                bytesPerImage: bytesPerImage
+            )
+        }
+    }
+#endif
 
     return mtlTexture
 }

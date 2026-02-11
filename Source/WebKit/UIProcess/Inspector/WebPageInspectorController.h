@@ -27,6 +27,7 @@
 
 #include "InspectorTargetProxy.h"
 #include "ProvisionalPageProxy.h"
+#include "UIProcess/WebFrameProxy.h"
 #include <JavaScriptCore/InspectorAgentRegistry.h>
 #include <JavaScriptCore/InspectorTargetAgent.h>
 #include <WebCore/FrameIdentifier.h>
@@ -71,9 +72,6 @@ public:
     void setIndicating(bool);
 #endif
 
-    void createWebPageInspectorTarget(const String& targetId, Inspector::InspectorTargetType);
-    void createWebFrameInspectorTarget(WebFrameProxy&, const String& targetId);
-    void destroyInspectorTarget(const String& targetId);
     void sendMessageToInspectorFrontend(const String& targetId, const String& message);
 
     bool shouldPauseLoading(const ProvisionalPageProxy&) const;
@@ -82,6 +80,8 @@ public:
     void didCreateProvisionalPage(ProvisionalPageProxy&);
     void willDestroyProvisionalPage(const ProvisionalPageProxy&);
     void didCommitProvisionalPage(WebCore::PageIdentifier oldWebPageID, WebCore::PageIdentifier newWebPageID);
+    void didCreateFrame(WebFrameProxy&);
+    void willDestroyFrame(const WebFrameProxy&);
 
     InspectorBrowserAgent* enabledBrowserAgent() const;
     void setEnabledBrowserAgent(InspectorBrowserAgent*);
@@ -95,6 +95,7 @@ private:
     void createLazyAgents();
 
     void addTarget(std::unique_ptr<InspectorTargetProxy>&&);
+    void removeTarget(const String& targetId);
 
     const Ref<Inspector::FrontendRouter> m_frontendRouter;
     const Ref<Inspector::BackendDispatcher> m_backendDispatcher;

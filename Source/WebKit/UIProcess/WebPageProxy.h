@@ -773,7 +773,6 @@ public:
         
 #if PLATFORM(COCOA)
     RemoteScrollingCoordinatorProxy* scrollingCoordinatorProxy() const { return m_scrollingCoordinatorProxy.get(); }
-    CheckedPtr<RemoteScrollingCoordinatorProxy> checkedScrollingCoordinatorProxy() const;
 #endif
 
     WebBackForwardListWrapper& backForwardListWrapper() { return m_backForwardList; }
@@ -822,8 +821,6 @@ public:
     void hideInspectorIndication();
 #endif
 
-    void createInspectorTarget(IPC::Connection&, const String& targetId, Inspector::InspectorTargetType);
-    void destroyInspectorTarget(IPC::Connection&, const String& targetId);
     void sendMessageToInspectorFrontend(const String& targetId, const String& message);
 
     void getAllFrames(CompletionHandler<void(std::optional<FrameTreeNodeData>&&)>&&);
@@ -2679,10 +2676,8 @@ public:
 #endif
 
     WebColorPickerClient& colorPickerClient();
-    CheckedRef<WebColorPickerClient> checkedColorPickerClient();
 
     WebPopupMenuProxyClient& popupMenuClient();
-    CheckedRef<WebPopupMenuProxyClient> checkedPopupMenuClient();
 
 #if ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
     OptionSet<WebCore::AdvancedPrivacyProtections> advancedPrivacyProtectionsPolicies() const { return m_advancedPrivacyProtectionsPolicies; }

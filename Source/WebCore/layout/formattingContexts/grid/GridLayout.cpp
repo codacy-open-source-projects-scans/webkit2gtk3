@@ -198,7 +198,7 @@ static GridAreaSizes computeGridAreaSizes(const PlacedGridItems& gridItems, cons
 // https://drafts.csswg.org/css-grid-1/#layout-algorithm
 std::pair<UsedTrackSizes, GridItemRects> GridLayout::layout(UnplacedGridItems& unplacedGridItems, const GridLayoutState& gridLayoutState)
 {
-    auto& [layoutConstraints, gridDefinition] = gridLayoutState;
+    auto& [layoutConstraints, gridDefinition, usedJustifyContent, usedAlignContent] = gridLayoutState;
     auto& gridTemplateColumnsTrackSizes = gridDefinition.gridTemplateColumns.sizes;
     auto& gridTemplateRowsTrackSizes = gridDefinition.gridTemplateRows.sizes;
 
@@ -213,7 +213,8 @@ std::pair<UsedTrackSizes, GridItemRects> GridLayout::layout(UnplacedGridItems& u
     // 2. FIXME: Find the size of the grid container.
 
     // 3. Given the resulting grid container size, run the Grid Sizing Algorithm to size the grid.
-    UsedTrackSizes usedTrackSizes = performGridSizingAlgorithm(placedGridItems, columnTrackSizingFunctionsList, rowTrackSizingFunctionsList, layoutConstraints);
+    UsedTrackSizes usedTrackSizes = performGridSizingAlgorithm(placedGridItems, columnTrackSizingFunctionsList, rowTrackSizingFunctionsList,
+        layoutConstraints, usedJustifyContent, usedAlignContent);
 
     CheckedRef formattingContextRootStyle = formattingContext.root().style();
     auto& columnGap = formattingContextRootStyle->columnGap();
@@ -353,9 +354,51 @@ TrackSizingFunctionsList GridLayout::trackSizingFunctions(size_t implicitGridTra
     });
 }
 
+// If calculating the layout of a grid item in this step depends on the available space in the block axis,
+// assume the available space that it would have if any row with a definite max track sizing function
+// had that size and all other rows were infinite.
+static Vector<LayoutUnit> rowSizesForFirstIterationColumnSizing(const TrackSizingFunctionsList& rowTrackSizingFunctionsList, std::optional<LayoutUnit> gridContainerInnerInlineSize)
+{
+    return rowTrackSizingFunctionsList.map([&gridContainerInnerInlineSize](const TrackSizingFunctions& trackSizingFunctions) {
+        return WTF::switchOn(trackSizingFunctions.max,
+            [](const Style::GridTrackBreadthLength::Fixed& fixedValue) {
+                return Style::evaluate<LayoutUnit>(fixedValue, Style::ZoomNeeded { });
+            },
+            [&gridContainerInnerInlineSize](const Style::GridTrackBreadthLength::Percentage& percentageValue) {
+                ASSERT(gridContainerInnerInlineSize, "The formatting context should have transformed this track size to auto");
+                return Style::evaluate<LayoutUnit>(percentageValue, *gridContainerInnerInlineSize);
+            },
+            [&gridContainerInnerInlineSize](const Style::GridTrackBreadth::Calc calculatedValue) -> LayoutUnit {
+                ASSERT(gridContainerInnerInlineSize, "The formatting context should have transformed this track size to auto");
+                return Style::evaluate<LayoutUnit>(calculatedValue, *gridContainerInnerInlineSize, Style::ZoomNeeded { });
+            },
+            [](const auto&) -> LayoutUnit {
+                ASSERT_NOT_IMPLEMENTED_YET();
+                return { };
+            });
+    });
+}
+
+// During track sizing we may need to get different types of size contributions for a grid item.
+// Getting a contribution in a specific dimension may require knowing the available space in
+// the opposite dimension. For each of these cases, the spec defines how to compute the available space.
+static LayoutUnit oppositeAxisConstraintForTrackSizing(Vector<LayoutUnit> oppositeAxisTrackSizes, const WTF::Range<size_t> oppositeAxisSpan)
+{
+    auto totalAvailableSpaceFromSpannedTracks = 0_lu;
+    for (auto oppositeAxisLineIndex : std::views::iota(oppositeAxisSpan.begin(), oppositeAxisSpan.end())) {
+        auto& oppositeAxisTrackSize = oppositeAxisTrackSizes[oppositeAxisLineIndex];
+        if (oppositeAxisTrackSize == LayoutUnit::max())
+            return oppositeAxisTrackSize;
+
+        totalAvailableSpaceFromSpannedTracks += oppositeAxisTrackSize;
+    }
+    return totalAvailableSpaceFromSpannedTracks;
+}
+
 // https://www.w3.org/TR/css-grid-1/#algo-grid-sizing
 UsedTrackSizes GridLayout::performGridSizingAlgorithm(const PlacedGridItems& placedGridItems,
-    const TrackSizingFunctionsList& columnTrackSizingFunctionsList, const TrackSizingFunctionsList& rowTrackSizingFunctionsList, const GridLayoutConstraints& layoutConstraints) const
+    const TrackSizingFunctionsList& columnTrackSizingFunctionsList, const TrackSizingFunctionsList& rowTrackSizingFunctionsList, const GridLayoutConstraints& layoutConstraints,
+    const StyleContentAlignmentData& usedJustifyContent, const StyleContentAlignmentData& usedAlignContent) const
 {
     auto& integrationUtils = formattingContext().integrationUtils();
     auto gridItemsCount = placedGridItems.size();
@@ -366,6 +409,8 @@ UsedTrackSizes GridLayout::performGridSizingAlgorithm(const PlacedGridItems& pla
     inlineAxisComputedSizesList.reserveInitialCapacity(gridItemsCount);
     UsedBorderAndPaddingList inlineBorderAndPaddingList;
     inlineBorderAndPaddingList.reserveInitialCapacity(gridItemsCount);
+    TrackSizingGridItemConstraintList blockAxisConstraintList;
+    blockAxisConstraintList.reserveInitialCapacity(gridItemsCount);
 
     Vector<WTF::Range<size_t>> rowSpanList;
     rowSpanList.reserveInitialCapacity(gridItemsCount);
@@ -374,39 +419,52 @@ UsedTrackSizes GridLayout::performGridSizingAlgorithm(const PlacedGridItems& pla
     UsedBorderAndPaddingList blockBorderAndPaddingList;
     blockBorderAndPaddingList.reserveInitialCapacity(gridItemsCount);
 
+    // Extract scenarios from constraints
+    auto columnFreeSpaceScenario = layoutConstraints.inlineAxis.scenario();
+    auto rowFreeSpaceScenario = layoutConstraints.blockAxis.scenario();
+
+    // Convert constraints to optional available space for track sizing algorithm
+    std::optional<LayoutUnit> inlineAxisAvailableSpace = columnFreeSpaceScenario == FreeSpaceScenario::Definite
+        ? std::optional(layoutConstraints.inlineAxis.availableSpace())
+        : std::nullopt;
+    auto blockAxisAvailableSpace = rowFreeSpaceScenario == FreeSpaceScenario::Definite
+        ? std::optional(layoutConstraints.blockAxis.availableSpace())
+        : std::nullopt;
+    auto rowSizesForFirstColumnSizing = rowSizesForFirstIterationColumnSizing(rowTrackSizingFunctionsList, inlineAxisAvailableSpace);
+
     for (auto& gridItem : placedGridItems) {
         columnSpanList.append({ gridItem.columnStartLine(), gridItem.columnEndLine() });
         inlineAxisComputedSizesList.append(gridItem.inlineAxisSizes());
         inlineBorderAndPaddingList.append(gridItem.usedInlineBorderAndPadding());
 
-        rowSpanList.append({ gridItem.rowStartLine(), gridItem.rowEndLine() });
+        auto rowSpan = WTF::Range<size_t> { gridItem.rowStartLine(), gridItem.rowEndLine() };
+        rowSpanList.append(rowSpan);
         blockAxisComputedSizesList.append(gridItem.blockAxisSizes());
         blockBorderAndPaddingList.append(gridItem.usedBlockBorderAndPadding());
+
+        blockAxisConstraintList.append(oppositeAxisConstraintForTrackSizing(rowSizesForFirstColumnSizing, rowSpan));
     }
 
     CheckedRef formattingContextRootStyle = formattingContext().root().style();
     auto columnsGap = GridLayoutUtils::computeGapValue(formattingContextRootStyle->columnGap());
     auto rowsGap = GridLayoutUtils::computeGapValue(formattingContextRootStyle->rowGap());
 
-    // Extract scenarios from constraints
-    auto columnFreeSpaceScenario = layoutConstraints.inlineAxis.scenario();
-    auto rowFreeSpaceScenario = layoutConstraints.blockAxis.scenario();
-
-    // Convert constraints to optional available space for track sizing algorithm
-    auto inlineAxisAvailableSpace = columnFreeSpaceScenario == FreeSpaceScenario::Definite
-        ? std::optional(layoutConstraints.inlineAxis.availableSpace())
-        : std::nullopt;
-    auto blockAxisAvailableSpace = rowFreeSpaceScenario == FreeSpaceScenario::Definite
-        ? std::optional(layoutConstraints.blockAxis.availableSpace())
-        : std::nullopt;
-
     // 1. First, the track sizing algorithm is used to resolve the sizes of the grid columns.
     auto columnSizes = TrackSizingAlgorithm::sizeTracks(placedGridItems, inlineAxisComputedSizesList, inlineBorderAndPaddingList, columnSpanList,
-        columnTrackSizingFunctionsList, inlineAxisAvailableSpace, GridLayoutUtils::inlineAxisGridItemSizingFunctions(), integrationUtils, columnFreeSpaceScenario, columnsGap);
+        columnTrackSizingFunctionsList, inlineAxisAvailableSpace, blockAxisConstraintList, GridLayoutUtils::inlineAxisGridItemSizingFunctions(integrationUtils),
+        columnFreeSpaceScenario, columnsGap, usedJustifyContent);
+
+    // To find the inline-axis available space for any items whose block-axis size contributions
+    // require it, use the grid column sizes calculated in the previous step.
+    TrackSizingGridItemConstraintList inlineAxisConstraintList;
+    inlineAxisConstraintList.reserveInitialCapacity(gridItemsCount);
+    for (auto [gridItemIndex, gridItem] : WTF::indexedRange(placedGridItems))
+        inlineAxisConstraintList.append(oppositeAxisConstraintForTrackSizing(columnSizes, columnSpanList[gridItemIndex]));
 
     // 2. Next, the track sizing algorithm resolves the sizes of the grid rows.
     auto rowSizes = TrackSizingAlgorithm::sizeTracks(placedGridItems, blockAxisComputedSizesList, blockBorderAndPaddingList, rowSpanList,
-        rowTrackSizingFunctionsList, blockAxisAvailableSpace, GridLayoutUtils::blockAxisGridItemSizingFunctions(), integrationUtils, rowFreeSpaceScenario, rowsGap);
+        rowTrackSizingFunctionsList, blockAxisAvailableSpace, inlineAxisConstraintList, GridLayoutUtils::blockAxisGridItemSizingFunctions(integrationUtils),
+        rowFreeSpaceScenario, rowsGap, usedAlignContent);
 
     // 3. Then, if the min-content contribution of any grid item has changed based on the
     // row sizes and alignment calculated in step 2, re-resolve the sizes of the grid
