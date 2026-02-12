@@ -153,7 +153,6 @@
 #include "RTCController.h"
 #include "Range.h"
 #include "RemoteFrame.h"
-#include "RemoteFrameLayoutInfo.h"
 #include "RenderDescendantIterator.h"
 #include "RenderElementInlines.h"
 #include "RenderImage.h"
@@ -568,7 +567,7 @@ Page::~Page()
         resourceUsageOverlay->detachFromPage();
 #endif
 
-    checkedBackForward()->close();
+    protect(backForward())->close();
     if (!isUtilityPage())
         BackForwardCache::singleton().removeAllItemsForPage(*this);
 
@@ -577,10 +576,6 @@ Page::~Page()
     protectedVisitedLinkStore()->removePage(*this);
 }
 
-CheckedRef<BackForwardController> Page::checkedBackForward()
-{
-    return m_backForwardController.get();
-}
 
 void Page::firstTimeInitialization()
 {
@@ -1202,7 +1197,7 @@ Page::FindStringData Page::findString(const String& target, FindOptions options,
         if (foundRange) {
             if (!options.contains(FindOption::DoNotSetSelection)) {
                 if (focusedLocalFrame && localFrame != focusedLocalFrame)
-                    focusedLocalFrame->checkedSelection()->clear();
+                    protect(focusedLocalFrame->selection())->clear();
                 m_focusController->setFocusedFrame(localFrame.get());
             }
             return { std::make_optional(localFrame->frameID()), foundRange };
@@ -1420,7 +1415,7 @@ static void replaceRanges(Page& page, const Vector<FindReplacementRange>& ranges
             if (range.collapsed())
                 continue;
 
-            frame->checkedSelection()->setSelectedRange(range, Affinity::Downstream, FrameSelection::ShouldCloseTyping::Yes);
+            protect(frame->selection())->setSelectedRange(range, Affinity::Downstream, FrameSelection::ShouldCloseTyping::Yes);
             protect(frame->editor())->replaceSelectionWithText(replacementText, Editor::SelectReplacement::Yes, Editor::SmartReplace::No, EditAction::InsertReplacement);
         }
     }
@@ -1612,18 +1607,13 @@ DiagnosticLoggingClient& Page::diagnosticLoggingClient() const
     return *m_diagnosticLoggingClient;
 }
 
-CheckedRef<DiagnosticLoggingClient> Page::checkedDiagnosticLoggingClient() const
-{
-    return diagnosticLoggingClient();
-}
-
 void Page::logMediaDiagnosticMessage(const RefPtr<FormData>& formData) const
 {
     unsigned imageOrMediaFilesCount = formData ? formData->imageOrMediaFilesCount() : 0;
     if (!imageOrMediaFilesCount)
         return;
     auto message = makeString(imageOrMediaFilesCount, imageOrMediaFilesCount == 1 ? " media file has been submitted"_s : " media files have been submitted"_s);
-    checkedDiagnosticLoggingClient()->logDiagnosticMessageWithDomain(message, DiagnosticLoggingDomain::Media);
+    protect(diagnosticLoggingClient())->logDiagnosticMessageWithDomain(message, DiagnosticLoggingDomain::Media);
 }
 
 void Page::setMediaVolume(float volume)
@@ -1998,11 +1988,6 @@ PageGroup& Page::group()
     return *m_group;
 }
 
-CheckedRef<PageGroup> Page::checkedGroup()
-{
-    return group();
-}
-    
 void Page::setVerticalScrollElasticity(ScrollElasticity elasticity)
 {
     if (m_verticalScrollElasticity == elasticity)
@@ -2112,7 +2097,7 @@ void Page::scheduleRenderingUpdate(OptionSet<RenderingUpdateStep> requestedSteps
 void Page::scheduleRenderingUpdateInternal()
 {
     if (!chrome().client().scheduleRenderingUpdate())
-        checkedRenderingUpdateScheduler()->scheduleRenderingUpdate();
+        protect(renderingUpdateScheduler())->scheduleRenderingUpdate();
     m_renderingUpdateIsScheduled = true;
 }
 
@@ -2169,31 +2154,6 @@ void Page::startTrackingRenderingUpdates()
 unsigned Page::renderingUpdateCount() const
 {
     return m_renderingUpdateCount;
-}
-
-void Page::syncLocalFrameInfoToRemote()
-{
-    forEachLocalFrame([] (LocalFrame& frame) {
-        CheckedPtr frameView = frame.view();
-
-        frameView->updateLayoutViewportRect();
-
-        {
-            HashMap<FrameIdentifier, RemoteFrameLayoutInfo> childrenFrameLayoutInfo;
-
-            for (RefPtr child = frame.tree().firstChild(); child; child = child->tree().nextSibling()) {
-                auto visibleRect = frameView->visibleRectOfChild(*child.get());
-
-                float usedZoom = 1.0;
-                if (CheckedPtr ownerRenderer = child->ownerRenderer())
-                    usedZoom = ownerRenderer->style().usedZoom();
-
-                childrenFrameLayoutInfo.add(child->frameID(), RemoteFrameLayoutInfo { .visibleRectInParent = visibleRect, .usedZoom = usedZoom });
-            }
-
-            frame.loader().client().broadcastChildrenFrameLayoutInfoToOtherProcesses(childrenFrameLayoutInfo);
-        }
-    });
 }
 
 // https://html.spec.whatwg.org/multipage/webappapis.html#update-the-rendering
@@ -2480,9 +2440,6 @@ void Page::doAfterUpdateRendering()
     }
 
     computeSampledPageTopColorIfNecessary();
-
-    if (settings().siteIsolationEnabled())
-        syncLocalFrameInfoToRemote();
 }
 
 void Page::finalizeRenderingUpdate(OptionSet<FinalizeRenderingUpdateFlags> flags)
@@ -2819,7 +2776,7 @@ void Page::userStyleSheetLocationChanged()
     }
 
     forEachDocument([] (Document& document) {
-        document.checkedExtensionStyleSheets()->updatePageUserSheet();
+        protect(document.extensionStyleSheets())->updatePageUserSheet();
     });
 }
 
@@ -3960,10 +3917,10 @@ void Page::logNavigation(const Navigation& navigation)
         // Not logging those for now.
         return;
     }
-    checkedDiagnosticLoggingClient()->logDiagnosticMessage(DiagnosticLoggingKeys::navigationKey(), navigationDescription, ShouldSample::No);
+    protect(diagnosticLoggingClient())->logDiagnosticMessage(DiagnosticLoggingKeys::navigationKey(), navigationDescription, ShouldSample::No);
 
     if (!navigation.domain.isEmpty())
-        checkedDiagnosticLoggingClient()->logDiagnosticMessageWithEnhancedPrivacy(DiagnosticLoggingKeys::domainVisitedKey(), navigation.domain.string(), ShouldSample::Yes);
+        protect(diagnosticLoggingClient())->logDiagnosticMessageWithEnhancedPrivacy(DiagnosticLoggingKeys::domainVisitedKey(), navigation.domain.string(), ShouldSample::Yes);
 }
 
 void Page::mainFrameLoadStarted(const URL& destinationURL, FrameLoadType type)
@@ -4486,7 +4443,7 @@ void Page::didChangeMainDocument(Document* newDocument)
 
     clearSampledPageTopColor();
 
-    checkedElementTargetingController()->didChangeMainDocument(newDocument);
+    protect(m_elementTargetingController)->didChangeMainDocument(newDocument);
 
     updateActiveNowPlayingSessionNow();
 }
@@ -4496,11 +4453,6 @@ RenderingUpdateScheduler& Page::renderingUpdateScheduler()
     if (!m_renderingUpdateScheduler)
         m_renderingUpdateScheduler = RenderingUpdateScheduler::create(*this);
     return *m_renderingUpdateScheduler;
-}
-
-CheckedRef<RenderingUpdateScheduler> Page::checkedRenderingUpdateScheduler()
-{
-    return renderingUpdateScheduler();
 }
 
 RenderingUpdateScheduler* Page::existingRenderingUpdateScheduler()
@@ -4699,7 +4651,7 @@ static void dispatchPrintEvent(Frame& mainFrame, const AtomString& eventType, Di
             if (dispatchedOnDocumentEventLoop == DispatchedOnDocumentEventLoop::No)
                 return dispatchEvent();
             if (RefPtr document = frame->document())
-                document->checkedEventLoop()->queueTask(TaskSource::DOMManipulation, WTF::move(dispatchEvent));
+                protect(document->eventLoop())->queueTask(TaskSource::DOMManipulation, WTF::move(dispatchEvent));
         }
     }
 }
@@ -4815,7 +4767,7 @@ void Page::configureLoggingChannel(const String& channelName, WTFLogChannelState
 
 void Page::didFinishLoadingImageForElement(HTMLImageElement& element)
 {
-    protect(element.document())->checkedEventLoop()->queueTask(TaskSource::Networking, [element = Ref { element }]() {
+    protect(protect(element.document())->eventLoop())->queueTask(TaskSource::Networking, [element = Ref { element }]() {
         RefPtr frame = element->document().frame();
         if (!frame)
             return;
@@ -4919,7 +4871,7 @@ void Page::revealCurrentSelection()
     RefPtr focusedOrMainFrame = focusController().focusedOrMainFrame();
     if (!focusedOrMainFrame)
         return;
-    focusedOrMainFrame->checkedSelection()->revealSelection({ SelectionRevealMode::Reveal, ScrollAlignment::alignCenterIfNeeded });
+    protect(focusedOrMainFrame->selection())->revealSelection({ SelectionRevealMode::Reveal, ScrollAlignment::alignCenterIfNeeded });
 }
 
 void Page::injectUserStyleSheet(UserStyleSheet& userStyleSheet)
@@ -4943,10 +4895,10 @@ void Page::injectUserStyleSheet(UserStyleSheet& userStyleSheet)
 
     if (userStyleSheet.injectedFrames() == UserContentInjectedFrames::InjectInTopFrameOnly) {
         if (RefPtr document = localMainFrame ? localMainFrame->document() : nullptr)
-            document->checkedExtensionStyleSheets()->injectPageSpecificUserStyleSheet(userStyleSheet);
+            protect(document->extensionStyleSheets())->injectPageSpecificUserStyleSheet(userStyleSheet);
     } else {
         forEachDocument([&] (Document& document) {
-            document.checkedExtensionStyleSheets()->injectPageSpecificUserStyleSheet(userStyleSheet);
+            protect(document.extensionStyleSheets())->injectPageSpecificUserStyleSheet(userStyleSheet);
         });
     }
 }
@@ -4963,10 +4915,10 @@ void Page::removeInjectedUserStyleSheet(UserStyleSheet& userStyleSheet)
     if (userStyleSheet.injectedFrames() == UserContentInjectedFrames::InjectInTopFrameOnly) {
         RefPtr localMainFrame = dynamicDowncast<LocalFrame>(m_mainFrame.get());
         if (RefPtr document = localMainFrame ? localMainFrame->document() : nullptr)
-            document->checkedExtensionStyleSheets()->removePageSpecificUserStyleSheet(userStyleSheet);
+            protect(document->extensionStyleSheets())->removePageSpecificUserStyleSheet(userStyleSheet);
     } else {
         forEachDocument([&] (Document& document) {
-            document.checkedExtensionStyleSheets()->removePageSpecificUserStyleSheet(userStyleSheet);
+            protect(document.extensionStyleSheets())->removePageSpecificUserStyleSheet(userStyleSheet);
         });
     }
 }
@@ -5093,7 +5045,7 @@ void Page::updateElementsWithTextRecognitionResults()
     }
 
     for (auto& [element, result] : elementsToUpdate) {
-        protect(element->document())->checkedEventLoop()->queueTask(TaskSource::InternalAsyncTask, [result = TextRecognitionResult { result }, weakElement = WeakPtr { element }] {
+        protect(protect(element->document())->eventLoop())->queueTask(TaskSource::InternalAsyncTask, [result = TextRecognitionResult { result }, weakElement = WeakPtr { element }] {
             if (RefPtr element = weakElement.get())
                 ImageOverlay::updateWithTextRecognitionResult(*element, result, ImageOverlay::CacheTextRecognitionResults::No);
         });
@@ -5203,7 +5155,7 @@ void Page::forceRepaintAllFrames()
         if (!frameView || !frameView->renderView())
             continue;
 
-        frameView->checkedRenderView()->repaintViewAndCompositedLayers();
+        protect(frameView->renderView())->repaintViewAndCompositedLayers();
     }
 }
 
@@ -5358,23 +5310,8 @@ void Page::deleteRemovedNodesAndDetachedRenderers()
         RefPtr frameView = document->view();
         if (!frameView)
             return;
-        frameView->checkedLayoutContext()->deleteDetachedRenderersNow();
+        protect(frameView->layoutContext())->deleteDetachedRenderersNow();
     });
-}
-
-CheckedRef<ProgressTracker> Page::checkedProgress()
-{
-    return m_progress.get();
-}
-
-CheckedRef<const ProgressTracker> Page::checkedProgress() const
-{
-    return m_progress.get();
-}
-
-CheckedRef<ElementTargetingController> Page::checkedElementTargetingController()
-{
-    return m_elementTargetingController.get();
 }
 
 const String& Page::sceneIdentifier() const

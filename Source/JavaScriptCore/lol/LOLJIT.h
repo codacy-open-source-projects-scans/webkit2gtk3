@@ -115,6 +115,7 @@ namespace JSC::LOL {
     macro(op_jnstricteq) \
     macro(op_jbelow) \
     macro(op_jbeloweq) \
+    macro(op_ret) \
     macro(op_create_lexical_environment) \
     macro(op_create_direct_arguments) \
     macro(op_create_scoped_arguments) \
@@ -131,6 +132,13 @@ namespace JSC::LOL {
     macro(op_new_async_generator_func_exp) \
     macro(op_new_object) \
     macro(op_new_reg_exp) \
+    macro(op_get_prototype_of) \
+    macro(op_to_this) \
+    macro(op_create_this) \
+    macro(op_throw) \
+    macro(op_switch_imm) \
+    macro(op_switch_char) \
+    macro(op_switch_string) \
 
 
 #define FOR_EACH_OP_WITH_SLOW_CASE(macro) \

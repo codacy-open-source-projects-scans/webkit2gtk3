@@ -34,6 +34,7 @@
 #import "WKPreferencesInternal.h"
 #import "WKScrollGeometry.h"
 #import "WKSeparatedImageView.h"
+#import "WKSurroundingsEffect.h"
 #import "WKUIDelegateInternal.h"
 #import "WKWebViewConfigurationInternal.h"
 #import "WKWebViewInternal.h"

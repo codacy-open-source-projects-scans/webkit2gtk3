@@ -23,61 +23,20 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "config.h"
-#include "DOMTimerHoldingTank.h"
-#include <wtf/TZoneMallocInlines.h>
+#pragma once
 
-#if ENABLE(CONTENT_CHANGE_OBSERVER)
+#import <wtf/Platform.h>
 
-namespace WebCore {
+#if PLATFORM(COCOA)
 
-WTF_MAKE_TZONE_ALLOCATED_IMPL(DOMTimerHoldingTank);
+namespace WebKit {
 
-#if PLATFORM(IOS_SIMULATOR)
-constexpr Seconds maximumHoldTimeLimit { 50_ms };
-#else
-constexpr Seconds maximumHoldTimeLimit { 32_ms };
-#endif
+class WebPage;
+struct InteractionInformationAtPosition;
+struct InteractionInformationRequest;
 
-bool DeferDOMTimersForScope::s_isDeferring { false };
+InteractionInformationAtPosition positionInformationForWebPage(WebPage&, const InteractionInformationRequest&);
 
-DOMTimerHoldingTank::DOMTimerHoldingTank()
-    : m_exceededMaximumHoldTimer { *this, &DOMTimerHoldingTank::removeAll }
-{
-}
+};
 
-DOMTimerHoldingTank::~DOMTimerHoldingTank() = default;
-
-void DOMTimerHoldingTank::add(const DOMTimer& timer)
-{
-    m_timers.add(timer);
-    if (!m_exceededMaximumHoldTimer.isActive())
-        m_exceededMaximumHoldTimer.startOneShot(maximumHoldTimeLimit);
-}
-
-void DOMTimerHoldingTank::remove(const DOMTimer& timer)
-{
-    stopExceededMaximumHoldTimer();
-    m_timers.remove(timer);
-}
-
-bool DOMTimerHoldingTank::contains(const DOMTimer& timer)
-{
-    return m_timers.contains(timer);
-}
-
-void DOMTimerHoldingTank::removeAll()
-{
-    stopExceededMaximumHoldTimer();
-    m_timers.clear();
-}
-
-inline void DOMTimerHoldingTank::stopExceededMaximumHoldTimer()
-{
-    if (m_exceededMaximumHoldTimer.isActive())
-        m_exceededMaximumHoldTimer.stop();
-}
-
-} // namespace WebCore
-
-#endif // ENABLE(CONTENT_CHANGE_OBSERVER)
+#endif // PLATFORM(COCOA)

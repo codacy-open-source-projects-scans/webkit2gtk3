@@ -215,7 +215,7 @@ void WebPage::getPlatformEditorState(LocalFrame& frame, EditorState& result) con
         postLayoutData.selectionBoundingRect = frame.protectedView()->contentsToWindow(enclosingIntRect(unitedBoundingBoxes(quads)));
     else if (selection.isCaret()) {
         // Quads will be empty at the start of a paragraph.
-        postLayoutData.selectionBoundingRect = frame.protectedView()->contentsToWindow(frame.checkedSelection()->absoluteCaretBounds());
+        postLayoutData.selectionBoundingRect = frame.protectedView()->contentsToWindow(protect(frame.selection())->absoluteCaretBounds());
     }
 }
 
@@ -426,9 +426,9 @@ bool WebPage::performNonEditingBehaviorForSelector(const String& selector, Keybo
     }
 
     if (selector == "moveToLeftEndOfLine:"_s)
-        didPerformAction = m_userInterfaceLayoutDirection == WebCore::UserInterfaceLayoutDirection::LTR ? page->checkedBackForward()->goBack() : page->checkedBackForward()->goForward();
+        didPerformAction = m_userInterfaceLayoutDirection == WebCore::UserInterfaceLayoutDirection::LTR ? protect(page->backForward())->goBack() : protect(page->backForward())->goForward();
     else if (selector == "moveToRightEndOfLine:"_s)
-        didPerformAction = m_userInterfaceLayoutDirection == WebCore::UserInterfaceLayoutDirection::LTR ? page->checkedBackForward()->goForward() : page->checkedBackForward()->goBack();
+        didPerformAction = m_userInterfaceLayoutDirection == WebCore::UserInterfaceLayoutDirection::LTR ? protect(page->backForward())->goForward() : protect(page->backForward())->goBack();
 
     return didPerformAction;
 }
@@ -677,7 +677,7 @@ void WebPage::handleImageServiceClick(WebCore::FrameIdentifier frameID, const In
         point,
         image,
         element.isContentEditable(),
-        element.checkedRenderBox()->absoluteContentQuad().enclosingBoundingBox(),
+        protect(element.renderBox())->absoluteContentQuad().enclosingBoundingBox(),
         HTMLAttachmentElement::getAttachmentIdentifier(element),
         contextForElement(element),
         image.mimeType()
@@ -693,7 +693,7 @@ void WebPage::handlePDFServiceClick(WebCore::FrameIdentifier frameID, const IntP
     send(Messages::WebPageProxy::ShowContextMenuFromFrame(webFrame->info(), ContextMenuContextData {
         point,
         element.isContentEditable(),
-        element.checkedRenderBox()->absoluteContentQuad().enclosingBoundingBox(),
+        protect(element.renderBox())->absoluteContentQuad().enclosingBoundingBox(),
         element.uniqueIdentifier(),
         "application/pdf"_s
     }, { }));

@@ -6910,7 +6910,8 @@
 		EDEC98030AED7E170059137F /* WebCorePrefix.h in Headers */ = {isa = PBXBuildFile; fileRef = EDEC98020AED7E170059137F /* WebCorePrefix.h */; };
 		EE0C7E042CE845CB0043DAF8 /* CSSPositionTryRule.h in Headers */ = {isa = PBXBuildFile; fileRef = EE0C7E002CE845CB0043DAF8 /* CSSPositionTryRule.h */; };
 		EE0D3C492D2F4B4C00072978 /* StageModeOperations.h in Headers */ = {isa = PBXBuildFile; fileRef = EE0D3C482D2F4AE600072978 /* StageModeOperations.h */; settings = {ATTRIBUTES = (Private, ); }; };
-		EE454B792F19C70200DD0C8D /* RemoteFrameLayoutInfo.h in Headers */ = {isa = PBXBuildFile; fileRef = EE454B782F19C6D400DD0C8D /* RemoteFrameLayoutInfo.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		EE1A93AA2F2AE00A0054FAE4 /* NavigationActivation.h in Headers */ = {isa = PBXBuildFile; fileRef = DFD9B92D2C29D16200E10B53 /* NavigationActivation.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		EE1A93AB2F2AE7D20054FAE4 /* NavigationHistoryEntry.h in Headers */ = {isa = PBXBuildFile; fileRef = A9C6E65D0D7400B4006442E9 /* NavigationHistoryEntry.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		EE62BD9D2DE12C1B006C9A05 /* ResolvedScopedName.h in Headers */ = {isa = PBXBuildFile; fileRef = EE62BD9B2DE12BD4006C9A05 /* ResolvedScopedName.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		EEE349082DE0061C00A7D4BB /* StyleScopeIdentifier.h in Headers */ = {isa = PBXBuildFile; fileRef = EEE349072DE005FC00A7D4BB /* StyleScopeIdentifier.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		EFCC6C8F20FE914400A2321B /* CanvasActivityRecord.h in Headers */ = {isa = PBXBuildFile; fileRef = EFCC6C8D20FE914000A2321B /* CanvasActivityRecord.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -22435,7 +22436,6 @@
 		EE0C7E012CE845CB0043DAF8 /* CSSPositionTryRule.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = CSSPositionTryRule.cpp; sourceTree = "<group>"; };
 		EE0C7E022CE845CB0043DAF8 /* CSSPositionTryRule.idl */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = CSSPositionTryRule.idl; sourceTree = "<group>"; };
 		EE0D3C482D2F4AE600072978 /* StageModeOperations.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StageModeOperations.h; sourceTree = "<group>"; };
-		EE454B782F19C6D400DD0C8D /* RemoteFrameLayoutInfo.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RemoteFrameLayoutInfo.h; sourceTree = "<group>"; };
 		EE62BD9B2DE12BD4006C9A05 /* ResolvedScopedName.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ResolvedScopedName.h; sourceTree = "<group>"; };
 		EE62BD9C2DE12BD4006C9A05 /* ResolvedScopedName.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ResolvedScopedName.cpp; sourceTree = "<group>"; };
 		EE7775212D07B0EF0054B960 /* CSSPropertyParserConsumer+Anchor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "CSSPropertyParserConsumer+Anchor.h"; sourceTree = "<group>"; };
@@ -24456,10 +24456,6 @@
 		18A6CD6F0D8F2025001DC3CE /* ios */ = {
 			isa = PBXGroup;
 			children = (
-				6FE9F09222211035004C5082 /* ContentChangeObserver.cpp */,
-				6FB5E212221F2447003989CF /* ContentChangeObserver.h */,
-				CE1A501E22D5350900CBC927 /* DOMTimerHoldingTank.cpp */,
-				CE1A501D22D5350900CBC927 /* DOMTimerHoldingTank.h */,
 				FE6938B51045D67E008EABB6 /* EventHandlerIOS.mm */,
 				FED13D3B0CEA936A00D89466 /* FrameIOS.mm */,
 				225A16B30D5C11E900090295 /* WebEventRegion.h */,
@@ -29345,8 +29341,12 @@
 			isa = PBXGroup;
 			children = (
 				443877E3271681F600FD3E33 /* CaptionUserPreferencesMediaAFCocoa.mm */,
+				6FE9F09222211035004C5082 /* ContentChangeObserver.cpp */,
+				6FB5E212221F2447003989CF /* ContentChangeObserver.h */,
 				F446EDDD265DAE3F0031DA8F /* DataDetectionResultsStorage.h */,
 				F446EDE7265DD8900031DA8F /* DataDetectorElementInfo.h */,
+				CE1A501E22D5350900CBC927 /* DOMTimerHoldingTank.cpp */,
+				CE1A501D22D5350900CBC927 /* DOMTimerHoldingTank.h */,
 				443BFDC627BB372C0001245F /* EventHandlerCocoa.mm */,
 				F446EDE0265DB1E50031DA8F /* ImageOverlayDataDetectionResultIdentifier.h */,
 				413E007B1DB0E707002341D2 /* MemoryReleaseCocoa.mm */,
@@ -30410,7 +30410,6 @@
 				5C2397D22949213600BB4E10 /* RemoteFrameClient.h */,
 				FADCF77D2DC5DB1700591E33 /* RemoteFrameGeometryTransformer.cpp */,
 				FADCF77C2DC5DB1700591E33 /* RemoteFrameGeometryTransformer.h */,
-				EE454B782F19C6D400DD0C8D /* RemoteFrameLayoutInfo.h */,
 				5C6F7689296CBC5400799B41 /* RemoteFrameView.cpp */,
 				5C907EB929528A4300B3402D /* RemoteFrameView.h */,
 				0223E0732AAED62200AF30FB /* RemoteUserInputEventData.h */,
@@ -46103,6 +46102,8 @@
 				83B2D1751B8BCD6A00A02E47 /* NativeNodeFilter.h in Headers */,
 				E10B9B6C0B747599003ED890 /* NativeXPathNSResolver.h in Headers */,
 				93CCF0270AF6C52900018E89 /* NavigationAction.h in Headers */,
+				EE1A93AA2F2AE00A0054FAE4 /* NavigationActivation.h in Headers */,
+				EE1A93AB2F2AE7D20054FAE4 /* NavigationHistoryEntry.h in Headers */,
 				4607DC652C6AC0AC00AB00D4 /* NavigationIdentifier.h in Headers */,
 				41E2F199274FAECF00A089EE /* NavigationPreloadManager.h in Headers */,
 				41503793274FDC9B00354ABC /* NavigationPreloadState.h in Headers */,
@@ -46638,7 +46639,6 @@
 				46B9519A207D635400A7D2DD /* RemoteFrame.h in Headers */,
 				5C2397D72949288700BB4E10 /* RemoteFrameClient.h in Headers */,
 				FADCF77E2DC5E3F000591E33 /* RemoteFrameGeometryTransformer.h in Headers */,
-				EE454B792F19C70200DD0C8D /* RemoteFrameLayoutInfo.h in Headers */,
 				5C6F768D296CC7DD00799B41 /* RemoteFrameView.h in Headers */,
 				CDC312E922FCD7C0001204EC /* RemotePlayback.h in Headers */,
 				CDC312EB22FCD7C9001204EC /* RemotePlaybackAvailabilityCallback.h in Headers */,

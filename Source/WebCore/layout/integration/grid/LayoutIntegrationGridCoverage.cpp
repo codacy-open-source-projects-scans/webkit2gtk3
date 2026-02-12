@@ -84,6 +84,8 @@ enum class GridAvoidanceReason : uint8_t {
     GridItemHasUnsupportedRowPlacement,
     GridItemHasUnsupportedWidthValue,
     GridItemHasUnsupportedAutomaticInlineSizing,
+    GridItemHasUnsupportedHeightValue,
+    GridItemHasUnsupportedAutomaticBlockSizing,
     NotAGrid,
     GridFormattingContextIntegrationDisabled,
 };
@@ -105,8 +107,6 @@ enum class GridAvoidanceReason : uint8_t {
 
 static bool hasValidColumnEnd(const Style::GridPositionExplicit& explicitColumnStart, const Style::GridPosition columnEnd, size_t linesFromGridTemplateColumnsCount)
 {
-    UNUSED_PARAM(explicitColumnStart);
-
     return WTF::switchOn(columnEnd,
         [](const CSS::Keyword::Auto&) {
             return false;
@@ -114,6 +114,16 @@ static bool hasValidColumnEnd(const Style::GridPositionExplicit& explicitColumnS
         [&](const Style::GridPositionExplicit&) {
             if (!columnEnd.namedGridLine().isEmpty() || columnEnd.explicitPosition() < 0 || columnEnd.explicitPosition() > static_cast<int>(linesFromGridTemplateColumnsCount))
                 return false;
+
+            // FIXME: Multi-span items are not yet supported in intrinsic sizing
+            // (see TrackSizingAlgorithm::sizeTracksForIntrinsicSizing).
+            // Only accept items that span a single column.
+            auto startPosition = explicitColumnStart.position.value;
+            auto endPosition = columnEnd.explicitPosition();
+            auto gridLineDistance = endPosition - startPosition;
+            if (gridLineDistance != 1)
+                return false;
+
             return true;
         },
         [&](const Style::GridPositionSpan&) {
@@ -145,7 +155,7 @@ static bool hasValidColumnEnd(const CSS::Keyword::Auto& autoColumnStart, const S
     );
 }
 
-static bool hasValidRowEnd(const Style::GridPositionExplicit&, const Style::GridPosition rowEnd, size_t linesFromGridTemplateRowsCount)
+static bool hasValidRowEnd(const Style::GridPositionExplicit& explicitRowStart, const Style::GridPosition rowEnd, size_t linesFromGridTemplateRowsCount)
 {
     return WTF::switchOn(rowEnd,
         [&](const CSS::Keyword::Auto&) {
@@ -154,6 +164,16 @@ static bool hasValidRowEnd(const Style::GridPositionExplicit&, const Style::Grid
         [&](const Style::GridPositionExplicit&) {
             if (!rowEnd.namedGridLine().isEmpty() || rowEnd.explicitPosition() < 0 || rowEnd.explicitPosition() > static_cast<int>(linesFromGridTemplateRowsCount))
                 return false;
+
+            // FIXME: Multi-span items are not yet supported in intrinsic sizing
+            // (see TrackSizingAlgorithm::sizeTracksForIntrinsicSizing).
+            // Only accept items that span a single row.
+            auto startPosition = explicitRowStart.position.value;
+            auto endPosition = rowEnd.explicitPosition();
+            auto gridLineDistance = endPosition - startPosition;
+            if (gridLineDistance != 1)
+                return false;
+
             return true;
         },
         [&](const Style::GridPositionSpan&) {
@@ -183,6 +203,26 @@ static bool gridItemHasValidWidth(const Style::PreferredSize& width)
 static bool canComputeAutomaticInlineSize(const RenderBox& gridItem, const StyleSelfAlignmentData& usedJustifySelf)
 {
     return usedJustifySelf.position() == ItemPosition::Normal && !protect(gridItem.element())->isReplaced() && !gridItem.style().hasAspectRatio();
+}
+
+static bool gridItemHasValidHeight(const Style::PreferredSize& height)
+{
+    return WTF::switchOn(height,
+        [](const CSS::Keyword::Auto&) {
+            return true;
+        },
+        [](const Style::PreferredSize::Fixed&) {
+            return true;
+        },
+        [](const auto&) {
+            return false;
+        }
+    );
+}
+
+static bool canComputeAutomaticBlockSize(const RenderBox& gridItem, const StyleSelfAlignmentData& usedAlignSelf)
+{
+    return usedAlignSelf.position() == ItemPosition::Normal && !protect(gridItem.element())->isReplaced() && !gridItem.style().hasAspectRatio();
 }
 
 static EnumSet<GridAvoidanceReason> gridLayoutAvoidanceReason(const RenderGrid& renderGrid, ReasonCollectionMode reasonCollectionMode)
@@ -377,8 +417,18 @@ static EnumSet<GridAvoidanceReason> gridLayoutAvoidanceReason(const RenderGrid& 
         if (gridItemWidth.isAuto() && !canComputeAutomaticInlineSize(gridItem, usedJustifySelf))
             ADD_REASON_AND_RETURN_IF_NEEDED(GridItemHasUnsupportedAutomaticInlineSizing, reasons, reasonCollectionMode);
 
-        if (!gridItemStyle->height().isFixed())
-            ADD_REASON_AND_RETURN_IF_NEEDED(GridItemHasNonFixedHeight, reasons, reasonCollectionMode);
+        auto usedAlignSelf = gridItemStyle->alignSelf().resolve(renderGridStyle.ptr());
+
+        if ((usedAlignSelf.position() != ItemPosition::Start && usedAlignSelf.position() != ItemPosition::Normal)
+            && usedAlignSelf.overflow() != OverflowAlignment::Default && usedAlignSelf.positionType() != ItemPositionType::NonLegacy)
+            ADD_REASON_AND_RETURN_IF_NEEDED(GridItemHasUnsupportedBlockAxisAlignment, reasons, reasonCollectionMode);
+
+        auto& gridItemHeight = gridItemStyle->height();
+        if (!gridItemHasValidHeight(gridItemHeight))
+            ADD_REASON_AND_RETURN_IF_NEEDED(GridItemHasUnsupportedHeightValue, reasons, reasonCollectionMode);
+
+        if (gridItemHeight.isAuto() && !canComputeAutomaticBlockSize(gridItem, usedAlignSelf))
+            ADD_REASON_AND_RETURN_IF_NEEDED(GridItemHasUnsupportedAutomaticBlockSizing, reasons, reasonCollectionMode);
 
         if (auto fixedMinWidth = gridItemStyle->minWidth().tryFixed(); fixedMinWidth && fixedMinWidth->unresolvedValue())
             ADD_REASON_AND_RETURN_IF_NEEDED(GridHasNonZeroMinWidth, reasons, reasonCollectionMode);
@@ -410,11 +460,6 @@ static EnumSet<GridAvoidanceReason> gridLayoutAvoidanceReason(const RenderGrid& 
         };
         if (gridItemHasMargins())
             ADD_REASON_AND_RETURN_IF_NEEDED(GridItemHasMargin, reasons, reasonCollectionMode);
-
-        auto alignSelf = gridItemStyle->alignSelf().resolve();
-        if (alignSelf.position() != ItemPosition::Start && alignSelf.overflow() != OverflowAlignment::Default
-            && alignSelf.positionType() != ItemPositionType::NonLegacy)
-            ADD_REASON_AND_RETURN_IF_NEEDED(GridItemHasUnsupportedBlockAxisAlignment, reasons, reasonCollectionMode);
 
         auto linesFromGridTemplateColumnsCount = gridTemplateColumns.sizes.size() + 1;
         auto linesFromGridTemplateRowsCount = gridTemplateRows.sizes.size() + 1;
@@ -607,6 +652,15 @@ static void printReason(GridAvoidanceReason reason, TextStream& stream)
         break;
     case GridAvoidanceReason::GridItemHasUnsupportedWidthValue:
         stream << "grid item has unsupported width value";
+        break;
+    case GridAvoidanceReason::GridItemHasUnsupportedAutomaticInlineSizing:
+        stream << "grid item has unsupported automatic inline sizing";
+        break;
+    case GridAvoidanceReason::GridItemHasUnsupportedHeightValue:
+        stream << "grid item has unsupported height value";
+        break;
+    case GridAvoidanceReason::GridItemHasUnsupportedAutomaticBlockSizing:
+        stream << "grid item has unsupported automatic block sizing";
         break;
     case GridAvoidanceReason::GridItemHasNonFixedHeight:
         stream << "grid item has non-fixed height";

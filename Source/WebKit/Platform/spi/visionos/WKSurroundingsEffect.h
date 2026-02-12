@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 Apple Inc. All rights reserved.
+ * Copyright (C) 2025 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,20 +25,32 @@
 
 #pragma once
 
-#if PLATFORM(IOS_FAMILY)
+#import <Foundation/Foundation.h>
+#import <wtf/Platform.h>
 
-#include <WebCore/Cursor.h>
-#include <WebCore/FloatRect.h>
+#if PLATFORM(VISION)
 
-namespace WebKit {
+#import <UIKit/UIKit.h>
 
-struct CursorContext {
-    WebCore::FloatRect lineCaretExtent;
-    std::optional<WebCore::Cursor> cursor;
-    bool isVerticalWritingMode { false };
-    bool shouldNotUseIBeamInEditableContent { false };
+typedef NS_ENUM(NSInteger, WKSurroundingsEffectType) {
+    WKSurroundingsEffectTypeNone = 0,
+    WKSurroundingsEffectTypeSemiDark = 1,
+    WKSurroundingsEffectTypeDark = 2,
+    WKSurroundingsEffectTypeUltraDark = 3,
 };
 
-} // namespace WebKit
+NS_HEADER_AUDIT_BEGIN(nullability, sendability)
 
-#endif // PLATFORM(IOS_FAMILY)
+NS_SWIFT_UI_ACTOR
+@interface WKSurroundingsEffectManager : NSObject
++ (WKSurroundingsEffectManager *)shared;
+@property (nonatomic) WKSurroundingsEffectType currentEffect;
+@end
+
+@interface WKSurroundingsEffectWindow : UIWindow
+- (instancetype)initWithWindowScene:(UIWindowScene *)windowScene;
+- (void)setupSurroundingsEffectIfNeeded;
+@end
+
+NS_HEADER_AUDIT_END(nullability, sendability)
+#endif

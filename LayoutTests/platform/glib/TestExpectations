@@ -1309,6 +1309,7 @@ webkit.org/b/230277 imported/w3c/web-platform-tests/css/css-transforms/perspecti
 webkit.org/b/245716 imported/w3c/web-platform-tests/css/css-transforms/transform3d-rotatex-perspective-003.html [ ImageOnlyFailure ]
 webkit.org/b/230080 imported/w3c/web-platform-tests/css/css-transforms/transform3d-sorting-006.html [ ImageOnlyFailure ]
 
+webkit.org/b/264579 imported/w3c/web-platform-tests/css/css-transforms/animation/transform-interpolation-perspective.html [ ImageOnlyFailure ]
 webkit.org/b/264579 imported/w3c/web-platform-tests/css/css-transforms/animation/transform-interpolation-rotate.html [ ImageOnlyFailure ]
 webkit.org/b/264579 imported/w3c/web-platform-tests/css/css-transforms/transform-3d-rotateY-stair-above-001.xht [ ImageOnlyFailure ]
 
@@ -1334,7 +1335,6 @@ webkit.org/b/237502 fast/dom/Range/getClientRects.html [ Failure ]
 # Tests that fail on other platforms, but pass on Glib ports. These are probably due to
 # things that work in TextureMapper, but not elsewhere.
 imported/w3c/web-platform-tests/css/css-transforms/3d-rendering-context-and-z-ordering-001.html [ Pass ]
-imported/w3c/web-platform-tests/css/css-transforms/animation/transform-interpolation-skew.html [ Pass ]
 imported/w3c/web-platform-tests/css/css-transforms/huge-length-tiny-scale.html [ Pass ]
 imported/w3c/web-platform-tests/css/css-transforms/preserve3d-and-filter-no-perspective.html [ Pass ]
 imported/w3c/web-platform-tests/css/css-transforms/transform3d-scale-004.html [ Pass ]
@@ -3791,19 +3791,10 @@ imported/w3c/web-platform-tests/css/css-ui/compute-kind-widget-generated/kind-of
 imported/w3c/web-platform-tests/css/css-ui/compute-kind-widget-generated/kind-of-widget-fallback-textarea-border-top-right-radius-001.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-ui/compute-kind-widget-generated/grouped-kind-of-widget-fallback-border-top-left-radius-001.html [ ImageOnlyFailure ]
 
+# Customizable select feature.
 imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select-in-page/customizable-select-in-page-keyboard-behavior.tentative.html [ Skip ]
 imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select-in-page/customizable-select-in-page-mouse-behavior.tentative.html [ Skip ]
-imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/select-home-end-pagedown-pageup-detailed.optional.html [ Skip ]
-imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/select-home-end-pagedown-pageup.optional.html [ Skip ]
-imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/select-keyboard-behavior.optional.html [ Skip ]
-imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/select-inside-top-layer.html [ Skip ]
-imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/select-mouse-behavior.html [ Skip ]
-imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/select-picker-exit-animation.html [ Skip ]
-imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/select-accessibility-minimum-target-size.html [ Skip ]
-imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/button-in-popover.html [ Skip ]
-imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/select-click-drag-option.optional.html [ Skip ]
-imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/select-picker-hover-active-pseudo.html [ Skip ]
-imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/switch-picker-appearance.html [ Skip ]
+imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select [ Skip ]
 imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/select-listbox-touch.optional.html [ Skip ]
 imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/select-marker-end-aligned.tentative.html [ Skip ]
 
@@ -5228,6 +5219,11 @@ webkit.org/b/307294 media/video-zoom.html [ ImageOnlyFailure Timeout ]
 webkit.org/b/294295 fullscreen/full-screen-request-removed-with-raf.html [ Pass Timeout ]
 
 webkit.org/b/307368 fast/repaint/iframe-from-display-none-repaint.html [ Pass ImageOnlyFailure ]
+
+webkit.org/b/307586 imported/w3c/web-platform-tests/css/css-view-transitions/no-raf-while-render-blocked.html [ Failure ]
+
+# Note: this randomly crashes on the EWS (which runs Release+Asserts) but passes always on post-commit (Release)
+webkit.org/b/307597 imported/w3c/web-platform-tests/service-workers/service-worker/redirected-response.https.html [ Crash Pass ]
 
 # End: Common failures between GTK and WPE.
 

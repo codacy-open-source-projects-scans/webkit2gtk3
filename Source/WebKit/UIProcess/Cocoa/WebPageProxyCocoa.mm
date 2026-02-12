@@ -279,9 +279,8 @@ std::optional<IPC::AsyncReplyID> WebPageProxy::grantAccessToCurrentPasteboardDat
 #if USE(APPLE_INTERNAL_SDK) && __has_include(<WebKitAdditions/WebPageProxyCocoaAdditions.mm>)
 #import <WebKitAdditions/WebPageProxyCocoaAdditions.mm>
 #else
-// Redefine as function-like macro for statement context
 #undef SAFE_BROWSING_LOOKUP_RESULT_ADDITIONS
-#define SAFE_BROWSING_LOOKUP_RESULT_ADDITIONS(lookupResult)
+#define SAFE_BROWSING_LOOKUP_RESULT_ADDITIONS(lookupResult) (void)lookupResult;
 #endif
 
 void WebPageProxy::beginSafeBrowsingCheck(const URL& url, API::Navigation& navigation, bool forMainFrameNavigation)
@@ -1850,6 +1849,17 @@ void WebPageProxy::selectWithGesture(IntPoint point, GestureType gestureType, Ge
         return callback({ }, GestureType::Loupe, GestureRecognizerState::Possible, { });
 
     WTF::protect(legacyMainFrameProcess())->sendWithAsyncReply(Messages::WebPage::SelectWithGesture(point, gestureType, gestureState, isInteractingWithFocusedElement), WTF::move(callback), webPageIDInMainFrameProcess());
+}
+
+void WebPageProxy::didReceivePositionInformation(const InteractionInformationAtPosition& info)
+{
+    if (RefPtr pageClient = this->pageClient())
+        pageClient->positionInformationDidChange(info);
+}
+
+void WebPageProxy::requestPositionInformation(const InteractionInformationRequest& request)
+{
+    protect(m_legacyMainFrameProcess)->send(Messages::WebPage::RequestPositionInformation(request), webPageIDInMainFrameProcess());
 }
 
 } // namespace WebKit

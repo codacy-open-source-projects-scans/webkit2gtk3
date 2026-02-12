@@ -561,17 +561,6 @@ void WebPageProxy::selectWithTwoTouches(const WebCore::IntPoint from, const WebC
     protect(legacyMainFrameProcess())->sendWithAsyncReply(Messages::WebPage::SelectWithTwoTouches(from, to, gestureType, gestureState), WTF::move(callback), webPageIDInMainFrameProcess());
 }
 
-void WebPageProxy::didReceivePositionInformation(const InteractionInformationAtPosition& info)
-{
-    if (RefPtr pageClient = this->pageClient())
-        pageClient->positionInformationDidChange(info);
-}
-
-void WebPageProxy::requestPositionInformation(const InteractionInformationRequest& request)
-{
-    protect(m_legacyMainFrameProcess)->send(Messages::WebPage::RequestPositionInformation(request), webPageIDInMainFrameProcess());
-}
-
 void WebPageProxy::startInteractionWithPositionInformation(const InteractionInformationAtPosition& positionInformation)
 {
     protect(m_legacyMainFrameProcess)->send(Messages::WebPage::StartInteractionWithElementContextOrPosition(positionInformation.elementContext, positionInformation.request.point), webPageIDInMainFrameProcess());
@@ -1110,6 +1099,11 @@ void WebPageProxy::setFocusedElementValue(const WebCore::ElementContext& context
 void WebPageProxy::setFocusedElementSelectedIndex(const WebCore::ElementContext& context, uint32_t index, bool allowMultipleSelection)
 {
     protect(legacyMainFrameProcess())->send(Messages::WebPage::SetFocusedElementSelectedIndex(context, index, allowMultipleSelection), webPageIDInMainFrameProcess());
+}
+
+void WebPageProxy::setSelectElementIsOpen(const WebCore::ElementContext& context, bool isOpen)
+{
+    protect(legacyMainFrameProcess())->send(Messages::WebPage::SetSelectElementIsOpen(context, isOpen), webPageIDInMainFrameProcess());
 }
 
 void WebPageProxy::didPerformDictionaryLookup(const DictionaryPopupInfo& dictionaryPopupInfo)

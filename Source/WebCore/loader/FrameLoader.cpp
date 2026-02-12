@@ -345,7 +345,7 @@ public:
     {
         if (m_inProgress && m_frame->page()) {
             Ref frame = m_frame.get();
-            protect(frame->page())->checkedProgress()->progressCompleted(frame);
+            protect(protect(frame->page())->progress())->progressCompleted(frame);
         }
     }
 
@@ -354,7 +354,7 @@ public:
         ASSERT(m_frame->page());
         if (!m_inProgress) {
             Ref frame = m_frame.get();
-            protect(frame->page())->checkedProgress()->progressStarted(frame);
+            protect(protect(frame->page())->progress())->progressStarted(frame);
         }
         m_inProgress = true;
     }
@@ -366,7 +366,7 @@ public:
         m_inProgress = false;
         Ref frame = m_frame.get();
         RefPtr page = frame->page();
-        page->checkedProgress()->progressCompleted(frame);
+        protect(page->progress())->progressCompleted(frame);
         platformStrategies()->loaderStrategy()->pageLoadCompleted(*page);
     }
 
@@ -525,7 +525,7 @@ void FrameLoader::changeLocation(FrameLoadRequest&& frameRequest, Event* trigger
         frameRequest.setFrameName(frame->document()->baseTarget());
 
     if (RefPtr document = frame->document())
-        document->checkedContentSecurityPolicy()->upgradeInsecureRequestIfNeeded(frameRequest.resourceRequest(), ContentSecurityPolicy::InsecureRequestType::Navigation);
+        protect(document->contentSecurityPolicy())->upgradeInsecureRequestIfNeeded(frameRequest.resourceRequest(), ContentSecurityPolicy::InsecureRequestType::Navigation);
 
     loadFrameRequest(WTF::move(frameRequest), triggeringEvent, { }, WTF::move(privateClickMeasurement));
 }
@@ -552,7 +552,7 @@ void FrameLoader::submitForm(Ref<FormSubmission>&& submission)
     }
 
     URL formAction = submission->action();
-    if (!document->checkedContentSecurityPolicy()->allowFormAction(formAction))
+    if (!protect(document->contentSecurityPolicy())->allowFormAction(formAction))
         return;
 
     RefPtr targetFrame = findFrameForNavigation(submission->target(), &submission->state()->sourceDocument());
@@ -748,7 +748,7 @@ void FrameLoader::clear(RefPtr<Document>&& newDocument, bool clearWindowProperti
         protect(frame->windowProxy())->setDOMWindow(protect(newDocument->window()).get());
 
     if (clearScriptObjects)
-        frame->checkedScript()->clearScriptObjects();
+        protect(frame->script())->clearScriptObjects();
 
     if (CheckedPtr newDocumentCSP = newDocument->contentSecurityPolicy()) {
         bool enableEvalValue = newDocumentCSP->evalErrorMessage().isNull();
@@ -842,12 +842,12 @@ void FrameLoader::didBeginDocument(bool dispatch, LocalDOMWindow* previousWindow
     if (RefPtr documentLoader = m_documentLoader) {
         // The DocumentLoader may have already parsed the CSP header to do some checks. If so, reuse the already parsed version instead of parsing again.
         if (CheckedPtr contentSecurityPolicy = documentLoader->contentSecurityPolicy())
-            document->checkedContentSecurityPolicy()->didReceiveHeaders(*contentSecurityPolicy, ContentSecurityPolicy::ReportParsingErrors::No);
+            protect(document->contentSecurityPolicy())->didReceiveHeaders(*contentSecurityPolicy, ContentSecurityPolicy::ReportParsingErrors::No);
         else
-            document->checkedContentSecurityPolicy()->didReceiveHeaders(ContentSecurityPolicyResponseHeaders(documentLoader->response()), referrer(), ContentSecurityPolicy::ReportParsingErrors::No);
+            protect(document->contentSecurityPolicy())->didReceiveHeaders(ContentSecurityPolicyResponseHeaders(documentLoader->response()), referrer(), ContentSecurityPolicy::ReportParsingErrors::No);
 
         if (document->url().protocolIsBlob())
-            document->checkedContentSecurityPolicy()->updateSourceSelf(SecurityOrigin::create(document->url()));
+            protect(document->contentSecurityPolicy())->updateSourceSelf(SecurityOrigin::create(document->url()));
 
         if (document->url().protocolIsInHTTPFamily() || document->url().protocolIsBlob())
             document->setCrossOriginEmbedderPolicy(obtainCrossOriginEmbedderPolicy(documentLoader->response(), document.ptr()));
@@ -1178,7 +1178,7 @@ bool FrameLoader::checkIfFormActionAllowedByCSP(const URL& url, bool didReceiveR
         return true;
 
     auto redirectResponseReceived = didReceiveRedirectResponse ? ContentSecurityPolicy::RedirectResponseReceived::Yes : ContentSecurityPolicy::RedirectResponseReceived::No;
-    return protect(m_frame->document())->checkedContentSecurityPolicy()->allowFormAction(url, redirectResponseReceived, preRedirectURL);
+    return protect(protect(m_frame->document())->contentSecurityPolicy())->allowFormAction(url, redirectResponseReceived, preRedirectURL);
 }
 
 void FrameLoader::provisionalLoadStarted()
@@ -2966,7 +2966,7 @@ void FrameLoader::checkLoadCompleteForThisFrame(LoadWillContinueInAnotherProcess
         }
         if (shouldReset && item) {
             if (RefPtr page = m_frame->page())
-                page->checkedBackForward()->setCurrentItem(*item);
+                protect(page->backForward())->setCurrentItem(*item);
         }
 
         return;
@@ -3597,7 +3597,7 @@ void FrameLoader::loadPostRequest(FrameLoadRequest&& request, const String& refe
     updateRequestAndAddExtraFields(workingResourceRequest, IsMainResource::Yes, loadType, ShouldUpdateAppInitiatedValue::Yes, FrameLoader::IsServiceWorkerNavigationLoad::No, willOpenInNewWindow, protect(request.requester()).ptr());
 
     if (RefPtr document = frame->document())
-        document->checkedContentSecurityPolicy()->upgradeInsecureRequestIfNeeded(workingResourceRequest, ContentSecurityPolicy::InsecureRequestType::Load);
+        protect(document->contentSecurityPolicy())->upgradeInsecureRequestIfNeeded(workingResourceRequest, ContentSecurityPolicy::InsecureRequestType::Load);
 
     NavigationAction action { request.requester(), workingResourceRequest, request.initiatedByMainFrame(), request.isRequestFromClientOrUserInput(), loadType, true, event, request.shouldOpenExternalURLsPolicy(), { } };
     action.setLockHistory(lockHistory);
@@ -3694,7 +3694,7 @@ ResourceLoaderIdentifier FrameLoader::loadResourceSynchronously(const ResourceRe
     }
 #endif
 
-    protect(frame->document())->checkedContentSecurityPolicy()->upgradeInsecureRequestIfNeeded(newRequest, ContentSecurityPolicy::InsecureRequestType::Load);
+    protect(protect(frame->document())->contentSecurityPolicy())->upgradeInsecureRequestIfNeeded(newRequest, ContentSecurityPolicy::InsecureRequestType::Load);
 
     if (error.isNull()) {
         ASSERT(!newRequest.isNull());
@@ -4029,7 +4029,7 @@ void FrameLoader::executeJavaScriptURL(const URL& url, const NavigationAction& a
         if (RefPtr document = m_frame->document())
             document->addConsoleMessage(MessageSource::Security, MessageLevel::Error, makeString("Blocked script execution in '"_s, action.requester()->url.stringCenterEllipsizedToLength(), "' because the document's frame is sandboxed and the 'allow-scripts' permission is not set."_s));
     } else
-        protect(m_frame)->checkedScript()->executeJavaScriptURL(url, action, didReplaceDocument);
+        protect(m_frame->script())->executeJavaScriptURL(url, action, didReplaceDocument);
 
     // We need to communicate that a load happened, even if the JavaScript URL execution didn't end up replacing the document.
     if (RefPtr document = m_frame->document(); isFirstNavigationInFrame && !didReplaceDocument)
@@ -4120,7 +4120,7 @@ void FrameLoader::continueLoadAfterNavigationPolicy(const ResourceRequest& reque
             if (RefPtr page = frame->page()) {
                 if (RefPtr localMainFrame = frame->localMainFrame()) {
                     if (RefPtr resetItem = localMainFrame->loader().history().currentItem())
-                        page->checkedBackForward()->setCurrentItem(*resetItem);
+                        protect(page->backForward())->setCurrentItem(*resetItem);
                 }
             }
         }
@@ -4217,7 +4217,7 @@ void FrameLoader::continueLoadAfterNewWindowPolicy(ResourceRequest&& request,
 
     Ref frame = m_frame.get();
 
-    if (request.url().protocolIsJavaScript() && !protect(frame->document())->checkedContentSecurityPolicy()->allowJavaScriptURLs(frame->document()->url().string(), { }, request.url().string(), nullptr))
+    if (request.url().protocolIsJavaScript() && !protect(protect(frame->document())->contentSecurityPolicy())->allowJavaScriptURLs(frame->document()->url().string(), { }, request.url().string(), nullptr))
         return;
 
     RefPtr mainFrame = m_client->dispatchCreatePage(action, openerPolicy);
@@ -4698,7 +4698,7 @@ String FrameLoader::referrer() const
 
 void FrameLoader::dispatchDidClearWindowObjectsInAllWorlds()
 {
-    if (!protect(m_frame)->checkedScript()->canExecuteScripts(ReasonForCallingCanExecuteScripts::NotAboutToExecuteScript))
+    if (!protect(m_frame->script())->canExecuteScripts(ReasonForCallingCanExecuteScripts::NotAboutToExecuteScript))
         return;
 
     Vector<Ref<DOMWrapperWorld>> worlds;
@@ -4710,7 +4710,7 @@ void FrameLoader::dispatchDidClearWindowObjectsInAllWorlds()
 void FrameLoader::dispatchDidClearWindowObjectInWorld(DOMWrapperWorld& world)
 {
     Ref frame = m_frame.get();
-    if (!frame->checkedScript()->canExecuteScripts(ReasonForCallingCanExecuteScripts::NotAboutToExecuteScript) || !protect(frame->windowProxy())->existingJSWindowProxy(world))
+    if (!protect(frame->script())->canExecuteScripts(ReasonForCallingCanExecuteScripts::NotAboutToExecuteScript) || !protect(frame->windowProxy())->existingJSWindowProxy(world))
         return;
 
     m_client->dispatchDidClearWindowObjectInWorld(world);
@@ -4834,7 +4834,7 @@ std::pair<RefPtr<Frame>, CreatedNewPage> createWindow(LocalFrame& openerFrame, F
     ASSERT(request.resourceRequest().httpMethod() == "GET"_s);
 
     // FIXME: Provide line number information with respect to the opener's document.
-    if (request.resourceRequest().url().protocolIsJavaScript() && !protect(openerFrame.document())->checkedContentSecurityPolicy()->allowJavaScriptURLs(openerFrame.document()->url().string(), { }, request.resourceRequest().url().string(), nullptr))
+    if (request.resourceRequest().url().protocolIsJavaScript() && !protect(protect(openerFrame.document())->contentSecurityPolicy())->allowJavaScriptURLs(openerFrame.document()->url().string(), { }, request.resourceRequest().url().string(), nullptr))
         return { nullptr, CreatedNewPage::No };
 
     if (!request.frameName().isEmpty() && !isBlankTargetFrameName(request.frameName())) {

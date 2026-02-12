@@ -1270,7 +1270,8 @@ void LocalFrameView::adjustScrollbarsForLayout(bool isFirstLayout)
 
 void LocalFrameView::willDoLayout(SingleThreadWeakPtr<RenderElement> layoutRoot)
 {
-    updateScrollAnchoringBeforeLayoutForScrollableAreas();
+    if (!m_frame->document()->isInStyleInterleavedLayout())
+        updateScrollAnchoringBeforeLayoutForScrollableAreas();
 
     bool subtreeLayout = !is<RenderView>(*layoutRoot);
     if (subtreeLayout)
@@ -2039,11 +2040,6 @@ LayoutRect LocalFrameView::layoutViewportRect() const
 
     // Size of initial containing block, anchored at scroll position, in document coordinates (unchanged by scale factor).
     return LayoutRect(m_layoutViewportOrigin, baseLayoutViewportSize());
-}
-
-void LocalFrameView::updateLayoutViewportRect()
-{
-    m_frame->loader().client().broadcastFrameLayoutViewportRectToOtherProcesses(layoutViewportRect());
 }
 
 // visibleContentRect is in the bounds of the scroll view content. That consists of an
@@ -4575,6 +4571,8 @@ void LocalFrameView::scrollToPendingTextFragmentRange()
             return;
 
         auto textRects = RenderObject::absoluteTextRects(range);
+        if (!textRects.size())
+            return;
 
         static constexpr OptionSet hitType { HitTestRequest::Type::ReadOnly, HitTestRequest::Type::Active, HitTestRequest::Type::AllowVisibleChildFrameContentOnly };
         auto result = localMainFrame->eventHandler().hitTestResultAtPoint(LayoutPoint(textRects.first().center()), hitType);
@@ -4663,16 +4661,6 @@ void LocalFrameView::flushAnyPendingPostLayoutTasks()
     layoutContext().flushPostLayoutTasks();
     if (m_updateEmbeddedObjectsTimer.isActive())
         updateEmbeddedObjectsTimerFired();
-}
-
-CheckedRef<const LocalFrameViewLayoutContext> LocalFrameView::checkedLayoutContext() const
-{
-    return m_layoutContext;
-}
-
-CheckedRef<LocalFrameViewLayoutContext> LocalFrameView::checkedLayoutContext()
-{
-    return m_layoutContext;
 }
 
 void LocalFrameView::performPostLayoutTasks()
@@ -6238,6 +6226,37 @@ FloatPoint LocalFrameView::clientToDocumentPoint(FloatPoint point) const
     return point;
 }
 
+FloatPoint LocalFrameView::absoluteToLayoutViewportPoint(FloatPoint p) const
+{
+    ASSERT(m_frame->settings().visualViewportEnabled());
+    p.scale(1 / m_frame->frameScaleFactor());
+    p.moveBy(-layoutViewportRect().location());
+    return p;
+}
+
+FloatPoint LocalFrameView::layoutViewportToAbsolutePoint(FloatPoint p) const
+{
+    ASSERT(m_frame->settings().visualViewportEnabled());
+    p.moveBy(layoutViewportRect().location());
+    return p.scaled(m_frame->frameScaleFactor());
+}
+
+FloatRect LocalFrameView::layoutViewportToAbsoluteRect(FloatRect rect) const
+{
+    ASSERT(m_frame->settings().visualViewportEnabled());
+    rect.moveBy(layoutViewportRect().location());
+    rect.scale(m_frame->frameScaleFactor());
+    return rect;
+}
+
+FloatRect LocalFrameView::absoluteToLayoutViewportRect(FloatRect rect) const
+{
+    ASSERT(m_frame->settings().visualViewportEnabled());
+    rect.scale(1 / m_frame->frameScaleFactor());
+    rect.moveBy(-layoutViewportRect().location());
+    return rect;
+}
+
 FloatRect LocalFrameView::clientToLayoutViewportRect(FloatRect rect) const
 {
     ASSERT(m_frame->settings().visualViewportEnabled());
@@ -6693,11 +6712,6 @@ LocalFrame& LocalFrameView::frame() const
 RenderView* LocalFrameView::renderView() const
 {
     return m_frame->contentRenderer();
-}
-
-CheckedPtr<RenderView> LocalFrameView::checkedRenderView() const
-{
-    return renderView();
 }
 
 int LocalFrameView::mapFromLayoutToCSSUnits(LayoutUnit value) const

@@ -25,21 +25,35 @@
 
 #pragma once
 
-#include <WebCore/LayoutRect.h>
+#if ENABLE(WEBASSEMBLY)
 
-namespace WebCore {
+#include "JSDestructibleObject.h"
+#include "JSObject.h"
 
-// Collection of layout info regarding a (potentially remote) frame.
-// This is synchronized from LocalFrame in one process to RemoteFrames
-// in other processes using FrameTreeSyncData. Currently, it is used by
-// Intersection Observer to compute the intersection rectangle from any processes.
-struct RemoteFrameLayoutInfo {
-    // Rectangle of the visible portion of the frame in its parent frame,
-    // in the coordinate space of the document of the parent frame.
-    std::optional<LayoutRect> visibleRectInParent;
+namespace JSC {
 
-    // RenderStyle::usedZoom of the owner renderer of the frame.
-    float usedZoom;
+class WebAssemblySuspendErrorPrototype final : public JSNonFinalObject {
+public:
+    using Base = JSNonFinalObject;
+    static constexpr unsigned StructureFlags = Base::StructureFlags;
+
+    template<typename CellType, SubspaceAccess>
+    static GCClient::IsoSubspace* subspaceFor(VM& vm)
+    {
+        STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(WebAssemblySuspendErrorPrototype, Base);
+        return &vm.plainObjectSpace();
+    }
+
+    static WebAssemblySuspendErrorPrototype* create(VM&, JSGlobalObject*, Structure*);
+    static Structure* createStructure(VM&, JSGlobalObject*, JSValue);
+
+    DECLARE_INFO;
+
+private:
+    WebAssemblySuspendErrorPrototype(VM&, Structure*);
+    void finishCreation(VM&);
 };
 
-};
+} // namespace JSC
+
+#endif // ENABLE(WEBASSEMBLY)

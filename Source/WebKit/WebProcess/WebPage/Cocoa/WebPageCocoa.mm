@@ -30,10 +30,12 @@
 #import "EditorState.h"
 #import "GPUProcessConnection.h"
 #import "InsertTextOptions.h"
+#import "InteractionInformationAtPosition.h"
 #import "LoadParameters.h"
 #import "MessageSenderInlines.h"
 #import "PDFPlugin.h"
 #import "PluginView.h"
+#import "PositionInformationForWebPage.h"
 #import "PrintInfo.h"
 #import "RemoteLayerTreeCommitBundle.h"
 #import "RemoteLayerTreeTransaction.h"
@@ -56,6 +58,9 @@
 #import <WebCore/AnimationTimelinesController.h>
 #import <WebCore/Chrome.h>
 #import <WebCore/ChromeClient.h>
+#if ENABLE(CONTENT_CHANGE_OBSERVER)
+#import <WebCore/ContentChangeObserver.h>
+#endif
 #import <WebCore/DeprecatedGlobalSettings.h>
 #import <WebCore/DictionaryLookup.h>
 #import <WebCore/DocumentMarkerController.h>
@@ -65,6 +70,7 @@
 #import <WebCore/Editing.h>
 #import <WebCore/EditingHTMLConverter.h>
 #import <WebCore/Editor.h>
+#import <WebCore/ElementAncestorIteratorInlines.h>
 #import <WebCore/EventHandler.h>
 #import <WebCore/EventNames.h>
 #import <WebCore/FixedContainerEdges.h>
@@ -73,9 +79,13 @@
 #import <WebCore/FrameLoader.h>
 #import <WebCore/FrameView.h>
 #import <WebCore/GraphicsContextCG.h>
+#import <WebCore/HTMLAnchorElement.h>
 #import <WebCore/HTMLBodyElement.h>
+#import <WebCore/HTMLIFrameElement.h>
 #import <WebCore/HTMLImageElement.h>
 #import <WebCore/HTMLOListElement.h>
+#import <WebCore/HTMLSelectElement.h>
+#import <WebCore/HTMLTextAreaElement.h>
 #import <WebCore/HTMLTextFormControlElement.h>
 #import <WebCore/HTMLUListElement.h>
 #import <WebCore/HitTestResult.h>
@@ -152,6 +162,28 @@
 namespace WebKit {
 
 using namespace WebCore;
+
+// FIXME: Unclear if callers in this file are correctly choosing which of these two functions to use.
+
+String plainTextForContext(const SimpleRange& range)
+{
+    return WebCore::plainTextReplacingNoBreakSpace(range);
+}
+
+String plainTextForContext(const std::optional<SimpleRange>& range)
+{
+    return range ? plainTextForContext(*range) : emptyString();
+}
+
+String plainTextForDisplay(const SimpleRange& range)
+{
+    return WebCore::plainTextReplacingNoBreakSpace(range, { }, true);
+}
+
+String plainTextForDisplay(const std::optional<SimpleRange>& range)
+{
+    return range ? plainTextForDisplay(*range) : emptyString();
+}
 
 void WebPage::platformInitialize(const WebPageCreationParameters& parameters)
 {
@@ -381,7 +413,7 @@ void WebPage::insertDictatedTextAsync(const String& text, const EditingRange& re
     if (replacementEditingRange.location != notFound) {
         auto replacementRange = EditingRange::toRange(*frame, replacementEditingRange);
         if (replacementRange)
-            frame->checkedSelection()->setSelection(VisibleSelection { *replacementRange });
+            protect(frame->selection())->setSelection(VisibleSelection { *replacementRange });
     }
 
     if (options.registerUndoGroup)
@@ -437,7 +469,7 @@ void WebPage::addDictationAlternative(const String& text, DictationContext conte
         return;
     }
 
-    document->checkedMarkers()->addMarker(matchRange, DocumentMarkerType::DictationAlternatives, { DocumentMarker::DictationData { context, text } });
+    protect(document->markers())->addMarker(matchRange, DocumentMarkerType::DictationAlternatives, { DocumentMarker::DictationData { context, text } });
     completion(true);
 }
 
@@ -460,7 +492,7 @@ void WebPage::dictationAlternativesAtSelection(CompletionHandler<void(Vector<Dic
         return;
     }
 
-    auto markers = document->checkedMarkers()->markersInRange(*expandedSelectionRange, DocumentMarkerType::DictationAlternatives);
+    auto markers = protect(document->markers())->markersInRange(*expandedSelectionRange, DocumentMarkerType::DictationAlternatives);
     auto contexts = WTF::compactMap(markers, [](auto& marker) -> std::optional<DictationContext> {
         if (std::holds_alternative<DocumentMarker::DictationData>(marker->data()))
             return std::get<DocumentMarker::DictationData>(marker->data()).context;
@@ -485,7 +517,7 @@ void WebPage::clearDictationAlternatives(Vector<DictationContext>&& contexts)
         setOfContextsToRemove.add(context);
 
     auto documentRange = makeRangeSelectingNodeContents(*document);
-    document->checkedMarkers()->filterMarkers(documentRange, [&] (auto& marker) {
+    protect(document->markers())->filterMarkers(documentRange, [&] (auto& marker) {
         if (!std::holds_alternative<DocumentMarker::DictationData>(marker.data()))
             return FilterMarkerResult::Keep;
         return setOfContextsToRemove.contains(std::get<WebCore::DocumentMarker::DictationData>(marker.data()).context) ? FilterMarkerResult::Remove : FilterMarkerResult::Keep;
@@ -910,7 +942,7 @@ void WebPage::replaceImageForRemoveBackground(const ElementContext& elementConte
 
     constexpr auto restoreSelectionOptions = FrameSelection::defaultSetSelectionOptions(UserTriggered::Yes);
     if (!originalSelection.isNoneOrOrphaned()) {
-        frame->checkedSelection()->setSelection(originalSelection, restoreSelectionOptions);
+        protect(frame->selection())->setSelection(originalSelection, restoreSelectionOptions);
         return;
     }
 
@@ -929,7 +961,7 @@ void WebPage::replaceImageForRemoveBackground(const ElementContext& elementConte
     // The node replacement may have orphaned the original selection range; in this case, try to restore
     // the original selected character range.
     auto newSelectionRange = resolveCharacterRange(selectionHostRange, *rangeToRestore, iteratorOptions);
-    frame->checkedSelection()->setSelection(newSelectionRange, restoreSelectionOptions);
+    protect(frame->selection())->setSelection(newSelectionRange, restoreSelectionOptions);
 }
 
 #endif // ENABLE(IMAGE_ANALYSIS_ENHANCEMENTS)
@@ -1766,7 +1798,7 @@ void WebPage::setTextAsync(const String& text)
 
     if (frame->selection().selection().isContentEditable()) {
         UserTypingGestureIndicator indicator(*frame);
-        frame->checkedSelection()->selectAll();
+        protect(frame->selection())->selectAll();
         if (text.isEmpty())
             protect(frame->editor())->deleteSelectionWithSmartDelete(false);
         else
@@ -1799,7 +1831,7 @@ void WebPage::insertTextAsync(const String& text, const EditingRange& replacemen
     if (replacementEditingRange.location != notFound) {
         if (auto replacementRange = EditingRange::toRange(*frame, replacementEditingRange, options.editingRangeIsRelativeTo)) {
             SetForScope isSelectingTextWhileInsertingAsynchronously(m_isSelectingTextWhileInsertingAsynchronously, options.suppressSelectionUpdate);
-            frame->checkedSelection()->setSelection(VisibleSelection(*replacementRange));
+            protect(frame->selection())->setSelection(VisibleSelection(*replacementRange));
             replacesText = replacementEditingRange.length;
         }
     }
@@ -1943,7 +1975,7 @@ void WebPage::setCompositionAsync(const String& text, const Vector<CompositionUn
     if (frame->selection().selection().isContentEditable()) {
         if (replacementEditingRange.location != notFound) {
             if (auto replacementRange = EditingRange::toRange(*frame, replacementEditingRange))
-                frame->checkedSelection()->setSelection(VisibleSelection(*replacementRange));
+                protect(frame->selection())->setSelection(VisibleSelection(*replacementRange));
         }
         protect(frame->editor())->setComposition(text, underlines, highlights, annotations, selection.location, selection.location + selection.length);
     }
@@ -2391,6 +2423,53 @@ VisiblePosition WebPage::visiblePositionInFocusedNodeForPoint(const LocalFrame& 
     IntPoint adjustedPoint(WTF::protect(frame.view())->rootViewToContents(point));
     IntPoint constrainedPoint = m_focusedElement && isInteractingWithFocusedElement ? WebPage::constrainPoint(adjustedPoint, frame, WTF::protect(*m_focusedElement)) : adjustedPoint;
     return frame.visiblePositionForPoint(constrainedPoint);
+}
+
+#if ENABLE(CONTENT_CHANGE_OBSERVER) && !PLATFORM(IOS_FAMILY)
+void WebPage::didFinishContentChangeObserving(WebCore::FrameIdentifier, WebCore::ContentChange)
+{
+    notImplemented();
+}
+#endif
+
+InteractionInformationAtPosition WebPage::positionInformation(const InteractionInformationRequest& request)
+{
+    return WebKit::positionInformationForWebPage(*this, request);
+}
+
+void WebPage::requestPositionInformation(const InteractionInformationRequest& request)
+{
+    sendEditorStateUpdate();
+    send(Messages::WebPageProxy::DidReceivePositionInformation(positionInformation(request)));
+}
+
+bool WebPage::isAssistableElement(Element& element)
+{
+    if (is<HTMLSelectElement>(element))
+        return true;
+    if (is<HTMLTextAreaElement>(element))
+        return true;
+    if (RefPtr inputElement = dynamicDowncast<HTMLInputElement>(element)) {
+        // FIXME: This laundry list of types is not a good way to factor this. Need a suitable function on HTMLInputElement itself.
+#if ENABLE(INPUT_TYPE_WEEK_PICKER)
+        if (inputElement->isWeekField())
+            return true;
+#endif
+        return inputElement->isTextField() || inputElement->isDateField() || inputElement->isDateTimeLocalField() || inputElement->isMonthField() || inputElement->isTimeField() || inputElement->isColorControl();
+    }
+    if (is<HTMLIFrameElement>(element))
+        return false;
+    return element.isContentEditable();
+}
+
+RefPtr<HTMLAnchorElement> WebPage::containingLinkAnchorElement(Element& element)
+{
+    // FIXME: There is code in the drag controller that supports any link, even if it's not an HTMLAnchorElement. Why is this different?
+    for (Ref currentElement : lineageOfType<HTMLAnchorElement>(element)) {
+        if (currentElement->isLink())
+            return currentElement;
+    }
+    return nullptr;
 }
 
 } // namespace WebKit

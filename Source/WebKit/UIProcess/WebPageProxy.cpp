@@ -3009,10 +3009,10 @@ void WebPageProxy::setViewNeedsDisplay(const Region& region)
         pageClient->setViewNeedsDisplay(region);
 }
 
-void WebPageProxy::requestScroll(const FloatPoint& scrollPosition, const IntPoint& scrollOrigin, ScrollIsAnimated animated)
+void WebPageProxy::requestScroll(const FloatPoint& scrollPosition, const IntPoint& scrollOrigin, ScrollIsAnimated animated, WebCore::InterruptScrollAnimation interruptAnimation)
 {
     if (RefPtr pageClient = this->pageClient())
-        pageClient->requestScroll(scrollPosition, scrollOrigin, animated);
+        pageClient->requestScroll(scrollPosition, scrollOrigin, animated, interruptAnimation);
 }
 
 WebCore::FloatPoint WebPageProxy::viewScrollPosition() const
@@ -7911,12 +7911,8 @@ void WebPageProxy::broadcastFrameTreeSyncData(IPC::Connection& connection, Frame
 
     // FIXME: This could instead be an option in FrameTreeSyncData.in to allow
     // certain properties to be mutable from non-frame-owning processes.
-    if (frameTreePropertyIsRestrictedToFrameOwningProcess(data.type)) {
-        if (&webFrameProxy->process() != &process.get()) {
-            // FIXME: make this a MESSAGE_CHECK.
-            return;
-        }
-    }
+    if (frameTreePropertyIsRestrictedToFrameOwningProcess(data.type))
+        MESSAGE_CHECK(process, &webFrameProxy->process() == &process.get());
 
     if (data.type == WebCore::FrameTreeSyncDataType::FrameRect)
         webFrameProxy->setRemoteFrameRect(std::get<IntRect>(data.value));
@@ -12078,6 +12074,10 @@ void WebPageProxy::resetState(ResetStateReason resetStateReason)
     m_suspendedPageKeptToPreventFlashing = nullptr;
     m_lastSuspendedPage = nullptr;
 
+#if ENABLE(MODEL_ELEMENT_IMMERSIVE)
+    m_allowedImmersiveElementFrameURL = std::nullopt;
+#endif
+
 #if PLATFORM(COCOA)
     m_scrollingPerformanceData = nullptr;
 #if PLATFORM(MAC)
@@ -13749,16 +13749,35 @@ void WebPageProxy::spatialBackdropSourceChanged(std::optional<WebCore::SpatialBa
 #endif
 
 #if ENABLE(MODEL_ELEMENT_IMMERSIVE)
-void WebPageProxy::allowImmersiveElementFromURL(const URL& url, CompletionHandler<void(bool)>&& completion) const
+void WebPageProxy::allowImmersiveElement(CompletionHandler<void(bool)>&& completion)
 {
-    if (RefPtr pageClient = this->pageClient())
-        pageClient->allowImmersiveElementFromURL(url, WTF::move(completion));
-    else
+    if (!m_mainFrame)
+        return completion(false);
+    auto url = m_mainFrame->url();
+
+    if (RefPtr pageClient = this->pageClient()) {
+        pageClient->allowImmersiveElementFromURL(url, [weakThis = WeakPtr { *this }, url, completion = WTF::move(completion)](bool allow) mutable {
+            if (weakThis && allow)
+                weakThis.get()->m_allowedImmersiveElementFrameURL = url;
+            completion(allow);
+        });
+    } else
         completion(false);
 }
 
 void WebPageProxy::presentImmersiveElement(const WebCore::LayerHostingContextIdentifier contextID, CompletionHandler<void(bool)>&& completion)
 {
+    if (!m_mainFrame)
+        return completion(false);
+    auto currentURL = m_mainFrame->url();
+
+    if (!m_allowedImmersiveElementFrameURL || m_allowedImmersiveElementFrameURL.value() != currentURL) {
+        WEBPAGEPROXY_RELEASE_LOG_ERROR(ModelElement, "presentImmersiveElement: Rejecting request - URL mismatch or no prior permission.");
+        completion(false);
+        return;
+    }
+    m_allowedImmersiveElementFrameURL = std::nullopt;
+
     if (RefPtr pageClient = this->pageClient()) {
         pageClient->presentImmersiveElement(contextID, [weakThis = WeakPtr { *this }, completion = WTF::move(completion)](bool success) mutable {
             if (success && weakThis)
