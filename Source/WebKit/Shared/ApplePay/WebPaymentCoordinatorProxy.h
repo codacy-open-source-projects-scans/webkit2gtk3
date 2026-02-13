@@ -132,7 +132,7 @@ public:
 
 private:
     explicit WebPaymentCoordinatorProxy(Client&);
-    Ref<WorkQueue> protectedCanMakePaymentsQueue() const;
+    Ref<WorkQueue> NODELETE protectedCanMakePaymentsQueue() const;
 
     // IPC::MessageReceiver
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
@@ -200,8 +200,6 @@ private:
     RetainPtr<PKPaymentRequest> platformPaymentRequest(const URL& originatingURL, const Vector<URL>& linkIconURLs, const WebCore::ApplePaySessionPaymentRequest&);
     void platformSetPaymentRequestUserAgent(PKPaymentRequest *, const String& userAgent);
 #endif
-
-    RefPtr<PaymentAuthorizationPresenter> protectedAuthorizationPresenter() { return m_authorizationPresenter; }
 
     WeakPtr<Client> m_client;
     std::optional<WebCore::PageIdentifier> m_destinationID;

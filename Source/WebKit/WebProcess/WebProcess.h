@@ -293,7 +293,6 @@ public:
 
     void networkProcessConnectionClosed(NetworkProcessConnection*);
     NetworkProcessConnection* existingNetworkProcessConnection() { return m_networkProcessConnection.get(); }
-    RefPtr<NetworkProcessConnection> protectedNetworkProcessConnection();
     WebLoaderStrategy& webLoaderStrategy();
     WebFileSystemStorageConnection& fileSystemStorageConnection();
 
@@ -495,6 +494,7 @@ public:
 
     bool requiresScriptTrackingPrivacyProtections(const URL&, const WebCore::SecurityOrigin& topOrigin) const;
     bool shouldAllowScriptAccess(const URL&, const WebCore::SecurityOrigin& topOrigin, WebCore::ScriptTrackingPrivacyCategory) const;
+    bool shouldBlockRequest(const URL&, const WebCore::SecurityOrigin& topOrigin);
 
     bool isLockdownModeEnabled() const { return m_isLockdownModeEnabled.value(); }
     bool imageAnimationEnabled() const { return m_imageAnimationEnabled; }

@@ -2519,23 +2519,6 @@ void WebPage::getRectsAtSelectionOffsetWithText(int32_t offset, const String& te
     completionHandler(selectionGeometries);
 }
 
-void WebPage::selectPositionAtPoint(const WebCore::IntPoint& point, bool isInteractingWithFocusedElement, CompletionHandler<void()>&& completionHandler)
-{
-    SetForScope userIsInteractingChange { m_userIsInteracting, true };
-
-    updateFocusBeforeSelectingTextAtLocation(point);
-
-    RefPtr frame = m_page->focusController().focusedOrMainFrame();
-    if (!frame)
-        return completionHandler();
-
-    VisiblePosition position = visiblePositionInFocusedNodeForPoint(*frame, point, isInteractingWithFocusedElement);
-    
-    if (position.isNotNull())
-        protect(frame->selection())->setSelectedRange(makeSimpleRange(position), position.affinity(), WebCore::FrameSelection::ShouldCloseTyping::Yes, UserTriggered::Yes);
-    completionHandler();
-}
-
 void WebPage::selectPositionAtBoundaryWithDirection(const WebCore::IntPoint& point, WebCore::TextGranularity granularity, WebCore::SelectionDirection direction, bool isInteractingWithFocusedElement, CompletionHandler<void()>&& completionHandler)
 {
     RefPtr frame = m_page->focusController().focusedOrMainFrame();
@@ -3196,7 +3179,7 @@ void WebPage::performActionOnElement(uint32_t action, const String& authorizatio
         return;
 
     if (static_cast<SheetAction>(action) == SheetAction::Copy) {
-        Ref interactionNodeEditor = m_interactionNode->document().editor();
+        Ref interactionNodeEditor = protect(m_interactionNode->document())->editor();
         Ref elementDocument = element->document();
         if (is<RenderImage>(*element->renderer())) {
             URL urlToCopy;
@@ -5274,7 +5257,7 @@ void WebPage::setInsertionPointColor(WebCore::Color color)
 
 void WebPage::textInputContextsInRect(FloatRect searchRect, CompletionHandler<void(const Vector<ElementContext>&)>&& completionHandler)
 {
-    auto contexts = m_page->editableElementsInRect(searchRect).map([&] (const auto& element) {
+    auto contexts = protect(m_page)->editableElementsInRect(searchRect).map([&] (const auto& element) {
         Ref document = element->document();
 
         ElementContext context;

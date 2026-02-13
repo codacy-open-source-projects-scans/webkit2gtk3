@@ -45,7 +45,6 @@ enum class ReasonCollectionMode : bool {
 };
 
 enum class GridAvoidanceReason : uint8_t {
-    GridHasNonFixedWidth,
     GridHasNonFixedHeight,
     GridHasVerticalWritingMode,
     GridHasMarginTrim,
@@ -234,9 +233,6 @@ static EnumSet<GridAvoidanceReason> gridLayoutAvoidanceReason(const RenderGrid& 
 
     CheckedRef renderGridStyle = renderGrid.style();
 
-    if (!renderGridStyle->width().isFixed())
-        ADD_REASON_AND_RETURN_IF_NEEDED(GridHasNonFixedWidth, reasons, reasonCollectionMode);
-
     if (!renderGridStyle->height().isFixed())
         ADD_REASON_AND_RETURN_IF_NEEDED(GridHasNonFixedHeight, reasons, reasonCollectionMode);
 
@@ -298,8 +294,8 @@ static EnumSet<GridAvoidanceReason> gridLayoutAvoidanceReason(const RenderGrid& 
 
                 if (minBreadth.isLength()) {
                     auto& gridTrackBreadthLength = minBreadth.length();
-                    // Length types like auto, min-content, max-content, etc. not yet supported
-                    if (!gridTrackBreadthLength.isFixed())
+                    // Length types like auto, max-content, etc. not yet supported
+                    if (!gridTrackBreadthLength.isFixed() && !gridTrackBreadthLength.isMinContent() && gridTrackBreadthLength.isMaxContent())
                         return GridAvoidanceReason::GridHasUnsupportedGridTemplateColumns;
                     return std::nullopt;
                 }
@@ -337,8 +333,6 @@ static EnumSet<GridAvoidanceReason> gridLayoutAvoidanceReason(const RenderGrid& 
 
     auto& gridTemplateRows = renderGridStyle->gridTemplateRows();
     auto& gridTemplateRowsTrackList = gridTemplateRows.list;
-    if (gridTemplateRowsTrackList.isEmpty())
-        ADD_REASON_AND_RETURN_IF_NEEDED(GridHasUnsupportedGridTemplateRows, reasons, reasonCollectionMode);
 
     for (auto& rowsTrackListEntry : gridTemplateRowsTrackList) {
         auto avoidanceReason = WTF::switchOn(rowsTrackListEntry,
@@ -352,8 +346,8 @@ static EnumSet<GridAvoidanceReason> gridLayoutAvoidanceReason(const RenderGrid& 
 
                 if (minBreadth.isLength()) {
                     auto& gridTrackBreadthLength = minBreadth.length();
-                    // Length types like auto, min-content, max-content, etc. not yet supported
-                    if (!gridTrackBreadthLength.isFixed())
+                    // Length types like auto, min-content, etc. not yet supported
+                    if (!gridTrackBreadthLength.isFixed() && !gridTrackBreadthLength.isMinContent() && !gridTrackBreadthLength.isMaxContent())
                         return GridAvoidanceReason::GridHasUnsupportedGridTemplateRows;
                     return std::nullopt;
                 }
@@ -586,9 +580,6 @@ static void printReason(GridAvoidanceReason reason, TextStream& stream)
     switch (reason) {
     case GridAvoidanceReason::GridFormattingContextIntegrationDisabled:
         stream << "grid formatting context integration is disabled";
-        break;
-    case GridAvoidanceReason::GridHasNonFixedWidth:
-        stream << "grid has non-fixed width";
         break;
     case GridAvoidanceReason::GridHasNonFixedHeight:
         stream << "grid has non-fixed height";

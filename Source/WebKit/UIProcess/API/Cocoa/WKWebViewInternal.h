@@ -39,6 +39,7 @@
 #import <WebCore/CocoaWritingToolsTypes.h>
 #import <WebCore/ColorCocoa.h>
 #import <WebCore/CornerRadii.h>
+#import <WebCore/DigitalCredentialsRequestData.h>
 #import <WebCore/FixedContainerEdges.h>
 #import <WebCore/LayerHostingContextIdentifier.h>
 #import <WebCore/TextExtractionTypes.h>
@@ -132,7 +133,6 @@ enum class TextSuggestionState : uint8_t;
 }
 
 #if ENABLE(WEB_AUTHN)
-struct DigitalCredentialsRequestData;
 struct DigitalCredentialsResponseData;
 struct MobileDocumentRequest;
 #endif
@@ -451,6 +451,10 @@ struct PerWebProcessState {
     RetainPtr<NSTimer> _enclosingScrollViewScrollTimer;
     BOOL _didScrollSinceLastTimerFire;
     BOOL _needsScrollend;
+
+#if PLATFORM(IOS_FAMILY)
+    RefPtr<RunLoop::DispatchTimer> _pendingInteractiveObscuredInsetsChangeTimer;
+#endif
 
     // This value tracks the current adjustment added to the bottom inset due to the keyboard sliding out from the bottom
     // when computing obscured content insets. This is used when updating the visible content rects where we should not

@@ -128,16 +128,20 @@ enum class WheelEventProcessingSteps : uint8_t;
 enum class WheelScrollGestureState : uint8_t;
 
 #if ENABLE(DRAG_SUPPORT)
-extern const int LinkDragHysteresis;
-extern const int ImageDragHysteresis;
-extern const int TextDragHysteresis;
-extern const int ColorDragHystersis;
-extern const int GeneralDragHysteresis;
+// The link drag hysteresis is much larger than the others because there
+// needs to be enough space to cancel the link press without starting a link drag,
+// and because dragging links is rare.
+inline constexpr int LinkDragHysteresis = 40;
+inline constexpr int ImageDragHysteresis = 5;
+inline constexpr int TextDragHysteresis = 3;
+inline constexpr int ColorDragHystersis = 3;
+inline constexpr int GeneralDragHysteresis = 3;
 #endif
 
 #if ENABLE(IOS_GESTURE_EVENTS) || ENABLE(MAC_GESTURE_EVENTS)
-extern const float GestureUnknown;
-extern const unsigned InvalidTouchIdentifier;
+inline constexpr float GestureUnknown = 0;
+// FIXME: Share this constant with EventHandler and SliderThumbElement.
+inline constexpr unsigned InvalidTouchIdentifier = 0;
 #endif
 
 enum AppendTrailingWhitespace { ShouldAppendTrailingWhitespace, DontAppendTrailingWhitespace };
@@ -657,7 +661,7 @@ private:
     bool isCapturingMouseEventsElement() const { return m_capturingMouseEventsElement || m_isCapturingRootElementForMouseEvents; }
     void resetCapturingMouseEventsElement();
 
-    Ref<LocalFrame> protectedFrame() const;
+    Ref<LocalFrame> NODELETE protectedFrame() const;
 
     WeakRef<LocalFrame> m_frame;
     RefPtr<Node> m_mousePressNode;

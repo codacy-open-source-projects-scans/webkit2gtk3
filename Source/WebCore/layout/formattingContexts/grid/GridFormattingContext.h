@@ -62,6 +62,8 @@ struct GridAutoFlowOptions {
 struct GridDefinition {
     Style::GridTemplateList gridTemplateColumns;
     Style::GridTemplateList gridTemplateRows;
+    Style::GridTrackSizes gridAutoColumns;
+    Style::GridTrackSizes gridAutoRows;
     GridAutoFlowOptions autoFlowOptions;
 };
 
@@ -143,6 +145,8 @@ public:
     const BoxGeometry& geometryForGridItem(const ElementBox&) const;
 
     const Style::ZoomFactor zoomFactor() const { return m_gridBox->style().usedZoomForLength(); }
+
+    const WritingMode writingMode() const { return m_gridBox->style().writingMode(); }
 
 private:
     UnplacedGridItems constructUnplacedGridItems() const;

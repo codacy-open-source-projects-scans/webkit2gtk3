@@ -131,6 +131,7 @@
 
 static const Seconds delayBeforeNoVisibleContentsRectsLogging = 1_s;
 static const Seconds delayBeforeNoCommitsLogging = 5_s;
+static constexpr Seconds delayBeforeUpdatingVisibleContentRectsWhenChangingObscuredInsetsInteractively = 100_ms;
 static const unsigned highlightMargin = 5;
 
 static WebCore::IntDegrees deviceOrientationForUIInterfaceOrientation(UIInterfaceOrientation orientation)
@@ -1909,6 +1910,12 @@ static WebCore::FloatPoint constrainContentOffset(WebCore::FloatPoint contentOff
 
     [_contentView setOpaque:opaque];
 
+#if PLATFORM(VISION)
+    static BOOL alternateRenderingAvailable = [UIScrollView instancesRespondToSelector:@selector(_setUseVisionAlternateScrollIndicatorRendering:)];
+    if (alternateRenderingAvailable)
+        [_scrollView _setUseVisionAlternateScrollIndicatorRendering:opaque];
+#endif
+
     if (!_page)
         return;
 
@@ -2695,7 +2702,29 @@ static WebCore::FloatPoint constrainContentOffset(WebCore::FloatPoint contentOff
 - (void)_scheduleForcedVisibleContentRectUpdate
 {
     _alwaysSendNextVisibleContentRectUpdate = YES;
+    [self _cancelPendingVisibleContentRectUpdateTimer];
     [self _scheduleVisibleContentRectUpdate];
+}
+
+- (void)_cancelPendingVisibleContentRectUpdateTimer
+{
+    if (!_pendingInteractiveObscuredInsetsChangeTimer)
+        return;
+
+    _pendingInteractiveObscuredInsetsChangeTimer->stop();
+    _pendingInteractiveObscuredInsetsChangeTimer = nullptr;
+}
+
+- (void)_scheduleVisibleContentRectUpdateWithDelay:(Seconds)delay
+{
+    if (_pendingInteractiveObscuredInsetsChangeTimer && _pendingInteractiveObscuredInsetsChangeTimer->isActive())
+        return;
+
+    _perProcessState.didDeferUpdateVisibleContentRectsForAnyReason = YES;
+    _pendingInteractiveObscuredInsetsChangeTimer = RunLoop::mainSingleton().dispatchAfter(delay, [retainedSelf = retainPtr(self)] {
+        retainedSelf->_pendingInteractiveObscuredInsetsChangeTimer = nullptr;
+        [retainedSelf _scheduleVisibleContentRectUpdate];
+    });
 }
 
 - (BOOL)_isInStableState:(UIScrollView *)scrollView
@@ -2959,6 +2988,15 @@ static bool scrollViewCanScroll(UIScrollView *scrollView)
         _perProcessState.didDeferUpdateVisibleContentRectsForUnstableScrollView = YES;
         WKWEBVIEW_RELEASE_LOG("%p (pageProxyID=%llu) -[WKWebView _updateVisibleContentRects:] - scroll view state is non-stable, bailing (shouldDeferGeometryUpdates %d, dynamicViewportUpdateMode %d, resetViewStateAfterTransactionID %llu, sizeChangedSinceLastVisibleContentRectUpdate %d, [_scrollView isZoomBouncing] %d, currentlyAdjustingScrollViewInsetsForKeyboard %d)", self, _page->identifier().toUInt64(), self._shouldDeferGeometryUpdates, enumToUnderlyingType(_perProcessState.dynamicViewportUpdateMode), _perProcessState.resetViewStateAfterTransactionID ? _perProcessState.resetViewStateAfterTransactionID->object().toUInt64() : 0, [_contentView sizeChangedSinceLastVisibleContentRectUpdate], [_scrollView isZoomBouncing], _perProcessState.currentlyAdjustingScrollViewInsetsForKeyboard);
         return;
+    }
+
+    if (_isChangingObscuredInsetsInteractively) {
+        auto timeSinceLastUpdate = timeNow - _timeOfLastVisibleContentRectUpdate;
+        if (timeSinceLastUpdate < delayBeforeUpdatingVisibleContentRectsWhenChangingObscuredInsetsInteractively) {
+            auto delay = delayBeforeUpdatingVisibleContentRectsWhenChangingObscuredInsetsInteractively - timeSinceLastUpdate;
+            [self _scheduleVisibleContentRectUpdateWithDelay:delay];
+            return;
+        }
     }
 
     [self _updateScrollViewContentInsetsIfNecessary];
@@ -4245,9 +4283,9 @@ static bool isLockdownModeWarningNeeded()
     auto updateBlockCopy = makeBlockPtr(updateBlock);
 
     if (_stableStatePresentationUpdateCallbacks)
-        [_stableStatePresentationUpdateCallbacks addObject:updateBlockCopy.get()];
+        SUPPRESS_UNRETAINED_ARG [_stableStatePresentationUpdateCallbacks addObject:updateBlockCopy.get()];
     else {
-        _stableStatePresentationUpdateCallbacks = adoptNS([[NSMutableArray alloc] initWithObjects:updateBlockCopy.get(), nil]);
+        SUPPRESS_UNRETAINED_ARG _stableStatePresentationUpdateCallbacks = adoptNS([[NSMutableArray alloc] initWithObjects:updateBlockCopy.get(), nil]);
         [self _firePresentationUpdateForPendingStableStatePresentationCallbacks];
     }
 }
@@ -4320,6 +4358,7 @@ static bool isLockdownModeWarningNeeded()
 {
     ASSERT(_isChangingObscuredInsetsInteractively);
     _isChangingObscuredInsetsInteractively = NO;
+    [self _cancelPendingVisibleContentRectUpdateTimer];
     [self _scheduleVisibleContentRectUpdate];
 }
 

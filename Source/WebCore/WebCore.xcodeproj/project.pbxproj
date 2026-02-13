@@ -1848,6 +1848,7 @@
 		4822FD1D2E2A7FA1004CAFF9 /* EventCounts.h in Headers */ = {isa = PBXBuildFile; fileRef = 4822FD1B2E2A7FA1004CAFF9 /* EventCounts.h */; };
 		4822FD232E2A8058004CAFF9 /* PerformanceEventTiming.h in Headers */ = {isa = PBXBuildFile; fileRef = 4822FD212E2A8058004CAFF9 /* PerformanceEventTiming.h */; };
 		482476B92EE0BC4B006EFFEE /* AXStitchGroup.h in Headers */ = {isa = PBXBuildFile; fileRef = 482476B72EE0BC4B006EFFEE /* AXStitchGroup.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		4828C31D2F35643E009D206E /* DigitalCredentialsSecurityOriginData.h in Headers */ = {isa = PBXBuildFile; fileRef = 4828C31C2F35643E009D206E /* DigitalCredentialsSecurityOriginData.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		4869472D2E54CE1800C708D8 /* PerformanceEventTimingCandidate.h in Headers */ = {isa = PBXBuildFile; fileRef = 4869472C2E54CE1800C708D8 /* PerformanceEventTimingCandidate.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		486B8DC72A043C0600E00E73 /* AXGeometryManager.h in Headers */ = {isa = PBXBuildFile; fileRef = 486B8DC62A043C0600E00E73 /* AXGeometryManager.h */; };
 		48B0242A2B2A65AA0083D122 /* AXTextRun.h in Headers */ = {isa = PBXBuildFile; fileRef = 48B024282B2A65AA0083D122 /* AXTextRun.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -1857,6 +1858,9 @@
 		48B187902E5CAE0F009B57A9 /* AccessibilityRole.h in Headers */ = {isa = PBXBuildFile; fileRef = 48B1878F2E5CAE0F009B57A9 /* AccessibilityRole.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		48B187A62E63BD3C009B57A9 /* AccessibilityObjectInlines.h in Headers */ = {isa = PBXBuildFile; fileRef = 48B187A52E63BD3C009B57A9 /* AccessibilityObjectInlines.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		48B5BF3729CA691700FEBE3B /* AccessibilityRegionContext.h in Headers */ = {isa = PBXBuildFile; fileRef = 48B5BF3529CA691700FEBE3B /* AccessibilityRegionContext.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		48BFAF1E2F2D7B3A00E7D926 /* DigitalCredentialsMobileDocumentRequestData.h in Headers */ = {isa = PBXBuildFile; fileRef = 48BFAF1C2F2D7B3A00E7D926 /* DigitalCredentialsMobileDocumentRequestData.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		48BFAF1F2F2D7B3A00E7D926 /* DigitalCredentialsMobileDocumentRequestDataWithRequestInfo.h in Headers */ = {isa = PBXBuildFile; fileRef = 48BFAF1D2F2D7B3A00E7D926 /* DigitalCredentialsMobileDocumentRequestDataWithRequestInfo.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		48BFAF2B2F3137FA00E7D926 /* DigitalCredentialsRequestDataBuilder.h in Headers */ = {isa = PBXBuildFile; fileRef = 48BFAF292F3137FA00E7D926 /* DigitalCredentialsRequestDataBuilder.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		48CBBAB52EC3B70000EC5429 /* AXID.h in Headers */ = {isa = PBXBuildFile; fileRef = 48CBBAB42EC3B70000EC5429 /* AXID.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		48D0E12929F7329E00263857 /* ElementAnimationContext.h in Headers */ = {isa = PBXBuildFile; fileRef = 48D0E12829F7322900263857 /* ElementAnimationContext.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		48E51DFC2F294CE200228A77 /* ISO18013DocumentRequestInfo.h in Headers */ = {isa = PBXBuildFile; fileRef = 48E51DFB2F294CE200228A77 /* ISO18013DocumentRequestInfo.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -5528,7 +5532,6 @@
 		BCEC01BE0C274DAC009F4EC9 /* Screen.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEC01BB0C274DAC009F4EC9 /* Screen.h */; };
 		BCEC01C30C274DDD009F4EC9 /* JSScreen.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEC01C10C274DDD009F4EC9 /* JSScreen.h */; };
 		BCEC01D70C274EB4009F4EC9 /* PlatformScreen.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEC01D60C274EB4009F4EC9 /* PlatformScreen.h */; settings = {ATTRIBUTES = (Private, ); }; };
-		BCEC09F62F33C915009A3938 /* WebGLVertexArrayObjectBase.h in Headers */ = {isa = PBXBuildFile; fileRef = 6F222B741AB52D640094651A /* WebGLVertexArrayObjectBase.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BCEC09892F2EE479009A3938 /* CryptoAlgorithmEcKeyParamsInit.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEC09762F2EE473009A3938 /* CryptoAlgorithmEcKeyParamsInit.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BCEC098A2F2EE479009A3938 /* CryptoAlgorithmRsaHashedKeyGenParamsInit.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEC09802F2EE473009A3938 /* CryptoAlgorithmRsaHashedKeyGenParamsInit.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BCEC098B2F2EE479009A3938 /* CryptoAlgorithmX25519Params.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEC09872F2EE473009A3938 /* CryptoAlgorithmX25519Params.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -5563,6 +5566,7 @@
 		BCEC09A82F2EE479009A3938 /* CryptoAlgorithmX25519ParamsInit.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEC09882F2EE473009A3938 /* CryptoAlgorithmX25519ParamsInit.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BCEC09AC2F2EF02A009A3938 /* CryptoAlgorithmParametersInit.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEC09682F2EE418009A3938 /* CryptoAlgorithmParametersInit.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BCEC09E42F31331E009A3938 /* StylePrimitiveNumericTypes+Rounding.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEC09E32F3132C1009A3938 /* StylePrimitiveNumericTypes+Rounding.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		BCEC09F62F33C915009A3938 /* WebGLVertexArrayObjectBase.h in Headers */ = {isa = PBXBuildFile; fileRef = 6F222B741AB52D640094651A /* WebGLVertexArrayObjectBase.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BCEF43CF0E673DA1001C1287 /* StyleImage.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEF43CE0E673DA1001C1287 /* StyleImage.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BCEF444A0E6745E0001C1287 /* StyleGeneratedImage.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEF44490E6745E0001C1287 /* StyleGeneratedImage.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BCEF444D0E674628001C1287 /* StyleCachedImage.h in Headers */ = {isa = PBXBuildFile; fileRef = BCEF444C0E674628001C1287 /* StyleCachedImage.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -11746,6 +11750,7 @@
 		4822FD222E2A8058004CAFF9 /* PerformanceEventTiming.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = PerformanceEventTiming.cpp; sourceTree = "<group>"; };
 		4822FD252E2A8082004CAFF9 /* PerformanceEventTiming.idl */ = {isa = PBXFileReference; lastKnownFileType = text; path = PerformanceEventTiming.idl; sourceTree = "<group>"; };
 		482476B72EE0BC4B006EFFEE /* AXStitchGroup.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AXStitchGroup.h; sourceTree = "<group>"; };
+		4828C31C2F35643E009D206E /* DigitalCredentialsSecurityOriginData.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DigitalCredentialsSecurityOriginData.h; sourceTree = "<group>"; };
 		484F5FBD2CEFA23700E7B1B1 /* AXCoreObjectCocoa.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = AXCoreObjectCocoa.mm; sourceTree = "<group>"; };
 		4869472C2E54CE1800C708D8 /* PerformanceEventTimingCandidate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PerformanceEventTimingCandidate.h; sourceTree = "<group>"; };
 		486B8DC62A043C0600E00E73 /* AXGeometryManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AXGeometryManager.h; sourceTree = "<group>"; };
@@ -11761,6 +11766,10 @@
 		48B187A52E63BD3C009B57A9 /* AccessibilityObjectInlines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AccessibilityObjectInlines.h; sourceTree = "<group>"; };
 		48B5BF3529CA691700FEBE3B /* AccessibilityRegionContext.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AccessibilityRegionContext.h; sourceTree = "<group>"; };
 		48B5BF3629CA691700FEBE3B /* AccessibilityRegionContext.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = AccessibilityRegionContext.cpp; sourceTree = "<group>"; };
+		48BFAF1C2F2D7B3A00E7D926 /* DigitalCredentialsMobileDocumentRequestData.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DigitalCredentialsMobileDocumentRequestData.h; sourceTree = "<group>"; };
+		48BFAF1D2F2D7B3A00E7D926 /* DigitalCredentialsMobileDocumentRequestDataWithRequestInfo.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DigitalCredentialsMobileDocumentRequestDataWithRequestInfo.h; sourceTree = "<group>"; };
+		48BFAF292F3137FA00E7D926 /* DigitalCredentialsRequestDataBuilder.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DigitalCredentialsRequestDataBuilder.h; sourceTree = "<group>"; };
+		48BFAF322F318E9E00E7D926 /* DigitalCredentialsRequestDataBuilder.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = DigitalCredentialsRequestDataBuilder.cpp; sourceTree = "<group>"; };
 		48C4E83C2B34D8380083460A /* AXTextRun.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = AXTextRun.cpp; sourceTree = "<group>"; };
 		48CBBAB42EC3B70000EC5429 /* AXID.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AXID.h; sourceTree = "<group>"; };
 		48D0E12829F7322900263857 /* ElementAnimationContext.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ElementAnimationContext.h; sourceTree = "<group>"; };
@@ -24158,8 +24167,13 @@
 				0D431A862B5A42AB00864655 /* DigitalCredentialPresentationProtocol.idl */,
 				0D494DEC2B5DF3DC00B61C51 /* DigitalCredentialRequestOptions.h */,
 				0D431A802B5A3A9800864655 /* DigitalCredentialRequestOptions.idl */,
+				48BFAF1C2F2D7B3A00E7D926 /* DigitalCredentialsMobileDocumentRequestData.h */,
+				48BFAF1D2F2D7B3A00E7D926 /* DigitalCredentialsMobileDocumentRequestDataWithRequestInfo.h */,
 				0DF687F52C8840D100C16DC9 /* DigitalCredentialsRequestData.h */,
+				48BFAF322F318E9E00E7D926 /* DigitalCredentialsRequestDataBuilder.cpp */,
+				48BFAF292F3137FA00E7D926 /* DigitalCredentialsRequestDataBuilder.h */,
 				0DE11A782C8AB2840003F6EE /* DigitalCredentialsResponseData.h */,
+				4828C31C2F35643E009D206E /* DigitalCredentialsSecurityOriginData.h */,
 			);
 			name = identity;
 			path = Modules/identity;
@@ -43724,9 +43738,13 @@
 				0D431F012B905BC4001E222F /* DigitalCredentialGetRequest.h in Headers */,
 				0D77A8522B9063A700BBD327 /* DigitalCredentialPresentationProtocol.h in Headers */,
 				0D431F002B9053DC001E222F /* DigitalCredentialRequestOptions.h in Headers */,
+				48BFAF1E2F2D7B3A00E7D926 /* DigitalCredentialsMobileDocumentRequestData.h in Headers */,
+				48BFAF1F2F2D7B3A00E7D926 /* DigitalCredentialsMobileDocumentRequestDataWithRequestInfo.h in Headers */,
 				E8E7BDE32D94D20E0000A163 /* DigitalCredentialsProtocols.h in Headers */,
 				0DF687F62C88414900C16DC9 /* DigitalCredentialsRequestData.h in Headers */,
+				48BFAF2B2F3137FA00E7D926 /* DigitalCredentialsRequestDataBuilder.h in Headers */,
 				0DE11A792C8AB2950003F6EE /* DigitalCredentialsResponseData.h in Headers */,
+				4828C31D2F35643E009D206E /* DigitalCredentialsSecurityOriginData.h in Headers */,
 				FDAF19991513D131008DB0C3 /* DirectConvolver.h in Headers */,
 				835D54C51F4DE53800E60671 /* DirectoryFileListCreator.h in Headers */,
 				F47A09D120A93A9700240FAE /* DisabledAdaptations.h in Headers */,

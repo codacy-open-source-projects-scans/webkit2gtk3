@@ -292,17 +292,20 @@ AllowMultiElementImplicitSubmission:
 
 AllowMultipleCommitLayerTreePending:
   type: bool
-  status: testable
+  status: internal
   category: dom
   humanReadableName: "Allow requesting CommitLayerTree before the previous has completed"
   humanReadableDescription: "Allow requesting CommitLayerTree before the previous has completed"
   defaultValue:
     WebKitLegacy:
-      default: false
+      "PLATFORM(IOS_FAMILY)": false
+      default: true
     WebKit:
-      default: false
+      "PLATFORM(IOS_FAMILY)": false
+      default: true
     WebCore:
-      default: false
+      "PLATFORM(IOS_FAMILY)": false
+      default: true
 
 AllowPrivacySensitiveOperationsInNonPersistentDataStores:
   type: bool
@@ -2663,6 +2666,25 @@ EnhancedSecurityHeuristicsEnabled:
   defaultsOverridable: true
   humanReadableName: "Enable EnhancedSecurity Heuristics"
   humanReadableDescription: "Triggers EnhancedSecurity when insecure HTTP loads occur"
+  defaultValue:
+    WebKitLegacy:
+      "PLATFORM(COCOA)": true
+      default: false
+    WebKit:
+      "PLATFORM(COCOA)": true
+      default: false
+    WebCore:
+      "PLATFORM(COCOA)": true
+      default: false
+
+EnhancedSecurityLinksEnabled:
+  type: bool
+  status: stable
+  category: security
+  condition: HAVE(ENHANCED_SECURITY_LINKS)
+  defaultsOverridable: true
+  humanReadableName: "Enhanced Security for links"
+  humanReadableDescription: "Enables additional Enhanced Security support for certain links"
   defaultValue:
     WebKitLegacy:
       "PLATFORM(COCOA)": true
@@ -6913,6 +6935,20 @@ ScriptTrackingPrivacyNetworkRequestBlockingEnabled:
     WebCore:
       default: false
 
+ScriptTrackingPrivacyNetworkRequestBlockingLatchEnabled:
+  type: bool
+  status: internal
+  humanReadableName: "Script Tracking Privacy Network Requests Blocking Latch"
+  humanReadableDescription: "Block multiple network requests made to tracking domains"
+  exposed: [ WebKit ]
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+
 ScriptTrackingPrivacyProtectionsEnabled:
   type: bool
   status: internal
@@ -7859,17 +7895,17 @@ StorageBlockingPolicy:
 
 SubpixelInlineLayoutEnabled:
   type: bool
-  status: stable
+  status: preview
   category: css
   humanReadableName: "Subpixels in inline layout (in block direction)"
   humanReadableDescription: "Subpixels in line layout (in block direction)"
   defaultValue:
     WebKitLegacy:
-      default: true
+      default: false
     WebKit:
-      default: true
+      default: false
     WebCore:
-      default: true
+      default: false
 
 SupportHDRCompositorTonemappingEnabled:
   type: bool
@@ -8755,6 +8791,7 @@ UserInterfaceDirectionPolicy:
 UsesBackForwardCache:
   type: bool
   status: embedder
+  defaultsOverridable: true
   webcoreOnChange: usesBackForwardCacheChanged
   webcoreExcludeFromInternalSettings: true
   webKitLegacyPreferenceKey: WebKitUsesPageCachePreferenceKey
@@ -9129,10 +9166,10 @@ WebArchiveTestingModeEnabled:
 
 WebAssemblyDebuggerEnabled:
   type: bool
-  status: internal
+  status: developer
   category: javascript
-  humanReadableName: "WebAssembly Debugger"
-  humanReadableDescription: "Enable LLDB debugging support for WebAssembly (requires page reload)"
+  humanReadableName: "Experimental WebAssembly Debugger (Disables JIT)"
+  humanReadableDescription: "Enable LLDB debugging support for WebAssembly (requires new tab)"
   condition: ENABLE(WEBASSEMBLY_DEBUGGER) && ENABLE(REMOTE_INSPECTOR)
   defaultValue:
     WebKitLegacy:

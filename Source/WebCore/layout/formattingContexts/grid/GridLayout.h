@@ -67,7 +67,9 @@ private:
 
     GridDimensions calculateGridDimensions(const UnplacedGridItems&, size_t explicitColumnsCount, size_t explicitRowsCount);
 
-    static TrackSizingFunctionsList trackSizingFunctions(size_t implicitGridTracksCount, const Vector<Style::GridTrackSize> gridTemplateTrackSizes);
+    static TrackSizingFunctions convertGridTrackSizeToTrackSizingFunctions(const Style::GridTrackSize&);
+    static TrackSizingFunctionsList generateImplicitTrackSizingFunctions(size_t explicitTracksCount, size_t totalTracksCount, const Style::GridTrackSizes& gridAutoTrackSizes);
+    static TrackSizingFunctionsList trackSizingFunctions(size_t totalTracksCount, const Vector<Style::GridTrackSize>& gridTemplateTrackSizes, const Style::GridTrackSizes& gridAutoTrackSizes);
 
     UsedTrackSizes performGridSizingAlgorithm(const PlacedGridItems&, const TrackSizingFunctionsList&, const TrackSizingFunctionsList&, const GridLayoutConstraints&,
         const StyleContentAlignmentData& usedJustifyContent, const StyleContentAlignmentData& usedAlignContent) const;
@@ -77,8 +79,8 @@ private:
     static Vector<UsedMargins> computeInlineMargins(const PlacedGridItems&, const Style::ZoomFactor&);
     static Vector<UsedMargins> computeBlockMargins(const PlacedGridItems&, const Style::ZoomFactor&);
 
-    static BorderBoxPositions performInlineAxisSelfAlignment(const PlacedGridItems&, const Vector<UsedMargins>&, const Vector<LayoutUnit>& gridAreaInlineSizes);
-    static BorderBoxPositions performBlockAxisSelfAlignment(const PlacedGridItems&, const Vector<UsedMargins>&, const Vector<LayoutUnit>& gridAreaBlockSizes);
+    BorderBoxPositions performInlineAxisSelfAlignment(const PlacedGridItems&, const Vector<UsedMargins>&, const UsedInlineSizes&, const Vector<LayoutUnit>& gridAreasInlineSizeList);
+    BorderBoxPositions performBlockAxisSelfAlignment(const PlacedGridItems&, const Vector<UsedMargins>&, const UsedBlockSizes&, const Vector<LayoutUnit>& gridAreasBlockSizeList);
 
     const GridFormattingContext& formattingContext() const { return m_gridFormattingContext; }
 

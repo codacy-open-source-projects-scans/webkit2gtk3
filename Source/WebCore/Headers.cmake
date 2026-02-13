@@ -477,8 +477,12 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/identity/DigitalCredentialGetRequest.h
     Modules/identity/DigitalCredentialPresentationProtocol.h
     Modules/identity/DigitalCredentialRequestOptions.h
+    Modules/identity/DigitalCredentialsMobileDocumentRequestData.h
+    Modules/identity/DigitalCredentialsMobileDocumentRequestDataWithRequestInfo.h
     Modules/identity/DigitalCredentialsRequestData.h
+    Modules/identity/DigitalCredentialsRequestDataBuilder.h
     Modules/identity/DigitalCredentialsResponseData.h
+    Modules/identity/DigitalCredentialsSecurityOriginData.h
 
     Modules/identity/dummy/DummyCredentialRequestCoordinatorClient.h
 
@@ -844,8 +848,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     Modules/webxr/XRCanvasConfiguration.h
     Modules/webxr/XRGPUProjectionLayerInit.h
-    Modules/webxr/XRLayerBacking.h
     Modules/webxr/XRHitTestTrackableType.h
+    Modules/webxr/XRLayerBacking.h
 
     Scripts/generate-log-declarations.py
 
@@ -3104,6 +3108,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/video-codecs/VideoCodecType.h
 
     platform/xr/PlatformXR.h
+    platform/xr/XRHitTestSourceIdentifier.h
 
     plugins/PluginData.h
     plugins/PluginInfoProvider.h

@@ -236,7 +236,7 @@ public:
 #endif
 
 #if PLATFORM(COCOA)
-    void betterApproximateNode(const IntPoint& testPoint, const NodeQualifier&, Node*& best, Node* failedNode, IntPoint& bestPoint, IntRect& bestRect, const IntRect& testRect);
+    RefPtr<Node> betterApproximateNode(const IntPoint& testPoint, const NodeQualifier&, Node* best, Node* failedNode, IntPoint& bestPoint, IntRect& bestRect, const IntRect& testRect);
 
     WEBCORE_EXPORT RefPtr<Node> nodeRespondingToInteraction(const FloatPoint& viewportLocation, FloatPoint& adjustedViewportLocation);
 
@@ -391,7 +391,7 @@ private:
     std::optional<DocumentSecurityPolicy> frameDocumentSecurityPolicy() const final;
     String frameURLProtocol() const final;
 
-    FrameView* virtualView() const final;
+    FrameView* NODELETE virtualView() const final;
     void disconnectView() final;
     DOMWindow* virtualWindow() const final;
     void reinitializeDocumentSecurityContext() final;

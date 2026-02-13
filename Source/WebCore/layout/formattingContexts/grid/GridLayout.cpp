@@ -205,8 +205,8 @@ std::pair<UsedTrackSizes, GridItemRects> GridLayout::layout(UnplacedGridItems& u
     auto [ gridAreas, columnsCount, rowsCount ] = placeGridItems(unplacedGridItems, gridTemplateColumnsTrackSizes, gridTemplateRowsTrackSizes, gridDefinition.autoFlowOptions);
     auto placedGridItems = formattingContext.constructPlacedGridItems(gridAreas);
 
-    auto columnTrackSizingFunctionsList = trackSizingFunctions(columnsCount, gridTemplateColumnsTrackSizes);
-    auto rowTrackSizingFunctionsList = trackSizingFunctions(rowsCount, gridTemplateRowsTrackSizes);
+    auto columnTrackSizingFunctionsList = trackSizingFunctions(columnsCount, gridTemplateColumnsTrackSizes, gridDefinition.gridAutoColumns);
+    auto rowTrackSizingFunctionsList = trackSizingFunctions(rowsCount, gridTemplateRowsTrackSizes, gridDefinition.gridAutoRows);
 
     // 2. FIXME: Find the size of the grid container.
 
@@ -231,125 +231,140 @@ std::pair<UsedTrackSizes, GridItemRects> GridLayout::layout(UnplacedGridItems& u
     // https://drafts.csswg.org/css-grid-1/#alignment
     // After a grid container’s grid tracks have been sized, and the dimensions of all grid items
     // are finalized, grid items can be aligned within their grid areas.
-    auto inlineAxisPositions = performInlineAxisSelfAlignment(placedGridItems, usedInlineMargins, gridAreaSizes.inlineSizes);
-    auto blockAxisPositions = performBlockAxisSelfAlignment(placedGridItems, usedBlockMargins, gridAreaSizes.blockSizes);
+    auto inlineAxisPositions = performInlineAxisSelfAlignment(placedGridItems, usedInlineMargins, usedInlineSizes, gridAreaSizes.inlineSizes);
+    auto blockAxisPositions = performBlockAxisSelfAlignment(placedGridItems, usedBlockMargins, usedBlockSizes, gridAreaSizes.blockSizes);
 
     auto gridItemRects = computeGridItemRects(placedGridItems, inlineAxisPositions, blockAxisPositions, usedInlineSizes, usedBlockSizes, usedInlineMargins, usedBlockMargins);
 
     return { usedTrackSizes, gridItemRects };
 }
 
-BorderBoxPositions GridLayout::performInlineAxisSelfAlignment(const PlacedGridItems& placedGridItems, const Vector<UsedMargins>& inlineMargins, const Vector<LayoutUnit>& gridAreaInlineSizes)
+BorderBoxPositions GridLayout::performInlineAxisSelfAlignment(const PlacedGridItems& placedGridItems, const Vector<UsedMargins>& inlineMargins, const UsedInlineSizes& borderBoxSizes,
+    const Vector<LayoutUnit>& gridAreasInlineSizeList)
 {
-    UNUSED_PARAM(gridAreaInlineSizes);
     BorderBoxPositions borderBoxPositions;
     borderBoxPositions.reserveInitialCapacity(placedGridItems.size());
 
-    auto computeMarginBoxPosition = [](const PlacedGridItem& placedGridItem) -> LayoutUnit {
-        switch (placedGridItem.inlineAxisAlignment().position()) {
-        case ItemPosition::FlexStart:
-        case ItemPosition::SelfStart:
-        case ItemPosition::Start:
-            return { };
+    auto& formattingContextWritingMode = formattingContext().writingMode();
+    for (size_t gridItemIndex = 0; gridItemIndex < placedGridItems.size(); ++gridItemIndex) {
+        auto& gridItem = placedGridItems[gridItemIndex];
 
+        auto& [marginStart, marginEnd] = inlineMargins[gridItemIndex];
+        auto marginBoxSize = marginStart + borderBoxSizes[gridItemIndex] + marginEnd;
+        auto remainingSpace = gridAreasInlineSizeList[gridItemIndex] - marginBoxSize;
+
+        // Normal behavior:
         // https://www.w3.org/TR/css-align-3/#justify-grid
         // Sizes as either stretch (typical non-replaced elements) or start (typical replaced elements);
         // see Grid Item Sizing in [CSS-GRID-1]. The resulting box is then start-aligned.
         //
         // Stretching should be handled by GridLayout::layoutGridItems.
-        case ItemPosition::Normal:
-            return { };
-        default:
-            ASSERT_NOT_IMPLEMENTED_YET();
-            return { };
-        }
-    };
+        auto marginBoxPosition = StyleSelfAlignmentData::adjustmentFromStartEdge(remainingSpace, gridItem.inlineAxisAlignment().position(), LogicalBoxAxis::Inline, formattingContextWritingMode, gridItem.writingMode());
 
-    for (size_t gridItemIndex = 0; gridItemIndex < placedGridItems.size(); ++gridItemIndex) {
-        auto& gridItem = placedGridItems[gridItemIndex];
-        auto marginBoxPosition = computeMarginBoxPosition(gridItem);
         borderBoxPositions.append(marginBoxPosition + inlineMargins[gridItemIndex].marginStart);
     }
 
     return borderBoxPositions;
 }
 
-BorderBoxPositions GridLayout::performBlockAxisSelfAlignment(const PlacedGridItems& placedGridItems, const Vector<UsedMargins>& blockMargins, const Vector<LayoutUnit>& gridAreaBlockSizes)
+BorderBoxPositions GridLayout::performBlockAxisSelfAlignment(const PlacedGridItems& placedGridItems, const Vector<UsedMargins>& blockMargins, const UsedBlockSizes& borderBoxSizes,
+    const Vector<LayoutUnit>& gridAreasBlockSizeList)
 {
-    UNUSED_PARAM(gridAreaBlockSizes);
     BorderBoxPositions borderBoxPositions;
     borderBoxPositions.reserveInitialCapacity(placedGridItems.size());
 
-    auto computeMarginBoxPosition = [](const PlacedGridItem& placedGridItem) -> LayoutUnit {
-        switch (placedGridItem.blockAxisAlignment().position()) {
-        case ItemPosition::FlexStart:
-        case ItemPosition::SelfStart:
-        case ItemPosition::Start:
-            return { };
+    auto& formattingContextWritingMode = formattingContext().writingMode();
+    for (size_t gridItemIndex = 0; gridItemIndex < placedGridItems.size(); ++gridItemIndex) {
+        auto& gridItem = placedGridItems[gridItemIndex];
 
+        auto& [marginStart, marginEnd] = blockMargins[gridItemIndex];
+        auto marginBoxSize = marginStart + borderBoxSizes[gridItemIndex] + marginEnd;
+        auto remainingSpace = gridAreasBlockSizeList[gridItemIndex] - marginBoxSize;
+
+        // Normal behavior:
         // https://www.w3.org/TR/css-align-3/#align-grid
         // Sizes as either stretch (typical non-replaced elements) or start (typical replaced
         // elements); see Grid Item Sizing in [CSS-GRID-1]. The resulting box is then start-aligned.
         //
         // Stretching should be handled by GridLayout::layoutGridItems.
-        case ItemPosition::Normal:
-            return { };
-        default:
-            ASSERT_NOT_IMPLEMENTED_YET();
-            return { };
-        }
-    };
+        auto marginBoxPosition = StyleSelfAlignmentData::adjustmentFromStartEdge(remainingSpace, gridItem.blockAxisAlignment().position(), LogicalBoxAxis::Block, formattingContextWritingMode, gridItem.writingMode());
 
-    for (size_t gridItemIndex = 0; gridItemIndex < placedGridItems.size(); ++gridItemIndex) {
-        auto& gridItem = placedGridItems[gridItemIndex];
-        auto marginBoxPosition = computeMarginBoxPosition(gridItem);
         borderBoxPositions.append(marginBoxPosition + blockMargins[gridItemIndex].marginStart);
     }
 
     return borderBoxPositions;
 }
 
-TrackSizingFunctionsList GridLayout::trackSizingFunctions(size_t implicitGridTracksCount, const Vector<Style::GridTrackSize> gridTemplateTrackSizes)
+TrackSizingFunctions GridLayout::convertGridTrackSizeToTrackSizingFunctions(const Style::GridTrackSize& gridTrackSize)
 {
-    // FIXME: Support implicit tracks (both before and after the explicit grid)
-    ASSERT(implicitGridTracksCount == gridTemplateTrackSizes.size(), "Currently only support mapping track sizes from explicit grid from grid-template-{columns, rows}");
-    UNUSED_VARIABLE(implicitGridTracksCount);
+    auto minTrackSizingFunction = [&]() {
+        // If the track was sized with a minmax() function, this is the first argument to that function.
+        if (gridTrackSize.isMinMax())
+            return gridTrackSize.minTrackBreadth();
+
+        // If the track was sized with a <flex> value or fit-content() function, auto.
+        if (gridTrackSize.isFitContent() || gridTrackSize.minTrackBreadth().isFlex())
+            return Style::GridTrackBreadth { CSS::Keyword::Auto { } };
+
+        // Otherwise, the track's sizing function.
+        return gridTrackSize.minTrackBreadth();
+    };
+
+    auto maxTrackSizingFunction = [&]() {
+        // If the track was sized with a minmax() function, this is the second argument to that function.
+        if (gridTrackSize.isMinMax())
+            return gridTrackSize.maxTrackBreadth();
+
+        // Otherwise, the track’s sizing function. In all cases, treat auto and fit-content() as max-content,
+        // except where specified otherwise for fit-content().
+        // Note: This special treatment is handled inside of TrackSizingAlgorithm.
+        return gridTrackSize.maxTrackBreadth();
+    };
+
+    return TrackSizingFunctions { minTrackSizingFunction(), maxTrackSizingFunction() };
+}
+
+// Generates track sizing functions for implicit tracks using grid-auto-{columns,rows}
+// FIXME: This function only supports appended tracks but not prepended tracks.
+TrackSizingFunctionsList GridLayout::generateImplicitTrackSizingFunctions(size_t explicitTracksCount, size_t totalTracksCount, const Style::GridTrackSizes& gridAutoTrackSizes)
+{
+    // https://drafts.csswg.org/css-grid-1/#auto-tracks
+    size_t implicitTracksCount = totalTracksCount - explicitTracksCount;
+
+    TrackSizingFunctionsList trackSizingFunctionsForImplicitGrid;
+    trackSizingFunctionsForImplicitGrid.reserveInitialCapacity(implicitTracksCount);
+
+    // Cycle through grid-auto-{columns,rows} values using modulo.
+    for (size_t i = 0; i < implicitTracksCount; ++i) {
+        size_t autoTrackIndex = i % gridAutoTrackSizes.size();
+        trackSizingFunctionsForImplicitGrid.append(convertGridTrackSizeToTrackSizingFunctions(gridAutoTrackSizes[autoTrackIndex]));
+    }
+
+    return trackSizingFunctionsForImplicitGrid;
+}
+
+TrackSizingFunctionsList GridLayout::trackSizingFunctions(size_t totalTracksCount, const Vector<Style::GridTrackSize>& gridTemplateTrackSizes, const Style::GridTrackSizes& gridAutoTrackSizes)
+{
+    // FIXME: This function only supports appended tracks but not prepended tracks.
+    // Per spec, we should support both forward and backward implicit tracks.
+    ASSERT_WITH_MESSAGE(totalTracksCount >= gridTemplateTrackSizes.size(), "Total tracks should be at least as many as explicit tracks");
+
+    TrackSizingFunctionsList trackSizingFunctions;
+    trackSizingFunctions.reserveInitialCapacity(totalTracksCount);
 
     // https://drafts.csswg.org/css-grid-1/#algo-terms
-    return gridTemplateTrackSizes.map([](const Style::GridTrackSize& gridTrackSize) {
-        auto minTrackSizingFunction = [&]() {
-            // If the track was sized with a minmax() function, this is the first argument to that function.
-            if (gridTrackSize.isMinMax())
-                return gridTrackSize.minTrackBreadth();
+    // Map explicit tracks from grid-template-{columns,rows}
+    for (auto& gridTrackSize : gridTemplateTrackSizes)
+        trackSizingFunctions.append(convertGridTrackSizeToTrackSizingFunctions(gridTrackSize));
 
-            // If the track was sized with a <flex> value or fit-content() function, auto.
-            if (gridTrackSize.isFitContent() || gridTrackSize.minTrackBreadth().isFlex())
-                return Style::GridTrackBreadth { CSS::Keyword::Auto { } };
+    // Generate implicit tracks using grid-auto-{columns,rows}
+    // https://drafts.csswg.org/css-grid-1/#auto-tracks
+    // "The first track after the last explicitly-sized track receives the first specified size, and so on forwards"
+    auto implicitTrackSizingFunctions = generateImplicitTrackSizingFunctions(gridTemplateTrackSizes.size(), totalTracksCount, gridAutoTrackSizes);
+    trackSizingFunctions.appendVector(implicitTrackSizingFunctions);
 
-            // Otherwise, the track’s sizing function.
-            return gridTrackSize.minTrackBreadth();
-        };
-
-        auto maxTrackSizingFunction = [&]() {
-            // If the track was sized with a minmax() function, this is the second argument to that function.
-            if (gridTrackSize.isMinMax())
-                return gridTrackSize.maxTrackBreadth();
-
-            // Otherwise, the track’s sizing function. In all cases, treat auto and fit-content() as max-content,
-            // except where specified otherwise for fit-content().
-            if (gridTrackSize.maxTrackBreadth().isAuto())
-                return Style::GridTrackBreadth { CSS::Keyword::MaxContent { } };
-
-            if (gridTrackSize.isFitContent()) {
-                ASSERT_NOT_IMPLEMENTED_YET();
-                return Style::GridTrackBreadth { CSS::Keyword::MaxContent { } };
-            }
-
-            return gridTrackSize.maxTrackBreadth();
-        };
-
-        return TrackSizingFunctions { minTrackSizingFunction(), maxTrackSizingFunction() };
-    });
+    ASSERT(trackSizingFunctions.size() == totalTracksCount);
+    return trackSizingFunctions;
 }
 
 // If calculating the layout of a grid item in this step depends on the available space in the block axis,
@@ -369,6 +384,12 @@ static Vector<LayoutUnit> rowSizesForFirstIterationColumnSizing(const TrackSizin
             [&gridContainerInnerInlineSize](const Style::GridTrackBreadth::Calc calculatedValue) -> LayoutUnit {
                 ASSERT(gridContainerInnerInlineSize, "The formatting context should have transformed this track size to auto");
                 return Style::evaluate<LayoutUnit>(calculatedValue, *gridContainerInnerInlineSize, Style::ZoomNeeded { });
+            },
+            [](const CSS::Keyword::MinContent&) -> LayoutUnit {
+                return LayoutUnit::max();
+            },
+            [](const CSS::Keyword::MaxContent&) {
+                return LayoutUnit::max();
             },
             [](const auto&) -> LayoutUnit {
                 ASSERT_NOT_IMPLEMENTED_YET();

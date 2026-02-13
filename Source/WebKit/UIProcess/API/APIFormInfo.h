@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2025 Apple Inc. All rights reserved.
+ * Copyright (C) 2026 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,20 +23,39 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#import "APIContentWorldConfiguration.h"
-#import "_WKContentWorldConfiguration.h"
-#import <wtf/AlignedStorage.h>
+#pragma once
 
-namespace WebKit {
+#include "APIFrameInfo.h"
+#include <wtf/URL.h>
+#include <wtf/text/WTFString.h>
 
-template<> struct WrapperTraits<API::ContentWorldConfiguration> {
-    using WrapperClass = _WKContentWorldConfiguration;
+namespace API {
+
+class FormInfo final : public ObjectImpl<Object::Type::FormInfo> {
+public:
+    template <typename... Args> static Ref<FormInfo> create(Args&&... args)
+    {
+        return adoptRef(*new FormInfo(std::forward<Args>(args)...));
+    }
+
+    virtual ~FormInfo();
+
+    API::FrameInfo* targetFrame() const;
+    API::FrameInfo* sourceFrame() const;
+    const WTF::URL& submissionURL() const;
+    const WTF::String& httpMethod() const;
+    const Vector<std::pair<WTF::String, WTF::String>>& formValues() const;
+
+private:
+    FormInfo(API::FrameInfo&, API::FrameInfo& sourceFrame, const WTF::URL& submissionURL, const WTF::String& httpMethod, const Vector<std::pair<WTF::String, WTF::String>>& formValues);
+
+    Ref<API::FrameInfo> m_targetFrame;
+    Ref<API::FrameInfo> m_sourceFrame;
+    WTF::URL m_submissionURL;
+    WTF::String m_httpMethod;
+    Vector<std::pair<WTF::String, WTF::String>> m_formValues;
 };
 
-}
+} // namespace API
 
-@interface _WKContentWorldConfiguration () <WKObject> {
-@package
-    AlignedStorage<API::ContentWorldConfiguration> _worldConfiguration;
-}
-@end
+SPECIALIZE_TYPE_TRAITS_API_OBJECT(FormInfo);

@@ -58,6 +58,7 @@
 #import "RemoteLayerTreeDrawingAreaProxyMac.h"
 #import "RemoteObjectRegistry.h"
 #import "RemoteObjectRegistryMessages.h"
+#import "RemoteScrollingCoordinatorProxy.h"
 #import "TextChecker.h"
 #import "TextCheckerState.h"
 #import "TiledCoreAnimationDrawingAreaProxy.h"
@@ -1271,6 +1272,10 @@ namespace WebKit {
 
 using namespace WebCore;
 
+#if USE(APPLE_INTERNAL_SDK)
+#import <WebKitAdditions/WebViewImplAdditions.mm>
+#endif
+
 static NSTrackingAreaOptions trackingAreaOptions()
 {
     // Legacy style scrollbars have design details that rely on tracking the mouse all the time.
@@ -1490,6 +1495,15 @@ void WebViewImpl::didRelaunchProcess()
 
     accessibilityRegisterUIProcessTokens();
     windowDidChangeScreen(); // Make sure DisplayID is set.
+}
+
+void WebViewImpl::scrollingCoordinatorWasCreated()
+{
+#if ENABLE(BANNER_VIEW_OVERLAYS)
+    // Sync banner view state that may have been set before the scrolling coordinator existed.
+    if (CheckedPtr scrollingCoordinator = m_page->scrollingCoordinatorProxy())
+        scrollingCoordinator->setHasBannerViewOverlay(!!m_bannerView);
+#endif
 }
 
 void WebViewImpl::setDrawsBackground(bool drawsBackground)
@@ -1766,6 +1780,10 @@ void WebViewImpl::setFrameSize(CGSize)
 {
     [m_layoutStrategy didChangeFrameSize];
     [m_warningView setFrame:[m_view.get() bounds]];
+
+#if ENABLE(BANNER_VIEW_OVERLAYS)
+    updateBannerViewFrame();
+#endif
 }
 
 void WebViewImpl::disableFrameSizeUpdates()
@@ -1933,6 +1951,10 @@ FloatBoxExtent WebViewImpl::obscuredContentInsets() const
 void WebViewImpl::setObscuredContentInsets(const FloatBoxExtent& insets)
 {
     m_page->setObscuredContentInsetsAsync(insets);
+
+#if ENABLE(BANNER_VIEW_OVERLAYS)
+    updateBannerViewFrame();
+#endif
 }
 
 void WebViewImpl::flushPendingObscuredContentInsetChanges()
@@ -2937,9 +2959,13 @@ void WebViewImpl::selectionDidChange()
 #endif
         if (protect(page->preferences())->textInputClientSelectionUpdatesEnabled()) {
             alreadyNotifiedClient = true;
-            [protect(inputContext()) textInputClientDidUpdateSelection];
+            [protect(inputContextIncludingNonEditable()) textInputClientDidUpdateSelection];
         }
     }
+
+#if HAVE(APPKIT_GESTURES_SUPPORT)
+    [m_textSelectionController selectionDidChange];
+#endif
 
 #if ENABLE(WRITING_TOOLS)
     bool wantsCompleteWritingTools = isEditable() || page->configuration().writingToolsBehavior() == WebCore::WritingTools::Behavior::Complete;
@@ -3046,12 +3072,16 @@ NSRect WebViewImpl::unionRectInVisibleSelectedRangeInScreen() const
         return NSZeroRect;
 
     Ref page = m_page.get();
-    if (!page->editorState().selectionIsRange)
+    auto& editorState = page->editorState();
+    if (editorState.selectionIsNone)
         return NSZeroRect;
 
     auto selectionRect = page->selectionBoundingRectInRootViewCoordinates();
     if (selectionRect.isEmpty())
         return NSZeroRect;
+
+    if (!editorState.selectionIsRange && editorState.isContentEditable)
+        selectionRect.setWidth(0);
 
     return convertFromViewToScreen(selectionRect);
 }
@@ -5166,6 +5196,10 @@ void WebViewImpl::scrollWheel(NSEvent *event)
     if (event.phase == NSEventPhaseBegan)
         dismissContentRelativeChildWindowsWithAnimation(false);
 
+#if ENABLE(BANNER_VIEW_OVERLAYS)
+    updateBannerViewForWheelEvent(event);
+#endif
+
     if (m_allowsBackForwardNavigationGestures && ensureProtectedGestureController()->handleScrollWheelEvent(event)) {
         RELEASE_LOG(MouseHandling, "[pageProxyID=%lld] WebViewImpl::scrollWheel: Gesture controller handled wheel event", m_page->identifier().toUInt64());
         return;
@@ -5606,7 +5640,18 @@ NSTextInputContext *WebViewImpl::inputContext()
     if (!m_page->editorState().isContentEditable)
         return nil;
 
-    return [m_view.get() _web_superInputContext];
+    return [protect(m_view.get()) _web_superInputContext];
+}
+
+NSTextInputContext *WebViewImpl::inputContextIncludingNonEditable()
+{
+    if (!protect(m_page->preferences())->textInputClientSelectionUpdatesEnabled())
+        return inputContext();
+
+    if (!m_page->editorState().isContentEditable && !m_page->editorState().selectionIsRange)
+        return nil;
+
+    return [protect(m_view.get()) _web_superInputContext];
 }
 
 void WebViewImpl::unmarkText()
@@ -7376,25 +7421,6 @@ void WebViewImpl::unregisterViewAboveScrollPocket(NSView *containerView)
 }
 
 #endif // ENABLE(CONTENT_INSET_BACKGROUND_FILL)
-
-#if ENABLE(BANNER_VIEW_OVERLAYS)
-
-void WebViewImpl::setBannerView(WKBannerView *bannerView)
-{
-    if (m_bannerView == bannerView)
-        return;
-
-    [m_bannerView.get() removeFromSuperview];
-    [m_view.get() addSubview:bannerView positioned:NSWindowAbove relativeTo:nil];
-
-    m_bannerView = bannerView;
-}
-
-void WebViewImpl::applyBannerViewOverlayHeight(CGFloat, bool)
-{
-}
-
-#endif // ENABLE(BANNER_VIEW_OVERLAYS)
 
 #if ENABLE(VIDEO)
 void WebViewImpl::showCaptionDisplaySettings(WebCore::HTMLMediaElementIdentifier, const WebCore::ResolvedCaptionDisplaySettingsOptions& options, CompletionHandler<void(Expected<void, WebCore::ExceptionData>&&)>&& completionHandler)

@@ -29,6 +29,7 @@
 // Use forward declarations and WebPageProxyInternals.h instead.
 #include "APIObject.h"
 #include "MessageReceiver.h"
+#include <WebCore/UnvalidatedDigitalCredentialRequest.h>
 #include <wtf/ApproximateTime.h>
 #include <wtf/CheckedRef.h>
 #include <wtf/CompletionHandler.h>
@@ -358,7 +359,26 @@ struct WrappedCryptoKey;
 
 #if ENABLE(WEB_AUTHN)
 struct MockWebAuthenticationConfiguration;
-struct DigitalCredentialsRequestData;
+struct DigitalCredentialsMobileDocumentRequestData;
+
+#if ENABLE(ISO18013_DOCUMENT_REQUEST_INFO)
+struct DigitalCredentialsMobileDocumentRequestDataWithRequestInfo;
+using RawDigitalCredentialsWithRequestInfo = Vector<String>;
+#endif
+
+struct MobileDocumentRequest;
+using UnvalidatedDigitalCredentialRequest = MobileDocumentRequest;
+using DigitalCredentialsRequestData = Variant<
+    WebCore::DigitalCredentialsMobileDocumentRequestData
+#if ENABLE(ISO18013_DOCUMENT_REQUEST_INFO)
+    , WebCore::DigitalCredentialsMobileDocumentRequestDataWithRequestInfo
+#endif // ENABLE(ISO18013_DOCUMENT_REQUEST_INFO)
+>;
+using DigitalCredentialsRawRequests = Variant<Vector<UnvalidatedDigitalCredentialRequest>
+#if ENABLE(ISO18013_DOCUMENT_REQUEST_INFO)
+        , RawDigitalCredentialsWithRequestInfo
+#endif // ENABLE(ISO18013_DOCUMENT_REQUEST_INFO)
+    >;
 struct DigitalCredentialsResponseData;
 struct MobileDocumentRequest;
 #endif
@@ -1174,8 +1194,11 @@ public:
 
 #if PLATFORM(COCOA)
     void selectWithGesture(WebCore::IntPoint, GestureType, GestureRecognizerState, bool isInteractingWithFocusedElement, CompletionHandler<void(const WebCore::IntPoint&, GestureType, GestureRecognizerState, OptionSet<SelectionFlags>)>&&);
+
     void didReceivePositionInformation(const InteractionInformationAtPosition&);
     void requestPositionInformation(const InteractionInformationRequest&);
+
+    void selectPositionAtPoint(WebCore::IntPoint, bool isInteractingWithFocusedElement, CompletionHandler<void()>&&);
 #endif
 
 #if PLATFORM(IOS_FAMILY)
@@ -1224,7 +1247,6 @@ public:
     void extendSelectionForReplacement(CompletionHandler<void()>&&);
     void moveSelectionByOffset(int32_t offset, CompletionHandler<void()>&&);
     void selectTextWithGranularityAtPoint(WebCore::IntPoint, WebCore::TextGranularity, bool isInteractingWithFocusedElement, CompletionHandler<void()>&&);
-    void selectPositionAtPoint(WebCore::IntPoint, bool isInteractingWithFocusedElement, CompletionHandler<void()>&&);
     void selectPositionAtBoundaryWithDirection(WebCore::IntPoint, WebCore::TextGranularity, WebCore::SelectionDirection, bool isInteractingWithFocusedElement, CompletionHandler<void()>&&);
     void moveSelectionAtBoundaryWithDirection(WebCore::TextGranularity, WebCore::SelectionDirection, CompletionHandler<void()>&&);
     void beginSelectionInDirection(WebCore::SelectionDirection, CompletionHandler<void(bool)>&&);
@@ -2357,7 +2379,7 @@ public:
 
     // Digital Credentials API
     void dismissDigitalCredentialsPicker(IPC::Connection&, CompletionHandler<void(bool)>&&);
-    void fetchRawDigitalCredentialRequests(CompletionHandler<void(Vector<WebCore::MobileDocumentRequest>)>&&);
+    void fetchRawDigitalCredentialRequests(CompletionHandler<void(WebCore::DigitalCredentialsRawRequests)>&&);
     void showDigitalCredentialsPicker(IPC::Connection&, const WebCore::DigitalCredentialsRequestData&, CompletionHandler<void(Expected<WebCore::DigitalCredentialsResponseData, WebCore::ExceptionData>&&)>&&);
 #endif
 
@@ -2884,7 +2906,7 @@ public:
 #endif
 
 #if ENABLE(POINTER_LOCK)
-    RefPtr<WebProcessProxy> webContentPointerLockProcess();
+    RefPtr<WebProcessProxy> NODELETE webContentPointerLockProcess();
     void clearWebContentPointerLockProcess();
     void resetPointerLockState(void);
 #endif
@@ -2907,7 +2929,7 @@ public:
     void takeActivitiesOnRemotePage(RemotePageProxy&);
 
 #if PLATFORM(IOS_FAMILY) && ENABLE(DEVICE_ORIENTATION)
-    RefPtr<WebDeviceOrientationUpdateProviderProxy> webDeviceOrientationUpdateProviderProxy();
+    RefPtr<WebDeviceOrientationUpdateProviderProxy> NODELETE webDeviceOrientationUpdateProviderProxy();
 #endif
 
 #if ENABLE(MODEL_ELEMENT_IMMERSIVE)
@@ -3592,6 +3614,7 @@ private:
 #endif
 
     void beginSiteHasStorageCheck(const URL&, API::Navigation&, WebFramePolicyListenerProxy&);
+    void beginEnhancedSecurityLinkCheck(const URL&, API::Navigation&, WebFramePolicyListenerProxy&);
 
     const UniqueRef<Internals> m_internals;
     Identifier m_identifier;
