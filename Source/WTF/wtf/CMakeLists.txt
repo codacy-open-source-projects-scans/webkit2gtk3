@@ -93,6 +93,7 @@ set(WTF_PUBLIC_HEADERS
     FailureAction.h
     FastBitVector.h
     FastFloat.h
+    FastJITPermissions.h
     FastMalloc.h
     FastTLS.h
     FileHandle.h
@@ -299,6 +300,7 @@ set(WTF_PUBLIC_HEADERS
     SegmentedVector.h
     SentinelLinkedList.h
     SequesteredAllocator.h
+    SequesteredAutomaticThread.h
     SequesteredImmortalHeap.h
     SequesteredMalloc.h
     SetForScope.h
@@ -318,6 +320,7 @@ set(WTF_PUBLIC_HEADERS
     SortedArrayMap.h
     SpanningTree.h
     Spectrum.h
+    StackAllocation.h
     StackBounds.h
     StackCheck.h
     StackPointer.h
@@ -600,6 +603,7 @@ set(WTF_SOURCES
     Seconds.cpp
     SegmentedVector.cpp
     SequesteredAllocator.cpp
+    SequesteredAutomaticThread.cpp
     SequesteredImmortalHeap.cpp
     SequesteredMalloc.cpp
     SixCharacterHash.cpp

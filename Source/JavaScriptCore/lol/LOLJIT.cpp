@@ -40,6 +40,7 @@
 #include "JITBitAndGenerator.h"
 #include "JITBitOrGenerator.h"
 #include "JITBitXorGenerator.h"
+#include "JITDivGenerator.h"
 #include "JITInlines.h"
 #include "JITLeftShiftGenerator.h"
 #include "JITSizeStatistics.h"
@@ -668,7 +669,6 @@ void LOLJIT::privateCompileSlowCases()
         DEFINE_SLOWCASE_OP(op_loop_hint)
         DEFINE_SLOWCASE_OP(op_enter)
         DEFINE_SLOWCASE_OP(op_check_traps)
-        DEFINE_SLOWCASE_OP(op_mod)
         DEFINE_SLOWCASE_OP(op_pow)
         DEFINE_SLOWCASE_OP(op_mul)
         DEFINE_SLOWCASE_OP(op_negate)
@@ -699,6 +699,7 @@ void LOLJIT::privateCompileSlowCases()
         DEFINE_SLOWCASE_SLOW_OP(rshift, OpRshift)
         DEFINE_SLOWCASE_SLOW_OP(urshift, OpUrshift)
         DEFINE_SLOWCASE_SLOW_OP(div, OpDiv)
+        DEFINE_SLOWCASE_SLOW_OP(mod, OpMod)
         DEFINE_SLOWCASE_SLOW_OP(create_this, OpCreateThis)
         DEFINE_SLOWCASE_SLOW_OP(create_promise, OpCreatePromise)
         DEFINE_SLOWCASE_SLOW_OP(create_generator, OpCreateGenerator)
@@ -2869,6 +2870,138 @@ void LOLJIT::emitSlow_op_sub(const JSInstruction* currentInstruction, Vector<Slo
 {
     JITSubIC* subIC = std::bit_cast<JITSubIC*>(m_instructionToMathIC.get(currentInstruction));
     emitMathICSlow<OpSub>(subIC, currentInstruction, operationValueSubProfiledOptimize, operationValueSubProfiled, operationValueSubOptimize, iter);
+}
+
+#if CPU(X86_64)
+
+void LOLJIT::emit_op_mod(const JSInstruction* currentInstruction)
+{
+    auto bytecode = currentInstruction->as<OpMod>();
+    auto allocations = m_fastAllocator.allocate(*this, bytecode, m_bytecodeIndex);
+    auto [ lhsRegs, rhsRegs ] = allocations.uses;
+    auto [ dstRegs ] = allocations.defs;
+
+    // Make sure registers are correct for x86 IDIV instructions.
+    ASSERT(regT0 == X86Registers::eax);
+    auto eax = X86Registers::eax;
+    auto edx = X86Registers::edx;
+    auto ecx = X86Registers::ecx;
+
+    addSlowCase(branchIfNotInt32(lhsRegs));
+    addSlowCase(branchIfNotInt32(rhsRegs));
+    addSlowCase(branchTest32(Zero, rhsRegs.payloadGPR()));
+
+    // Check for INT32_MIN % -1 (would overflow on IDIV)
+    Jump denominatorNotNeg1 = branch32(NotEqual, rhsRegs.payloadGPR(), TrustedImm32(-1));
+    addSlowCase(branch32(Equal, lhsRegs.payloadGPR(), TrustedImm32(INT32_MIN)));
+    denominatorNotNeg1.link(this);
+
+    move(rhsRegs.payloadGPR(), ecx);
+    move(lhsRegs.payloadGPR(), eax);
+
+    // Sign extend eax to edx:eax
+    x86ConvertToDoubleWord32(eax, edx);
+    // Perform division: quotient in eax, remainder in edx
+    x86Div32(ecx);
+
+    // Check for negative zero result: if numerator was negative and remainder is 0
+    Jump numeratorPositive = branch32(GreaterThanOrEqual, lhsRegs.payloadGPR(), TrustedImm32(0));
+    addSlowCase(branchTest32(Zero, edx));
+    numeratorPositive.link(this);
+
+    // Box the remainder result
+    boxInt32(edx, dstRegs);
+
+    m_fastAllocator.releaseScratches(allocations);
+}
+
+#elif CPU(ARM64)
+
+void LOLJIT::emit_op_mod(const JSInstruction* currentInstruction)
+{
+    auto bytecode = currentInstruction->as<OpMod>();
+    auto allocations = m_fastAllocator.allocate(*this, bytecode, m_bytecodeIndex);
+    auto [ lhsRegs, rhsRegs ] = allocations.uses;
+    auto [ dstRegs ] = allocations.defs;
+
+    addSlowCase(branchIfNotInt32(lhsRegs));
+    addSlowCase(branchIfNotInt32(rhsRegs));
+
+    GPRReg dividendGPR = lhsRegs.payloadGPR();
+    GPRReg divisorGPR = rhsRegs.payloadGPR();
+    GPRReg quotientThenRemainderGPR = s_scratch;
+    // GPRReg multiplyAnswerGPR = s_scratch;
+    addSlowCase(branchTest32(Zero, divisorGPR));
+
+    // This is doing: x - ((x / y) * y)
+    div32(dividendGPR, divisorGPR, quotientThenRemainderGPR);
+    // This should only overflow for INT32_MIN % -1 but that will end up with quotientThenRemainderGPR == 0 and finally yield -0.0 as expected.
+    multiplySub32(quotientThenRemainderGPR, divisorGPR, dividendGPR, quotientThenRemainderGPR);
+
+    // Make sure we're not accidentally producing a positive zero when it should be a negative zero.
+    Jump numeratorPositive = branch32(GreaterThanOrEqual, dividendGPR, TrustedImm32(0));
+    Jump nonZeroRemainder = branchTest32(NonZero, quotientThenRemainderGPR);
+    moveValue(jsDoubleNumber(-0.0), dstRegs);
+    Jump done = jump();
+
+    numeratorPositive.link(this);
+    nonZeroRemainder.link(this);
+
+    boxInt32(quotientThenRemainderGPR, dstRegs);
+    done.link(this);
+
+    m_fastAllocator.releaseScratches(allocations);
+}
+#else
+#error "Unsupported Architecture"
+#endif
+
+void LOLJIT::emit_op_div(const JSInstruction* currentInstruction)
+{
+    auto bytecode = currentInstruction->as<OpDiv>();
+    auto allocations = m_fastAllocator.allocate(*this, bytecode, m_bytecodeIndex);
+    auto [ leftRegs, rightRegs ] = allocations.uses;
+    auto [ resultRegs ] = allocations.defs;
+
+    VirtualRegister op1 = bytecode.m_lhs;
+    VirtualRegister op2 = bytecode.m_rhs;
+
+    BinaryArithProfile* arithProfile = nullptr;
+    if (shouldEmitProfiling())
+        arithProfile = &m_unlinkedCodeBlock->binaryArithProfile(bytecode.m_profileIndex);
+
+    SnippetOperand leftOperand(bytecode.m_operandTypes.first());
+    SnippetOperand rightOperand(bytecode.m_operandTypes.second());
+
+    if (isOperandConstantInt(op1))
+        leftOperand.setConstInt32(getOperandConstantInt(op1));
+#if USE(JSVALUE64)
+    else if (isOperandConstantDouble(op1))
+        leftOperand.setConstDouble(getOperandConstantDouble(op1));
+#endif
+    else if (isOperandConstantInt(op2))
+        rightOperand.setConstInt32(getOperandConstantInt(op2));
+#if USE(JSVALUE64)
+    else if (isOperandConstantDouble(op2))
+        rightOperand.setConstDouble(getOperandConstantDouble(op2));
+#endif
+
+    RELEASE_ASSERT(!leftOperand.isConst() || !rightOperand.isConst());
+
+    JITDivGenerator gen(leftOperand, rightOperand, resultRegs, leftRegs, rightRegs,
+        fpRegT0, fpRegT1, s_scratch, fpRegT2, arithProfile);
+
+    gen.generateFastPath(*this);
+
+    if (gen.didEmitFastPath()) {
+        gen.endJumpList().link(this);
+        addSlowCase(gen.slowPathJumpList());
+    } else {
+        // No fast path emitted - always go slow path.
+        addSlowCase(jump());
+    }
+
+    m_fastAllocator.releaseScratches(allocations);
 }
 
 void LOLJIT::emit_op_negate(const JSInstruction* currentInstruction)

@@ -35,6 +35,7 @@
 #import "GPUProcessProxy.h"
 #import "Logging.h"
 #import "ModelProcessProxy.h"
+#import "PDFDisplayMode.h"
 #import "PageClientImplIOS.h"
 #import "PickerDismissalReason.h"
 #import "PrintInfo.h"
@@ -333,6 +334,7 @@ typedef NS_ENUM(NSInteger, _WKPrintRenderingCallbackType) {
 
     [self registerForTraitChanges:@[ UITraitDisplayScale.class ] withTarget:self action:@selector(_displayScaleDidChange)];
     [self registerForTraitChanges:@[ UITraitSceneCaptureState.class ] withTarget:self action:@selector(_sceneCaptureStateDidChange)];
+    [self registerForTraitChanges:@[ UITraitHorizontalSizeClass.class ] withTarget:self action:@selector(_horizontalSizeClassDidChange)];
 
     return self;
 }
@@ -1145,6 +1147,35 @@ static void storeAccessibilityRemoteConnectionInformation(id element, pid_t pid,
 - (void)_sceneCaptureStateDidChange
 {
     protect(_page)->setScreenIsBeingCaptured([self screenIsBeingCaptured]);
+}
+
+#if ENABLE(UNIFIED_PDF)
+- (void)_updatePDFDisplayModeForHorizontalSizeClassChangeIfNeeded
+{
+    if (![_webView.get() _isDisplayingPDF])
+        return;
+
+    RefPtr page = _page.get();
+
+    if (!protect(page->preferences())->twoUpPDFDisplayModeSupportEnabled())
+        return;
+
+    BOOL isSinglePage = WebKit::isSinglePagePDFDisplayMode(page->pdfDisplayMode());
+    if (isSinglePage)
+        return;
+
+    if (self.traitCollection.horizontalSizeClass == UIUserInterfaceSizeClassRegular)
+        return;
+
+    page->requestPDFDisplayMode(WebKit::PDFDisplayMode::SinglePageContinuous);
+}
+#endif
+
+- (void)_horizontalSizeClassDidChange
+{
+#if ENABLE(UNIFIED_PDF)
+    [self _updatePDFDisplayModeForHorizontalSizeClassChangeIfNeeded];
+#endif
 }
 
 - (BOOL)_shouldExposeRollAngleAsTwist

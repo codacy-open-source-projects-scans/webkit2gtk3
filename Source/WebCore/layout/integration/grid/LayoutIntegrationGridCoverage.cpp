@@ -85,6 +85,8 @@ enum class GridAvoidanceReason : uint8_t {
     GridItemHasUnsupportedAutomaticInlineSizing,
     GridItemHasUnsupportedHeightValue,
     GridItemHasUnsupportedAutomaticBlockSizing,
+    GridItemHasUnsupportedMinWidth,
+    GridItemHasUnsupportedMinHeight,
     NotAGrid,
     GridFormattingContextIntegrationDisabled,
 };
@@ -289,24 +291,9 @@ static EnumSet<GridAvoidanceReason> gridLayoutAvoidanceReason(const RenderGrid& 
                 // MaxTrackBreadth to the same value we only need to check one.
                 if (!trackSize.isBreadth())
                     return GridAvoidanceReason::GridHasUnsupportedGridTemplateColumns;
-
-                auto& minBreadth = trackSize.minTrackBreadth();
-
-                if (minBreadth.isLength()) {
-                    auto& gridTrackBreadthLength = minBreadth.length();
-                    // Length types like auto, max-content, etc. not yet supported
-                    if (!gridTrackBreadthLength.isFixed() && !gridTrackBreadthLength.isMinContent() && gridTrackBreadthLength.isMaxContent())
-                        return GridAvoidanceReason::GridHasUnsupportedGridTemplateColumns;
-                    return std::nullopt;
-                }
-
-                if (minBreadth.isFlex()) {
-                    // Flex tracks (fr units) are now supported
-                    return std::nullopt;
-                }
-
-                ASSERT_NOT_REACHED();
-                return GridAvoidanceReason::GridHasUnsupportedGridTemplateColumns;
+                if (trackSize.minTrackBreadth().isPercentOrCalculated())
+                    return GridAvoidanceReason::GridHasUnsupportedGridTemplateColumns;
+                return { };
             },
             [&](const Vector<String>& names) -> std::optional<GridAvoidanceReason> {
                 if (!names.isEmpty())
@@ -341,24 +328,9 @@ static EnumSet<GridAvoidanceReason> gridLayoutAvoidanceReason(const RenderGrid& 
                 // MaxTrackBreadth to the same value we only need to check one.
                 if (!trackSize.isBreadth())
                     return GridAvoidanceReason::GridHasUnsupportedGridTemplateRows;
-
-                auto& minBreadth = trackSize.minTrackBreadth();
-
-                if (minBreadth.isLength()) {
-                    auto& gridTrackBreadthLength = minBreadth.length();
-                    // Length types like auto, min-content, etc. not yet supported
-                    if (!gridTrackBreadthLength.isFixed() && !gridTrackBreadthLength.isMinContent() && !gridTrackBreadthLength.isMaxContent())
-                        return GridAvoidanceReason::GridHasUnsupportedGridTemplateRows;
-                    return std::nullopt;
-                }
-
-                if (minBreadth.isFlex()) {
-                    // Flex tracks (fr units) are now supported
-                    return std::nullopt;
-                }
-
-                ASSERT_NOT_REACHED();
-                return GridAvoidanceReason::GridHasUnsupportedGridTemplateRows;
+                if (trackSize.minTrackBreadth().isPercentOrCalculated())
+                    return GridAvoidanceReason::GridHasUnsupportedGridTemplateRows;
+                return { };
             },
             [&](const Vector<String>& names) -> std::optional<GridAvoidanceReason> {
                 if (!names.isEmpty())
@@ -424,14 +396,16 @@ static EnumSet<GridAvoidanceReason> gridLayoutAvoidanceReason(const RenderGrid& 
         if (gridItemHeight.isAuto() && !canComputeAutomaticBlockSize(gridItem, usedAlignSelf))
             ADD_REASON_AND_RETURN_IF_NEEDED(GridItemHasUnsupportedAutomaticBlockSizing, reasons, reasonCollectionMode);
 
-        if (auto fixedMinWidth = gridItemStyle->minWidth().tryFixed(); fixedMinWidth && fixedMinWidth->unresolvedValue())
-            ADD_REASON_AND_RETURN_IF_NEEDED(GridHasNonZeroMinWidth, reasons, reasonCollectionMode);
+        auto& minWidth = gridItemStyle->minWidth();
+        if (!minWidth.isFixed() && !minWidth.isAuto())
+            ADD_REASON_AND_RETURN_IF_NEEDED(GridItemHasUnsupportedMinWidth, reasons, reasonCollectionMode);
 
         if (!gridItemStyle->maxWidth().isNone())
             ADD_REASON_AND_RETURN_IF_NEEDED(GridItemHasNonInitialMaxWidth, reasons, reasonCollectionMode);
 
-        if (auto fixedMinHeight = gridItemStyle->minHeight().tryFixed(); fixedMinHeight && fixedMinHeight->unresolvedValue())
-            ADD_REASON_AND_RETURN_IF_NEEDED(GridItemHasNonZeroMinHeight, reasons, reasonCollectionMode);
+        auto& minHeight = gridItemStyle->minHeight();
+        if (!minHeight.isFixed() && !minHeight.isAuto())
+            ADD_REASON_AND_RETURN_IF_NEEDED(GridItemHasUnsupportedMinHeight, reasons, reasonCollectionMode);
 
         if (!gridItemStyle->maxHeight().isNone())
             ADD_REASON_AND_RETURN_IF_NEEDED(GridItemHasNonInitialMaxHeight, reasons, reasonCollectionMode);
@@ -500,7 +474,10 @@ static EnumSet<GridAvoidanceReason> gridLayoutAvoidanceReason(const RenderGrid& 
                     return GridAvoidanceReason::GridItemHasUnsupportedRowPlacement;
 
                 ASSERT(rowEnd.isExplicit());
-                explicitlyPlacedItemsInRowCount.resize(rowStartLineNumber + 1);
+                size_t rowIndex = rowStartLineNumber + 1;
+                auto rowsCount = explicitlyPlacedItemsInRowCount.size();
+                if (rowIndex > rowsCount)
+                    explicitlyPlacedItemsInRowCount.insertFill(rowsCount, 0, rowIndex - rowsCount);
                 ++explicitlyPlacedItemsInRowCount[rowStartLineNumber];
                 return { };
             },
@@ -697,6 +674,12 @@ static void printReason(GridAvoidanceReason reason, TextStream& stream)
         break;
     case GridAvoidanceReason::GridItemHasUnsupportedRowPlacement:
         stream << "grid item has unsupported row placement";
+        break;
+    case GridAvoidanceReason::GridItemHasUnsupportedMinWidth:
+        stream << "grid item has unsupported min-width";
+        break;
+    case GridAvoidanceReason::GridItemHasUnsupportedMinHeight:
+        stream << "grid item has unsupported min-height";
         break;
     default:
         break;

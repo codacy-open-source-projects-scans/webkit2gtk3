@@ -1345,17 +1345,17 @@ CSSRhythmicSizingEnabled:
 
 CSSScrollAnchoringEnabled:
   type: bool
-  status: testable
+  status: stable
   category: css
   humanReadableName: "CSS Scroll Anchoring"
   humanReadableDescription: "Enable CSS Scroll Anchoring"
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 CSSScrollbarColorEnabled:
   type: bool
@@ -1906,12 +1906,12 @@ CompressionStreamEnabled:
     WebCore:
       default: false
 
-ConsistentQueryParameterFilteringQuirkEnabled:
+ConsistentQueryParameterFilteringInternalQuirkEnabled:
   type: bool
   status: internal
   category: dom
-  humanReadableName: "Consistent Query Parameter Filtering"
-  humanReadableDescription: "Enable consistent query parameter filtering"
+  humanReadableName: "Consistent Query Parameter Filtering Internal"
+  humanReadableDescription: "Enable internal consistent query parameter filtering"
   defaultValue:
     WebKitLegacy:
       default: false
@@ -1919,6 +1919,20 @@ ConsistentQueryParameterFilteringQuirkEnabled:
       default: false
     WebCore:
       default: false
+
+ConsistentQueryParameterFilteringQuirkEnabled:
+  type: bool
+  status: stable
+  category: dom
+  humanReadableName: "Consistent Query Parameter Filtering"
+  humanReadableDescription: "Enable consistent query parameter filtering"
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
+    WebCore:
+      default: true
 
 ContactPickerAPIEnabled:
   type: bool
@@ -5503,17 +5517,20 @@ ModelElementEnabled:
 
 ModelElementImmersiveEnabled:
   type: bool
-  status: testable
+  status: stable
   category: javascript
   condition: ENABLE(MODEL_ELEMENT_IMMERSIVE)
   humanReadableName: "Immersive <model> API"
   humanReadableDescription: "Enable <model> element immersive API"
   defaultValue:
     WebKitLegacy:
+      "ENABLE(MODEL_ELEMENT_IMMERSIVE)": true
       default: false
     WebKit:
+      "ENABLE(MODEL_ELEMENT_IMMERSIVE)": true
       default: false
     WebCore:
+      "ENABLE(MODEL_ELEMENT_IMMERSIVE)": true
       default: false
   disableInLockdownMode: true
   sharedPreferenceForWebProcess: true
@@ -8395,9 +8412,9 @@ TwoUpPDFDisplayModeSupportEnabled:
     WebKitLegacy:
       default: false
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 UAVisualTransitionDetectionEnabled:
   type: bool

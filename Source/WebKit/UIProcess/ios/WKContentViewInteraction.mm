@@ -10403,7 +10403,7 @@ static WebCore::DataOwnerType coreDataOwnerType(_UIDataOwner platformType)
     if (!_contextMenuHintContainerView)
         return;
 
-    CGPoint newOffset = [protect(_scrollViewForTargetedPreview.get()) convertPoint:CGPointZero toView:[protect(_contextMenuHintContainerView.get()) superview]];
+    CGPoint newOffset = [protect(_scrollViewForTargetedPreview) convertPoint:CGPointZero toView:[protect(_contextMenuHintContainerView.get()) superview]];
 
     CGRect frame = [_contextMenuHintContainerView frame];
     frame.origin.x = newOffset.x - _scrollViewForTargetedPreviewInitialOffset.x;
@@ -10421,7 +10421,7 @@ static WebCore::DataOwnerType coreDataOwnerType(_UIDataOwner platformType)
     if (!_scrollViewForTargetedPreview)
         _scrollViewForTargetedPreview = self.webView.scrollView;
 
-    _scrollViewForTargetedPreviewInitialOffset = [protect(_scrollViewForTargetedPreview.get()) convertPoint:CGPointZero toView:[protect(_contextMenuHintContainerView.get()) superview]];
+    _scrollViewForTargetedPreviewInitialOffset = [protect(_scrollViewForTargetedPreview) convertPoint:CGPointZero toView:[protect(_contextMenuHintContainerView.get()) superview]];
 }
 
 #pragma mark - WKDeferringGestureRecognizerDelegate
@@ -12983,7 +12983,7 @@ static RetainPtr<NSItemProvider> createItemProvider(const WebKit::WebPageProxy& 
 - (NSData *)provideDataForItem:(QLItem *)item
 {
     ASSERT(_visualSearchPreviewImage);
-    return WebKit::transcode(protect<CGImageRef>([_visualSearchPreviewImage CGImage]), protect((__bridge CFStringRef)UTTypeTIFF.identifier).get()).autorelease();
+    return WebKit::transcode(protect([_visualSearchPreviewImage CGImage]), protect((__bridge CFStringRef)UTTypeTIFF.identifier).get()).autorelease();
 }
 
 #pragma mark - WKActionSheetAssistantDelegate
@@ -13412,7 +13412,7 @@ static BOOL shouldUseMachineReadableCodeMenuFromImageAnalysisResult(CocoaImageAn
     if (!self.subjectResultForImageContextMenu)
         return;
 
-    auto [data, type] = WebKit::imageDataForRemoveBackground(protect<CGImageRef>(self.subjectResultForImageContextMenu), protect((__bridge CFStringRef)sourceMIMEType).get());
+    auto [data, type] = WebKit::imageDataForRemoveBackground(protect(self.subjectResultForImageContextMenu), protect((__bridge CFStringRef)sourceMIMEType).get());
     if (!data)
         return;
 
@@ -15369,7 +15369,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
 
 - (BOOL)shouldShowPDFDisplayOptions
 {
-    return protect(_page->preferences())->twoUpPDFDisplayModeSupportEnabled();
+    return protect(_page->preferences())->twoUpPDFDisplayModeSupportEnabled() && self.traitCollection.horizontalSizeClass == UIUserInterfaceSizeClassRegular;
 }
 
 - (void)continueContextMenuInteractionWithPDFDisplayOptions:(void(^)(UIContextMenuConfiguration *))continueWithContextMenuConfiguration
@@ -15391,7 +15391,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
             if (!page)
                 return;
 
-            BOOL isSinglePage = page->pdfDisplayMode() == WebKit::PDFDisplayMode::SinglePageContinuous;
+            BOOL isSinglePage = WebKit::isSinglePagePDFDisplayMode(page->pdfDisplayMode());
             BOOL isSinglePageAction = [action.identifier isEqualToString:WKPDFActionSinglePageIdentifier];
 
             if (isSinglePage == isSinglePageAction)
@@ -15403,7 +15403,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
         RetainPtr singlePageAction = [UIAction actionWithTitle:WebCore::contextMenuItemPDFSinglePage().createNSString().get() image:nil identifier:WKPDFActionSinglePageIdentifier handler:actionHandler];
         RetainPtr twoPagesAction = [UIAction actionWithTitle:WebCore::contextMenuItemPDFTwoPages().createNSString().get() image:nil identifier:WKPDFActionTwoPagesIdentifier handler:actionHandler];
 
-        if (protect(strongSelf->_page)->pdfDisplayMode() == WebKit::PDFDisplayMode::SinglePageContinuous)
+        if (WebKit::isSinglePagePDFDisplayMode(protect(strongSelf->_page)->pdfDisplayMode()))
             [singlePageAction setState:UIMenuElementStateOn];
         else
             [twoPagesAction setState:UIMenuElementStateOn];

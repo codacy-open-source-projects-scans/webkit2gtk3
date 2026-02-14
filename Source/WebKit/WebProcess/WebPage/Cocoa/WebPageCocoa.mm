@@ -196,15 +196,13 @@ void WebPage::platformInitialize(const WebPageCreationParameters& parameters)
     platformInitializeAccessibility(shouldInitializeAccessibility ? ShouldInitializeNSAccessibility::Yes : ShouldInitializeNSAccessibility::No);
 
 #if ENABLE(MEDIA_STREAM)
-    if (RefPtr captureManager = WebProcess::singleton().supplement<UserMediaCaptureManager>()) {
-        captureManager->setupCaptureProcesses(parameters.shouldCaptureAudioInUIProcess, parameters.shouldCaptureAudioInGPUProcess, parameters.shouldCaptureVideoInUIProcess, parameters.shouldCaptureVideoInGPUProcess, parameters.shouldCaptureDisplayInUIProcess, parameters.shouldCaptureDisplayInGPUProcess,
+    protect(WebProcess::singleton().userMediaCaptureManager())->setupCaptureProcesses(parameters.shouldCaptureAudioInUIProcess, parameters.shouldCaptureAudioInGPUProcess, parameters.shouldCaptureVideoInUIProcess, parameters.shouldCaptureVideoInGPUProcess, parameters.shouldCaptureDisplayInUIProcess, parameters.shouldCaptureDisplayInGPUProcess,
 #if ENABLE(WEB_RTC)
-            m_page->settings().webRTCRemoteVideoFrameEnabled()
+        m_page->settings().webRTCRemoteVideoFrameEnabled()
 #else
-            false
+        false
 #endif // ENABLE(WEB_RTC)
-        );
-    }
+    );
 #endif // ENABLE(MEDIA_STREAM)
 #if USE(LIBWEBRTC)
     LibWebRTCCodecs::setCallbacks(m_page->settings().webRTCPlatformCodecsInGPUProcessEnabled(), m_page->settings().webRTCRemoteVideoFrameEnabled());
@@ -304,7 +302,7 @@ void WebPage::performDictionaryLookupAtLocation(const FloatPoint& floatPoint)
         return;
     // Find the frame the point is over.
     constexpr OptionSet<HitTestRequest::Type> hitType { HitTestRequest::Type::ReadOnly, HitTestRequest::Type::Active, HitTestRequest::Type::DisallowUserAgentShadowContent, HitTestRequest::Type::AllowChildFrameContent };
-    auto result = localMainFrame->eventHandler().hitTestResultAtPoint(localMainFrame->protectedView()->windowToContents(roundedIntPoint(floatPoint)), hitType);
+    auto result = localMainFrame->eventHandler().hitTestResultAtPoint(protect(localMainFrame->view())->windowToContents(roundedIntPoint(floatPoint)), hitType);
 
     RefPtr frame = result.innerNonSharedNode() ? result.innerNonSharedNode()->document().frame() : corePage()->focusController().focusedOrMainFrame();
     if (!frame)
@@ -349,7 +347,7 @@ DictionaryPopupInfo WebPage::dictionaryPopupInfoForRange(LocalFrame& frame, cons
 
     DictionaryPopupInfo dictionaryPopupInfo;
 
-    IntRect rangeRect = frame.protectedView()->contentsToWindow(quads[0].enclosingBoundingBox());
+    IntRect rangeRect = protect(frame.view())->contentsToWindow(quads[0].enclosingBoundingBox());
 
     const CheckedPtr style = protect(range.startContainer())->renderStyle();
     float scaledAscent = style ? style->metricsOfPrimaryFont().intAscent() * pageScaleFactor() : 0;
@@ -645,7 +643,7 @@ WebPaymentCoordinator* WebPage::paymentCoordinator()
 void WebPage::getContentsAsAttributedString(CompletionHandler<void(const WebCore::AttributedString&)>&& completionHandler)
 {
     RefPtr localFrame = protect(corePage())->localMainFrame();
-    completionHandler(localFrame ? attributedString(makeRangeSelectingNodeContents(*localFrame->protectedDocument()), IgnoreUserSelectNone::No) : AttributedString { });
+    completionHandler(localFrame ? attributedString(makeRangeSelectingNodeContents(*protect(localFrame->document())), IgnoreUserSelectNone::No) : AttributedString { });
 }
 
 void WebPage::setRemoteObjectRegistry(WebRemoteObjectRegistry* registry)
@@ -1054,7 +1052,7 @@ std::pair<URL, DidFilterLinkDecoration> WebPage::applyLinkDecorationFilteringWit
         if (trigger == LinkDecorationFilteringTrigger::Navigation)
             send(Messages::WebPageProxy::DidApplyLinkDecorationFiltering(url, sanitizedURL));
         auto removedParametersString = makeStringByJoining(removedParameters, ", "_s);
-        WEBPAGE_RELEASE_LOG(ResourceLoadStatistics, "Blocked known tracking query parameters: %s", removedParametersString.utf8().data());
+        WEBPAGE_RELEASE_LOG(ResourceLoadStatistics, "applyLinkDecorationFilteringWithResult: Blocked known tracking query parameters: %s", removedParametersString.utf8().data());
     }
 
     return { sanitizedURL, DidFilterLinkDecoration::Yes };
@@ -2487,6 +2485,195 @@ void WebPage::selectPositionAtPoint(WebCore::IntPoint point, bool isInteractingW
     if (position.isNotNull())
         WTF::protect(frame->selection())->setSelectedRange(makeSimpleRange(position), position.affinity(), WebCore::FrameSelection::ShouldCloseTyping::Yes, UserTriggered::Yes);
     completionHandler();
+}
+
+std::optional<SimpleRange> WebPage::rangeForGranularityAtPoint(LocalFrame& frame, const WebCore::IntPoint& point, WebCore::TextGranularity granularity, bool isInteractingWithFocusedElement)
+{
+    auto position = visiblePositionInFocusedNodeForPoint(frame, point, isInteractingWithFocusedElement);
+    switch (granularity) {
+    case TextGranularity::CharacterGranularity:
+        return makeSimpleRange(position);
+    case TextGranularity::WordGranularity:
+        return wordRangeFromPosition(position);
+    case TextGranularity::SentenceGranularity:
+    case TextGranularity::ParagraphGranularity:
+        return enclosingTextUnitOfGranularity(position, granularity, SelectionDirection::Forward);
+    case TextGranularity::DocumentGranularity:
+        // FIXME: Makes no sense that this mutates the current selection and returns null.
+        protect(frame.selection())->selectAll();
+        return std::nullopt;
+    case TextGranularity::LineGranularity:
+        ASSERT_NOT_REACHED();
+        return std::nullopt;
+    case TextGranularity::LineBoundary:
+        ASSERT_NOT_REACHED();
+        return std::nullopt;
+    case TextGranularity::SentenceBoundary:
+        ASSERT_NOT_REACHED();
+        return std::nullopt;
+    case TextGranularity::ParagraphBoundary:
+        ASSERT_NOT_REACHED();
+        return std::nullopt;
+    case TextGranularity::DocumentBoundary:
+        ASSERT_NOT_REACHED();
+        return std::nullopt;
+    }
+    ASSERT_NOT_REACHED();
+    return std::nullopt;
+}
+
+void WebPage::setSelectionRange(const WebCore::IntPoint& point, WebCore::TextGranularity granularity, bool isInteractingWithFocusedElement)
+{
+    updateFocusBeforeSelectingTextAtLocation(point);
+
+    RefPtr frame = m_page->focusController().focusedOrMainFrame();
+    if (!frame)
+        return;
+
+#if ENABLE(PDF_PLUGIN) && PLATFORM(IOS_FAMILY)
+    // FIXME: Support text selection in embedded PDFs.
+    if (RefPtr pluginView = focusedPluginViewForFrame(*frame)) {
+        pluginView->setSelectionRange(point, granularity);
+        return;
+    }
+#endif // ENABLE(PDF_PLUGIN) && PLATFORM(IOS_FAMILY)
+
+    auto range = rangeForGranularityAtPoint(*frame, point, granularity, isInteractingWithFocusedElement);
+    if (range)
+        protect(frame->selection())->setSelectedRange(*range, Affinity::Upstream, WebCore::FrameSelection::ShouldCloseTyping::Yes, UserTriggered::Yes);
+
+    m_initialSelection = range;
+}
+
+void WebPage::updateSelectionWithExtentPointAndBoundary(const WebCore::IntPoint& point, WebCore::TextGranularity granularity, bool isInteractingWithFocusedElement, TextInteractionSource source, CompletionHandler<void(bool)>&& callback)
+{
+    RefPtr frame = m_page->focusController().focusedOrMainFrame();
+    if (!frame)
+        return callback(false);
+
+#if ENABLE(PDF_PLUGIN) && PLATFORM(IOS_FAMILY)
+    if (RefPtr pluginView = focusedPluginViewForFrame(*frame)) {
+        auto movedEndpoint = pluginView->extendInitialSelection(point, granularity);
+        return callback(movedEndpoint == SelectionEndpoint::End);
+    }
+#endif // ENABLE(PDF_PLUGIN) && PLATFORM(IOS_FAMILY)
+
+    auto position = visiblePositionInFocusedNodeForPoint(*frame, point, isInteractingWithFocusedElement);
+    auto newRange = rangeForGranularityAtPoint(*frame, point, granularity, isInteractingWithFocusedElement);
+
+    if (position.isNull() || !m_initialSelection || !newRange)
+        return callback(false);
+
+#if PLATFORM(IOS_FAMILY)
+    addTextInteractionSources(source);
+#endif
+
+    auto initialSelectionStartPosition = makeDeprecatedLegacyPosition(m_initialSelection->start);
+    auto initialSelectionEndPosition = makeDeprecatedLegacyPosition(m_initialSelection->end);
+
+    VisiblePosition selectionStart = initialSelectionStartPosition;
+    VisiblePosition selectionEnd = initialSelectionEndPosition;
+    if (position > initialSelectionEndPosition)
+        selectionEnd = makeDeprecatedLegacyPosition(newRange->end);
+    else if (position < initialSelectionStartPosition)
+        selectionStart = makeDeprecatedLegacyPosition(newRange->start);
+
+    if (auto range = makeSimpleRange(selectionStart, selectionEnd))
+        protect(frame->selection())->setSelectedRange(range, Affinity::Upstream, WebCore::FrameSelection::ShouldCloseTyping::Yes, UserTriggered::Yes);
+
+#if PLATFORM(IOS_FAMILY)
+    if (!m_hasAnyActiveTouchPoints) {
+        // Ensure that `Touch` doesn't linger around in `m_activeTextInteractionSources` after
+        // the user has ended all active touches.
+        removeTextInteractionSources(TextInteractionSource::Touch);
+    }
+#endif // PLATFORM(IOS_FAMILY)
+
+    callback(selectionStart == initialSelectionStartPosition);
+}
+
+void WebPage::updateSelectionWithExtentPoint(const WebCore::IntPoint& point, bool isInteractingWithFocusedElement, RespectSelectionAnchor respectSelectionAnchor, CompletionHandler<void(bool)>&& callback)
+{
+    RefPtr frame = m_page->focusController().focusedOrMainFrame();
+    if (!frame)
+        return callback(false);
+
+    auto position = visiblePositionInFocusedNodeForPoint(*frame, point, isInteractingWithFocusedElement);
+
+    if (position.isNull())
+        return callback(false);
+
+    VisiblePosition selectionStart;
+    VisiblePosition selectionEnd;
+
+    if (respectSelectionAnchor == RespectSelectionAnchor::Yes) {
+#if PLATFORM(IOS_FAMILY)
+        if (m_selectionAnchor == SelectionAnchor::Start) {
+            selectionStart = frame->selection().selection().visibleStart();
+            selectionEnd = position;
+            if (position <= selectionStart) {
+                selectionStart = selectionStart.previous();
+                selectionEnd = frame->selection().selection().visibleEnd();
+                m_selectionAnchor = SelectionAnchor::End;
+            }
+        } else {
+            selectionStart = position;
+            selectionEnd = frame->selection().selection().visibleEnd();
+            if (position >= selectionEnd) {
+                selectionStart = frame->selection().selection().visibleStart();
+                selectionEnd = selectionEnd.next();
+                m_selectionAnchor = SelectionAnchor::Start;
+            }
+        }
+#endif // PLATFORM(IOS_FAMILY)
+    } else {
+        auto currentStart = frame->selection().selection().visibleStart();
+        auto currentEnd = frame->selection().selection().visibleEnd();
+        if (position <= currentStart) {
+            selectionStart = position;
+            selectionEnd = currentEnd;
+        } else if (position >= currentEnd) {
+            selectionStart = currentStart;
+            selectionEnd = position;
+        }
+    }
+
+    if (auto range = makeSimpleRange(selectionStart, selectionEnd))
+        protect(frame->selection())->setSelectedRange(range, Affinity::Upstream, WebCore::FrameSelection::ShouldCloseTyping::Yes, UserTriggered::Yes);
+
+#if PLATFORM(IOS_FAMILY)
+    callback(m_selectionAnchor == SelectionAnchor::Start);
+#else
+    callback(true);
+#endif
+}
+
+void WebPage::selectTextWithGranularityAtPoint(const WebCore::IntPoint& point, WebCore::TextGranularity granularity, bool isInteractingWithFocusedElement, CompletionHandler<void()>&& completionHandler)
+{
+#if PLATFORM(IOS_FAMILY)
+    if (!m_potentialTapNode) {
+        setSelectionRange(point, granularity, isInteractingWithFocusedElement);
+        completionHandler();
+        return;
+    }
+
+    ASSERT(!m_selectionChangedHandler);
+    if (auto selectionChangedHandler = std::exchange(m_selectionChangedHandler, {}))
+        selectionChangedHandler();
+
+    m_selectionChangedHandler = [point, granularity, isInteractingWithFocusedElement, completionHandler = WTF::move(completionHandler), weakThis = WeakPtr { *this }]() mutable {
+        RefPtr protectedThis = weakThis.get();
+        if (!protectedThis) {
+            completionHandler();
+            return;
+        }
+        protectedThis->setSelectionRange(point, granularity, isInteractingWithFocusedElement);
+        completionHandler();
+    };
+#else
+    setSelectionRange(point, granularity, isInteractingWithFocusedElement);
+    completionHandler();
+#endif
 }
 
 } // namespace WebKit

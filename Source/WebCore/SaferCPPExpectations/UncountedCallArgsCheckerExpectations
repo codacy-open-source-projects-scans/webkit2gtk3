@@ -6,13 +6,9 @@ Modules/filesystem/FileSystemFileHandle.cpp
 Modules/mediasession/MediaMetadata.cpp
 Modules/mediasession/MediaSession.cpp
 [ Mac ] Modules/mediasession/MediaSessionCoordinator.cpp
-Modules/mediastream/MediaStreamTrack.cpp
 Modules/mediastream/MediaStreamTrackProcessor.cpp
-Modules/mediastream/RTCDTMFSender.cpp
-Modules/mediastream/RTCDataChannelRemoteHandler.cpp
 Modules/mediastream/RTCEncodedFrame.cpp
 Modules/mediastream/RTCPeerConnection.cpp
-Modules/mediastream/RTCRtpReceiver.cpp
 Modules/mediastream/RTCRtpSFrameTransform.cpp
 Modules/mediastream/RTCRtpSender.cpp
 Modules/mediastream/RTCRtpTransform.cpp
@@ -20,8 +16,6 @@ Modules/mediastream/libwebrtc/LibWebRTCObservers.h
 [ Mac ] Modules/model-element/scenekit/SceneKitModelPlayer.mm
 Modules/pictureinpicture/HTMLVideoElementPictureInPicture.cpp
 Modules/push-api/PushManager.cpp
-Modules/push-api/PushSubscription.cpp
-Modules/remoteplayback/RemotePlayback.cpp
 Modules/speech/SpeechSynthesis.cpp
 [ iOS ] Modules/system-preview/ARKitBadgeSystemImage.mm
 Modules/webaudio/AnalyserNode.cpp
@@ -41,7 +35,6 @@ Modules/webaudio/AudioSummingJunction.cpp
 Modules/webaudio/AudioWorkletGlobalScope.cpp
 Modules/webaudio/AudioWorkletMessagingProxy.cpp
 Modules/webaudio/AudioWorkletNode.cpp
-[ iOS ] Modules/webaudio/ChannelMergerNode.cpp
 Modules/webaudio/ConvolverNode.cpp
 Modules/webaudio/DefaultAudioDestinationNode.cpp
 Modules/webaudio/DynamicsCompressorNode.cpp
@@ -314,7 +307,6 @@ editing/ApplyStyleCommand.cpp
 editing/BreakBlockquoteCommand.cpp
 editing/CompositeEditCommand.cpp
 editing/DeleteSelectionCommand.cpp
-[ iOS ] editing/EditCommand.cpp
 editing/Editing.cpp
 editing/Editor.cpp
 editing/EditorCommand.cpp
@@ -388,7 +380,6 @@ html/canvas/CanvasRenderingContext2DBase.cpp
 html/canvas/CanvasStyle.cpp
 html/canvas/EXTDisjointTimerQuery.cpp
 html/canvas/GPUCanvasContextCocoa.mm
-html/canvas/ImageBitmapRenderingContext.cpp
 html/canvas/OffscreenCanvasRenderingContext2D.cpp
 html/canvas/PlaceholderRenderingContext.cpp
 html/canvas/WebGL2RenderingContext.cpp
@@ -443,6 +434,7 @@ layout/integration/inline/LayoutIntegrationInlineContentBuilder.cpp
 layout/integration/inline/LayoutIntegrationLineLayout.cpp
 loader/ApplicationManifestLoader.cpp
 loader/CrossOriginPreflightChecker.cpp
+[ iOS ] loader/DocumentLoader.cpp
 loader/FrameLoadRequest.cpp
 [ iOS ] loader/FrameLoader.cpp
 loader/MediaResourceLoader.cpp
@@ -462,6 +454,7 @@ mathml/MathMLSelectElement.cpp
 page/AutoscrollController.cpp
 page/Chrome.cpp
 [ Mac ] page/ContextMenuController.cpp
+[ iOS ] page/DOMTimer.cpp
 page/DebugPageOverlays.h
 page/DragController.cpp
 page/ElementTargetingController.cpp
@@ -507,6 +500,7 @@ page/VisualViewport.cpp
 page/WheelEventTestMonitor.cpp
 page/WheelEventTestMonitor.h
 page/WindowOrWorkerGlobalScope.cpp
+[ iOS ] page/cocoa/ContentChangeObserver.cpp
 page/cocoa/EventHandlerCocoa.mm
 page/cocoa/PageCocoa.mm
 page/cocoa/ResourceUsageOverlayCocoa.mm
@@ -528,6 +522,7 @@ page/scrolling/ScrollingCoordinator.cpp
 page/text-extraction/TextExtraction.cpp
 page/writing-tools/WritingToolsController.mm
 platform/DragImage.cpp
+[ iOS ] platform/PreviewConverter.cpp
 platform/ScrollAnimationSmooth.cpp
 platform/ScrollView.cpp
 platform/ScrollableArea.cpp
@@ -593,6 +588,7 @@ platform/graphics/filters/software/FETurbulenceSoftwareApplier.cpp
 platform/graphics/opentype/OpenTypeMathData.cpp
 platform/graphics/transforms/TransformOperations.cpp
 platform/graphics/transforms/TransformOperationsSharedPrimitivesPrefix.h
+[ iOS ] platform/audio/ios/AudioSessionIOS.mm
 [ iOS ] platform/ios/DeviceMotionClientIOS.mm
 [ iOS ] platform/ios/DeviceOrientationClientIOS.mm
 [ iOS ] platform/ios/LegacyTileGrid.mm
@@ -605,6 +601,8 @@ platform/graphics/transforms/TransformOperationsSharedPrimitivesPrefix.h
 platform/mediastream/RealtimeOutgoingAudioSource.cpp
 platform/mediastream/RealtimeOutgoingVideoSource.cpp
 platform/mediastream/cocoa/IncomingAudioMediaStreamTrackRendererUnit.cpp
+[ iOS ] platform/mediastream/ios/CoreAudioCaptureSourceIOS.mm
+[ iOS ] platform/mediastream/mac/CoreAudioCaptureUnit.cpp
 platform/mediastream/mac/MediaStreamTrackAudioSourceProviderCocoa.cpp
 platform/mediastream/mac/RealtimeOutgoingAudioSourceCocoa.cpp
 platform/mediastream/mac/WebAudioSourceProviderCocoa.mm
@@ -650,7 +648,6 @@ rendering/RenderLayerCompositor.cpp
 rendering/RenderLayerFilters.cpp
 rendering/RenderLayerModelObject.cpp
 rendering/RenderLayerScrollableArea.cpp
-[ iOS ] rendering/RenderLineBreak.cpp
 rendering/RenderListBox.cpp
 rendering/RenderListItem.cpp
 rendering/RenderListMarker.cpp
@@ -673,6 +670,7 @@ rendering/RenderTextControlSingleLine.cpp
 rendering/RenderTextControlSingleLine.h
 rendering/RenderTextFragment.cpp
 rendering/RenderTheme.cpp
+[ iOS ] rendering/cocoa/RenderThemeCocoa.mm
 rendering/RenderTreeAsText.cpp
 rendering/RenderView.cpp
 rendering/RenderViewTransitionCapture.cpp

@@ -53,6 +53,10 @@
 #import <wtf/UUID.h>
 #import <wtf/WeakPtr.h>
 
+#if __has_include(<WebKitAdditions/WKAppKitGestureControllerAdditionsBefore.mm>)
+#import <WebKitAdditions/WKAppKitGestureControllerAdditionsBefore.mm>
+#endif
+
 #define WK_APPKIT_GESTURE_CONTROLLER_RELEASE_LOG(pageID, fmt, ...) RELEASE_LOG(ViewGestures, "[pageProxyID=%llu] %s: " fmt, pageID, std::source_location::current().function_name(), ##__VA_ARGS__)
 
 static WebCore::FloatSize translationInView(NSPanGestureRecognizer *gesture, WKWebView *view)
@@ -96,6 +100,9 @@ static WebCore::FloatSize toRawPlatformDelta(WebCore::FloatSize delta)
     return -delta;
 }
 
+@interface WKAppKitGestureController () <NSGestureRecognizerDelegatePrivate>
+@end
+
 @implementation WKAppKitGestureController {
     WeakPtr<WebKit::WebPageProxy> _page;
     WeakPtr<WebKit::WebViewImpl> _viewImpl;
@@ -108,7 +115,11 @@ static WebCore::FloatSize toRawPlatformDelta(WebCore::FloatSize delta)
     bool _isMomentumActive;
 }
 
+#if __has_include(<WebKitAdditions/WKAppKitGestureControllerAdditionsImpl.mm>)
+#import <WebKitAdditions/WKAppKitGestureControllerAdditionsImpl.mm>
+#elif __has_include(<WebKitAdditions/WKAppKitGestureControllerAdditions.mm>)
 #import <WebKitAdditions/WKAppKitGestureControllerAdditions.mm>
+#endif
 
 - (instancetype)initWithPage:(std::reference_wrapper<WebKit::WebPageProxy>)page viewImpl:(std::reference_wrapper<WebKit::WebViewImpl>)viewImpl
 {
@@ -490,19 +501,43 @@ static inline bool isSamePair(NSGestureRecognizer *a, NSGestureRecognizer *b, NS
     if (isSamePair(gestureRecognizer, otherGestureRecognizer, _singleClickGestureRecognizer.get(), _panGestureRecognizer.get()))
         return YES;
 
-    if ((gestureRecognizer == _singleClickGestureRecognizer.get() && [otherGestureRecognizer.name isEqualToString:textSelectionClickGestureName])
-        || (otherGestureRecognizer == _singleClickGestureRecognizer.get() && [gestureRecognizer.name isEqualToString:textSelectionClickGestureName]))
-        return YES;
+    CheckedPtr viewImpl = _viewImpl.get();
+    if (!viewImpl)
+        return NO;
+
+    RetainPtr webView = viewImpl->view();
+    if (!webView)
+        return NO;
+
+    // Allow the single click GR to be simultaneously recognized with any of those from the text selection manager.
+
+    for (NSGestureRecognizer *gestureForFailureRequirements in [[webView textSelectionManager] gesturesForFailureRequirements]) {
+        if ((gestureRecognizer == _singleClickGestureRecognizer && otherGestureRecognizer == gestureForFailureRequirements)
+            || (otherGestureRecognizer == _singleClickGestureRecognizer && gestureRecognizer == gestureForFailureRequirements))
+            return YES;
+    }
 
     return NO;
 }
 
-- (BOOL)gestureRecognizer:(NSGestureRecognizer *)gestureRecognizer shouldRequireFailureOfGestureRecognizer:(NSGestureRecognizer *)otherGestureRecognizer
+- (BOOL)gestureRecognizer:(NSGestureRecognizer *)gestureRecognizer shouldBeRequiredToFailByGestureRecognizer:(NSGestureRecognizer *)otherGestureRecognizer
 {
     WK_APPKIT_GESTURE_CONTROLLER_RELEASE_LOG(RefPtr { _page.get() }->logIdentifier(), "Gesture: %@, Other gesture: %@", gestureRecognizer, otherGestureRecognizer);
 
-    if (gestureRecognizer == _secondaryClickGestureRecognizer && [otherGestureRecognizer.name isEqualToString:textSelectionSecondaryClickGestureName])
-        return YES;
+    CheckedPtr viewImpl = _viewImpl.get();
+    if (!viewImpl)
+        return NO;
+
+    RetainPtr webView = viewImpl->view();
+    if (!webView)
+        return NO;
+
+    // Fail any gestures from the text selection manager if the secondary click GR handles them.
+
+    for (NSGestureRecognizer *gestureForFailureRequirements in [[webView textSelectionManager] gesturesForFailureRequirements]) {
+        if (gestureRecognizer == _secondaryClickGestureRecognizer && otherGestureRecognizer == gestureForFailureRequirements)
+            return YES;
+    }
 
     return NO;
 }
@@ -511,13 +546,30 @@ static inline bool isSamePair(NSGestureRecognizer *a, NSGestureRecognizer *b, NS
 {
     WK_APPKIT_GESTURE_CONTROLLER_RELEASE_LOG(RefPtr { _page.get() }->logIdentifier(), "Gesture: %@", gestureRecognizer);
 
-    if (gestureRecognizer == _doubleClickGestureRecognizer.get()) {
+    if (gestureRecognizer == _doubleClickGestureRecognizer) {
         CheckedPtr viewImpl = _viewImpl.get();
         if (!viewImpl || !viewImpl->allowsMagnification())
             return NO;
     }
 
+    if (gestureRecognizer == _secondaryClickGestureRecognizer) {
+        // FIXME: Implement logic for determining if the clicked node is not text.
+        return NO;
+    }
+
     return YES;
+}
+
+- (BOOL)_isScrollOrZoomGestureRecognizer:(NSGestureRecognizer *)gesture
+{
+    // FIXME: Should we account for any system pan gesture recognizers?
+    return gesture == _panGestureRecognizer || [gesture isKindOfClass:[NSMagnificationGestureRecognizer class]];
+}
+
+- (BOOL)_gestureRecognizer:(NSGestureRecognizer *)preventingGestureRecognizer canPreventGestureRecognizer:(NSGestureRecognizer *)preventedGestureRecognizer
+{
+    bool isOurClickGesture = preventingGestureRecognizer == _singleClickGestureRecognizer || preventingGestureRecognizer == _secondaryClickGestureRecognizer;
+    return !isOurClickGesture || ![self _isScrollOrZoomGestureRecognizer:preventedGestureRecognizer];
 }
 
 @end

@@ -131,7 +131,6 @@
 
 static const Seconds delayBeforeNoVisibleContentsRectsLogging = 1_s;
 static const Seconds delayBeforeNoCommitsLogging = 5_s;
-static constexpr Seconds delayBeforeUpdatingVisibleContentRectsWhenChangingObscuredInsetsInteractively = 100_ms;
 static const unsigned highlightMargin = 5;
 
 static WebCore::IntDegrees deviceOrientationForUIInterfaceOrientation(UIInterfaceOrientation orientation)
@@ -650,7 +649,7 @@ enum class AllowPageBackgroundColorOverride : bool { No, Yes };
 static WebCore::Color baseScrollViewBackgroundColor(WKWebView *webView, AllowPageBackgroundColorOverride allowPageBackgroundColorOverride)
 {
     if (webView->_customContentView)
-        return WebCore::roundAndClampToSRGBALossy(protect<CGColorRef>([webView->_customContentView backgroundColor].CGColor));
+        return WebCore::roundAndClampToSRGBALossy(protect([webView->_customContentView backgroundColor].CGColor));
 
     if (webView->_gestureController) {
         WebCore::Color color = webView->_gestureController->backgroundColorForCurrentSnapshot();
@@ -674,10 +673,10 @@ static WebCore::Color scrollViewBackgroundColor(WKWebView *webView, AllowPageBac
         color = baseScrollViewBackgroundColor(webView.get(), allowPageBackgroundColorOverride);
 
         if (!color.isValid() && webView->_contentView)
-            color = WebCore::roundAndClampToSRGBALossy(protect<CGColorRef>([webView->_contentView backgroundColor].CGColor));
+            color = WebCore::roundAndClampToSRGBALossy(protect([webView->_contentView backgroundColor].CGColor));
 
         if (!color.isValid())
-            color = WebCore::roundAndClampToSRGBALossy(protect<CGColorRef>(UIColor.systemBackgroundColor.CGColor));
+            color = WebCore::roundAndClampToSRGBALossy(protect(UIColor.systemBackgroundColor.CGColor));
     }];
 
     return color;
@@ -2702,29 +2701,7 @@ static WebCore::FloatPoint constrainContentOffset(WebCore::FloatPoint contentOff
 - (void)_scheduleForcedVisibleContentRectUpdate
 {
     _alwaysSendNextVisibleContentRectUpdate = YES;
-    [self _cancelPendingVisibleContentRectUpdateTimer];
     [self _scheduleVisibleContentRectUpdate];
-}
-
-- (void)_cancelPendingVisibleContentRectUpdateTimer
-{
-    if (!_pendingInteractiveObscuredInsetsChangeTimer)
-        return;
-
-    _pendingInteractiveObscuredInsetsChangeTimer->stop();
-    _pendingInteractiveObscuredInsetsChangeTimer = nullptr;
-}
-
-- (void)_scheduleVisibleContentRectUpdateWithDelay:(Seconds)delay
-{
-    if (_pendingInteractiveObscuredInsetsChangeTimer && _pendingInteractiveObscuredInsetsChangeTimer->isActive())
-        return;
-
-    _perProcessState.didDeferUpdateVisibleContentRectsForAnyReason = YES;
-    _pendingInteractiveObscuredInsetsChangeTimer = RunLoop::mainSingleton().dispatchAfter(delay, [retainedSelf = retainPtr(self)] {
-        retainedSelf->_pendingInteractiveObscuredInsetsChangeTimer = nullptr;
-        [retainedSelf _scheduleVisibleContentRectUpdate];
-    });
 }
 
 - (BOOL)_isInStableState:(UIScrollView *)scrollView
@@ -2988,15 +2965,6 @@ static bool scrollViewCanScroll(UIScrollView *scrollView)
         _perProcessState.didDeferUpdateVisibleContentRectsForUnstableScrollView = YES;
         WKWEBVIEW_RELEASE_LOG("%p (pageProxyID=%llu) -[WKWebView _updateVisibleContentRects:] - scroll view state is non-stable, bailing (shouldDeferGeometryUpdates %d, dynamicViewportUpdateMode %d, resetViewStateAfterTransactionID %llu, sizeChangedSinceLastVisibleContentRectUpdate %d, [_scrollView isZoomBouncing] %d, currentlyAdjustingScrollViewInsetsForKeyboard %d)", self, _page->identifier().toUInt64(), self._shouldDeferGeometryUpdates, enumToUnderlyingType(_perProcessState.dynamicViewportUpdateMode), _perProcessState.resetViewStateAfterTransactionID ? _perProcessState.resetViewStateAfterTransactionID->object().toUInt64() : 0, [_contentView sizeChangedSinceLastVisibleContentRectUpdate], [_scrollView isZoomBouncing], _perProcessState.currentlyAdjustingScrollViewInsetsForKeyboard);
         return;
-    }
-
-    if (_isChangingObscuredInsetsInteractively) {
-        auto timeSinceLastUpdate = timeNow - _timeOfLastVisibleContentRectUpdate;
-        if (timeSinceLastUpdate < delayBeforeUpdatingVisibleContentRectsWhenChangingObscuredInsetsInteractively) {
-            auto delay = delayBeforeUpdatingVisibleContentRectsWhenChangingObscuredInsetsInteractively - timeSinceLastUpdate;
-            [self _scheduleVisibleContentRectUpdateWithDelay:delay];
-            return;
-        }
     }
 
     [self _updateScrollViewContentInsetsIfNecessary];
@@ -4358,7 +4326,6 @@ static bool isLockdownModeWarningNeeded()
 {
     ASSERT(_isChangingObscuredInsetsInteractively);
     _isChangingObscuredInsetsInteractively = NO;
-    [self _cancelPendingVisibleContentRectUpdateTimer];
     [self _scheduleVisibleContentRectUpdate];
 }
 

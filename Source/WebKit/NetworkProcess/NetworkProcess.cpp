@@ -205,18 +205,6 @@ NetworkProcess::NetworkProcess(AuxiliaryProcessInitializationParameters&& parame
 
 NetworkProcess::~NetworkProcess() = default;
 
-void NetworkProcess::setSharedParentalControlsURLFilterIfNecessary()
-{
-#if HAVE(BROWSERENGINEKIT_WEBCONTENTFILTER) && !HAVE(WEBCONTENTRESTRICTIONS_PATH_SPI)
-    ASSERT(isMainRunLoop());
-    static bool initialized = false;
-    if (!initialized) {
-        WebCore::ParentalControlsURLFilter::setGlobalFilter(WebParentalControlsURLFilter::create());
-        initialized = true;
-    }
-#endif
-}
-
 AuthenticationManager& NetworkProcess::authenticationManager()
 {
     return *supplement<AuthenticationManager>();
@@ -3095,16 +3083,11 @@ NetworkConnectionToWebProcess* NetworkProcess::webProcessConnection(ProcessIdent
     return m_webProcessConnections.get(identifier);
 }
 
-RefPtr<NetworkConnectionToWebProcess> NetworkProcess::protectedWebProcessConnection(WebCore::ProcessIdentifier identifier) const
+NetworkConnectionToWebProcess* NetworkProcess::webProcessConnection(const IPC::Connection& connection) const
 {
-    return webProcessConnection(identifier);
-}
-
-RefPtr<NetworkConnectionToWebProcess> NetworkProcess::protectedWebProcessConnection(const IPC::Connection& connection) const
-{
-    for (Ref webProcessConnection : m_webProcessConnections.values()) {
+    for (auto& webProcessConnection : m_webProcessConnections.values()) {
         if (webProcessConnection->connection().uniqueID() == connection.uniqueID())
-            return webProcessConnection;
+            return webProcessConnection.ptr();
     }
     return nullptr;
 }

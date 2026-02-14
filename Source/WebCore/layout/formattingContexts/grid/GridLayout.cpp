@@ -221,7 +221,7 @@ std::pair<UsedTrackSizes, GridItemRects> GridLayout::layout(UnplacedGridItems& u
 
     // 4. Lay out the grid items into their respective containing blocks. Each grid area’s
     // width and height are considered definite for this purpose.
-    auto [ usedInlineSizes, usedBlockSizes ] = layoutGridItems(placedGridItems, gridAreaSizes);
+    auto [ usedInlineSizes, usedBlockSizes ] = layoutGridItems(placedGridItems, gridAreaSizes, columnTrackSizingFunctionsList, rowTrackSizingFunctionsList);
 
     // https://drafts.csswg.org/css-grid-1/#alignment
     const auto& zoomFactor = formattingContext.zoomFactor();
@@ -391,6 +391,9 @@ static Vector<LayoutUnit> rowSizesForFirstIterationColumnSizing(const TrackSizin
             [](const CSS::Keyword::MaxContent&) {
                 return LayoutUnit::max();
             },
+            [](const CSS::Keyword::Auto&) -> LayoutUnit {
+                return LayoutUnit::max();
+            },
             [](const auto&) -> LayoutUnit {
                 ASSERT_NOT_IMPLEMENTED_YET();
                 return { };
@@ -543,7 +546,8 @@ Vector<UsedMargins> GridLayout::computeBlockMargins(const PlacedGridItems& place
 }
 
 // https://drafts.csswg.org/css-grid-1/#grid-item-sizing
-std::pair<UsedInlineSizes, UsedBlockSizes> GridLayout::layoutGridItems(const PlacedGridItems& placedGridItems, const GridAreaSizes& gridAreaSizes) const
+std::pair<UsedInlineSizes, UsedBlockSizes> GridLayout::layoutGridItems(const PlacedGridItems& placedGridItems, const GridAreaSizes& gridAreaSizes,
+    const TrackSizingFunctionsList& columnTrackSizingFunctions, const TrackSizingFunctionsList& rowTrackSizingFunctions) const
 {
     auto gridItemsCount = placedGridItems.size();
     UsedInlineSizes usedInlineSizes;
@@ -557,10 +561,10 @@ std::pair<UsedInlineSizes, UsedBlockSizes> GridLayout::layoutGridItems(const Pla
         auto& gridAreaInlineSize = gridAreaSizes.inlineSizes[gridItemIndex];
         auto& gridAreaBlockSize = gridAreaSizes.blockSizes[gridItemIndex];
 
-        auto usedInlineSizeForGridItem = GridLayoutUtils::usedInlineSizeForGridItem(gridItem, gridItem.usedInlineBorderAndPadding(), gridAreaInlineSize);
+        auto usedInlineSizeForGridItem = GridLayoutUtils::usedInlineSizeForGridItem(gridItem, gridItem.usedInlineBorderAndPadding(), columnTrackSizingFunctions, gridAreaInlineSize, integrationUtils);
         usedInlineSizes.append(usedInlineSizeForGridItem);
 
-        auto usedBlockSizeForGridItem = GridLayoutUtils::usedBlockSizeForGridItem(gridItem, gridItem.usedBlockBorderAndPadding(), gridAreaBlockSize);
+        auto usedBlockSizeForGridItem = GridLayoutUtils::usedBlockSizeForGridItem(gridItem, gridItem.usedBlockBorderAndPadding(), rowTrackSizingFunctions, gridAreaBlockSize, integrationUtils);
         usedBlockSizes.append(usedBlockSizeForGridItem);
 
         auto& layoutBox = gridItem.layoutBox();

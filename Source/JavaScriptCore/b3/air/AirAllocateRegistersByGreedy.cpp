@@ -1538,6 +1538,7 @@ private:
     void setStageAndEnqueue(Tmp tmp, TmpData& tmpData, Stage stage)
     {
         ASSERT(!tmp.isReg());
+        ASSERT(&tmpData == &m_map[tmp]);
         ASSERT(m_map[tmp].liveRange.size()); // 0-size ranges don't need a register and spillCost() depends on size() != 0
         ASSERT(stage == Stage::Unspillable || stage == Stage::TryAllocate || stage == Stage::TrySplit || stage == Stage::Spill);
         ASSERT(groupForReg(tmp) == tmp); // Only the roots of register-groups should be enqueued
@@ -1597,34 +1598,17 @@ private:
                     dumpRegRanges<bank>(out);
                     dataLog(out.toCString());
                 }
-                if (tmpData.stage == Stage::Replaced)
-                    continue; // Tmp no longer relevant
-                if (tryAllocate<bank>(tmp, tmpData))
-                    continue;
-                if (tmpData.stage != Stage::TrySplit && tryEvict<bank>(tmp, tmpData))
-                    continue;
-
-                ASSERT(&tmpData == &m_map.get<bank>(tmp)); // Verify m_map hasn't been resized on this path
                 switch (tmpData.stage) {
-                case Stage::TryAllocate: {
-                    // If we couldn't allocate tmp, allow it to split next time.
-                    Stage nextStage = Stage::TrySplit;
-                    // If we already know splitting won't be profitable, skip it.
-                    if (!tmpData.isGroup() && tmpData.liveRange.size() < splitMinRangeSize)
-                        nextStage = Stage::Spill;
-                    setStageAndEnqueue(tmp, tmpData, nextStage);
+                case Stage::Unspillable:
+                case Stage::TryAllocate:
+                    doStageTryAllocate<bank>(tmp, tmpData);
                     continue;
-                }
                 case Stage::TrySplit:
-                    if (!trySplit<bank>(tmp, tmpData))
-                        setStageAndEnqueue(tmp, tmpData, Stage::Spill);
+                    doStageTrySplit<bank>(tmp, tmpData);
                     continue;
                 case Stage::Spill:
-                    ASSERT(queueContainsOnlySpills()); // FIXME: remove
-                    spill(tmp, tmpData);
+                    doStageSpill<bank>(tmp, tmpData);
                     continue;
-                case Stage::Unspillable:
-                    // Unspillables must have been allocated during tryAllocate or tryEvict.
                 default:
                     dataLogLn("Invalid stage tmp = ", tmp, " tmpData = ", tmpData);
                     // Tmps in these stages should not have been enqueued.
@@ -1638,6 +1622,46 @@ private:
             }
             // Process the spill/fill tmps,
         } while (!m_queue.isEmpty());
+    }
+
+    template <Bank bank>
+    void doStageTryAllocate(Tmp tmp, TmpData& tmpData)
+    {
+        ASSERT(tmpData.stage == Stage::TryAllocate || tmpData.stage == Stage::Unspillable);
+        if (tryAllocate<bank>(tmp, tmpData))
+            return;
+        if (tryEvict<bank>(tmp, tmpData))
+            return;
+        RELEASE_ASSERT(tmpData.stage == Stage::TryAllocate); // Unspillable must have succeeded
+        // If we couldn't allocate tmp, allow it to split next time.
+        Stage nextStage = Stage::TrySplit;
+        // If we already know splitting won't be profitable, skip it.
+        if (!tmpData.isGroup() && tmpData.liveRange.size() < splitMinRangeSize)
+            nextStage = Stage::Spill;
+        setStageAndEnqueue(tmp, tmpData, nextStage);
+    }
+
+    template <Bank bank>
+    void doStageTrySplit(Tmp tmp, TmpData& tmpData)
+    {
+        ASSERT(tmpData.stage == Stage::TrySplit);
+        if (tryAllocate<bank>(tmp, tmpData))
+            return;
+        if (trySplit<bank>(tmp, tmpData))
+            return;
+        setStageAndEnqueue(tmp, tmpData, Stage::Spill);
+    }
+
+    template <Bank bank>
+    void doStageSpill(Tmp tmp, TmpData& tmpData)
+    {
+        ASSERT(tmpData.stage == Stage::Spill);
+        if (tryAllocate<bank>(tmp, tmpData))
+            return;
+        if (tryEvict<bank>(tmp, tmpData))
+            return;
+        ASSERT(queueContainsOnlySpills());
+        spill(tmp, tmpData);
     }
 
     template <Bank bank>
@@ -1733,7 +1757,7 @@ private:
         };
 
         Reg bestEvictReg;
-        float minSpillCost = unspillableCost;
+        float minSpillCost = tmpData.spillCost();
         m_visited.resize(m_code.numTmps(bank));
         LiveRange& liveRange = tmpData.liveRange;
         Width width = widthForConflicts<bank>(tmp);
@@ -2316,7 +2340,6 @@ private:
                     // This has become a Move spillN, spillM. If N==M, we can remove this instruction. Otherwise,
                     // a scratch register is needed in order to execute the move between spill slots.
                     if (maybeCoalescable && inst.args[0] == inst.args[1]) {
-                        ASSERT_IMPLIES(inst.kind.opcode == Move32, inst.args[1].stackSlot()->byteSize() == bytesForWidth(Width32));
                         m_stats[bank].numCoalescedStackSlotMoves++;
                         inst = Inst(); // Will be removed during assignRegisters final pass
                         continue;
@@ -2516,10 +2539,6 @@ private:
         // We can coalesce a Move32 so long as either of the following holds:
         // - The input is already zero-filled.
         // - The output only cares about the low 32 bits.
-        //
-        // Note that the input property requires an analysis over ZDef's, so it's only valid so long
-        // as the input gets a register. We don't know if the input gets a register, but we do know
-        // that if it doesn't get a register then we will still emit this Move32.
         if (inst.kind.opcode == Move32 && !is32Bit() && m_tmpWidth.defWidth(inst.args[0].tmp()) > Width32)
             return false;
         return true;

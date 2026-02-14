@@ -6014,6 +6014,7 @@
 		D20E878D2AF44B5E004579F3 /* SwitchMacUtilities.h in Headers */ = {isa = PBXBuildFile; fileRef = D20E878C2AF44B5E004579F3 /* SwitchMacUtilities.h */; };
 		D22B85932EB4EF6D000D2DC3 /* HTMLSelectedContentElement.h in Headers */ = {isa = PBXBuildFile; fileRef = D22B85912EB4EF6D000D2DC3 /* HTMLSelectedContentElement.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		D245256B2F22773C000DFFF6 /* SelectFallbackButtonElement.h in Headers */ = {isa = PBXBuildFile; fileRef = D21A65EB2F2276ED004D221F /* SelectFallbackButtonElement.h */; };
+		D245256C2F22773C000DFFF7 /* SelectPopoverElement.h in Headers */ = {isa = PBXBuildFile; fileRef = D21A65ED2F2276ED004D221F /* SelectPopoverElement.h */; };
 		D245B6DD2B679280009AA00E /* HTTPStatusCodes.h in Headers */ = {isa = PBXBuildFile; fileRef = D245B6D02B6791BA009AA00E /* HTTPStatusCodes.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		D267D41F2EE1B21E00C5E212 /* Origin.h in Headers */ = {isa = PBXBuildFile; fileRef = D267D41D2EE1B21E00C5E212 /* Origin.h */; };
 		D267D41F2EE1B21E00C5E213 /* JSOrigin.h in Headers */ = {isa = PBXBuildFile; fileRef = D267D41D2EE1B21E00C5E213 /* JSOrigin.h */; };
@@ -20965,6 +20966,8 @@
 		D20E878E2AF44BD8004579F3 /* SwitchMacUtilities.mm */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.objcpp; path = SwitchMacUtilities.mm; sourceTree = "<group>"; };
 		D21A65EB2F2276ED004D221F /* SelectFallbackButtonElement.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; lineEnding = 0; path = SelectFallbackButtonElement.h; sourceTree = "<group>"; };
 		D21A65EC2F2276ED004D221F /* SelectFallbackButtonElement.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; lineEnding = 0; path = SelectFallbackButtonElement.cpp; sourceTree = "<group>"; };
+		D21A65ED2F2276ED004D221F /* SelectPopoverElement.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; lineEnding = 0; path = SelectPopoverElement.h; sourceTree = "<group>"; };
+		D21A65EE2F2276ED004D221F /* SelectPopoverElement.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; lineEnding = 0; path = SelectPopoverElement.cpp; sourceTree = "<group>"; };
 		D22B85902EB4EF6D000D2DC3 /* HTMLSelectedContentElement.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = HTMLSelectedContentElement.cpp; sourceTree = "<group>"; };
 		D22B85912EB4EF6D000D2DC3 /* HTMLSelectedContentElement.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = HTMLSelectedContentElement.h; sourceTree = "<group>"; };
 		D22B85922EB4EF6D000D2DC3 /* HTMLSelectedContentElement.idl */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = HTMLSelectedContentElement.idl; sourceTree = "<group>"; };
@@ -26478,6 +26481,8 @@
 				A715E651134BBBEC00D8E713 /* ProgressShadowElement.h */,
 				D21A65EC2F2276ED004D221F /* SelectFallbackButtonElement.cpp */,
 				D21A65EB2F2276ED004D221F /* SelectFallbackButtonElement.h */,
+				D21A65EE2F2276ED004D221F /* SelectPopoverElement.cpp */,
+				D21A65ED2F2276ED004D221F /* SelectPopoverElement.h */,
 				4150F9F012B6E0E70008C860 /* SliderThumbElement.cpp */,
 				4150F9EF12B6E0E70008C860 /* SliderThumbElement.h */,
 				B9CA3B3F2CAB1D3E00B2607C /* SpatialImageControls.cpp */,
@@ -47145,6 +47150,7 @@
 				E464328A273D2E7C005B756B /* SelectorMatchingState.h in Headers */,
 				43107BE218CC19DE00CC18E8 /* SelectorPseudoTypeMap.h in Headers */,
 				E45322AC140CE267005A0F92 /* SelectorQuery.h in Headers */,
+				D245256C2F22773C000DFFF7 /* SelectPopoverElement.h in Headers */,
 				F4D43D662188038B00ECECAC /* SerializedAttachmentData.h in Headers */,
 				E18DF33518AAF12C00773E59 /* SerializedCryptoKeyWrap.h in Headers */,
 				FAFFC34B2E298AA000CCC89C /* SerializedNode.h in Headers */,

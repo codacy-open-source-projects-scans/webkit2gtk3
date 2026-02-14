@@ -266,7 +266,7 @@ void UnifiedPDFPlugin::teardown()
     if (m_scrollingNodeID && page) {
         RefPtr scrollingCoordinator = page->scrollingCoordinator();
         scrollingCoordinator->unparentChildrenAndDestroyNode(*m_scrollingNodeID);
-        frame->coreLocalFrame()->protectedView()->removePluginScrollableAreaForScrollingNodeID(*m_scrollingNodeID);
+        protect(frame->coreLocalFrame()->view())->removePluginScrollableAreaForScrollingNodeID(*m_scrollingNodeID);
     }
 
     [[NSNotificationCenter defaultCenter] removeObserver:m_pdfMutationObserver.get() name:mutationObserverNotificationString().createNSString().get() object:m_pdfDocument.get()];
@@ -422,11 +422,6 @@ void UnifiedPDFPlugin::enableDataDetection()
 #endif
 }
 
-Ref<PDFDataDetectorOverlayController> UnifiedPDFPlugin::protectedDataDetectorOverlayController()
-{
-    return dataDetectorOverlayController();
-}
-
 void UnifiedPDFPlugin::handleClickForDataDetectionResult(const DataDetectorElementInfo& dataDetectorElementInfo, const IntPoint& clickPointInPluginSpace)
 {
     RefPtr page = this->page();
@@ -445,7 +440,7 @@ void UnifiedPDFPlugin::didInvalidateDataDetectorHighlightOverlayRects()
 {
     auto lastKnownMousePositionInDocumentSpace = convertDown<FloatPoint>(CoordinateSpace::Plugin, CoordinateSpace::PDFDocumentLayout, lastKnownMousePositionInView());
     auto pageIndex = protect(m_presentationController)->pageIndexForDocumentPoint(lastKnownMousePositionInDocumentSpace);
-    protectedDataDetectorOverlayController()->didInvalidateHighlightOverlayRects(pageIndex);
+    protect(m_dataDetectorOverlayController)->didInvalidateHighlightOverlayRects(pageIndex);
 }
 
 #endif
@@ -683,7 +678,7 @@ void UnifiedPDFPlugin::createScrollingNodeIfNecessary()
         layer->setScrollingNodeID(*m_scrollingNodeID);
 #endif
 
-    protect(m_frame)->coreLocalFrame()->protectedView()->setPluginScrollableAreaForScrollingNodeID(*m_scrollingNodeID, *this);
+    protect(protect(m_frame)->coreLocalFrame()->view())->setPluginScrollableAreaForScrollingNodeID(*m_scrollingNodeID, *this);
 
     scrollingCoordinator->setScrollingNodeScrollableAreaGeometry(*m_scrollingNodeID, *this);
 
@@ -1167,7 +1162,7 @@ void UnifiedPDFPlugin::didBeginMagnificationGesture()
     m_inMagnificationGesture = true;
 
 #if ENABLE(UNIFIED_PDF_DATA_DETECTION)
-    protectedDataDetectorOverlayController()->hideActiveHighlightOverlay();
+    protect(m_dataDetectorOverlayController)->hideActiveHighlightOverlay();
 #endif
 }
 
@@ -2017,7 +2012,7 @@ bool UnifiedPDFPlugin::handleMouseEvent(const WebMouseEvent& event)
     }
 
 #if ENABLE(UNIFIED_PDF_DATA_DETECTION)
-    if (protectedDataDetectorOverlayController()->handleMouseEvent(event, pageIndex))
+    if (protect(m_dataDetectorOverlayController)->handleMouseEvent(event, pageIndex))
         return true;
 #endif
 
@@ -3827,7 +3822,7 @@ id UnifiedPDFPlugin::accessibilityHitTestInPageForIOS(WebCore::FloatPoint point)
 WebCore::AXCoreObject* UnifiedPDFPlugin::accessibilityCoreObject()
 {
     if (CheckedPtr cache = axObjectCache())
-        return cache->exportedGetOrCreate(protect(m_element.get()));
+        return cache->exportedGetOrCreate(protect(m_element));
     return nullptr;
 }
 #endif // PLATFORM(IOS_FAMILY)
