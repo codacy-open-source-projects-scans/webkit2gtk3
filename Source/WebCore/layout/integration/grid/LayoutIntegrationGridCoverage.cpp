@@ -52,6 +52,7 @@ enum class GridAvoidanceReason : uint8_t {
     GridHasOutOfFlowChild,
     GridHasNonVisibleOverflow,
     GridItemIsReplacedElement,
+    GridItemDoesNotHaveElement,
     GridIsEmpty,
     GridHasNonInitialMinWidth,
     GridHasNonInitialMaxWidth,
@@ -235,13 +236,10 @@ static EnumSet<GridAvoidanceReason> gridLayoutAvoidanceReason(const RenderGrid& 
 
     CheckedRef renderGridStyle = renderGrid.style();
 
-    if (!renderGridStyle->height().isFixed())
-        ADD_REASON_AND_RETURN_IF_NEEDED(GridHasNonFixedHeight, reasons, reasonCollectionMode);
-
-    if (renderGridStyle->display() == DisplayType::InlineGrid)
+    if (renderGridStyle->display() == Style::DisplayType::InlineGrid)
         ADD_REASON_AND_RETURN_IF_NEEDED(GridNeedsBaseline, reasons, reasonCollectionMode);
 
-    if (renderGridStyle->display() != DisplayType::Grid)
+    if (renderGridStyle->display() != Style::DisplayType::BlockGrid)
         ADD_REASON_AND_RETURN_IF_NEEDED(NotAGrid, reasons, reasonCollectionMode);
 
     if (!renderGridStyle->writingMode().isHorizontal())
@@ -291,8 +289,6 @@ static EnumSet<GridAvoidanceReason> gridLayoutAvoidanceReason(const RenderGrid& 
                 // MaxTrackBreadth to the same value we only need to check one.
                 if (!trackSize.isBreadth())
                     return GridAvoidanceReason::GridHasUnsupportedGridTemplateColumns;
-                if (trackSize.minTrackBreadth().isPercentOrCalculated())
-                    return GridAvoidanceReason::GridHasUnsupportedGridTemplateColumns;
                 return { };
             },
             [&](const Vector<String>& names) -> std::optional<GridAvoidanceReason> {
@@ -327,8 +323,6 @@ static EnumSet<GridAvoidanceReason> gridLayoutAvoidanceReason(const RenderGrid& 
                 // Since a GridTrackSize type of Breadth sets the MinTrackBreadth and
                 // MaxTrackBreadth to the same value we only need to check one.
                 if (!trackSize.isBreadth())
-                    return GridAvoidanceReason::GridHasUnsupportedGridTemplateRows;
-                if (trackSize.minTrackBreadth().isPercentOrCalculated())
                     return GridAvoidanceReason::GridHasUnsupportedGridTemplateRows;
                 return { };
             },
@@ -365,7 +359,11 @@ static EnumSet<GridAvoidanceReason> gridLayoutAvoidanceReason(const RenderGrid& 
     for (CheckedRef gridItem : childrenOfType<RenderBox>(renderGrid)) {
         // We do not yet support grid item sizing spec for replaced elements.
         // See: https://drafts.csswg.org/css-grid/#grid-item-sizing
-        if (protect(gridItem->element())->isReplaced())
+        RefPtr gridItemElement = gridItem->element();
+        if (!gridItemElement)
+            ADD_REASON_AND_RETURN_IF_NEEDED(GridItemDoesNotHaveElement, reasons, reasonCollectionMode);
+
+        if (gridItemElement->isReplaced())
             ADD_REASON_AND_RETURN_IF_NEEDED(GridItemIsReplacedElement, reasons, reasonCollectionMode);
 
         CheckedRef gridItemStyle = gridItem->style();
@@ -575,6 +573,9 @@ static void printReason(GridAvoidanceReason reason, TextStream& stream)
         break;
     case GridAvoidanceReason::GridHasNonVisibleOverflow:
         stream << "grid has non-visible overflow";
+        break;
+    case GridAvoidanceReason::GridItemDoesNotHaveElement:
+        stream << "grid item does not have a corresponding element";
         break;
     case GridAvoidanceReason::GridItemIsReplacedElement:
         stream << "grid item is a replaced element";

@@ -191,14 +191,6 @@
 #define HAVE_PTHREAD_MAIN_NP 1
 #endif
 
-/* From the documentation:
- * https://developer.apple.com/documentation/apple-silicon/porting-just-in-time-compilers-to-apple-silicon
- * This API is only available on macOS.
- * Use OS(MACOS) to pick up JSCOnly ports on Mac. */
-#if OS(MACOS) || PLATFORM(MACCATALYST)
-#define HAVE_PTHREAD_JIT_PERMISSIONS_API 1
-#endif
-
 /* watchOS (ARM64_32) must not use int128_t because of wrong behavior. */
 #if (OS(DARWIN) || OS(LINUX)) && CPU(ADDRESS64)
 #define HAVE_INT128_T 1
@@ -1916,6 +1908,10 @@
 
 #if !defined(HAVE_CGPATTERN_CREATE_WITH_IMAGE_TRANSFORM_STEP)
 #define HAVE_CGPATTERN_CREATE_WITH_IMAGE_TRANSFORM_STEP 0
+#endif
+
+#if !defined(HAVE_CGIOSURFACECONTEXT_FLUSH_QUEUE)
+#define HAVE_CGIOSURFACECONTEXT_FLUSH_QUEUE 0
 #endif
 
 #if !defined(HAVE_SUPPORTS_WRITING_TOOLS_ACTION) && PLATFORM(MAC) && __MAC_OS_X_VERSION_MAX_ALLOWED >= 260000

@@ -2532,7 +2532,7 @@ bool AccessibilityObject::isModalDescendant(Node& modalNode) const
 
 bool AccessibilityObject::isModalNode() const
 {
-    if (AXObjectCache* cache = axObjectCache())
+    if (CheckedPtr cache = axObjectCache())
         return node() && cache->modalNode() == node();
 
     return false;
@@ -2564,7 +2564,7 @@ bool AccessibilityObject::ignoredFromModalPresence() const
     if (!node() || !node()->parentNode())
         return false;
 
-    AXObjectCache* cache = axObjectCache();
+    CheckedPtr cache = axObjectCache();
     if (!cache)
         return false;
 
@@ -2951,7 +2951,7 @@ void AccessibilityObject::updateRole()
     recomputeAriaRole();
     m_role = determineAccessibilityRole();
     if (previousRole != m_role) {
-        if (auto* cache = axObjectCache())
+        if (CheckedPtr cache = axObjectCache())
             cache->handleRoleChanged(*this, previousRole);
     }
 }
@@ -3055,7 +3055,7 @@ bool AccessibilityObject::isTabItemSelected() const
     if (!focusedElement)
         return false;
 
-    auto* cache = axObjectCache();
+    CheckedPtr cache = axObjectCache();
     if (!cache)
         return false;
 
@@ -3959,7 +3959,7 @@ String AccessibilityObject::validationMessage() const
 AccessibilityObjectInclusion AccessibilityObject::defaultObjectInclusion() const
 {
     bool isHiddenUntilFound = false;
-    if (const auto* style = this->style()) {
+    if (CheckedPtr style = this->style()) {
         if (style->effectiveInert())
             return AccessibilityObjectInclusion::IgnoreObject;
         if (isVisibilityHidden(*style)) {
@@ -3971,7 +3971,7 @@ AccessibilityObjectInclusion AccessibilityObject::defaultObjectInclusion() const
     }
 
     if (CheckedPtr style = this->style()) {
-        if (style->display() == DisplayType::None && !isImageMapLink())
+        if (style->display() == Style::DisplayType::None && !isImageMapLink())
             return AccessibilityObjectInclusion::IgnoreObject;
     }
 
@@ -3985,7 +3985,7 @@ AccessibilityObjectInclusion AccessibilityObject::defaultObjectInclusion() const
     bool ignoreARIAHidden = isFocused();
     if (Accessibility::findAncestor<AccessibilityObject>(*this, false, [&] (const auto& object) {
         const auto* style = object.style();
-        if (style && style->display() == DisplayType::None) {
+        if (style && style->display() == Style::DisplayType::None) {
             // We don't want to use AccessibilityObject::isRenderHidden(), as that also checks and returns true
             // for visibility:hidden, which would be wrong if |this| has a visibility:visible ancestor before
             // this visibility:hidden ancestor (visibility:visible cancels out visibility:hidden).
@@ -4043,7 +4043,7 @@ bool AccessibilityObject::isWithinHiddenWebArea() const
 bool AccessibilityObject::isIgnored() const
 {
     AXComputedObjectAttributeCache* attributeCache = nullptr;
-    auto* axObjectCache = this->axObjectCache();
+    CheckedPtr axObjectCache = this->axObjectCache();
     if (axObjectCache)
         attributeCache = axObjectCache->computedObjectAttributeCache();
 
@@ -4117,7 +4117,7 @@ Vector<Ref<Element>> AccessibilityObject::elementsFromAttribute(const QualifiedN
     if (auto elementsFromAttribute = element->elementsArrayForAttributeInternal(attribute))
         return elementsFromAttribute.value();
 
-    if (auto* defaultARIA = element->customElementDefaultARIAIfExists()) {
+    if (CheckedPtr defaultARIA = element->customElementDefaultARIAIfExists()) {
         if (std::optional elements = defaultARIA->elementsForAttribute(*element, attribute))
             return *elements;
     }
@@ -4182,7 +4182,7 @@ bool AccessibilityObject::isContainedBySecureField() const
 
 AXCoreObject::AccessibilityChildrenVector AccessibilityObject::relatedObjects(AXRelation relation) const
 {
-    auto* cache = axObjectCache();
+    CheckedPtr cache = axObjectCache();
     if (!cache)
         return { };
 

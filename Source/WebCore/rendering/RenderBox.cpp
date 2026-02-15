@@ -421,7 +421,7 @@ void RenderBox::styleDidChange(Style::Difference diff, const RenderStyle* oldSty
     // Changing the position from/to absolute can potentially create/remove flex/grid items, as absolutely positioned
     // children of a flex/grid box are out-of-flow, and thus, not flex/grid items. This means that we need to clear
     // any override content size set by our container, because it would likely be incorrect after the style change.
-    if (isOutOfFlowPositioned() && parent() && parent()->style().isDisplayFlexibleBoxIncludingDeprecatedOrGridFormattingContextBox())
+    if (isOutOfFlowPositioned() && parent() && Style::isDisplayFlexibleBoxIncludingDeprecatedOrGridFormattingContextBox(parent()->style().display()))
         clearOverridingSize();
 
     if (oldStyle && oldStyle->hasOutOfFlowPosition() != style().hasOutOfFlowPosition()) {
@@ -3671,7 +3671,7 @@ bool RenderBox::skipContainingBlockForPercentHeightCalculation(const RenderBox& 
     // objects, such as table-cells and flexboxes, will be treated as if they were
     // non-anonymous.
     if (containingBlock.isAnonymousForPercentageResolution())
-        return containingBlock.style().display() == DisplayType::Block || containingBlock.style().display() == DisplayType::InlineBlock;
+        return containingBlock.style().display() == Style::DisplayType::BlockFlow || containingBlock.style().display() == Style::DisplayType::InlineFlowRoot;
     
     // For quirks mode, we skip most auto-height containing blocks when computing
     // percentages.
@@ -3955,6 +3955,19 @@ void RenderBox::computeAndSetBlockDirectionMargins(const RenderBlock& containing
 
 // MARK: - Positioned Layout
 
+inline static LayoutRange getScrollableContainingBlockRange(const RenderBox& containingBlock, BoxAxis physicalAxis)
+{
+    if (BoxAxis::Horizontal == physicalAxis) {
+        // PositionedLayoutConstraints expects us to not have adjusted for left-side scrollbars yet.
+        // FIXME: Get PositionedLayoutConstraints to work in pre-corrected coordinates instead of doing "fixup" afterwards.
+        auto range = containingBlock.scrollablePaddingAreaOverflowRect().xRange();
+        if (containingBlock.isHorizontalWritingMode() && containingBlock.shouldPlaceVerticalScrollbarOnLeft())
+            range.moveBy(-containingBlock.verticalScrollbarWidth());
+        return range;
+    }
+    return containingBlock.scrollablePaddingAreaOverflowRect().yRange();
+}
+
 LayoutRange RenderBox::containingBlockRangeForPositioned(const RenderBoxModelObject& container, BoxAxis physicalAxis) const
 {
     ASSERT(container.canContainAbsolutelyPositionedObjects() || container.canContainFixedPositionObjects());
@@ -3964,6 +3977,8 @@ LayoutRange RenderBox::containingBlockRangeForPositioned(const RenderBoxModelObj
 
     if (isFixedPositioned()) {
         if (auto* renderView = dynamicDowncast<RenderView>(container)) {
+            if (!style().positionArea().isNone() && renderView->hasRenderOverflow())
+                return getScrollableContainingBlockRange(*renderView, physicalAxis);
             return isContainerInlineAxis
                 ? LayoutRange(startEdge, renderView->clientLogicalWidthForFixedPosition())
                 : LayoutRange(startEdge, renderView->clientLogicalHeightForFixedPosition());
@@ -4014,6 +4029,9 @@ LayoutRange RenderBox::containingBlockRangeForPositioned(const RenderBoxModelObj
             }
         }
     }
+
+    if (!style().positionArea().isNone() && containingBlock->hasRenderOverflow() && containingBlock->hasPotentiallyScrollableOverflow())
+        return getScrollableContainingBlockRange(*containingBlock, physicalAxis);
 
     return BoxAxis::Horizontal == physicalAxis
         ? LayoutRange(startEdge, containingBlock->clientWidth())

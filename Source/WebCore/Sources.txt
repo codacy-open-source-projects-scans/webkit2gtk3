@@ -196,6 +196,7 @@ Modules/indexeddb/server/MemoryIndexCursor.cpp
 Modules/indexeddb/server/MemoryObjectStore.cpp
 Modules/indexeddb/server/MemoryObjectStoreCursor.cpp
 Modules/indexeddb/server/SQLiteIDBBackingStore.cpp
+Modules/indexeddb/server/SQLiteMemoryIDBBackingStore.cpp
 Modules/indexeddb/server/SQLiteIDBCursor.cpp
 Modules/indexeddb/server/SQLiteIDBTransaction.cpp
 Modules/indexeddb/server/ServerOpenDBRequest.cpp
@@ -3253,6 +3254,7 @@ style/values/content/StyleContent.cpp
 style/values/content/StyleQuotes.cpp
 style/values/counter-styles/StyleCounterStyle.cpp
 style/values/css2/StyleZIndex.cpp
+style/values/display/StyleDisplay.cpp
 style/values/easing/StyleCubicBezierEasingFunction.cpp
 style/values/easing/StyleEasingFunction.cpp
 style/values/easing/StyleLinearEasingFunction.cpp

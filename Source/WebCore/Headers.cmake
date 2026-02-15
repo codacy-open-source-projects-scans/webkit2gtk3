@@ -533,6 +533,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/indexeddb/server/MemoryBackingStoreTransaction.h
     Modules/indexeddb/server/MemoryIDBBackingStore.h
     Modules/indexeddb/server/SQLiteIDBBackingStore.h
+    Modules/indexeddb/server/SQLiteMemoryIDBBackingStore.h
     Modules/indexeddb/server/SQLiteIDBTransaction.h
     Modules/indexeddb/server/ServerOpenDBRequest.h
     Modules/indexeddb/server/UniqueIDBDatabase.h
@@ -1874,6 +1875,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     layout/formattingContexts/grid/GridItemRect.h
     layout/formattingContexts/grid/GridLayoutState.h
     layout/formattingContexts/grid/GridTypeAliases.h
+    layout/formattingContexts/grid/ImplicitGrid.h
 
     layout/formattingContexts/inline/AbstractLineBuilder.h
     layout/formattingContexts/inline/AvailableLineWidthOverride.h
@@ -3402,6 +3404,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     style/values/css2/StyleZIndex.h
 
+    style/values/display/StyleDisplay.h
     style/values/display/StyleOrder.h
 
     style/values/easing/StyleEasingFunction.h

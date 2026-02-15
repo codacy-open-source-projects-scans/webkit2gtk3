@@ -1176,12 +1176,16 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     setViewportConfigurationViewLayoutSize(parameters.viewportConfigurationViewLayoutSize, parameters.viewportConfigurationLayoutSizeScaleFactorFromClient, parameters.viewportConfigurationMinimumEffectiveDeviceWidth);
 #endif
 
-#if HAVE(VISIBILITY_PROPAGATION_VIEW) && !HAVE(NON_HOSTING_VISIBILITY_PROPAGATION_VIEW)
+#if HAVE(VISIBILITY_PROPAGATION_VIEW)
+    LayerHostingContextID contextID = 0;
+#if !HAVE(NON_HOSTING_VISIBILITY_PROPAGATION_VIEW)
     m_contextForVisibilityPropagation = LayerHostingContext::create({
         canShowWhileLocked()
     });
     WEBPAGE_RELEASE_LOG(Process, "WebPage: Created context with ID %u for visibility propagation from UIProcess", m_contextForVisibilityPropagation->contextID());
-    send(Messages::WebPageProxy::DidCreateContextInWebProcessForVisibilityPropagation(m_contextForVisibilityPropagation->cachedContextID()));
+    contextID = m_contextForVisibilityPropagation->cachedContextID();
+#endif // !HAVE(NON_HOSTING_VISIBILITY_PROPAGATION_VIEW)
+    send(Messages::WebPageProxy::DidCreateContextInWebProcessForVisibilityPropagation(contextID));
 #endif // HAVE(VISIBILITY_PROPAGATION_VIEW) && !HAVE(NON_HOSTING_VISIBILITY_PROPAGATION_VIEW)
 
 #if ENABLE(VP9) && PLATFORM(COCOA)
@@ -1337,8 +1341,11 @@ void WebPage::gpuProcessConnectionDidBecomeAvailable(GPUProcessConnection& gpuPr
 #endif
 
 #if ENABLE(EXTENSION_CAPABILITIES)
-    if (!mediaEnvironment().isEmpty())
-        gpuProcessConnection.setMediaEnvironment(identifier(), mediaEnvironment());
+    if (!mediaPlaybackEnvironment().isEmpty())
+        gpuProcessConnection.setMediaPlaybackEnvironment(identifier(), mediaPlaybackEnvironment());
+
+    if (!displayCaptureEnvironment().isEmpty())
+        gpuProcessConnection.setDisplayCaptureEnvironment(identifier(), displayCaptureEnvironment());
 #endif
 }
 
@@ -1545,7 +1552,8 @@ WebPage::~WebPage()
         completionHandler(false);
 
 #if ENABLE(EXTENSION_CAPABILITIES)
-    setMediaEnvironment({ });
+    setMediaPlaybackEnvironment({ });
+    setDisplayCaptureEnvironment({ });
 #endif
 }
 

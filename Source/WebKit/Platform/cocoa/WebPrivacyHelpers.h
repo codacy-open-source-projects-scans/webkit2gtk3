@@ -64,6 +64,7 @@ void configureForAdvancedPrivacyProtections(NSURLSession *);
 bool isKnownTrackerAddressOrDomain(StringView host);
 WebCore::IsKnownCrossSiteTracker isRequestToKnownCrossSiteTracker(const WebCore::ResourceRequest&);
 bool isRequestBlockable(const WebCore::ResourceRequest&, bool);
+bool isTaintedScriptURLBlockable(const URL&);
 void requestLinkDecorationFilteringData(CompletionHandler<void(Vector<WebCore::LinkDecorationFilteringData>&&)>&&);
 
 class ListDataObserver : public RefCountedAndCanMakeWeakPtr<ListDataObserver> {
@@ -204,6 +205,13 @@ private:
 };
 
 #define HAVE_RESOURCE_MONITOR_URLS_GET_SOURCE 1
+
+class ConsistentPrivacyQuirkController : public ListDataController<ConsistentPrivacyQuirkController, ScriptTrackingPrivacyRules> {
+private:
+    void updateList(CompletionHandler<void()>&&) final;
+    void didUpdateCachedListData() final;
+    unsigned resourceTypeValue() const final;
+};
 
 #endif // ENABLE(ADVANCED_PRIVACY_PROTECTIONS)
 

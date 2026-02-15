@@ -3441,17 +3441,17 @@ GridLanesEnabled:
 
 HTMLEnhancedSelectEnabled:
    type: bool
-   status: testable
-   category: css
+   status: stable
+   category: dom
    humanReadableName: "Enhanced HTML select element"
    humanReadableDescription: "Enable enhanced HTML select element"
    defaultValue:
      WebKitLegacy:
-       default: false
+       default: true
      WebKit:
-       default: false
+       default: true
      WebCore:
-       default: false
+       default: true
 
 HTMLEnhancedSelectParsingEnabled:
    type: bool
@@ -3842,6 +3842,21 @@ IndexedDBAPIEnabled:
   disableInLockdownMode: true
   sharedPreferenceForWebProcess: true
   richJavaScript: true
+
+IndexedDBSQLiteMemoryBackingStoreEnabled:
+  type: bool
+  status: stable
+  category: dom
+  humanReadableName: "IndexedDB SQLite Memory Backing Store"
+  humanReadableDescription: "Use SQLite in-memory database for ephemeral IndexedDB instead of MemoryIDBBackingStore"
+  defaultValue:
+    WebKitLegacy:
+      default: true
+    WebKit:
+      default: true
+    WebCore:
+      default: true
+  sharedPreferenceForWebProcess: true
 
 InlineMediaPlaybackRequiresPlaysInlineAttribute:
   type: bool
@@ -6946,11 +6961,11 @@ ScriptTrackingPrivacyNetworkRequestBlockingEnabled:
   exposed: [ WebKit ]
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 ScriptTrackingPrivacyNetworkRequestBlockingLatchEnabled:
   type: bool
@@ -6960,11 +6975,11 @@ ScriptTrackingPrivacyNetworkRequestBlockingLatchEnabled:
   exposed: [ WebKit ]
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 ScriptTrackingPrivacyProtectionsEnabled:
   type: bool
@@ -10062,7 +10077,7 @@ WindowFocusRestricted:
 
 WirelessPlaybackMediaPlayerEnabled:
   type: bool
-  status: unstable
+  status: internal
   category: media
   humanReadableName: "Wireless Playback Media Player"
   humanReadableDescription: "Enable wireless playback via MediaPlayerPrivateWirelessPlayback"
@@ -10071,7 +10086,7 @@ WirelessPlaybackMediaPlayerEnabled:
     WebCore:
       default: false
     WebKit:
-      default: false
+      default: true
     WebKitLegacy:
       default: false
   disableInLockdownMode: true

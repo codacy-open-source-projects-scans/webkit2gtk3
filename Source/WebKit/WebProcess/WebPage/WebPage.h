@@ -1092,6 +1092,12 @@ public:
     void selectTextWithGranularityAtPoint(const WebCore::IntPoint&, WebCore::TextGranularity, bool isInteractingWithFocusedElement, CompletionHandler<void()>&&);
 #endif // PLATFORM(COCOA)
 
+#if ENABLE(TWO_PHASE_CLICKS)
+    Awaitable<std::optional<WebCore::RemoteUserInputEventData>> potentialTapAtPosition(std::optional<WebCore::FrameIdentifier>, WebKit::TapIdentifier, WebCore::FloatPoint, bool shouldRequestMagnificationInformation);
+    Awaitable<std::optional<WebCore::FrameIdentifier>> commitPotentialTap(std::optional<WebCore::FrameIdentifier>, OptionSet<WebKit::WebEventModifier>, TransactionID lastLayerTreeTransactionId, WebCore::PointerID);
+    void cancelPotentialTap();
+#endif
+
 #if PLATFORM(IOS_FAMILY)
     void textInputContextsInRect(WebCore::FloatRect, CompletionHandler<void(const Vector<WebCore::ElementContext>&)>&&);
     void focusTextInputContextAndPlaceCaret(const WebCore::ElementContext&, const WebCore::IntPoint&, CompletionHandler<void(bool)>&&);
@@ -1118,11 +1124,8 @@ public:
     bool hasStablePageScaleFactor() const { return m_hasStablePageScaleFactor; }
 
     void attemptSyntheticClick(const WebCore::IntPoint&, OptionSet<WebKit::WebEventModifier>, TransactionID lastLayerTreeTransactionId);
-    Awaitable<std::optional<WebCore::RemoteUserInputEventData>> potentialTapAtPosition(std::optional<WebCore::FrameIdentifier>, WebKit::TapIdentifier, WebCore::FloatPoint, bool shouldRequestMagnificationInformation);
-    Awaitable<std::optional<WebCore::FrameIdentifier>> commitPotentialTap(std::optional<WebCore::FrameIdentifier>, OptionSet<WebKit::WebEventModifier>, TransactionID lastLayerTreeTransactionId, WebCore::PointerID);
     void commitPotentialTapFailed();
     void didHandleTapAsHover();
-    void cancelPotentialTap();
     void cancelPotentialTapInFrame(WebFrame&);
     void tapHighlightAtPosition(WebKit::TapIdentifier, const WebCore::FloatPoint&);
     void didRecognizeLongPress();
@@ -2065,8 +2068,10 @@ public:
 #endif
 
 #if ENABLE(EXTENSION_CAPABILITIES)
-    const String& mediaEnvironment() const { return m_mediaEnvironment; }
-    void setMediaEnvironment(const String&);
+    const String& mediaPlaybackEnvironment() const { return m_mediaPlaybackEnvironment; }
+    void setMediaPlaybackEnvironment(const String&);
+    const String& displayCaptureEnvironment() const { return m_displayCaptureEnvironment; }
+    void setDisplayCaptureEnvironment(const String&);
 #endif
 
 #if ENABLE(WRITING_TOOLS)
@@ -3047,6 +3052,12 @@ private:
     std::optional<WebCore::SimpleRange> m_initialSelection;
 #endif
 
+#if ENABLE(TWO_PHASE_CLICKS)
+    RefPtr<WebCore::Node> m_potentialTapNode;
+    WebCore::FloatPoint m_potentialTapLocation;
+    RefPtr<WebCore::SecurityOrigin> m_potentialTapSecurityOrigin;
+#endif
+
 #if PLATFORM(IOS_FAMILY)
     RefPtr<WebCore::Node> m_interactionNode;
     WebCore::DoublePoint m_lastInteractionLocation;
@@ -3066,9 +3077,6 @@ private:
     };
     BidiSelectionFlippingState m_bidiSelectionFlippingState { BidiSelectionFlippingState::NotFlipping };
 
-    RefPtr<WebCore::Node> m_potentialTapNode;
-    WebCore::FloatPoint m_potentialTapLocation;
-    RefPtr<WebCore::SecurityOrigin> m_potentialTapSecurityOrigin;
     CompletionHandler<void(WebCore::SyntheticClickResult)> m_pendingSyntheticClickCallback;
 
     bool m_hasReceivedVisibleContentRectsAfterDidCommitLoad { false };
@@ -3275,7 +3283,8 @@ private:
 #endif
 
 #if ENABLE(EXTENSION_CAPABILITIES)
-    String m_mediaEnvironment;
+    String m_mediaPlaybackEnvironment;
+    String m_displayCaptureEnvironment;
 #endif
 
 #if ENABLE(WRITING_TOOLS)

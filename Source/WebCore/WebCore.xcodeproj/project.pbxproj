@@ -990,6 +990,7 @@
 		2AEF6FDB26E7ECC700326D02 /* CSSNumericArray.h in Headers */ = {isa = PBXBuildFile; fileRef = 2AEF6FBF26E716EE00326D02 /* CSSNumericArray.h */; };
 		2AEF6FDC26E7ECCC00326D02 /* CSSNumericBaseType.h in Headers */ = {isa = PBXBuildFile; fileRef = 2AEF6FCF26E71F2E00326D02 /* CSSNumericBaseType.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		2AEF6FDD26E7ECCF00326D02 /* CSSNumericType.h in Headers */ = {isa = PBXBuildFile; fileRef = 2AEF6FCE26E71F2D00326D02 /* CSSNumericType.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		2B1A35462EBF5FBC00F83EA2 /* SQLiteMemoryIDBBackingStore.h in Headers */ = {isa = PBXBuildFile; fileRef = 2B1A35452EBF5FBC00F83EA2 /* SQLiteMemoryIDBBackingStore.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		2B365C743425119AAB91D27B /* RenderSVGEllipse.h in Headers */ = {isa = PBXBuildFile; fileRef = 2B4235A015250EF555DB5CD8 /* RenderSVGEllipse.h */; };
 		2B365C841525119E0091D27B /* LegacyRenderSVGEllipse.h in Headers */ = {isa = PBXBuildFile; fileRef = 2B4235A015250F6000DBBCD8 /* LegacyRenderSVGEllipse.h */; };
 		2B598F99286F6BF4005AF06F /* Formats.h in Headers */ = {isa = PBXBuildFile; fileRef = 2B598F98286F6BF4005AF06F /* Formats.h */; };
@@ -5284,6 +5285,7 @@
 		BC8243290D0CE8A200460C8F /* JSSQLError.h in Headers */ = {isa = PBXBuildFile; fileRef = BC8243250D0CE8A200460C8F /* JSSQLError.h */; };
 		BC82432A0D0CE8A200460C8F /* JSSQLTransaction.h in Headers */ = {isa = PBXBuildFile; fileRef = BC8243260D0CE8A200460C8F /* JSSQLTransaction.h */; };
 		BC8243E90D0CFD7500460C8F /* WindowFeatures.h in Headers */ = {isa = PBXBuildFile; fileRef = BC8243E70D0CFD7500460C8F /* WindowFeatures.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		BC83412C2F3E61F2007B3176 /* StyleDisplay.h in Headers */ = {isa = PBXBuildFile; fileRef = BC83412B2F3E61ED007B3176 /* StyleDisplay.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BC89E31C2D11ECD10016DF06 /* CSSNoConversionDataRequiredToken.h in Headers */ = {isa = PBXBuildFile; fileRef = BC89E31B2D11ECD10016DF06 /* CSSNoConversionDataRequiredToken.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BC8AE34F12EA096A00EB3AE6 /* ScrollableArea.h in Headers */ = {isa = PBXBuildFile; fileRef = BC8AE34D12EA096A00EB3AE6 /* ScrollableArea.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BC8B853E0E7C7F1100AB6984 /* ScrollbarThemeMac.h in Headers */ = {isa = PBXBuildFile; fileRef = BC8B853C0E7C7F1100AB6984 /* ScrollbarThemeMac.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -9903,6 +9905,8 @@
 		2AEF6FE426E802F000326D02 /* CSSMathProduct.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = CSSMathProduct.cpp; sourceTree = "<group>"; };
 		2AEF6FE526E802F100326D02 /* CSSMathSum.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = CSSMathSum.cpp; sourceTree = "<group>"; };
 		2B0838EE286674A800C23C32 /* GenericTransformStream.idl */ = {isa = PBXFileReference; lastKnownFileType = text; path = GenericTransformStream.idl; sourceTree = "<group>"; };
+		2B1A35452EBF5FBC00F83EA2 /* SQLiteMemoryIDBBackingStore.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SQLiteMemoryIDBBackingStore.h; sourceTree = "<group>"; };
+		2B1A35472EBF5FC600F83EA2 /* SQLiteMemoryIDBBackingStore.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = SQLiteMemoryIDBBackingStore.cpp; sourceTree = "<group>"; };
 		2B1B1C1E2E3A869C00D7D9ED /* ForwardDeclCheckerExpectations */ = {isa = PBXFileReference; lastKnownFileType = text; path = ForwardDeclCheckerExpectations; sourceTree = "<group>"; };
 		2B1B1C1F2E3A869C00D7D9ED /* MemoryUnsafeCastCheckerExpectations */ = {isa = PBXFileReference; lastKnownFileType = text; path = MemoryUnsafeCastCheckerExpectations; sourceTree = "<group>"; };
 		2B1B1C202E3A869C00D7D9ED /* NoUncheckedPtrMemberCheckerExpectations */ = {isa = PBXFileReference; lastKnownFileType = text; path = NoUncheckedPtrMemberCheckerExpectations; sourceTree = "<group>"; };
@@ -19356,6 +19360,16 @@
 		BC8243260D0CE8A200460C8F /* JSSQLTransaction.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = JSSQLTransaction.h; sourceTree = "<group>"; };
 		BC8243E60D0CFD7500460C8F /* WindowFeatures.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = WindowFeatures.cpp; sourceTree = "<group>"; };
 		BC8243E70D0CFD7500460C8F /* WindowFeatures.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = WindowFeatures.h; sourceTree = "<group>"; };
+		BC8341082F3B96EA007B3176 /* JSAuthenticationExtensionsClientInputsJSON.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JSAuthenticationExtensionsClientInputsJSON.h; sourceTree = "<group>"; };
+		BC8341092F3B96EA007B3176 /* JSAuthenticationExtensionsClientInputsJSON.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = JSAuthenticationExtensionsClientInputsJSON.cpp; sourceTree = "<group>"; };
+		BC83410A2F3B96EA007B3176 /* JSAuthenticationExtensionsClientOutputsJSON.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JSAuthenticationExtensionsClientOutputsJSON.h; sourceTree = "<group>"; };
+		BC83410B2F3B96EA007B3176 /* JSAuthenticationExtensionsClientOutputsJSON.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = JSAuthenticationExtensionsClientOutputsJSON.cpp; sourceTree = "<group>"; };
+		BC83410C2F3B96EA007B3176 /* JSAuthenticationResponseJSON.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JSAuthenticationResponseJSON.h; sourceTree = "<group>"; };
+		BC83410D2F3B96EA007B3176 /* JSAuthenticationResponseJSON.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = JSAuthenticationResponseJSON.cpp; sourceTree = "<group>"; };
+		BC83410E2F3B96EA007B3176 /* JSAuthenticatorSelectionCriteria.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JSAuthenticatorSelectionCriteria.h; sourceTree = "<group>"; };
+		BC83410F2F3B96EA007B3176 /* JSAuthenticatorSelectionCriteria.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = JSAuthenticatorSelectionCriteria.cpp; sourceTree = "<group>"; };
+		BC83412B2F3E61ED007B3176 /* StyleDisplay.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StyleDisplay.h; sourceTree = "<group>"; };
+		BC83412D2F3F911D007B3176 /* StyleDisplay.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = StyleDisplay.cpp; sourceTree = "<group>"; };
 		BC83CE912BEFF65D00DC644F /* CSSPropertyParserConsumer+ColorInterpolationMethod.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "CSSPropertyParserConsumer+ColorInterpolationMethod.h"; sourceTree = "<group>"; };
 		BC83CE922BEFF66700DC644F /* CSSPropertyParserConsumer+ColorInterpolationMethod.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = "CSSPropertyParserConsumer+ColorInterpolationMethod.cpp"; sourceTree = "<group>"; };
 		BC84F4392641AB1400F57C1C /* CustomPaintImage.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = CustomPaintImage.cpp; sourceTree = "<group>"; };
@@ -28049,6 +28063,8 @@
 				511EC12E1C50ABEC0032F983 /* SQLiteIDBCursor.h */,
 				511EC1291C50ABBA0032F983 /* SQLiteIDBTransaction.cpp */,
 				511EC12A1C50ABBA0032F983 /* SQLiteIDBTransaction.h */,
+				2B1A35472EBF5FC600F83EA2 /* SQLiteMemoryIDBBackingStore.cpp */,
+				2B1A35452EBF5FBC00F83EA2 /* SQLiteMemoryIDBBackingStore.h */,
 				518864DE1BBAF30F00E540C9 /* UniqueIDBDatabase.cpp */,
 				518864DF1BBAF30F00E540C9 /* UniqueIDBDatabase.h */,
 				5198F7A21BBDAA2900E2CC5F /* UniqueIDBDatabaseConnection.cpp */,
@@ -29238,8 +29254,14 @@
 				57D135262294A7A700827401 /* JSAttestationConveyancePreference.h */,
 				57DA47AC224032DC002A4612 /* JSAuthenticationExtensionsClientInputs.cpp */,
 				57DA47AD224032DD002A4612 /* JSAuthenticationExtensionsClientInputs.h */,
+				BC8341092F3B96EA007B3176 /* JSAuthenticationExtensionsClientInputsJSON.cpp */,
+				BC8341082F3B96EA007B3176 /* JSAuthenticationExtensionsClientInputsJSON.h */,
 				5758595C239F113000C74572 /* JSAuthenticationExtensionsClientOutputs.cpp */,
 				5758595E239F117300C74572 /* JSAuthenticationExtensionsClientOutputs.h */,
+				BC83410B2F3B96EA007B3176 /* JSAuthenticationExtensionsClientOutputsJSON.cpp */,
+				BC83410A2F3B96EA007B3176 /* JSAuthenticationExtensionsClientOutputsJSON.h */,
+				BC83410D2F3B96EA007B3176 /* JSAuthenticationResponseJSON.cpp */,
+				BC83410C2F3B96EA007B3176 /* JSAuthenticationResponseJSON.h */,
 				57303C2E2009B7DA00355965 /* JSAuthenticatorAssertionResponse.cpp */,
 				57303C2D2009B7D900355965 /* JSAuthenticatorAssertionResponse.h */,
 				57FE68772605568F00BF45E4 /* JSAuthenticatorAttachment.cpp */,
@@ -29248,6 +29270,8 @@
 				57303C212009AEF600355965 /* JSAuthenticatorAttestationResponse.h */,
 				57303BDE20095B2700355965 /* JSAuthenticatorResponse.cpp */,
 				57303BDD20095B2600355965 /* JSAuthenticatorResponse.h */,
+				BC83410F2F3B96EA007B3176 /* JSAuthenticatorSelectionCriteria.cpp */,
+				BC83410E2F3B96EA007B3176 /* JSAuthenticatorSelectionCriteria.h */,
 				57DCED91214880C60016B847 /* JSAuthenticatorTransport.cpp */,
 				57DCED92214880C60016B847 /* JSAuthenticatorTransport.h */,
 				57D846311FEAFC2F00CA3682 /* JSPublicKeyCredential.cpp */,
@@ -36749,6 +36773,8 @@
 		BC34D2F02E3D2708001EAD95 /* display */ = {
 			isa = PBXGroup;
 			children = (
+				BC83412D2F3F911D007B3176 /* StyleDisplay.cpp */,
+				BC83412B2F3E61ED007B3176 /* StyleDisplay.h */,
 				BC34D2EE2E3D2662001EAD95 /* StyleOrder.h */,
 			);
 			path = display;
@@ -47320,6 +47346,7 @@
 				512BDB4B1C456FFA006494DF /* SQLiteIDBBackingStore.h in Headers */,
 				511EC1301C50ABF50032F983 /* SQLiteIDBCursor.h in Headers */,
 				511EC12C1C50ABBF0032F983 /* SQLiteIDBTransaction.h in Headers */,
+				2B1A35462EBF5FBC00F83EA2 /* SQLiteMemoryIDBBackingStore.h in Headers */,
 				1A22464C0CC98DDB00C05240 /* SQLiteStatement.h in Headers */,
 				EBE5B226245A26EF003A5A88 /* SQLiteStatementAutoResetScope.h in Headers */,
 				1A22464E0CC98DDB00C05240 /* SQLiteTransaction.h in Headers */,
@@ -47459,6 +47486,7 @@
 				A8C4A7FD09D563270003AC8D /* StyledElement.h in Headers */,
 				BC63AD442F084C2F007B62C4 /* StyleDeprecatedFlexibleBoxData.h in Headers */,
 				BC913B3E2EE89B0E009E3349 /* StyleDifference.h in Headers */,
+				BC83412C2F3E61F2007B3176 /* StyleDisplay.h in Headers */,
 				E440FD5325A4AFDF00F7C849 /* StyledMarkedText.h in Headers */,
 				BC95FBDF2F19DA5800AC941B /* StyleDropShadowFunction.h in Headers */,
 				BC5C89BE2D567E23000F45B7 /* StyleDynamicRangeLimit.h in Headers */,

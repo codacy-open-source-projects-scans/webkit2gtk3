@@ -79,15 +79,8 @@ RenderBlock& RenderTreeBuilder::FormControls::findOrCreateParentForChild(RenderB
 
 void RenderTreeBuilder::FormControls::updateAfterDescendants(RenderElement& renderer)
 {
-    if (!renderer.document().settings().cssAppearanceBaseEnabled())
-        return;
-
     if (RefPtr inputElement = dynamicDowncast<HTMLInputElement>(renderer.element())) {
-        RefPtr inputType = inputElement->inputType();
-        if (!inputType)
-            return;
-
-        if (inputType->isCheckable())
+        if (inputElement->isCheckable())
             updatePseudoElement(PseudoElementType::Checkmark, renderer);
         return;
     }
@@ -100,21 +93,24 @@ void RenderTreeBuilder::FormControls::updateAfterDescendants(RenderElement& rend
 
 void RenderTreeBuilder::FormControls::updatePseudoElement(PseudoElementType type, RenderElement& renderer)
 {
-    auto pseudoStyle = renderer.getCachedPseudoStyle({ type });
-    if (!pseudoStyle)
-        return;
-
-    auto shouldHavePseudoElementRenderer = [&]() -> bool {
-        return renderer.style().usedAppearance() == StyleAppearance::Base && pseudoStyle->display() != DisplayType::None;
-    };
-
-    auto existingPseudoElement = [&]() -> CheckedPtr<RenderElement> {
+    auto existingPseudoElement = [&] -> CheckedPtr<RenderElement> {
         for (CheckedRef child : childrenOfType<RenderElement>(renderer)) {
             if (child->style().pseudoElementType() == type)
                 return child;
         }
         return nullptr;
     }();
+
+    if (renderer.style().usedAppearance() != StyleAppearance::Base && !existingPseudoElement)
+        return;
+
+    auto pseudoStyle = renderer.getCachedPseudoStyle({ type });
+    if (!pseudoStyle)
+        return;
+
+    auto shouldHavePseudoElementRenderer = [&] -> bool {
+        return renderer.style().usedAppearance() == StyleAppearance::Base && pseudoStyle->display() != Style::DisplayType::None;
+    };
 
     if (!shouldHavePseudoElementRenderer()) {
         if (existingPseudoElement)

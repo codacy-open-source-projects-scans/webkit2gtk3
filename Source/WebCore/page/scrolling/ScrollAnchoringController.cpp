@@ -202,7 +202,8 @@ auto ScrollAnchoringController::computeScrollerRelativeRects(RenderObject& candi
         if (!frameView)
             return { };
 
-        auto scrollViewport = frameView->layoutViewportRect();
+        // This is not affected by page scale.
+        auto scrollViewport = frameView->visualViewportRect();
 
         RefPtr documentElement = frameView->frame().document() ? frameView->frame().document()->documentElement() : nullptr;
         if (!documentElement)
@@ -216,7 +217,8 @@ auto ScrollAnchoringController::computeScrollerRelativeRects(RenderObject& candi
 
         // FIXME: Need to clamp negative layout overflow for clamp-negative-overflow.html.
         return {
-            .boundsRelativeToScrolledContent = candidate.localToAbsoluteQuad(localAnchoringRect).boundingBox(),
+            // Map to the RenderView to exclude page scale.
+            .boundsRelativeToScrolledContent = candidate.localToContainerQuad(localAnchoringRect, dynamicDowncast<RenderView>(*scrollerBox)).boundingBox(),
             .scrollerContentsVisibleRect = scrollViewport
         };
     }
@@ -314,7 +316,7 @@ AnchorSearchStatus ScrollAnchoringController::examinePriorityCandidate(RenderEle
 {
     CheckedPtr scrollerBox = scrollableAreaBox();
 
-    RenderElement* ancestor = &renderer;
+    CheckedPtr<RenderElement> ancestor = &renderer;
     while (ancestor && ancestor != scrollerBox.get()) {
         if (ancestor->style().overflowAnchor() == OverflowAnchor::None)
             return AnchorSearchStatus::Exclude;
@@ -446,8 +448,8 @@ AnchorSearchStatus ScrollAnchoringController::findAnchorInOutOfFlowObjects(Rende
     if (!outOfFlowBoxes)
         return AnchorSearchStatus::Exclude;
 
-    for (auto& outOfFlowBox : *outOfFlowBoxes) {
-        auto status = findAnchorRecursive(&outOfFlowBox);
+    for (CheckedRef outOfFlowBox : *outOfFlowBoxes) {
+        auto status = findAnchorRecursive(outOfFlowBox.ptr());
         if (isViableStatus(status))
             return status;
     }
@@ -601,6 +603,12 @@ void ScrollAnchoringController::adjustScrollPositionForAnchoring()
         return;
 
     // FIXME: Handle content-visibility.
+
+    CheckedPtr scrollerBox = scrollableAreaBox();
+    if (scrollerBox->isRenderView()) {
+        auto pageScale = frameView().frame().frameScaleFactor();
+        adjustment.scale(pageScale);
+    }
 
     auto currentPosition = m_owningScrollableArea->scrollPosition();
     auto newScrollPosition = currentPosition + roundedIntSize(adjustment);
