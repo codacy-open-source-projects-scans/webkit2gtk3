@@ -359,7 +359,7 @@ void RenderBlockFlow::computeIntrinsicLogicalWidths(LayoutUnit& minLogicalWidth,
         adjustIntrinsicLogicalWidthsForColumns(minLogicalWidth, maxLogicalWidth);
 
     auto resetMinimumWidthForMarqueeIfApplicable = [&] {
-        if (style().autoWrap() || !layer())
+        if (style().textWrapMode() != TextWrapMode::NoWrap || !layer())
             return;
         CheckedPtr scrollableArea = layer()->scrollableArea();
         if (!scrollableArea || !scrollableArea->marquee() || !scrollableArea->marquee()->isHorizontal())
@@ -743,7 +743,7 @@ void RenderBlockFlow::dirtyForLayoutFromPercentageHeightDescendants()
                 // If the width of an image is affected by the height of a child (e.g., an image with an aspect ratio),
                 // then we have to dirty preferred widths, since even enclosing blocks can become dirty as a result.
                 // (A horizontal flexbox that contains an inline image wrapped in an anonymous block for example.)
-                if (renderBox->hasIntrinsicAspectRatio() || renderBox->style().hasAspectRatio())
+                if (renderBox->hasIntrinsicAspectRatio() || renderBox->style().aspectRatio().hasRatio())
                     renderBox->setNeedsPreferredWidthsUpdate();
             }
         }
@@ -1300,7 +1300,7 @@ void RenderBlockFlow::adjustFloatingBlock(const MarginInfo& marginInfo)
 
 void RenderBlockFlow::updateStaticInlinePositionForChild(RenderBox& child, LayoutUnit logicalTop)
 {
-    if (Style::isDisplayInlineType(child.style().originalDisplay()))
+    if (child.style().originalDisplay().isInlineType())
         setStaticInlinePositionForChild(child, staticInlinePositionForOriginalDisplayInline(logicalTop));
     else
         setStaticInlinePositionForChild(child, startOffsetForContent());
@@ -1608,7 +1608,7 @@ LayoutUnit RenderBlockFlow::collapseMarginsWithChildInfo(RenderBox* child, Margi
 bool RenderBlockFlow::isChildEligibleForMarginTrim(Style::MarginTrimSide marginTrimSide, const RenderBox& child) const
 {
     ASSERT(style().marginTrim().contains(marginTrimSide));
-    if (!Style::isDisplayBlockType(child.style().display()))
+    if (!child.style().display().isBlockType())
         return false;
     // https://drafts.csswg.org/css-box-4/#margin-trim-block
     // 3.3.1. Trimming Block Container Content
@@ -4098,7 +4098,7 @@ RenderBlockFlow::InlineContentStatus RenderBlockFlow::markInlineContentDirtyForL
             if (hasParentRelativeHeightOrTop)
                 hasSimpleOutOfFlowContentOnly = false;
 
-            if (hasSimpleOutOfFlowContentOnly && Style::isDisplayInlineType(style.originalDisplay()))
+            if (hasSimpleOutOfFlowContentOnly && style.originalDisplay().isInlineType())
                 hasSimpleOutOfFlowContentOnly = hasSimpleStaticPositionForInlineLevelOutOfFlowContentByStyle;
         } else
             hasSimpleOutOfFlowContentOnly = false;
@@ -4267,7 +4267,7 @@ void RenderBlockFlow::setStaticPositionsForSimpleOutOfFlowContent()
 #ifndef NDEBUG
     ASSERT(!hasLineIfEmpty());
     for (auto walker = InlineWalker(*this); !walker.atEnd(); walker.advance()) {
-        if (Style::isDisplayInlineType(walker.current()->style().display())) {
+        if (walker.current()->style().display().isInlineType()) {
             ASSERT(hasSimpleStaticPositionForInlineLevelOutOfFlowChildrenByStyle(style()));
             break;
         }
@@ -4670,7 +4670,7 @@ RenderObject* InlineMinMaxIterator::next()
         if (is<RenderInline>(*candidate) || candidate->isRenderTextOrLineBreak() || candidate->isFloating() || candidate->isBlockLevelReplacedOrAtomicInline())
             break;
 
-        if (Style::isDisplayBlockType(candidate->style().display())) {
+        if (candidate->style().display().isBlockType()) {
             ASSERT(candidate->settings().blocksInInlineLayoutEnabled());
             break;
         }
@@ -4775,7 +4775,7 @@ static inline std::optional<std::pair<const RenderText&, const RenderText&>> tra
 
 static inline bool hasTrailingSoftWrapOpportunity(const RenderInline& rubyBase, const RenderBlockFlow& blockContainer)
 {
-    if (!rubyBase.parent()->style().autoWrap())
+    if (rubyBase.parent()->style().textWrapMode() == TextWrapMode::NoWrap)
         return false;
 
     if (auto lastAndNextTextContent = trailingRubyBaseAndAdjacentTextContent(rubyBase, blockContainer))
@@ -4827,7 +4827,7 @@ void RenderBlockFlow::computeInlinePreferredLogicalWidths(LayoutUnit& minLogical
     // Not supporting the quirk has caused us to mis-render some real sites. (See Bugzilla 10517.) 
     bool allowImagesToBreak = !document().inQuirksMode() || !isRenderTableCell() || !styleToUse.logicalWidth().isIntrinsicOrLegacyIntrinsicOrAuto();
 
-    bool oldAutoWrap = styleToUse.autoWrap();
+    bool oldAutoWrap = styleToUse.textWrapMode() != TextWrapMode::NoWrap;
 
     InlineMinMaxIterator childIterator(*this);
 
@@ -4894,7 +4894,7 @@ void RenderBlockFlow::computeInlinePreferredLogicalWidths(LayoutUnit& minLogical
             remainingNegativeTextIndent = { };
             addedStartPunctuationHang = true;
             isPrevChildInlineFlow = false;
-            oldAutoWrap = child->parent()->style().autoWrap();
+            oldAutoWrap = child->parent()->style().textWrapMode() != TextWrapMode::NoWrap;
         };
 
         if (child->isBR()) {
@@ -4902,7 +4902,7 @@ void RenderBlockFlow::computeInlinePreferredLogicalWidths(LayoutUnit& minLogical
             continue;
         }
 
-        if (Style::isDisplayBlockType(child->style().display()) && !child->isFloating() && is<RenderBox>(*child)) {
+        if (child->style().display().isBlockType() && !child->isFloating() && is<RenderBox>(*child)) {
             ASSERT(settings().blocksInInlineLayoutEnabled());
 
             resetLineForForcedLineBreak();
@@ -4955,7 +4955,7 @@ void RenderBlockFlow::computeInlinePreferredLogicalWidths(LayoutUnit& minLogical
         // values (if any of them are larger than our current min/max). We then look at
         // the width of the last non-breakable run and use that to start a new line
         // (unless we end in whitespace).
-        auto autoWrap = child->isBlockLevelReplacedOrAtomicInline() || is<RenderText>(*child) ? child->parent()->style().autoWrap() : child->style().autoWrap();
+        auto autoWrap = child->isBlockLevelReplacedOrAtomicInline() || is<RenderText>(*child) ? (child->parent()->style().textWrapMode() != TextWrapMode::NoWrap) : (child->style().textWrapMode() != TextWrapMode::NoWrap);
         auto childMin = 0.f;
         auto childMax = 0.f;
 
@@ -5094,7 +5094,7 @@ void RenderBlockFlow::computeInlinePreferredLogicalWidths(LayoutUnit& minLogical
                 lastText = nullptr;
             }
         } else if (CheckedPtr renderText = dynamicDowncast<RenderText>(*child)) {
-            if (renderText->style().hasTextCombine()) {
+            if (renderText->style().textCombine() != TextCombine::None) {
                 if (CheckedPtr renderCombineText = dynamicDowncast<RenderCombineText>(*renderText))
                     renderCombineText->combineTextIfNeeded();
             }

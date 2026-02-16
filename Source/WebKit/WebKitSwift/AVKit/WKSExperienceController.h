@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 Apple Inc. All rights reserved.
+ * Copyright (C) 2026 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,31 +23,24 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#import "config.h"
-#import "VideoPresentationInterfaceAVKit.h"
+#import <Foundation/Foundation.h>
 
-#if HAVE(AVKIT_CONTENT_SOURCE)
+#if HAVE(AVEXPERIENCECONTROLLER)
 
-#import <wtf/TZoneMallocInlines.h>
+NS_HEADER_AUDIT_BEGIN(nullability, sendability)
 
-namespace WebCore {
+@class AVPlayerViewControllerContentSource;
 
-WTF_MAKE_TZONE_ALLOCATED_IMPL(VideoPresentationInterfaceAVKit);
+NS_SWIFT_MAIN_ACTOR
+@interface WKSExperienceController : NSObject
++ (instancetype)new NS_UNAVAILABLE;
+- (instancetype)init NS_UNAVAILABLE;
+- (instancetype)initWithContentSource:(AVPlayerViewControllerContentSource *)contentSource NS_DESIGNATED_INITIALIZER;
 
-Ref<VideoPresentationInterfaceAVKit> VideoPresentationInterfaceAVKit::create(PlaybackSessionInterfaceIOS& playbackSessionInterface)
-{
-    return adoptRef(*new VideoPresentationInterfaceAVKit(playbackSessionInterface));
-}
+- (void)enterFullscreenWithCompletionHandler:(NS_SWIFT_UI_ACTOR NS_SWIFT_SENDABLE void (^)(BOOL))completionHandler;
+- (void)exitFullscreenWithCompletionHandler:(NS_SWIFT_UI_ACTOR NS_SWIFT_SENDABLE void (^)(BOOL))completionHandler;
+@end
 
-VideoPresentationInterfaceAVKit::VideoPresentationInterfaceAVKit(PlaybackSessionInterfaceIOS& playbackSessionInterface)
-    : VideoPresentationInterfaceIOS { playbackSessionInterface }
-{
-}
+NS_HEADER_AUDIT_END(nullability, sendability)
 
-VideoPresentationInterfaceAVKit::~VideoPresentationInterfaceAVKit()
-{
-}
-
-} // namespace WebCore
-
-#endif // HAVE(AVKIT_CONTENT_SOURCE)
+#endif // HAVE(AVEXPERIENCECONTROLLER)

@@ -472,7 +472,7 @@ void InlineDisplayContentBuilder::processNonBidiContent(const LineLayoutResult& 
         CheckedRef layoutBox = lineRun.layoutBox();
 
         if (lineRun.isOpaque()) {
-            if (Style::isDisplayInlineType(layoutBox->style().originalDisplay())) {
+            if (layoutBox->style().originalDisplay().isInlineType()) {
                 formattingContext().geometryForBox(layoutBox).setTopLeft({ lineBox.logicalRect().left() + lineBox.logicalRectForRootInlineBox().left() + lineRun.logicalLeft(), lineBox.logicalRect().top() });
                 continue;
             }
@@ -560,7 +560,7 @@ void InlineDisplayContentBuilder::processNonBidiContent(const LineLayoutResult& 
         auto updateAssociatedBoxGeometry = [&] {
             if (lineRun.isText() || lineRun.isSoftLineBreak())
                 return;
-            if (!lineBox.hasContent() && lineRun.isLineSpanningInlineBoxStart()) {
+            if (!lineLayoutResult.hasContentfulInFlowContent() && lineRun.isLineSpanningInlineBoxStart()) {
                 // When a spanning inline box (e.g. <div>text<span><br></span></div>) lands on an empty line
                 // (empty here means no content at all including line breaks, not just visually empty) then we
                 // don't extend the spanning line box over to this line.
@@ -803,8 +803,8 @@ void InlineDisplayContentBuilder::processBidiContent(const LineLayoutResult& lin
             hasInlineBox = hasInlineBox || (!lineRun.isBlock() && (parentDisplayBoxNodeIndex || lineRun.isInlineBoxStart() || lineRun.isLineSpanningInlineBoxStart()));
 
             if (lineRun.isOpaque()) {
-                if (Style::isDisplayInlineType(layoutBox->style().originalDisplay())) {
-                    // Note that out-of-flow handling (render tree integraton) really only needs logical coords (not even "content in inline diretion visual order").
+                if (layoutBox->style().originalDisplay().isInlineType()) {
+                    // Note that out-of-flow handling (render tree integration) really only needs logical coords (not even "content in inline direction visual order").
                     formattingContext().geometryForBox(layoutBox).setTopLeft({ lineBox.logicalRect().left() + lineBox.logicalRectForRootInlineBox().left() + lineRun.logicalLeft(), lineBox.logicalRect().top() });
                     continue;
                 }
@@ -882,7 +882,7 @@ void InlineDisplayContentBuilder::processBidiContent(const LineLayoutResult& lin
                 // some cases where the inline box has some content on the paragraph level (at bidi split) but line breaking renders it empty
                 // or their content is completely collapsed.
                 // Such inline boxes should also be handled here.
-                if (!lineBox.hasContent()) {
+                if (!lineLayoutResult.hasContentfulInFlowContent()) {
                     // FIXME: It's expected to not have any inline boxes on empty lines. They make the line taller. We should reconsider this.
                     setInlineBoxGeometry(layoutBox, formattingContext().geometryForBox(layoutBox), { { }, { } }, true);
                     continue;

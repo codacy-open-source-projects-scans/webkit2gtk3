@@ -35,7 +35,6 @@ animation/ElementAnimationRareData.cpp
 animation/KeyframeEffect.cpp
 animation/ScrollTimeline.cpp
 animation/StyleOriginatedAnimation.cpp
-animation/StyleOriginatedAnimationEvent.cpp
 animation/ViewTimeline.cpp
 animation/WebAnimation.cpp
 bindings/js/DOMPromiseProxy.h
@@ -324,7 +323,6 @@ page/ElementTargetingController.cpp
 page/EventHandler.cpp
 page/FocusController.cpp
 page/FrameSnapshotting.cpp
-page/ImageOverlayController.cpp
 page/IntelligenceTextEffectsSupport.cpp
 page/InteractionRegion.cpp
 page/IntersectionObserver.cpp
@@ -473,7 +471,6 @@ rendering/RenderMultiColumnFlow.cpp
 rendering/RenderMultiColumnSet.cpp
 rendering/RenderObject.cpp
 rendering/RenderObjectNode.h
-rendering/RenderProgress.cpp
 rendering/RenderQuote.cpp
 rendering/RenderReplaced.cpp
 rendering/RenderReplica.cpp

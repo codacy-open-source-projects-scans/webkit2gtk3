@@ -69,17 +69,14 @@ accessibility/AccessibilityTableHeaderContainer.cpp
 [ Mac ] accessibility/isolatedtree/AXIsolatedTree.cpp
 [ Mac ] accessibility/mac/AccessibilityObjectMac.mm
 [ iOS ] accessibility/mac/WebAccessibilityObjectWrapperBase.mm
-animation/AnimationEffectTiming.cpp
 animation/BlendingKeyframes.cpp
 animation/DocumentTimeline.cpp
 animation/KeyframeEffect.cpp
 animation/ScrollTimeline.cpp
 animation/StyleOriginatedAnimation.cpp
-animation/StyleOriginatedAnimationEvent.cpp
 animation/ViewTimeline.cpp
 animation/WebAnimation.cpp
 bindings/js/CachedModuleScriptLoader.cpp
-bindings/js/CommonVM.cpp
 bindings/js/DOMPromiseProxy.h
 bindings/js/DOMWrapperWorld.cpp
 bindings/js/JSAudioBufferCustom.cpp
@@ -300,7 +297,6 @@ dom/TreeScope.cpp
 dom/TreeScopeOrderedMap.cpp
 dom/TypedElementDescendantIteratorInlines.h
 dom/ViewTransition.cpp
-dom/WindowOrWorkerGlobalScopeTrustedTypes.cpp
 editing/AlternativeTextController.cpp
 editing/ApplyBlockElementCommand.cpp
 editing/ApplyStyleCommand.cpp
@@ -395,7 +391,6 @@ inspector/InspectorAuditAccessibilityObject.cpp
 inspector/InspectorCanvas.cpp
 inspector/InspectorCanvas.h
 inspector/InspectorCanvasCallTracer.cpp
-inspector/InspectorFrontendAPIDispatcher.cpp
 inspector/InspectorFrontendHost.cpp
 inspector/InspectorInstrumentation.cpp
 inspector/InspectorInstrumentation.h
@@ -421,11 +416,9 @@ inspector/agents/InspectorNetworkAgent.cpp
 inspector/agents/InspectorPageAgent.cpp
 inspector/agents/InspectorTimelineAgent.cpp
 inspector/agents/InspectorWorkerAgent.cpp
-inspector/agents/page/PageAuditAgent.cpp
 inspector/agents/page/PageCanvasAgent.cpp
 inspector/agents/page/PageConsoleAgent.cpp
 inspector/agents/page/PageDOMDebuggerAgent.cpp
-inspector/agents/page/PageDebuggerAgent.cpp
 inspector/agents/page/PageNetworkAgent.cpp
 inspector/agents/page/PageRuntimeAgent.cpp
 inspector/agents/worker/ServiceWorkerAgent.cpp
@@ -452,7 +445,6 @@ loader/cache/CachedSVGFont.cpp
 mathml/MathMLElement.cpp
 mathml/MathMLSelectElement.cpp
 page/AutoscrollController.cpp
-page/Chrome.cpp
 [ Mac ] page/ContextMenuController.cpp
 [ iOS ] page/DOMTimer.cpp
 page/DebugPageOverlays.h
@@ -479,7 +471,6 @@ page/PageSerializer.cpp
 page/PartitionedSecurityOrigin.h
 page/Performance.cpp
 page/PerformanceMark.cpp
-page/PerformanceMonitor.cpp
 page/PerformanceUserTiming.cpp
 page/PointerCaptureController.cpp
 page/PointerLockController.cpp
@@ -491,7 +482,6 @@ page/RenderingUpdateScheduler.cpp
 page/ResizeObservation.cpp
 page/ResizeObserver.cpp
 page/ResourceUsageOverlay.cpp
-page/Screen.cpp
 page/ScrollBehavior.cpp
 page/SettingsBase.cpp
 page/SpatialNavigation.cpp
@@ -528,6 +518,7 @@ platform/ScrollView.cpp
 platform/ScrollableArea.cpp
 platform/Widget.cpp
 platform/animation/AcceleratedEffectValues.cpp
+[ iOS ] platform/audio/ios/AudioSessionIOS.mm
 [ iOS ] platform/audio/ios/MediaSessionManagerIOS.mm
 [ Mac ] platform/cocoa/DragImageCocoa.mm
 platform/cocoa/PlaybackSessionModelMediaElement.mm
@@ -588,7 +579,6 @@ platform/graphics/filters/software/FETurbulenceSoftwareApplier.cpp
 platform/graphics/opentype/OpenTypeMathData.cpp
 platform/graphics/transforms/TransformOperations.cpp
 platform/graphics/transforms/TransformOperationsSharedPrimitivesPrefix.h
-[ iOS ] platform/audio/ios/AudioSessionIOS.mm
 [ iOS ] platform/ios/DeviceMotionClientIOS.mm
 [ iOS ] platform/ios/DeviceOrientationClientIOS.mm
 [ iOS ] platform/ios/LegacyTileGrid.mm
@@ -655,7 +645,6 @@ rendering/RenderMenuList.cpp
 rendering/RenderMultiColumnSet.cpp
 rendering/RenderObject.cpp
 rendering/RenderObjectNode.h
-rendering/RenderProgress.cpp
 rendering/RenderQuote.cpp
 rendering/RenderReplaced.cpp
 rendering/RenderReplica.cpp
@@ -670,12 +659,12 @@ rendering/RenderTextControlSingleLine.cpp
 rendering/RenderTextControlSingleLine.h
 rendering/RenderTextFragment.cpp
 rendering/RenderTheme.cpp
-[ iOS ] rendering/cocoa/RenderThemeCocoa.mm
 rendering/RenderTreeAsText.cpp
 rendering/RenderView.cpp
 rendering/RenderViewTransitionCapture.cpp
 rendering/RenderWidget.cpp
 rendering/TextBoxPainter.cpp
+[ iOS ] rendering/cocoa/RenderThemeCocoa.mm
 [ iOS ] rendering/ios/RenderThemeIOS.mm
 rendering/mathml/MathOperator.cpp
 rendering/mathml/RenderMathMLFraction.cpp

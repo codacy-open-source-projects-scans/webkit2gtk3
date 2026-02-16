@@ -210,7 +210,10 @@ void RenderBoxModelObject::willBeDestroyed()
 
 bool RenderBoxModelObject::hasVisibleBoxDecorationStyle() const
 {
-    return hasBackground() || style().hasVisibleBorderDecoration() || style().hasUsedAppearance() || style().hasBoxShadow();
+    return hasBackground()
+        || style().border().hasVisibleBorderDecoration()
+        || style().hasUsedAppearance()
+        || !style().boxShadow().isNone();
 }
 
 void RenderBoxModelObject::updateFromStyle()
@@ -221,7 +224,7 @@ void RenderBoxModelObject::updateFromStyle()
     // we only check for bits that could possibly be set to true.
     const auto& styleToUse = style();
     setHasVisibleBoxDecorations(hasVisibleBoxDecorationStyle());
-    setInline(Style::isDisplayInlineType(styleToUse.display()));
+    setInline(styleToUse.display().isInlineType());
     setPositionState(styleToUse.position());
     setHorizontalWritingMode(styleToUse.writingMode().isHorizontal());
     setPaintContainmentApplies(shouldApplyPaintContainment());
@@ -857,7 +860,7 @@ bool RenderBoxModelObject::borderObscuresBackgroundEdge(const FloatSize& context
 
 bool RenderBoxModelObject::borderObscuresBackground() const
 {
-    if (!style().hasBorder())
+    if (!style().border().hasBorder())
         return false;
 
     // Bail if we have any border-image for now. We could look at the image alpha to improve this.

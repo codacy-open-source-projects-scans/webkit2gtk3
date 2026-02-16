@@ -4155,10 +4155,6 @@
 		A180AD5B219F81B000DC039A /* WebCoreAdditions.mm in Sources */ = {isa = PBXBuildFile; fileRef = A17E4F26219BC01600E1C7EE /* WebCoreAdditions.mm */; };
 		A185B42A1E8211A100DC9118 /* LegacyPreviewLoader.h in Headers */ = {isa = PBXBuildFile; fileRef = A185B4281E8211A100DC9118 /* LegacyPreviewLoader.h */; };
 		A18890AF1AA13F250026C301 /* ParentalControlsContentFilter.h in Headers */ = {isa = PBXBuildFile; fileRef = A18890AD1AA13F250026C301 /* ParentalControlsContentFilter.h */; settings = {ATTRIBUTES = (Private, ); }; };
-		A19310CD2D100944003C8410 /* VideoPresentationInterfaceAVKit.mm in Sources */ = {isa = PBXBuildFile; fileRef = A19310CC2D100944003C8410 /* VideoPresentationInterfaceAVKit.mm */; };
-		A19310CE2D100944003C8410 /* VideoPresentationInterfaceAVKit.h in Headers */ = {isa = PBXBuildFile; fileRef = A19310CB2D100944003C8410 /* VideoPresentationInterfaceAVKit.h */; settings = {ATTRIBUTES = (Private, ); }; };
-		A19310D12D100972003C8410 /* PlaybackSessionInterfaceAVKit.mm in Sources */ = {isa = PBXBuildFile; fileRef = A19310D02D100972003C8410 /* PlaybackSessionInterfaceAVKit.mm */; };
-		A19310D22D100972003C8410 /* PlaybackSessionInterfaceAVKit.h in Headers */ = {isa = PBXBuildFile; fileRef = A19310CF2D100972003C8410 /* PlaybackSessionInterfaceAVKit.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		A19311042D113B7C003C8410 /* PlatformTimeRangesCocoa.mm in Sources */ = {isa = PBXBuildFile; fileRef = A19311012D1138B7003C8410 /* PlatformTimeRangesCocoa.mm */; };
 		A1956F1C2331A6770057E9D2 /* JSApplePayCancelEvent.h in Headers */ = {isa = PBXBuildFile; fileRef = A1956F1B2331A6460057E9D2 /* JSApplePayCancelEvent.h */; };
 		A1956F202331A8C70057E9D2 /* ApplePaySessionError.h in Headers */ = {isa = PBXBuildFile; fileRef = A1956F1D2331A8C70057E9D2 /* ApplePaySessionError.h */; };
@@ -16731,10 +16727,6 @@
 		A1885D942C0FEF100086246A /* tvos-media-controls.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = "tvos-media-controls.css"; sourceTree = "<group>"; };
 		A18890AC1AA13F250026C301 /* ParentalControlsContentFilter.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = ParentalControlsContentFilter.mm; sourceTree = "<group>"; };
 		A18890AD1AA13F250026C301 /* ParentalControlsContentFilter.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ParentalControlsContentFilter.h; sourceTree = "<group>"; };
-		A19310CB2D100944003C8410 /* VideoPresentationInterfaceAVKit.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = VideoPresentationInterfaceAVKit.h; sourceTree = "<group>"; };
-		A19310CC2D100944003C8410 /* VideoPresentationInterfaceAVKit.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = VideoPresentationInterfaceAVKit.mm; sourceTree = "<group>"; };
-		A19310CF2D100972003C8410 /* PlaybackSessionInterfaceAVKit.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PlaybackSessionInterfaceAVKit.h; sourceTree = "<group>"; };
-		A19310D02D100972003C8410 /* PlaybackSessionInterfaceAVKit.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = PlaybackSessionInterfaceAVKit.mm; sourceTree = "<group>"; };
 		A19311012D1138B7003C8410 /* PlatformTimeRangesCocoa.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = PlatformTimeRangesCocoa.mm; sourceTree = "<group>"; };
 		A1956F182331A4680057E9D2 /* ApplePayCancelEvent.idl */ = {isa = PBXFileReference; lastKnownFileType = text; path = ApplePayCancelEvent.idl; sourceTree = "<group>"; };
 		A1956F1A2331A6460057E9D2 /* JSApplePayCancelEvent.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = JSApplePayCancelEvent.cpp; sourceTree = "<group>"; };
@@ -33477,8 +33469,6 @@
 				26601EBE14B3B9AD0012C0FE /* PlatformEventFactoryIOS.mm */,
 				C5278B0B17F212EA003A2998 /* PlatformPasteboardIOS.mm */,
 				E45390320EAFD637003695C8 /* PlatformScreenIOS.mm */,
-				A19310CF2D100972003C8410 /* PlaybackSessionInterfaceAVKit.h */,
-				A19310D02D100972003C8410 /* PlaybackSessionInterfaceAVKit.mm */,
 				1F95C34C2B644AF6006F7B93 /* PlaybackSessionInterfaceAVKitLegacy.h */,
 				1F95C34E2B644B1E006F7B93 /* PlaybackSessionInterfaceAVKitLegacy.mm */,
 				CDA29A2E1CBF73FC00901CCF /* PlaybackSessionInterfaceIOS.h */,
@@ -33505,8 +33495,6 @@
 				F4C80CC52ABA43EB00DEB820 /* UIViewControllerUtilities.mm */,
 				A3AF9D8320325691006CAD06 /* UserAgentIOS.mm */,
 				837B7D1F1DC3F54C00D051FC /* ValidationBubbleIOS.mm */,
-				A19310CB2D100944003C8410 /* VideoPresentationInterfaceAVKit.h */,
-				A19310CC2D100944003C8410 /* VideoPresentationInterfaceAVKit.mm */,
 				1F7DDE712B6C66B9001816A1 /* VideoPresentationInterfaceAVKitLegacy.h */,
 				1F7DDE732B6C66E4001816A1 /* VideoPresentationInterfaceAVKitLegacy.mm */,
 				3FBC4AF2189881560046EE38 /* VideoPresentationInterfaceIOS.h */,
@@ -46508,7 +46496,6 @@
 				E1EE8B722412B2A800E794D6 /* PlatformXR.h in Headers */,
 				3A3A05812B04973800017309 /* PlatformXRPose.h in Headers */,
 				712BE4801FE864A7002031CC /* PlaybackDirection.h in Headers */,
-				A19310D22D100972003C8410 /* PlaybackSessionInterfaceAVKit.h in Headers */,
 				1F95C34D2B644B08006F7B93 /* PlaybackSessionInterfaceAVKitLegacy.h in Headers */,
 				CDA29A321CC01A9500901CCF /* PlaybackSessionInterfaceIOS.h in Headers */,
 				CDA29A171CBDA56C00901CCF /* PlaybackSessionInterfaceMac.h in Headers */,
@@ -48290,7 +48277,6 @@
 				4158707E28EC79A900C163C5 /* VideoPixelFormat.h in Headers */,
 				CDE83DB2183C44060031EAA3 /* VideoPlaybackQuality.h in Headers */,
 				075033A8252BD36800F70CE3 /* VideoPlaybackQualityMetrics.h in Headers */,
-				A19310CE2D100944003C8410 /* VideoPresentationInterfaceAVKit.h in Headers */,
 				1F7DDE722B6C66C6001816A1 /* VideoPresentationInterfaceAVKitLegacy.h in Headers */,
 				3FBC4AF4189881560046EE38 /* VideoPresentationInterfaceIOS.h in Headers */,
 				52B0D4C21C57FF910077CE53 /* VideoPresentationInterfaceMac.h in Headers */,
@@ -49488,7 +49474,6 @@
 				CEA284662141E84900E407E8 /* PlatformEventFactoryIOS.mm in Sources */,
 				AA12DF491743DF83004DAFDF /* PlatformSpeechSynthesizerCocoa.mm in Sources */,
 				A19311042D113B7C003C8410 /* PlatformTimeRangesCocoa.mm in Sources */,
-				A19310D12D100972003C8410 /* PlaybackSessionInterfaceAVKit.mm in Sources */,
 				1F95C34F2B644B28006F7B93 /* PlaybackSessionInterfaceAVKitLegacy.mm in Sources */,
 				CDA29A301CBF74D400901CCF /* PlaybackSessionInterfaceIOS.mm in Sources */,
 				CDA29A161CBDA56C00901CCF /* PlaybackSessionInterfaceMac.mm in Sources */,
@@ -50117,7 +50102,6 @@
 				7C73FB07191EF417007DE061 /* UserMessageHandlersNamespace.cpp in Sources */,
 				E300511629DB92D300E1C3A4 /* VideoFullscreenCaptions.mm in Sources */,
 				41FFD2C42756570F00501BBF /* VideoLayerManagerObjC.mm in Sources */,
-				A19310CD2D100944003C8410 /* VideoPresentationInterfaceAVKit.mm in Sources */,
 				1F7DDE742B6C66EF001816A1 /* VideoPresentationInterfaceAVKitLegacy.mm in Sources */,
 				3FBC4AF3189881560046EE38 /* VideoPresentationInterfaceIOS.mm in Sources */,
 				CDAD8DF12BEC7EDF00107D24 /* VideoTargetFactory.mm in Sources */,

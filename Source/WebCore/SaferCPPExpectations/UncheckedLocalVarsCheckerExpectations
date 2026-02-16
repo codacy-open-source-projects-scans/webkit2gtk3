@@ -4,7 +4,6 @@ accessibility/AXObjectCache.cpp
 [ iOS ] accessibility/ios/AccessibilityObjectIOS.mm
 [ iOS ] accessibility/ios/WebAccessibilityObjectWrapperIOS.mm
 dom/Position.cpp
-dom/TreeScope.cpp
 editing/Editing.cpp
 [ iOS ] editing/cocoa/EditorCocoa.mm
 [ iOS ] editing/ios/DictationCommandIOS.cpp
@@ -25,6 +24,7 @@ layout/formattingContexts/table/TableFormattingContext.cpp
 layout/formattingContexts/table/TableLayout.cpp
 layout/integration/LayoutIntegrationBoxGeometryUpdater.cpp
 layout/integration/LayoutIntegrationBoxTreeUpdater.cpp
+layout/layouttree/LayoutBox.cpp
 [ iOS ] page/Chrome.cpp
 [ iOS ] page/DOMTimer.cpp
 page/ElementTargetingController.cpp

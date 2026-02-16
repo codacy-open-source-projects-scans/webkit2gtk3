@@ -2133,6 +2133,12 @@ void WebPage::willCommitMainFrameData(MainFrameData& data, const TransactionID& 
         m_pendingEditorStateUpdateStatus = PendingEditorStateUpdateStatus::NotScheduled;
         m_needsEditorStateVisualDataUpdate = false;
     }
+
+#if ENABLE(SCROLL_STRETCH_NOTIFICATIONS)
+    auto scrollOrigin = mainFrameView->scrollOrigin();
+    auto scrollPosition = mainFrameView->scrollPosition();
+    data.topScrollStretch = static_cast<uint64_t>(std::max(0, -scrollOrigin.y() - scrollPosition.y()));
+#endif
 }
 
 void WebPage::didFlushLayerTreeAtTime(MonotonicTime timestamp, bool flushSucceeded)
@@ -2519,17 +2525,9 @@ std::optional<SimpleRange> WebPage::rangeForGranularityAtPoint(LocalFrame& frame
         protect(frame.selection())->selectAll();
         return std::nullopt;
     case TextGranularity::LineGranularity:
-        ASSERT_NOT_REACHED();
-        return std::nullopt;
     case TextGranularity::LineBoundary:
-        ASSERT_NOT_REACHED();
-        return std::nullopt;
     case TextGranularity::SentenceBoundary:
-        ASSERT_NOT_REACHED();
-        return std::nullopt;
     case TextGranularity::ParagraphBoundary:
-        ASSERT_NOT_REACHED();
-        return std::nullopt;
     case TextGranularity::DocumentBoundary:
         ASSERT_NOT_REACHED();
         return std::nullopt;
@@ -2538,7 +2536,7 @@ std::optional<SimpleRange> WebPage::rangeForGranularityAtPoint(LocalFrame& frame
     return std::nullopt;
 }
 
-void WebPage::setSelectionRange(const WebCore::IntPoint& point, WebCore::TextGranularity granularity, bool isInteractingWithFocusedElement)
+void WebPage::setSelectionRange(WebCore::IntPoint point, WebCore::TextGranularity granularity, bool isInteractingWithFocusedElement)
 {
     updateFocusBeforeSelectingTextAtLocation(point);
 
@@ -2561,7 +2559,7 @@ void WebPage::setSelectionRange(const WebCore::IntPoint& point, WebCore::TextGra
     m_initialSelection = range;
 }
 
-void WebPage::updateSelectionWithExtentPointAndBoundary(const WebCore::IntPoint& point, WebCore::TextGranularity granularity, bool isInteractingWithFocusedElement, TextInteractionSource source, CompletionHandler<void(bool)>&& callback)
+void WebPage::updateSelectionWithExtentPointAndBoundary(WebCore::IntPoint point, WebCore::TextGranularity granularity, bool isInteractingWithFocusedElement, TextInteractionSource source, CompletionHandler<void(bool)>&& callback)
 {
     RefPtr frame = m_page->focusController().focusedOrMainFrame();
     if (!frame)
@@ -2608,7 +2606,7 @@ void WebPage::updateSelectionWithExtentPointAndBoundary(const WebCore::IntPoint&
     callback(selectionStart == initialSelectionStartPosition);
 }
 
-void WebPage::updateSelectionWithExtentPoint(const WebCore::IntPoint& point, bool isInteractingWithFocusedElement, RespectSelectionAnchor respectSelectionAnchor, CompletionHandler<void(bool)>&& callback)
+void WebPage::updateSelectionWithExtentPoint(WebCore::IntPoint point, bool isInteractingWithFocusedElement, RespectSelectionAnchor respectSelectionAnchor, CompletionHandler<void(bool)>&& callback)
 {
     RefPtr frame = m_page->focusController().focusedOrMainFrame();
     if (!frame)
@@ -2664,7 +2662,7 @@ void WebPage::updateSelectionWithExtentPoint(const WebCore::IntPoint& point, boo
 #endif
 }
 
-void WebPage::selectTextWithGranularityAtPoint(const WebCore::IntPoint& point, WebCore::TextGranularity granularity, bool isInteractingWithFocusedElement, CompletionHandler<void()>&& completionHandler)
+void WebPage::selectTextWithGranularityAtPoint(WebCore::IntPoint point, WebCore::TextGranularity granularity, bool isInteractingWithFocusedElement, CompletionHandler<void()>&& completionHandler)
 {
 #if PLATFORM(IOS_FAMILY)
     if (!m_potentialTapNode) {
@@ -2674,7 +2672,7 @@ void WebPage::selectTextWithGranularityAtPoint(const WebCore::IntPoint& point, W
     }
 
     ASSERT(!m_selectionChangedHandler);
-    if (auto selectionChangedHandler = std::exchange(m_selectionChangedHandler, {}))
+    if (auto selectionChangedHandler = std::exchange(m_selectionChangedHandler, { }))
         selectionChangedHandler();
 
     m_selectionChangedHandler = [point, granularity, isInteractingWithFocusedElement, completionHandler = WTF::move(completionHandler), weakThis = WeakPtr { *this }]() mutable {

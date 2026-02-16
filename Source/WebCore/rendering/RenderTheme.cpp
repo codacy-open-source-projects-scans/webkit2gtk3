@@ -537,13 +537,13 @@ static void updateMeterPartForRenderer(MeterPart& meterPart, const RenderMeter& 
     MeterPart::GaugeRegion gaugeRegion;
 
     switch (element->gaugeRegion()) {
-    case HTMLMeterElement::GaugeRegionOptimum:
+    case HTMLMeterElement::GaugeRegion::Optimum:
         gaugeRegion = MeterPart::GaugeRegion::Optimum;
         break;
-    case HTMLMeterElement::GaugeRegionSuboptimal:
+    case HTMLMeterElement::GaugeRegion::Suboptimal:
         gaugeRegion = MeterPart::GaugeRegion::Suboptimal;
         break;
-    case HTMLMeterElement::GaugeRegionEvenLessGood:
+    case HTMLMeterElement::GaugeRegion::EvenLessGood:
         gaugeRegion = MeterPart::GaugeRegion::EvenLessGood;
         break;
     }
@@ -1722,7 +1722,7 @@ void RenderTheme::adjustSliderThumbStyle(RenderStyle& style, const Element* elem
 void RenderTheme::adjustSwitchStyleDisplay(RenderStyle& style) const
 {
     // RenderTheme::adjustStyle() normalizes a bunch of display types to InlineBlock and Block.
-    switch (style.display()) {
+    switch (style.display().value) {
     case Style::DisplayType::InlineFlowRoot:
         style.setDisplayMaintainingOriginalDisplay(Style::DisplayType::InlineGrid);
         break;

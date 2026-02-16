@@ -106,7 +106,7 @@ std::unique_ptr<RenderStyle> RenderStyle::clonePtr(const RenderStyle& style)
     return makeUnique<RenderStyle>(style, Clone);
 }
 
-RenderStyle RenderStyle::createAnonymousStyleWithDisplay(const RenderStyle& parentStyle, Style::DisplayType display)
+RenderStyle RenderStyle::createAnonymousStyleWithDisplay(const RenderStyle& parentStyle, Style::Display display)
 {
     auto newStyle = create();
     newStyle.inheritFrom(parentStyle);
@@ -284,7 +284,7 @@ bool RenderStyle::isIdempotentTextAutosizingCandidate(AutosizeStatus status) con
         return false;
     }
 
-    if (hasBackgroundImage() && backgroundLayers().usedFirst().repeat() == FillRepeat::NoRepeat)
+    if (auto& backgroundLayers = this->backgroundLayers(); Style::hasImageInAnyLayer(backgroundLayers) && backgroundLayers.usedFirst().repeat() == FillRepeat::NoRepeat)
         return false;
 
     return true;

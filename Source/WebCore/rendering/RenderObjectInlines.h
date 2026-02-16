@@ -38,13 +38,13 @@ namespace WebCore {
 
 inline bool RenderObject::hasTransformOrPerspective() const
 {
-    return hasTransformRelatedProperty() && (isTransformed() || style().hasPerspective());
+    return hasTransformRelatedProperty() && (isTransformed() || !style().perspective().isNone());
 }
 
 inline bool RenderObject::isAtomicInlineLevelBox() const
 {
     auto display = style().display();
-    return Style::isDisplayInlineType(display)
+    return display.isInlineType()
         && !(display == Style::DisplayType::InlineFlow && !isBlockLevelReplacedOrAtomicInline());
 }
 

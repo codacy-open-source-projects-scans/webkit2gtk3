@@ -25,18 +25,20 @@
 
 #pragma once
 
-#if HAVE(AVKIT_CONTENT_SOURCE)
+#if HAVE(AVEXPERIENCECONTROLLER)
 
 #include <WebCore/VideoPresentationInterfaceIOS.h>
 #include <wtf/TZoneMalloc.h>
 
-namespace WebCore {
+OBJC_CLASS WKSExperienceController;
 
-class VideoPresentationInterfaceAVKit final : public VideoPresentationInterfaceIOS {
+namespace WebKit {
+
+class VideoPresentationInterfaceAVKit final : public WebCore::VideoPresentationInterfaceIOS {
     WTF_MAKE_TZONE_ALLOCATED(VideoPresentationInterfaceAVKit);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(VideoPresentationInterfaceAVKit);
 public:
-    WEBCORE_EXPORT static Ref<VideoPresentationInterfaceAVKit> create(PlaybackSessionInterfaceIOS&);
+    static Ref<VideoPresentationInterfaceAVKit> create(WebCore::PlaybackSessionInterfaceIOS&);
     ~VideoPresentationInterfaceAVKit();
 
 #if !RELEASE_LOG_DISABLED
@@ -44,37 +46,42 @@ public:
 #endif
 
 private:
-    VideoPresentationInterfaceAVKit(PlaybackSessionInterfaceIOS&);
+    VideoPresentationInterfaceAVKit(WebCore::PlaybackSessionInterfaceIOS&);
 
     // VideoPresentationInterfaceIOS overrides
     bool pictureInPictureWasStartedWhenEnteringBackground() const final { return false; }
     bool mayAutomaticallyShowVideoPictureInPicture() const final { return false; }
     bool isPlayingVideoInEnhancedFullscreen() const final { return false; }
-    void setupFullscreen(const FloatRect&, const FloatSize&, UIView*, HTMLMediaElementEnums::VideoFullscreenMode, bool, bool, bool) final { }
+    void setupFullscreen(const WebCore::FloatRect&, const WebCore::FloatSize&, UIView*, WebCore::HTMLMediaElementEnums::VideoFullscreenMode, bool, bool, bool) final;
     void hasVideoChanged(bool) final { }
-    void finalizeSetup() final { }
+    void finalizeSetup() final;
     void updateRouteSharingPolicy() final { }
-    void setupPlayerViewController() final { }
-    void invalidatePlayerViewController() final { }
+    void setupPlayerViewController() final;
+    void invalidatePlayerViewController() final;
     UIViewController *playerViewController() const final { return nullptr; }
     void tryToStartPictureInPicture() final { }
     void stopPictureInPicture() final { }
-    void presentFullscreen(bool, Function<void(BOOL, NSError *)>&&) final { }
-    void dismissFullscreen(bool, Function<void(BOOL, NSError *)>&&) final { }
+    void presentFullscreen(bool, Function<void(BOOL, NSError *)>&&) final;
+    void dismissFullscreen(bool, Function<void(BOOL, NSError *)>&&) final;
     void setShowsPlaybackControls(bool) final { }
-    void setContentDimensions(const FloatSize&) final { }
+    void setContentDimensions(const WebCore::FloatSize&) final;
+
     void setAllowsPictureInPicturePlayback(bool) final { }
     bool isExternalPlaybackActive() const final { return false; }
     bool willRenderToLayer() const final { return false; }
     AVPlayerViewController *avPlayerViewController() const final { return nullptr; }
     CALayer *captionsLayer() final { return nullptr; }
-    void setupCaptionsLayer(CALayer *, const FloatSize&) final { }
+    void setupCaptionsLayer(CALayer *, const WebCore::FloatSize&) final { }
 #if ENABLE(LINEAR_MEDIA_PLAYER)
     WKSPlayableViewControllerHost *playableViewController() final { return nullptr; }
 #endif
     void setSpatialImmersive(bool) final { }
+    void transferVideoViewToFullscreen() final { }
+    void returnVideoView() final { }
+
+    RetainPtr<WKSExperienceController> m_experienceController;
 };
 
-} // namespace WebCore
+} // namespace WebKit
 
-#endif // HAVE(AVKIT_CONTENT_SOURCE)
+#endif // HAVE(AVEXPERIENCECONTROLLER)

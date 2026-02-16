@@ -293,10 +293,10 @@ RenderBlock::~RenderBlock()
 void RenderBlock::styleWillChange(Style::Difference diff, const RenderStyle& newStyle)
 {
     const RenderStyle* oldStyle = hasInitializedStyle() ? &style() : nullptr;
-    setBlockLevelReplacedOrAtomicInline(Style::isDisplayInlineType(newStyle.display()));
+    setBlockLevelReplacedOrAtomicInline(newStyle.display().isInlineType());
     if (oldStyle) {
         removeOutOfFlowBoxesIfNeededOnStyleChange(*this, *oldStyle, newStyle);
-        if (isLegend() && !oldStyle->isFloating() && newStyle.isFloating())
+        if (isLegend() && oldStyle->floating() == Float::None && newStyle.floating() != Float::None)
             setIsExcludedFromNormalLayout(false);
     }
     RenderBox::styleWillChange(diff, newStyle);
@@ -1302,20 +1302,20 @@ bool RenderBlock::establishesIndependentFormattingContextIgnoringDisplayType(con
     }
 
     auto isBlockBoxWithPotentiallyScrollableOverflow = [&] {
-        return Style::isDisplayBlockType(style.display())
-            && Style::doesDisplayGenerateBlockContainer(style.display())
+        return style.display().isBlockType()
+            && style.display().doesGenerateBlockContainer()
             && hasNonVisibleOverflow()
             && style.overflowX() != Overflow::Clip
             && style.overflowX() != Overflow::Visible;
     };
 
-    return style.isFloating()
+    return style.floating() != Float::None
         || style.hasOutOfFlowPosition()
         || isBlockBoxWithPotentiallyScrollableOverflow()
         || style.usedContain().contains(Style::ContainValue::Layout)
         || style.containerType() != ContainerType::Normal
         || WebCore::shouldApplyPaintContainment(style, *protect(element()))
-        || (Style::isDisplayBlockType(style.display()) && !style.blockStepSize().isNone());
+        || (style.display().isBlockType() && !style.blockStepSize().isNone());
 }
 
 bool RenderBlock::establishesIndependentFormattingContext() const
@@ -1348,7 +1348,7 @@ bool RenderBlock::createsNewFormattingContext() const
     if (isBlockContainer() && !style.alignContent().isNormal())
         return true;
     return isNonReplacedAtomicInlineLevelBox()
-        || Style::isDisplayFlexibleBoxIncludingDeprecatedOrGridFormattingContextBox(style.display())
+        || style.display().isFlexibleBoxIncludingDeprecatedOrGridFormattingContextBox()
         || isFlexItemIncludingDeprecated()
         || isRenderTable()
         || isRenderTableCell()

@@ -25,38 +25,37 @@
 
 #pragma once
 
-#if HAVE(AVKIT_CONTENT_SOURCE)
+#if HAVE(AVEXPERIENCECONTROLLER)
 
 #include <WebCore/PlaybackSessionInterfaceIOS.h>
 #include <wtf/TZoneMalloc.h>
 
-OBJC_CLASS WebAVContentSource;
+namespace WebKit {
 
-namespace WebCore {
-
-class PlaybackSessionInterfaceAVKit final : public PlaybackSessionInterfaceIOS {
+class PlaybackSessionInterfaceAVKit final : public WebCore::PlaybackSessionInterfaceIOS {
     WTF_MAKE_TZONE_ALLOCATED(PlaybackSessionInterfaceAVKit);
     WTF_OVERRIDE_DELETE_FOR_CHECKED_PTR(PlaybackSessionInterfaceAVKit);
 public:
-    WEBCORE_EXPORT static Ref<PlaybackSessionInterfaceAVKit> create(PlaybackSessionModel&);
+    static Ref<PlaybackSessionInterfaceAVKit> create(WebCore::PlaybackSessionModel&);
     ~PlaybackSessionInterfaceAVKit();
 
-    void nowPlayingMetadataChanged(const NowPlayingMetadata&);
+    void nowPlayingMetadataChanged(const WebCore::NowPlayingMetadata&);
 
     // PlaybackSessionInterfaceIOS overrides
     WebAVPlayerController *playerController() const final { return nullptr; }
     WKSLinearMediaPlayer *linearMediaPlayer() const final { return nullptr; }
+    WKAVContentSource *contentSource() const { return m_contentSource.get(); }
     void durationChanged(double) final;
     void currentTimeChanged(double, double) final;
     void bufferedTimeChanged(double) final { }
-    void rateChanged(OptionSet<PlaybackSessionModel::PlaybackState>, double, double) final;
-    void seekableRangesChanged(const PlatformTimeRanges&, double, double) final;
-    void canPlayFastReverseChanged(bool) final;
-    void audioMediaSelectionOptionsChanged(const Vector<MediaSelectionOption>&, uint64_t) final;
-    void legibleMediaSelectionOptionsChanged(const Vector<MediaSelectionOption>&, uint64_t) final;
+    void rateChanged(OptionSet<WebCore::PlaybackSessionModel::PlaybackState>, double, double) final;
+    void seekableRangesChanged(const WebCore::PlatformTimeRanges&, double, double) final;
+    void canPlayFastReverseChanged(bool) final { }
+    void audioMediaSelectionOptionsChanged(const Vector<WebCore::MediaSelectionOption>&, uint64_t) final;
+    void legibleMediaSelectionOptionsChanged(const Vector<WebCore::MediaSelectionOption>&, uint64_t) final;
     void audioMediaSelectionIndexChanged(uint64_t) final;
     void legibleMediaSelectionIndexChanged(uint64_t) final;
-    void externalPlaybackChanged(bool, PlaybackSessionModel::ExternalPlaybackTargetType, const String&) final { }
+    void externalPlaybackChanged(bool, WebCore::PlaybackSessionModel::ExternalPlaybackTargetType, const String&) final { }
     void wirelessVideoPlaybackDisabledChanged(bool) final { }
     void mutedChanged(bool) final;
     void volumeChanged(double) final;
@@ -67,12 +66,12 @@ public:
 #endif
 
 private:
-    PlaybackSessionInterfaceAVKit(PlaybackSessionModel&);
+    explicit PlaybackSessionInterfaceAVKit(WebCore::PlaybackSessionModel&);
 
-    RetainPtr<WebAVContentSource> m_contentSource;
-    const Ref<NowPlayingMetadataObserver> m_nowPlayingMetadataObserver;
+    RetainPtr<WKAVContentSource> m_contentSource;
+    const Ref<WebCore::NowPlayingMetadataObserver> m_nowPlayingMetadataObserver;
 };
 
-} // namespace WebCore
+} // namespace WebKit
 
-#endif // HAVE(AVKIT_CONTENT_SOURCE)
+#endif // HAVE(AVEXPERIENCECONTROLLER)
