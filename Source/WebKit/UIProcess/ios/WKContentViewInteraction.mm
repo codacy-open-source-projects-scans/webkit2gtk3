@@ -99,6 +99,7 @@
 #import "WebEvent.h"
 #import "WebFoundTextRange.h"
 #import "WebIOSEventFactory.h"
+#import "WebMouseEvent.h"
 #import "WebPageMessages.h"
 #import "WebPageProxy.h"
 #import "WebPageProxyMessages.h"
@@ -3896,7 +3897,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
     if (shouldRequestMagnificationInformation)
         RELEASE_LOG(ViewGestures, "Single tap identified. Request details on potential zoom. (%p, pageProxyID=%llu)", self, _page->identifier().toUInt64());
 
-    protect(_page)->potentialTapAtPosition(std::nullopt, position, shouldRequestMagnificationInformation, [self nextTapIdentifier]);
+    protect(_page)->potentialTapAtPosition(std::nullopt, position, shouldRequestMagnificationInformation, [self nextTapIdentifier], WebKit::WebMouseEventInputSource::Hardware);
     _potentialTapInProgress = YES;
     _isTapHighlightIDValid = YES;
     _isExpectingFastSingleTapCommit = !_doubleTapGestureRecognizer.get().enabled;
@@ -8306,6 +8307,10 @@ static RetainPtr<NSObject <WKFormPeripheral>> createInputPeripheralWithView(WebK
 #else
     switch (type) {
     case WebKit::InputType::Select:
+        // Don't create native iOS picker for appearance: base selects
+        if (view.focusedElementInformation.usesBaseAppearancePicker)
+            return nil;
+
         return adoptNS([[WKFormSelectControl alloc] initWithView:view]);
     case WebKit::InputType::Color:
 #if PLATFORM(APPLETV)

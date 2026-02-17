@@ -6857,7 +6857,6 @@ imported/w3c/web-platform-tests/css/css-tables/absolute-tables-007.html [ ImageO
 imported/w3c/web-platform-tests/css/css-tables/absolute-tables-011.tentative.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-tables/absolute-tables-015.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-tables/anonymous-table-ws-001.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-tables/box-shadow-001.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-tables/col-definite-min-size-001.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-tables/fixup-dynamic-anonymous-inline-table-001.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-tables/fixup-dynamic-anonymous-inline-table-002.html [ ImageOnlyFailure ]
@@ -8332,3 +8331,10 @@ webkit.org/b/307614 imported/w3c/web-platform-tests/css/css-highlight-api/painti
 webkit.org/b/307602 imported/w3c/web-platform-tests/svg/text/reftests/rtl-text-path.html [ ImageOnlyFailure ]
 webkit.org/b/307602 imported/w3c/web-platform-tests/svg/text/reftests/textpath-path-attr-precedence-over-href.svg [ ImageOnlyFailure ]
 webkit.org/b/307602 imported/w3c/web-platform-tests/svg/text/reftests/textpath-path-attr.svg [ ImageOnlyFailure ]
+
+# VNE testing is flaky.
+webkit.org/b/211221 http/tests/performance/paint-timing/performance-paint-timing-fcp-after-visually-non-empty-for-num-chars.html [ Pass Failure ]
+
+imported/w3c/web-platform-tests/html/semantics/scripting-1/the-script-element/module/dynamic-import/microtasks/worklet.https.html [ ImageOnlyFailure ]
+
+webkit.org/b/307972 imported/w3c/web-platform-tests/css/css-tables/crashtests/atomic-item-crash.html [ Skip ]

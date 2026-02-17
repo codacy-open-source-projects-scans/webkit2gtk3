@@ -972,6 +972,7 @@
 		2A538A2D26F0104C00965FC8 /* CSSTransformComponent.h in Headers */ = {isa = PBXBuildFile; fileRef = 2A538A0526E3693000965FC8 /* CSSTransformComponent.h */; };
 		2A538A2E26F0104F00965FC8 /* CSSTransformValue.h in Headers */ = {isa = PBXBuildFile; fileRef = 2A538A1526E3693000965FC8 /* CSSTransformValue.h */; };
 		2A538A2F26F0105200965FC8 /* CSSTranslate.h in Headers */ = {isa = PBXBuildFile; fileRef = 2A538A0C26E3693000965FC8 /* CSSTranslate.h */; };
+		2A91BCAA2F3D6B5E00392D76 /* RubberbandingState.h in Headers */ = {isa = PBXBuildFile; fileRef = 2A91BCA92F3D6B3D00392D76 /* RubberbandingState.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		2A9475612ED58A6400D55787 /* HTMLInputElementInlines.h in Headers */ = {isa = PBXBuildFile; fileRef = 2A9475602ED5894600D55787 /* HTMLInputElementInlines.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		2A9D2AC12E34956600E1B1DB /* DoubleSize.h in Headers */ = {isa = PBXBuildFile; fileRef = 2A9D2AC02E34956600E1B1DB /* DoubleSize.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		2A9D2AC22E34956600E1B1DB /* DoublePoint.h in Headers */ = {isa = PBXBuildFile; fileRef = 2A9D2ABE2E34956600E1B1DB /* DoublePoint.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -6925,6 +6926,7 @@
 		F344C75311294D9D00F26EEE /* InspectorFrontendClientLocal.h in Headers */ = {isa = PBXBuildFile; fileRef = F344C75211294D9D00F26EEE /* InspectorFrontendClientLocal.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		F3ABFE0C130E9DA000E7F7D1 /* InstrumentingAgents.h in Headers */ = {isa = PBXBuildFile; fileRef = F3ABFE0B130E9DA000E7F7D1 /* InstrumentingAgents.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		F3D461491161D53200CA0D09 /* JSErrorHandler.h in Headers */ = {isa = PBXBuildFile; fileRef = F3D461471161D53200CA0D09 /* JSErrorHandler.h */; };
+		F3EB1F322F43B92600725B79 /* FrameConsoleAgent.h in Headers */ = {isa = PBXBuildFile; fileRef = F3EB1F2E2F43B92600725B79 /* FrameConsoleAgent.h */; };
 		F4023C4B2D3C4E670008A06D /* UnicodeHelpers.h in Headers */ = {isa = PBXBuildFile; fileRef = F4023C482D3C4E670008A06D /* UnicodeHelpers.h */; };
 		F402822F2D88C9A700F3680B /* CocoaView.h in Headers */ = {isa = PBXBuildFile; fileRef = F402822E2D88C9A700F3680B /* CocoaView.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		F403E7872363B58C00044550 /* EnterKeyHint.h in Headers */ = {isa = PBXBuildFile; fileRef = F403E7852363B58C00044550 /* EnterKeyHint.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -9854,6 +9856,7 @@
 		2A66438E26A006AE00C147A1 /* FormDataEvent.idl */ = {isa = PBXFileReference; lastKnownFileType = text; path = FormDataEvent.idl; sourceTree = "<group>"; };
 		2A66439026A006AF00C147A1 /* FormDataEvent.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FormDataEvent.h; sourceTree = "<group>"; };
 		2A66439126A006AF00C147A1 /* FormDataEvent.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = FormDataEvent.cpp; sourceTree = "<group>"; };
+		2A91BCA92F3D6B3D00392D76 /* RubberbandingState.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RubberbandingState.h; sourceTree = "<group>"; };
 		2A9475602ED5894600D55787 /* HTMLInputElementInlines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HTMLInputElementInlines.h; sourceTree = "<group>"; };
 		2A9D2ABE2E34956600E1B1DB /* DoublePoint.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DoublePoint.h; sourceTree = "<group>"; };
 		2A9D2ABF2E34956600E1B1DB /* DoubleRect.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DoubleRect.h; sourceTree = "<group>"; };
@@ -22482,6 +22485,8 @@
 		F3ABFE0B130E9DA000E7F7D1 /* InstrumentingAgents.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = InstrumentingAgents.h; sourceTree = "<group>"; };
 		F3D461461161D53200CA0D09 /* JSErrorHandler.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = JSErrorHandler.cpp; sourceTree = "<group>"; };
 		F3D461471161D53200CA0D09 /* JSErrorHandler.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = JSErrorHandler.h; sourceTree = "<group>"; };
+		F3EB1F2E2F43B92600725B79 /* FrameConsoleAgent.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FrameConsoleAgent.h; sourceTree = "<group>"; };
+		F3EB1F2F2F43B92600725B79 /* FrameConsoleAgent.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = FrameConsoleAgent.cpp; sourceTree = "<group>"; };
 		F4023C482D3C4E670008A06D /* UnicodeHelpers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = UnicodeHelpers.h; sourceTree = "<group>"; };
 		F4023C492D3C4E670008A06D /* UnicodeHelpers.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = UnicodeHelpers.cpp; sourceTree = "<group>"; };
 		F402822E2D88C9A700F3680B /* CocoaView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CocoaView.h; sourceTree = "<group>"; };
@@ -33524,6 +33529,7 @@
 		A5B81C831FAA44060037D1E6 /* agents */ = {
 			isa = PBXGroup;
 			children = (
+				F3EB1F302F43B92600725B79 /* frame */,
 				A5B81CB91FAA44820037D1E6 /* page */,
 				A5B81CC61FAA44C30037D1E6 /* worker */,
 				913FE5982362799900F9446A /* InspectorAnimationAgent.cpp */,
@@ -38430,6 +38436,7 @@
 				6B4E8612221B713F0022F389 /* RegistrableDomain.h */,
 				CDFC360318CA61C20026E56F /* RemoteCommandListener.cpp */,
 				CDFC360418CA61C20026E56F /* RemoteCommandListener.h */,
+				2A91BCA92F3D6B3D00392D76 /* RubberbandingState.h */,
 				F43160C92A297A150021441D /* RunLoopObserver.cpp */,
 				F43160C72A2974D90021441D /* RunLoopObserver.h */,
 				4644219928F5181900FE48C6 /* ScreenOrientationManager.cpp */,
@@ -40302,6 +40309,15 @@
 				C18CC0A62580F0FA003D75FB /* UniversalAccessZoom.mm */,
 			);
 			path = mac;
+			sourceTree = "<group>";
+		};
+		F3EB1F302F43B92600725B79 /* frame */ = {
+			isa = PBXGroup;
+			children = (
+				F3EB1F2F2F43B92600725B79 /* FrameConsoleAgent.cpp */,
+				F3EB1F2E2F43B92600725B79 /* FrameConsoleAgent.h */,
+			);
+			path = frame;
 			sourceTree = "<group>";
 		};
 		F440E769233D93620063F9AB /* Clipboard */ = {
@@ -44203,6 +44219,7 @@
 				2D9153F028AE0E330073A385 /* FragmentDirectiveRangeFinder.h in Headers */,
 				2DDF3EE42C8D94B30047786D /* FragmentDirectiveUtilities.h in Headers */,
 				46B95196207D633A00A7D2DD /* Frame.h in Headers */,
+				F3EB1F322F43B92600725B79 /* FrameConsoleAgent.h in Headers */,
 				DAED203116F244480070EC0F /* FrameConsoleClient.h in Headers */,
 				974A862314B7ADBB003FDC76 /* FrameDestructionObserver.h in Headers */,
 				46014ACC28333F65004C0B84 /* FrameDestructionObserverInlines.h in Headers */,
@@ -47000,6 +47017,7 @@
 				078E092A17D14D1C00420AA1 /* RTCStatsReport.h in Headers */,
 				5E2C43681BCEE3770001E2BC /* RTCTrackEvent.h in Headers */,
 				078E094717D16E1C00420AA1 /* RTCVoidRequest.h in Headers */,
+				2A91BCAA2F3D6B5E00392D76 /* RubberbandingState.h in Headers */,
 				DDBF8DAF2AB51FC100B3318A /* RubyFormattingContext.h in Headers */,
 				E4863CFE23842E9E00972158 /* RuleData.h in Headers */,
 				A79BADA2161E7F3F00C2E652 /* RuleFeature.h in Headers */,
