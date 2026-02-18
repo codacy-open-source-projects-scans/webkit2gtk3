@@ -1498,9 +1498,10 @@ void WebViewImpl::didRelaunchProcess()
 void WebViewImpl::scrollingCoordinatorWasCreated()
 {
 #if ENABLE(BANNER_VIEW_OVERLAYS)
-    // Sync banner view state that may have been set before the scrolling coordinator existed.
-    if (CheckedPtr scrollingCoordinator = m_page->scrollingCoordinatorProxy())
+    if (CheckedPtr scrollingCoordinator = m_page->scrollingCoordinatorProxy()) {
         scrollingCoordinator->setHasBannerViewOverlay(!!m_bannerView);
+        scrollingCoordinator->setBannerViewMaximumHeight(bannerViewMaximumHeight());
+    }
 #endif
 }
 
@@ -2291,7 +2292,7 @@ bool WebViewImpl::acceptsFirstMouse(NSEvent *event)
         return false;
 
     auto previousEvent = setLastMouseDownEvent(event);
-    WebMouseEvent mouseEvent = WebEventFactory::createWebMouseEvent(event, m_lastPressureEvent.get(), m_view.get().get(), WebMouseEventInputSource::Hardware);
+    WebMouseEvent mouseEvent = WebEventFactory::createWebMouseEvent(event, m_lastPressureEvent.get(), m_view.get().get(), WebMouseEventInputSource::UserDriven);
     bool result = m_page->acceptsFirstMouse(event.eventNumber, mouseEvent);
     setLastMouseDownEvent(previousEvent.get());
     return result;
@@ -2320,7 +2321,7 @@ bool WebViewImpl::shouldDelayWindowOrderingForEvent(NSEvent *event)
     }
 
     auto previousEvent = setLastMouseDownEvent(event);
-    WebMouseEvent mouseEvent = WebEventFactory::createWebMouseEvent(event, m_lastPressureEvent.get(), m_view.get().get(), WebMouseEventInputSource::Hardware);
+    WebMouseEvent mouseEvent = WebEventFactory::createWebMouseEvent(event, m_lastPressureEvent.get(), m_view.get().get(), WebMouseEventInputSource::UserDriven);
     bool result = m_page->shouldDelayWindowOrderingForEvent(mouseEvent);
     setLastMouseDownEvent(previousEvent.get());
     return result;
@@ -2546,7 +2547,7 @@ void WebViewImpl::scheduleMouseDidMoveOverElement(NSEvent *flagsChangedEvent)
     RetainPtr fakeEvent = [NSEvent mouseEventWithType:NSEventTypeMouseMoved location:flagsChangedEvent.window.mouseLocationOutsideOfEventStream
         modifierFlags:flagsChangedEvent.modifierFlags timestamp:flagsChangedEvent.timestamp windowNumber:flagsChangedEvent.windowNumber
         context:nullptr eventNumber:0 clickCount:0 pressure:0];
-    NativeWebMouseEvent webEvent(fakeEvent.get(), m_lastPressureEvent.get(), m_view.get().get(), WebMouseEventInputSource::Hardware);
+    NativeWebMouseEvent webEvent(fakeEvent.get(), m_lastPressureEvent.get(), m_view.get().get(), WebMouseEventInputSource::UserDriven);
     m_page->dispatchMouseDidMoveOverElementAsynchronously(webEvent);
 }
 
@@ -2748,7 +2749,7 @@ void WebViewImpl::pressureChangeWithEvent(NSEvent *event)
     if (event.phase != NSEventPhaseChanged && event.phase != NSEventPhaseBegan && event.phase != NSEventPhaseEnded)
         return;
 
-    NativeWebMouseEvent webEvent(event, m_lastPressureEvent.get(), m_view.get().get(), WebMouseEventInputSource::Hardware);
+    NativeWebMouseEvent webEvent(event, m_lastPressureEvent.get(), m_view.get().get(), WebMouseEventInputSource::UserDriven);
     m_page->handleMouseEvent(webEvent);
 
     m_lastPressureEvent = event;
@@ -6196,7 +6197,7 @@ void WebViewImpl::mouseEntered(NSEvent *event)
         return;
     }
 
-    nativeMouseEventHandler(event, WebMouseEventInputSource::Hardware);
+    nativeMouseEventHandler(event, WebMouseEventInputSource::UserDriven);
 }
 
 void WebViewImpl::mouseExited(NSEvent *event)
@@ -6209,42 +6210,42 @@ void WebViewImpl::mouseExited(NSEvent *event)
         return;
     }
 
-    nativeMouseEventHandler(event, WebMouseEventInputSource::Hardware);
+    nativeMouseEventHandler(event, WebMouseEventInputSource::UserDriven);
 }
 
 void WebViewImpl::otherMouseDown(NSEvent *event)
 {
-    nativeMouseEventHandler(event, WebMouseEventInputSource::Hardware);
+    nativeMouseEventHandler(event, WebMouseEventInputSource::UserDriven);
 }
 
 void WebViewImpl::otherMouseDragged(NSEvent *event)
 {
-    nativeMouseEventHandler(event, WebMouseEventInputSource::Hardware);
+    nativeMouseEventHandler(event, WebMouseEventInputSource::UserDriven);
 }
 
 void WebViewImpl::otherMouseUp(NSEvent *event)
 {
-    nativeMouseEventHandler(event, WebMouseEventInputSource::Hardware);
+    nativeMouseEventHandler(event, WebMouseEventInputSource::UserDriven);
 }
 
 void WebViewImpl::rightMouseDown(NSEvent *event)
 {
-    nativeMouseEventHandler(event, WebMouseEventInputSource::Hardware);
+    nativeMouseEventHandler(event, WebMouseEventInputSource::UserDriven);
 }
 
 void WebViewImpl::rightMouseDragged(NSEvent *event)
 {
-    nativeMouseEventHandler(event, WebMouseEventInputSource::Hardware);
+    nativeMouseEventHandler(event, WebMouseEventInputSource::UserDriven);
 }
 
 void WebViewImpl::rightMouseUp(NSEvent *event)
 {
-    nativeMouseEventHandler(event, WebMouseEventInputSource::Hardware);
+    nativeMouseEventHandler(event, WebMouseEventInputSource::UserDriven);
 }
 
 void WebViewImpl::mouseMovedInternal(NSEvent *event)
 {
-    nativeMouseEventHandlerInternal(event, WebMouseEventInputSource::Hardware);
+    nativeMouseEventHandlerInternal(event, WebMouseEventInputSource::UserDriven);
 }
 
 void WebViewImpl::mouseDownInternal(NSEvent *event, WebMouseEventInputSource inputSource)
@@ -6259,7 +6260,7 @@ void WebViewImpl::mouseUpInternal(NSEvent *event, WebMouseEventInputSource input
 
 void WebViewImpl::mouseDraggedInternal(NSEvent *event)
 {
-    nativeMouseEventHandlerInternal(event, WebMouseEventInputSource::Hardware);
+    nativeMouseEventHandlerInternal(event, WebMouseEventInputSource::UserDriven);
 }
 
 void WebViewImpl::mouseMoved(NSEvent *event)

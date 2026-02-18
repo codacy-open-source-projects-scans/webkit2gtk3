@@ -29,7 +29,7 @@
 #include <WebCore/CSSPrimitiveValue.h>
 #include <WebCore/ScrollTimeline.h>
 #include <WebCore/StyleViewFunction.h>
-#include <WebCore/StyleViewTimelineInsets.h>
+#include <WebCore/StyleViewTimelineInsetItem.h>
 #include <WebCore/Styleable.h>
 #include <WebCore/ViewTimelineOptions.h>
 #include <wtf/Ref.h>
@@ -99,6 +99,7 @@ public:
     std::pair<double, double> offsetIntervalForTimelineRangeName(Style::SingleAnimationRangeName) const;
 
     bool matchesAnonymousViewFunctionForSubject(const Style::ViewFunction&, const Styleable&) const;
+    WebAnimationTime epsilon() const;
 
 private:
     ScrollTimeline::Data computeTimelineData(UseCachedCurrentTime = UseCachedCurrentTime::Yes) const final;

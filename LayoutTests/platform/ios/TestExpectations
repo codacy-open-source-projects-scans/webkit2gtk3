@@ -2403,6 +2403,7 @@ accessibility/html-element-aria-hidden.html [ Pass ]
 accessibility/html5-required-attribute.html [ Pass ]
 accessibility/iframe-tree-update-with-dirty-layout.html [ Pass ]
 accessibility/iframe-with-role.html [ Pass ]
+accessibility/image-data.html [ Pass ]
 accessibility/indeterminate-progressbar-custom-element.html [ Pass ]
 accessibility/input-type-hidden-in-aria-hidden-false.html [ Pass ]
 accessibility/datetime/input-time-label-value.html [ Pass ]
@@ -7970,9 +7971,6 @@ imported/w3c/web-platform-tests/css/CSS2/stacking-context/composite-change-after
 
 webkit.org/b/288518 fast/text/emoji-num-glyphs.html [ Failure ]
 
-# rdar://148254605 (REGRESSION (iOS 18.4): media/sources-fallback-codecs.html is constantly failing.)
-media/sources-fallback-codecs.html [ Failure ]
-
 webkit.org/b/294142 fast/canvas/webgl/gl-teximage.html [ Failure ]
 
 webkit.org/b/294152 http/tests/misc/timer-vs-loading.html [ Timeout ]
@@ -8484,3 +8482,5 @@ webkit.org/b/307582 compositing/overflow/rtl-scrollbar-layer-positioning.html [ 
 webkit.org/b/307882 webgl/lose-context-after-context-lost.html [ Failure ]
 
 webkit.org/b/307889 http/tests/multipart/multipart-async-image.html [ Pass Failure ]
+
+webkit.org/b/308084 [ Release ] imported/w3c/web-platform-tests/css/filter-effects/backdrop-filter-boundary.html [  Pass ImageOnlyFailure ]

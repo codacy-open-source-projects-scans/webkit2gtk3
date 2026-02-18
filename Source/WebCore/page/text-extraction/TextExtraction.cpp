@@ -119,7 +119,7 @@ static String normalizeText(const String& string, unsigned maxDescriptionLength 
     result = makeStringByReplacingAll(result, '"', "'"_s);
     result = makeStringByReplacingAll(result, '\r', ""_s);
     result = makeStringByReplacingAll(result, '\n', " "_s);
-    result = result.trim(isASCIIWhitespace<char16_t>);
+    result = result.simplifyWhiteSpace(isASCIIWhitespace);
     if (result.length() <= maxDescriptionLength)
         return result;
 
@@ -1495,6 +1495,7 @@ static std::optional<SimpleRange> searchForText(Node& node, const String& search
     auto foundRange = findPlainText(searchRange, searchText, {
         FindOption::DoNotRevealSelection,
         FindOption::DoNotSetSelection,
+        FindOption::CaseInsensitive,
     });
 
     if (foundRange.collapsed())
@@ -1522,15 +1523,15 @@ static constexpr auto interactedWithSelectElementDescription = "Successfully upd
 static void dispatchSimulatedClick(LocalFrame& frame, IntPoint location, CompletionHandler<void(bool, String&&)>&& completion)
 {
     frame.eventHandler().handleMouseMoveEvent({
-        location, location, MouseButton::Left, PlatformEvent::Type::MouseMoved, 0, { }, MonotonicTime::now(), ForceAtClick, SyntheticClickType::NoTap, MouseEventInputSource::Hardware
+        location, location, MouseButton::Left, PlatformEvent::Type::MouseMoved, 0, { }, MonotonicTime::now(), ForceAtClick, SyntheticClickType::NoTap, MouseEventInputSource::UserDriven
     });
 
     frame.eventHandler().handleMousePressEvent({
-        location, location, MouseButton::Left, PlatformEvent::Type::MousePressed, 1, { }, MonotonicTime::now(), ForceAtClick, SyntheticClickType::NoTap, MouseEventInputSource::Hardware
+        location, location, MouseButton::Left, PlatformEvent::Type::MousePressed, 1, { }, MonotonicTime::now(), ForceAtClick, SyntheticClickType::NoTap, MouseEventInputSource::UserDriven
     });
 
     frame.eventHandler().handleMouseReleaseEvent({
-        location, location, MouseButton::Left, PlatformEvent::Type::MouseReleased, 1, { }, MonotonicTime::now(), ForceAtClick, SyntheticClickType::NoTap, MouseEventInputSource::Hardware
+        location, location, MouseButton::Left, PlatformEvent::Type::MouseReleased, 1, { }, MonotonicTime::now(), ForceAtClick, SyntheticClickType::NoTap, MouseEventInputSource::UserDriven
     });
 
     completion(true, { });
@@ -1736,6 +1737,24 @@ static void scrollBy(LocalFrame& frame, std::optional<NodeIdentifier>&& identifi
     completion(true, { });
 }
 
+static void scrollToReveal(LocalFrame& frame, std::optional<NodeIdentifier>&& identifier, String&& searchText, CompletionHandler<void(bool, String&&)>&& completion)
+{
+    RefPtr searchScope = resolveNodeWithBodyAsFallback(frame, identifier);
+    if (!searchScope)
+        return completion(false, invalidNodeIdentifierDescription(WTF::move(identifier)));
+
+    auto foundRange = searchForText(*searchScope, searchText);
+    if (!foundRange)
+        return completion(false, searchTextNotFoundDescription(searchText));
+
+    RefPtr elementToReveal = lineageOfType<Element>(foundRange->startContainer()).first();
+    if (!elementToReveal)
+        return completion(false, searchTextNotFoundDescription(searchText));
+
+    elementToReveal->scrollIntoView();
+    completion(true, { });
+}
+
 static bool simulateKeyPress(LocalFrame& frame, const String& key)
 {
     auto keyDown = PlatformKeyboardEvent::syntheticEventFromText(PlatformEvent::Type::KeyDown, key);
@@ -1892,7 +1911,10 @@ void handleInteraction(Interaction&& interaction, LocalFrame& frame, CompletionH
 
         return highlightText(frame, WTF::move(interaction.nodeIdentifier), WTF::move(interaction.text), interaction.scrollToVisible, WTF::move(completion));
     }
-    case Action::ScrollBy:
+    case Action::Scroll:
+        if (!interaction.text.isEmpty())
+            return scrollToReveal(frame, WTF::move(interaction.nodeIdentifier), WTF::move(interaction.text), WTF::move(completion));
+
         if (interaction.scrollDelta.isZero())
             return completion(false, "Scroll delta is zero"_s);
 
@@ -1967,6 +1989,46 @@ static String textDescription(const Element& element, Vector<String>& stringsToV
         description.append(makeString(" with placeholder "_s, wrapWithDoubleQuotes(WTF::move(text))));
         stringsToValidate.append(WTF::move(text));
         needsParentContext = false;
+    }
+
+    static constexpr auto maximumNumberOfClasses = 3;
+    static constexpr auto minimumClassOrIdLength = 6;
+    static constexpr auto maximumClassOrIdLength = 20;
+
+    auto isCandidateClassOrId = [](StringView text) {
+        if (text.length() < minimumClassOrIdLength)
+            return false;
+
+        if (text.length() > maximumClassOrIdLength)
+            return false;
+
+        if (!StringEntropyHelpers::isProbablyHumanReadable(text))
+            return false;
+
+        return true;
+    };
+
+    if (auto text = element.attributeWithoutSynchronization(HTMLNames::idAttr); isCandidateClassOrId(text)) {
+        description.append(makeString(" with id "_s, wrapWithDoubleQuotes(text)));
+        needsParentContext = false;
+    }
+
+    if (auto classValue = element.attributeWithoutSynchronization(HTMLNames::classAttr); !classValue.isEmpty()) {
+        Vector<String, maximumNumberOfClasses> humanReadableClassNames;
+        for (auto className : StringView { classValue }.split(' ')) {
+            if (!isCandidateClassOrId(className))
+                continue;
+
+            humanReadableClassNames.append(className.toString());
+            if (humanReadableClassNames.size() >= maximumNumberOfClasses)
+                break;
+        }
+
+        if (!humanReadableClassNames.isEmpty()) {
+            auto classOrClasses = humanReadableClassNames.size() > 1 ? " with classes "_s : " with class "_s;
+            description.append(makeString(classOrClasses, wrapWithDoubleQuotes(makeStringByJoining(humanReadableClassNames, " "_s))));
+            needsParentContext = false;
+        }
     }
 
     auto elementDescription = description.toString();
@@ -2102,7 +2164,7 @@ InteractionDescription interactionDescription(const Interaction& interaction, Lo
             return "Enter text"_s;
         case Action::HighlightText:
             return "Highlight text"_s;
-        case Action::ScrollBy:
+        case Action::Scroll:
             return "Scroll"_s;
         }
         ASSERT_NOT_REACHED();
@@ -2114,11 +2176,11 @@ InteractionDescription interactionDescription(const Interaction& interaction, Lo
         case Action::SelectText:
         case Action::Click:
         case Action::HighlightText:
+        case Action::Scroll:
             return true;
         case Action::SelectMenuItem:
         case Action::TextInput:
         case Action::KeyPress:
-        case Action::ScrollBy:
             return false;
         }
         ASSERT_NOT_REACHED();
@@ -2133,7 +2195,7 @@ InteractionDescription interactionDescription(const Interaction& interaction, Lo
         }
     }
 
-    if (action == Action::ScrollBy) {
+    if (action == Action::Scroll && interaction.text.isEmpty()) {
         auto delta = roundedIntSize(interaction.scrollDelta);
         description.append(makeString(" by ("_s, delta.width(), ", "_s, delta.height(), ')'));
     }
@@ -2143,8 +2205,8 @@ InteractionDescription interactionDescription(const Interaction& interaction, Lo
         if (elementString.isEmpty())
             return;
 
-        auto elementPrefix = [action] -> String {
-            switch (action) {
+        auto elementPrefix = [&interaction] -> String {
+            switch (interaction.action) {
             case Action::Click:
                 return " on "_s;
             case Action::SelectText:
@@ -2152,8 +2214,9 @@ InteractionDescription interactionDescription(const Interaction& interaction, Lo
             case Action::SelectMenuItem:
             case Action::KeyPress:
             case Action::HighlightText:
-            case Action::ScrollBy:
                 return " in "_s;
+            case Action::Scroll:
+                return interaction.text.isEmpty() ? " in "_s : " to reveal "_s;
             case Action::TextInput:
                 return " into "_s;
             }

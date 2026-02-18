@@ -26,15 +26,15 @@ import OSLog
 import WebKit
 import simd
 
-#if ENABLE_GPU_PROCESS_MODEL && canImport(RealityCoreRenderer, _version: 9) && (os(macOS) || (os(iOS) && canImport(SwiftUI, _version: "8.0.36"))) && canImport(_USDKit_RealityKit)
+#if ENABLE_GPU_PROCESS_MODEL && canImport(RealityCoreRenderer, _version: 9) && (os(macOS) || (os(iOS) && canImport(SwiftUI, _version: "8.0.36"))) && canImport(_USDKit_RealityKit) && !os(visionOS)
 @_weakLinked @_spi(UsdLoaderAPI) internal import _USDKit_RealityKit
-@_weakLinked @_spi(RealityCoreRendererAPI) internal import RealityKit
+@_spi(RealityCoreRendererAPI) import RealityKit
 @_weakLinked @_spi(RealityCoreTextureProcessingAPI) internal import RealityCoreTextureProcessing
 @_weakLinked internal import USDKit
 @_weakLinked @_spi(SwiftAPI) internal import DirectResource
 @_weakLinked internal import USDKit
 @_weakLinked internal import _USDKit_RealityKit
-@_weakLinked internal import RealityKit
+@_weakLinked import RealityKit
 @_weakLinked @_spi(SGPrivate) internal import ShaderGraph
 @_weakLinked internal import RealityCoreDeformation
 

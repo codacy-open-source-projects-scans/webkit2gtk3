@@ -3237,10 +3237,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/style/RenderStyle.h
     rendering/style/RenderStyle+GettersInlines.h
     rendering/style/RenderStyleConstants.h
-    rendering/style/StyleCachedImage.h
     rendering/style/StyleContentAlignmentData.h
-    rendering/style/StyleGeneratedImage.h
-    rendering/style/StyleImage.h
     rendering/style/StyleSelfAlignmentData.h
 
     rendering/svg/RenderSVGInlineText.h
@@ -3470,6 +3467,9 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     style/values/images/StyleImageWrapper.h
     style/values/images/StyleObjectPosition.h
 
+    style/values/images/kinds/StyleCachedImage.h
+    style/values/images/kinds/StyleImage.h
+
     style/values/inline/StyleLineFitEdge.h
     style/values/inline/StyleLineHeight.h
     style/values/inline/StyleTextBoxEdge.h
@@ -3554,12 +3554,14 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     style/values/rhythm/StyleBlockStepSize.h
 
-    style/values/scroll-animations/StyleProgressTimelineAxes.h
+    style/values/scroll-animations/StyleProgressTimelineAxis.h
     style/values/scroll-animations/StyleProgressTimelineName.h
     style/values/scroll-animations/StyleScrollFunction.h
+    style/values/scroll-animations/StyleScrollTimeline.h
     style/values/scroll-animations/StyleScrollTimelines.h
     style/values/scroll-animations/StyleViewFunction.h
-    style/values/scroll-animations/StyleViewTimelineInsets.h
+    style/values/scroll-animations/StyleViewTimeline.h
+    style/values/scroll-animations/StyleViewTimelineInsetItem.h
     style/values/scroll-animations/StyleViewTimelines.h
 
     style/values/scroll-snap/StyleScrollMargin.h

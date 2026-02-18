@@ -29,7 +29,6 @@ bindings/js/JSDOMAbstractOperations.h
 bindings/js/JSDOMBindingSecurity.cpp
 bindings/js/JSDOMGlobalObject.cpp
 bindings/js/JSDOMWindowBase.cpp
-bindings/js/JSDOMWindowCustom.cpp
 bindings/js/JSDOMWindowProperties.cpp
 bindings/js/JSErrorHandler.cpp
 bindings/js/JSHTMLAllCollectionCustom.cpp
@@ -60,14 +59,13 @@ dom/Node.cpp
 dom/Position.cpp
 dom/SpaceSplitString.cpp
 dom/TreeScope.cpp
-[ iOS ] editing/FrameSelection.cpp
-[ iOS ] editing/cocoa/DataDetection.mm
 [ iOS ] editing/ios/DictationCommandIOS.cpp
 [ iOS ] editing/ios/EditorIOS.mm
 [ iOS ] html/HTMLAnchorElement.cpp
 [ iOS ] html/HTMLImageElement.cpp
 [ iOS ] html/HTMLImageLoader.cpp
 [ iOS ] html/HTMLPictureElement.cpp
+html/canvas/CanvasRenderingContext2DBase.cpp
 inspector/InspectorAuditAccessibilityObject.cpp
 inspector/agents/InspectorAnimationAgent.cpp
 inspector/agents/InspectorCSSAgent.cpp
@@ -78,7 +76,6 @@ inspector/agents/InspectorPageAgent.cpp
 inspector/agents/page/PageCanvasAgent.cpp
 inspector/agents/page/PageNetworkAgent.cpp
 [ iOS ] loader/cache/CachedRawResource.cpp
-[ iOS ] page/Chrome.cpp
 page/EventHandler.cpp
 page/FocusController.cpp
 [ iOS ] page/LocalDOMWindow.cpp

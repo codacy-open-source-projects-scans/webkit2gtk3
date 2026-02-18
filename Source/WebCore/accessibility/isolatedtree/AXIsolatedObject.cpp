@@ -1227,16 +1227,21 @@ FloatRect AXIsolatedObject::relativeFrame() const
         std::optional<IntRect> rectFromLabels;
         if (isControl()) {
             // For controls, we can try to use the frame of any associated labels.
-            auto labels = labeledByObjects();
-            for (const auto& label : labels) {
-                std::optional frame = downcast<AXIsolatedObject>(label)->cachedRelativeFrame();
-                if (!frame)
-                    continue;
-                if (!rectFromLabels)
-                    rectFromLabels = *frame;
-                else if (rectFromLabels->intersects(*frame))
-                    rectFromLabels->unite(*frame);
-            }
+            // Prefer ARIA labels first, fall back to native labels if none provide geometry.
+            auto uniteLabelsIntoRect = [&rectFromLabels](const AccessibilityChildrenVector& labels) {
+                for (const auto& label : labels) {
+                    std::optional frame = downcast<AXIsolatedObject>(label)->cachedRelativeFrame();
+                    if (!frame)
+                        continue;
+                    if (!rectFromLabels)
+                        rectFromLabels = *frame;
+                    else if (rectFromLabels->intersects(*frame))
+                        rectFromLabels->unite(*frame);
+                }
+            };
+            uniteLabelsIntoRect(labeledByObjects());
+            if (!rectFromLabels)
+                uniteLabelsIntoRect(nativeLabeledByObjects());
         }
 
         if (rectFromLabels && !rectFromLabels->isEmpty())
@@ -1389,6 +1394,15 @@ String AXIsolatedObject::identifierAttribute() const
         return { };
     }, Accessibility::GeneralPropertyTimeout, emptyString());
 #endif
+}
+
+RefPtr<FragmentedSharedBuffer> AXIsolatedObject::imageData() const
+{
+    return Accessibility::retrieveValueFromMainThreadWithTimeoutAndDefault([context = mainThreadContext()] () -> RefPtr<FragmentedSharedBuffer> {
+        if (RefPtr object = context.axObjectOnMainThread())
+            return object->imageData();
+        return nullptr;
+    }, Accessibility::ImageDataTimeout, nullptr);
 }
 
 CharacterRange AXIsolatedObject::doAXRangeForLine(unsigned lineIndex) const

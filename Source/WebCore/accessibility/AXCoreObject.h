@@ -96,6 +96,7 @@ class AXTextMarkerRange;
 class AccessibilityScrollView;
 class Document;
 class Element;
+class FragmentedSharedBuffer;
 class LocalFrame;
 class LocalFrameView;
 class Node;
@@ -380,6 +381,8 @@ enum class AXRelation : uint8_t {
     HeaderFor,
     LabeledBy,
     LabelFor,
+    NativeLabeledBy,
+    NativeLabelFor,
     OwnedBy,
     OwnerFor,
 };
@@ -735,6 +738,7 @@ public:
     virtual String brailleLabel() const = 0;
     virtual String brailleRoleDescription() const = 0;
     virtual String embeddedImageDescription() const = 0;
+    virtual RefPtr<FragmentedSharedBuffer> imageData() const = 0;
     virtual std::optional<AccessibilityChildrenVector> imageOverlayElements() = 0;
     virtual String extendedDescription() const = 0;
 
@@ -760,6 +764,11 @@ public:
     AccessibilityChildrenVector flowFromObjects() const { return relatedObjects(AXRelation::FlowsFrom); }
     AccessibilityChildrenVector labeledByObjects() const { return relatedObjects(AXRelation::LabeledBy); }
     AccessibilityChildrenVector labelForObjects() const { return relatedObjects(AXRelation::LabelFor); }
+    // This function exists because in the accname calculation, aria-labelledby takes precedence over "native"
+    // labels (like <label for="z"><input id="z">), and thus we do not create a LabelFor relationship for the native
+    // label. However, sometimes outside of accname, we do also want to know the native label relationship,
+    // which is what this function is for.
+    AccessibilityChildrenVector nativeLabeledByObjects() const { return relatedObjects(AXRelation::NativeLabeledBy); }
     AccessibilityChildrenVector ownedObjects() const { return relatedObjects(AXRelation::OwnerFor); }
     AccessibilityChildrenVector owners() const { return relatedObjects(AXRelation::OwnedBy); }
     virtual AccessibilityChildrenVector relatedObjects(AXRelation) const = 0;
@@ -1694,6 +1703,7 @@ constexpr Seconds HitTestTimeout = 15_ms;
 constexpr Seconds BoundingBoxTimeout = 25_ms;
 constexpr Seconds GeneralPropertyTimeout = 25_ms;
 constexpr Seconds VisibilityCheckTimeout = 50_ms;
+constexpr Seconds ImageDataTimeout = 100_ms;
 constexpr Seconds SpellCheckTimeout = 100_ms;
 constexpr Seconds InteractiveTimeout = 250_ms;
 
