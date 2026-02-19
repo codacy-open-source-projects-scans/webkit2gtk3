@@ -20,19 +20,15 @@ Modules/speech/SpeechSynthesis.cpp
 [ iOS ] Modules/system-preview/ARKitBadgeSystemImage.mm
 Modules/webaudio/AnalyserNode.cpp
 Modules/webaudio/AudioBasicInspectorNode.cpp
-Modules/webaudio/AudioBasicProcessorNode.cpp
 Modules/webaudio/AudioBuffer.cpp
 Modules/webaudio/AudioBufferSourceNode.cpp
-Modules/webaudio/AudioContext.cpp
 Modules/webaudio/AudioDestinationNode.cpp
 Modules/webaudio/AudioListener.cpp
 Modules/webaudio/AudioNode.cpp
-Modules/webaudio/AudioNodeInput.cpp
 Modules/webaudio/AudioNodeOutput.cpp
 Modules/webaudio/AudioParam.cpp
 Modules/webaudio/AudioScheduledSourceNode.cpp
 Modules/webaudio/AudioSummingJunction.cpp
-Modules/webaudio/AudioWorkletGlobalScope.cpp
 Modules/webaudio/AudioWorkletMessagingProxy.cpp
 Modules/webaudio/AudioWorkletNode.cpp
 Modules/webaudio/ConvolverNode.cpp
@@ -261,8 +257,6 @@ dom/Element.cpp
 dom/ElementData.cpp
 dom/ElementInlines.h
 dom/ElementInternals.cpp
-dom/ElementIteratorInlines.h
-dom/ElementTraversal.h
 dom/EventPath.cpp
 dom/ExtensionStyleSheets.cpp
 dom/FragmentDirectiveRangeFinder.cpp
@@ -316,7 +310,6 @@ editing/InsertTextCommand.cpp
 editing/ModifySelectionListLevel.cpp
 editing/RemoveFormatCommand.cpp
 editing/ReplaceSelectionCommand.cpp
-editing/ReplaceSelectionCommand.h
 editing/SpellChecker.cpp
 editing/TextIterator.cpp
 editing/TextManipulationController.cpp

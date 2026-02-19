@@ -3130,10 +3130,10 @@ void Element::clearEffectiveLangStateOnNewDocumentElement()
 {
     ASSERT(parentNode() == &document());
 
-    if (hasLangAttrKnownToMatchDocumentElement()) {
+    if (hasLangAttrKnownToMatchDocumentElement())
         protect(document())->removeElementWithLangAttrMatchingDocumentElement(*this);
-        setEffectiveLangKnownToMatchDocumentElement(false);
-    }
+
+    setEffectiveLangKnownToMatchDocumentElement(true);
 
     if (hasRareData())
         elementRareData()->setEffectiveLang(nullAtom());
@@ -3141,6 +3141,8 @@ void Element::clearEffectiveLangStateOnNewDocumentElement()
 
 void Element::setEffectiveLangStateOnOldDocumentElement()
 {
+    setEffectiveLangKnownToMatchDocumentElement(false);
+
     if (auto& lang = langFromAttribute(); !lang.isNull() || hasRareData())
         ensureElementRareData().setEffectiveLang(lang);
 }
@@ -3232,11 +3234,16 @@ void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldPar
             shadowRoot->hostChildElementDidChange(*this);
     }
 
-    if (!parentNode() && is<Document>(oldParentOfRemovedTree)) {
-        setEffectiveLangStateOnOldDocumentElement();
-        document().setDocumentElementLanguage(nullAtom());
-    } else if (!hasLanguageAttribute())
-        updateEffectiveLangStateFromParent();
+    if (!parentNode()) {
+        if (is<Document>(oldParentOfRemovedTree)) {
+            setEffectiveLangStateOnOldDocumentElement();
+            document().setDocumentElementLanguage(nullAtom());
+        } else if (!hasLanguageAttribute()) {
+            setEffectiveLangKnownToMatchDocumentElement(false);
+            if (hasRareData())
+                elementRareData()->setEffectiveLang(nullAtom());
+        }
+    }
 
     Styleable::fromElement(*this).elementWasRemoved();
 
@@ -3312,24 +3319,6 @@ void Element::addShadowRoot(Ref<ShadowRoot>&& newShadowRoot)
 
     if (shadowRoot->mode() == ShadowRootMode::UserAgent)
         didAddUserAgentShadowRoot(shadowRoot);
-    else
-        enqueueShadowRootAttachedEvent();
-}
-
-void Element::enqueueShadowRootAttachedEvent()
-{
-    if (hasStateFlag(StateFlag::IsShadowRootAttachedEventPending))
-        return;
-    setStateFlag(StateFlag::IsShadowRootAttachedEventPending);
-    MutationObserver::enqueueShadowRootAttachedEvent(*this);
-}
-
-void Element::dispatchShadowRootAttachedEvent()
-{
-    Ref<Event> event = Event::create(eventNames().webkitshadowrootattachedEvent, Event::CanBubble::Yes, Event::IsCancelable::No, Event::IsComposed::Yes);
-    event->setIsShadowRootAttachedEvent();
-    event->setTarget(Ref { *this });
-    dispatchEvent(event);
 }
 
 void Element::removeShadowRootSlow(ShadowRoot& oldRoot)
@@ -3541,7 +3530,7 @@ inline void Node::setCustomElementState(CustomElementState state)
         state == CustomElementState::Custom || state == CustomElementState::Uncustomized
     );
     auto bitfields = rareDataBitfields();
-    bitfields.customElementState = enumToUnderlyingType(state);
+    bitfields.customElementState = std::to_underlying(state);
     setRareDataBitfields(bitfields);
 }
 
@@ -4845,7 +4834,7 @@ unsigned Element::rareDataChildIndex() const
 
 const AtomString& Element::effectiveLang() const
 {
-    if (effectiveLangKnownToMatchDocumentElement())
+    if (effectiveLangKnownToMatchDocumentElement() && isConnected())
         return document().effectiveDocumentElementLanguage();
 
     if (hasRareData()) {
@@ -4853,7 +4842,14 @@ const AtomString& Element::effectiveLang() const
             return lang;
     }
 
-    return isConnected() ? document().effectiveDocumentElementLanguage() : nullAtom();
+    if (isConnected())
+        return document().effectiveDocumentElementLanguage();
+
+    for (SUPPRESS_UNCHECKED_LOCAL auto* ancestor = this; ancestor; ancestor = ancestor->parentOrShadowHostElement()) {
+        if (ancestor->hasLanguageAttribute())
+            return ancestor->langFromAttribute();
+    }
+    return nullAtom();
 }
 
 const AtomString& Element::langFromAttribute() const

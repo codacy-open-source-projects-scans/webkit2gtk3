@@ -8124,7 +8124,7 @@ void WebPageProxy::didSameDocumentNavigationForFrame(IPC::Connection& connection
 
     MESSAGE_CHECK_URL(m_legacyMainFrameProcess, url);
 
-    WEBPAGEPROXY_RELEASE_LOG(Loading, "didSameDocumentNavigationForFrame: frameID=%" PRIu64 ", isMainFrame=%d, type=%u", frameID.toUInt64(), frame->isMainFrame(), enumToUnderlyingType(navigationType));
+    WEBPAGEPROXY_RELEASE_LOG(Loading, "didSameDocumentNavigationForFrame: frameID=%" PRIu64 ", isMainFrame=%d, type=%u", frameID.toUInt64(), frame->isMainFrame(), std::to_underlying(navigationType));
 
     // FIXME: We should message check that navigationID is not zero here, but it's currently zero for some navigations through the back/forward cache.
     RefPtr<API::Navigation> navigation;
@@ -8173,7 +8173,7 @@ void WebPageProxy::didSameDocumentNavigationForFrameViaJS(IPC::Connection& conne
     Ref process = WebProcessProxy::fromConnection(connection);
     MESSAGE_CHECK_URL(process, url);
 
-    WEBPAGEPROXY_RELEASE_LOG(Loading, "didSameDocumentNavigationForFrameViaJS: frameID=%" PRIu64 ", isMainFrame=%d, type=%u", frameID.toUInt64(), frame->isMainFrame(), enumToUnderlyingType(navigationType));
+    WEBPAGEPROXY_RELEASE_LOG(Loading, "didSameDocumentNavigationForFrameViaJS: frameID=%" PRIu64 ", isMainFrame=%d, type=%u", frameID.toUInt64(), frame->isMainFrame(), std::to_underlying(navigationType));
 
     // FIXME: We should message check that navigationID is not zero here, but it's currently zero for some navigations through the back/forward cache.
     RefPtr<API::Navigation> navigation;
@@ -14995,11 +14995,11 @@ void WebPageProxy::handleControlledElementIDResponse(const String& identifier) c
 #endif
 }
 
-bool WebPageProxy::isPlayingVideoInEnhancedFullscreen() const
+bool WebPageProxy::isPlayingVideoInPictureInPicture() const
 {
 #if ENABLE(VIDEO_PRESENTATION_MODE)
     RefPtr videoPresentationManager = m_videoPresentationManager;
-    return videoPresentationManager && videoPresentationManager->isPlayingVideoInEnhancedFullscreen();
+    return videoPresentationManager && videoPresentationManager->isPlayingVideoInPictureInPicture();
 #else
     return false;
 #endif

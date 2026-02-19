@@ -685,6 +685,7 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_BEGIN
         [tempArray addObject:NSAccessibilityInvalidAttribute];
         [tempArray addObject:NSAccessibilityPlaceholderValueAttribute];
         [tempArray addObject:NSAccessibilityValueAutofillAvailableAttribute];
+        [tempArray addObject:NSAccessibilityIntersectionWithSelectionRangeAttribute];
         return tempArray;
     }();
     static NeverDestroyed listAttrs = [] {
@@ -882,7 +883,6 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_BEGIN
         auto tempArray = adoptNS([[NSMutableArray alloc] initWithArray:attributes.get().get()]);
         [tempArray addObject:NSAccessibilityImageOverlayElementsAttribute];
         [tempArray addObject:NSAccessibilityEmbeddedImageDescriptionAttribute];
-        [tempArray addObject:NSAccessibilityImageDataAttribute];
         [tempArray addObject:NSAccessibilityURLAttribute];
         return tempArray;
     }();
@@ -1436,14 +1436,6 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_BEGIN
 
     if ([attributeName isEqualToString:NSAccessibilityEmbeddedImageDescriptionAttribute])
         return backingObject->embeddedImageDescription().createNSString().autorelease();
-
-    if ([attributeName isEqualToString:NSAccessibilityImageDataAttribute]) {
-        if (RefPtr imageData = backingObject->imageData()) {
-            if (RetainPtr nsData = imageData->makeContiguous()->createNSData())
-                return @[ nsData.get() ];
-        }
-        return @[ ];
-    }
 
     if ([attributeName isEqualToString:NSAccessibilityWindowAttribute]
         || [attributeName isEqualToString:NSAccessibilityTopLevelUIElementAttribute])
@@ -2307,6 +2299,12 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_BEGIN
         [tempArray addObject:(NSString*)kAXRTFForRangeParameterizedAttribute];
         [tempArray addObject:(NSString*)kAXAttributedStringForRangeParameterizedAttribute];
         [tempArray addObject:(NSString*)kAXStyleRangeForIndexParameterizedAttribute];
+        [tempArray addObject:NSAccessibilityIntersectTextMarkerRangesAttribute];
+        return tempArray;
+    }();
+    static NeverDestroyed staticTextParamAttrs = [] {
+        auto tempArray = adoptNS([[NSMutableArray alloc] initWithArray:paramAttrs.get().get()]);
+        [tempArray addObject:NSAccessibilityIntersectTextMarkerRangesAttribute];
         return tempArray;
     }();
     static NeverDestroyed tableParamAttrs = [] {
@@ -2338,6 +2336,9 @@ ALLOW_DEPRECATED_IMPLEMENTATIONS_BEGIN
 
     if (backingObject->isWebArea())
         return webAreaParamAttrs.get().get();
+
+    if (backingObject->isStaticText())
+        return staticTextParamAttrs.get().get();
 
     // The object that serves up the remote frame also is the one that does the frame conversion.
     if (backingObject->hasRemoteFrameChild())

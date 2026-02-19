@@ -459,9 +459,6 @@ public:
     bool isInLargestContentfulPaintTextContentSet() const { return hasStateFlag(StateFlag::InLargestContentfulPaintTextContentSet); }
     void setInLargestContentfulPaintTextContentSet() { setStateFlag(StateFlag::InLargestContentfulPaintTextContentSet); }
 
-    void didDispatchShadowRootAttachedEvent() { clearStateFlag(StateFlag::IsShadowRootAttachedEventPending); }
-    void dispatchShadowRootAttachedEvent();
-
     enum class CustomElementRegistryKind : bool { Window, Null };
 
     WEBCORE_EXPORT ExceptionOr<ShadowRoot&> attachShadow(const ShadowRootInit&, std::optional<CustomElementRegistryKind> = std::nullopt);
@@ -569,6 +566,7 @@ public:
     const AtomString& effectiveLang() const;
     const AtomString& langFromAttribute() const;
     Locale& locale() const;
+    bool effectiveLangKnownToMatchDocumentElement() const { return hasStateFlag(StateFlag::EffectiveLangKnownToMatchDocumentElement); }
 
     void updateEffectiveLangStateAndPropagateToDescendants();
 
@@ -1015,8 +1013,6 @@ private:
     void cloneShadowTreeIfPossible(Element& newHost) const;
     virtual Ref<Element> cloneElementWithoutAttributesAndChildren(Document&, CustomElementRegistry*) const;
 
-    void enqueueShadowRootAttachedEvent();
-
     inline void removeShadowRoot(); // Defined in ElementRareData.h.
     void removeShadowRootSlow(ShadowRoot&);
 
@@ -1062,7 +1058,6 @@ private:
     bool hasXMLLangAttr() const { return hasEventTargetFlag(EventTargetFlag::HasXMLLangAttr); }
     void setHasXMLLangAttr(bool has) { setEventTargetFlag(EventTargetFlag::HasXMLLangAttr, has); }
 
-    bool effectiveLangKnownToMatchDocumentElement() const { return hasStateFlag(StateFlag::EffectiveLangKnownToMatchDocumentElement); }
     void setEffectiveLangKnownToMatchDocumentElement(bool matches) { setStateFlag(StateFlag::EffectiveLangKnownToMatchDocumentElement, matches); }
 
     bool hasLanguageAttribute() const { return hasLangAttr() || hasXMLLangAttr(); }

@@ -96,7 +96,6 @@ class AXTextMarkerRange;
 class AccessibilityScrollView;
 class Document;
 class Element;
-class FragmentedSharedBuffer;
 class LocalFrame;
 class LocalFrameView;
 class Node;
@@ -738,7 +737,6 @@ public:
     virtual String brailleLabel() const = 0;
     virtual String brailleRoleDescription() const = 0;
     virtual String embeddedImageDescription() const = 0;
-    virtual RefPtr<FragmentedSharedBuffer> imageData() const = 0;
     virtual std::optional<AccessibilityChildrenVector> imageOverlayElements() = 0;
     virtual String extendedDescription() const = 0;
 
@@ -1697,13 +1695,13 @@ struct TimeoutSafeSemaphore : RefCounted<TimeoutSafeSemaphore<T>> {
     bool wait(Seconds timeout) { return semaphore.waitFor(timeout); }
 };
 
+constexpr Seconds HitTestCacheExpiration = 500_ms;
 // Timeout constants for retrieveValueFromMainThreadWithTimeoutAndDefault.
 // These are grouped by operation type to make it easier to tune timeouts.
 constexpr Seconds HitTestTimeout = 15_ms;
 constexpr Seconds BoundingBoxTimeout = 25_ms;
 constexpr Seconds GeneralPropertyTimeout = 25_ms;
 constexpr Seconds VisibilityCheckTimeout = 50_ms;
-constexpr Seconds ImageDataTimeout = 100_ms;
 constexpr Seconds SpellCheckTimeout = 100_ms;
 constexpr Seconds InteractiveTimeout = 250_ms;
 

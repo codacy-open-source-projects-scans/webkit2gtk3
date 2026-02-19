@@ -2403,7 +2403,6 @@ accessibility/html-element-aria-hidden.html [ Pass ]
 accessibility/html5-required-attribute.html [ Pass ]
 accessibility/iframe-tree-update-with-dirty-layout.html [ Pass ]
 accessibility/iframe-with-role.html [ Pass ]
-accessibility/image-data.html [ Pass ]
 accessibility/indeterminate-progressbar-custom-element.html [ Pass ]
 accessibility/input-type-hidden-in-aria-hidden-false.html [ Pass ]
 accessibility/datetime/input-time-label-value.html [ Pass ]
@@ -8206,8 +8205,6 @@ webkit.org/b/296816 [ Release ] imported/w3c/web-platform-tests/css/css-shapes/s
 webkit.org/b/296833 imported/w3c/web-platform-tests/css/css-contain/content-visibility/content-visibility-096.html [ Pass ImageOnlyFailure ]
 
 webkit.org/b/296910 http/tests/app-privacy-report/app-attribution-beacon-isnotappinitiated.html [ Pass Failure ]
-
-webkit.org/b/296964 [ Release ] imported/w3c/web-platform-tests/webrtc/RTCDataChannel-GC.html [ Pass Failure ]
 
 webkit.org/b/297001 http/tests/local/blob/navigate-blob.html [ Pass Failure ]
 
