@@ -110,6 +110,7 @@ class Geolocation;
 class GraphicsLayer;
 class GraphicsLayerFactory;
 class HTMLAttachmentElement;
+class HTMLFrameOwnerElement;
 class HTMLImageElement;
 class HTMLInputElement;
 class HTMLMediaElement;
@@ -514,7 +515,7 @@ public:
     // Returns true if layer tree updates are disabled.
     virtual bool layerTreeStateIsFrozen() const { return false; }
 
-    WEBCORE_EXPORT virtual RefPtr<ScrollingCoordinator> createScrollingCoordinator(Page&) const;
+    WEBCORE_EXPORT virtual RefPtr<ScrollingCoordinator> NODELETE createScrollingCoordinator(Page&) const;
     WEBCORE_EXPORT virtual void ensureScrollbarsController(Page&, ScrollableArea&, bool update = false) const;
 
     virtual bool canEnterVideoFullscreen(HTMLVideoElement&, HTMLMediaElementEnums::VideoFullscreenMode) const { return false; }
@@ -696,6 +697,8 @@ public:
 #if ENABLE(WEB_AUTHN)
     virtual void setMockWebAuthenticationConfiguration(const MockWebAuthenticationConfiguration&) { }
 #endif
+
+    virtual HTMLFrameOwnerElement* frameOwnerElementForFrameID(FrameIdentifier) const { return nullptr; }
 
     virtual bool requiresScriptTrackingPrivacyProtections(const URL&, const SecurityOrigin& /* topOrigin */) const { return false; }
     virtual bool shouldAllowScriptAccess(const URL&, const WebCore::SecurityOrigin&, ScriptTrackingPrivacyCategory) const { return true; }

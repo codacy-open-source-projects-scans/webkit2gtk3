@@ -224,7 +224,7 @@ Vector<uint64_t> Frame::pathToFrame() const
     return path;
 }
 
-RenderWidget* Frame::ownerRenderer() const
+RenderWidget* NODELETE Frame::ownerRenderer() const
 {
     RefPtr ownerElement = this->ownerElement();
     if (!ownerElement)
@@ -358,6 +358,11 @@ bool Frame::frameCanCreatePaymentSession() const
 bool Frame::isPrinting() const
 {
     return m_isPrinting;
+}
+
+RefPtr<Frame> Frame::parent() const
+{
+    return tree().parent();
 }
 
 void Frame::setPrinting(bool printing, FloatSize pageSize, FloatSize originalPageSize, float maximumShrinkRatio, AdjustViewSize shouldAdjustViewSize, NotifyUIProcess notifyUIProcess)

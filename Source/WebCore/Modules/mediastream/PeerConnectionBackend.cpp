@@ -355,7 +355,7 @@ static void setAssociatedRemoteStreams(RTCRtpReceiver& receiver, const PeerConne
     receiver.setAssociatedStreams(WTF::map(state.receiverStreams, [](auto& stream) { return WeakPtr { stream.get() }; }));
 }
 
-static bool isDirectionReceiving(RTCRtpTransceiverDirection direction)
+static bool NODELETE isDirectionReceiving(RTCRtpTransceiverDirection direction)
 {
     return direction == RTCRtpTransceiverDirection::Sendrecv || direction == RTCRtpTransceiverDirection::Recvonly;
 }
@@ -651,7 +651,7 @@ void PeerConnectionBackend::addIceCandidate(RTCIceCandidate* iceCandidate, Funct
                 return;
 
             if (result.hasException()) {
-                RELEASE_LOG_ERROR(WebRTC, "Adding ice candidate failed %hhu", enumToUnderlyingType(result.exception().code()));
+                RELEASE_LOG_ERROR(WebRTC, "Adding ice candidate failed %hhu", std::to_underlying(result.exception().code()));
                 callback(result.releaseException());
                 return;
             }
