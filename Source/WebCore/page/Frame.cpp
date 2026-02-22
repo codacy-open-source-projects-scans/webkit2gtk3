@@ -224,7 +224,7 @@ Vector<uint64_t> Frame::pathToFrame() const
     return path;
 }
 
-RenderWidget* NODELETE Frame::ownerRenderer() const
+RenderWidget* Frame::ownerRenderer() const
 {
     RefPtr ownerElement = this->ownerElement();
     if (!ownerElement)
@@ -378,6 +378,12 @@ SecurityOrigin& Frame::topOrigin() const
         return page->mainFrameOrigin();
 
     return SecurityOrigin::opaqueOrigin();
+}
+
+TextStream& operator<<(TextStream& ts, const Frame& frame)
+{
+    ts << frame.debugDescription();
+    return ts;
 }
 
 } // namespace WebCore

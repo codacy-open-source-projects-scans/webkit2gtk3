@@ -95,7 +95,7 @@ static const AtomString& buttonSlotName()
     return buttonSlot;
 }
 
-static bool isFirstElementChildButton(const Node& child)
+static bool NODELETE isFirstElementChildButton(const Node& child)
 {
     return is<HTMLButtonElement>(child) && !child.previousElementSibling();
 }
@@ -339,8 +339,11 @@ bool HTMLSelectElement::usesBaseAppearancePicker() const
 
     ASSERT(document().settings().htmlEnhancedSelectEnabled());
 
-    CheckedPtr computedStyle = popover->computedStyle();
-    return computedStyle && computedStyle->usedAppearance() == StyleAppearance::Base;
+    if (CheckedPtr style = existingComputedStyle(); !style || style->usedAppearance() != StyleAppearance::Base)
+        return false;
+
+    CheckedPtr pickerStyle = popover->computedStyle();
+    return pickerStyle && pickerStyle->usedAppearance() == StyleAppearance::Base;
 }
 
 SelectPopoverElement* HTMLSelectElement::pickerPopoverElement() const

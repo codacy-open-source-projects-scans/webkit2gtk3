@@ -86,7 +86,7 @@ static WKSyntheticClickType toWKSyntheticClickType(WebKit::WebMouseEventSyntheti
     if (WebCoreObjCScheduleDeallocateOnMainRunLoop(WKNavigationAction.class, self))
         return;
 
-    _navigationAction->~NavigationAction();
+    SUPPRESS_UNCOUNTED_ARG _navigationAction->~NavigationAction();
 
     [super dealloc];
 }
@@ -105,7 +105,8 @@ static WKSyntheticClickType toWKSyntheticClickType(WebKit::WebMouseEventSyntheti
 
 - (WKFrameInfo *)sourceFrame
 {
-    return wrapper(protect(*_navigationAction)->sourceFrame());
+    // Static analyzer false positive. CLANG_POINTER_CONVERSION should make this warning go away but doesn't.
+    SUPPRESS_UNCOUNTED_ARG return wrapper(protect(*_navigationAction)->sourceFrame());
 }
 
 - (WKFrameInfo *)targetFrame

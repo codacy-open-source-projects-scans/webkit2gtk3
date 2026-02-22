@@ -771,7 +771,7 @@ Ref<DOMRectList> Page::passiveTouchEventListenerRectsForTesting()
     return DOMRectList::create(rects.map([](auto& rect) { return FloatQuad { FloatRect { rect } }; }));
 }
 
-void NODELETE Page::setConsoleMessageListenerForTesting(RefPtr<StringCallback>&& listener)
+void Page::setConsoleMessageListenerForTesting(RefPtr<StringCallback>&& listener)
 {
     m_consoleMessageListenerForTesting = listener;
 }
@@ -978,7 +978,7 @@ void Page::updateTopDocumentSyncData(Ref<DocumentSyncData>&& data)
     m_topDocumentSyncData = WTF::move(data);
 }
 
-void NODELETE Page::setMainFrameURLFragment(String&& fragment)
+void Page::setMainFrameURLFragment(String&& fragment)
 {
     if (!fragment.isEmpty())
         m_mainFrameURLFragment = WTF::move(fragment);
@@ -1055,7 +1055,7 @@ const String& Page::groupName() const
     return m_group ? m_group->name() : nullAtom().string();
 }
 
-void NODELETE Page::setBroadcastChannelRegistry(Ref<BroadcastChannelRegistry>&& broadcastChannelRegistry)
+void Page::setBroadcastChannelRegistry(Ref<BroadcastChannelRegistry>&& broadcastChannelRegistry)
 {
     m_broadcastChannelRegistry = WTF::move(broadcastChannelRegistry);
 }
@@ -1799,7 +1799,7 @@ void Page::windowScreenDidChange(PlatformDisplayID displayID, std::optional<Fram
     setNeedsRecalcStyleInAllFrames();
 }
 
-void NODELETE Page::setInitialScaleIgnoringContentSize(float scale)
+void Page::setInitialScaleIgnoringContentSize(float scale)
 {
     m_initialScaleIgnoringContentSize = scale;
 }
@@ -1994,7 +1994,7 @@ void Page::setVerticalScrollElasticity(ScrollElasticity elasticity)
         view->setVerticalScrollElasticity(elasticity);
 }
     
-void NODELETE Page::setHorizontalScrollElasticity(ScrollElasticity elasticity)
+void Page::setHorizontalScrollElasticity(ScrollElasticity elasticity)
 {
     if (m_horizontalScrollElasticity == elasticity)
         return;
@@ -2267,7 +2267,7 @@ void Page::updateRendering()
 
     // https://drafts.csswg.org/scroll-animations-1/#event-loop
     forEachDocument([] (Document& document) {
-        document.runPostRenderingUpdateAnimationTasks();
+        document.updateStaleScrollTimelines();
     });
 
     runProcessingStep(RenderingUpdateStep::FocusFixup, [&] (Document& document) {
@@ -2362,6 +2362,12 @@ void Page::doAfterUpdateRendering()
     forEachRenderableDocument([] (Document& document) {
         document.updateHighlightPositions();
     });
+
+#if ENABLE(THREADED_ANIMATIONS)
+    forEachDocument([] (Document& document) {
+        document.runPostRenderingUpdateAnimationTasks();
+    });
+#endif
 
 #if ENABLE(APP_HIGHLIGHTS)
     forEachRenderableDocument([timestamp = m_lastRenderingUpdateTimestamp] (Document& document) {

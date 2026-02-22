@@ -409,7 +409,8 @@ WK_OBJECT_DISABLE_DISABLE_KVC_IVAR_ACCESS;
 
 + (WKWebsiteDataStore *)defaultDataStore
 {
-    return wrapper(WebKit::WebsiteDataStore::defaultDataStore());
+    // Static analyzer false positive. CLANG_POINTER_CONVERSION should make this warning go away but doesn't.
+    SUPPRESS_UNCOUNTED_ARG return wrapper(WebKit::WebsiteDataStore::defaultDataStore());
 }
 
 + (WKWebsiteDataStore *)nonPersistentDataStore
@@ -496,7 +497,8 @@ WK_OBJECT_DISABLE_DISABLE_KVC_IVAR_ACCESS;
 
 - (WKHTTPCookieStore *)httpCookieStore
 {
-    return wrapper(protect(*_websiteDataStore)->cookieStore());
+    // Static analyzer false positive. CLANG_POINTER_CONVERSION should make this warning go away but doesn't.
+    SUPPRESS_UNCOUNTED_ARG return wrapper(protect(*_websiteDataStore)->cookieStore());
 }
 
 static WallTime toSystemClockTime(NSDate *date)
@@ -1429,7 +1431,7 @@ struct WKWebsiteData {
 
 -(void)_setServiceWorkerOverridePreferences:(WKPreferences *)preferences
 {
-    _websiteDataStore->setServiceWorkerOverridePreferences(preferences ? preferences->_preferences.get() : nullptr);
+    protect(*_websiteDataStore)->setServiceWorkerOverridePreferences(protect(preferences ? preferences->_preferences.get() : nullptr));
 }
 
 -(void)_scopeURL:(NSURL *)scopeURL hasPushSubscriptionForTesting:(void(^)(BOOL))completionHandler

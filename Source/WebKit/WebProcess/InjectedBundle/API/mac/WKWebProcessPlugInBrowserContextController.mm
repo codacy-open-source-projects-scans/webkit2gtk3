@@ -289,14 +289,15 @@ static WKURLRequestRef willSendRequestForFrame(WKBundlePageRef, WKBundleFrameRef
     auto loadDelegate = pluginContextController->_loadDelegate.get();
 
     if ([loadDelegate respondsToSelector:@selector(webProcessPlugInBrowserContextController:frame:willSendRequestForResource:request:redirectResponse:)]) {
-        RetainPtr originalRequest = wrapper(*WebKit::toImpl(request));
+        RetainPtr originalRequest = wrapper(*protect(WebKit::toImpl(request)));
         RetainPtr<NSURLRequest> substituteRequest = [loadDelegate webProcessPlugInBrowserContextController:pluginContextController frame:protect(wrapper(*WebKit::toProtectedImpl(frame))).get() willSendRequestForResource:resourceIdentifier
             request:originalRequest.get() redirectResponse:WebKit::toImpl(redirectResponse)->resourceResponse().protectedNSURLResponse().get()];
 
         if (substituteRequest != originalRequest.get())
             return substituteRequest ? WKURLRequestCreateWithNSURLRequest(substituteRequest.get()) : nullptr;
     } else if ([loadDelegate respondsToSelector:@selector(webProcessPlugInBrowserContextController:frame:willSendRequest:redirectResponse:)]) {
-        RetainPtr originalRequest = wrapper(*WebKit::toImpl(request));
+        // Static analyzer false positive. CLANG_POINTER_CONVERSION should make this warning go away but doesn't.
+        SUPPRESS_UNCOUNTED_ARG RetainPtr originalRequest = wrapper(*WebKit::toImpl(request));
         RetainPtr<NSURLRequest> substituteRequest = [loadDelegate webProcessPlugInBrowserContextController:pluginContextController frame:protect(wrapper(*WebKit::toProtectedImpl(frame))).get() willSendRequest:originalRequest.get()
             redirectResponse:WebKit::toImpl(redirectResponse)->resourceResponse().protectedNSURLResponse().get()];
 
@@ -444,7 +445,7 @@ static void setUpResourceLoadClient(WKWebProcessPlugInBrowserContextController *
 
 + (instancetype)lookUpBrowsingContextFromHandle:(WKBrowsingContextHandle *)handle
 {
-    return wrapper(WebKit::WebProcess::singleton().webPage(ObjectIdentifier<WebCore::PageIdentifierType>(handle.webPageID)));
+    SUPPRESS_UNCOUNTED_ARG return wrapper(WebKit::WebProcess::singleton().webPage(ObjectIdentifier<WebCore::PageIdentifierType>(handle.webPageID)));
 }
 
 - (_WKRemoteObjectRegistry *)_remoteObjectRegistry

@@ -816,6 +816,7 @@ public:
     void suspendActiveDOMObjects(ReasonForSuspension) final;
     void resumeActiveDOMObjects(ReasonForSuspension) final;
     void stopActiveDOMObjects() final;
+    bool isEventLoopGroupStoppedPermanently() const final;
     GraphicsClient* graphicsClient() final;
 
     inline const SettingsValues& settingsValues() const final; // Defined in DocumentSettingsValues.h.
@@ -1144,10 +1145,10 @@ public:
 
 #if ENABLE(CONTENT_CHANGE_OBSERVER)
     ContentChangeObserver* contentChangeObserverIfExists() { return m_contentChangeObserver.get(); }
-    WEBCORE_EXPORT ContentChangeObserver& NODELETE contentChangeObserver();
+    WEBCORE_EXPORT ContentChangeObserver& contentChangeObserver();
 
     DOMTimerHoldingTank* domTimerHoldingTankIfExists() { return m_domTimerHoldingTank.get(); }
-    DOMTimerHoldingTank& NODELETE domTimerHoldingTank();
+    DOMTimerHoldingTank& domTimerHoldingTank();
 #endif
     void processViewport(const String& features, ViewportArguments::Type origin);
     WEBCORE_EXPORT bool isViewportDocument() const;
@@ -1849,7 +1850,10 @@ public:
     WEBCORE_EXPORT static const Logger& sharedLogger();
 
     void updateAnimationsAndSendEvents();
+    void updateStaleScrollTimelines();
+#if ENABLE(THREADED_ANIMATIONS)
     void runPostRenderingUpdateAnimationTasks();
+#endif
     WEBCORE_EXPORT DocumentTimeline& timeline();
     DocumentTimeline* existingTimeline() const { return m_timeline.get(); }
     Vector<Ref<WebAnimation>> getAnimations();

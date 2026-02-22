@@ -406,7 +406,8 @@ static _WKWebsiteDeviceOrientationAndMotionAccessPolicy toWKWebsiteDeviceOrienta
 
 - (WKWebsiteDataStore *)_websiteDataStore
 {
-    return wrapper(_websitePolicies->websiteDataStore());
+    // Static analyzer false positive. CLANG_POINTER_CONVERSION should make this warning go away but doesn't.
+    SUPPRESS_UNCOUNTED_ARG return wrapper(_websitePolicies->websiteDataStore());
 }
 
 - (void)_setWebsiteDataStore:(WKWebsiteDataStore *)websiteDataStore
@@ -416,7 +417,8 @@ static _WKWebsiteDeviceOrientationAndMotionAccessPolicy toWKWebsiteDeviceOrienta
 
 - (WKUserContentController *)_userContentController
 {
-    return wrapper(_websitePolicies->userContentController());
+    // Static analyzer false positive. CLANG_POINTER_CONVERSION should make this warning go away but doesn't.
+    SUPPRESS_UNCOUNTED_ARG return wrapper(_websitePolicies->userContentController());
 }
 
 - (void)_setUserContentController:(WKUserContentController *)userContentController
@@ -426,7 +428,7 @@ static _WKWebsiteDeviceOrientationAndMotionAccessPolicy toWKWebsiteDeviceOrienta
 
 - (void)_setCustomUserAgent:(NSString *)customUserAgent
 {
-    _websitePolicies->setCustomUserAgent(customUserAgent);
+    protect(*_websitePolicies)->setCustomUserAgent(customUserAgent);
 }
 
 - (NSString *)_customUserAgent
@@ -436,7 +438,7 @@ static _WKWebsiteDeviceOrientationAndMotionAccessPolicy toWKWebsiteDeviceOrienta
 
 - (void)_setCustomUserAgentAsSiteSpecificQuirks:(NSString *)customUserAgent
 {
-    _websitePolicies->setCustomUserAgentAsSiteSpecificQuirks(customUserAgent);
+    protect(*_websitePolicies)->setCustomUserAgentAsSiteSpecificQuirks(customUserAgent);
 }
 
 - (NSString *)_customUserAgentAsSiteSpecificQuirks
@@ -446,7 +448,7 @@ static _WKWebsiteDeviceOrientationAndMotionAccessPolicy toWKWebsiteDeviceOrienta
 
 - (void)_setCustomNavigatorPlatform:(NSString *)customNavigatorPlatform
 {
-    _websitePolicies->setCustomNavigatorPlatform(customNavigatorPlatform);
+    protect(*_websitePolicies)->setCustomNavigatorPlatform(customNavigatorPlatform);
 }
 
 - (NSString *)_customNavigatorPlatform
@@ -471,7 +473,7 @@ static _WKWebsiteDeviceOrientationAndMotionAccessPolicy toWKWebsiteDeviceOrienta
 
 - (void)_setApplicationNameForUserAgentWithModernCompatibility:(NSString *)applicationName
 {
-    _websitePolicies->setApplicationNameForDesktopUserAgent(applicationName);
+    protect(*_websitePolicies)->setApplicationNameForDesktopUserAgent(applicationName);
 }
 
 - (API::Object&)_apiObject
@@ -496,7 +498,7 @@ static _WKWebsiteDeviceOrientationAndMotionAccessPolicy toWKWebsiteDeviceOrienta
 
 - (void)setOverrideReferrer:(NSString *)referrer
 {
-    _websitePolicies->setOverrideReferrerForAllRequests(referrer);
+    protect(*_websitePolicies)->setOverrideReferrerForAllRequests(referrer);
 }
 
 - (void)_setOverrideReferrerForAllRequests:(NSString *)referrer

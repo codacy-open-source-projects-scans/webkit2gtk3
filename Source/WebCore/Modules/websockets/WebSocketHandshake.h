@@ -60,7 +60,7 @@ public:
     const String host() const;
 
     const String& NODELETE clientProtocol() const;
-    void NODELETE setClientProtocol(const String&);
+    void setClientProtocol(const String&);
 
     bool NODELETE secure() const;
 
@@ -73,7 +73,7 @@ public:
 
     WEBCORE_EXPORT int readServerHandshake(std::span<const uint8_t> header);
     WEBCORE_EXPORT Mode NODELETE mode() const;
-    WEBCORE_EXPORT String failureReason() const; // Returns a string indicating the reason of failure if mode() == Failed.
+    WEBCORE_EXPORT String NODELETE failureReason() const; // Returns a string indicating the reason of failure if mode() == Failed.
 
     WEBCORE_EXPORT String serverWebSocketProtocol() const;
     WEBCORE_EXPORT String serverSetCookie() const;
