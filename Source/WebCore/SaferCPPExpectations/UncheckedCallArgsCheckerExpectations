@@ -124,8 +124,6 @@ dom/RangeBoundaryPoint.h
 dom/ScriptElement.cpp
 dom/SelectorQuery.cpp
 dom/ShadowRoot.cpp
-dom/SimpleRange.cpp
-dom/SimulatedClick.cpp
 dom/TreeScope.cpp
 dom/TreeScopeOrderedMap.cpp
 dom/TypedElementDescendantIteratorInlines.h
@@ -326,7 +324,6 @@ loader/archive/cf/LegacyWebArchive.cpp
 [ Mac ] loader/cache/CachedResourceLoader.cpp
 mathml/MathMLElement.cpp
 mathml/MathMLMathElement.cpp
-mathml/MathMLOperatorElement.cpp
 mathml/MathMLPresentationElement.cpp
 mathml/MathMLSelectElement.cpp
 page/AutoscrollController.cpp
@@ -358,7 +355,6 @@ page/PointerLockController.cpp
 page/PrintContext.cpp
 page/Quirks.cpp
 page/RemoteFrame.cpp
-page/ResizeObservation.cpp
 page/ResizeObserver.cpp
 page/ScrollBehavior.cpp
 page/SettingsBase.cpp
@@ -630,7 +626,6 @@ style/StyleChangedAnimatableProperties.cpp
 style/StyleCustomPropertyRegistry.cpp
 style/StyleExtractor.cpp
 style/StyleExtractorCustom.h
-style/StyleInterpolation.cpp
 style/StyleInvalidationFunctions.h
 style/StyleInvalidator.cpp
 style/StyleResolveForDocument.cpp

@@ -105,17 +105,17 @@ using namespace WebCore;
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(WebLoaderStrategy);
 
-[[maybe_unused]] static uint64_t pageIDForLog(const std::optional<WebResourceLoader::TrackingParameters>& parameters)
+[[maybe_unused]] static uint64_t NODELETE pageIDForLog(const std::optional<WebResourceLoader::TrackingParameters>& parameters)
 {
     return parameters ? parameters->pageID.toUInt64() : 0;
 }
 
-[[maybe_unused]] static uint64_t frameIDForLog(const std::optional<WebResourceLoader::TrackingParameters>& parameters)
+[[maybe_unused]] static uint64_t NODELETE frameIDForLog(const std::optional<WebResourceLoader::TrackingParameters>& parameters)
 {
     return parameters ? parameters->frameID.toUInt64() : 0;
 }
 
-[[maybe_unused]] static uint64_t resourceIDForLog(const std::optional<WebResourceLoader::TrackingParameters>& parameters)
+[[maybe_unused]] static uint64_t NODELETE resourceIDForLog(const std::optional<WebResourceLoader::TrackingParameters>& parameters)
 {
     return parameters ? parameters->resourceID.toUInt64() : 0;
 }
@@ -389,7 +389,7 @@ static void addParametersShared(const LocalFrame* frame, NetworkResourceLoadPara
     Ref mainFrame = frame->mainFrame();
     RefPtr policySourceDocumentLoader = policySourceDocumentLoaderForFrame(*frame, isMainFrameNavigation);
 
-    parameters.allowPrivacyProxy = policySourceDocumentLoader ? policySourceDocumentLoader->allowPrivacyProxy() : true;
+    parameters.allowPrivacyProxy = !policySourceDocumentLoader || policySourceDocumentLoader->allowPrivacyProxy();
 
     if (RefPtr framePolicySourceDocumentLoader = frame->loader().loaderForWebsitePolicies(isMainFrameNavigation ? FrameLoader::CanIncludeCurrentDocumentLoader::No : FrameLoader::CanIncludeCurrentDocumentLoader::Yes)) {
         if (String referrer = framePolicySourceDocumentLoader->preferences().overrideReferrerForAllRequests; !referrer.isNull())
@@ -565,7 +565,7 @@ void WebLoaderStrategy::scheduleLoadFromNetworkProcess(ResourceLoader& resourceL
         RefPtr coreFrame = webFrame ? webFrame->coreFrame() : nullptr;
         RefPtr openerFrame = coreFrame ? coreFrame->opener() : nullptr;
         RefPtr openerDocumentSecurityOrigin = openerFrame ? openerFrame->frameDocumentSecurityOrigin() : nullptr;
-        bool openerDocumentIsSameOriginAsTopDocument = openerDocumentSecurityOrigin ? openerDocumentSecurityOrigin->isSameOriginAs(protect(openerFrame->topOrigin())) : false;
+        bool openerDocumentIsSameOriginAsTopDocument = openerDocumentSecurityOrigin && openerDocumentSecurityOrigin->isSameOriginAs(protect(openerFrame->topOrigin()));
         auto openerDocumentSecurityPolicy = openerFrame ? openerFrame->frameDocumentSecurityPolicy() : std::nullopt;
         if (!document->haveInitializedSecurityOrigin() && openerDocumentSecurityPolicy && openerDocumentIsSameOriginAsTopDocument)
             loadParameters.sourceCrossOriginOpenerPolicy = openerDocumentSecurityPolicy->crossOriginOpenerPolicy;

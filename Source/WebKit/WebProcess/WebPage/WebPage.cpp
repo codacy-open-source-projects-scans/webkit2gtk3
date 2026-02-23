@@ -1675,7 +1675,7 @@ EditorState WebPage::editorState(ShouldPerformLayout shouldPerformLayout) const
     result.isContentRichlyEditable = selection.isContentRichlyEditable();
     result.isInPasswordField = selection.isInPasswordField();
     result.hasComposition = editor->hasComposition();
-    result.shouldIgnoreSelectionChanges = editor->ignoreSelectionChanges() || (editor->client() && !editor->checkedClient()->shouldRevealCurrentSelectionAfterInsertion());
+    result.shouldIgnoreSelectionChanges = editor->ignoreSelectionChanges() || (editor->client() && !protect(editor->client())->shouldRevealCurrentSelectionAfterInsertion());
     result.triggeredByAccessibilitySelectionChange = m_pendingEditorStateUpdateStatus == PendingEditorStateUpdateStatus::ScheduledDuringAccessibilitySelectionChange || m_isChangingSelectionForAccessibility;
 
     Ref<Document> document = *frame->document();
@@ -2511,7 +2511,7 @@ void WebPage::drawRect(GraphicsContext& graphicsContext, const IntRect& rect)
     if (!localMainFrame)
         return;
     RefPtr mainFrameView = localMainFrame->view();
-    LocalDefaultSystemAppearance localAppearance(mainFrameView ? mainFrameView->useDarkAppearance() : false);
+    LocalDefaultSystemAppearance localAppearance(mainFrameView && mainFrameView->useDarkAppearance());
 #endif
 
     GraphicsContextStateSaver stateSaver(graphicsContext);

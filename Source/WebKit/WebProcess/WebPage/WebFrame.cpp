@@ -138,7 +138,7 @@ namespace WebKit {
 using namespace JSC;
 using namespace WebCore;
 
-static uint64_t generateListenerID()
+static uint64_t NODELETE generateListenerID()
 {
     static uint64_t uniqueListenerID = 1;
     return uniqueListenerID++;
@@ -315,7 +315,7 @@ FrameInfoData WebFrame::info(WithCertificateInfo withCertificateInfo) const
         withCertificateInfo == WithCertificateInfo::Yes ? certificateInfo() : CertificateInfo(),
         getCurrentProcessID(),
         isFocused(),
-        coreLocalFrame ? coreLocalFrame->loader().errorOccurredInLoading() : false,
+        coreLocalFrame && coreLocalFrame->loader().errorOccurredInLoading(),
         WTF::move(metrics)
     };
 }

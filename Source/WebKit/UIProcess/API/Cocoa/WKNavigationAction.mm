@@ -44,7 +44,7 @@
 
 @implementation WKNavigationAction
 
-static WKNavigationType toWKNavigationType(WebCore::NavigationType navigationType)
+static WKNavigationType NODELETE toWKNavigationType(WebCore::NavigationType navigationType)
 {
     switch (navigationType) {
     case WebCore::NavigationType::LinkClicked:
@@ -105,8 +105,7 @@ static WKSyntheticClickType toWKSyntheticClickType(WebKit::WebMouseEventSyntheti
 
 - (WKFrameInfo *)sourceFrame
 {
-    // Static analyzer false positive. CLANG_POINTER_CONVERSION should make this warning go away but doesn't.
-    SUPPRESS_UNCOUNTED_ARG return wrapper(protect(*_navigationAction)->sourceFrame());
+    return wrapper(protect(*_navigationAction)->sourceFrame());
 }
 
 - (WKFrameInfo *)targetFrame
