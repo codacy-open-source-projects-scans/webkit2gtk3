@@ -273,6 +273,7 @@
 		07C1482E2612A21F00775828 /* MediaSessionCoordinatorState.h in Headers */ = {isa = PBXBuildFile; fileRef = 077BA58826126D660072F19F /* MediaSessionCoordinatorState.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		07C1C0E21BFB600100BD2256 /* MediaTrackSupportedConstraints.h in Headers */ = {isa = PBXBuildFile; fileRef = 07C1C0E01BFB600100BD2256 /* MediaTrackSupportedConstraints.h */; };
 		07C1C0E51BFB60ED00BD2256 /* RealtimeMediaSourceSupportedConstraints.h in Headers */ = {isa = PBXBuildFile; fileRef = 07C1C0E41BFB60ED00BD2256 /* RealtimeMediaSourceSupportedConstraints.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		07C3212C2F496D3A0045F670 /* SelectionType.h in Headers */ = {isa = PBXBuildFile; fileRef = 07C3212B2F496D3A0045F670 /* SelectionType.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		07C6778629ACFB820083C923 /* DisplayCapturePromptType.h in Headers */ = {isa = PBXBuildFile; fileRef = 07C6778529ACF4780083C923 /* DisplayCapturePromptType.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		07CCECF22C25FBC9001FF552 /* WritingToolsCompositionCommand.h in Headers */ = {isa = PBXBuildFile; fileRef = 07CCECF12C25FBC9001FF552 /* WritingToolsCompositionCommand.h */; };
 		07CE77D516712A6A00C55A47 /* InbandTextTrackPrivateClient.h in Headers */ = {isa = PBXBuildFile; fileRef = 07CE77D416712A6A00C55A47 /* InbandTextTrackPrivateClient.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -7727,6 +7728,8 @@
 		07C1C0E01BFB600100BD2256 /* MediaTrackSupportedConstraints.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MediaTrackSupportedConstraints.h; sourceTree = "<group>"; };
 		07C1C0E11BFB600100BD2256 /* MediaTrackSupportedConstraints.idl */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = MediaTrackSupportedConstraints.idl; sourceTree = "<group>"; };
 		07C1C0E41BFB60ED00BD2256 /* RealtimeMediaSourceSupportedConstraints.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RealtimeMediaSourceSupportedConstraints.h; sourceTree = "<group>"; };
+		07C3212B2F496D3A0045F670 /* SelectionType.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SelectionType.h; sourceTree = "<group>"; };
+		07C3212D2F49707A0045F670 /* SelectionType.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = SelectionType.cpp; sourceTree = "<group>"; };
 		07C6778529ACF4780083C923 /* DisplayCapturePromptType.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DisplayCapturePromptType.h; sourceTree = "<group>"; };
 		07C8AD111D073D630087C5CE /* AVAssetMIMETypeCache.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = AVAssetMIMETypeCache.mm; sourceTree = "<group>"; };
 		07C8AD121D073D630087C5CE /* AVAssetMIMETypeCache.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AVAssetMIMETypeCache.h; sourceTree = "<group>"; };
@@ -41791,6 +41794,8 @@
 				7ABA250428AAF779005D4F6D /* SecurityPolicyViolationEventDisposition.h */,
 				7ABA250128AAEE7B005D4F6D /* SecurityPolicyViolationEventDisposition.idl */,
 				98CBC8032618F68B001593C8 /* SelectionRestorationMode.h */,
+				07C3212D2F49707A0045F670 /* SelectionType.cpp */,
+				07C3212B2F496D3A0045F670 /* SelectionType.h */,
 				E45322A9140CE267005A0F92 /* SelectorQuery.cpp */,
 				E45322AA140CE267005A0F92 /* SelectorQuery.h */,
 				FA1E3BC22E3408B000AF406D /* SerializedNode.cpp */,
@@ -47202,6 +47207,7 @@
 				BEA807C90F714A0300524199 /* SelectionGeometry.h in Headers */,
 				51405C89190B014400754F94 /* SelectionGeometryGatherer.h in Headers */,
 				98CBC8052618F68C001593C8 /* SelectionRestorationMode.h in Headers */,
+				07C3212C2F496D3A0045F670 /* SelectionType.h in Headers */,
 				E44B4BB4141650D7002B1D8B /* SelectorChecker.h in Headers */,
 				432D3FE818A8658400D7DC03 /* SelectorCheckerTestFunctions.h in Headers */,
 				26B999971804D54200D01121 /* SelectorCompiler.h in Headers */,

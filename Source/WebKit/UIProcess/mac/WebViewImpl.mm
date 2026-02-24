@@ -131,6 +131,7 @@
 #import <WebCore/PromisedAttachmentInfo.h>
 #import <WebCore/ReferrerPolicy.h>
 #import <WebCore/ResolvedCaptionDisplaySettingsOptions.h>
+#import <WebCore/SelectionType.h>
 #import <WebCore/ShareableBitmap.h>
 #import <WebCore/Site.h>
 #import <WebCore/TextAlternativeWithRange.h>
@@ -2258,10 +2259,7 @@ bool WebViewImpl::mightBeginDragWhileInactive()
     if ([m_view.get() window].isKeyWindow)
         return false;
 
-    if (m_page->editorState().selectionIsNone || !m_page->editorState().selectionIsRange)
-        return false;
-
-    return true;
+    return m_page->editorState().selectionType == WebCore::SelectionType::Range;
 }
 
 bool WebViewImpl::mightBeginScrollWhileInactive()
@@ -2914,7 +2912,7 @@ id WebViewImpl::validRequestorForSendAndReturnTypes(NSString *sendType, NSString
     EditorState editorState = m_page->editorState();
     bool isValidSendType = !sendType;
 
-    if (sendType && !editorState.selectionIsNone) {
+    if (sendType && editorState.selectionType != WebCore::SelectionType::None) {
         if (editorState.isInPlugin)
             isValidSendType = [sendType isEqualToString:WebCore::legacyStringPasteboardTypeSingleton()];
         else
@@ -2969,7 +2967,7 @@ void WebViewImpl::selectionDidChange()
 #if ENABLE(WRITING_TOOLS)
     bool wantsCompleteWritingTools = isEditable() || page->configuration().writingToolsBehavior() == WebCore::WritingTools::Behavior::Complete;
     if (wantsCompleteWritingTools && !alreadyNotifiedClient) {
-        auto isRange = page->editorState().hasPostLayoutData() && page->editorState().selectionIsRange;
+        auto isRange = page->editorState().hasPostLayoutData() && page->editorState().selectionType == WebCore::SelectionType::Range;
         auto selectionRect = isRange ? page->editorState().postLayoutData->selectionBoundingRect : IntRect { };
 
         // The affordance will only show up if the selected range consists of >= 50 characters.
@@ -3072,14 +3070,14 @@ NSRect WebViewImpl::unionRectInVisibleSelectedRangeInScreen() const
 
     Ref page = m_page.get();
     auto& editorState = page->editorState();
-    if (editorState.selectionIsNone)
+    if (editorState.selectionType == WebCore::SelectionType::None)
         return NSZeroRect;
 
     auto selectionRect = page->selectionBoundingRectInRootViewCoordinates();
     if (selectionRect.isEmpty())
         return NSZeroRect;
 
-    if (!editorState.selectionIsRange && editorState.isContentEditable)
+    if (editorState.selectionType != WebCore::SelectionType::Range && editorState.isContentEditable)
         selectionRect.setWidth(0);
 
     return convertFromViewToScreen(selectionRect);
@@ -3106,7 +3104,7 @@ void WebViewImpl::changeFontColorFromSender(id sender)
         return;
 
     auto& editorState = m_page->editorState();
-    if (!editorState.isContentEditable || editorState.selectionIsNone)
+    if (!editorState.isContentEditable || editorState.selectionType == WebCore::SelectionType::None)
         return;
 
     WebCore::FontAttributeChanges changes;
@@ -3117,7 +3115,7 @@ void WebViewImpl::changeFontColorFromSender(id sender)
 void WebViewImpl::changeFontAttributesFromSender(id sender)
 {
     auto& editorState = m_page->editorState();
-    if (!editorState.isContentEditable || editorState.selectionIsNone)
+    if (!editorState.isContentEditable || editorState.selectionType == WebCore::SelectionType::None)
         return;
 
     m_page->changeFontAttributes(WebCore::computedFontAttributeChanges(NSFontManager.sharedFontManager, sender));
@@ -3126,7 +3124,7 @@ void WebViewImpl::changeFontAttributesFromSender(id sender)
 void WebViewImpl::changeFontFromFontManager()
 {
     auto& editorState = m_page->editorState();
-    if (!editorState.isContentEditable || editorState.selectionIsNone)
+    if (!editorState.isContentEditable || editorState.selectionType == WebCore::SelectionType::None)
         return;
 
     m_page->changeFont(WebCore::computedFontChanges(NSFontManager.sharedFontManager));
@@ -3221,14 +3219,14 @@ bool WebViewImpl::validateUserInterfaceItem(id<NSValidatedUserInterfaceItem> ite
     }
 
     if (action == @selector(uppercaseWord:) || action == @selector(lowercaseWord:) || action == @selector(capitalizeWord:))
-        return m_page->editorState().selectionIsRange && m_page->editorState().isContentEditable;
+        return m_page->editorState().selectionType == WebCore::SelectionType::Range && m_page->editorState().isContentEditable;
 
     if (action == @selector(stopSpeaking:))
         return [NSApp isSpeaking];
 
     // The centerSelectionInVisibleArea: selector is enabled if there's a selection range or if there's an insertion point in an editable area.
     if (action == @selector(centerSelectionInVisibleArea:))
-        return m_page->editorState().selectionIsRange || (m_page->editorState().isContentEditable && !m_page->editorState().selectionIsNone);
+        return m_page->editorState().selectionType == WebCore::SelectionType::Range || (m_page->editorState().isContentEditable && m_page->editorState().selectionType == WebCore::SelectionType::Caret);
 
 #if ENABLE(WRITING_TOOLS) && HAVE(NSRESPONDER_WRITING_TOOLS_SUPPORT)
     if (action == @selector(showWritingTools:))
@@ -4443,7 +4441,7 @@ static bool handleLegacyFilesPromisePasteboard(id<NSDraggingInfo> draggingInfo, 
     // FIXME: legacyFilesPromisePasteboardTypeSingleton() contains UTIs, not path names. Also, it's not
     // guaranteed that the count of UTIs equals the count of files, since some clients only write
     // unique UTIs.
-    RetainPtr files = dynamic_objc_cast<NSArray>([retainPtr(draggingInfo.draggingPasteboard) propertyListForType:WebCore::legacyFilesPromisePasteboardTypeSingleton()]);
+    RetainPtr files = dynamic_objc_cast<NSArray>([protect(draggingInfo.draggingPasteboard) propertyListForType:WebCore::legacyFilesPromisePasteboardTypeSingleton()]);
     if (!files)
         return false;
 
@@ -4455,21 +4453,28 @@ static bool handleLegacyFilesPromisePasteboard(id<NSDraggingInfo> draggingInfo, 
     auto fileNames = Box<Vector<String>>::create();
     RetainPtr dropDestination = [NSURL fileURLWithPath:dropDestinationPath.get() isDirectory:YES];
     String pasteboardName = draggingInfo.draggingPasteboard.name;
-    Ref protectedPage { page };
-    [draggingInfo enumerateDraggingItemsWithOptions:0 forView:view.get() classes:@[NSFilePromiseReceiver.class] searchOptions:@{ } usingBlock:[&](NSDraggingItem *draggingItem, NSInteger idx, BOOL *stop) {
-        auto queue = adoptNS([NSOperationQueue new]);
-        [retainPtr(draggingItem.item) receivePromisedFilesAtDestination:dropDestination.get() options:@{ } operationQueue:queue.get() reader:[protectedPage, fileNames, fileCount, dragData, pasteboardName](NSURL *fileURL, NSError *errorOrNil) mutable {
+    [draggingInfo enumerateDraggingItemsWithOptions:0 forView:view.get() classes:@[NSFilePromiseReceiver.class] searchOptions:@{ } usingBlock:makeBlockPtr([
+        pasteboardName,
+        dropDestination,
+        fileNames,
+        fileCount,
+        dragData,
+        protectedPage = protect(page)
+    ](NSDraggingItem *draggingItem, NSInteger idx, BOOL *stop) {
+        RetainPtr queue = adoptNS([NSOperationQueue new]);
+        BlockPtr readerBlock = makeBlockPtr([protectedPage, fileNames, fileCount, dragData, pasteboardName = pasteboardName.isolatedCopy()](NSURL *fileURL, NSError *errorOrNil) mutable {
             if (errorOrNil)
                 return;
 
-            RunLoop::mainSingleton().dispatch([protectedPage = WTF::move(protectedPage), path = RetainPtr { fileURL.path }, fileNames, fileCount, dragData, pasteboardName] () mutable {
+            RunLoop::mainSingleton().dispatch([protectedPage, path = protect(fileURL.path), fileNames, fileCount, dragData, pasteboardName] mutable {
                 fileNames->append(path.get());
                 if (fileNames->size() != fileCount)
                     return;
                 performDragWithLegacyFiles(protectedPage, WTF::move(fileNames), WTF::move(dragData), pasteboardName);
             });
-        }];
-    }];
+        });
+        [protect(draggingItem.item) receivePromisedFilesAtDestination:dropDestination.get() options:@{ } operationQueue:queue.get() reader:readerBlock.get()];
+    }).get()];
 
     return true;
 }
@@ -5037,7 +5042,7 @@ void WebViewImpl::showWritingTools(WTRequestedTool tool)
     FloatRect selectionRect;
 
     auto& editorState = m_page->editorState();
-    if (editorState.selectionIsRange)
+    if (editorState.selectionType == WebCore::SelectionType::Range)
         selectionRect = page().selectionBoundingRectInRootViewCoordinates();
 
 ALLOW_DEPRECATED_DECLARATIONS_BEGIN
@@ -5647,7 +5652,7 @@ NSTextInputContext *WebViewImpl::inputContextIncludingNonEditable()
     if (!protect(m_page->preferences())->textInputClientSelectionUpdatesEnabled())
         return inputContext();
 
-    if (!m_page->editorState().isContentEditable && !m_page->editorState().selectionIsRange)
+    if (!m_page->editorState().isContentEditable && m_page->editorState().selectionType != WebCore::SelectionType::Range)
         return nil;
 
     return [protect(m_view) _web_superInputContext];
@@ -6696,7 +6701,7 @@ void WebViewImpl::updateTextTouchBar()
     }
 
     if ([NSSpellChecker isAutomaticTextCompletionEnabled] && !m_isCustomizingTouchBar) {
-        BOOL showCandidatesList = !m_page->editorState().selectionIsRange || m_isHandlingAcceptedCandidate;
+        BOOL showCandidatesList = m_page->editorState().selectionType != WebCore::SelectionType::Range || m_isHandlingAcceptedCandidate;
         RetainPtr candidateListTouchBarItem = WebViewImpl::candidateListTouchBarItem();
         [candidateListTouchBarItem updateWithInsertionPointVisibility:showCandidatesList];
         [m_view.get() _didUpdateCandidateListVisibility:showCandidatesList];

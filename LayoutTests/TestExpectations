@@ -657,7 +657,6 @@ imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customiz
 imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/select-picker-starting-style.html [ Skip ]
 imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/select-popover-exit-animation.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/selectedcontent-restore.html [ Skip ]
-imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/picker-and-slotted.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/select-synthetic-events.html [ Skip ]
 imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/select-mouse-behavior.html [ Skip ]
 imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/select-many-options.tentative.html [ Skip ]
@@ -1995,10 +1994,7 @@ imported/w3c/web-platform-tests/html/browsers/windows/nested-browsing-contexts/f
 
 # These MathML WPT tests fail.
 webkit.org/b/180013 mathml/non-core/lengths-2.html [ ImageOnlyFailure ]
-webkit.org/b/194952 imported/w3c/web-platform-tests/mathml/presentation-markup/fractions/frac-bar-001.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/mathml/presentation-markup/direction/direction-overall-003.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/mathml/presentation-markup/fractions/frac-bar-002.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/mathml/presentation-markup/fractions/frac-default-padding.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/mathml/presentation-markup/operators/embellished-op-1-2.html [ ImageOnlyFailure Pass ]
 imported/w3c/web-platform-tests/mathml/presentation-markup/operators/embellished-op-1-3.html [ ImageOnlyFailure Pass ]
 imported/w3c/web-platform-tests/mathml/presentation-markup/operators/embellished-op-1-4.html [ ImageOnlyFailure Pass ]
@@ -2051,14 +2047,11 @@ imported/w3c/web-platform-tests/mathml/relations/css-styling/clip.html [ ImageOn
 imported/w3c/web-platform-tests/mathml/relations/css-styling/presentational-hints-001.html [ ImageOnlyFailure Pass ]
 imported/w3c/web-platform-tests/mathml/relations/css-styling/transform.html [ ImageOnlyFailure ]
 
-imported/w3c/web-platform-tests/mathml/presentation-markup/fractions/frac-bar-003.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/mathml/presentation-markup/operators/mo-lspace-rspace-2.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/mathml/presentation-markup/operators/mo-movablelimits-and-embellished-operator.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/mathml/presentation-markup/operators/op-dict-8.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/mathml/presentation-markup/operators/op-dict-9.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/mathml/presentation-markup/operators/painting-stretchy-operator-001.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/mathml/presentation-markup/scripts/mprescripts-001.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/mathml/presentation-markup/scripts/none-001.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/mathml/presentation-markup/scripts/underover-stretchy-002.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/mathml/relations/css-styling/display-with-overflow.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/mathml/relations/css-styling/floats/floating-inside-mathml-with-block-display.html [ ImageOnlyFailure ]
@@ -5741,10 +5734,6 @@ webkit.org/b/214461 imported/w3c/web-platform-tests/css/css-pseudo/spelling-erro
 webkit.org/b/214462 imported/w3c/web-platform-tests/css/css-scoping/host-context-specificity-001.html [ ImageOnlyFailure ]
 webkit.org/b/214462 imported/w3c/web-platform-tests/css/css-scoping/host-context-specificity-002.html [ ImageOnlyFailure ]
 webkit.org/b/214462 imported/w3c/web-platform-tests/css/css-scoping/host-context-specificity-003.html [ ImageOnlyFailure ]
-webkit.org/b/214462 imported/w3c/web-platform-tests/css/css-scoping/slotted-placeholder.html [ ImageOnlyFailure ]
-
-webkit.org/b/287169 imported/w3c/web-platform-tests/css/css-scoping/slotted-details-content.html [ ImageOnlyFailure ]
-webkit.org/b/287169 imported/w3c/web-platform-tests/css/css-scoping/slotted-file-selector-button.html [ ImageOnlyFailure ]
 
 webkit.org/b/214464 imported/w3c/web-platform-tests/css/css-text-decor/text-decoration-thickness-ink-skip-dilation.html [ ImageOnlyFailure ]
 
