@@ -27,10 +27,9 @@
 
 #if ENABLE(VIDEO) && USE(AVFOUNDATION)
 
-#include "FloatSize.h"
-#include "InbandTextTrackPrivateAVF.h"
-#include "MediaPlayerPrivate.h"
-#include "Timer.h"
+#include <WebCore/FloatSize.h>
+#include <WebCore/MediaPlayerPrivate.h>
+#include <WebCore/Timer.h>
 #include <wtf/Deque.h>
 #include <wtf/Function.h>
 #include <wtf/Lock.h>
@@ -152,7 +151,6 @@ public:
 
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const final { return m_logger.get(); }
-    Ref<const Logger> protectedLogger() const { return logger(); }
     ASCIILiteral logClassName() const override { return "MediaPlayerPrivateAVFoundation"_s; }
     uint64_t logIdentifier() const final { return m_logIdentifier; }
     WTFLogChannel& logChannel() const final;

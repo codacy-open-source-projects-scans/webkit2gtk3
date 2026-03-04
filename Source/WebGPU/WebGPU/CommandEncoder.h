@@ -47,7 +47,7 @@ IGNORE_CLANG_WARNINGS_BEGIN("nullability-completeness")
 @interface TextureAndClearColor : NSObject
 - (instancetype)initWithTexture:(id<MTLTexture> _Nonnull)texture NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;
-@property (nonatomic) id<MTLTexture> texture;
+@property (nonatomic, nonnull) id<MTLTexture> texture;
 @property (nonatomic) MTLClearColor clearColor;
 @property (nonatomic) NSUInteger depthPlane;
 @end
@@ -106,7 +106,6 @@ public:
     void setLabel(String&&);
 
     Device& device() const { return m_device; }
-    Ref<Device> protectedDevice() const { return m_device; }
 
     bool isValid() const { return m_commandBuffer; }
     void lock(bool);
@@ -177,7 +176,6 @@ private:
     void trackEncoder(TrackedResourceContainer&);
 
     void discardCommandBuffer();
-    RefPtr<CommandBuffer> protectedCachedCommandBuffer() const { return m_cachedCommandBuffer.get(); }
     void retainTimestampsForOneUpdateLoop();
 
     id<MTLCommandBuffer> _Nullable m_commandBuffer { nil };

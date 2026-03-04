@@ -114,6 +114,7 @@ public:
     virtual ~NetworkSession();
 
     virtual void invalidateAndCancel();
+    bool isInvalidated() const { return m_isInvalidated; }
     virtual bool shouldLogCookieInformation() const { return false; }
     virtual Vector<WebCore::SecurityOriginData> hostNamesWithAlternativeServices() const { return { }; }
     virtual void deleteAlternativeServicesForHostNames(const Vector<String>&) { }
@@ -207,7 +208,7 @@ public:
     virtual void removeWebSocketTask(SessionSet&, WebSocketTask&) { }
     virtual void addWebSocketTask(WebPageProxyIdentifier, WebSocketTask&) { }
 
-    WebCore::BlobRegistryImpl& blobRegistry() { return m_blobRegistry; }
+    WebCore::BlobRegistryImpl& blobRegistry() LIFETIME_BOUND { return m_blobRegistry; }
     NetworkBroadcastChannelRegistry& broadcastChannelRegistry() { return m_broadcastChannelRegistry; }
 
     unsigned testSpeedMultiplier() const { return m_testSpeedMultiplier; }
@@ -225,7 +226,6 @@ public:
 
     WebCore::SWServer* swServer() { return m_swServer.get(); }
     WebCore::SWServer& ensureSWServer();
-    Ref<WebCore::SWServer> ensureProtectedSWServer();
     void registerSWServerConnection(WebSWServerConnection&);
     void unregisterSWServerConnection(WebSWServerConnection&);
 
@@ -257,7 +257,7 @@ public:
 #endif
 
 #if PLATFORM(COCOA)
-    AppPrivacyReportTestingData& appPrivacyReportTestingData() { return m_appPrivacyReportTestingData; }
+    AppPrivacyReportTestingData& appPrivacyReportTestingData() LIFETIME_BOUND { return m_appPrivacyReportTestingData; }
 #endif
 
     virtual void removeNetworkWebsiteData(std::optional<WallTime>, std::optional<HashSet<WebCore::RegistrableDomain>>&&, CompletionHandler<void()>&& completionHandler) { completionHandler(); }
@@ -316,7 +316,7 @@ protected:
     NetworkSession(NetworkProcess&, const NetworkSessionCreationParameters&);
 
     void forwardResourceLoadStatisticsSettings();
-    WebSWOriginStore* NODELETE swOriginStore() const;
+    WebSWOriginStore* NODELETE swOriginStore() const LIFETIME_BOUND;
 
     // SWServerDelegate
     void softUpdate(WebCore::ServiceWorkerJobData&&, bool shouldRefreshCache, WebCore::ResourceRequest&&, CompletionHandler<void(WebCore::WorkerFetchResult&&)>&&) final;
@@ -329,7 +329,6 @@ protected:
     Ref<WebCore::BackgroundFetchStore> createBackgroundFetchStore() final;
 
     BackgroundFetchStoreImpl& ensureBackgroundFetchStore();
-    Ref<BackgroundFetchStoreImpl> ensureProtectedBackgroundFetchStore();
 
     PAL::SessionID m_sessionID;
     const Ref<NetworkProcess> m_networkProcess;
@@ -374,9 +373,7 @@ protected:
 
     const UniqueRef<PrefetchCache> m_prefetchCache;
 
-#if ASSERT_ENABLED
     bool m_isInvalidated { false };
-#endif
     RefPtr<NetworkCache::Cache> m_cache;
     const RefPtr<NetworkLoadScheduler> m_networkLoadScheduler;
     WebCore::BlobRegistryImpl m_blobRegistry;

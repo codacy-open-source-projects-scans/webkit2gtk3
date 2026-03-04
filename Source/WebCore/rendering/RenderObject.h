@@ -1292,7 +1292,7 @@ private:
 
         // From RenderElement
         std::unique_ptr<ReferencedSVGResources> referencedSVGResources;
-        SingleThreadWeakPtr<RenderBlockFlow> backdropRenderer;
+        std::array<SingleThreadWeakPtr<RenderBlockFlow>, 3> pseudoElementRenderers;
 
         // From RenderBox
         RefPtr<ControlPart> controlPart;

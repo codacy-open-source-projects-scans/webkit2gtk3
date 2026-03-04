@@ -134,8 +134,8 @@ public:
     void destroy();
     size_t enumerateFeatures(WGPUFeatureName* features);
     bool getLimits(WGPUSupportedLimits&);
-    Queue& getQueue() const { return m_defaultQueue; }
-    Ref<Queue> protectedQueue() const { return m_defaultQueue; }
+    Queue& getQueueReference() const { return m_defaultQueue; }
+    Ref<Queue> getQueue() const { return m_defaultQueue; }
     bool hasFeature(WGPUFeatureName) const;
     bool popErrorScope(CompletionHandler<void(WGPUErrorType, String&&)>&& callback);
     void pushErrorScope(WGPUErrorFilter);
@@ -226,7 +226,7 @@ public:
     bool enableEncoderTimestamps() const;
     id<MTLCounterSampleBuffer> timestampsBuffer(id<MTLCommandBuffer>, size_t);
     void resolveTimestampsForBuffer(id<MTLCommandBuffer>);
-    id<MTLSharedEvent> resolveTimestampsSharedEvent();
+    id<MTLSharedEvent> _Nonnull resolveTimestampsSharedEvent();
     uint32_t maxVerticesPerDrawCall() const { return m_maxVerticesPerDrawCall; }
     void trackTimestampsBuffer(id<MTLCommandBuffer>, id<MTLCounterSampleBuffer>);
 

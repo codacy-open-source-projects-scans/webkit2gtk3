@@ -267,7 +267,7 @@ private:
 #endif
     }
 
-    const ProcessIdentity& resourceOwner() const final
+    ProcessIdentity resourceOwner() const final
     {
         return m_process.get()->webProcessIdentity();
     }
@@ -662,7 +662,7 @@ void GPUConnectionToWebProcess::providePresentingApplicationPID(WebCore::PageIde
 
     ProcessID processID = presentingApplicationPID(pageIdentifier);
     ASSERT(processID);
-    MediaSessionHelper::protectedSharedHelper()->providePresentingApplicationPID(processID);
+    protect(MediaSessionHelper::sharedHelper())->providePresentingApplicationPID(processID);
 }
 #endif
 

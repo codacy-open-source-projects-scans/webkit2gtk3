@@ -29,6 +29,7 @@
 
 #if ENABLE(MODEL_ELEMENT)
 
+#include "AbortSignal.h"
 #include "ContainerNodeInlines.h"
 #include "DOMMatrixReadOnly.h"
 #include "DOMPointReadOnly.h"
@@ -102,6 +103,23 @@ using namespace HTMLNames;
 WTF_MAKE_TZONE_ALLOCATED_IMPL(HTMLModelElement);
 
 static const Seconds reloadModelDelay { 1_s };
+
+#if ENABLE(TOUCH_EVENTS)
+class HTMLModelElementEventListener final : public EventListener {
+public:
+    static Ref<HTMLModelElementEventListener> create()
+    {
+        return adoptRef(*new HTMLModelElementEventListener());
+    }
+
+    void handleEvent(ScriptExecutionContext&, Event&) override { }
+
+private:
+    explicit HTMLModelElementEventListener()
+        : EventListener(EventListener::CPPEventListenerType)
+    { }
+};
+#endif
 
 HTMLModelElement::HTMLModelElement(const QualifiedName& tagName, Document& document)
     : HTMLElement(tagName, document, { TypeFlag::HasCustomStyleResolveCallbacks, TypeFlag::HasDidMoveToNewDocument })
@@ -378,7 +396,7 @@ void HTMLModelElement::didConvertModelData(ModelPlayer& modelPlayer, Ref<SharedB
 
     RELEASE_LOG(ModelElement, "%p - HTMLModelElement::didConvertModelData: Received converted model data, size=%zu mimeType=%s", this, convertedData->size(), convertedMIMEType.utf8().data());
 
-    m_model = Model::create(WTF::move(convertedData), convertedMIMEType, m_sourceURL, true /* isConverted */);
+    m_model = Model::create(WTF::move(convertedData), String { convertedMIMEType }, m_sourceURL, true /* isConverted */);
     m_dataMemoryCost.store(m_model->data()->size(), std::memory_order_relaxed);
     reportExtraMemoryCost();
 }
@@ -1109,8 +1127,27 @@ WebCore::StageModeOperation HTMLModelElement::stageMode() const
 
 void HTMLModelElement::updateStageMode()
 {
+    auto mode = stageMode();
     if (m_modelPlayer)
-        m_modelPlayer->setStageMode(stageMode());
+        m_modelPlayer->setStageMode(mode);
+
+#if ENABLE(TOUCH_EVENTS)
+    if (!m_eventListener)
+        m_eventListener = HTMLModelElementEventListener::create();
+
+    if (mode == WebCore::StageModeOperation::Orbit) {
+        addEventListener(eventNames().touchstartEvent, *m_eventListener, { });
+        addEventListener(eventNames().touchmoveEvent, *m_eventListener, { });
+        addEventListener(eventNames().touchendEvent, *m_eventListener, { });
+        document().didAddTouchEventHandler(*this);
+    } else {
+        removeEventListener(eventNames().touchstartEvent, *m_eventListener, { });
+        removeEventListener(eventNames().touchmoveEvent, *m_eventListener, { });
+        removeEventListener(eventNames().touchendEvent, *m_eventListener, { });
+        document().didRemoveTouchEventHandler(*this);
+    }
+
+#endif
 }
 
 #endif

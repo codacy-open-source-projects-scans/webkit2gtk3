@@ -243,18 +243,8 @@ void RenderInline::generateLineBoxRects(GeneratorContext& context) const
             context.addRect({ });
             return;
         }
-        if (inlineBoxRects.size() == 1) {
-            context.addRect(inlineBoxRects.first());
-            return;
-        }
-
-        for (auto inlineBoxRect : inlineBoxRects) {
-            if (!inlineBoxRect.size().isZero()) {
-                // Empty inline boxes may show up for cases where the inline box is fragmented and (usually) in-between line(s)
-                // can't accomodate any content (e.g. due to floats). Let's not report such rectanges to functions like getClientRects.
-                context.addRect(inlineBoxRect);
-            }
-        }
+        for (auto inlineRect : inlineBoxRects)
+            context.addRect(inlineRect);
         return;
     }
     if (auto* curr = firstLegacyInlineBox()) {

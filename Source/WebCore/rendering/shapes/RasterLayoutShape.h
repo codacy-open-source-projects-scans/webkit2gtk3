@@ -29,9 +29,9 @@
 
 #pragma once
 
-#include <WebCore/FloatRect.h>
-#include <WebCore/LayoutShape.h>
-#include <WebCore/ShapeInterval.h>
+#include "FloatRect.h"
+#include "LayoutShape.h"
+#include "ShapeInterval.h"
 #include <wtf/Assertions.h>
 #include <wtf/TZoneMalloc.h>
 #include <wtf/Vector.h>
@@ -101,8 +101,8 @@ public:
 private:
     const RasterShapeIntervals& marginIntervals() const;
 
-    std::unique_ptr<RasterShapeIntervals> m_intervals;
-    mutable std::unique_ptr<RasterShapeIntervals> m_marginIntervals;
+    const std::unique_ptr<RasterShapeIntervals> m_intervals;
+    const std::unique_ptr<RasterShapeIntervals> m_marginIntervals;
     IntSize m_marginRectSize;
 };
 

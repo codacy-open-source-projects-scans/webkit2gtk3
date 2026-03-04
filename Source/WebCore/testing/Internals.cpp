@@ -499,7 +499,7 @@ InspectorStubFrontend::InspectorStubFrontend(Page& inspectedPage, LocalFrame& ma
     ASSERT_ARG(frontendWindow, frontendWindow);
 
     frontendPage()->inspectorController().setInspectorFrontendClient(this);
-    inspectedPage.protectedInspectorController()->connectFrontend(*this);
+    protect(inspectedPage.inspectorController())->connectFrontend(*this);
     protect(mainFrame.inspectorController())->connectFrontend(*this);
 }
 
@@ -517,7 +517,7 @@ void InspectorStubFrontend::closeWindow()
     if (RefPtr controller = m_mainFrameInspectorController.get())
         controller->disconnectFrontend(*this);
     if (RefPtr page = inspectedPage())
-        page->protectedInspectorController()->disconnectFrontend(*this);
+        protect(page->inspectorController())->disconnectFrontend(*this);
 
     m_frontendWindow->close();
     m_frontendWindow = nullptr;
@@ -624,6 +624,9 @@ void Internals::resetToConsistentState(Page& page)
         page.setHeaderHeight(0);
         page.setFooterHeight(0);
         page.setObscuredContentInsets({ });
+#if ENABLE(BANNER_VIEW_OVERLAYS)
+        page.setHasBannerViewOverlay(false);
+#endif
         mainFrameView->setUseFixedLayout(false);
         mainFrameView->setFixedLayoutSize(IntSize());
         mainFrameView->enableFixedWidthAutoSizeMode(false, { });
@@ -750,7 +753,6 @@ void Internals::resetToConsistentState(Page& page)
 #endif
 
 #if ENABLE(WIRELESS_PLAYBACK_MEDIA_PLAYER)
-    MediaDeviceRouteController::singleton().setClient(nullptr);
     setMockMediaDeviceRouteControllerEnabled(false);
 #endif
 }
@@ -5906,7 +5908,7 @@ void Internals::queueMicroTask(int testNumber)
 
     ScriptExecutionContext* context = document;
     auto& eventLoop = context->eventLoop();
-    eventLoop.queueMicrotask([document = Ref { *document }, testNumber]() {
+    eventLoop.queueMicrotask(document->vm(), [document = Ref { *document }, testNumber]() {
         document->addConsoleMessage(MessageSource::JS, MessageLevel::Debug, makeString("MicroTask #"_s, testNumber, " has run."_s));
     });
 }
@@ -6059,6 +6061,21 @@ float Internals::pageMediaVolume()
 
     return page->mediaVolume();
 }
+
+#if ENABLE(BANNER_VIEW_OVERLAYS)
+void Internals::setPageHasBannerViewOverlayForTesting(bool hasBannerViewOverlay)
+{
+    RefPtr document = contextDocument();
+    if (!document)
+        return;
+
+    RefPtr page = document->page();
+    if (!page)
+        return;
+
+    page->setHasBannerViewOverlay(hasBannerViewOverlay);
+}
+#endif
 
 #if !PLATFORM(COCOA)
 
@@ -6391,7 +6408,7 @@ ExceptionOr<void> Internals::queueTaskToQueueMicrotask(Document& document, const
     ScriptExecutionContext& context = document; // This avoids unnecessarily exporting Document::eventLoop.
     context.eventLoop().queueTask(*source, [movedCallback = WTF::move(callback), protectedDocument = Ref { document }]() mutable {
         ScriptExecutionContext& context = protectedDocument.get();
-        context.eventLoop().queueMicrotask([callback = WTF::move(movedCallback)] {
+        context.eventLoop().queueMicrotask(context.vm(), [callback = WTF::move(movedCallback)] {
             callback->invoke();
         });
     });

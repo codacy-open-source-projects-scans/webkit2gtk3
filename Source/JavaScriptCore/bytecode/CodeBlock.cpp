@@ -2845,8 +2845,11 @@ void CodeBlock::didDFGJettison(Profiler::JettisonReason reason)
     if (!Profiler::isSpeculationFailure(reason))
         return;
 
-    ASSERT(unlinkedCodeBlock()->hasQuickDFGTierUpUpdated());
-    unlinkedCodeBlock()->setQuickDFGTierUp(TriState::False);
+    // Only mark as failed if code was already installed and ran (flag = True).
+    // If jettison happens during compilation (flag = Indeterminate), leave it
+    // unchanged - this was environmental (OOM, GC pressure), not a code quality issue.
+    if (unlinkedCodeBlock()->hasQuickDFGTierUpUpdated())
+        unlinkedCodeBlock()->setQuickDFGTierUp(TriState::False);
 }
 
 void CodeBlock::didFailDFGCompilation()
@@ -3100,7 +3103,15 @@ bool CodeBlock::shouldOptimizeNowFromBaseline()
             numberOfSamplesInProfiles, ValueProfile::numberOfBuckets * numberOfNonArgumentValueProfiles());
     }
 
-    if (livenessRate >= Options::desiredProfileLivenessRate() && fullnessRate >= Options::desiredProfileFullnessRate() && static_cast<unsigned>(m_optimizationDelayCounter) + 1 >= Options::minimumOptimizationDelay())
+    double requiredLivenessRate = Options::desiredProfileLivenessRate();
+    double requiredFullnessRate = Options::desiredProfileFullnessRate();
+
+    if (unlinkedCodeBlock()->isQuickDFGTierUp()) {
+        requiredLivenessRate *= Options::relaxedProfileCoverageFactorForQuickDFGTierUp();
+        requiredFullnessRate *= Options::relaxedProfileCoverageFactorForQuickDFGTierUp();
+    }
+
+    if (livenessRate >= requiredLivenessRate && fullnessRate >= requiredFullnessRate && static_cast<unsigned>(m_optimizationDelayCounter) + 1 >= Options::minimumOptimizationDelay())
         return true;
 
 #if ENABLE(DFG_JIT)

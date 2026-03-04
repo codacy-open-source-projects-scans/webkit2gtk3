@@ -63,6 +63,7 @@
 #include "CodeBlockSetInlines.h"
 #include "ConsoleClient.h"
 #include "ConsoleObjectInlines.h"
+#include "CrossTaskToken.h"
 #include "DateConstructorInlines.h"
 #include "DateInstanceInlines.h"
 #include "DatePrototypeInlines.h"
@@ -217,6 +218,7 @@
 #include "MarkedSpaceInlines.h"
 #include "MathObjectInlines.h"
 #include "Microtask.h"
+#include "MicrotaskQueueInlines.h"
 #include "NativeErrorConstructorInlines.h"
 #include "NativeErrorPrototypeInlines.h"
 #include "NullGetterFunctionInlines.h"
@@ -666,7 +668,6 @@ const GlobalObjectMethodTable* JSGlobalObject::baseGlobalObjectMethodTable()
         &supportsRichSourceInfo,
         &shouldInterruptScript,
         &javaScriptRuntimeFlags,
-        &queueMicrotaskToEventLoop,
         &shouldInterruptScriptBeforeTimeout,
         nullptr, // moduleLoaderImportModule
         nullptr, // moduleLoaderResolve
@@ -745,7 +746,7 @@ JSC_DEFINE_HOST_FUNCTION(resolvePromise, (JSGlobalObject* globalObject, CallFram
 {
     auto* promise = jsCast<JSPromise*>(callFrame->uncheckedArgument(0));
     JSValue argument = callFrame->uncheckedArgument(1);
-    promise->resolvePromise(globalObject, argument);
+    promise->resolvePromise(globalObject, globalObject->vm(), argument);
     return encodedJSUndefined();
 }
 
@@ -769,7 +770,7 @@ JSC_DEFINE_HOST_FUNCTION(resolvePromiseWithFirstResolvingFunctionCallCheck, (JSG
 {
     auto* promise = jsCast<JSPromise*>(callFrame->uncheckedArgument(0));
     JSValue argument = callFrame->uncheckedArgument(1);
-    promise->resolve(globalObject, argument);
+    promise->resolve(globalObject, globalObject->vm(), argument);
     return encodedJSUndefined();
 }
 
@@ -791,18 +792,20 @@ JSC_DEFINE_HOST_FUNCTION(fulfillPromiseWithFirstResolvingFunctionCallCheck, (JSG
 
 JSC_DEFINE_HOST_FUNCTION(resolveWithInternalMicrotaskForAsyncAwait, (JSGlobalObject* globalObject, CallFrame* callFrame))
 {
+    VM& vm = globalObject->vm();
     JSValue resolution = callFrame->uncheckedArgument(0);
     auto task = static_cast<InternalMicrotask>(callFrame->uncheckedArgument(1).asUInt32AsAnyInt());
     JSValue context = callFrame->uncheckedArgument(2);
-    JSPromise::resolveWithInternalMicrotaskForAsyncAwait(globalObject, resolution, task, context);
+    JSPromise::resolveWithInternalMicrotaskForAsyncAwait(globalObject, vm, resolution, task, context);
     return encodedJSUndefined();
 }
 
 JSC_DEFINE_HOST_FUNCTION(driveAsyncFunction, (JSGlobalObject* globalObject, CallFrame* callFrame))
 {
+    VM& vm = globalObject->vm();
     JSValue resolution = callFrame->uncheckedArgument(0);
     JSValue context = callFrame->uncheckedArgument(1);
-    JSPromise::resolveWithInternalMicrotaskForAsyncAwait(globalObject, resolution, InternalMicrotask::AsyncFunctionResume, context);
+    JSPromise::resolveWithInternalMicrotaskForAsyncAwait(globalObject, vm, resolution, InternalMicrotask::AsyncFunctionResume, context);
     return encodedJSUndefined();
 }
 
@@ -884,7 +887,7 @@ JSC_DEFINE_HOST_FUNCTION(asyncGeneratorQueueDequeueResolve, (JSGlobalObject* glo
 
     auto [value, resumeMode, promise] = generator->dequeue(vm);
 
-    promise->resolve(globalObject, resolution);
+    promise->resolve(globalObject, vm, resolution);
 
     return JSValue::encode(jsNumber(generator->resumeMode()));
 }
@@ -908,6 +911,7 @@ JS_GLOBAL_OBJECT_ADDITIONS_2;
 JSGlobalObject::JSGlobalObject(VM& vm, Structure* structure, const GlobalObjectMethodTable* globalObjectMethodTable)
     : Base(vm, structure, nullptr)
     , m_vm(&vm)
+    , m_microtaskQueue(vm.defaultMicrotaskQueue())
     , m_linkTimeConstants(numberOfLinkTimeConstants)
     , m_structureCache(vm)
     , m_masqueradesAsUndefinedWatchpointSet(WatchpointSet::create(IsWatched))
@@ -1033,7 +1037,7 @@ SUPPRESS_ASAN inline void JSGlobalObject::initStaticGlobals(VM& vm)
         GlobalPropertyInfo(vm.propertyNames->builtinNames().assertPrivateName(), JSFunction::create(vm, this, 1, String(), assertCall, ImplementationVisibility::Public), PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
 #endif
     };
-    addStaticGlobals(staticGlobals, std::size(staticGlobals));
+    addStaticGlobals(staticGlobals);
 }
 
 WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
@@ -3096,19 +3100,16 @@ SUPPRESS_ASAN void JSGlobalObject::exposeDollarVM(VM& vm)
     GlobalPropertyInfo extraStaticGlobals[] = {
         GlobalPropertyInfo(vm.propertyNames->builtinNames().dollarVMPrivateName(), dollarVM, PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
     };
-    addStaticGlobals(extraStaticGlobals, std::size(extraStaticGlobals));
+    addStaticGlobals(extraStaticGlobals);
 
     putDirect(vm, Identifier::fromString(vm, "$vm"_s), dollarVM, static_cast<unsigned>(PropertyAttribute::DontEnum));
 }
 
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
-
-void JSGlobalObject::addStaticGlobals(GlobalPropertyInfo* globals, int count)
+void JSGlobalObject::addStaticGlobals(std::span<GlobalPropertyInfo> globals)
 {
-    ScopeOffset startOffset = addVariables(count, jsUndefined());
+    ScopeOffset startOffset = addVariables(globals.size(), jsUndefined());
 
-    for (int i = 0; i < count; ++i) {
-        GlobalPropertyInfo& global = globals[i];
+    for (auto [i, global] : indexedRange(globals)) {
         // This `configurable = false` is necessary condition for static globals,
         // otherwise lexical bindings can change the result of GlobalVar queries too.
         // We won't be able to declare a global lexical variable with the sanem name to
@@ -3130,8 +3131,6 @@ void JSGlobalObject::addStaticGlobals(GlobalPropertyInfo* globals, int count)
         symbolTablePutTouchWatchpointSet(vm(), this, global.identifier, global.value, variable, watchpointSet);
     }
 }
-
-WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
 bool JSGlobalObject::getOwnPropertySlot(JSObject* object, JSGlobalObject* globalObject, PropertyName propertyName, PropertySlot& slot)
 {
@@ -3594,15 +3593,35 @@ void JSGlobalObject::bumpGlobalLexicalBindingEpoch(VM& vm)
 
 void JSGlobalObject::queueMicrotaskToEventLoop(JSC::JSGlobalObject& globalObject, JSC::QueuedTask&& task)
 {
-    if (globalObject.debugger()) [[unlikely]]
-        task.setDispatcher(JSMicrotaskDispatcher::create(globalObject.vm(), DebuggableMicrotaskDispatcher::create(), &globalObject));
-    globalObject.vm().queueMicrotask(WTF::move(task));
+    globalObject.queueMicrotask(globalObject.vm(), WTF::move(task));
 }
 
-void JSGlobalObject::queueMicrotask(InternalMicrotask job, uint8_t payload, JSValue argument0, JSValue argument1, JSValue argument2)
+void JSGlobalObject::queueMicrotask(VM& vm, QueuedTask&& task)
 {
-    QueuedTask task { nullptr, job, payload, this, argument0, argument1, argument2 };
-    globalObjectMethodTable()->queueMicrotaskToEventLoop(*this, WTF::move(task));
+    ([&] ALWAYS_INLINE_LAMBDA {
+        if (auto* crossTaskToken = vm.crossTaskToken(); crossTaskToken && crossTaskToken->shouldPropagateToMicroTask()) [[unlikely]] {
+            if (auto dispatcher = crossTaskToken->createMicrotaskDispatcher(vm, this)) {
+                task.setDispatcher(JSMicrotaskDispatcher::create(vm, dispatcher.releaseNonNull(), this));
+                return;
+            }
+        }
+
+        if (debugger()) [[unlikely]] {
+            task.setDispatcher(JSMicrotaskDispatcher::create(vm, DebuggableMicrotaskDispatcher::create(), this));
+            return;
+        }
+    }());
+    microtaskQueue().enqueue(WTF::move(task));
+}
+
+void JSGlobalObject::queueMicrotask(VM& vm, InternalMicrotask job, uint8_t payload, JSValue argument0, JSValue argument1, JSValue argument2)
+{
+    queueMicrotask(vm, QueuedTask { nullptr, job, payload, this, argument0, argument1, argument2 });
+}
+
+void JSGlobalObject::setMicrotaskQueue(Ref<MicrotaskQueue>&& queue)
+{
+    m_microtaskQueue = WTF::move(queue);
 }
 
 void JSGlobalObject::promiseRejectionTracker(JSGlobalObject* globalObject, JSPromise* promise, JSPromiseRejectionOperation operation)
@@ -3618,9 +3637,8 @@ void JSGlobalObject::promiseRejectionTracker(JSGlobalObject* globalObject, JSPro
     }
 }
 
-void JSGlobalObject::reportUncaughtExceptionAtEventLoop(JSGlobalObject*, Exception* exception)
+void JSGlobalObject::reportUncaughtExceptionAtEventLoop(JSGlobalObject*, Exception*)
 {
-    dataLogLn("Uncaught Exception at run loop: ", exception->value());
 }
 
 void JSGlobalObject::setConsoleClient(WeakPtr<ConsoleClient>&& consoleClient)
@@ -3781,11 +3799,6 @@ void JSGlobalObject::cachedFunctionExecutableForFunctionConstructor(FunctionExec
 }
 
 #if ENABLE(REMOTE_INSPECTOR)
-Ref<JSGlobalObjectDebuggable> JSGlobalObject::protectedInspectorDebuggable()
-{
-    return inspectorDebuggable();
-}
-
 Inspector::JSGlobalObjectInspectorController& JSGlobalObject::inspectorController() const
 {
     return *m_inspectorController.get();

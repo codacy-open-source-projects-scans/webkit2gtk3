@@ -79,7 +79,9 @@ void appendPlatformProperties(AXPropertyVector& properties, OptionSet<AXProperty
         setProperty(AXProperty::StringValue, object->stringValue().isolatedCopy());
 
     setProperty(AXProperty::RemoteFramePlatformElement, object->remoteFramePlatformElement());
-    setProperty(AXProperty::RemoteFrameProcessIdentifier, object->remoteFrameProcessIdentifier());
+    setProperty(AXProperty::RemoteFrameProcessIdentifier, object->remoteFramePID());
+    if (std::optional frameID = object->remoteFrameID())
+        setProperty(AXProperty::RemoteFrameID, *frameID);
 
     if (object->isWebArea()) {
         setProperty(AXProperty::PreventKeyboardDOMEventDispatch, object->preventKeyboardDOMEventDispatch());
@@ -124,7 +126,7 @@ RetainPtr<RemoteAXObjectRef> AXIsolatedObject::remoteParent() const
 
 FloatRect AXIsolatedObject::primaryScreenRect() const
 {
-    RefPtr geometryManager = tree()->geometryManager();
+    RefPtr geometryManager = tree().geometryManager();
     return geometryManager ? geometryManager->primaryScreenRect() : FloatRect();
 }
 
@@ -296,7 +298,7 @@ AXTextMarkerRange AXIsolatedObject::textMarkerRange() const
     Ref stopAfterObject = *this;
 
     if (std::optional stitchGroup = stitchGroupIfRepresentative()) {
-        if (RefPtr lastGroupMember = tree()->objectForID(stitchGroup->members().last()))
+        if (RefPtr lastGroupMember = tree().objectForID(stitchGroup->members().last()))
             stopAfterObject = lastGroupMember.releaseNonNull();
     }
     std::optional<AXID> stopAtID = stopAfterObject->idOfNextSiblingIncludingIgnoredOrParent();
@@ -323,7 +325,7 @@ AXTextMarkerRange AXIsolatedObject::textMarkerRangeForNSRange(const NSRange& ran
         unsigned start = range.location;
         unsigned end = range.location + range.length;
         if (start < text->length() && end <= text->length())
-            return { tree()->treeID(), objectID(), start, end };
+            return { tree().treeID(), objectID(), start, end };
     }
 
     if (std::optional markerRange = Accessibility::markerRangeFrom(range, *this)) {

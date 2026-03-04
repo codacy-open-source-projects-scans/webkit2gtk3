@@ -47,6 +47,8 @@ class TextStream;
 
 namespace WebCore {
 
+enum class ForTextEmphasis : bool;
+
 class FontPlatformData;
 class FontSelector;
 class GraphicsContext;
@@ -69,7 +71,7 @@ namespace ShapedTextCacheDefaults {
 static constexpr int initialInterval = -3; // Cache immediately, no countdown
 static constexpr int minInterval = -3; // After a hit, cache the next 3 attempts
 static constexpr int maxInterval = -3; // Never ramp up sampling, stay aggressive
-static constexpr unsigned maxSize = 500000; // Same as default cache size
+static constexpr unsigned maxSize = 3000; // Shaped text entries are large due to GlyphBuffer
 static constexpr unsigned maxTextLength = 128; // Larger than default to cache longer canvas text
 }
 
@@ -138,7 +140,7 @@ public:
     ShapedTextCache& shapedTextCache() { return m_shapedTextCache; }
     const ShapedTextCache& shapedTextCache() const { return m_shapedTextCache; }
 
-    const TextShapingResult* getOrCreateCachedShapedText(const TextRun&, const FontCascade&);
+    const TextShapingResult* getOrCreateCachedShapedText(const TextRun&, const FontCascade&, unsigned from, std::optional<unsigned> to, ForTextEmphasis);
 
     const Font& primaryFont(const FontCascadeDescription&, FontSelector*);
     WEBCORE_EXPORT const FontRanges& realizeFallbackRangesAt(const FontCascadeDescription&, FontSelector*, unsigned fallbackIndex);

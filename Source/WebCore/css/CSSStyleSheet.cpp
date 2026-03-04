@@ -86,7 +86,7 @@ static bool isAcceptableCSSStyleSheetParent(Node* parentNode)
         || is<HTMLLinkElement>(*parentNode)
         || is<HTMLStyleElement>(*parentNode)
         || is<SVGStyleElement>(*parentNode)
-        || parentNode->nodeType() == Node::PROCESSING_INSTRUCTION_NODE;
+        || parentNode->nodeType() == NodeType::ProcessingInstruction;
 }
 #endif // ASSERT_ENABLED
 
@@ -594,11 +594,6 @@ void CSSStyleSheet::removeAdoptingTreeScope(ContainerNode& treeScope)
     ASSERT(is<Document>(treeScope) || is<ShadowRoot>(treeScope));
     m_adoptingTreeScopes.remove(treeScope);
     styleScopeFor(treeScope).didChangeStyleSheetContents();
-}
-
-Ref<StyleSheetContents> CSSStyleSheet::protectedContents()
-{
-    return m_contents;
 }
 
 void CSSStyleSheet::getChildStyleSheets(HashSet<Ref<CSSStyleSheet>>& childStyleSheets)

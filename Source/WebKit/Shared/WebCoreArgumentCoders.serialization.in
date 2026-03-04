@@ -2194,6 +2194,11 @@ class WebCore::LayoutRect {
     WebCore::LayoutSize m_size;
 };
 
+struct WebCore::RemoteFrameLayoutInfo {
+    std::optional<WebCore::LayoutRect> visibleRectInParent;
+    float usedZoom;
+};
+
 header: <WebCore/VP9Utilities.h>
 [CustomHeader] struct WebCore::ScreenDataOverrides {
     double width;
@@ -2800,12 +2805,10 @@ header: <WebCore/ScrollingCoordinatorTypes.h>
 header: <WebCore/ScrollingCoordinatorTypes.h>
 [CustomHeader] enum class WebCore::ScrollUpdateType : uint8_t {
     PositionUpdate,
-    ScrollRequestResponse,
     AnimatedScrollWillStart,
     AnimatedScrollDidEnd,
     WheelEventScrollWillStart,
     WheelEventScrollDidEnd,
-    ProgrammaticScrollDidEnd,
 };
 
 header: <WebCore/ScrollingCoordinatorTypes.h>
@@ -2816,13 +2819,27 @@ header: <WebCore/ScrollingCoordinatorTypes.h>
 };
 
 header: <WebCore/ScrollingCoordinatorTypes.h>
+[CustomHeader] enum class WebCore::ShouldFireScrollEnd : bool;
+
+header: <WebCore/ScrollingCoordinatorTypes.h>
+[CustomHeader] struct WebCore::ScrollUpdateData {
+    WebCore::ScrollUpdateType updateType;
+    WebCore::ScrollingLayerPositionAction updateLayerPositionAction;
+    std::optional<WebCore::FloatPoint> layoutViewportOrigin;
+};
+
+header: <WebCore/ScrollingCoordinatorTypes.h>
+[CustomHeader] struct WebCore::ScrollRequestResponseData {
+    WebCore::ScrollRequestType requestType;
+    Markable<WebCore::ScrollRequestIdentifier> responseIdentifier;
+};
+
+header: <WebCore/ScrollingCoordinatorTypes.h>
 [CustomHeader] struct WebCore::ScrollUpdate {
     WebCore::ScrollingNodeID nodeID;
     WebCore::FloatPoint scrollPosition;
-    std::optional<WebCore::FloatPoint> layoutViewportOrigin;
-    WebCore::ScrollUpdateType updateType;
-    WebCore::ScrollingLayerPositionAction updateLayerPositionAction;
-    Markable<WebCore::ScrollRequestIdentifier> responseIdentifier;
+    WebCore::ShouldFireScrollEnd shouldFireScrollEnd;
+    Variant<WebCore::ScrollUpdateData, WebCore::ScrollRequestResponseData> data;
 };
 
 header: <WebCore/ScrollingCoordinatorTypes.h>
@@ -4368,10 +4385,10 @@ enum class WebCore::ScrollType : bool;
     Markable<WebCore::ScrollRequestIdentifier> identifier;
     WebCore::ScrollType scrollType;
     WebCore::ScrollClamping clamping;
-    WebCore::ScrollIsAnimated animated;
     WebCore::ScrollbarRevealBehavior scrollbarRevealBehavior;
-    std::optional<std::tuple<WebCore::ScrollRequestType, Variant<WebCore::FloatPoint, WebCore::FloatSize>, WebCore::ScrollType, WebCore::ScrollClamping>> requestedDataBeforeAnimatedScroll;
 }
+
+using WebCore::ScrollRequestData = Vector<WebCore::RequestedScrollData, 2>;
 
 [Alias=struct ScrollSnapOffsetsInfo<float,WebCore::FloatRect>, CustomHeader] alias WebCore::FloatScrollSnapOffsetsInfo {
     std::optional<WebCore::ScrollSnapStrictness> strictness;
@@ -7103,6 +7120,7 @@ header: <WebCore/TextExtractionTypes.h>
     String title;
     HashMap<String, String> clientAttributes;
     unsigned enclosingBlockNumber;
+    bool hasLineThrough;
 };
 
 header: <WebCore/TextExtractionTypes.h>
@@ -8068,7 +8086,10 @@ header: <WebCore/ScrollingCoordinatorTypes.h>
 header: <WebCore/ScrollingCoordinatorTypes.h>
 [Nested] enum class WebCore::ScrollRequestType : uint8_t {
     PositionUpdate,
+    AnimatedPositionUpdate,
     DeltaUpdate,
+    AnimatedDeltaUpdate,
+    ImplicitDeltaUpdate,
     CancelAnimatedScroll
 };
 
@@ -9329,6 +9350,68 @@ header: <WebCore/AXObjectCache.h>
     ProcessID pid;
 #endif
 }
+
+header: <WebCore/AXCoreObject.h>
+enum class WebCore::AccessibilitySearchDirection : uint8_t {
+    Next,
+    Previous,
+};
+
+header: <WebCore/AXSearchManager.h>
+enum class WebCore::AccessibilitySearchKey : uint8_t {
+    AnyType,
+    Article,
+    BlockquoteSameLevel,
+    Blockquote,
+    BoldFont,
+    Button,
+    Checkbox,
+    Control,
+    DifferentType,
+    FontChange,
+    FontColorChange,
+    Frame,
+    Graphic,
+    HeadingLevel1,
+    HeadingLevel2,
+    HeadingLevel3,
+    HeadingLevel4,
+    HeadingLevel5,
+    HeadingLevel6,
+    HeadingSameLevel,
+    Heading,
+    Highlighted,
+    ItalicFont,
+    KeyboardFocusable,
+    Landmark,
+    Link,
+    List,
+    LiveRegion,
+    MisspelledWord,
+    Outline,
+    PlainText,
+    RadioGroup,
+    SameType,
+    StaticText,
+    StyleChange,
+    TableSameLevel,
+    Table,
+    TextField,
+    Underline,
+    UnvisitedLink,
+    VisitedLink,
+};
+
+header: <WebCore/AXSearchManager.h>
+[CustomHeader] struct WebCore::AccessibilitySearchCriteriaIPC {
+    WebCore::AccessibilitySearchDirection searchDirection;
+    Vector<WebCore::AccessibilitySearchKey> searchKeys;
+    String searchText;
+    unsigned resultsLimit;
+    bool visibleOnly;
+    bool immediateDescendantsOnly;
+    std::optional<MonotonicTime> deadline;
+};
 
 header: <WebCore/ScriptTrackingPrivacyCategory.h>
 [OptionSet] enum class WebCore::ScriptTrackingPrivacyFlag : uint16_t {

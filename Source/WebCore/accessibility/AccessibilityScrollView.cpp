@@ -109,7 +109,7 @@ void AccessibilityScrollView::detachRemoteParts(AccessibilityDetachmentType deta
     if (remoteFrameView && m_remoteFrame && (detachmentType == AccessibilityDetachmentType::ElementDestroyed || detachmentType == AccessibilityDetachmentType::CacheDestroyed)) {
 #if PLATFORM(MAC)
         Ref remoteFrame = remoteFrameView->frame();
-        remoteFrame->unbindRemoteAccessibilityFrames(m_remoteFrame->processIdentifier());
+        remoteFrame->unbindRemoteAccessibilityFrames(protect(m_remoteFrame)->remoteFramePID());
 #endif
         m_remoteFrame = nullptr;
     }
@@ -437,9 +437,9 @@ RefPtr<AXCoreObject> AccessibilityScrollView::accessibilityHitTest(const IntPoin
     if (!webArea)
         return nullptr;
 
-    if (m_horizontalScrollbar && protectedHorizontalScrollbar()->elementRect().contains(point))
+    if (m_horizontalScrollbar && protect(m_horizontalScrollbar)->elementRect().contains(point))
         return m_horizontalScrollbar.get();
-    if (m_verticalScrollbar && protectedVerticalScrollbar()->elementRect().contains(point))
+    if (m_verticalScrollbar && protect(m_verticalScrollbar)->elementRect().contains(point))
         return m_verticalScrollbar.get();
 
     return webArea->accessibilityHitTest(point);

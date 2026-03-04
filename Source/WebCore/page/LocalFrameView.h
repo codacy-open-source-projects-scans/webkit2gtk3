@@ -25,6 +25,7 @@
 #pragma once
 
 #include <WebCore/AdjustViewSize.h>
+#include <WebCore/BoxSides.h>
 #include <WebCore/Color.h>
 #include <WebCore/FrameView.h>
 #include <WebCore/LayoutMilestone.h>
@@ -217,13 +218,7 @@ public:
     WEBCORE_EXPORT void setBaseBackgroundColor(const Color&);
     WEBCORE_EXPORT void updateBackgroundRecursively(const std::optional<Color>& backgroundColor);
 
-    enum ExtendedBackgroundModeFlags {
-        ExtendedBackgroundModeNone          = 0,
-        ExtendedBackgroundModeVertical      = 1 << 0,
-        ExtendedBackgroundModeHorizontal    = 1 << 1,
-        ExtendedBackgroundModeAll           = ExtendedBackgroundModeVertical | ExtendedBackgroundModeHorizontal,
-    };
-    typedef unsigned ExtendedBackgroundMode;
+    using ExtendedBackgroundMode = BoxSideSet;
 
     void updateExtendBackgroundIfNecessary();
     void updateTilesForExtendedBackgroundMode(ExtendedBackgroundMode);
@@ -318,6 +313,7 @@ public:
 
     // These are in document coordinates, unaffected by page scale (but affected by zooming).
     WEBCORE_EXPORT LayoutRect layoutViewportRect() const final;
+    void updateLayoutViewportRect();
     WEBCORE_EXPORT LayoutRect visualViewportRect() const;
 
     LayoutRect layoutViewportRectIncludingObscuredInsets() const;
@@ -341,7 +337,7 @@ public:
 #endif
 
     AtomString mediaType() const;
-    WEBCORE_EXPORT void NODELETE setMediaType(const AtomString&);
+    WEBCORE_EXPORT void setMediaType(const AtomString&);
     void adjustMediaTypeForPrinting(bool printing);
 
     void setCannotBlitToWindow();
@@ -442,7 +438,7 @@ public:
     bool NODELETE isPainting() const;
     bool hasEverPainted() const { return !!m_lastPaintTime; }
     void setLastPaintTime(MonotonicTime lastPaintTime) { m_lastPaintTime = lastPaintTime; }
-    WEBCORE_EXPORT void NODELETE setNodeToDraw(Node*);
+    WEBCORE_EXPORT void setNodeToDraw(Node*);
 
     enum SelectionInSnapshot { IncludeSelection, ExcludeSelection };
     enum CoordinateSpaceForSnapshot { DocumentCoordinates, ViewCoordinates };
@@ -535,7 +531,7 @@ public:
     float absoluteToDocumentScaleFactor(std::optional<float> usedZoom = { }) const;
 
     WEBCORE_EXPORT FloatRect absoluteToDocumentRect(FloatRect, std::optional<float> usedZoom = { }) const;
-    WEBCORE_EXPORT FloatPoint NODELETE absoluteToDocumentPoint(FloatPoint, std::optional<float> usedZoom = { }) const;
+    WEBCORE_EXPORT FloatPoint absoluteToDocumentPoint(FloatPoint, std::optional<float> usedZoom = { }) const;
     WEBCORE_EXPORT DoublePoint absoluteToDocumentPoint(DoublePoint, std::optional<float> usedZoom = { }) const;
 
     FloatRect absoluteToClientRect(FloatRect, std::optional<float> usedZoom = { }) const;
@@ -546,12 +542,6 @@ public:
     DoublePoint documentToClientPoint(DoublePoint) const;
     WEBCORE_EXPORT FloatRect clientToDocumentRect(FloatRect) const;
     WEBCORE_EXPORT FloatPoint clientToDocumentPoint(FloatPoint) const;
-
-    WEBCORE_EXPORT FloatPoint absoluteToLayoutViewportPoint(FloatPoint) const;
-    FloatPoint layoutViewportToAbsolutePoint(FloatPoint) const;
-
-    WEBCORE_EXPORT FloatRect absoluteToLayoutViewportRect(FloatRect) const;
-    FloatRect layoutViewportToAbsoluteRect(FloatRect) const;
 
     // Unlike client coordinates, layout viewport coordinates are affected by page zoom.
     WEBCORE_EXPORT FloatRect clientToLayoutViewportRect(FloatRect) const;
@@ -1043,7 +1033,6 @@ private:
     OptionSet<PaintBehavior> m_paintBehavior;
 
     float m_lastUsedZoomFactor { 1 };
-    float m_lastFrameScaleFactor { 1 };
     unsigned m_visuallyNonEmptyCharacterCount { 0 };
     unsigned m_visuallyNonEmptyPixelCount { 0 };
     unsigned m_textRendererCountForVisuallyNonEmptyCharacters { 0 };

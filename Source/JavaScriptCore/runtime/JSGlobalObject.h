@@ -105,6 +105,7 @@ class JSTypedArrayViewPrototype;
 class MapIteratorPrototype;
 class MapPrototype;
 class Microtask;
+class MicrotaskQueue;
 class NullGetterFunction;
 class NullSetterFunction;
 class ObjectAdaptiveStructureWatchpoint;
@@ -230,6 +231,7 @@ private:
     VM* const m_vm;
     Debugger* m_debugger { nullptr };
     QueuedTaskResult m_microtaskRunnability { QueuedTaskResult::Executed };
+    Ref<MicrotaskQueue> m_microtaskQueue;
 
 // Our hashtable code-generator tries to access these properties, so we make them public.
 // However, we'd like it better if they could be protected.
@@ -1030,7 +1032,6 @@ public:
     // FIXME: <http://webkit.org/b/246237> Local inspection should be controlled by `inspectable` API.
     Inspector::JSGlobalObjectInspectorController& inspectorController() const;
     JSGlobalObjectDebuggable& inspectorDebuggable() { return *m_inspectorDebuggable; }
-    Ref<JSGlobalObjectDebuggable> protectedInspectorDebuggable();
 #endif
 
     void bumpGlobalLexicalBindingEpoch(VM&);
@@ -1174,7 +1175,8 @@ public:
             m_trustedTypesEnforcement = enforcement;
     }
 
-    void queueMicrotask(InternalMicrotask, uint8_t, JSValue, JSValue, JSValue);
+    void queueMicrotask(VM&, QueuedTask&&);
+    void queueMicrotask(VM&, InternalMicrotask, uint8_t, JSValue, JSValue, JSValue);
 
 #if ASSERT_ENABLED
     const JSGlobalObject* globalObjectAtDebuggerEntry() const { return m_globalObjectAtDebuggerEntry; }
@@ -1233,13 +1235,16 @@ public:
     QueuedTaskResult microtaskRunnability() const { return m_microtaskRunnability; }
     void setMicrotaskRunnability(QueuedTaskResult runnability) { m_microtaskRunnability = runnability; }
 
+    MicrotaskQueue& microtaskQueue() const { return m_microtaskQueue.get(); }
+    JS_EXPORT_PRIVATE void setMicrotaskQueue(Ref<MicrotaskQueue>&&);
+
 protected:
     enum class HasSpeciesProperty : bool { No, Yes };
     template<typename SpeciesWatchpoint>
     void tryInstallSpeciesWatchpoint(JSObject* prototype, JSObject* constructor, std::unique_ptr<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>& constructorWatchpoint, std::unique_ptr<SpeciesWatchpoint>&, InlineWatchpointSet&, HasSpeciesProperty, GetterSetter*);
 
     struct GlobalPropertyInfo;
-    JS_EXPORT_PRIVATE void addStaticGlobals(GlobalPropertyInfo*, int count);
+    JS_EXPORT_PRIVATE void addStaticGlobals(std::span<GlobalPropertyInfo>);
 
     void setNeedsSiteSpecificQuirks(bool needQuirks) { m_needsSiteSpecificQuirks = needQuirks; }
 

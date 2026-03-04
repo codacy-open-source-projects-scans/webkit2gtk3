@@ -371,6 +371,7 @@ struct PerWebProcessState {
 #if HAVE(NSVIEW_CORNER_CONFIGURATION)
     WebCore::CornerRadii _lastViewCornerRadii;
 #endif
+    NSSize _lastContentSize;
 #endif // PLATFORM(MAC)
 
 #if PLATFORM(IOS_FAMILY)
@@ -457,6 +458,10 @@ struct PerWebProcessState {
     BOOL _didScrollSinceLastTimerFire;
     BOOL _needsScrollend;
 
+#if PLATFORM(IOS_FAMILY)
+    RefPtr<RunLoop::DispatchTimer> _pendingInteractiveObscuredInsetsChangeTimer;
+#endif
+
     // This value tracks the current adjustment added to the bottom inset due to the keyboard sliding out from the bottom
     // when computing obscured content insets. This is used when updating the visible content rects where we should not
     // include this adjustment.
@@ -536,6 +541,7 @@ struct PerWebProcessState {
 
 #if ENABLE(TEXT_EXTRACTION_FILTER)
     HashMap<unsigned /* string hash */, TextValidationMapValue> _textValidationCache;
+    std::optional<HashSet<String>> _textExtractionRecognizedWords;
 #endif
     RefPtr<WebKit::TextExtractionURLCache> _textExtractionURLCache;
 
@@ -658,14 +664,6 @@ struct PerWebProcessState {
 - (RefPtr<WebKit::WebPageProxy>)_protectedPage;
 #if PLATFORM(MAC)
 - (nullable WebKit::WebViewImpl *)_impl;
-#endif
-#if ENABLE(SCREEN_TIME)
-- (nullable STWebpageController *)_screenTimeWebpageController;
-#if PLATFORM(MAC)
-- (nullable NSVisualEffectView *)_screenTimeBlurredSnapshot;
-#else
-- (nullable UIVisualEffectView *)_screenTimeBlurredSnapshot;
-#endif
 #endif
 
 #if ENABLE(PDF_PAGE_NUMBER_INDICATOR)

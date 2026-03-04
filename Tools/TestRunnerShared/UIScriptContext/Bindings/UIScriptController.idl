@@ -47,6 +47,7 @@ dictionary TextExtractionTestOptions {
     boolean clipToBounds = false;
     boolean includeRects = false;
     boolean includeURLs = false;
+    boolean includeSelectOptions = false;
     boolean shortenURLs = false;
     DOMString nodeIdentifierInclusion = "none";
     object eventListenerCategories;
@@ -272,6 +273,7 @@ interface UIScriptController {
 
     // <input type=color>
     undefined setSelectedColorForColorPicker(double red, double green, double blue);
+    readonly attribute boolean isShowingColorPicker;
 
     undefined keyboardAccessoryBarNext();
     undefined keyboardAccessoryBarPrevious();

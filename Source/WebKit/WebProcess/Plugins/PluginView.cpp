@@ -186,26 +186,26 @@ void PluginView::Stream::didFail(NetscapePlugInStreamLoader&, const ResourceErro
 {
     // Calling streamDidFail could cause us to be deleted, so we hold on to a reference here.
     Ref protectedThis { *this };
+    RefPtr pluginView = std::exchange(m_pluginView, nullptr);
 
     // We only want to call streamDidFail if the stream was not explicitly cancelled by the plug-in.
     if (!m_streamWasCancelled)
-        m_pluginView->m_plugin->streamDidFail();
+        pluginView->m_plugin->streamDidFail();
 
-    ASSERT(m_pluginView->m_stream == this);
-    m_pluginView->m_stream = nullptr;
-    m_pluginView = nullptr;
+    ASSERT(pluginView->m_stream == this);
+    pluginView->m_stream = nullptr;
 }
 
 void PluginView::Stream::didFinishLoading(NetscapePlugInStreamLoader&)
 {
     // Calling streamDidFinishLoading could cause us to be deleted, so we hold on to a reference here.
     Ref protectedThis { *this };
+    RefPtr pluginView = std::exchange(m_pluginView, nullptr);
 
-    m_pluginView->m_plugin->streamDidFinishLoading();
+    pluginView->m_plugin->streamDidFinishLoading();
 
-    ASSERT(m_pluginView->m_stream == this);
-    m_pluginView->m_stream = nullptr;
-    m_pluginView = nullptr;
+    ASSERT(pluginView->m_stream == this);
+    pluginView->m_stream = nullptr;
 }
 
 RefPtr<PluginView> PluginView::create(HTMLPlugInElement& element, const URL& mainResourceURL, const String& contentType, bool shouldUseManualLoader)
@@ -434,7 +434,7 @@ void PluginView::initializePlugin()
         if (RefPtr frameView = frame->view())
             frameView->setNeedsLayoutAfterViewConfigurationChange();
         if (frame->isMainFrame() && plugin->isFullFramePlugin())
-            protect(WebFrame::fromCoreFrame(*frame)->page())->send(Messages::WebPageProxy::MainFramePluginHandlesPageScaleGestureDidChange(plugin->handlesPageScaleFactor(), plugin->minScaleFactor(), plugin->maxScaleFactor()));
+            protect(protect(WebFrame::fromCoreFrame(*frame))->page())->send(Messages::WebPageProxy::MainFramePluginHandlesPageScaleGestureDidChange(plugin->handlesPageScaleFactor(), plugin->minScaleFactor(), plugin->maxScaleFactor()));
     }
 }
 
@@ -1183,8 +1183,6 @@ void PluginView::handleSyntheticClick(PlatformMouseEvent&& event)
     m_plugin->handleSyntheticClick(WTF::move(event));
 }
 
-#if PLATFORM(IOS_FAMILY)
-
 void PluginView::setSelectionRange(FloatPoint pointInRootView, TextGranularity granularity)
 {
     m_plugin->setSelectionRange(pointInRootView, granularity);
@@ -1199,6 +1197,8 @@ SelectionEndpoint PluginView::extendInitialSelection(FloatPoint pointInRootView,
 {
     return m_plugin->extendInitialSelection(pointInRootView, granularity);
 }
+
+#if PLATFORM(IOS_FAMILY)
 
 DocumentEditingContext PluginView::documentEditingContext(DocumentEditingContextRequest&& request) const
 {

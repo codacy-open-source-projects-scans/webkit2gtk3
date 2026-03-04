@@ -57,7 +57,7 @@ public:
     void appendInlineBoxEnd(const InlineItem&, const RenderStyle&, InlineLayoutUnit logicalWidth);
     void appendLineBreak(const InlineItem&, const RenderStyle&);
     void appendWordBreakOpportunity(const InlineItem&, const RenderStyle&);
-    void appendOpaqueBox(const InlineItem&, const RenderStyle&);
+    void appendOutOfFlow(const InlineItem&, const RenderStyle&);
     void appendBlock(const InlineItem&, InlineLayoutUnit marginBoxLogicalWidth);
 
     void setContentNeedsBidiReordering() { m_hasNonDefaultBidiLevelRun = true; }
@@ -65,7 +65,6 @@ public:
     enum class IncludeInsideListMarker : bool { No, Yes };
     bool hasContent(IncludeInsideListMarker = IncludeInsideListMarker::No) const;
     bool hasContentOrDecoration(IncludeInsideListMarker = IncludeInsideListMarker::No) const;
-    bool hasLineSpanningInlineBoxOnly() const;
     bool hasRubyContent() const { return m_hasRubyContent; }
 
     InlineLayoutUnit contentLogicalWidth() const { return m_contentLogicalWidth; }
@@ -104,7 +103,7 @@ public:
             InlineBoxStart,
             InlineBoxEnd,
             LineSpanningInlineBoxStart,
-            Opaque,
+            OutOfFlow,
             Block
         };
 
@@ -123,7 +122,7 @@ public:
         bool isInlineBoxStart() const { return m_type == Type::InlineBoxStart; }
         bool isLineSpanningInlineBoxStart() const { return m_type == Type::LineSpanningInlineBoxStart; }
         bool isInlineBoxEnd() const { return m_type == Type::InlineBoxEnd; }
-        bool isOpaque() const { return m_type == Type::Opaque; }
+        bool isOutOfFlow() const { return m_type == Type::OutOfFlow; }
         bool isBlock() const { return m_type == Type::Block; }
 
         bool isContentful() const { return (isText() && textContent().length) || isAtomicInlineBox() || isLineBreak() || isListMarker() || isBlock(); }
@@ -347,17 +346,6 @@ inline bool Line::hasContent(IncludeInsideListMarker includeInsideListMarker) co
             return true;
     }
     return false;
-}
-
-inline bool Line::hasLineSpanningInlineBoxOnly() const
-{
-    if (m_runs.isEmpty())
-        return false;
-    for (auto& run : m_runs | std::views::reverse) {
-        if (!run.isLineSpanningInlineBoxStart() && !run.isInlineBoxEnd())
-            return false;
-    }
-    return true;
 }
 
 inline void Line::TrimmableTrailingContent::reset()

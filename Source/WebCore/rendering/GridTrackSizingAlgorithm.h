@@ -121,7 +121,7 @@ public:
     ~GridTrackSizingAlgorithm();
 
     void run(Style::GridTrackSizingDirection, unsigned numTracks, SizingOperation, std::optional<LayoutUnit> availableSpace, RenderGridLayoutState&);
-    void NODELETE reset();
+    void reset();
 
     // Required by RenderGrid. Try to minimize the exposed surface.
     const Grid& grid() const { return m_grid; }
@@ -178,7 +178,6 @@ private:
 
     std::optional<LayoutUnit> NODELETE availableSpace() const;
     Style::GridTrackSize calculateGridTrackSize(Style::GridTrackSizingDirection, unsigned translatedIndex) const;
-    const Style::GridTrackSize& rawGridTrackSize(Style::GridTrackSizingDirection, unsigned translatedIndex) const;
 
     // Helper methods for step 1. initializeTrackSizes().
     LayoutUnit initialBaseSize(const Style::GridTrackSize&) const;

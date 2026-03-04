@@ -25,9 +25,9 @@
 
 #pragma once
 
-#include "AXRemoteFrame.h"
-#include "AccessibilityObject.h"
-#include "ScrollView.h"
+#include <WebCore/AXRemoteFrame.h>
+#include <WebCore/AccessibilityObject.h>
+#include <WebCore/ScrollView.h>
 
 namespace WebCore {
 
@@ -53,6 +53,7 @@ public:
     String ownerDebugDescription() const;
     String extraDebugInfo() const final;
 
+    AccessibilityObject* parentObject() const final;
 #if ENABLE(ACCESSIBILITY_LOCAL_FRAME)
     AccessibilityObject* crossFrameParentObject() const final;
     AccessibilityObject* crossFrameChildObject() const final;
@@ -104,9 +105,8 @@ private:
     LocalFrameView* documentFrameView() const final;
     LayoutRect elementRect() const final;
     LayoutRect boundingBoxRect() const final { return elementRect(); }
-    AccessibilityObject* parentObject() const final;
-    RefPtr<AccessibilityObject> protectedHorizontalScrollbar() const { return m_horizontalScrollbar; }
-    RefPtr<AccessibilityObject> protectedVerticalScrollbar() const { return m_verticalScrollbar; }
+    AccessibilityObject* horizontalScrollbar() const { return m_horizontalScrollbar.get(); }
+    AccessibilityObject* verticalScrollbar() const { return m_verticalScrollbar.get(); }
     HTMLFrameOwnerElement* frameOwnerElement() const { return m_frameOwnerElement; }
 
     AccessibilityObject* firstChild() const final { return webAreaObject(); }

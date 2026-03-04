@@ -153,6 +153,7 @@
 #include "RTCController.h"
 #include "Range.h"
 #include "RemoteFrame.h"
+#include "RemoteFrameLayoutInfo.h"
 #include "RenderDescendantIterator.h"
 #include "RenderElementInlines.h"
 #include "RenderImage.h"
@@ -492,7 +493,7 @@ Page::Page(PageConfiguration&& pageConfiguration)
 
     protect(pluginInfoProvider())->addPage(*this);
     Ref { m_userContentProvider }->addPage(*this);
-    protectedVisitedLinkStore()->addPage(*this);
+    protect(m_visitedLinkStore)->addPage(*this);
 
     static bool firstTimeInitializationRan = false;
     if (!firstTimeInitializationRan) {
@@ -573,7 +574,7 @@ Page::~Page()
 
     protect(pluginInfoProvider())->removePage(*this);
     Ref { m_userContentProvider }->removePage(*this);
-    protectedVisitedLinkStore()->removePage(*this);
+    protect(m_visitedLinkStore)->removePage(*this);
 }
 
 
@@ -961,7 +962,7 @@ void Page::updateTopDocumentSyncData(const DocumentSyncSerializationData& data)
 #if ENABLE(DOM_AUDIO_SESSION)
     case DocumentSyncDataType::AudioSessionType:
 #endif
-        protectedTopDocumentSyncData()->update(data);
+        protect(m_topDocumentSyncData)->update(data);
         break;
     }
 }
@@ -1116,11 +1117,6 @@ PluginData& Page::pluginData()
     if (!m_pluginData)
         m_pluginData = PluginData::create(*this);
     return *m_pluginData;
-}
-
-Ref<PluginData> Page::protectedPluginData()
-{
-    return pluginData();
 }
 
 void Page::clearPluginData()
@@ -1951,6 +1947,20 @@ void Page::setShouldSuppressScrollbarAnimations(bool suppressAnimations)
     m_suppressScrollbarAnimations = suppressAnimations;
 }
 
+#if ENABLE(BANNER_VIEW_OVERLAYS)
+void Page::setHasBannerViewOverlay(bool hasBannerViewOverlay)
+{
+    if (m_hasBannerViewOverlay == hasBannerViewOverlay)
+        return;
+
+    m_hasBannerViewOverlay = hasBannerViewOverlay;
+
+    RefPtr localMainFrame = this->localMainFrame();
+    if (RefPtr view = localMainFrame ? localMainFrame->view() : nullptr)
+        view->updateExtendBackgroundIfNecessary();
+}
+#endif
+
 void Page::lockAllOverlayScrollbarsToHidden(bool lockOverlayScrollbars)
 {
     RefPtr view = protect(mainFrame())->virtualView();
@@ -2151,6 +2161,31 @@ unsigned NODELETE Page::renderingUpdateCount() const
     return m_renderingUpdateCount;
 }
 
+void Page::syncLocalFrameInfoToRemote()
+{
+    forEachLocalFrame([] (LocalFrame& frame) {
+        CheckedPtr frameView = frame.view();
+
+        frameView->updateLayoutViewportRect();
+
+        {
+            HashMap<FrameIdentifier, RemoteFrameLayoutInfo> childrenFrameLayoutInfo;
+
+            for (RefPtr child = frame.tree().firstChild(); child; child = child->tree().nextSibling()) {
+                auto visibleRect = frameView->visibleRectOfChild(*child.get());
+
+                float usedZoom = 1.0;
+                if (CheckedPtr ownerRenderer = child->ownerRenderer())
+                    usedZoom = ownerRenderer->style().usedZoom();
+
+                childrenFrameLayoutInfo.add(child->frameID(), RemoteFrameLayoutInfo { .visibleRectInParent = visibleRect, .usedZoom = usedZoom });
+            }
+
+            frame.loader().client().broadcastChildrenFrameLayoutInfoToOtherProcesses(childrenFrameLayoutInfo);
+        }
+    });
+}
+
 // https://html.spec.whatwg.org/multipage/webappapis.html#update-the-rendering
 void Page::updateRendering()
 {
@@ -2286,7 +2321,7 @@ void Page::updateRendering()
     });
 
     runProcessingStep(RenderingUpdateStep::IntersectionObservations, [] (Document& document) {
-        document.updateIntersectionObservations();
+        document.updateIntersectionObservers();
     });
 
     runProcessingStep(RenderingUpdateStep::Images, [] (Document& document) {
@@ -2441,6 +2476,9 @@ void Page::doAfterUpdateRendering()
     }
 
     computeSampledPageTopColorIfNecessary();
+
+    if (settings().siteIsolationEnabled())
+        syncLocalFrameInfoToRemote();
 }
 
 void Page::finalizeRenderingUpdate(OptionSet<FinalizeRenderingUpdateFlags> flags)
@@ -3373,11 +3411,6 @@ void Page::stopKeyboardScrollAnimation()
     }
 }
 
-Ref<DocumentSyncData> Page::protectedTopDocumentSyncData() const
-{
-    return m_topDocumentSyncData;
-}
-
 bool NODELETE Page::isVisibleAndActive() const
 {
     return m_activityState.contains(ActivityState::IsVisible) && m_activityState.contains(ActivityState::WindowIsActive);
@@ -3943,11 +3976,6 @@ PluginInfoProvider& Page::pluginInfoProvider()
     return m_pluginInfoProvider;
 }
 
-Ref<UserContentProvider> NODELETE Page::protectedUserContentProviderForFrame()
-{
-    return m_userContentProvider;
-}
-
 void Page::setUserContentProviderForWebKitLegacy(Ref<UserContentProvider>&& userContentProvider)
 {
     Ref { m_userContentProvider }->removePage(*this);
@@ -3962,16 +3990,11 @@ VisitedLinkStore& Page::visitedLinkStore()
     return m_visitedLinkStore;
 }
 
-Ref<VisitedLinkStore> Page::protectedVisitedLinkStore()
-{
-    return m_visitedLinkStore;
-}
-
 void Page::setVisitedLinkStore(Ref<VisitedLinkStore>&& visitedLinkStore)
 {
-    protectedVisitedLinkStore()->removePage(*this);
+    protect(m_visitedLinkStore)->removePage(*this);
     m_visitedLinkStore = WTF::move(visitedLinkStore);
-    protectedVisitedLinkStore()->addPage(*this);
+    protect(m_visitedLinkStore)->addPage(*this);
 
     invalidateStylesForAllLinks();
 }
@@ -4115,11 +4138,11 @@ bool NODELETE Page::isMonitoringWheelEvents() const
 
 void Page::startMonitoringWheelEvents(bool clearLatchingState)
 {
-    ensureProtectedWheelEventTestMonitor()->clearAllTestDeferrals();
+    protect(ensureWheelEventTestMonitor())->clearAllTestDeferrals();
 
 #if ENABLE(WHEEL_EVENT_LATCHING)
     if (clearLatchingState)
-        protectedScrollLatchingController()->clear();
+        protect(scrollLatchingController())->clear();
 #endif
 
     RefPtr localMainFrame = this->localMainFrame();
@@ -4137,11 +4160,6 @@ WheelEventTestMonitor& Page::ensureWheelEventTestMonitor()
         m_wheelEventTestMonitor = adoptRef(new WheelEventTestMonitor(*this));
 
     return *m_wheelEventTestMonitor;
-}
-
-Ref<WheelEventTestMonitor> Page::ensureProtectedWheelEventTestMonitor()
-{
-    return ensureWheelEventTestMonitor();
 }
 
 #if ENABLE(VIDEO)
@@ -4435,7 +4453,7 @@ void Page::didChangeMainDocument(Document* newDocument)
     m_topDocumentSyncData = newDocument ? newDocument->syncData() : DocumentSyncData::create();
 
     if (settings().siteIsolationEnabled())
-        documentSyncClient().broadcastAllDocumentSyncDataToOtherProcesses(protectedTopDocumentSyncData().get());
+        documentSyncClient().broadcastAllDocumentSyncDataToOtherProcesses(protect(m_topDocumentSyncData).get());
 
 #if ENABLE(WEB_RTC)
     m_rtcController->reset(m_shouldEnableICECandidateFilteringByDefault);
@@ -4627,10 +4645,6 @@ ScrollLatchingController& Page::scrollLatchingController()
     return *m_scrollLatchingController;
 }
 
-Ref<ScrollLatchingController> Page::protectedScrollLatchingController()
-{
-    return scrollLatchingController();
-}
 #endif // ENABLE(WHEEL_EVENT_LATCHING)
 
 enum class DispatchedOnDocumentEventLoop : bool { No, Yes };
@@ -4988,11 +5002,6 @@ ImageOverlayController& Page::imageOverlayController()
     return *m_imageOverlayController;
 }
 
-Ref<ImageOverlayController> Page::protectedImageOverlayController()
-{
-    return imageOverlayController();
-}
-
 Page* Page::serviceWorkerPage(ScriptExecutionContextIdentifier serviceWorkerPageIdentifier)
 {
     RefPtr serviceWorkerPageDocument = Document::allDocumentsMap().get(serviceWorkerPageIdentifier);
@@ -5006,11 +5015,6 @@ ImageAnalysisQueue& Page::imageAnalysisQueue()
     if (!m_imageAnalysisQueue)
         m_imageAnalysisQueue = ImageAnalysisQueue::create(*this);
     return *m_imageAnalysisQueue;
-}
-
-Ref<ImageAnalysisQueue> Page::protectedImageAnalysisQueue()
-{
-    return imageAnalysisQueue();
 }
 
 void Page::resetImageAnalysisQueue()
@@ -5843,18 +5847,6 @@ bool NODELETE Page::isAlwaysOnLoggingAllowed() const
 {
     return m_sessionID.isAlwaysOnLoggingAllowed() || settings().allowPrivacySensitiveOperationsInNonPersistentDataStores();
 }
-
-Ref<PageInspectorController> NODELETE Page::protectedInspectorController()
-{
-    return m_inspectorController.get();
-}
-
-#if PLATFORM(MAC) && (ENABLE(SERVICE_CONTROLS) || ENABLE(TELEPHONE_NUMBER_DETECTION))
-Ref<ServicesOverlayController> Page::protectedServicesOverlayController()
-{
-    return m_servicesOverlayController.get();
-}
-#endif
 
 ProcessID Page::presentingApplicationPID() const
 {

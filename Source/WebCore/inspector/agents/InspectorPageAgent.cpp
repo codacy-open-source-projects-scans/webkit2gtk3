@@ -49,6 +49,7 @@
 #include "HTMLFrameOwnerElement.h"
 #include "HTMLNames.h"
 #include "ImageBuffer.h"
+#include "ImageUtilities.h"
 #include "InspectorBackendClient.h"
 #include "InspectorDOMAgent.h"
 #include "InspectorNetworkAgent.h"
@@ -99,7 +100,7 @@ using namespace Inspector;
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(InspectorPageAgent);
 
-Ref<InspectorOverlay> InspectorPageAgent::protectedOverlay() const
+InspectorOverlay& InspectorPageAgent::overlay() const
 {
     return m_overlay.get();
 }
@@ -645,7 +646,7 @@ Inspector::Protocol::ErrorStringOr<Ref<JSON::ArrayOf<Inspector::Protocol::Page::
 #if !PLATFORM(IOS_FAMILY)
 Inspector::Protocol::ErrorStringOr<void> InspectorPageAgent::setShowRulers(bool showRulers)
 {
-    protectedOverlay()->setShowRulers(showRulers);
+    protect(overlay())->setShowRulers(showRulers);
 
     return { };
 }
@@ -659,7 +660,7 @@ Inspector::Protocol::ErrorStringOr<void> InspectorPageAgent::setShowPaintRects(b
     if (m_client->overridesShowPaintRects())
         return { };
 
-    protectedOverlay()->setShowPaintRects(show);
+    protect(overlay())->setShowPaintRects(show);
 
     return { };
 }
@@ -804,7 +805,7 @@ void InspectorPageAgent::didPaint(RenderObject& renderer, const LayoutRect& rect
         return;
     }
 
-    protectedOverlay()->showPaintRect(rootRect);
+    protect(overlay())->showPaintRect(rootRect);
 }
 
 void InspectorPageAgent::didLayout()
@@ -813,7 +814,7 @@ void InspectorPageAgent::didLayout()
     if (isFirstLayout)
         m_isFirstLayoutAfterOnLoad = false;
 
-    protectedOverlay()->update();
+    protect(overlay())->update();
 }
 
 void InspectorPageAgent::didScroll()
@@ -823,7 +824,7 @@ void InspectorPageAgent::didScroll()
 
 void InspectorPageAgent::didRecalculateStyle()
 {
-    protectedOverlay()->update();
+    protect(overlay())->update();
 }
 
 Ref<Inspector::Protocol::Page::Frame> InspectorPageAgent::buildObjectForFrame(LocalFrame* frame)
@@ -942,8 +943,7 @@ Inspector::Protocol::ErrorStringOr<String> InspectorPageAgent::snapshotNode(Insp
     auto snapshot = WebCore::snapshotNode(*localMainFrame, *node, { { }, PixelFormat::BGRA8, DestinationColorSpace::SRGB() });
     if (!snapshot)
         return makeUnexpected("Could not capture snapshot"_s);
-
-    return snapshot->toDataURL("image/png"_s, std::nullopt, PreserveResolution::Yes);
+    return encodeDataURL(WTF::move(snapshot), "image/png"_s);
 }
 
 Inspector::Protocol::ErrorStringOr<String> InspectorPageAgent::snapshotRect(int x, int y, int width, int height, Inspector::Protocol::Page::CoordinateSystem coordinateSystem)
@@ -960,8 +960,7 @@ Inspector::Protocol::ErrorStringOr<String> InspectorPageAgent::snapshotRect(int 
 
     if (!snapshot)
         return makeUnexpected("Could not capture snapshot"_s);
-
-    return snapshot->toDataURL("image/png"_s, std::nullopt, PreserveResolution::Yes);
+    return encodeDataURL(WTF::move(snapshot), "image/png"_s);
 }
 
 #if ENABLE(WEB_ARCHIVE) && USE(CF)

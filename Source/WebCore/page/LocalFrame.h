@@ -223,8 +223,7 @@ public:
     float pageZoomFactor() const { return m_pageZoomFactor; }
     float textZoomFactor() const { return m_textZoomFactor; }
 
-    // Scale factor of this frame with respect to the container.
-    WEBCORE_EXPORT float NODELETE frameScaleFactor() const;
+    float usedZoomForChild(const Frame&) const final;
 
     void deviceOrPageScaleFactorChanged();
 
@@ -345,7 +344,7 @@ public:
     OptionSet<AdvancedPrivacyProtections> advancedPrivacyProtections() const final;
     AutoplayPolicy autoplayPolicy() const final;
 
-    WEBCORE_EXPORT SandboxFlags NODELETE effectiveSandboxFlags() const;
+    WEBCORE_EXPORT SandboxFlags effectiveSandboxFlags() const;
     SandboxFlags sandboxFlagsFromSandboxAttributeNotCSP() { return m_sandboxFlags; }
     WEBCORE_EXPORT void updateSandboxFlags(SandboxFlags, NotifyUIProcess) final;
 

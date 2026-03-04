@@ -263,6 +263,7 @@ CanvasRenderingContext2DBase::CanvasRenderingContext2DBase(CanvasBase& canvas, C
 CanvasRenderingContext2DBase::~CanvasRenderingContext2DBase()
 {
 #if ASSERT_ENABLED
+    m_unrealizedSaveCount = 0;
     size_t restoreCount = m_stateStack.size() - 1;
     for (size_t i = 0; i < restoreCount; ++i)
         restore();
@@ -323,12 +324,12 @@ void CanvasRenderingContext2DBase::reset()
 
 void CanvasRenderingContext2DBase::didUpdateCanvasSizeProperties(bool sizeChanged)
 {
+    m_unrealizedSaveCount = 0;
     size_t restoreCount = m_stateStack.size() - 1;
     for (size_t i = 0; i < restoreCount; ++i)
         restore();
     m_stateStack.first() = State();
     m_path.clear();
-    m_unrealizedSaveCount = 0;
     m_cachedContents.emplace<CachedContentsTransparent>();
     m_hasDeferredOperations = false;
     clearAccumulatedDirtyRect();
@@ -2881,7 +2882,7 @@ void CanvasRenderingContext2DBase::drawTextUnchecked(const TextRun& textRun, dou
     if (canUseCachedShapedText(textRun)) {
         RefPtr fonts = fontCascade.fonts();
         ASSERT(fonts);
-        cachedShapedText = fonts->getOrCreateCachedShapedText(textRun, fontCascade);
+        cachedShapedText = fonts->getOrCreateCachedShapedText(textRun, fontCascade, 0, std::nullopt, ForTextEmphasis::No);
     }
 
     float fontWidth = cachedShapedText ? cachedShapedText->width : fontCascade.width(textRun);

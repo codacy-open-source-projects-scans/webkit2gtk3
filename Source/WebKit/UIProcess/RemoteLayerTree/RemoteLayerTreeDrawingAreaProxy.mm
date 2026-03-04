@@ -352,7 +352,8 @@ void RemoteLayerTreeDrawingAreaProxy::commitLayerTree(IPC::Connection& connectio
     __block Vector<MachSendRight, 16> sendRights;
     for (auto& transaction : bundle.transactions) {
         // commitLayerTreeTransaction consumes the incoming buffers, so we need to grab them first.
-        for (auto& [layerID, properties] : CheckedRef { transaction.first }->changedLayerProperties()) {
+        CheckedRef removeLayerTreeTransaction = transaction.first;
+        for (auto& [layerID, properties] : removeLayerTreeTransaction->changedLayerProperties()) {
             auto* backingStoreProperties = properties->backingStoreOrProperties.properties.get();
             if (!backingStoreProperties)
                 continue;
@@ -466,7 +467,7 @@ void RemoteLayerTreeDrawingAreaProxy::commitLayerTreeTransaction(IPC::Connection
         return;
 
     {
-        std::optional<RequestedScrollData> requestedScroll;
+        ScrollRequestData requestedScroll;
         CheckedRef scrollingCoordinatorProxy = *page->scrollingCoordinatorProxy();
 
         auto commitLayerAndScrollingTrees = [&] {
@@ -498,8 +499,8 @@ void RemoteLayerTreeDrawingAreaProxy::commitLayerTreeTransaction(IPC::Connection
 #endif
         // Handle requested scroll position updates from the scrolling tree transaction after didCommitLayerTree()
         // has updated the view size based on the content size.
-        if (requestedScroll)
-            scrollingCoordinatorProxy->adjustMainFrameDelegatedScrollPosition(WTF::move(*requestedScroll));
+        if (requestedScroll.size())
+            scrollingCoordinatorProxy->adjustMainFrameDelegatedScrollPosition(WTF::move(requestedScroll));
 
 #if ENABLE(OVERLAY_REGIONS_IN_EVENT_REGION)
         if (layerTreeTransaction.changedLayerProperties().size() || layerTreeTransaction.destroyedLayers().size())

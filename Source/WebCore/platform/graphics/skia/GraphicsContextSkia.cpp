@@ -40,7 +40,9 @@
 #include "Pattern.h"
 #include "PlatformDisplay.h"
 #include "ProcessCapabilities.h"
+#include "SkiaImageAtlasLayoutBuilder.h"
 #include "SkiaPaintingEngine.h"
+#include "SkiaRecordingResult.h"
 #include <cmath>
 #include <ranges>
 WTF_IGNORE_WARNINGS_IN_THIRD_PARTY_CODE_BEGIN
@@ -274,11 +276,17 @@ static SkSamplingOptions toSkSamplingOptions(InterpolationQuality quality)
     return SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kNearest);
 }
 
-void GraphicsContextSkia::drawNativeImage(NativeImage& nativeImage, const FloatRect& destRect, const FloatRect& srcRect, ImagePaintingOptions options)
+void GraphicsContextSkia::drawNativeImage(const NativeImage& nativeImage, const FloatRect& destRect, const FloatRect& srcRect, ImagePaintingOptions options)
 {
     auto image = nativeImage.platformImage();
     if (!image)
         return;
+
+    // Collect raster images for atlas batching during recording.
+    if (m_contextMode == ContextMode::RecordingMode && m_renderingMode == RenderingMode::Accelerated && !image->isTextureBacked()) {
+        ASSERT(m_atlasLayoutBuilder);
+        m_atlasLayoutBuilder->collectRasterImage(image);
+    }
 
     auto imageSize = nativeImage.size();
     if (options.orientation().usesWidthAsHeight())
@@ -1154,7 +1162,7 @@ static sk_sp<SkSurface> createAcceleratedSurface(const IntSize& size)
     return surface;
 }
 
-void GraphicsContextSkia::drawPattern(NativeImage& nativeImage, const FloatRect& destRect, const FloatRect& tileRect, const AffineTransform& patternTransform, const FloatPoint& phase, const FloatSize& spacing, ImagePaintingOptions options)
+void GraphicsContextSkia::drawPattern(const NativeImage& nativeImage, const FloatRect& destRect, const FloatRect& tileRect, const AffineTransform& patternTransform, const FloatPoint& phase, const FloatSize& spacing, ImagePaintingOptions options)
 {
     if (!patternTransform.isInvertible())
         return;
@@ -1228,13 +1236,25 @@ void GraphicsContextSkia::beginRecording()
 {
     ASSERT(m_contextMode == ContextMode::PaintingMode);
     m_contextMode = ContextMode::RecordingMode;
+
+    if (m_renderingMode == RenderingMode::Accelerated)
+        m_atlasLayoutBuilder = makeUnique<SkiaImageAtlasLayoutBuilder>();
+    else
+        ASSERT(!m_atlasLayoutBuilder);
 }
 
-SkiaImageToFenceMap GraphicsContextSkia::endRecording()
+SkiaRecordingData GraphicsContextSkia::endRecording()
 {
     ASSERT(m_contextMode == ContextMode::RecordingMode);
     m_contextMode = ContextMode::PaintingMode;
-    return WTF::move(m_imageToFenceMap);
+
+    Vector<Ref<SkiaImageAtlasLayout>> atlasLayouts;
+    if (m_atlasLayoutBuilder) {
+        atlasLayouts = m_atlasLayoutBuilder->finalize();
+        m_atlasLayoutBuilder = nullptr;
+    }
+
+    return { WTF::move(m_imageToFenceMap), WTF::move(atlasLayouts) };
 }
 
 void GraphicsContextSkia::enableStateReplayTracking()

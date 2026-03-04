@@ -196,7 +196,12 @@ TEST(EditorStateTests, TypingAttributesTextAlignmentAbsoluteAlignmentOptions)
     EXPECT_WK_STREQ("right\njustified\ncenter\nleft", [webView stringByEvaluatingJavaScript:@"getSelection().toString()"]);
 }
 
+// FIXME when webkit.org/b/309007 is resolved.
+#if PLATFORM(MAC) && !defined(NDEBUG)
+TEST(EditorStateTests, DISABLED_TypingAttributesTextAlignmentStartEnd)
+#else
 TEST(EditorStateTests, TypingAttributesTextAlignmentStartEnd)
+#endif
 {
     auto testHarness = setUpEditorStateTestHarness();
     TestWKWebView *webView = [testHarness webView];
@@ -219,7 +224,12 @@ TEST(EditorStateTests, TypingAttributesTextAlignmentStartEnd)
     [testHarness insertParagraphAndExpectEditorStateWith:@{ @"text-alignment": @(NSTextAlignmentRight) }];
 }
 
+// FIXME when webkit.org/b/309007 is resolved.
+#if PLATFORM(MAC) && !defined(NDEBUG)
+TEST(EditorStateTests, DISABLED_TypingAttributesTextAlignmentDirectionalText)
+#else
 TEST(EditorStateTests, TypingAttributesTextAlignmentDirectionalText)
+#endif
 {
     auto testHarness = setUpEditorStateTestHarness();
     [[testHarness webView] stringByEvaluatingJavaScript:@"document.body.setAttribute('dir', 'auto')"];
@@ -656,8 +666,10 @@ TEST(EditorStateTests, UnionRectInVisibleSelectedRangeAndDocumentVisibleRect)
     EXPECT_FALSE(NSIsEmptyRect([webView unionRectInVisibleSelectedRange]));
     EXPECT_FALSE(isInView([webView unionRectInVisibleSelectedRange]));
 
+    auto countBeforeClearingSelection = didUpdateSelectionCount;
     [webView stringByEvaluatingJavaScript:@"getSelection().removeAllRanges()"];
     [webView waitForNextPresentationUpdate];
+    EXPECT_GT(didUpdateSelectionCount, countBeforeClearingSelection);
     EXPECT_TRUE(NSIsEmptyRect([webView unionRectInVisibleSelectedRange]));
 }
 
@@ -695,6 +707,12 @@ TEST(EditorStateTests, UnionRectInVisibleSelectedRangeForEditableCaretSelection)
     EXPECT_GT(caretRect.origin.y, 0);
     EXPECT_TRUE(NSPointInRect(caretRect.origin, [webView documentVisibleRect]));
     EXPECT_GT(didUpdateSelectionCount, 0u);
+
+    auto countBeforeClearingSelection = didUpdateSelectionCount;
+    [webView stringByEvaluatingJavaScript:@"getSelection().removeAllRanges()"];
+    [webView waitForNextPresentationUpdate];
+    EXPECT_GT(didUpdateSelectionCount, countBeforeClearingSelection);
+    EXPECT_TRUE(NSIsEmptyRect([webView unionRectInVisibleSelectedRange]));
 }
 
 TEST(EditorStateTests, UnionRectInVisibleSelectedRangeForNonEditableRangeSelection)
@@ -728,6 +746,12 @@ TEST(EditorStateTests, UnionRectInVisibleSelectedRangeForNonEditableRangeSelecti
     EXPECT_FALSE(NSIsEmptyRect(selectionRect));
     EXPECT_TRUE(NSContainsRect([webView documentVisibleRect], selectionRect));
     EXPECT_GT(didUpdateSelectionCount, 0u);
+
+    auto countBeforeClearingSelection = didUpdateSelectionCount;
+    [webView stringByEvaluatingJavaScript:@"getSelection().removeAllRanges()"];
+    [webView waitForNextPresentationUpdate];
+    EXPECT_GT(didUpdateSelectionCount, countBeforeClearingSelection);
+    EXPECT_TRUE(NSIsEmptyRect([webView unionRectInVisibleSelectedRange]));
 }
 
 #endif // PLATFORM(MAC)

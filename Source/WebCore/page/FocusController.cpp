@@ -425,6 +425,11 @@ static inline void dispatchEventsOnWindowAndFocusedElement(Document* document, b
             return;
         }
 
+        if (RefPtr formControlElement = dynamicDowncast<HTMLFormControlElement>(*document->focusedElement())) {
+            if (formControlElement->wasChangedSinceLastFormControlChangeEvent())
+                formControlElement->dispatchFormControlChangeEvent();
+        }
+
         document->focusedElement()->dispatchBlurEvent(nullptr);
     }
 
@@ -758,7 +763,7 @@ FocusableElementSearchResult FocusController::findFocusableElementInDocumentOrde
 
         if (shouldFocusElement == ShouldFocusElement::Yes) {
             document->setFocusedElement(nullptr);
-            setFocusedFrame(owner->protectedContentFrame().get());
+            setFocusedFrame(protect(owner->contentFrame()).get());
         }
         return findResult;
     }

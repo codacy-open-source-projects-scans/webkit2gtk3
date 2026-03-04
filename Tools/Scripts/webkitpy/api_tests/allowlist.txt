@@ -232,7 +232,6 @@ TestWebKitAPI.AudioStreamDescriptionCocoa/EachSampleTypeTest/1
 TestWebKitAPI.AudioStreamDescriptionCocoa/EachSampleTypeTest/2
 TestWebKitAPI.AudioStreamDescriptionCocoa/EachSampleTypeTest/3
 TestWebKitAPI.AutocorrectionTests
-TestWebKitAPI.Badging
 TestWebKitAPI.BifurcatedGraphicsContextTests
 TestWebKitAPI.CARingBufferTest
 TestWebKitAPI.CBORReaderTest
@@ -242,7 +241,6 @@ TestWebKitAPI.CSSParser
 TestWebKitAPI.CSSParserFastPaths
 TestWebKitAPI.CSSPropertyParser
 TestWebKitAPI.CSSTokenizerTest
-TestWebKitAPI.CSSViewportUnits
 TestWebKitAPI.CTAPRequestTest
 TestWebKitAPI.CTAPResponseTest
 TestWebKitAPI.CancelLoading
@@ -313,7 +311,6 @@ TestWebKitAPI.GridPositionTest
 TestWebKitAPI.HTTPHeaderField
 TestWebKitAPI.HTTPHeaderMap
 TestWebKitAPI.HTTPParsers
-TestWebKitAPI.HistoryDelegate
 TestWebKitAPI.HysteresisActivity
 TestWebKitAPI.IOSurfacePoolTest
 TestWebKitAPI.IOSurfaceTest

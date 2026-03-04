@@ -50,10 +50,10 @@ namespace WebKit {
 using TextExtractionVersion = unsigned;
 
 enum class TextExtractionOptionFlag : uint8_t {
-    IncludeURLs     = 1 << 0,
-    IncludeRects    = 1 << 1,
-    OnlyIncludeText = 1 << 2,
-    ShortenURLs     = 1 << 3,
+    IncludeURLs          = 1 << 0,
+    IncludeRects         = 1 << 1,
+    ShortenURLs          = 1 << 2,
+    IncludeSelectOptions = 1 << 3,
 };
 
 enum class TextExtractionOutputFormat : uint8_t {
@@ -61,6 +61,7 @@ enum class TextExtractionOutputFormat : uint8_t {
     HTMLMarkup,
     Markdown,
     MinifiedJSON,
+    PlainText,
 };
 
 using TextExtractionOptionFlags = OptionSet<TextExtractionOptionFlag>;

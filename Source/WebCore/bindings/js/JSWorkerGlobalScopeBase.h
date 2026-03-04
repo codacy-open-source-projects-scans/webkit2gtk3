@@ -45,8 +45,7 @@ public:
 
     DECLARE_VISIT_CHILDREN;
 
-    WorkerGlobalScope& wrapped() const { return *m_wrapped; }
-    ScriptExecutionContext* NODELETE scriptExecutionContext() const;
+    WorkerGlobalScope& wrapped() const { return m_wrapped; }
 
     static JSC::Structure* createStructure(JSC::VM& vm, JSC::JSGlobalObject* globalObject, JSC::JSValue prototype)
     {
@@ -58,17 +57,16 @@ public:
     static bool shouldInterruptScriptBeforeTimeout(const JSC::JSGlobalObject*);
     static JSC::RuntimeFlags javaScriptRuntimeFlags(const JSC::JSGlobalObject*);
     static JSC::ScriptExecutionStatus scriptExecutionStatus(JSC::JSGlobalObject*, JSC::JSObject*);
-    static void queueMicrotaskToEventLoop(JSC::JSGlobalObject&, JSC::QueuedTask&&);
     static void reportViolationForUnsafeEval(JSC::JSGlobalObject*, const String&);
 
 protected:
-    JSWorkerGlobalScopeBase(JSC::VM&, JSC::Structure*, RefPtr<WorkerGlobalScope>&&);
+    JSWorkerGlobalScopeBase(JSC::VM&, JSC::Structure*, Ref<WorkerGlobalScope>&&);
     void finishCreation(JSC::VM&, JSC::JSGlobalProxy*);
 
     static const JSC::GlobalObjectMethodTable* globalObjectMethodTable();
 
 private:
-    RefPtr<WorkerGlobalScope> m_wrapped;
+    const Ref<WorkerGlobalScope> m_wrapped;
 };
 
 // Returns a JSWorkerGlobalScope or jsNull()

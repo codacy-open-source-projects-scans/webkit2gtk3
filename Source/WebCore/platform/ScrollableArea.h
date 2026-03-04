@@ -276,6 +276,11 @@ public:
     WEBCORE_EXPORT virtual ScrollPosition minimumScrollPosition() const;
     WEBCORE_EXPORT virtual ScrollPosition maximumScrollPosition() const;
 
+    virtual ScrollPosition adjustScrollPositionWithinRange(const ScrollPosition& position) const
+    {
+        return constrainedScrollPosition(position);
+    }
+
     ScrollPosition constrainedScrollPosition(const ScrollPosition& position) const
     {
         return position.constrainedBetween(minimumScrollPosition(), maximumScrollPosition());
@@ -555,6 +560,18 @@ public:
 
 private:
     WeakPtr<ScrollableArea> m_scrollableArea;
+};
+
+class ScrollTypeScope {
+public:
+    WEBCORE_EXPORT ScrollTypeScope(ScrollableArea&, ScrollType);
+    WEBCORE_EXPORT ~ScrollTypeScope();
+
+    void restore();
+
+private:
+    WeakRef<ScrollableArea> m_scrollableArea;
+    std::optional<ScrollType> m_oldScrollType;
 };
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const ScrollableArea&);

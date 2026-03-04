@@ -77,6 +77,7 @@
 #include "HTMLSummaryElement.h"
 #include "HTMLTableElement.h"
 #include "HTMLTextAreaElement.h"
+#include "HTMLVideoElement.h"
 #include "HitTestRequest.h"
 #include "HitTestResult.h"
 #include "Image.h"
@@ -88,6 +89,7 @@
 #include "LineSelection.h"
 #include "LocalFrame.h"
 #include "LocalizedStrings.h"
+#include "Logging.h"
 #include "NodeList.h"
 #include "Page.h"
 #include "PathUtilities.h"
@@ -1361,7 +1363,6 @@ bool AccessibilityRenderObject::computeIsIgnored() const
 
         // First check the RenderImage's altText (which can be set through a style sheet, or come from the Element).
         // However, if this is not a native image, fallback to the attribute on the Element.
-        // If the image is decorative (i.e. alt=""), it should be ignored even if a title, aria-label, etc. is supplied.
         AccessibilityObjectInclusion altTextInclusion = AccessibilityObjectInclusion::DefaultBehavior;
         WeakPtr image = dynamicDowncast<RenderImage>(*m_renderer);
         if (image)
@@ -1369,15 +1370,21 @@ bool AccessibilityRenderObject::computeIsIgnored() const
         else
             altTextInclusion = objectInclusionFromAltText(altTextFromAttributeOrStyle());
 
-        if (altTextInclusion == AccessibilityObjectInclusion::IgnoreObject)
-            return true;
         if (altTextInclusion == AccessibilityObjectInclusion::IncludeObject)
             return false;
 
-        // webkit.org/b/173870 - If an image has other alternative text, don't ignore it if alt text is empty.
-        // This means we should process title and aria-label first.
+        // Per HTML-AAM, aria-label and valid aria-labelledby (referencing elements with
+        // non-empty text) take precedence over alt="", so check for valid ARIA accname
+        // before ignoring the image due to empty alt text.
+        // Note: we intentionally only check ARIA attributes here and not the title attribute,
+        // because per HTML-AAM, title does not override alt="" for images.
+        if (RefPtr imageElement = dynamicDowncast<Element>(node.get()); imageElement && hasARIAAccNameAttribute(*imageElement))
+            return false;
 
-        // If an image has an accname, accessibility should be lenient and allow it to appear in the hierarchy (according to WAI-ARIA).
+        if (altTextInclusion == AccessibilityObjectInclusion::IgnoreObject)
+            return true;
+
+        // If an image has an accname (including from title), it should not be ignored (according to WAI-ARIA).
         if (hasAccNameAttribute())
             return false;
 
@@ -2687,8 +2694,7 @@ void AccessibilityRenderObject::addTextFieldChildren()
     if (!spinButtonElement)
         return;
 
-    Ref axSpinButton = uncheckedDowncast<AccessibilitySpinButton>(*axObjectCache()->create(AccessibilityRole::SpinButton));
-    axSpinButton->setSpinButtonElement(spinButtonElement.get());
+    Ref axSpinButton = axObjectCache()->createSpinButton(*spinButtonElement);
     axSpinButton->setParent(this);
     addChild(WTF::move(axSpinButton));
 }
@@ -3262,7 +3268,7 @@ bool AccessibilityRenderObject::isAutoplayEnabled() const
 
 void AccessibilityRenderObject::enterFullscreen() const
 {
-    AccessibilityMediaHelpers::enterFullscreen(videoElement());
+    AccessibilityMediaHelpers::enterFullscreen(protect(videoElement()));
 }
 #endif // PLATFORM(IOS_FAMILY)
 

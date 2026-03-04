@@ -38,7 +38,6 @@
 #include "AXObjectCacheInlines.h"
 #include "AXObjectRareData.h"
 #include "AXRemoteFrame.h"
-#include "AXSearchManager.h"
 #include "AXTextMarker.h"
 #include "AXUtilities.h"
 #include "AccessibilityMockObject.h"
@@ -744,13 +743,12 @@ void AccessibilityObject::resetChildrenIndexInParent() const
     }
 }
 
-AXCoreObject::AccessibilityChildrenVector AccessibilityObject::findMatchingObjects(AccessibilitySearchCriteria&& criteria)
+AXCoreObject::AccessibilityChildrenVector AccessibilityObject::findMatchingObjectsWithin(AccessibilitySearchCriteria&& criteria)
 {
     if (CheckedPtr cache = axObjectCache())
         cache->startCachingComputedObjectAttributesUntilTreeMutates();
 
-    criteria.anchorObject = this;
-    return AXSearchManager().findMatchingObjects(WTF::move(criteria));
+    return AXCoreObject::findMatchingObjectsWithin(WTF::move(criteria));
 }
 
 // Returns the range that is fewer positions away from the reference range.
@@ -2912,20 +2910,12 @@ String AccessibilityObject::computedRoleString() const
         return reverseAriaRoleMap().get(std::to_underlying(AccessibilityRole::Presentational));
 
     // We do compute a role string for block elements with author-provided roles.
-    if (ariaRoleAttribute() == AccessibilityRole::TextGroup
-        || role == AccessibilityRole::Footnote
-        || role == AccessibilityRole::GraphicsObject)
+    if (ariaRoleAttribute() == AccessibilityRole::TextGroup || role == AccessibilityRole::Footnote)
         return reverseAriaRoleMap().get(std::to_underlying(AccessibilityRole::Group));
 
     // We do not compute a role string for generic block elements with user-agent assigned roles.
     if (role == AccessibilityRole::TextGroup)
         return emptyString();
-
-    if (role == AccessibilityRole::GraphicsDocument)
-        return reverseAriaRoleMap().get(std::to_underlying(AccessibilityRole::Document));
-
-    if (role == AccessibilityRole::GraphicsSymbol)
-        return reverseAriaRoleMap().get(std::to_underlying(AccessibilityRole::Image));
 
     if (role == AccessibilityRole::HorizontalRule)
         return reverseAriaRoleMap().get(std::to_underlying(AccessibilityRole::Splitter));

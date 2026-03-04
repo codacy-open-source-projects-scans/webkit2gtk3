@@ -31,6 +31,7 @@
 
 #include "AXLoggerBase.h"
 #include "AXObjectCache.h"
+#include "AXSearchManager.h"
 #include "AXTreeStoreInlines.h"
 #include "AXUtilities.h"
 #include "DocumentView.h"
@@ -1922,6 +1923,12 @@ std::partial_ordering AXCoreObject::partialOrder(const AXCoreObject& other)
     if (objectID() == other.objectID())
         return std::partial_ordering::equivalent;
 
+    if (treeID() != other.treeID()) {
+        // With ENABLE(ACCESSIBILITY_LOCAL_FRAME), each frame has its own accessibility tree
+        // root, so cross-frame objects will never share a common ancestor.
+        return std::partial_ordering::unordered;
+    }
+
     RefPtr current = this;
     RefPtr otherCurrent = other;
 
@@ -1977,6 +1984,9 @@ std::partial_ordering AXCoreObject::partialOrder(const AXCoreObject& other)
             current = parent.ptr();
             AX_ASSERT(!ourAncestors.contains(parent));
             ourAncestors.appendOrMoveToLast(WTF::move(parent));
+        } else {
+            // We've reached the top of this frame's accessibility tree without finding a shared ancestor.
+            current = nullptr;
         }
 
         if (RefPtr maybeParent = otherCurrent ? otherCurrent->parentObject() : nullptr) {
@@ -1998,12 +2008,15 @@ std::partial_ordering AXCoreObject::partialOrder(const AXCoreObject& other)
             otherCurrent = parent.ptr();
             AX_ASSERT(!otherAncestors.contains(parent));
             otherAncestors.appendOrMoveToLast(WTF::move(parent));
+        } else {
+            // We've reached the top of this frame's accessibility tree without finding a shared ancestor.
+            otherCurrent = nullptr;
         }
     }
 
     AX_ASSERT(failsafeCounter < maxIterations);
-    // If we pass the above ASSERT but hit this one, it means we didn't loop infinitely,
-    // but also did not find a shared ancestor between the two objects, which shouldn't ever happen.
+    // We already early-returned for cross-tree objects above, so reaching here means
+    // same-tree objects failed to find a common ancestor, which shouldn't happen.
     AX_ASSERT_NOT_REACHED();
     return std::partial_ordering::unordered;
 }
@@ -2043,6 +2056,21 @@ String LineDecorationStyle::debugDescription() const
 String AXCoreObject::infoStringForTesting()
 {
     return makeString("Role: "_s, rolePlatformString(), ", Value: "_s, stringValue());
+}
+
+AXCoreObject::AccessibilityChildrenVector AXCoreObject::findMatchingObjectsWithin(AccessibilitySearchCriteria&& criteria)
+{
+    criteria.anchorObject = this;
+    auto stream = AXSearchManager().findMatchingObjectsAsStream(WTF::move(criteria));
+
+    // Extract local objects from the stream. Remote frame entries are ignored since
+    // callers of this function expect AccessibilityChildrenVector.
+    AccessibilityChildrenVector results;
+    for (const auto& entry : stream.entries()) {
+        if (RefPtr object = entry.objectIfLocalResult())
+            results.append(object.releaseNonNull());
+    }
+    return results;
 }
 
 namespace Accessibility {

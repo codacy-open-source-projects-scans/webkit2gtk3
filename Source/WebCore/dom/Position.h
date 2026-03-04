@@ -85,7 +85,7 @@ public:
     Text* NODELETE containerText() const;
     Element* NODELETE containerOrParentElement() const;
 
-    int computeOffsetInContainerNode() const;  // O(n) for before/after-anchored positions, O(1) for parent-anchored positions
+    int NODELETE computeOffsetInContainerNode() const; // O(n) for before/after-anchored positions, O(1) for parent-anchored positions
     WEBCORE_EXPORT Position parentAnchoredEquivalent() const; // Convenience method for DOM positions that also fixes up some positions for editing
 
     // Inline O(1) access for Positions which callers know to be parent-anchored
@@ -179,7 +179,7 @@ public:
     static unsigned positionCountBetweenPositions(const Position&, const Position&);
 
     static bool hasRenderedNonAnonymousDescendantsWithHeight(const RenderElement&);
-    static bool nodeIsUserSelectNone(Node*);
+    static bool nodeIsUserSelectNone(const Node*);
     static bool nodeIsUserSelectAll(const Node*);
     static RefPtr<Node> rootUserSelectAllForNode(Node*);
 
@@ -263,7 +263,7 @@ public:
     {
     }
 
-    const Position& position() const { return m_position; }
+    const Position& position() const LIFETIME_BOUND { return m_position; }
     Affinity affinity() const { return m_affinity; }
 
 private:

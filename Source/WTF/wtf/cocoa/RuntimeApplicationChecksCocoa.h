@@ -152,10 +152,10 @@ WTF_EXPORT_PRIVATE bool linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior);
 WTF_EXPORT_PRIVATE bool NODELETE processIsExtension();
 WTF_EXPORT_PRIVATE void NODELETE setProcessIsExtension(bool);
 
-WTF_EXPORT_PRIVATE void NODELETE setApplicationBundleIdentifier(const String&);
-WTF_EXPORT_PRIVATE void NODELETE setApplicationBundleIdentifierOverride(const String&);
+WTF_EXPORT_PRIVATE void setApplicationBundleIdentifier(const String&);
+WTF_EXPORT_PRIVATE void setApplicationBundleIdentifierOverride(const String&);
 WTF_EXPORT_PRIVATE String applicationBundleIdentifier();
-WTF_EXPORT_PRIVATE void NODELETE clearApplicationBundleIdentifierTestingOverride();
+WTF_EXPORT_PRIVATE void clearApplicationBundleIdentifierTestingOverride();
 
 #if USE(SOURCE_APPLICATION_AUDIT_DATA)
 WTF_EXPORT_PRIVATE void setApplicationAuditToken(audit_token_t);
@@ -207,6 +207,7 @@ WTF_EXPORT_PRIVATE bool isHoYoLAB();
 WTF_EXPORT_PRIVATE bool isMailCompositionService();
 WTF_EXPORT_PRIVATE bool isMiniBrowser();
 WTF_EXPORT_PRIVATE bool isMobileMail();
+WTF_EXPORT_PRIVATE bool isMaild();
 WTF_EXPORT_PRIVATE bool isMobileSafari();
 WTF_EXPORT_PRIVATE bool isNews();
 WTF_EXPORT_PRIVATE bool isSafariViewService();

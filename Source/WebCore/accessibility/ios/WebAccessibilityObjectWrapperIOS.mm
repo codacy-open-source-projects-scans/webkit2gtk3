@@ -2287,7 +2287,7 @@ static RenderObject* rendererForView(WAKView* view)
         return nil;
 
     auto criteria = accessibilitySearchCriteriaForSearchPredicate(*backingObject, parameters);
-    return makeNSArray(backingObject->findMatchingObjects(WTF::move(criteria)));
+    return makeNSArray(backingObject->findMatchingObjectsWithin(WTF::move(criteria)));
 }
 
 - (void)accessibilityModifySelection:(TextGranularity)granularity increase:(BOOL)increase
@@ -3410,8 +3410,10 @@ static RenderObject* rendererForView(WAKView* view)
 
     RetainPtr<NSMutableArray<UIAccessibilityCustomAction *>> actions = adoptNS([[NSMutableArray alloc] init]);
     for (auto& actionData : actionsData) {
+        auto treeID = actionData.treeID;
+        auto targetID = actionData.targetID;
         auto action = adoptNS([PAL::allocUIAccessibilityCustomActionInstance() initWithName:actionData.name.createNSString().autorelease() actionHandler:^BOOL(UIAccessibilityCustomAction *) {
-            return Accessibility::performCustomActionPress(actionData.treeID, actionData.targetID);
+            return Accessibility::performCustomActionPress(treeID, targetID);
         }]);
         [actions addObject:action.get()];
     }

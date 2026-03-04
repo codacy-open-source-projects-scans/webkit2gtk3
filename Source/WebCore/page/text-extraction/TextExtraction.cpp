@@ -86,6 +86,7 @@
 #include "SimpleRange.h"
 #include "StaticRange.h"
 #include "StringEntropyHelpers.h"
+#include "StyleTextDecorationLine.h"
 #include "Text.h"
 #include "TextIterator.h"
 #include "TypedElementDescendantIteratorInlines.h"
@@ -354,6 +355,9 @@ static inline bool canMerge(const TraversalContext& context, const Item& destina
         return false;
 
     if (!std::holds_alternative<TextItemData>(destinationItem.data) || !std::holds_alternative<TextItemData>(sourceItem.data))
+        return false;
+
+    if (destinationItem.hasLineThrough != sourceItem.hasLineThrough)
         return false;
 
     // Don't merge adjacent text runs if they represent two different editable roots.
@@ -806,7 +810,7 @@ static inline void extractRecursive(Node& node, Item& parentItem, TraversalConte
 
     OptionSet<EventListenerCategory> eventListeners;
     if (auto requestedCategories = context.originalRequest.eventListenerCategories) {
-        node.enumerateEventListenerTypes([&](auto& type, unsigned) {
+        node.enumerateEventListenerTypes([&](auto& type, uint16_t, uint16_t) {
             auto typeInfo = eventNames().typeInfoForEvent(type);
             if (typeInfo.isInCategory(EventCategory::Wheel) && requestedCategories.contains(EventListenerCategory::Wheel))
                 eventListeners.add(EventListenerCategory::Wheel);
@@ -972,6 +976,9 @@ static inline void extractRecursive(Node& node, Item& parentItem, TraversalConte
         }
         context.onlyCollectTextAndLinksCount++;
     }
+
+    if (CheckedPtr renderer = node.renderer(); renderer && item)
+        item->hasLineThrough = renderer->style().textDecorationLineInEffect().hasLineThrough();
 
     ASSERT_IMPLIES(isScrollable, item);
 
@@ -1684,9 +1691,9 @@ static void dispatchSimulatedClick(Node& targetNode, const String& searchText, C
 
     // Fall back to dispatching a programmatic click.
     if (element->dispatchSimulatedClick(nullptr, SendMouseUpDownEvents))
-        completion(false, "Failed to click (tried falling back to dispatching programmatic click since target could not be hit-tested)"_s);
-    else
         completion(true, { });
+    else
+        completion(false, "Failed to click (tried falling back to dispatching programmatic click since target could not be hit-tested)"_s);
 }
 
 static void dispatchSimulatedClick(NodeIdentifier identifier, const String& searchText, CompletionHandler<void(bool, String&&)>&& completion)

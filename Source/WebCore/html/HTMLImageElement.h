@@ -78,7 +78,7 @@ public:
 
     WEBCORE_EXPORT unsigned naturalWidth() const;
     WEBCORE_EXPORT unsigned naturalHeight() const;
-    const URL& currentURL() const { return m_currentURL; }
+    const URL& currentURL() const LIFETIME_BOUND { return m_currentURL; }
     WEBCORE_EXPORT const AtomString& currentSrc();
 
     bool isServerMap() const;
@@ -201,8 +201,8 @@ private:
 
     bool canStartSelection() const override;
 
-    bool isURLAttribute(const Attribute&) const override;
-    bool attributeContainsURL(const Attribute&) const override;
+    bool NODELETE isURLAttribute(const Attribute&) const override;
+    bool NODELETE attributeContainsURL(const Attribute&) const override;
     String completeURLsInAttributeValue(const URL& base, const Attribute&, ResolveURLs = ResolveURLs::Yes) const override;
     Attribute replaceURLsInAttributeValue(const Attribute&, const CSS::SerializationContext&) const override;
 
