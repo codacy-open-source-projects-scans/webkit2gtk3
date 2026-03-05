@@ -757,6 +757,23 @@ void WebBackForwardList::backForwardListCounts(CompletionHandler<void(WebBackFor
     completionHandler(counts());
 }
 
+FrameState* WebBackForwardList::findFrameStateInItem(WebCore::BackForwardItemIdentifier itemID, WebCore::FrameIdentifier parentFrameID, uint64_t childFrameIndex)
+{
+    RefPtr targetItem = itemForID(itemID);
+    if (!targetItem)
+        return nullptr;
+
+    RefPtr parentFrameItem = protect(targetItem->mainFrameItem())->childItemForFrameID(parentFrameID);
+    if (!parentFrameItem)
+        return nullptr;
+
+    RefPtr childFrameItem = parentFrameItem->childItemAtIndex(childFrameIndex);
+    if (!childFrameItem)
+        return nullptr;
+
+    return &childFrameItem->frameState();
+}
+
 String WebBackForwardList::loggingString()
 {
     StringBuilder builder;
@@ -867,14 +884,14 @@ WebCore::BackForwardItemIdentifier generateBackForwardItemIdentifier()
 }
 
 // rdar://168139823 is the task of doing a productionized version of WebKit Swift logging
-void doLog(const char* WTF_NONNULL msg)
+void doLog(const WTF::String& msg)
 {
-    LOG(BackForward, "%s", msg);
+    LOG(BackForward, "%s", msg.utf8().data());
 }
 
-void doLoadingReleaseLog(const char* WTF_NONNULL msg)
+void doLoadingReleaseLog(const WTF::String& msg)
 {
-    RELEASE_LOG(Loading, "%s", msg);
+    RELEASE_LOG(Loading, "%s", msg.utf8().data());
 }
 // rdar://168139740 is the task of doing a productionized Swift MESSAGE_CHECK
 void messageCheckFailed(Ref<WebKit::WebProcessProxy> process)

@@ -32,10 +32,10 @@ namespace WebCore {
 
 class CSSCounterValue final : public CSSValue {
 public:
-    static Ref<CSSCounterValue> create(AtomString&& identifier, AtomString&& separator, Ref<CSSValue>&& counterStyle);
+    static Ref<CSSCounterValue> NODELETE create(AtomString&& identifier, AtomString&& separator, Ref<CSSValue>&& counterStyle);
 
-    const AtomString& identifier() const { return m_identifier; }
-    const AtomString& separator() const { return m_separator; }
+    const AtomString& identifier() const LIFETIME_BOUND { return m_identifier; }
+    const AtomString& separator() const LIFETIME_BOUND { return m_separator; }
     CSSValue& counterStyle() const { return m_counterStyle; }
     String counterStyleCSSText() const;
 

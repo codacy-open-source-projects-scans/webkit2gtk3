@@ -62,6 +62,8 @@ WTF_MAKE_TZONE_ALLOCATED_IMPL(AXIDAndCharacterRange);
 
 static const Seconds CreationFeedbackInterval { 3_s };
 
+std::atomic<bool> AXIsolatedTree::s_anyTreeNeedsTearDown { false };
+
 HashMap<FrameIdentifier, Ref<AXIsolatedTree>>& AXIsolatedTree::treeFrameCache()
 {
     static NeverDestroyed<HashMap<FrameIdentifier, Ref<AXIsolatedTree>>> map;
@@ -90,6 +92,7 @@ void AXIsolatedTree::queueForDestruction()
 
     Locker locker { m_changeLogLock };
     m_queuedForDestruction = true;
+    s_anyTreeNeedsTearDown.store(true, std::memory_order_relaxed);
 }
 
 Ref<AXIsolatedTree> AXIsolatedTree::createEmpty(AXObjectCache& axObjectCache)
@@ -131,7 +134,8 @@ void AXIsolatedTree::createEmptyContent(AccessibilityObject& axRoot)
         return object->isWebArea();
     });
     if (!axWebArea) {
-        AX_ASSERT_NOT_REACHED();
+        // FIXME: Can hit this almost 100% of the time on google.com with ENABLE(ACCESSIBILITY_LOCAL_FRAME).
+        AX_BROKEN_ASSERT_NOT_REACHED();
         return;
     }
     auto webAreaData = createIsolatedObjectData(*axWebArea, *this);
@@ -889,12 +893,11 @@ void AXIsolatedTree::updateNodeProperties(AccessibilityObject& axObject, const A
         case AXProperty::LinethroughColor:
             properties.append({ AXProperty::LinethroughColor, axObject.lineDecorationStyle().linethroughColor });
             break;
-        case AXProperty::RevealableText:
-            // We should only cache this property for ignored objects.
-            AX_ASSERT(axObject.isIgnored());
+        case AXProperty::RevealableText: {
             if (String text = axObject.revealableText(); !text.isEmpty())
                 properties.append({ AXProperty::RevealableText, WTF::move(text).isolatedCopy() });
             break;
+        }
         case AXProperty::TextColor: {
             if (RefPtr parent = axObject.parentObject()) {
                 auto color = axObject.textColor();
@@ -1145,8 +1148,6 @@ void AXIsolatedTree::setInitialSortedNonRootWebAreas(Vector<AXID> webAreaIDs)
 std::optional<AXID> AXIsolatedTree::focusedNodeID()
 {
     AX_ASSERT(!isMainThread());
-    // applyPendingChanges can destroy `this` tree, so protect it until the end of this method.
-    Ref protectedThis { *this };
     // Apply pending changes in case focus has changed and hasn't been updated.
     // Use applyPendingChangesUnlessQueuedForDestruction() because this method may be called
     // while s_storeLock is held (e.g., from findAXTree() callback). If we used applyPendingChanges()
@@ -1352,9 +1353,42 @@ void AXIsolatedTree::applyPendingChangesUnlessQueuedForDestruction()
 
     Locker locker { m_changeLogLock };
 
-    if (m_queuedForDestruction)
+    if (m_queuedForDestruction) [[unlikely]]
         return;
     applyPendingChangesLocked();
+}
+
+DidTearDown AXIsolatedTree::applyPendingChangesOrTearDown()
+{
+    AX_ASSERT(!isMainThread());
+
+    Locker locker { m_changeLogLock };
+
+    if (m_queuedForDestruction) [[unlikely]] {
+        clearTreeContentsLocked();
+        return DidTearDown::Yes;
+    }
+
+    applyPendingChangesLocked();
+    return DidTearDown::No;
+}
+
+void AXIsolatedTree::clearTreeContentsLocked()
+{
+    AXTRACE("AXIsolatedTree::clearTreeContentsLocked"_s);
+    AX_ASSERT(!isMainThread());
+    AX_ASSERT(m_changeLogLock.isLocked());
+
+    for (const auto& object : m_readerThreadNodeMap.values())
+        object->detach(AccessibilityDetachmentType::CacheDestroyed);
+
+    // Because each AXIsolatedObject holds a RefPtr to this tree, clear out any member variable
+    // that holds an AXIsolatedObject so the ref-cycle is broken and this tree can be destroyed.
+    m_readerThreadNodeMap.clear();
+    m_rootNode = nullptr;
+    m_pendingAppends.clear();
+    // We don't need to bother clearing out any other non-cycle-causing member variables as they
+    // will be cleaned up automatically when the tree is destroyed.
 }
 
 void AXIsolatedTree::applyPendingChangesLocked()
@@ -1367,16 +1401,7 @@ void AXIsolatedTree::applyPendingChangesLocked()
         WTFBeginSignpostAlways(this, AccessibilityIsolatedTreeApplyPendingChanges, "tree ID: %" PRIVATE_LOG_STRING "", treeID().loggingString().utf8().data());
 
     if (m_queuedForDestruction) [[unlikely]] {
-        for (const auto& object : m_readerThreadNodeMap.values())
-            object->detach(AccessibilityDetachmentType::CacheDestroyed);
-
-        // Because each AXIsolatedObject holds a RefPtr to this tree, clear out any member variable
-        // that holds an AXIsolatedObject so the ref-cycle is broken and this tree can be destroyed.
-        m_readerThreadNodeMap.clear();
-        m_rootNode = nullptr;
-        m_pendingAppends.clear();
-        // We don't need to bother clearing out any other non-cycle-causing member variables as they
-        // will be cleaned up automatically when the tree is destroyed.
+        clearTreeContentsLocked();
 
         AX_ASSERT(AXTreeStore::contains(treeID()));
         AXTreeStore::remove(treeID());
@@ -1630,7 +1655,12 @@ void AXIsolatedTree::processQueuedNodeUpdates()
         m_unresolvedPendingAppends.add(objectID);
     m_needsUpdateNode.clear();
 
-    for (const auto& propertyUpdate : m_needsPropertyUpdates) {
+    // Updating properties can trigger side-effects (e.g. isIgnored() detecting an
+    // ignored-state change) that call queueNodeUpdate, adding more entries to
+    // m_needsPropertyUpdates. Exchange the map so we iterate a snapshot; any
+    // newly-queued updates are picked up in the next timer cycle.
+    auto propertyUpdates = std::exchange(m_needsPropertyUpdates, { });
+    for (const auto& propertyUpdate : propertyUpdates) {
         if (m_unresolvedPendingAppends.contains(propertyUpdate.key))
             continue;
 
@@ -1640,9 +1670,8 @@ void AXIsolatedTree::processQueuedNodeUpdates()
         if (RefPtr axObject = cache->objectForID(propertyUpdate.key))
             updateNodeProperties(*axObject, propertyUpdate.value);
     }
-    m_needsPropertyUpdates.clear();
 
-    if (m_relationsNeedUpdate)
+    if (m_relationsNeedUpdate && cache)
         updateRelations(cache->relations());
 
     if (m_mostRecentlyPaintedTextIsDirty) {
@@ -1661,7 +1690,7 @@ void AXIsolatedTree::processQueuedNodeUpdates()
         //
         // So it's crucial to resolve the mostRecentlyPaintedText structure before the m_changeLogLock critical section,
         // and only perform a move or copy while in the critical section to avoid a deadlock.
-        auto mostRecentlyPaintedText = cache->mostRecentlyPaintedText();
+        auto mostRecentlyPaintedText = cache ? cache->mostRecentlyPaintedText() : HashMap<AXID, LineRange> { };
         Locker lock { m_changeLogLock };
         m_pendingMostRecentlyPaintedText = WTF::move(mostRecentlyPaintedText);
     }
@@ -1783,7 +1812,7 @@ void setPropertyIn(AXProperty property, AXPropertyValueVariant&& value, AXProper
         properties.append(std::pair(property, WTF::move(value)));
 }
 
-static bool shouldCacheElementName(ElementName name)
+static bool NODELETE shouldCacheElementName(ElementName name)
 {
     switch (name) {
     case ElementName::HTML_area:

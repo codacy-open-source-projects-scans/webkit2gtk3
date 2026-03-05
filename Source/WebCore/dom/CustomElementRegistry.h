@@ -114,13 +114,13 @@ public:
     MemoryCompactRobinHoodHashMap<AtomString, Ref<DeferredPromise>>& promiseMap() LIFETIME_BOUND { return m_promiseMap; }
     bool isShadowDisabled(const AtomString& name) const { return m_disabledShadowSet.contains(name); }
 
-    template<typename Visitor> void visitJSCustomElementInterfaces(Visitor&) const;
+    template<typename Visitor> void visitJSCustomElementInterfacesInGCThread(Visitor&) const;
 
 private:
     CustomElementRegistry(ScriptExecutionContext&, LocalDOMWindow&);
     CustomElementRegistry(ScriptExecutionContext&);
 
-    static WeakHashMap<Element, Ref<CustomElementRegistry>, WeakPtrImplWithEventTargetData>& scopedCustomElementRegistryMap();
+    static WeakHashMap<Element, Ref<CustomElementRegistry>, WeakPtrImplWithEventTargetData>& NODELETE scopedCustomElementRegistryMap();
 
     WeakPtr<LocalDOMWindow, WeakPtrImplWithEventTargetData> m_window;
     HashMap<AtomString, Ref<JSCustomElementInterface>> m_nameMap;

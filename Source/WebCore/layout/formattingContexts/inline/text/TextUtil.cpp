@@ -482,7 +482,7 @@ TextBreakIterator::ContentAnalysis TextUtil::contentAnalysis(WordBreak wordBreak
 // `Bidi_Class` of `ch` isn't `R`, `AL`, nor Bidi controls.
 // https://util.unicode.org/UnicodeJsps/list-unicodeset.jsp?a=%5B%5B%3Abc%3DR%3A%5D%5B%3Abc%3DAL%3A%5D%5D&g=bc
 // https://util.unicode.org/UnicodeJsps/list-unicodeset.jsp?a=[:Bidi_C:]
-static ALWAYS_INLINE bool mayBeBidiRTL(char32_t ch)
+static ALWAYS_INLINE bool NODELETE mayBeBidiRTL(char32_t ch)
 {
     if (ch < 0x0590)
         return false;
@@ -630,7 +630,7 @@ static bool isASCIIHangableQuote(char32_t character)
 static bool isHangableOpenPunctuation(char32_t character)
 {
     // https://drafts.csswg.org/css-text-3/#hanging-punctuation-property
-    if (isASCIIHangableQuote(character))
+    if (isASCIIHangableQuote(character) || character == ideographicSpace)
         return true;
     return U_GET_GC_MASK(character) & (U_GC_PS_MASK | U_GC_PI_MASK | U_GC_PF_MASK);
 }
