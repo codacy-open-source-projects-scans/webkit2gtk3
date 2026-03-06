@@ -1154,7 +1154,7 @@ static sk_sp<SkSurface> createAcceleratedSurface(const IntSize& size)
     RELEASE_ASSERT(grContext);
 
     auto imageInfo = SkImageInfo::Make(size.width(), size.height(), kRGBA_8888_SkColorType, kPremul_SkAlphaType, SkColorSpace::MakeSRGB());
-    SkSurfaceProps properties { 0, FontRenderOptions::singleton().subpixelOrder() };
+    SkSurfaceProps properties = FontRenderOptions::singleton().createSurfaceProps();
     auto surface = SkSurfaces::RenderTarget(grContext, skgpu::Budgeted::kNo, imageInfo, PlatformDisplay::sharedDisplay().msaaSampleCount(), kTopLeft_GrSurfaceOrigin, &properties);
     if (!surface || !surface->getCanvas())
         return nullptr;
@@ -1249,12 +1249,14 @@ SkiaRecordingData GraphicsContextSkia::endRecording()
     m_contextMode = ContextMode::PaintingMode;
 
     Vector<Ref<SkiaImageAtlasLayout>> atlasLayouts;
+    unsigned imageSetFingerprint = 0;
     if (m_atlasLayoutBuilder) {
         atlasLayouts = m_atlasLayoutBuilder->finalize();
+        imageSetFingerprint = m_atlasLayoutBuilder->imageSetFingerprint();
         m_atlasLayoutBuilder = nullptr;
     }
 
-    return { WTF::move(m_imageToFenceMap), WTF::move(atlasLayouts) };
+    return { WTF::move(m_imageToFenceMap), WTF::move(atlasLayouts), imageSetFingerprint };
 }
 
 void GraphicsContextSkia::enableStateReplayTracking()

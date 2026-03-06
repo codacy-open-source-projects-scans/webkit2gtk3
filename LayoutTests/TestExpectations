@@ -373,6 +373,9 @@ media/deactivate-audio-session.html [ Skip ]
 # Skip isolated-tree specific tests.
 accessibility/isolated-tree [ Skip ]
 
+# Skipped because ACCESSIBILITY_LOCAL_FRAME doesn't support dynamic updates yet.
+accessibility/dynamic-changes-update-position.html [ Failure ]
+
 # ApplePay is only available on iOS (greater than iOS 10) and macOS (greater than macOS 10.12) and only for WebKit2.
 fast/css/appearance-apple-pay-button.html [ Skip ]
 fast/css/appearance-apple-pay-button-div.html [ Skip ]
@@ -1254,6 +1257,10 @@ fast/text/font-lookup-dot-prefix-case-sensitive.html [ Skip ]
 http/tests/paymentrequest [ Skip ]
 http/tests/inspector/paymentrequest [ Skip ]
 imported/w3c/web-platform-tests/payment-request [ Skip ]
+
+# Permissions-Policy HTTP header is not implemented
+webkit.org/b/253126 imported/w3c/web-platform-tests/permissions-policy/payment-allowed-by-permissions-policy.https.sub.html [ Skip ]
+webkit.org/b/253126 imported/w3c/web-platform-tests/permissions-policy/payment-disabled-by-permissions-policy.https.sub.html [ Skip ]
 
 webkit.org/b/182292 imported/w3c/web-platform-tests/css/cssom-view/scrollingElement-quirks-dynamic-001.html [ ImageOnlyFailure ]
 webkit.org/b/182292 imported/w3c/web-platform-tests/css/cssom-view/scrollingElement-quirks-dynamic-002.html [ ImageOnlyFailure ]
@@ -2892,6 +2899,8 @@ fast/table/hittest-tablecell-right-edge.html [ Pass Failure ]
 webkit.org/b/154687 streams/pipe-to.html [ Slow ]
 
 webkit.org/b/52185 fast/css/vertical-align-baseline-rowspan-010.html [ ImageOnlyFailure ]
+
+webkit.org/b/309145 fast/css/vertical-text-overflow-ellipsis-text-align-center-mixed.html [ Pass Failure ]
 
 # Content Security Policy failures
 webkit.org/b/111869 http/tests/security/contentSecurityPolicy/eval-blocked-and-sends-report.html
@@ -6596,9 +6605,6 @@ imported/w3c/web-platform-tests/paint-timing/fcp-only/fcp-out-of-bounds.html [ S
 imported/w3c/web-platform-tests/paint-timing/fcp-only/fcp-out-of-bounds-translate.html [ Skip ]
 imported/w3c/web-platform-tests/paint-timing/fcp-only/fcp-pseudo-element-visibility.html [ Skip ]
 imported/w3c/web-platform-tests/paint-timing/fcp-only/svg-in-iframe.html [ Skip ]
-imported/w3c/web-platform-tests/payment-request/delegate-request.https.sub.html [ Skip ]
-imported/w3c/web-platform-tests/payment-request/payment-is-showing.https.html [ Skip ]
-imported/w3c/web-platform-tests/payment-request/payment-request-disallowed-when-hidden.https.html [ Skip ]
 imported/w3c/web-platform-tests/permissions/permissions-query-feature-policy-attribute.https.sub.html [ Skip ]
 imported/w3c/web-platform-tests/pointerevents/pointerlock/pointerevent_pointermove_in_pointerlock.html [ Skip ]
 imported/w3c/web-platform-tests/pointerlock/mouse_buttons_back_forward.html [ Skip ]

@@ -4139,6 +4139,10 @@ void WebPageProxy::handleMouseEvent(const NativeWebMouseEvent& event)
     if (!m_mainFrame)
         return;
 
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    WTFBeginSignpost(event.signpostIdentifier(), HandleMouseEvent, "id: %" PRIuPTR ", type: %s", event.signpostIdentifier(), toString(event.type()).characters());
+#endif
+
 #if ENABLE(CONTEXT_MENU_EVENT)
     if (event.button() == WebMouseEventButton::Right && event.type() == WebEventType::MouseDown) {
         ASSERT(m_contextMenuPreventionState != EventPreventionState::Waiting);
@@ -5609,10 +5613,49 @@ void WebPageProxy::continueNavigationInNewProcess(API::Navigation& navigation, W
 
     Ref preferences = m_preferences;
     if (preferences->siteIsolationEnabled() && (!frame.isMainFrame() || newProcess->coreProcessIdentifier() == frame.process().coreProcessIdentifier())) {
+        // about:blank frames should inherit the origin of the which originated navigation.
+        // If the two frames share origins, they should share the same process.
+        //
+        // From HTML Spec: browsing the Web, section 7.4.2.2, Item 23, sub-item 5:
+        // https://html.spec.whatwg.org/multipage/browsing-the-web.html#beginning-navigation
+        //
+        // If url matches about:blank or is about:srcdoc, then:
+        //     Set documentState's origin to initiatorOriginSnapshot.
+        //     Set documentState's about base URL to initiatorBaseURLSnapshot.
+        std::optional<SecurityOriginData> originator = navigation.currentRequest().url().isAboutBlank() && navigation.originatingFrameInfo() ? std::make_optional(navigation.originatingFrameInfo()->securityOrigin) : std::nullopt;
+
+        auto shouldTreatAsContinuingLoad = navigation.currentRequestIsRedirect() ? WebCore::ShouldTreatAsContinuingLoad::YesAfterProvisionalLoadStarted : WebCore::ShouldTreatAsContinuingLoad::YesAfterNavigationPolicyDecision;
+
+        // When a child frame's Back/Forward navigation triggers a process swap (Site Isolation),
+        // send GoToBackForwardItem so the new process performs a proper history navigation using
+        // the FrameState stored on the Navigation object.
+        if (RefPtr frameState = navigation.backForwardFrameState()) {
+            // The FrameState from the BackForwardList may contain an old frameID from a
+            // previous incarnation of this child frame. Update it to the current frameID
+            // so the new process can find the correct frame to navigate.
+            frameState->frameID = frame.frameID();
+
+            WEBPAGEPROXY_RELEASE_LOG(Loading, "continueNavigationInNewProcess: Sending GoToBackForwardItem for child frame to new process, URL=%" SENSITIVE_LOG_STRING, frameState->urlString.utf8().data());
+            auto publicSuffix = WebCore::PublicSuffixStore::singleton().publicSuffix(navigation.currentRequest().url());
+            frame.prepareForProvisionalLoadInProcess(newProcess, navigation, browsingContextGroup, originator, [
+                navigationID = navigation.navigationID(),
+                frameState = WTF::move(frameState),
+                shouldTreatAsContinuingLoad,
+                lastNavigationWasAppInitiated = m_lastNavigationWasAppInitiated,
+                publicSuffix = WTF::move(publicSuffix),
+                newProcess = newProcess.copyRef(),
+                preventProcessShutdownScope = newProcess->shutdownPreventingScope()
+            ] (std::optional<PageIdentifier> pageID) mutable {
+                if (pageID)
+                    newProcess->send(Messages::WebPage::GoToBackForwardItem({ navigationID, frameState.releaseNonNull(), FrameLoadType::IndexedBackForward, shouldTreatAsContinuingLoad, std::nullopt, lastNavigationWasAppInitiated, std::nullopt, WTF::move(publicSuffix), { }, WebCore::ProcessSwapDisposition::None }), *pageID);
+            });
+            return;
+        }
+
         // FIXME: Add more parameters as appropriate. <rdar://116200985>
         LoadParameters loadParameters;
         loadParameters.request = navigation.currentRequest();
-        loadParameters.shouldTreatAsContinuingLoad = navigation.currentRequestIsRedirect() ? WebCore::ShouldTreatAsContinuingLoad::YesAfterProvisionalLoadStarted : WebCore::ShouldTreatAsContinuingLoad::YesAfterNavigationPolicyDecision;
+        loadParameters.shouldTreatAsContinuingLoad = shouldTreatAsContinuingLoad;
         loadParameters.frameIdentifier = frame.frameID();
         loadParameters.isRequestFromClientOrUserInput = navigation.isRequestFromClientOrUserInput();
         loadParameters.navigationID = navigation.navigationID();
@@ -5628,23 +5671,13 @@ void WebPageProxy::continueNavigationInNewProcess(API::Navigation& navigation, W
         if (navigation.isInitialFrameSrcLoad())
             frame.setIsPendingInitialHistoryItem(true);
 
-        // about:blank frames should inherit the origin of the which originated navigation.
-        // If the two frames share origins, they should share the same process.
-        //
-        // From HTML Spec: browsing the Web, section 7.4.2.2, Item 23, sub-item 5:
-        // https://html.spec.whatwg.org/multipage/browsing-the-web.html#beginning-navigation
-        //
-        // If url matches about:blank or is about:srcdoc, then:
-        //     Set documentState's origin to initiatorOriginSnapshot.
-        //     Set documentState's about base URL to initiatorBaseURLSnapshot.
-        std::optional<SecurityOriginData> originator = navigation.currentRequest().url().isAboutBlank() && navigation.originatingFrameInfo() ? std::make_optional(navigation.originatingFrameInfo()->securityOrigin) : std::nullopt;
-
         frame.prepareForProvisionalLoadInProcess(newProcess, navigation, browsingContextGroup, originator, [
             loadParameters = WTF::move(loadParameters),
             newProcess = newProcess.copyRef(),
             preventProcessShutdownScope = newProcess->shutdownPreventingScope()
-        ] (PageIdentifier pageID) mutable {
-            newProcess->send(Messages::WebPage::LoadRequest(WTF::move(loadParameters)), pageID);
+        ](std::optional<PageIdentifier> pageID) mutable {
+            if (pageID)
+                newProcess->send(Messages::WebPage::LoadRequest(WTF::move(loadParameters)), *pageID);
         });
         return;
     }
@@ -8512,12 +8545,11 @@ void WebPageProxy::decidePolicyForNavigationAction(Ref<WebProcessProxy>&& proces
         }
     }
 
-    // Wrap completionHandler to include FrameState in response.
     auto completionHandler = [
         originalCompletionHandler = WTF::move(originalCompletionHandler),
-        frameStateForBackForwardNavigation = WTF::move(frameStateForBackForwardNavigation)
+        frameStateForBackForwardNavigation
     ](PolicyDecision&& policyDecision) mutable {
-        if (frameStateForBackForwardNavigation && (policyDecision.policyAction == PolicyAction::Use))
+        if (frameStateForBackForwardNavigation && policyDecision.policyAction == PolicyAction::Use)
             policyDecision.backForwardFrameState = WTF::move(frameStateForBackForwardNavigation);
         originalCompletionHandler(WTF::move(policyDecision));
     };
@@ -8574,6 +8606,10 @@ void WebPageProxy::decidePolicyForNavigationAction(Ref<WebProcessProxy>&& proces
         if (!navigation)
             navigation = m_navigationState->createLoadRequestNavigation(process->coreProcessIdentifier(), ResourceRequest(request), protect(backForwardList().currentItem()));
     }
+
+    // Store frameState on navigation for Site Isolation process swap.
+    if (frameStateForBackForwardNavigation && navigation)
+        navigation->setBackForwardFrameState(frameStateForBackForwardNavigation->copy());
 
     if (!checkURLReceivedFromCurrentOrPreviousWebProcess(process, request.url())) {
         WEBPAGEPROXY_RELEASE_LOG_ERROR(Process, "Ignoring request to load this main resource because it is outside the sandbox");
@@ -9864,6 +9900,36 @@ void WebPageProxy::rootViewToAccessibilityScreen(const IntRect& viewRect, Comple
         return completionHandler({ });
     completionHandler(pageClient->rootViewToAccessibilityScreen(viewRect));
 }
+
+#if ENABLE(ACCESSIBILITY_LOCAL_FRAME)
+void WebPageProxy::requestFrameScreenPosition(FrameIdentifier frameID)
+{
+    static constexpr float unitRectSize = 1000;
+    convertRectToMainFrameCoordinates(FloatRect(0, 0, unitRectSize, unitRectSize), frameID, [weakThis = WeakPtr { *this }, frameID](std::optional<FloatRect> finalRect) mutable {
+        RefPtr protectedThis = weakThis.get();
+        if (!protectedThis || !finalRect)
+            return;
+
+        RefPtr pageClient = protectedThis->pageClient();
+        if (!pageClient)
+            return;
+
+        auto screenRect = pageClient->rootViewToAccessibilityScreen(enclosingIntRect(*finalRect));
+
+        FrameGeometry geometry;
+#if PLATFORM(MAC)
+        // On macOS, NSRect origin is the bottom-left corner, so screenRect.location()
+        // is offset downward by the rect's height. Add it back to get the content origin.
+        geometry.screenPosition = { screenRect.x(), screenRect.y() + screenRect.height() };
+#else
+        geometry.screenPosition = screenRect.location();
+#endif
+        geometry.screenTransform = AffineTransform::makeScale({ screenRect.width() / unitRectSize, screenRect.height() / unitRectSize });
+
+        protectedThis->sendToProcessContainingFrame(frameID, Messages::WebPage::UpdateRemotePageAccessibilityScreenPosition(frameID, geometry));
+    });
+}
+#endif // ENABLE(ACCESSIBILITY_LOCAL_FRAME)
 
 void WebPageProxy::runBeforeUnloadConfirmPanel(IPC::Connection& connection, FrameIdentifier frameID, FrameInfoData&& frameInfo, String&& message, CompletionHandler<void(bool)>&& reply)
 {
@@ -11641,6 +11707,15 @@ void WebPageProxy::mouseEventHandlingCompleted(std::optional<WebEventType> event
         }
 #endif
     }
+
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    WTFEndSignpost(event.signpostIdentifier(), HandleMouseEvent);
+    for (auto& coalescedEvent : event.coalescedEvents()) {
+        if (coalescedEvent.signpostIdentifier() == event.signpostIdentifier())
+            continue;
+        WTFEndSignpost(coalescedEvent.signpostIdentifier(), HandleMouseEvent);
+    }
+#endif
 
     if (!internals().mouseEventQueue.isEmpty()) {
         LOG(MouseHandling, " UIProcess: handling a queued mouse event from mouseEventHandlingCompleted");
