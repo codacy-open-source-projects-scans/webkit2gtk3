@@ -51,6 +51,10 @@
 #import <wtf/cocoa/RuntimeApplicationChecksCocoa.h>
 #import <wtf/darwin/DispatchExtras.h>
 
+#if HAVE(AVEXPERIENCECONTROLLER)
+#import <WebKitAdditions/MediaSessionManagerCocoaAdditions.h>
+#endif
+
 #import "MediaRemoteSoftLink.h"
 #include <pal/cocoa/AVFoundationSoftLink.h>
 
@@ -573,6 +577,11 @@ bool MediaSessionManagerCocoa::shouldUpdateNowPlaying(const NowPlayingInfo& nowP
         return true;
     }
 
+    if (m_nowPlayingInfo->fullscreenMode != nowPlayingInfo.fullscreenMode) {
+        INFO_LOG(LOGIDENTIFIER, "fullscreenMode changed");
+        return true;
+    }
+
     auto currentTime = nowPlayingInfo.currentTime;
 
     // Always update when currentTime changes while paused.
@@ -779,9 +788,16 @@ static id<MRNowPlayingActivityUIControllable> nowPlayingActivityController()
 
 void MediaSessionManagerCocoa::updateNowPlayingSuppression(const NowPlayingInfo* nowPlayingInfo)
 {
-    if (!nowPlayingInfo || !nowPlayingInfo->isVideo) {
-        RELEASE_LOG(Media, "MediaSessionManagerCocoa::updateNowPlayingSuppression: clearing suppressPresentationOverBundleIdentifiers (hasNowPlayingInfo=%d, isVideo=%d)", !!nowPlayingInfo, nowPlayingInfo && nowPlayingInfo->isVideo);
+    if (!nowPlayingInfo || !nowPlayingInfo->isVideo || nowPlayingInfo->fullscreenMode == MediaPlayerEnums::VideoFullscreenModeStandard) {
+        RELEASE_LOG(Media, "MediaSessionManagerCocoa::updateNowPlayingSuppression: clearing suppressPresentationOverBundleIdentifiers (hasNowPlayingInfo=%d, isVideo=%d, fullscreenMode=%d)", !!nowPlayingInfo, nowPlayingInfo && nowPlayingInfo->isVideo, nowPlayingInfo && nowPlayingInfo->fullscreenMode);
         [nowPlayingActivityController() suppressPresentationOverBundleIdentifiers:nil];
+
+#if HAVE(AVEXPERIENCECONTROLLER)
+        if (nowPlayingInfo->fullscreenMode == MediaPlayerEnums::VideoFullscreenModeStandard) {
+            RELEASE_LOG(Media, "MediaSessionManagerCocoa::updateNowPlayingSuppression: taking Now Playing assertion");
+            [nowPlayingActivityController() acquireNowPlayingActivityAssertionForRouteIdentifier:MRNowPlayingActivityActiveRouteIdentifier withDuration:MRNowPlayingActivityUIDurationBrief preferredState:MRNowPlayingActivityUIStateUnsuppressed];
+        }
+#endif
     } else {
         RetainPtr parentApplicationBundleIdentifier = applicationBundleIdentifier().createNSString();
         RetainPtr presentingApplicationBundleIdentifier = nowPlayingInfo->metadata.sourceApplicationIdentifier.createNSString();

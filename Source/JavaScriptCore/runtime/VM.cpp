@@ -48,9 +48,9 @@
 #include "Disassembler.h"
 #include "DoublePredictionFuzzerAgent.h"
 #include "ErrorInstance.h"
+#include "EvacuatedStack.h"
 #include "EvalCodeBlockInlines.h"
 #include "EvalExecutableInlines.h"
-#include "EvacuatedStack.h"
 #include "Exception.h"
 #include "FTLThunks.h"
 #include "FileBasedFuzzerAgent.h"
@@ -106,6 +106,7 @@
 #include "ProfilerDatabase.h"
 #include "ProgramCodeBlockInlines.h"
 #include "ProgramExecutableInlines.h"
+#include "PropertyInlineCache.h"
 #include "PropertyTableInlines.h"
 #include "RandomizingFuzzerAgent.h"
 #include "RegExpCache.h"
@@ -121,7 +122,6 @@
 #include "StrongInlines.h"
 #include "StructureChainInlines.h"
 #include "StructureInlines.h"
-#include "StructureStubInfo.h"
 #include "SubspaceInlines.h"
 #include "SymbolInlines.h"
 #include "SymbolTableInlines.h"
@@ -2052,10 +2052,5 @@ Wasm::DebugState* VM::debugState()
     return m_debugState.get();
 }
 #endif
-
-JSPIContext::~JSPIContext()
-{
-    ASSERT_WITH_MESSAGE(!limitFrame, "JSPIContext is still active when leaving its scope");
-}
 
 } // namespace JSC
