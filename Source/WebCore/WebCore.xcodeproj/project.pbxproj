@@ -19517,6 +19517,8 @@
 		BCA2B0601050475F0043BD1C /* UserScript.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = UserScript.h; sourceTree = "<group>"; };
 		BCA2B0601050485F0043BD1C /* UserScript.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = UserScript.cpp; sourceTree = "<group>"; };
 		BCA2B08A10505BCD0043BD1C /* UserScriptTypes.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = UserScriptTypes.h; sourceTree = "<group>"; };
+		BCA332A52F5B4B6B0013DC4F /* HitTestRequest.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = HitTestRequest.cpp; sourceTree = "<group>"; };
+		BCA332A82F5B508A0013DC4F /* PseudoElementUtilitiesInlines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PseudoElementUtilitiesInlines.h; sourceTree = "<group>"; };
 		BCA378BA0D15F64200B793D6 /* ScheduledAction.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ScheduledAction.cpp; sourceTree = "<group>"; };
 		BCA378BB0D15F64200B793D6 /* ScheduledAction.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ScheduledAction.h; sourceTree = "<group>"; };
 		BCA407B22C9B2DFA006B037F /* CSSContrastColor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CSSContrastColor.h; sourceTree = "<group>"; };
@@ -40102,6 +40104,7 @@
 				494265302B61F7E9000446D5 /* PseudoElementRequest.h */,
 				59A4D4F6CA874D5152089306 /* PseudoElementUtilities.cpp */,
 				8E4E11F4E1E66A6928D671C6 /* PseudoElementUtilities.h */,
+				BCA332A82F5B508A0013DC4F /* PseudoElementUtilitiesInlines.h */,
 				EE62BD9C2DE12BD4006C9A05 /* ResolvedScopedName.cpp */,
 				EE62BD9B2DE12BD4006C9A05 /* ResolvedScopedName.h */,
 				930A9D8629DA3EFF006CBF0E /* ResolvedStyle.h */,
@@ -40941,6 +40944,7 @@
 				4969B0F113D0B33F00DF3521 /* HitTestingTransformState.h */,
 				2D8287F416E4A0380086BD00 /* HitTestLocation.cpp */,
 				2D8287F516E4A0380086BD00 /* HitTestLocation.h */,
+				BCA332A52F5B4B6B0013DC4F /* HitTestRequest.cpp */,
 				930908900AF7EDE40081DF01 /* HitTestRequest.h */,
 				9307F1D50AF2D59000DBA31A /* HitTestResult.cpp */,
 				9307F1D60AF2D59000DBA31A /* HitTestResult.h */,
