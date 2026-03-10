@@ -654,6 +654,11 @@ imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customiz
 
 # Top layer exit animations (remove from implicit anchor/top layer after picker transition finishes).
 imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/select-popover-exit-animation.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/select-picker-exit-animation.html [ Skip ]
+imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/select-picker-starting-style.html [ Skip ]
+
+# Snapshot is taken too soon
+imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/select-picker-pseudo-target-text.html [ ImageOnlyFailure ]
 
 # Untriaged.
 imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/customizable-select/select-appearance-button-after-text.html [ ImageOnlyFailure ]
@@ -867,7 +872,6 @@ imported/w3c/web-platform-tests/speculation-rules/prefetch/redirect-to-prefetch-
 imported/w3c/web-platform-tests/compat/webkit-box-fieldset.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/compat/webkit-box-rtl-flex.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/compat/webkit-text-fill-color-property-003.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/compat/webkit-text-fill-color-property-004.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/compat/webkit-text-fill-color-property-005.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/compat/webkit-box-horizontal-rtl-variants.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/compat/webkit-box-horizontal-reverse-variants.html [ ImageOnlyFailure ]
@@ -1315,6 +1319,7 @@ imported/w3c/web-platform-tests/largest-contentful-paint/web-font-styled-text-re
 
 imported/w3c/web-platform-tests/mediacapture-streams/MediaStreamTrack-MediaElement-disabled-video-is-black.https.html [ Pass Failure ]
 imported/w3c/web-platform-tests/mediacapture-streams/MediaDevices-enumerateDevices-per-origin-ids.sub.https.html [ Skip ]
+imported/w3c/web-platform-tests/mediacapture-streams/BrowserCaptureMediaStreamTrack-restrictTo.https.html [ Skip ]
 
 # These fetch tests are flaky or fail.
 webkit.org/b/247290 imported/w3c/web-platform-tests/fetch/api/basic/response-null-body.any.html [ Pass Failure ]
@@ -1355,6 +1360,8 @@ http/wpt/html/browsers/browsing-the-web/navigating-across-documents/click.html
 http/wpt/html/browsers/browsing-the-web/navigating-across-documents/href.html
 
 imported/w3c/web-platform-tests/html/browsers/browsing-the-web/navigating-across-documents/cross-origin-top-navigation-with-user-activation-in-parent.window.html [ Pass Failure ]
+# Test should be rewritten to use async_test, but it also doesn't appear upstream?
+imported/w3c/web-platform-tests/html/user-activation/consumption-crossorigin.sub.html [ Pass Failure ]
 
 # Tests in this directory take > 30 minutes to run on debug bots.
 [ Debug ] imported/w3c/web-platform-tests/encoding/legacy-mb-japanese
@@ -4505,8 +4512,12 @@ imported/w3c/web-platform-tests/css/css-sizing/margin-collapse-with-indefinite-b
 imported/w3c/web-platform-tests/css/css-sizing/margin-collapse-with-indefinite-block-size-004.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-sizing/replaced-max-height-min-content.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-sizing/replaced-min-height-min-content.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-sizing/responsive-iframe-cross-origin.sub.tentative.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-sizing/responsive-iframe.tentative.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-sizing/responsive-iframe/responsive-iframe-cross-origin.sub.tentative.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-sizing/responsive-iframe/responsive-iframe-request-resize.tentative.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-sizing/responsive-iframe/responsive-iframe.tentative.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-sizing/stretch/replaced-next-to-float-1.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-sizing/stretch/replaced-next-to-float-2.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-sizing/stretch/stretch-quirk-001.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-sizing/stretch/abspos-1.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-sizing/stretch/abspos-2.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-sizing/stretch/bfc-next-to-float-2.html [ ImageOnlyFailure ]
@@ -6320,7 +6331,7 @@ webkit.org/b/241104 fast/css/fill-available-with-percent-height-no-quirk.html [ 
 # scroll anchoring failures
 imported/w3c/web-platform-tests/css/css-scroll-anchoring/anchor-inside-textarea.tentative.html [ Failure ]
 imported/w3c/web-platform-tests/css/css-scroll-anchoring/multicol-fragmented-anchor.html [ Failure ]
-imported/w3c/web-platform-tests/css/css-scroll-anchoring/position-change-heuristic.html [ Pass Failure ]
+
 fast/repaint/absolute-position-changed.html [ Pass ImageOnlyFailure ]
 
 webkit.org/b/307272 fast/events/no-scroll-on-input-text-selection.html [ Failure ]
@@ -8044,6 +8055,9 @@ imported/w3c/web-platform-tests/focus/hasfocus-different-site.html [ Skip ]
 imported/w3c/web-platform-tests/focus/iframe-activeelement-after-focusing-out-iframes.html [ Skip ]
 imported/w3c/web-platform-tests/focus/iframe-focuses-parent-different-site.html [ Skip ]
 
+# Flaky focus failures
+imported/w3c/web-platform-tests/shadow-dom/focus/click-focus-delegatesFocus-click.html [ Skip ]
+
 # Timeout.
 imported/w3c/web-platform-tests/mimesniff/sniffing/html.window.html [ Skip ]
 
@@ -8069,7 +8083,6 @@ webkit.org/b/297505 ipc/LocalSampleBufferDisplayLayer-LogIdentifier-data-race-ua
 
 # Fix upstream in WPT by increasing pixel tolerance
 imported/w3c/web-platform-tests/svg/shapes/rect-03.svg [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/svg/shapes/reftests/pathlength-002.svg [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/svg/shapes/reftests/pathlength-003.svg [ ImageOnlyFailure ]
 
 imported/w3c/web-platform-tests/css/css-pseudo/first-line-line-height-003.html [ ImageOnlyFailure ]

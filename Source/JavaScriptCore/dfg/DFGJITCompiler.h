@@ -115,7 +115,7 @@ public:
     
     void setForNode(Node* node)
     {
-        if (Options::useIRDump()) [[unlikely]]
+        if (Options::useIRDump() || Options::useSourceCodeDump()) [[unlikely]]
             m_irDumpLabels.append({ labelIgnoringWatchpoints(), node });
         if (!m_disassembler) [[likely]]
             return;
@@ -281,9 +281,9 @@ public:
 
     RefPtr<DFG::JITCode> jitCode() { return m_jitCode; }
     
-    Vector<Label>& blockHeads() { return m_blockHeads; }
+    Vector<Label>& blockHeads() LIFETIME_BOUND { return m_blockHeads; }
 
-    PCToCodeOriginMapBuilder& pcToCodeOriginMapBuilder() { return m_pcToCodeOriginMapBuilder; }
+    PCToCodeOriginMapBuilder& pcToCodeOriginMapBuilder() LIFETIME_BOUND { return m_pcToCodeOriginMapBuilder; }
 
     VM& vm() { return m_graph.m_vm; }
 
@@ -388,6 +388,7 @@ protected:
     void linkOSRExits();
     void disassemble(LinkBuffer&);
     void collectIRDumpDebugInfo(LinkBuffer&);
+    void collectSourceCodeDumpDebugInfo(LinkBuffer&);
 
     void makeCatchOSREntryBuffer();
 

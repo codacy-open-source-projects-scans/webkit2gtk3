@@ -2632,6 +2632,7 @@
 		5FA904CA178E61F5004C8A2D /* CertificateInfo.h in Headers */ = {isa = PBXBuildFile; fileRef = 5F2DBBE8178E336900141486 /* CertificateInfo.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		5FC7DC26CFE2563200B85AE4 /* JSEventTarget.h in Headers */ = {isa = PBXBuildFile; fileRef = 5FC7DC26CFE2563200B85AE5 /* JSEventTarget.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		5FE1D292178FD1F3001AA3C3 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5FE1D291178FD1F3001AA3C3 /* Security.framework */; };
+		623C21972F529B6F00B6094B /* StyleVisualBox.h in Headers */ = {isa = PBXBuildFile; fileRef = 623C21962F529B1800B6094B /* StyleVisualBox.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		62641BBD2F3C5E5D006EA1D3 /* CSSPropertyParserConsumer+Overflow.h in Headers */ = {isa = PBXBuildFile; fileRef = 62641BB82F3C527F006EA1D3 /* CSSPropertyParserConsumer+Overflow.h */; };
 		626CDE0F1140424C001E5A68 /* SpatialNavigation.h in Headers */ = {isa = PBXBuildFile; fileRef = 626CDE0D1140424C001E5A68 /* SpatialNavigation.h */; };
 		628D214C12131ED10055DCFC /* NetworkingContext.h in Headers */ = {isa = PBXBuildFile; fileRef = 628D214B12131ED10055DCFC /* NetworkingContext.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -13338,6 +13339,7 @@
 		5F2DBBE8178E336900141486 /* CertificateInfo.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CertificateInfo.h; sourceTree = "<group>"; };
 		5FC7DC26CFE2563200B85AE5 /* JSEventTarget.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = JSEventTarget.h; sourceTree = "<group>"; };
 		5FE1D291178FD1F3001AA3C3 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		623C21962F529B1800B6094B /* StyleVisualBox.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StyleVisualBox.h; sourceTree = "<group>"; };
 		62641BB72F3C5248006EA1D3 /* CSSPropertyParserConsumer+Overflow.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = "CSSPropertyParserConsumer+Overflow.cpp"; sourceTree = "<group>"; };
 		62641BB82F3C527F006EA1D3 /* CSSPropertyParserConsumer+Overflow.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "CSSPropertyParserConsumer+Overflow.h"; sourceTree = "<group>"; };
 		626CDE0C1140424C001E5A68 /* SpatialNavigation.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = SpatialNavigation.cpp; sourceTree = "<group>"; };
@@ -37450,6 +37452,7 @@
 				BC7CEF5E2EC3C2EF008664ED /* StyleMarginTrim.cpp */,
 				BC7CEF5D2EC3C2EF008664ED /* StyleMarginTrim.h */,
 				BC9ABA122DECC1CA00F7E52D /* StylePadding.h */,
+				623C21962F529B1800B6094B /* StyleVisualBox.h */,
 			);
 			path = box;
 			sourceTree = "<group>";
@@ -47864,6 +47867,7 @@
 				BC2A0EFA2E121665003CBA0E /* StyleViewTransitionClass.h in Headers */,
 				A7CAEDA42CB740E200FE4677 /* StyleViewTransitionName.h in Headers */,
 				BC63AD292F084C2F007B62C4 /* StyleVisitedLinkColorData.h in Headers */,
+				623C21972F529B6F00B6094B /* StyleVisualBox.h in Headers */,
 				BC22AABA2E371A4C009AC0C3 /* StyleWebKitBorderSpacing.h in Headers */,
 				BC731F292E68B37100A6584F /* StyleWebKitBoxFlex.h in Headers */,
 				BC731F2B2E68B38500A6584F /* StyleWebKitBoxFlexGroup.h in Headers */,
