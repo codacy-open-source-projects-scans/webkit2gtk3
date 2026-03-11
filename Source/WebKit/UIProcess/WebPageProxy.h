@@ -1383,6 +1383,8 @@ public:
     void addDictationAlternative(WebCore::TextAlternativeWithRange&&);
     void dictationAlternativesAtSelection(CompletionHandler<void(Vector<WebCore::DictationContext>&&)>&&);
     void clearDictationAlternatives(Vector<WebCore::DictationContext>&&);
+    void setDictationStreamingOpacity(const String& hypothesisText, WebCore::CharacterRange streamingRangeInHypothesis, float opacity);
+    void clearDictationStreamingOpacity();
 
     void hasMarkedText(CompletionHandler<void(bool)>&&);
     void getMarkedRangeAsync(CompletionHandler<void(const EditingRange&)>&&);
@@ -1463,6 +1465,10 @@ public:
     void doAfterProcessingAllPendingMouseEvents(Function<void()>&&);
     void didFinishProcessingAllPendingMouseEvents();
     void flushPendingMouseEventCallbacks();
+
+    void doAfterProcessingAllPendingKeyEvents(Function<void()>&&);
+    void didFinishProcessingAllPendingKeyEvents();
+    void flushPendingKeyEventCallbacks();
 
     bool NODELETE isProcessingWheelEvents() const;
     void handleNativeWheelEvent(const NativeWebWheelEvent&);

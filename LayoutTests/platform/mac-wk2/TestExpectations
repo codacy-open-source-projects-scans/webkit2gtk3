@@ -801,8 +801,7 @@ webkit.org/b/160042 accessibility/mac/value-change/value-change-user-info-conten
 
 # Skipped because ACCESSIBILITY_LOCAL_FRAME is not compatable with relative frames.
 accessibility/mac/iframe-relative-frame.html [ Failure ]
-# Skipped because ACCESSIBILITY_LOCAL_FRAME doesn't yet account for dynamic position changes (like scroll).
-accessibility/mac/scroll-to-visible-action.html [ Failure ]
+
 # Regression from ENABLE(ACCESSIBILITY_LOCAL_FRAME).
 accessibility/mac/visible-content-search-in-scrolled-iframe.html [ Failure ]
 platform/mac-wk2/accessibility/content-inset-scrollview-frame.html [ Failure ]
@@ -1708,7 +1707,6 @@ http/tests/webgpu/webgpu/shader/validation/expression/call/builtin/textureSample
 http/tests/webgpu/webgpu/shader/validation/parse/diagnostic.html [ Skip ]
 http/tests/webgpu/webgpu/shader/validation/parse/shadow_builtins.html [ Skip ]
 http/tests/webgpu/webgpu/shader/validation/shader_io/group_and_binding.html [ Skip ]
-http/tests/webgpu/webgpu/shader/validation/uniformity/uniformity.html [ Skip ]
 http/tests/webgpu/webgpu/api/operation/memory_sync/buffer/multiple_buffers.html  [ Skip ]
 http/tests/webgpu/webgpu/api/operation/rendering/depth_clip_clamp.html  [ Skip ]
 http/tests/webgpu/webgpu/api/validation/getBindGroupLayout.html  [ Skip ]
@@ -1957,8 +1955,9 @@ webkit.org/b/287122 imported/w3c/web-platform-tests/html/capability-delegation/d
 [ arm64 ] fast/webgpu/regression/repro_283595-for.html [ Skip ]
 [ arm64 ] fast/webgpu/regression/repro_283595-loop.html [ Skip ]
 [ arm64 ] fast/webgpu/regression/repro_283595-while.html [ Skip ]
-[ arm64 ] fast/webgpu/nocrash/fuzz-284937.html [ Skip ]
 [ arm64 ] fast/webgpu/nocrash/fuzz-287444.html [ Skip ]
+
+webkit.org/b/309524 fast/webgpu/nocrash/fuzz-284937.html [ Skip ]
 
 webkit.org/b/287865 pdf/two-pages-continuous-to-discrete.html [ Pass ImageOnlyFailure ]
 
@@ -2453,14 +2452,14 @@ webkit.org/b/306821 [ Tahoe ] fast/css-grid-layout/grid-item-display.html [ Pass
 
 webkit.org/b/306380 [ Release arm64 ] imported/w3c/web-platform-tests/media-source/mediasource-config-change-webm-av-audio-bitrate.html [ Pass Failure ]
 
+webkit.org/b/309600 [ arm64 ] http/tests/xmlhttprequest/chunked-progress-event-expectedLength.html [ Pass Failure ]
+
 webkit.org/b/307084 [ Tahoe Release ] webgl/smell-test.html [ ImageOnlyFailure Pass ]
 webkit.org/b/307088 [ Tahoe Release ] webgl/webgl-and-dom-in-gpup.html [ ImageOnlyFailure Pass ]
 
 webkit.org/b/307196 http/tests/geolocation/geolocation-get-current-position-does-not-leak.https.html [ Pass Failure ]
 
 webkit.org/b/307351 imported/w3c/web-platform-tests/html/browsers/browsing-the-web/navigating-across-documents/replace-before-load/form-requestsubmit.html [ Pass Failure ]
-
-webkit.org/b/307385 fast/events/onunload-not-on-body.html [ Pass Failure ]
 
 webkit.org/b/307377 [ Tahoe Release arm64 ] compositing/webgl/update-composited-canvas-layer.html [ ImageOnlyFailure Pass ]
 
@@ -2481,14 +2480,6 @@ webkit.org/b/306444 [ Release ] imported/w3c/web-platform-tests/editing/other/ty
 webkit.org/b/306444 [ Release ] imported/w3c/web-platform-tests/editing/other/typing-around-link-element-at-non-collapsed-selection.tentative.html?target=DesignMode&child=b [ Pass Failure ]
 
 webkit.org/b/307850 media/modern-media-controls/tracks-support/audio-single-track.html [ Pass Timeout ]
-
-# webkit.org/b/309512 [macOS arm64] fast/text/glyph-display-lists/glyph-display-list-* are flaky text failures
-[ arm64 ] fast/text/glyph-display-lists/glyph-display-list-color.html [ Failure Pass ]
-[ arm64 ] fast/text/glyph-display-lists/glyph-display-list-gpu-process-crash.html [ Failure Pass ]
-[ arm64 ] fast/text/glyph-display-lists/glyph-display-list-scaled-unshared.html [ Failure Pass ]
-[ arm64 ] fast/text/glyph-display-lists/glyph-display-list-shadow-unshared.html [ Failure Pass ]
-[ arm64 ] fast/text/glyph-display-lists/glyph-display-list-sharing-colr.html [ Failure Pass ]
-[ arm64 ] fast/text/glyph-display-lists/glyph-display-list-svg-unshared.html [ Failure Pass ]
 
 webkit.org/b/307886 [ Release arm64 ] js/dom/promise-stack-overflow.html [ Pass Failure ]
 

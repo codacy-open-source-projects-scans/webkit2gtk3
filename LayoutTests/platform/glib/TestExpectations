@@ -3026,7 +3026,7 @@ imported/w3c/web-platform-tests/webrtc/simulcast/h264.https.html [ Pass Failure 
 imported/w3c/web-platform-tests/webrtc/simulcast/negotiation-encodings.https.html [ Failure ]
 imported/w3c/web-platform-tests/webrtc/simulcast/setParameters-encodings.https.html [ Failure ]
 imported/w3c/web-platform-tests/webrtc/simulcast/setParameters-maxFramerate.https.html [ Pass Failure ]
-imported/w3c/web-platform-tests/webrtc/simulcast/vp9-scalability-mode.https.html [ Skip ] 
+imported/w3c/web-platform-tests/webrtc/simulcast/vp9-scalability-mode.https.html [ Skip ]
 webkit.org/b/235885 imported/w3c/web-platform-tests/webrtc/protocol/simulcast-answer.html [ Skip ]
 webkit.org/b/235885 imported/w3c/web-platform-tests/webrtc/protocol/simulcast-offer.html [ Skip ]
 webkit.org/b/306018 imported/w3c/web-platform-tests/webrtc/simulcast/av1.https.html [ Pass Failure ]
@@ -3531,8 +3531,6 @@ imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/t
 imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/track/track-element/track-cues-sorted-before-dispatch.html [ Skip ]
 imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/offsets-into-the-media-resource/currentTime-move-within-document.html [ Skip ]
 
-webkit.org/b/309434 imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/loading-the-media-resource/resource-selection-source-media-env-change.html [ Pass Crash ]
-
 # PiP / presentation-mode is not supported yet
 webkit.org/b/202756 media/airplay-wirelessvideoplaybackdisabled.html [ Skip ]
 webkit.org/b/202756 http/tests/media/modern-media-controls/pip-support [ Skip ]
@@ -3557,6 +3555,8 @@ webkit.org/b/174242 media/video-suppress-hdr-fullscreen.html [ Skip ]
 # Requires unsupported captive portal codec and container restrictions
 webkit.org/b/242145 media/mediacapabilities/mediacapabilities-allowed-codecs.html [ Skip ]
 webkit.org/b/242145 media/mediacapabilities/mediacapabilities-allowed-containers.html [ Skip ]
+# Reports supported for <= 2 channels
+webkit.org/b/309552 media/mediacapabilities/mediacapabilities-decodingInfo-spatialRendering.html [ Failure ]
 
 # These tests require platform support.
 media/media-allowed-codecs.html [ Skip ]
@@ -4338,7 +4338,6 @@ imported/w3c/web-platform-tests/css/css-backgrounds/background-size/vector/wide-
 # Flaky tests detected both on GTK and WPE on May2023
 webkit.org/b/257624 animations/background-position.html [ ImageOnlyFailure Pass ]
 webkit.org/b/257624 http/tests/workers/service/postmessage-after-terminating-hung-worker.html [ Timeout Pass ]
-webkit.org/b/257624 imported/w3c/web-platform-tests/navigation-timing/nav2_test_redirect_xserver.html [ Failure Pass ]
 
 webkit.org/b/258162 fast/images/image-alt-text-vertical.html [ ImageOnlyFailure ]
 
@@ -5084,8 +5083,8 @@ media/volume-activate-audio-session.html [ Skip ]
 
 # Does not work on glib platforms
 http/tests/performance/performance-resource-timing-cross-origin-media-with-cors.html [ Skip ]
-http/tests/performance/performance-resource-timing-cross-origin-media.html [ Skip ] 
-http/tests/performance/performance-resource-timing-redirection-cross-origin-media-with-cors.html [ Skip ] 
+http/tests/performance/performance-resource-timing-cross-origin-media.html [ Skip ]
+http/tests/performance/performance-resource-timing-redirection-cross-origin-media-with-cors.html [ Skip ]
 http/tests/performance/performance-resource-timing-redirection-cross-origin-media.html [ Skip ]
 
 webkit.org/b/304180 media/modern-media-controls/tracks-support/on-off-text-track.html [ Failure ]
@@ -5297,6 +5296,13 @@ webkit.org/b/309259 webrtc/canvas-to-peer-connection-vp8-2d.html [ Pass Failure 
 webkit.org/b/309373 [ x86_64 ] imported/w3c/web-platform-tests/webaudio/the-audio-api/the-audioworklet-interface/audioworklet-denormals.https.window.html [ Failure ]
 
 webkit.org/b/309469 imported/w3c/web-platform-tests/svg/shapes/reftests/pathlength-002.svg [ ImageOnlyFailure ]
+
+webkit.org/b/299322 imported/w3c/web-platform-tests/uievents/mouse/mouse_boundary_events_after_reappending_last_over_target.tentative.html [ Pass Failure ]
+
+webkit.org/b/309570 imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/autoplay-disabled-by-feature-policy.https.sub.html [ Pass Failure ]
+
+webkit.org/b/246356 imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/autoplay-allowed-by-feature-policy.https.sub.html [ Pass Failure ]
+webkit.org/b/246356 imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/autoplay-default-feature-policy.https.sub.html [ Pass Failure ]
 
 # End: Common failures between GTK and WPE.
 
