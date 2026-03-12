@@ -615,7 +615,7 @@ static void updateSliderTrackPartForRenderer(SliderTrackPart& sliderTrackPart, c
 
 static void updateSwitchThumbPartForRenderer(SwitchThumbPart& switchThumbPart, const RenderElement& renderer)
 {
-    Ref input = downcast<HTMLInputElement>(*protect(renderer.element())->shadowHost());
+    Ref input = downcast<HTMLInputElement>(*renderer.element()->shadowHost());
     ASSERT(input->isSwitch());
 
     switchThumbPart.setIsOn(input->isSwitchVisuallyOn());
@@ -624,7 +624,7 @@ static void updateSwitchThumbPartForRenderer(SwitchThumbPart& switchThumbPart, c
 
 static void updateSwitchTrackPartForRenderer(SwitchTrackPart& switchTrackPart, const RenderElement& renderer)
 {
-    Ref input = downcast<HTMLInputElement>(*protect(renderer.element())->shadowHost());
+    Ref input = downcast<HTMLInputElement>(*renderer.element()->shadowHost());
     ASSERT(input->isSwitch());
 
     switchTrackPart.setIsOn(input->isSwitchVisuallyOn());
@@ -1373,9 +1373,9 @@ Style::MinimumSizePair RenderTheme::minimumControlSize(StyleAppearance appearanc
 
     // Other StyleAppearance types are composed controls with shadow subtree.
     if (appearance == StyleAppearance::Radio || appearance == StyleAppearance::Checkbox) {
-        if (minSize.width().isIntrinsicOrLegacyIntrinsicOrAuto())
+        if (minSize.width().isSizingKeywordOrAuto())
             resultWidth = preferredSize.width().asMinimumSize();
-        if (minSize.height().isIntrinsicOrLegacyIntrinsicOrAuto())
+        if (minSize.height().isSizingKeywordOrAuto())
             resultHeight = preferredSize.height().asMinimumSize();
     }
 

@@ -4050,7 +4050,7 @@ static void setFullRepaintOnParentInlineBoxLayerIfNeeded(const RenderText& rende
     }
     if (!parent->isInline() || !parent->hasLayer())
         return;
-    protect(downcast<RenderLayerModelObject>(*parent).layer())->setRepaintStatus(RepaintStatus::NeedsFullRepaint);
+    downcast<RenderLayerModelObject>(*parent).layer()->setRepaintStatus(RepaintStatus::NeedsFullRepaint);
 }
 
 std::pair<float, float> RenderBlockFlow::inlineContentTopAndBottomIncludingInkOverflow() const
@@ -4841,7 +4841,7 @@ void RenderBlockFlow::computeInlinePreferredLogicalWidths(LayoutUnit& minLogical
     // Firefox and Opera will allow a table cell to grow to fit an image inside it under
     // very specific cirucumstances (in order to match common WinIE renderings). 
     // Not supporting the quirk has caused us to mis-render some real sites. (See Bugzilla 10517.) 
-    bool allowImagesToBreak = !document().inQuirksMode() || !isRenderTableCell() || !styleToUse.logicalWidth().isIntrinsicOrLegacyIntrinsicOrAuto();
+    bool allowImagesToBreak = !document().inQuirksMode() || !isRenderTableCell() || !styleToUse.logicalWidth().isSizingKeywordOrAuto();
 
     bool oldAutoWrap = styleToUse.textWrapMode() != TextWrapMode::NoWrap;
 

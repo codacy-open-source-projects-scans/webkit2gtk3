@@ -913,7 +913,7 @@ LayoutRect AccessibilityRenderObject::boundingBoxRect() const
             // |this| is a stitching of multiple objects, so we need to combine all of their bounding boxes.
 
             CheckedPtr cache = axObjectCache();
-            RefPtr endNode = cache ? lastNode(stitchGroup->members(), *cache) : nullptr;
+            RefPtr endNode = cache ? lastNonAriaHiddenNode(stitchGroup->members(), *cache) : nullptr;
             if (endNode) {
                 if (std::optional range = makeSimpleRange(positionBeforeNode(*node), positionAfterNode(*endNode))) {
                     quads = RenderObject::absoluteTextQuads(*range);
@@ -922,8 +922,10 @@ LayoutRect AccessibilityRenderObject::boundingBoxRect() const
                         if (axID == objectID())
                             break;
                         if (RefPtr object = cache->objectForID(axID)) {
-                            if (CheckedPtr renderListMarker = dynamicDowncast<RenderListMarker>(object->renderer()))
-                                renderListMarker->absoluteFocusRingQuads(quads);
+                            if (CheckedPtr renderListMarker = dynamicDowncast<RenderListMarker>(object->renderer())) {
+                                if (!object->isAXHidden())
+                                    renderListMarker->absoluteFocusRingQuads(quads);
+                            }
                         }
                     }
                 }
@@ -1106,7 +1108,7 @@ AccessibilityObject* AccessibilityRenderObject::titleUIElement() const
 
         // Table cells that are th cannot have title ui elements, since by definition
         // they are title ui elements
-        if (WebCore::elementName(protect(node()).get()) == ElementName::HTML_th)
+        if (WebCore::elementName(node()) == ElementName::HTML_th)
             return nullptr;
 
         CheckedRef renderCell = downcast<RenderTableCell>(*m_renderer);

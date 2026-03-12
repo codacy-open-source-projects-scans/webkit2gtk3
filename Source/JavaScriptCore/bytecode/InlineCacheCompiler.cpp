@@ -252,6 +252,8 @@ static bool needsScratchFPR(AccessCase::AccessType type)
     case AccessCase::StringLength:
     case AccessCase::DirectArgumentsLength:
     case AccessCase::ScopedArgumentsLength:
+    case AccessCase::RegExpLastIndexLoad:
+    case AccessCase::RegExpLastIndexStore:
     case AccessCase::ModuleNamespaceLoad:
     case AccessCase::ProxyObjectIn:
     case AccessCase::ProxyObjectLoad:
@@ -371,6 +373,8 @@ static bool forInBy(AccessCase::AccessType type)
     case AccessCase::StringLength:
     case AccessCase::DirectArgumentsLength:
     case AccessCase::ScopedArgumentsLength:
+    case AccessCase::RegExpLastIndexLoad:
+    case AccessCase::RegExpLastIndexStore:
     case AccessCase::CheckPrivateBrand:
     case AccessCase::SetPrivateBrand:
     case AccessCase::IndexedMegamorphicLoad:
@@ -522,6 +526,8 @@ static bool isStateless(AccessCase::AccessType type)
     case AccessCase::StringLength:
     case AccessCase::DirectArgumentsLength:
     case AccessCase::ScopedArgumentsLength:
+    case AccessCase::RegExpLastIndexLoad:
+    case AccessCase::RegExpLastIndexStore:
     case AccessCase::IndexedProxyObjectLoad:
     case AccessCase::IndexedMegamorphicLoad:
     case AccessCase::IndexedMegamorphicStore:
@@ -656,6 +662,8 @@ static bool doesJSCalls(AccessCase::AccessType type)
     case AccessCase::StringLength:
     case AccessCase::DirectArgumentsLength:
     case AccessCase::ScopedArgumentsLength:
+    case AccessCase::RegExpLastIndexLoad:
+    case AccessCase::RegExpLastIndexStore:
     case AccessCase::IndexedMegamorphicLoad:
     case AccessCase::IndexedMegamorphicStore:
     case AccessCase::IndexedInt32Load:
@@ -791,6 +799,8 @@ static bool isMegamorphic(AccessCase::AccessType type)
     case AccessCase::StringLength:
     case AccessCase::DirectArgumentsLength:
     case AccessCase::ScopedArgumentsLength:
+    case AccessCase::RegExpLastIndexLoad:
+    case AccessCase::RegExpLastIndexStore:
     case AccessCase::IndexedInt32Load:
     case AccessCase::IndexedDoubleLoad:
     case AccessCase::IndexedContiguousLoad:
@@ -916,6 +926,8 @@ bool canBeViaGlobalProxy(AccessCase::AccessType type)
     case AccessCase::StringLength:
     case AccessCase::DirectArgumentsLength:
     case AccessCase::ScopedArgumentsLength:
+    case AccessCase::RegExpLastIndexLoad:
+    case AccessCase::RegExpLastIndexStore:
     case AccessCase::IndexedMegamorphicLoad:
     case AccessCase::IndexedMegamorphicStore:
     case AccessCase::IndexedInt32Load:
@@ -2009,6 +2021,27 @@ void InlineCacheCompiler::generateWithGuard(unsigned index, AccessCase& accessCa
         return;
     }
 
+    case AccessCase::RegExpLastIndexLoad: {
+        ASSERT(!accessCase.viaGlobalProxy());
+        fallThrough.append(jit.branchIfNotType(baseGPR, RegExpObjectType));
+        jit.loadValue(CCallHelpers::Address(baseGPR, RegExpObject::offsetOfLastIndex()), valueRegs);
+        succeed();
+        return;
+    }
+
+    case AccessCase::RegExpLastIndexStore: {
+        ASSERT(!accessCase.viaGlobalProxy());
+        fallThrough.append(jit.branchIfNotType(baseGPR, RegExpObjectType));
+        fallThrough.append(
+            jit.branchTestPtr(
+                CCallHelpers::NonZero,
+                CCallHelpers::Address(baseGPR, RegExpObject::offsetOfRegExpAndFlags()),
+                CCallHelpers::TrustedImm32(RegExpObject::lastIndexIsNotWritableFlag)));
+        jit.storeValue(valueRegs, CCallHelpers::Address(baseGPR, RegExpObject::offsetOfLastIndex()));
+        succeed();
+        return;
+    }
+
     case AccessCase::ModuleNamespaceLoad: {
         ASSERT(!accessCase.viaGlobalProxy());
         emitModuleNamespaceLoad(accessCase.as<ModuleNamespaceAccessCase>(), fallThrough);
@@ -2890,18 +2923,31 @@ void InlineCacheCompiler::generateWithGuard(unsigned index, AccessCase& accessCa
         GPRReg scratch2GPR = allocator.allocateScratchGPR();
         GPRReg scratch3GPR = allocator.allocateScratchGPR();
         GPRReg scratch4GPR = allocator.allocateScratchGPR();
+        GPRReg scratch5GPR = allocator.allocateScratchGPR();
 
         ScratchRegisterAllocator::PreservedState preservedState = allocator.preserveReusedRegistersByPushing(jit, ScratchRegisterAllocator::ExtraStackSpace::NoExtraSpace);
 
         CCallHelpers::JumpList slowCases;
+
+        jit.move(baseGPR, scratch5GPR);
+        auto isString = jit.branchIfString(scratch5GPR);
+        auto label = jit.label();
         if (useHandlerIC()) {
             jit.loadPtr(CCallHelpers::Address(GPRInfo::handlerGPR, InlineCacheHandler::offsetOfUid()), scratch4GPR);
-            slowCases.append(jit.loadMegamorphicProperty(vm, baseGPR, scratch4GPR, nullptr, valueRegs.payloadGPR(), scratchGPR, scratch2GPR, scratch3GPR));
+            slowCases.append(jit.loadMegamorphicProperty(vm, scratch5GPR, scratch4GPR, nullptr, valueRegs.payloadGPR(), scratchGPR, scratch2GPR, scratch3GPR));
         } else
-            slowCases.append(jit.loadMegamorphicProperty(vm, baseGPR, InvalidGPRReg, uid, valueRegs.payloadGPR(), scratchGPR, scratch2GPR, scratch3GPR));
+            slowCases.append(jit.loadMegamorphicProperty(vm, scratch5GPR, InvalidGPRReg, uid, valueRegs.payloadGPR(), scratchGPR, scratch2GPR, scratch3GPR));
 
         allocator.restoreReusedRegistersByPopping(jit, preservedState);
         succeed();
+
+        isString.link(jit);
+        if (useHandlerIC()) {
+            jit.loadPtr(CCallHelpers::Address(m_propertyCache.m_propertyCacheGPR, PropertyInlineCache::offsetOfGlobalObject()), scratch5GPR);
+            jit.loadPtr(CCallHelpers::Address(scratch5GPR, JSGlobalObject::offsetOfStringPrototype()), scratch5GPR);
+        } else
+            jit.move(CCallHelpers::TrustedImmPtr(m_globalObject->stringPrototype()), scratch5GPR);
+        jit.jump().linkTo(label, jit);
 
         if (allocator.didReuseRegisters()) {
             slowCases.link(&jit);
@@ -3809,6 +3855,8 @@ void InlineCacheCompiler::generateAccessCase(unsigned index, AccessCase& accessC
 
     case AccessCase::DirectArgumentsLength:
     case AccessCase::ScopedArgumentsLength:
+    case AccessCase::RegExpLastIndexLoad:
+    case AccessCase::RegExpLastIndexStore:
     case AccessCase::ModuleNamespaceLoad:
     case AccessCase::ProxyObjectIn:
     case AccessCase::ProxyObjectLoad:

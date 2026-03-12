@@ -536,7 +536,7 @@ static inline bool isLayoutBoundary(const RenderElement& renderer)
         return false;
     }
 
-    if (style.width().isIntrinsicOrLegacyIntrinsicOrAuto() || style.height().isIntrinsicOrLegacyIntrinsicOrAuto() || style.height().isPercentOrCalculated())
+    if (style.width().isSizingKeywordOrAuto() || style.height().isSizingKeywordOrAuto() || style.height().isPercentOrCalculated())
         return false;
 
     if (renderer.document().settings().layerBasedSVGEngineEnabled() && renderer.isSVGLayerAwareRenderer())
@@ -701,13 +701,13 @@ void RenderObject::invalidateContainerPreferredLogicalWidths()
 void RenderObject::setLayerNeedsFullRepaint()
 {
     ASSERT(hasLayer());
-    protect(downcast<RenderLayerModelObject>(*this).layer())->setRepaintStatus(RepaintStatus::NeedsFullRepaint);
+    downcast<RenderLayerModelObject>(*this).layer()->setRepaintStatus(RepaintStatus::NeedsFullRepaint);
 }
 
 void RenderObject::setLayerNeedsFullRepaintForOutOfFlowMovementLayout()
 {
     ASSERT(hasLayer());
-    protect(downcast<RenderLayerModelObject>(*this).layer())->setRepaintStatus(RepaintStatus::NeedsFullRepaintForOutOfFlowMovementLayout);
+    downcast<RenderLayerModelObject>(*this).layer()->setRepaintStatus(RepaintStatus::NeedsFullRepaintForOutOfFlowMovementLayout);
 }
 
 static inline RenderBlock* nearestNonAnonymousContainingBlockIncludingSelf(RenderElement* renderer)
@@ -1774,7 +1774,7 @@ void RenderObject::willBeDestroyed()
             node->setRenderer({ });
     }
 
-    protect(view())->willDestroyRenderer();
+    view().willDestroyRenderer();
 
     removeRareData();
 }
