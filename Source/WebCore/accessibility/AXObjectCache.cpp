@@ -167,8 +167,8 @@ static bool isSecureFieldOrContainedBySecureField(AccessibilityObject& object)
 static bool rendererNeedsDeferredUpdate(const RenderObject& renderer)
 {
     AX_ASSERT(!renderer.beingDestroyed());
-    Ref document = renderer.document();
-    return renderer.needsLayout() || document->needsStyleRecalc() || document->inRenderTreeUpdate() || (document->view() && document->view()->layoutContext().isInRenderTreeLayout());
+    auto& document = renderer.document();
+    return renderer.needsLayout() || document.needsStyleRecalc() || document.inRenderTreeUpdate() || (document.view() && document.view()->layoutContext().isInRenderTreeLayout());
 }
 
 static bool NODELETE nodeRendererIsValid(Node& node)
@@ -291,7 +291,7 @@ AXObjectCache::AXObjectCache(LocalFrame& localFrame, Document* document)
 
     // If loading completed before the cache was created, loading progress will have been reset to zero.
     // Consider loading progress to be 100% in this case.
-    if (RefPtr page = localFrame.page()) {
+    if (auto* page = localFrame.page()) {
         m_loadingProgress = page->progress().estimatedProgress();
         m_pageActivityState = page->activityState();
     }
@@ -512,7 +512,7 @@ bool AXObjectCache::isNodeVisible(const Node* node) const
     // Check whether this object or any of its ancestors has opacity 0.
     // The resulting opacity of a RenderObject is computed as the multiplication
     // of its opacity times the opacities of its ancestors.
-    for (CheckedPtr ancestor = renderer; ancestor; ancestor = ancestor->parent()) {
+    for (auto* ancestor = renderer.get(); ancestor; ancestor = ancestor->parent()) {
         if (ancestor->style().opacity().isTransparent())
             return false;
     }
@@ -2129,9 +2129,14 @@ void AXObjectCache::onPopoverToggle(const HTMLElement& popover)
     RefPtr axPopover = get(const_cast<HTMLElement*>(&popover));
     if (!axPopover)
         return;
-    // There may be multiple elements with popovertarget attributes that point at |popover|.
-    for (const auto& invoker : axPopover->controllers())
-        postNotification(dynamicDowncast<AccessibilityObject>(invoker.get()), protect(document()).get(), AXNotification::ExpandedChanged);
+
+    // Updating the accessibility tree and sending notifications in response to a toggled
+    // popover requires accessing the popover's controllers(), which could resolve relations
+    // at a time that's not safe (i.e. if this function is called downstream of an element
+    // removal). Defer this handling to a time we know it's safe.
+    m_deferredToggledPopovers.append(axPopover.releaseNonNull());
+    if (!m_performCacheUpdateTimer.isActive())
+        m_performCacheUpdateTimer.startOneShot(0_s);
 }
 
 void AXObjectCache::deferMenuListValueChange(Element* element)
@@ -3477,7 +3482,7 @@ void AXObjectCache::updateCachedTextOfAssociatedObjects(AccessibilityObject& obj
 #endif
 }
 
-static bool hasAnyARIALabelling(Element& element)
+static bool NODELETE hasAnyARIALabelling(Element& element)
 {
     return element.hasAttributeWithoutSynchronization(aria_labelAttr)
         || element.hasAttributeWithoutSynchronization(aria_labelledbyAttr)
@@ -4379,7 +4384,7 @@ char32_t AXObjectCache::characterBefore(const CharacterOffset& characterOffset)
     return characterForCharacterOffset(characterOffset);
 }
 
-static bool characterOffsetNodeIsBR(const CharacterOffset& characterOffset)
+static bool NODELETE characterOffsetNodeIsBR(const CharacterOffset& characterOffset)
 {
     if (characterOffset.isNull())
         return false;
@@ -5101,6 +5106,10 @@ void AXObjectCache::performDeferredCacheUpdate(ForceLayout forceLayout)
         handleDeferredNotification(notificationData);
     m_deferredNotifications.clear();
 
+    for (auto& toggledPopover : m_deferredToggledPopovers)
+        handleDeferredPopoverToggle(toggledPopover);
+    m_deferredToggledPopovers.clear();
+
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
     if (m_deferredRegenerateIsolatedTree) {
         if (auto tree = AXIsolatedTree::treeForFrameID(m_frameID)) {
@@ -5130,6 +5139,13 @@ void AXObjectCache::performDeferredCacheUpdate(ForceLayout forceLayout)
 #endif
 
     platformPerformDeferredCacheUpdate();
+}
+
+void AXObjectCache::handleDeferredPopoverToggle(AccessibilityObject& axPopover)
+{
+    // There may be multiple elements with popovertarget or commandfor attributes that point at this popover.
+    for (const auto& invoker : axPopover.controllers())
+        postNotification(&downcast<AccessibilityObject>(invoker.get()), document(), AXNotification::ExpandedChanged);
 }
 
 void AXObjectCache::handleDeferredNotification(const DeferredNotificationData& data)
@@ -5985,22 +6001,22 @@ void AXObjectCache::updateRelationsForTree(ContainerNode& rootNode)
 {
     AX_ASSERT(!rootNode.parentNode());
     for (Ref element : descendantsOfType<Element>(rootNode)) {
-        if (!canHaveRelations(element.get()))
+        if (!canHaveRelations(element))
             continue;
 
         if (RefPtr shadowRoot = element->shadowRoot(); shadowRoot && shadowRoot->mode() != ShadowRootMode::UserAgent)
             updateRelationsForTree(*shadowRoot);
-        if (RefPtr frameOwnerElement = dynamicDowncast<HTMLFrameOwnerElement>(element)) {
+        if (RefPtr frameOwnerElement = dynamicDowncast<HTMLFrameOwnerElement>(element.get())) {
             if (RefPtr document = frameOwnerElement->contentDocument())
                 updateRelationsForTree(*document);
         }
 
         for (const auto& attribute : relationAttributes())
-            addRelation(element.get(), attribute);
+            addRelation(element, attribute);
 
         // In addition to ARIA specified relations, there may be other relevant relations.
         // For instance, LabelFor in HTMLLabelElements.
-        addLabelForRelation(element.get());
+        addLabelForRelation(element);
     }
 }
 

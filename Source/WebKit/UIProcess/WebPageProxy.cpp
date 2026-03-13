@@ -223,6 +223,7 @@
 #include <WebCore/CrossSiteNavigationDataTransfer.h>
 #include <WebCore/CryptoKey.h>
 #include <WebCore/DOMPasteAccess.h>
+#include <WebCore/DateTimeChooserParameters.h>
 #include <WebCore/DeprecatedGlobalSettings.h>
 #include <WebCore/DiagnosticLoggingClient.h>
 #include <WebCore/DiagnosticLoggingKeys.h>
@@ -1663,7 +1664,7 @@ void WebPageProxy::didAttachToRunningProcess()
     m_playbackSessionManager = PlaybackSessionManagerProxy::create(*this);
     ASSERT(!m_videoPresentationManager);
     m_videoPresentationManager = VideoPresentationManagerProxy::create(*this, *protect(playbackSessionManager()));
-    if (RefPtr videoPresentationManager = m_videoPresentationManager)
+    if (auto* videoPresentationManager = m_videoPresentationManager.get())
         videoPresentationManager->setMockVideoPresentationModeEnabled(m_mockVideoPresentationModeEnabled);
 #endif
 
@@ -6524,7 +6525,7 @@ void WebPageProxy::setGapBetweenPages(double gap)
     send(Messages::WebPage::SetGapBetweenPages(gap));
 }
 
-static bool scaleFactorIsValid(double scaleFactor)
+static bool NODELETE scaleFactorIsValid(double scaleFactor)
 {
     return scaleFactor > 0 && scaleFactor <= 100;
 }
@@ -7611,7 +7612,7 @@ void WebPageProxy::didFailProvisionalLoadForFrame(IPC::Connection& connection, F
 
     Ref process = WebProcessProxy::fromConnection(connection);
     if (protect(preferences())->siteIsolationEnabled() && process != frame->process()) {
-        RefPtr provisionalFrame = frame->provisionalFrame();
+        auto* provisionalFrame = frame->provisionalFrame();
         if (!provisionalFrame || provisionalFrame->process() != process)
             return;
     }
@@ -8703,7 +8704,7 @@ void WebPageProxy::decidePolicyForNavigationAction(Ref<WebProcessProxy>&& proces
     navigationID = navigation->navigationID();
 
     // Make sure the provisional page always has the latest navigationID.
-    if (RefPtr provisionalPage = m_provisionalPage; provisionalPage && &provisionalPage->process() == process.ptr())
+    if (auto* provisionalPage = m_provisionalPage.get(); provisionalPage && &provisionalPage->process() == process.ptr())
         provisionalPage->setNavigation(*navigation);
 
     navigation->setCurrentRequest(ResourceRequest(request), process->coreProcessIdentifier());
@@ -9635,7 +9636,7 @@ bool WebPageProxy::hasPageOpenedByMainFrame() const
     ASSERT(mainFrame());
 
     for (Ref page : internals().m_openedPages) {
-        RefPtr openedFrame = page->mainFrame();
+        auto* openedFrame = page->mainFrame();
         if (!openedFrame)
             continue;
         if (openedFrame->opener() == mainFrame())
@@ -9672,7 +9673,7 @@ void WebPageProxy::fullscreenMayReturnToInline()
 
 bool WebPageProxy::canEnterFullscreen()
 {
-    if (RefPtr playbackSessionManager = m_playbackSessionManager)
+    if (auto* playbackSessionManager = m_playbackSessionManager.get())
         return playbackSessionManager->canEnterVideoFullscreen();
     return false;
 }
@@ -10609,7 +10610,17 @@ void WebPageProxy::showDateTimePicker(WebCore::DateTimeChooserParameters&& param
     if (!m_dateTimePicker)
         return;
 
-    protect(*m_dateTimePicker)->showDateTimePicker(WTF::move(params));
+    convertRectToMainFrameCoordinates(params.anchorRectInRootView, params.rootFrameID, [weakThis = WeakPtr { *this }, params = WTF::move(params)](std::optional<FloatRect> convertedRect) mutable {
+        RefPtr protectedThis = weakThis.get();
+        if (!protectedThis || !convertedRect)
+            return;
+
+        if (!protectedThis->m_dateTimePicker)
+            return;
+
+        params.anchorRectInRootView = IntRect(*convertedRect);
+        protect(*protectedThis->m_dateTimePicker)->showDateTimePicker(WTF::move(params));
+    });
 }
 
 void WebPageProxy::endDateTimePicker()
@@ -10625,18 +10636,18 @@ void WebPageProxy::didChooseDate(StringView date)
     if (!hasRunningProcess())
         return;
 
-    auto targetFrameID = focusedOrMainFrame() ? std::optional(focusedOrMainFrame()->frameID()) : std::nullopt;
-    sendToProcessContainingFrame(targetFrameID, Messages::WebPage::DidChooseDate(date.toString()));
+    auto frameID = m_dateTimePicker ? m_dateTimePicker->frameID() : std::nullopt;
+    sendToProcessContainingFrame(frameID, Messages::WebPage::DidChooseDate(date.toString()));
 }
 
 void WebPageProxy::didEndDateTimePicker()
 {
+    auto frameID = m_dateTimePicker ? m_dateTimePicker->frameID() : std::nullopt;
     m_dateTimePicker = nullptr;
     if (!hasRunningProcess())
         return;
 
-    auto targetFrameID = focusedOrMainFrame() ? std::optional(focusedOrMainFrame()->frameID()) : std::nullopt;
-    sendToProcessContainingFrame(targetFrameID, Messages::WebPage::DidEndDateTimePicker());
+    sendToProcessContainingFrame(frameID, Messages::WebPage::DidEndDateTimePicker());
 }
 
 WebInspectorUIProxy* WebPageProxy::inspector() const
@@ -10740,7 +10751,7 @@ VideoPresentationManagerProxy* WebPageProxy::videoPresentationManager()
 void WebPageProxy::setMockVideoPresentationModeEnabled(bool enabled)
 {
     m_mockVideoPresentationModeEnabled = enabled;
-    if (RefPtr videoPresentationManager = m_videoPresentationManager)
+    if (auto* videoPresentationManager = m_videoPresentationManager.get())
         videoPresentationManager->setMockVideoPresentationModeEnabled(enabled);
 }
 
@@ -12240,7 +12251,7 @@ URL WebPageProxy::currentResourceDirectoryURL() const
     auto resourceDirectoryURL = internals().pageLoadState.resourceDirectoryURL();
     if (!resourceDirectoryURL.isEmpty())
         return resourceDirectoryURL;
-    if (RefPtr item = backForwardList().currentItem())
+    if (auto* item = backForwardList().currentItem())
         return item->resourceDirectoryURL();
     return { };
 }
@@ -13521,7 +13532,7 @@ void WebPageProxy::beginMonitoringCaptureDevices()
     UserMediaProcessManager::singleton().beginMonitoringCaptureDevices();
 }
 
-static WebCore::MediaStreamRequest toUserMediaRequest(WebCore::MediaProducerMediaCaptureKind kind, WebCore::PageIdentifier pageIdentifier)
+static WebCore::MediaStreamRequest NODELETE toUserMediaRequest(WebCore::MediaProducerMediaCaptureKind kind, WebCore::PageIdentifier pageIdentifier)
 {
     switch (kind) {
     case WebCore::MediaProducerMediaCaptureKind::Microphone:
@@ -17096,7 +17107,7 @@ bool WebPageProxy::shouldAvoidSynchronouslyWaitingToPreventDeadlock() const
 
 #if ENABLE(GPU_PROCESS)
     if (useGPUProcessForDOMRenderingEnabled()) {
-        RefPtr gpuProcess = GPUProcessProxy::singletonIfCreated();
+        auto* gpuProcess = GPUProcessProxy::singletonIfCreated();
         if (!gpuProcess || !gpuProcess->hasConnection()) {
             // It's possible that the GPU process hasn't been initialized yet; in this case, we might end up in a deadlock
             // if a message comes in from the web process to initialize the GPU process while we're synchronously waiting.
@@ -17485,6 +17496,11 @@ INSTANTIATE_SEND_TO_PROCESS_CONTAINING_FRAME(WebPage::UserMediaAccessWasDenied);
 #endif
 #if PLATFORM(GTK)
 INSTANTIATE_SEND_TO_PROCESS_CONTAINING_FRAME(WebPage::CollapseSelectionInFrame);
+#endif
+#if PLATFORM(IOS_FAMILY)
+INSTANTIATE_SEND_TO_PROCESS_CONTAINING_FRAME(WebPage::SetFocusedElementValue);
+INSTANTIATE_SEND_TO_PROCESS_CONTAINING_FRAME(WebPage::SetFocusedElementSelectedIndex);
+INSTANTIATE_SEND_TO_PROCESS_CONTAINING_FRAME(WebPage::SetSelectElementIsOpen);
 #endif
 #undef INSTANTIATE_SEND_TO_PROCESS_CONTAINING_FRAME
 
@@ -17934,7 +17950,7 @@ bool WebPageProxy::canStartNavigationSwipeAtLastInteractionLocation() const
 
 bool WebPageProxy::isRemoteFrameNavigation(Ref<WebProcessProxy> process)
 {
-    RefPtr provisionalPage = m_provisionalPage;
+    auto* provisionalPage = m_provisionalPage.get();
     return m_legacyMainFrameProcess != process && (!provisionalPage || provisionalPage->process() != process);
 }
 

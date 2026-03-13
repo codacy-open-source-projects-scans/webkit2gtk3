@@ -68,6 +68,7 @@ http/tests/swipe [ Skip ]
 http/tests/text-extraction [ Skip ]
 fast/zooming/ios [ Skip ]
 fast/forms/ios [ Skip ]
+http/tests/site-isolation/select-in-cross-origin-iframe.html [ Skip ]
 fast/viewport/ios [ Skip ]
 fast/visual-viewport/ios/ [ Skip ]
 fast/device-orientation [ Skip ]
@@ -1269,6 +1270,8 @@ webkit.org/b/253126 imported/w3c/web-platform-tests/screen-wake-lock/wakelock-en
 webkit.org/b/253126 imported/w3c/web-platform-tests/screen-wake-lock/wakelock-enabled-by-permissions-policy.https.html [ Skip ]
 webkit.org/b/253126 imported/w3c/web-platform-tests/screen-wake-lock/wakelock-enabled-on-self-origin-by-permissions-policy.https.html [ Skip ]
 webkit.org/b/253126 imported/w3c/web-platform-tests/screen-wake-lock/wakelock-supported-by-permissions-policy.html [ Skip ]
+webkit.org/b/253126 imported/w3c/web-platform-tests/permissions-policy/payment-extension-allowed-by-permissions-policy-attribute.https.sub.html [ Skip ]
+webkit.org/b/253126 imported/w3c/web-platform-tests/permissions-policy/payment-supported-by-permissions-policy.tentative.html [ Skip ]
 
 webkit.org/b/182292 imported/w3c/web-platform-tests/css/cssom-view/scrollingElement-quirks-dynamic-001.html [ ImageOnlyFailure ]
 webkit.org/b/182292 imported/w3c/web-platform-tests/css/cssom-view/scrollingElement-quirks-dynamic-002.html [ ImageOnlyFailure ]
@@ -1664,7 +1667,6 @@ imported/w3c/web-platform-tests/css/css-flexbox/flexbox-flex-wrap-flexing-003.ht
 imported/w3c/web-platform-tests/css/css-flexbox/multiline-shrink-to-fit.html [ ImageOnlyFailure ]
 
 # grid layout tests
-webkit.org/b/149890 fast/css-grid-layout/grid-shorthands-style-format.html [ Failure ]
 webkit.org/b/191508 fast/css-grid-layout/crash-large-positions.html [ Skip ]
 
 webkit.org/b/231021 imported/w3c/web-platform-tests/css/css-grid/grid-with-dynamic-img.html [ ImageOnlyFailure ]
@@ -1771,7 +1773,6 @@ imported/w3c/web-platform-tests/css/css-grid/grid-lanes/tentative/fragmentation/
 imported/w3c/web-platform-tests/css/css-grid/grid-lanes/tentative/fragmentation/grid-lanes-fragmentation-003.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-grid/grid-lanes/tentative/grid-placement/column-explicit-placement-003.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-grid/grid-lanes/tentative/grid-placement/grid-lanes-grid-placement-named-lines-dense-packing-001.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-grid/grid-lanes/tentative/intrinsic-sizing/grid-lanes-contain-intrinsic-size-010.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-grid/grid-lanes/tentative/intrinsic-sizing/grid-lanes-contain-intrinsic-size-015.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-grid/grid-lanes/tentative/intrinsic-sizing/grid-lanes-contain-intrinsic-size-row-001.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-grid/grid-lanes/tentative/intrinsic-sizing/grid-lanes-contain-intrinsic-size-row-002.html [ ImageOnlyFailure ]
@@ -2754,7 +2755,6 @@ http/wpt/mediarecorder/pause-recording.html [ Slow ]
 http/wpt/mediarecorder/pause-recording-2.html [ Pass Failure ]
 
 imported/w3c/web-platform-tests/webrtc/RTCRtpReceiver-getSynchronizationSources.https.html [ Slow ]
-imported/w3c/web-platform-tests/webrtc/protocol/split.https.html [ Pass Failure ]
 imported/w3c/web-platform-tests/webrtc/RTCPeerConnection-relay-canvas.https.html [ Failure ]
 imported/w3c/web-platform-tests/webrtc/protocol/h264-profile-levels.https.html [ Pass Failure ]
 imported/w3c/web-platform-tests/webrtc/RTCRtpParameters-encodings.html [ Pass Failure ]
@@ -8336,8 +8336,6 @@ imported/w3c/web-platform-tests/editing/other/insertparagraph-in-child-of-head.t
 imported/w3c/web-platform-tests/editing/other/insertparagraph-in-child-of-head.tentative.html?designMode=on&white-space=pre-wrap [ Pass Failure ]
 
 webkit.org/b/288546 imported/w3c/web-platform-tests/fullscreen/api/element-ready-allowed.html [ Pass Failure ]
-
-webkit.org/b/309619 imported/w3c/web-platform-tests/fullscreen/rendering/backdrop-object.html [ Pass ImageOnlyFailure Timeout ]
 
 # Tests that timed out
 imported/w3c/web-platform-tests/html/browsers/browsing-the-web/history-traversal/pageswap/pageswap-push-from-click.html [ Skip ]
