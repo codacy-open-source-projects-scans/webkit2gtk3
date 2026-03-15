@@ -48,8 +48,11 @@
 #include "HTMLFormElement.h"
 #include "HistoryController.h"
 #include "HistoryItem.h"
+#include "JSDOMConvertAny.h"
+#include "JSDOMConvertInterface.h"
 #include "JSDOMGlobalObject.h"
 #include "JSDOMPromise.h"
+#include "JSDOMPromiseDeferred.h"
 #include "JSNavigationHistoryEntry.h"
 #include "Logging.h"
 #include "MessagePort.h"
@@ -72,6 +75,22 @@
 namespace WebCore {
 
 WTF_MAKE_TZONE_ALLOCATED_IMPL(Navigation);
+
+Ref<NavigationAPIMethodTracker> NavigationAPIMethodTracker::create(Ref<DeferredPromise>&& committed, Ref<DeferredPromise>&& finished, JSC::JSValue&& info, RefPtr<SerializedScriptValue>&& serializedState)
+{
+    return adoptRef(*new NavigationAPIMethodTracker(WTF::move(committed), WTF::move(finished), WTF::move(info), WTF::move(serializedState)));
+}
+
+NavigationAPIMethodTracker::NavigationAPIMethodTracker(Ref<DeferredPromise>&& committed, Ref<DeferredPromise>&& finished, JSC::JSValue&& infoValue, RefPtr<SerializedScriptValue>&& serializedStateValue)
+    : info(infoValue)
+    , serializedState(serializedStateValue)
+    , committedPromise(WTF::move(committed))
+    , finishedPromise(WTF::move(finished))
+    , identifier(NavigationAPIMethodTrackerIdentifier::generate())
+{
+}
+
+NavigationAPIMethodTracker::~NavigationAPIMethodTracker() = default;
 
 Navigation::Navigation(LocalDOMWindow& window)
     : LocalDOMWindowProperty(&window)
@@ -1359,15 +1378,15 @@ bool Navigation::RateLimiter::navigationAllowed()
     return false;
 }
 
-void Navigation::visitAdditionalChildren(JSC::AbstractSlotVisitor& visitor)
+void Navigation::visitAdditionalChildrenInGCThread(JSC::AbstractSlotVisitor& visitor)
 {
     Locker locker { m_apiMethodTrackersLock };
     if (m_ongoingAPIMethodTracker)
-        m_ongoingAPIMethodTracker->info.visit(visitor);
+        m_ongoingAPIMethodTracker->info.visitInGCThread(visitor);
     if (m_upcomingNonTraverseMethodTracker)
-        m_upcomingNonTraverseMethodTracker->info.visit(visitor);
+        m_upcomingNonTraverseMethodTracker->info.visitInGCThread(visitor);
     for (auto& tracker : m_upcomingTraverseMethodTrackers.values())
-        tracker->info.visit(visitor);
+        tracker->info.visitInGCThread(visitor);
 }
 
 } // namespace WebCore

@@ -30,6 +30,8 @@
 #include "CallbackResult.h"
 #include "ContextDestructionObserverInlines.h"
 #include "InternalObserver.h"
+#include "JSDOMConvertAny.h"
+#include "JSDOMConvertBoolean.h"
 #include "JSDOMPromiseDeferred.h"
 #include "Observable.h"
 #include "PredicateCallback.h"
@@ -99,9 +101,9 @@ private:
         protect(m_promise)->resolve<IDLBoolean>(false);
     }
 
-    void visitAdditionalChildren(JSC::AbstractSlotVisitor& visitor) const final
+    void visitAdditionalChildrenInGCThread(JSC::AbstractSlotVisitor& visitor) const final
     {
-        m_callback->visitJSFunction(visitor);
+        m_callback->visitJSFunctionInGCThread(visitor);
     }
 
     InternalObserverSome(ScriptExecutionContext& context, Ref<PredicateCallback>&& callback, Ref<AbortSignal>&& signal, Ref<DeferredPromise>&& promise)
