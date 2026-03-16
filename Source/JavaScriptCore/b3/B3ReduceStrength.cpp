@@ -3422,28 +3422,32 @@ private:
             break;
         }
 
-        case VectorShiftByVector: {
-            // VectorShiftByVector(x, splat(1)) for unsigned left shift → VectorAdd(x, x)
-            // Since x + x = x << 1, this avoids the shift instruction.
-            if constexpr (isARM64()) {
-                SIMDValue* value = m_value->as<SIMDValue>();
-                if (value->signMode() == SIMDSignMode::Unsigned || value->signMode() == SIMDSignMode::None) {
-                    Value* shiftVec = m_value->child(1);
-                    if (shiftVec->opcode() == Const128) {
-                        auto result = SIMDShuffle::isI8x16SameElement(shiftVec->as<Const128Value>()->value());
-                        if (result && result.value() == 1) {
-                            replaceWithNew<SIMDValue>(m_value->origin(), VectorAdd, B3::V128, value->simdLane(), SIMDSignMode::None, m_value->child(0), m_value->child(0));
-                            break;
-                        }
-                    }
-                }
+        case VectorShl: {
+            SIMDValue* value = m_value->as<SIMDValue>();
+            if (value->child(1)->hasInt32() && value->child(1)->asInt32() == 1) {
+                replaceWithNew<SIMDValue>(m_value->origin(), VectorAdd, B3::V128, value->simdLane(), SIMDSignMode::None, m_value->child(0), m_value->child(0));
+                break;
+            }
+            break;
+        }
+
+        case VectorDotProduct: {
+            handleCommutativity();
+
+            // Turn this: VectorDotProduct(v, splatOne16)
+            // Into this: VectorExtaddPairwise(v)
+            constexpr v128_t splatOne16 = v128_t::fromU16x8(1, 1, 1, 1, 1, 1, 1, 1);
+            if (m_value->child(1)->hasV128() && bitEquals(m_value->child(1)->asV128(), splatOne16)) {
+                // VectorExtaddPairwise uses the input lane type (i16x8), not the output (i32x4).
+                replaceWithNew<SIMDValue>(m_value->origin(), VectorExtaddPairwise, B3::V128, SIMDLane::i16x8, SIMDSignMode::Signed, m_value->child(0));
+                break;
             }
             break;
         }
 
         case VectorSwizzle: {
-            if (m_value->numChildren() == 2 && m_value->child(1)->isConstant()) {
-                v128_t pattern = m_value->child(1)->as<Const128Value>()->value();
+            if (m_value->numChildren() == 2 && m_value->child(1)->hasV128()) {
+                v128_t pattern = m_value->child(1)->asV128();
                 if (SIMDShuffle::isIdentity(pattern)) {
                     replaceWithIdentity(m_value->child(0));
                     break;
@@ -3509,8 +3513,8 @@ private:
             }
 
             if constexpr (isARM64()) {
-                if (m_value->numChildren() == 3 && m_value->child(2)->isConstant()) {
-                    v128_t pattern = m_value->child(2)->as<Const128Value>()->value();
+                if (m_value->numChildren() == 3 && m_value->child(2)->hasV128()) {
+                    v128_t pattern = m_value->child(2)->asV128();
                     if (m_pass == ReduceStrengthPass::Final) {
                         // Try to match binary canonical patterns (UZP, ZIP, TRN).
                         {

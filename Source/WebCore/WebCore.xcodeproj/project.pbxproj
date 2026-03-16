@@ -352,6 +352,7 @@
 		0BE030A20F3112FB003C1A46 /* RenderLineBoxList.h in Headers */ = {isa = PBXBuildFile; fileRef = 0BE030A10F3112FB003C1A46 /* RenderLineBoxList.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		0C3F1F5B10C8871200D72CE1 /* WebGLUniformLocation.h in Headers */ = {isa = PBXBuildFile; fileRef = 0C3F1F5810C8871200D72CE1 /* WebGLUniformLocation.h */; };
 		0C45342810CDBBFA00869157 /* JSWebGLUniformLocation.h in Headers */ = {isa = PBXBuildFile; fileRef = 0C45342610CDBBFA00869157 /* JSWebGLUniformLocation.h */; };
+		0C6B52D0EB74C9FC2A56BF0A /* FontInlines.h in Headers */ = {isa = PBXBuildFile; fileRef = 59763CF0AFE56B2B76896F18 /* FontInlines.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		0D0215492EF77E2400A9D950 /* modelDefaultSpecularData in Resources */ = {isa = PBXBuildFile; fileRef = 0D0215482EF77E2400A9D950 /* modelDefaultSpecularData */; };
 		0D02154A2EF77E2400A9D950 /* modelDefaultDiffuseData in Resources */ = {isa = PBXBuildFile; fileRef = 0D0215472EF77E2400A9D950 /* modelDefaultDiffuseData */; };
 		0D0B4DA32EBD20E30053FB12 /* UnifiedSource1-ARC.mm in Sources */ = {isa = PBXBuildFile; fileRef = 0D0B4DA22EBD20E30053FB12 /* UnifiedSource1-ARC.mm */; settings = {COMPILER_FLAGS = "-fobjc-arc"; }; };
@@ -2996,7 +2997,7 @@
 		7A22732120C9FAFE00DB1DEF /* WebKitNSImageExtras.h in Headers */ = {isa = PBXBuildFile; fileRef = 7A22731F20C9F9DA00DB1DEF /* WebKitNSImageExtras.h */; };
 		7A293F5229945A430033D744 /* FontCustomPlatformData.h in Headers */ = {isa = PBXBuildFile; fileRef = 7A293F5129945A100033D744 /* FontCustomPlatformData.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		7A29F57218C69514004D0F81 /* OutOfBandTextTrackPrivateAVF.h in Headers */ = {isa = PBXBuildFile; fileRef = 7A29F57118C69514004D0F81 /* OutOfBandTextTrackPrivateAVF.h */; };
-		7A4279002D8CC19000A60073 /* FontCascadeCocoaInlines.h in Headers */ = {isa = PBXBuildFile; fileRef = 7A4278FF2D8CC06500A60073 /* FontCascadeCocoaInlines.h */; };
+		7A4279002D8CC19000A60073 /* FontCascadeCocoaInlines.h in Headers */ = {isa = PBXBuildFile; fileRef = 7A4278FF2D8CC06500A60073 /* FontCascadeCocoaInlines.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		7A45033018DB717200377B34 /* BufferedLineReader.h in Headers */ = {isa = PBXBuildFile; fileRef = 7A45032E18DB717200377B34 /* BufferedLineReader.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		7A54858014E02D51006AE05A /* InspectorHistory.h in Headers */ = {isa = PBXBuildFile; fileRef = 7A54857E14E02D51006AE05A /* InspectorHistory.h */; };
 		7A54881714E432A1006AE05A /* DOMPatchSupport.h in Headers */ = {isa = PBXBuildFile; fileRef = 7A54881514E432A1006AE05A /* DOMPatchSupport.h */; };
@@ -5755,6 +5756,7 @@
 		CD24B86A2982DCCA000A53FE /* HTMLMediaElementIdentifier.h in Headers */ = {isa = PBXBuildFile; fileRef = CD24B8692982DCCA000A53FE /* HTMLMediaElementIdentifier.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		CD27AE5022A9868700947FF9 /* ImageRotationSessionVT.h in Headers */ = {isa = PBXBuildFile; fileRef = CD27AE4E22A9868700947FF9 /* ImageRotationSessionVT.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		CD27AE5122A9868700947FF9 /* ImageRotationSessionVT.mm in Sources */ = {isa = PBXBuildFile; fileRef = CD27AE4F22A9868700947FF9 /* ImageRotationSessionVT.mm */; };
+		CD28D6EA2F5F47DA008D8F59 /* FontCascadeInlines.h in Headers */ = {isa = PBXBuildFile; fileRef = CD28D6E92F5F47DA008D8F59 /* FontCascadeInlines.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		CD2F4A2418D89F700063746D /* AudioHardwareListener.h in Headers */ = {isa = PBXBuildFile; fileRef = CD2F4A2218D89F700063746D /* AudioHardwareListener.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		CD2F4A2818D8A3490063746D /* AudioHardwareListenerMac.h in Headers */ = {isa = PBXBuildFile; fileRef = CD2F4A2618D8A3490063746D /* AudioHardwareListenerMac.h */; };
 		CD3184152E89FBFA00606263 /* DocumentPage.h in Headers */ = {isa = PBXBuildFile; fileRef = CD3184142E89F7B300606263 /* DocumentPage.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -5824,6 +5826,7 @@
 		CD671C9C2F5C175F00B387A2 /* LegacyInlineBoxInlines.h in Headers */ = {isa = PBXBuildFile; fileRef = CD671C9B2F5C175F00B387A2 /* LegacyInlineBoxInlines.h */; };
 		CD671C9E2F5D083000B387A2 /* AccessibilityNodeObjectInlines.h in Headers */ = {isa = PBXBuildFile; fileRef = CD671C9D2F5D083000B387A2 /* AccessibilityNodeObjectInlines.h */; };
 		CD671CA02F5D0A7F00B387A2 /* StyleTreeResolverInlines.h in Headers */ = {isa = PBXBuildFile; fileRef = CD671C9F2F5D0A7F00B387A2 /* StyleTreeResolverInlines.h */; };
+		CD671CA42F5E144F00B387A2 /* FontCascadeEnums.h in Headers */ = {isa = PBXBuildFile; fileRef = CD671CA32F5E144F00B387A2 /* FontCascadeEnums.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		CD6A1F0D297A1A8F00F7B9FA /* CanvasObserver.h in Headers */ = {isa = PBXBuildFile; fileRef = CD6A1F0C297A1A8F00F7B9FA /* CanvasObserver.h */; };
 		CD7122632CDD80220045FB4D /* VideoPresentationLayerProvider.h in Headers */ = {isa = PBXBuildFile; fileRef = CD7122612CDD6B530045FB4D /* VideoPresentationLayerProvider.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		CD720B4F2268B51300047FDE /* ISOFairPlayStreamingPsshBox.h in Headers */ = {isa = PBXBuildFile; fileRef = CD720B4922682C7F00047FDE /* ISOFairPlayStreamingPsshBox.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -13114,6 +13117,7 @@
 		59309A1211F4AE6A00250603 /* DeviceOrientationClientMock.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DeviceOrientationClientMock.h; sourceTree = "<group>"; };
 		5958F1CB1343917C0080B31F /* XMLViewer.css */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.css; path = XMLViewer.css; sourceTree = "<group>"; };
 		5958F1CC1343917C0080B31F /* XMLViewer.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = XMLViewer.js; sourceTree = "<group>"; };
+		59763CF0AFE56B2B76896F18 /* FontInlines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FontInlines.h; sourceTree = "<group>"; };
 		59780849D41E6F65D81198BC /* MathMLSelectElement.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MathMLSelectElement.h; sourceTree = "<group>"; };
 		598365DC1355F53C001B185D /* JSPositionCallback.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = JSPositionCallback.h; sourceTree = "<group>"; };
 		598365DE1355F562001B185D /* JSPositionErrorCallback.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = JSPositionErrorCallback.h; sourceTree = "<group>"; };
@@ -20444,6 +20448,8 @@
 		CD27F6E3145767580078207D /* JSMediaController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = JSMediaController.h; sourceTree = "<group>"; };
 		CD27F6E4145767870078207D /* MediaController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MediaController.h; sourceTree = "<group>"; };
 		CD27F6E6145770D30078207D /* MediaController.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = MediaController.cpp; sourceTree = "<group>"; };
+		CD28D6E92F5F47DA008D8F59 /* FontCascadeInlines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FontCascadeInlines.h; sourceTree = "<group>"; };
+		CD28D6F82F5FC222008D8F59 /* SimpleFontDataCoreText.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SimpleFontDataCoreText.h; sourceTree = "<group>"; };
 		CD2F4A2118D89F700063746D /* AudioHardwareListener.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = AudioHardwareListener.cpp; sourceTree = "<group>"; };
 		CD2F4A2218D89F700063746D /* AudioHardwareListener.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AudioHardwareListener.h; sourceTree = "<group>"; };
 		CD2F4A2518D8A3490063746D /* AudioHardwareListenerMac.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = AudioHardwareListenerMac.cpp; sourceTree = "<group>"; };
@@ -20560,6 +20566,7 @@
 		CD671C9B2F5C175F00B387A2 /* LegacyInlineBoxInlines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = LegacyInlineBoxInlines.h; sourceTree = "<group>"; };
 		CD671C9D2F5D083000B387A2 /* AccessibilityNodeObjectInlines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AccessibilityNodeObjectInlines.h; sourceTree = "<group>"; };
 		CD671C9F2F5D0A7F00B387A2 /* StyleTreeResolverInlines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StyleTreeResolverInlines.h; sourceTree = "<group>"; };
+		CD671CA32F5E144F00B387A2 /* FontCascadeEnums.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FontCascadeEnums.h; sourceTree = "<group>"; };
 		CD6A1F0C297A1A8F00F7B9FA /* CanvasObserver.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CanvasObserver.h; sourceTree = "<group>"; };
 		CD6FE5B724BCE645009FCDA4 /* VP9UtilitiesCocoa.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = VP9UtilitiesCocoa.h; sourceTree = "<group>"; };
 		CD6FE5B824BCE645009FCDA4 /* VP9UtilitiesCocoa.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = VP9UtilitiesCocoa.mm; sourceTree = "<group>"; };
@@ -25486,6 +25493,7 @@
 				1C6FD8AC250A294D00D6E920 /* FontPlatformDataCoreText.cpp */,
 				1C6FD8AD250A2E5300D6E920 /* GlyphPageCoreText.cpp */,
 				7AFD16CD2C63F3AF00B51D1A /* SimpleFontDataCoreText.cpp */,
+				CD28D6F82F5FC222008D8F59 /* SimpleFontDataCoreText.h */,
 			);
 			path = coretext;
 			sourceTree = "<group>";
@@ -35792,8 +35800,10 @@
 				32EAFB8B274C5EA500650557 /* FontCascadeCache.h */,
 				E4E8B4F0216B8B5F00B8834D /* FontCascadeDescription.cpp */,
 				E4E8B4F2216B8B6000B8834D /* FontCascadeDescription.h */,
+				CD671CA32F5E144F00B387A2 /* FontCascadeEnums.h */,
 				B2C3DA560D006CD600EF6F26 /* FontCascadeFonts.cpp */,
 				B2C3DA570D006CD600EF6F26 /* FontCascadeFonts.h */,
+				CD28D6E92F5F47DA008D8F59 /* FontCascadeInlines.h */,
 				1C26671926FA7F2E00117073 /* FontCreationContext.h */,
 				7A293F5129945A100033D744 /* FontCustomPlatformData.h */,
 				37ACCE620DA2AA960089E602 /* FontDescription.cpp */,
@@ -35803,6 +35813,7 @@
 				BE4662C128F853D10050A5D3 /* FontFeatureValues.h */,
 				E44EE3A617576E5500EEE8CF /* FontGenericFamilies.cpp */,
 				E44EE3A717576E5500EEE8CF /* FontGenericFamilies.h */,
+				59763CF0AFE56B2B76896F18 /* FontInlines.h */,
 				0845680712B90DA600960A9F /* FontMetrics.h */,
 				1C4674FD26F4843600B61273 /* FontPalette.h */,
 				1C5E1DA626F949B900E07AF1 /* FontPaletteValues.h */,
@@ -44284,7 +44295,9 @@
 				32EAFB8D274C5EA600650557 /* FontCascadeCache.h in Headers */,
 				7A4279002D8CC19000A60073 /* FontCascadeCocoaInlines.h in Headers */,
 				E4E8B4F5216B956500B8834D /* FontCascadeDescription.h in Headers */,
+				CD671CA42F5E144F00B387A2 /* FontCascadeEnums.h in Headers */,
 				B2C3DA680D006CD600EF6F26 /* FontCascadeFonts.h in Headers */,
+				CD28D6EA2F5F47DA008D8F59 /* FontCascadeInlines.h in Headers */,
 				F4A064C8277E48C900B06A17 /* FontCocoa.h in Headers */,
 				1C26671B26FA932F00117073 /* FontCreationContext.h in Headers */,
 				7A293F5229945A430033D744 /* FontCustomPlatformData.h in Headers */,
@@ -44296,6 +44309,7 @@
 				3294ECFA274EFA57006BE8C8 /* FontFamilySpecificationCoreTextCache.h in Headers */,
 				BE88176C28FF5C3E001AF304 /* FontFeatureValues.h in Headers */,
 				E42EE3A717576E5500EEE8CF /* FontGenericFamilies.h in Headers */,
+				0C6B52D0EB74C9FC2A56BF0A /* FontInlines.h in Headers */,
 				658436860AE01B7400E53743 /* FontLoadRequest.h in Headers */,
 				BC4A532F256057CD0028C592 /* FontLoadTimingOverride.h in Headers */,
 				0845680812B90DA600960A9F /* FontMetrics.h in Headers */,
