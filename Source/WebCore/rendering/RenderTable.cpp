@@ -371,7 +371,7 @@ void RenderTable::updateLogicalWidth()
 template<typename SizeType> LayoutUnit RenderTable::convertStyleLogicalWidthToComputedWidth(const SizeType& styleLogicalWidth, LayoutUnit availableWidth)
 {
     if (styleLogicalWidth.isIntrinsicOrStretch())
-        return computeIntrinsicLogicalWidthUsing(styleLogicalWidth, availableWidth, bordersPaddingAndSpacingInRowDirection());
+        return computeSizingKeywordLogicalWidthUsing(styleLogicalWidth, availableWidth, bordersPaddingAndSpacingInRowDirection());
 
     // HTML tables' width styles already include borders and padding, but CSS tables' width styles do not.
     LayoutUnit borders;
@@ -398,7 +398,7 @@ template<typename SizeType> LayoutUnit RenderTable::convertStyleLogicalHeightToC
     } else if (styleLogicalHeight.isPercentOrCalculated())
         return computePercentageLogicalHeight(styleLogicalHeight).value_or(0);
     else if (styleLogicalHeight.isIntrinsicOrStretch())
-        return computeIntrinsicLogicalContentHeightUsing(styleLogicalHeight, logicalHeight() - borderAndPadding, borderAndPadding).value_or(0);
+        return computeSizingKeywordLogicalContentHeightUsing(styleLogicalHeight, logicalHeight() - borderAndPadding, borderAndPadding).value_or(0);
     else
         ASSERT_NOT_REACHED();
     return 0_lu;
@@ -557,13 +557,12 @@ void RenderTable::layout()
 
         LayoutUnit oldLogicalWidth = logicalWidth();
         LayoutUnit oldLogicalHeight = logicalHeight();
-        resetLogicalHeightBeforeLayoutIfNeeded();
         updateLogicalWidth();
-
         if (logicalWidth() != oldLogicalWidth) {
             for (unsigned i = 0; i < m_captions.size(); i++)
                 m_captions[i]->setNeedsLayout(MarkOnlyThis);
         }
+        resetLogicalHeightBeforeLayoutIfNeeded();
         // FIXME: The optimisation below doesn't work since the internal table
         // layout could have changed. We need to add a flag to the table
         // layout that tells us if something has changed in the min max

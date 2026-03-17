@@ -472,7 +472,8 @@ void WebFrame::createProvisionalFrame(ProvisionalFrameCreationParameters&& param
     m_provisionalFrame = localFrame.ptr();
     m_frameIDBeforeProvisionalNavigation = parameters.frameIDBeforeProvisionalNavigation;
     localFrame->init();
-    protect(localFrame->document())->setURL(URL { aboutBlankURL() });
+    if (!localFrame->isMainFrame())
+        protect(localFrame->document())->setURL(URL { aboutBlankURL() });
 
     if (parameters.layerHostingContextIdentifier)
         setLayerHostingContextIdentifier(*parameters.layerHostingContextIdentifier);
@@ -652,6 +653,7 @@ void WebFrame::setHistoryItemForBackForwardNavigation(const FrameState& frameSta
     // Build HistoryItem from FrameState
     Ref historyItemClient = page->historyItemClient();
     auto ignoreHistoryItemChangesForScope = historyItemClient->ignoreChangesForScope();
+    ASSERT(!page->corePage()->settings().useUIProcessForBackForwardItemLoading() || frameState.children.isEmpty());
     Ref historyItem = toHistoryItem(historyItemClient, protect(frameState));
 
     Ref frameLoader = localFrame->loader();
