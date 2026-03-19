@@ -239,6 +239,7 @@ void HTMLConstructionSite::attachLater(Ref<ContainerNode>&& parent, Ref<Node>&& 
     if (m_openElements.stackDepth() >= m_maximumDOMTreeDepth && task.parent->parentNode()) {
         m_openElements.pop();
         task.parent = task.parent->parentNode();
+        m_hasReachedMaxDOMTreeDepth = true;
     }
 
     ASSERT(task.parent);
@@ -866,7 +867,7 @@ std::tuple<RefPtr<HTMLElement>, RefPtr<JSCustomElementInterface>, RefPtr<CustomE
     // FIXME: This is a hack to connect images to pictures before the image has
     // been inserted into the document. It can be removed once asynchronous image
     // loading is working. When this hack is removed, the assertion just before
-    // the setPictureElement() call in HTMLImageElement::insertedIntoAncestor
+    // the setPictureElement() call in HTMLImageElement::insertionSteps
     // can be simplified.
     if (RefPtr currentPictureElement = dynamicDowncast<HTMLPictureElement>(currentNode())) {
         if (auto* imageElement = dynamicDowncast<HTMLImageElement>(*element))

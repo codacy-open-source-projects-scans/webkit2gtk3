@@ -149,15 +149,15 @@ void HTMLFrameElementBase::attributeChanged(const QualifiedName& name, const Ato
         HTMLFrameOwnerElement::attributeChanged(name, oldValue, newValue, attributeModificationReason);
 }
 
-Node::InsertedIntoAncestorResult HTMLFrameElementBase::insertedIntoAncestor(InsertionType insertionType, ContainerNode& parentOfInsertedTree)
+Node::NeedsPostConnectionSteps HTMLFrameElementBase::insertionSteps(InsertionType insertionType, ContainerNode& parentOfInsertedTree)
 {
-    HTMLFrameOwnerElement::insertedIntoAncestor(insertionType, parentOfInsertedTree);
+    HTMLFrameOwnerElement::insertionSteps(insertionType, parentOfInsertedTree);
     if (insertionType.connectedToDocument)
-        return InsertedIntoAncestorResult::NeedsPostInsertionCallback;
-    return InsertedIntoAncestorResult::Done;
+        return NeedsPostConnectionSteps::Yes;
+    return NeedsPostConnectionSteps::No;
 }
 
-void HTMLFrameElementBase::didFinishInsertingNode()
+void HTMLFrameElementBase::postConnectionSteps()
 {
     if (!isConnected())
         return;
@@ -208,16 +208,6 @@ void HTMLFrameElementBase::setLocation(const String& str)
 
     if (isConnected())
         openURL(LockHistory::No, LockBackForwardList::No);
-}
-
-void HTMLFrameElementBase::setLocation(JSC::JSGlobalObject& state, const String& newLocation)
-{
-    if (WTF::protocolIsJavaScript(newLocation)) {
-        if (!BindingSecurity::shouldAllowAccessToNode(state, protect(contentDocument()).get()))
-            return;
-    }
-
-    setLocation(newLocation);
 }
 
 bool HTMLFrameElementBase::supportsFocus() const

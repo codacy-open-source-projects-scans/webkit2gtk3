@@ -6559,6 +6559,12 @@ void WebPageProxy::pageScaleFactorDidChange(IPC::Connection& connection, double 
             return;
         process.send(Messages::WebPage::DidScalePage(scaleFactor, { }), pageID);
     });
+
+#if ENABLE(ACCESSIBILITY_LOCAL_FRAME)
+    // If the page's scale factor changes, the UI process needs to send an updated AffineTransform to each frame.
+    for (RefPtr frame = m_mainFrame; frame; frame = frame->traverseNext().frame)
+        requestFrameScreenPosition(frame->frameID());
+#endif
 }
 
 void WebPageProxy::viewScaleFactorDidChange(IPC::Connection& connection, double scaleFactor)
@@ -10499,19 +10505,20 @@ void WebPageProxy::showColorPicker(IPC::Connection& connection, const WebCore::C
 {
     MESSAGE_CHECK_BASE(supportsAlpha == ColorControlSupportsAlpha::No || protect(preferences())->inputTypeColorEnhancementsEnabled(), connection);
 
-    convertRectToMainFrameCoordinates(elementRect, rootFrameID, [weakThis = WeakPtr { *this }, initialColor, supportsAlpha, suggestions = WTF::move(suggestions), rootFrameID](std::optional<FloatRect> convertedRect) mutable {
+    RefPtr pageClient = this->pageClient();
+    if (!pageClient)
+        return;
+
+    internals().colorPicker = pageClient->createColorPicker(*this, initialColor, elementRect, supportsAlpha, WTF::move(suggestions), rootFrameID);
+
+    convertRectToMainFrameCoordinates(elementRect, rootFrameID, [weakThis = WeakPtr { *this }, initialColor](std::optional<FloatRect> convertedRect) mutable {
         RefPtr protectedThis = weakThis.get();
         if (!protectedThis || !convertedRect)
             return;
 
-        RefPtr pageClient = protectedThis->pageClient();
-        if (!pageClient)
-            return;
-
-        protectedThis->internals().colorPicker = pageClient->createColorPicker(*protectedThis, initialColor, IntRect(*convertedRect), supportsAlpha, WTF::move(suggestions), rootFrameID);
         // FIXME: Remove this conditional once all ports have a functional PageClientImpl::createColorPicker.
         if (RefPtr colorPicker = protectedThis->internals().colorPicker)
-            colorPicker->showColorPicker(initialColor);
+            colorPicker->showColorPicker(initialColor, IntRect(*convertedRect));
     });
 }
 
@@ -10543,6 +10550,9 @@ void WebPageProxy::hasVideoInPictureInPictureDidChange(bool value)
 
 void WebPageProxy::Internals::didChooseColor(const WebCore::Color& color)
 {
+    if (!colorPicker)
+        return;
+
     Ref protectedPage = page.get();
     if (!protectedPage->hasRunningProcess())
         return;
@@ -11783,6 +11793,7 @@ void WebPageProxy::setCursorHiddenUntilMouseMoves(bool hiddenUntilMouseMoves)
 
 void WebPageProxy::mouseEventHandlingCompleted(std::optional<WebEventType> eventType, bool handled, std::optional<RemoteUserInputEventData> remoteUserInputEventData)
 {
+    MESSAGE_CHECK(m_legacyMainFrameProcess, !internals().mouseEventQueue.isEmpty());
     if (remoteUserInputEventData) {
         CheckedRef event = internals().mouseEventQueue.first();
         const auto originalPosition = event->position();
@@ -11806,7 +11817,6 @@ void WebPageProxy::mouseEventHandlingCompleted(std::optional<WebEventType> event
     }
 
     // Retire the last sent event now that WebProcess is done handling it.
-    MESSAGE_CHECK(m_legacyMainFrameProcess, !internals().mouseEventQueue.isEmpty());
     auto event = internals().mouseEventQueue.takeFirst();
     if (eventType) {
         MESSAGE_CHECK(m_legacyMainFrameProcess, *eventType == event.type());
@@ -11824,11 +11834,11 @@ void WebPageProxy::mouseEventHandlingCompleted(std::optional<WebEventType> event
     }
 
 #if PLATFORM(GTK) || PLATFORM(WPE)
-    WTFEndSignpost(event.signpostIdentifier(), HandleMouseEvent);
+    WTFEndSignpost(event.signpostIdentifier(), HandleMouseEvent, "handled: %s", handled ? "yes" : "no");
     for (auto& coalescedEvent : event.coalescedEvents()) {
         if (coalescedEvent.signpostIdentifier() == event.signpostIdentifier())
             continue;
-        WTFEndSignpost(coalescedEvent.signpostIdentifier(), HandleMouseEvent);
+        WTFEndSignpost(coalescedEvent.signpostIdentifier(), HandleMouseEvent, "coalesced with: %" PRIuPTR, event.signpostIdentifier());
     }
 #endif
 

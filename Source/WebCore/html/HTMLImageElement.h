@@ -145,6 +145,9 @@ public:
 
     bool isLazyLoadable() const;
     static bool hasLazyLoadableAttributeValue(StringView);
+    bool hasAutoSizes() const;
+    static bool hasAutoSizesAttributeValue(StringView);
+    void scheduleAutoSizesResolution();
 
     bool NODELETE isDeferred() const;
 
@@ -211,8 +214,8 @@ private:
     void addSubresourceAttributeURLs(ListHashSet<URL>&) const override;
     void addCandidateSubresourceURLs(ListHashSet<URL>&) const override;
 
-    InsertedIntoAncestorResult insertedIntoAncestor(InsertionType, ContainerNode&) override;
-    void removedFromAncestor(RemovalType, ContainerNode&) override;
+    NeedsPostConnectionSteps insertionSteps(InsertionType, ContainerNode&) override;
+    void removingSteps(RemovalType, ContainerNode&) override;
 
     bool NODELETE isFormListedElement() const final { return false; }
     FormAssociatedElement* NODELETE asFormAssociatedElement() final { return this; }
@@ -233,6 +236,8 @@ private:
     void selectImageSource(RelevantMutation);
 
     ImageCandidate bestFitSourceFromPictureElement();
+
+    std::optional<float> autoSizesLayoutWidth() const;
 
     void copyNonAttributePropertiesFromElement(const Element&) final;
 

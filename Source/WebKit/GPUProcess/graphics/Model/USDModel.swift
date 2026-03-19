@@ -259,16 +259,6 @@ internal func logInfo(_ info: String) {
     Logger.modelGPU.info("\(info)")
 }
 
-extension simd_float4x4 {
-    fileprivate var minor: simd_float3x3 {
-        .init(
-            [self.columns.0.x, self.columns.0.y, self.columns.0.z],
-            [self.columns.1.x, self.columns.1.y, self.columns.1.z],
-            [self.columns.2.x, self.columns.2.y, self.columns.2.z]
-        )
-    }
-}
-
 @objc
 @implementation
 extension WKBridgeUSDConfiguration {
@@ -665,6 +655,16 @@ extension WKBridgeReceiver {
                             fatalError("Failed to get material instance \(materialIdentifier)")
                         }
 
+                        #if canImport(RealityCoreRenderer, _version: 12)
+                        let pipeline = try await renderContext.makeRenderPipelineState(
+                            descriptor: .init(
+                                mesh: meshResource.descriptor,
+                                material: material.resource,
+                                renderTargets: [renderTarget],
+                                blending: material.blending == .transparent ? .sourceOver : nil
+                            )
+                        )
+                        #else
                         let pipeline = try await renderContext.makeRenderPipelineState(
                             descriptor: .descriptor(
                                 mesh: meshResource.descriptor,
@@ -672,6 +672,7 @@ extension WKBridgeReceiver {
                                 renderTargets: [renderTarget]
                             )
                         )
+                        #endif
 
                         let meshPart = try renderContext.makeMeshPart(
                             resource: meshResource,
@@ -684,6 +685,18 @@ extension WKBridgeReceiver {
                         )
 
                         for instanceTransform in data.instanceTransforms {
+                            #if canImport(RealityCoreRenderer, _version: 12)
+                            let position = instanceTransform.transformPosition(.zero)
+                            let meshInstance = try renderContext.makeMeshInstance(
+                                meshPart: meshPart,
+                                pipeline: pipeline,
+                                geometryArguments: material.geometryArguments,
+                                surfaceArguments: material.surfaceArguments,
+                                lightingArguments: lightingArguments,
+                                transform: .single(instanceTransform),
+                                category: material.blending == .transparent ? .transparent(sortPosition: position) : .opaque
+                            )
+                            #else
                             let meshInstance = try renderContext.makeMeshInstance(
                                 meshPart: meshPart,
                                 pipeline: pipeline,
@@ -693,6 +706,7 @@ extension WKBridgeReceiver {
                                 transform: .single(instanceTransform),
                                 category: .opaque
                             )
+                            #endif
 
                             // FIXME: https://bugs.webkit.org/show_bug.cgi?id=305857
                             // swift-format-ignore: NeverForceUnwrap
@@ -1392,14 +1406,19 @@ extension ShaderGraph._Proto_ShaderNodeGraph {
                     }
 
                 case .builtin, .arguments, .results:
-                    // Handle builtin nodes by looking up their definitions
+                    // Handle builtin, arguments, and results nodes
                     if let builtin = bridgeNode.builtin, !builtin.definition.isEmpty {
                         if let definition = library.definition(named: builtin.definition) {
                             let node = _Proto_ShaderNodeGraph.Node(name: nodeName, data: .definition(definition))
                             nodesDictionary[nodeName] = node
                         } else {
                             logError("Could not find builtin definition named '\(builtin.definition)' for node '\(nodeName)'")
+                            // Don't add this node to the dictionary - it will be filtered out later
                         }
+                    } else {
+                        // For arguments/results nodes without definitions, skip them
+                        // These are special node types that don't need explicit nodes in the graph
+                        logInfo("Skipping \(bridgeNode.bridgeNodeType) node '\(nodeName)' (no definition)")
                     }
 
                 @unknown default:
@@ -1407,9 +1426,31 @@ extension ShaderGraph._Proto_ShaderNodeGraph {
                 }
             }
 
-            // Convert bridge edges to edges
-            let edges = descriptor.edges.map { bridgeEdge in
-                _Proto_ShaderNodeGraph.Edge(
+            // Build a set of valid node names (excluding special nodes like arguments/results)
+            let validNodeNames = Set(nodesDictionary.keys)
+
+            // Get the names of arguments and results nodes from the descriptor fields
+            // These are stored separately in descriptor.arguments and descriptor.results, not in descriptor.nodes
+            let specialNodeNames = Set(
+                [descriptor.arguments, descriptor.results]
+                    .compactMap {
+                        $0.builtin?.name ?? $0.constant?.name
+                    }
+            )
+
+            // Convert bridge edges to edges, filtering out edges that reference truly missing nodes
+            let edges = descriptor.edges.compactMap { bridgeEdge -> _Proto_ShaderNodeGraph.Edge? in
+                let outputExists = validNodeNames.contains(bridgeEdge.outputNode) || specialNodeNames.contains(bridgeEdge.outputNode)
+                let inputExists = validNodeNames.contains(bridgeEdge.inputNode) || specialNodeNames.contains(bridgeEdge.inputNode)
+
+                guard outputExists && inputExists else {
+                    logError(
+                        "Skipping edge from '\(bridgeEdge.outputNode).\(bridgeEdge.outputPort)' to '\(bridgeEdge.inputNode).\(bridgeEdge.inputPort)' - one or both nodes not found"
+                    )
+                    return nil
+                }
+
+                return _Proto_ShaderNodeGraph.Edge(
                     outputNode: bridgeEdge.outputNode,
                     outputPort: bridgeEdge.outputPort,
                     inputNode: bridgeEdge.inputNode,

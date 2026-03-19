@@ -838,6 +838,7 @@ public:
     inline bool hasFilter() const;
     bool hasFilterOutsets() const { return !filterOutsets().isZero(); }
     IntOutsets filterOutsets() const;
+    void clearFilters();
     inline bool hasBackdropFilter() const;
 
     bool hasBackdropFilterDescendantsWithoutRoot() const { return m_hasBackdropFilterDescendantsWithoutRoot; }
@@ -1316,6 +1317,8 @@ private:
     bool mustCompositeForIndirectReasons() const { return m_indirectCompositingReason; }
 
     void removeClipperClientIfNeeded() const;
+
+    bool hasFailedFilterForSVGRenderer() const;
 
     struct OverflowControlRects {
         IntRect horizontalScrollbar;

@@ -307,11 +307,21 @@ ImageCandidate HTMLImageElement::bestFitSourceFromPictureElement()
         if (!result)
             continue;
 
-        SizesAttributeParser sizesParser(source->attributeWithoutSynchronization(sizesAttr).string(), document.get());
+        // Per the spec, if the source has no sizes attribute, use the img's sizes attribute.
+        auto& sourceSizesAttr = source->attributeWithoutSynchronization(sizesAttr);
+        auto sizesString = sourceSizesAttr.isNull() ? attributeWithoutSynchronization(sizesAttr).string() : sourceSizesAttr.string();
+        SizesAttributeParser sizesParser(sizesString, document.get());
 
         m_dynamicMediaQueryResults.appendVector(sizesParser.dynamicMediaQueryResults());
 
-        auto sourceSize = sizesParser.effectiveSize();
+        float sourceSize;
+        if (sizesParser.isAuto() && isLazyLoadable()) {
+            if (auto layoutWidth = autoSizesLayoutWidth())
+                sourceSize = *layoutWidth;
+            else
+                sourceSize = sizesParser.effectiveSize();
+        } else
+            sourceSize = sizesParser.effectiveSize();
 
         candidate = bestFitSourceForImageAttributes(document->deviceScaleFactor(), nullAtom(), srcset, sourceSize, [&](auto& candidate) {
             return m_imageLoader->shouldIgnoreCandidateWhenLoadingFromArchive(candidate);
@@ -372,7 +382,14 @@ void HTMLImageElement::selectImageSource(RelevantMutation relevantMutation)
             // If we don't have a <picture> or didn't find a source, then we use our own attributes.
             SizesAttributeParser sizesParser(attributeWithoutSynchronization(sizesAttr).string(), document.get());
             m_dynamicMediaQueryResults.appendVector(sizesParser.dynamicMediaQueryResults());
-            auto sourceSize = sizesParser.effectiveSize();
+            float sourceSize;
+            if (sizesParser.isAuto() && isLazyLoadable()) {
+                if (auto layoutWidth = autoSizesLayoutWidth())
+                    sourceSize = *layoutWidth;
+                else
+                    sourceSize = sizesParser.effectiveSize();
+            } else
+                sourceSize = sizesParser.effectiveSize();
             candidate = bestFitSourceForImageAttributes(document->deviceScaleFactor(), srcAttribute, srcsetAttribute, sourceSize, [&](auto& candidate) {
                 return m_imageLoader->shouldIgnoreCandidateWhenLoadingFromArchive(candidate);
             });
@@ -388,6 +405,28 @@ void HTMLImageElement::selectImageSource(RelevantMutation relevantMutation)
 bool HTMLImageElement::hasLazyLoadableAttributeValue(StringView attributeValue)
 {
     return equalLettersIgnoringASCIICase(attributeValue, "lazy"_s);
+}
+
+bool HTMLImageElement::hasAutoSizesAttributeValue(StringView attributeValue)
+{
+    return attributeValue.startsWithIgnoringASCIICase("auto"_s) && (attributeValue.length() == 4 || attributeValue[4] == ',');
+}
+
+bool HTMLImageElement::hasAutoSizes() const
+{
+    return hasAutoSizesAttributeValue(attributeWithoutSynchronization(sizesAttr));
+}
+
+void HTMLImageElement::scheduleAutoSizesResolution()
+{
+    ASSERT(hasAutoSizes());
+    // Defer source selection to avoid mutating the render tree during layout.
+    protect(protect(document())->eventLoop())->queueTask(TaskSource::DOMManipulation, [weakThis = WeakPtr { *this }] {
+        RefPtr protectedThis = weakThis.get();
+        if (!protectedThis)
+            return;
+        protectedThis->selectImageSource(RelevantMutation::No);
+    });
 }
 
 void HTMLImageElement::attributeChanged(const QualifiedName& name, const AtomString& oldValue, const AtomString& newValue, AttributeModificationReason attributeModificationReason)
@@ -463,7 +502,17 @@ void HTMLImageElement::attributeChanged(const QualifiedName& name, const AtomStr
 
 void HTMLImageElement::loadDeferredImage()
 {
+    if (hasAutoSizes())
+        selectImageSource(RelevantMutation::No);
     m_imageLoader->loadDeferredImage();
+}
+
+std::optional<float> HTMLImageElement::autoSizesLayoutWidth() const
+{
+    CheckedPtr box = renderBox();
+    if (!box)
+        return { };
+    return box->contentBoxWidth().toFloat();
 }
 
 const AtomString& HTMLImageElement::altText() const
@@ -527,7 +576,7 @@ void HTMLImageElement::didAttachRenderers()
         renderImage->setImageSizeForAltText();
 }
 
-Node::InsertedIntoAncestorResult HTMLImageElement::insertedIntoAncestor(InsertionType insertionType, ContainerNode& parentOfInsertedTree)
+Node::NeedsPostConnectionSteps HTMLImageElement::insertionSteps(InsertionType insertionType, ContainerNode& parentOfInsertedTree)
 {
     FormAssociatedElement::elementInsertedIntoAncestor(*this, insertionType);
     if (!form())
@@ -535,7 +584,7 @@ Node::InsertedIntoAncestorResult HTMLImageElement::insertedIntoAncestor(Insertio
 
     // Insert needs to complete first, before we start updating the loader. Loader dispatches events which could result
     // in callbacks back to this node.
-    Node::InsertedIntoAncestorResult insertNotificationRequest = HTMLElement::insertedIntoAncestor(insertionType, parentOfInsertedTree);
+    Node::NeedsPostConnectionSteps insertNotificationRequest = HTMLElement::insertionSteps(insertionType, parentOfInsertedTree);
 
     if (insertionType.treeScopeChanged && !m_parsedUsemap.isNull())
         protect(treeScope())->addImageElementByUsemap(m_parsedUsemap, *this);
@@ -556,7 +605,7 @@ Node::InsertedIntoAncestorResult HTMLImageElement::insertedIntoAncestor(Insertio
     return insertNotificationRequest;
 }
 
-void HTMLImageElement::removedFromAncestor(RemovalType removalType, ContainerNode& oldParentOfRemovedTree)
+void HTMLImageElement::removingSteps(RemovalType removalType, ContainerNode& oldParentOfRemovedTree)
 {
     if (removalType.treeScopeChanged && !m_parsedUsemap.isNull())
         protect(oldParentOfRemovedTree.treeScope())->removeImageElementByUsemap(m_parsedUsemap, *this);
@@ -567,7 +616,7 @@ void HTMLImageElement::removedFromAncestor(RemovalType removalType, ContainerNod
         selectImageSource(RelevantMutation::Yes);
     }
 
-    HTMLElement::removedFromAncestor(removalType, oldParentOfRemovedTree);
+    HTMLElement::removingSteps(removalType, oldParentOfRemovedTree);
     FormAssociatedElement::elementRemovedFromAncestor(*this, removalType);
 }
 
