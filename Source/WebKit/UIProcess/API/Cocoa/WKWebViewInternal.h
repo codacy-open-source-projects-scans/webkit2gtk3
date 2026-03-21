@@ -189,6 +189,7 @@ enum class PreferSolidColorHardPocketReason : uint8_t {
 @class WKTextExtractionItem;
 @class WKWebViewContentProviderRegistry;
 @class _WKFrameHandle;
+@class _WKJSHandle;
 @class _WKWarningView;
 
 #if ENABLE(WEB_AUTHN)
@@ -353,6 +354,8 @@ struct PerWebProcessState {
     NSUInteger _partialIntelligenceTextAnimationCount;
     BOOL _writingToolsTextReplacementsFinished;
     BOOL _activeWritingToolsSessionIsForProofreadingReview;
+
+    RetainPtr<NSMutableArray<_WKJSHandle *>> _writingToolsPreservedNodes;
 #endif
 
 #if ENABLE(SCREEN_TIME)
@@ -601,6 +604,8 @@ struct PerWebProcessState {
 - (void)_addTextAnimationForAnimationID:(NSUUID *)uuid withData:(const WebCore::TextAnimationData&)styleData;
 - (void)_removeTextAnimationForAnimationID:(NSUUID *)uuid;
 
+- (void)_clearWritingToolsPreservedNodes;
+
 #endif
 
 - (void)_internalDoAfterNextPresentationUpdate:(void (^)(void))updateBlock withoutWaitingForPainting:(BOOL)withoutWaitingForPainting withoutWaitingForAnimatedResize:(BOOL)withoutWaitingForAnimatedResize;
@@ -653,6 +658,10 @@ struct PerWebProcessState {
 - (void)_setAllowGamepadsInput:(BOOL)allowGamepadsInput;
 - (void)_setAllowGamepadsAccess;
 #endif
+#endif
+
+#if ENABLE(MANAGED_UIREFRESHCONTROL_APPEARANCE)
+- (void)_updateRefreshControlAppearance;
 #endif
 
 - (void)_updateFixedContainerEdges:(const WebCore::FixedContainerEdges&)edges;

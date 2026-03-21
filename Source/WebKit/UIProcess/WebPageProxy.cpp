@@ -5734,7 +5734,7 @@ void WebPageProxy::continueNavigationInNewProcess(API::Navigation& navigation, W
         loadParameters.navigationID = navigation.navigationID();
         loadParameters.effectiveSandboxFlags = frame.effectiveSandboxFlags();
         loadParameters.effectiveReferrerPolicy = frame.effectiveReferrerPolicy();
-        loadParameters.lockBackForwardList = !!navigation.backForwardFrameLoadType() ? LockBackForwardList::Yes : LockBackForwardList::No;
+        loadParameters.lockBackForwardList = navigation.isInitialFrameSrcLoad() ? LockBackForwardList::No : navigation.lockBackForwardList();
         loadParameters.ownerPermissionsPolicy = navigation.ownerPermissionsPolicy();
         loadParameters.navigationUpgradeToHTTPSBehavior = navigationUpgradeToHTTPSBehavior;
         loadParameters.isHandledByAboutSchemeHandler = m_aboutSchemeHandler->canHandleURL(loadParameters.request.url());
@@ -12424,6 +12424,8 @@ void WebPageProxy::resetState(ResetStateReason resetStateReason)
 
 #if ENABLE(MODEL_ELEMENT_IMMERSIVE)
     m_allowedImmersiveElementFrameURL = std::nullopt;
+    if (m_immersive)
+        dismissImmersiveElement([] { });
 #endif
 
 #if PLATFORM(COCOA)
@@ -12649,12 +12651,14 @@ void WebPageProxy::resetStateAfterProcessExited(ProcessTerminationReason termina
     if (terminationReason != ProcessTerminationReason::NavigationSwap)
         m_provisionalPage = nullptr;
 
-    if (terminationReason == ProcessTerminationReason::NavigationSwap)
-        protectedPageClient->processWillSwap();
-    else
-        protectedPageClient->processDidExit();
+    if (protectedPageClient) {
+        if (terminationReason == ProcessTerminationReason::NavigationSwap)
+            protectedPageClient->processWillSwap();
+        else
+            protectedPageClient->processDidExit();
 
-    protectedPageClient->clearAllEditCommands();
+        protectedPageClient->clearAllEditCommands();
+    }
 
 #if PLATFORM(COCOA)
     WebPasteboardProxy::singleton().revokeAccess(m_legacyMainFrameProcess.get());

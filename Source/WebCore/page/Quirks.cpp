@@ -951,6 +951,18 @@ bool Quirks::needsPreloadAutoQuirk() const
 #endif
 }
 
+// espn.com rdar://154903596
+bool Quirks::needsPauseBeforeFullscreenExitQuirk() const
+{
+#if PLATFORM(IOS_FAMILY)
+    QUIRKS_EARLY_RETURN_IF_DISABLED_WITH_VALUE(false);
+
+    return m_quirksData.quirkIsEnabled(QuirksData::SiteSpecificQuirk::NeedsPauseBeforeFullscreenExitQuirk);
+#else
+    return false;
+#endif
+}
+
 // vimeo.com rdar://56996057
 // docs.google.com rdar://59893415
 // bing.com rdar://133223599
@@ -1932,7 +1944,7 @@ String Quirks::scriptToEvaluateBeforeRunningScriptFromURL(const URL& scriptURL)
         return { };
 
     // player.anyclip.com rdar://138789765
-    if (m_quirksData.isThesaurus && scriptURL.lastPathComponent().endsWith("lre.js"_s)) [[unlikely]] {
+    if ((m_quirksData.isDictionary || m_quirksData.isThesaurus) && scriptURL.lastPathComponent().endsWith("lre.js"_s)) [[unlikely]] {
         if (scriptURL.host() == "player.anyclip.com"_s)
             return chromeUserAgentScript;
     }
@@ -2598,6 +2610,11 @@ static void handleSlackQuirks(QuirksData& quirksData, const URL&, const String& 
 
 static void handleScriptToEvaluateBeforeRunningScriptFromURLQuirk(QuirksData& quirksData, const URL& /* quirksURL */, const String& topDomain, const URL& /* documentURL */)
 {
+    if (topDomain == "dictionary.com"_s) {
+        quirksData.isDictionary = true;
+        quirksData.enableQuirk(QuirksData::SiteSpecificQuirk::NeedsScriptToEvaluateBeforeRunningScriptFromURLQuirk);
+    }
+
     if (topDomain == "thesaurus.com"_s) {
         quirksData.isThesaurus = true;
         quirksData.enableQuirk(QuirksData::SiteSpecificQuirk::NeedsScriptToEvaluateBeforeRunningScriptFromURLQuirk);
@@ -2932,6 +2949,10 @@ static void handleESPNQuirks(QuirksData& quirksData, const URL& /* quirksURL */,
     quirksData.isESPN = true;
 
     quirksData.enableQuirks({
+#if PLATFORM(IOS)
+        // espn.com rdar://154903596
+        QuirksData::SiteSpecificQuirk::NeedsPauseBeforeFullscreenExitQuirk,
+#endif
 #if PLATFORM(IOS) || PLATFORM(VISION)
         // espn.com rdar://problem/95651814
         QuirksData::SiteSpecificQuirk::AllowLayeredFullscreenVideos,
@@ -3560,6 +3581,7 @@ void Quirks::determineRelevantQuirks()
         { "t-mobile"_s, &handleTMobileQuirks },
         { "descript"_s, &handleDescriptQuirks },
 #if PLATFORM(IOS_FAMILY)
+        { "dictionary"_s, &handleScriptToEvaluateBeforeRunningScriptFromURLQuirk },
         { "disneyplus"_s, &handleDisneyPlusQuirks },
 #endif
         { "ea"_s, &handleEAQuirks },
