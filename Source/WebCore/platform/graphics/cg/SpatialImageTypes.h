@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024 Apple Inc. All rights reserved.
+ * Copyright (C) 2025 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,4 +25,34 @@
 
 #pragma once
 
-#include <wtf/SwiftBridging.h>
+#if ENABLE(SPATIAL_IMAGE_DETECTION)
+
+namespace WebCore {
+
+struct CameraExtrinsics {
+    std::array<float, 3> position;
+    std::array<float, 9> rotation;
+};
+
+struct CameraIntrinsics {
+    std::array<float, 9> matrix;
+};
+
+struct SpatialImageEyeProperties {
+    struct GroupMetadata {
+        unsigned groupIndex { 0 };
+        float disparityAdjustment { 0.0f };
+    };
+
+    struct CameraMetadata {
+        CameraExtrinsics extrinsics;
+        CameraIntrinsics intrinsics;
+    };
+
+    GroupMetadata groupMetadata;
+    CameraMetadata cameraMetadata;
+};
+
+}
+
+#endif

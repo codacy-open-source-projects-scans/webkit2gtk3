@@ -194,13 +194,13 @@ list(APPEND WebCore_SOURCES
 
     platform/audio/AudioSession.cpp
 
+    platform/audio/cocoa/AudioBusCocoa.mm
     platform/audio/cocoa/AudioDecoderCocoa.cpp
     platform/audio/cocoa/AudioEncoderCocoa.cpp
+    platform/audio/cocoa/FFTFrameCocoa.cpp
     platform/audio/cocoa/WebAudioBufferList.cpp
 
-    platform/audio/mac/AudioBusMac.mm
     platform/audio/mac/AudioHardwareListenerMac.cpp
-    platform/audio/mac/FFTFrameMac.cpp
 
     platform/cf/KeyedDecoderCF.cpp
     platform/cf/KeyedEncoderCF.cpp
@@ -389,11 +389,11 @@ list(APPEND WebCore_SOURCES
     platform/mac/WebCoreObjCExtras.mm
     platform/mac/WidgetMac.mm
 
-    platform/mediastream/libwebrtc/LibWebRTCAudioModule.cpp
+    platform/mediastream/cocoa/MockRealtimeVideoSourceCocoa.mm
+    platform/mediastream/cocoa/RealtimeOutgoingVideoSourceCocoa.cpp
+    platform/mediastream/cocoa/RealtimeOutgoingVideoSourceCocoa.mm
 
-    platform/mediastream/mac/MockRealtimeVideoSourceMac.mm
-    platform/mediastream/mac/RealtimeOutgoingVideoSourceCocoa.cpp
-    platform/mediastream/mac/RealtimeOutgoingVideoSourceCocoa.mm
+    platform/mediastream/libwebrtc/LibWebRTCAudioModule.cpp
 
     platform/network/cf/CertificateInfoCFNet.cpp
     platform/network/cf/DNSResolveQueueCFNet.cpp
@@ -428,7 +428,7 @@ list(APPEND WebCore_SOURCES
 
     platform/text/cf/HyphenationCF.cpp
 
-    platform/text/mac/TextBoundaries.mm
+    platform/text/cocoa/TextBoundaries.mm
     platform/text/mac/TextCheckingMac.mm
 
     rendering/TextAutoSizing.cpp
@@ -733,10 +733,9 @@ list(APPEND WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     platform/mediastream/cocoa/AudioMediaStreamTrackRendererInternalUnit.h
     platform/mediastream/cocoa/AudioMediaStreamTrackRendererUnit.h
-
-    platform/mediastream/mac/RealtimeIncomingVideoSourceCocoa.h
-    platform/mediastream/mac/RealtimeVideoUtilities.h
-    platform/mediastream/mac/WebAudioSourceProviderCocoa.h
+    platform/mediastream/cocoa/RealtimeIncomingVideoSourceCocoa.h
+    platform/mediastream/cocoa/RealtimeVideoUtilities.h
+    platform/mediastream/cocoa/WebAudioSourceProviderCocoa.h
 
     platform/mediastream/libwebrtc/LibWebRTCProviderCocoa.h
     platform/mediastream/libwebrtc/VideoFrameLibWebRTC.h
