@@ -66,12 +66,12 @@ accessibility/AccessibilityObject.h
 accessibility/AccessibilityRenderObject.cpp
 accessibility/AccessibilitySlider.cpp
 accessibility/AccessibilityTableHeaderContainer.cpp
+[ iOS ] accessibility/cocoa/WebAccessibilityObjectWrapperBase.mm
 [ iOS ] accessibility/ios/AXObjectCacheIOS.mm
 [ iOS ] accessibility/ios/AccessibilityObjectIOS.mm
 [ iOS ] accessibility/ios/WebAccessibilityObjectWrapperIOS.mm
 [ Mac ] accessibility/isolatedtree/AXIsolatedTree.cpp
 [ Mac ] accessibility/mac/AccessibilityObjectMac.mm
-[ iOS ] accessibility/mac/WebAccessibilityObjectWrapperBase.mm
 animation/BlendingKeyframes.cpp
 animation/DocumentTimeline.cpp
 animation/KeyframeEffect.cpp
@@ -309,7 +309,6 @@ html/canvas/CanvasRenderingContext.cpp
 html/canvas/CanvasRenderingContext2D.cpp
 html/canvas/CanvasRenderingContext2DBase.cpp
 html/canvas/CanvasStyle.cpp
-html/canvas/EXTDisjointTimerQuery.cpp
 html/canvas/GPUCanvasContextCocoa.mm
 html/canvas/OffscreenCanvasRenderingContext2D.cpp
 html/canvas/PlaceholderRenderingContext.cpp

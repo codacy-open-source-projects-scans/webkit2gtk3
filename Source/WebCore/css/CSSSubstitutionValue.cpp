@@ -75,6 +75,14 @@ void CSSSubstitutionValue::cacheSimpleReference()
     auto range = m_data->tokenRange();
 
     auto functionId = range.peek().functionId();
+
+    if (functionId == CSSValueInternalAutoBase) {
+        range.consumeBlock();
+        if (range.atEnd())
+            m_simpleReference = SimpleReference { { }, CSSValueInternalAutoBase };
+        return;
+    }
+
     if (functionId != CSSValueVar && functionId != CSSValueEnv)
         return;
 
