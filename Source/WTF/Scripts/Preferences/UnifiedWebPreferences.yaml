@@ -3914,6 +3914,22 @@ IndexedDBAPIEnabled:
   sharedPreferenceForWebProcess: true
   richJavaScript: true
 
+IndexedDBGetAllRecordsEnabled:
+  type: bool
+  category: dom
+  status: testable
+  humanReadableName: "IndexedDB getAllRecords() API"
+  humanReadableDescription: "Enable getAllRecords() on IDBIndex"
+  defaultValue:
+    WebKitLegacy:
+      default: false
+    WebKit:
+      default: false
+    WebCore:
+      default: false
+  sharedPreferenceForWebProcess: true
+  richJavaScript: true
+
 IndexedDBSQLiteMemoryBackingStoreEnabled:
   type: bool
   status: stable
@@ -8256,11 +8272,11 @@ TextEffectsEnabled:
   condition: ENABLE(WRITING_TOOLS_TEXT_EFFECTS)
   defaultValue:
     WebKitLegacy:
-      default: false
+      default: true
     WebKit:
-      default: false
+      default: true
     WebCore:
-      default: false
+      default: true
 
 TextExtractionDebugUIEnabled:
   type: bool

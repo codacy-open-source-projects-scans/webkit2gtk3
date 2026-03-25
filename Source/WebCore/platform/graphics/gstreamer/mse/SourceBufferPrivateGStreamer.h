@@ -101,7 +101,7 @@ public:
     const Logger& sourceBufferLogger() const final { return m_logger; }
     uint64_t sourceBufferLogIdentifier() final { return logIdentifier(); }
 #ifndef GST_DISABLE_GST_DEBUG
-    void handleLogMessage(const WTFLogChannel&, WTFLogLevel, Vector<JSONLogValue>&&) final;
+    void handleLogMessage(const WTFLogChannel&, WTFLogLevel, std::optional<WTFLogLocation>, Vector<JSONLogValue>&&) final;
 #endif
 #endif
 
@@ -137,7 +137,6 @@ private:
 #if !RELEASE_LOG_DISABLED
     const Ref<const Logger> m_logger;
     const uint64_t m_logIdentifier;
-    String m_objectIdentifierString;
 #endif
 };
 
