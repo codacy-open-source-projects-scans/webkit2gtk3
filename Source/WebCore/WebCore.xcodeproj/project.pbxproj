@@ -266,6 +266,7 @@
 		07B7116D1D899E63009F0FFB /* CaptureDevice.h in Headers */ = {isa = PBXBuildFile; fileRef = 07B7116A1D899E63009F0FFB /* CaptureDevice.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		07B7116F1D899E63009F0FFB /* CaptureDeviceManager.h in Headers */ = {isa = PBXBuildFile; fileRef = 07B7116C1D899E63009F0FFB /* CaptureDeviceManager.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		07B93FFC23B94EC70036F8EA /* MIMETypeCache.h in Headers */ = {isa = PBXBuildFile; fileRef = 07B93FF923B92AAA0036F8EA /* MIMETypeCache.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		5149E5DC2F725A000019F7C3 /* MediaSourceTypeSupportedCache.h in Headers */ = {isa = PBXBuildFile; fileRef = 5149E5DD2F725A000019F7C3 /* MediaSourceTypeSupportedCache.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		07BB1E7027176CD9001DF289 /* DisplayCaptureSourceCocoa.h in Headers */ = {isa = PBXBuildFile; fileRef = 07BB1E6F27176CCA001DF289 /* DisplayCaptureSourceCocoa.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		07BD443C2E281E7900F37729 /* NodeHTMLConverter.h in Headers */ = {isa = PBXBuildFile; fileRef = 07BD443A2E2818B800F37729 /* NodeHTMLConverter.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		07BD443D2E281E8300F37729 /* EditingHTMLConverter.h in Headers */ = {isa = PBXBuildFile; fileRef = 07BD443B2E28190000F37729 /* EditingHTMLConverter.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -5716,7 +5717,7 @@
 		CD063F821E23FA8900812BE3 /* InitDataRegistry.cpp in Sources */ = {isa = PBXBuildFile; fileRef = CD063F801E23FA8900812BE3 /* InitDataRegistry.cpp */; };
 		CD063F831E23FA8900812BE3 /* InitDataRegistry.h in Headers */ = {isa = PBXBuildFile; fileRef = CD063F811E23FA8900812BE3 /* InitDataRegistry.h */; };
 		CD0664492E72218900B7D658 /* RenderElementStyleInlines.h in Headers */ = {isa = PBXBuildFile; fileRef = CD0664482E72218900B7D658 /* RenderElementStyleInlines.h */; settings = {ATTRIBUTES = (Private, ); }; };
-		CD06644B2E723F3D00B7D658 /* StylableInlines.h in Headers */ = {isa = PBXBuildFile; fileRef = CD06644A2E723F3D00B7D658 /* StylableInlines.h */; };
+		CD06644B2E723F3D00B7D658 /* StyleableInlines.h in Headers */ = {isa = PBXBuildFile; fileRef = CD06644A2E723F3D00B7D658 /* StyleableInlines.h */; };
 		CD06644D2E72415A00B7D658 /* NodeDocument.h in Headers */ = {isa = PBXBuildFile; fileRef = CD06644C2E72415A00B7D658 /* NodeDocument.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		CD0E2ED72998B76E005FE2BB /* HTMLNameCollectionInlines.h in Headers */ = {isa = PBXBuildFile; fileRef = CD0E2ED62998B76E005FE2BB /* HTMLNameCollectionInlines.h */; };
 		CD0EEE0E14743F39003EAFA2 /* AudioOutputUnitAdaptorIOS.cpp in Sources */ = {isa = PBXBuildFile; fileRef = CD0EEE0B14743E35003EAFA2 /* AudioOutputUnitAdaptorIOS.cpp */; };
@@ -7748,6 +7749,8 @@
 		07B93ECC2BF6FEBE0072078C /* CharacterRange.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = CharacterRange.cpp; sourceTree = "<group>"; };
 		07B93FF923B92AAA0036F8EA /* MIMETypeCache.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MIMETypeCache.h; sourceTree = "<group>"; };
 		07B93FFB23B92AAB0036F8EA /* MIMETypeCache.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = MIMETypeCache.cpp; sourceTree = "<group>"; };
+		5149E5DD2F725A000019F7C3 /* MediaSourceTypeSupportedCache.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MediaSourceTypeSupportedCache.h; sourceTree = "<group>"; };
+		5149E5DE2F725A000019F7C3 /* MediaSourceTypeSupportedCache.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = MediaSourceTypeSupportedCache.cpp; sourceTree = "<group>"; };
 		07BB1E6E27176CCA001DF289 /* DisplayCaptureSourceCocoa.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = DisplayCaptureSourceCocoa.cpp; sourceTree = "<group>"; };
 		07BB1E6F27176CCA001DF289 /* DisplayCaptureSourceCocoa.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DisplayCaptureSourceCocoa.h; sourceTree = "<group>"; };
 		07BD443A2E2818B800F37729 /* NodeHTMLConverter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NodeHTMLConverter.h; sourceTree = "<group>"; };
@@ -20389,7 +20392,7 @@
 		CD063F801E23FA8900812BE3 /* InitDataRegistry.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = InitDataRegistry.cpp; sourceTree = "<group>"; };
 		CD063F811E23FA8900812BE3 /* InitDataRegistry.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = InitDataRegistry.h; sourceTree = "<group>"; };
 		CD0664482E72218900B7D658 /* RenderElementStyleInlines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RenderElementStyleInlines.h; sourceTree = "<group>"; };
-		CD06644A2E723F3D00B7D658 /* StylableInlines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StylableInlines.h; sourceTree = "<group>"; };
+		CD06644A2E723F3D00B7D658 /* StyleableInlines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StyleableInlines.h; sourceTree = "<group>"; };
 		CD06644C2E72415A00B7D658 /* NodeDocument.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NodeDocument.h; sourceTree = "<group>"; };
 		CD0E2ED62998B76E005FE2BB /* HTMLNameCollectionInlines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HTMLNameCollectionInlines.h; sourceTree = "<group>"; };
 		CD0EEE0B14743E35003EAFA2 /* AudioOutputUnitAdaptorIOS.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = AudioOutputUnitAdaptorIOS.cpp; sourceTree = "<group>"; };
@@ -26660,8 +26663,6 @@
 		41763D0C2ACAFA4A00283035 /* cocoa */ = {
 			isa = PBXGroup;
 			children = (
-				41E476502B6CF8A700C30B11 /* RTCVideoDecoderVTBAV1.h */,
-				41E476522B6CF8A800C30B11 /* RTCVideoDecoderVTBAV1.mm */,
 				41DC698F2F7290A70033015A /* VideoDecoderVTB.h */,
 				41DC69902F7290A70033015A /* VideoDecoderVTB.mm */,
 				41E476512B6CF8A700C30B11 /* WebRTCVideoDecoder.h */,
@@ -36018,6 +36019,8 @@
 				5199AB3E29CD7D950076BDDE /* MediaSourcePrivate.cpp */,
 				CD641EB11818F5ED00EE4C41 /* MediaSourcePrivate.h */,
 				CDDC1E7918A952F30027A9D4 /* MediaSourcePrivateClient.h */,
+				5149E5DE2F725A000019F7C3 /* MediaSourceTypeSupportedCache.cpp */,
+				5149E5DD2F725A000019F7C3 /* MediaSourceTypeSupportedCache.h */,
 				07611DB8243FB75C00D80704 /* MediaUsageInfo.h */,
 				51E4CC032BA1132F00A29FB3 /* MIMESniffer.cpp */,
 				51E4CC022BA1132F00A29FB3 /* MIMESniffer.h */,
@@ -40196,9 +40199,9 @@
 				BC2A0EED2E11D3D9003CBA0E /* ScopedName.cpp */,
 				E401B3622A942E3E0018B557 /* ScopedName.h */,
 				E4643288273D2E7C005B756B /* SelectorMatchingState.h */,
-				CD06644A2E723F3D00B7D658 /* StylableInlines.h */,
 				7173DEBD2614DF040097DF32 /* Styleable.cpp */,
 				713922BC2518AB70005DB3C2 /* Styleable.h */,
+				CD06644A2E723F3D00B7D658 /* StyleableInlines.h */,
 				E45BA6B22376227E004DFC07 /* StyleAdjuster.cpp */,
 				E45BA6B52376229F004DFC07 /* StyleAdjuster.h */,
 				E4ABAC07236B018100FA4345 /* StyleBuilder.cpp */,
@@ -46206,6 +46209,7 @@
 				CD641EB31818F5ED00EE4C41 /* MediaSourcePrivate.h in Headers */,
 				CDC8B5A7180474F70016E685 /* MediaSourcePrivateAVFObjC.h in Headers */,
 				CDDC1E7A18A952F30027A9D4 /* MediaSourcePrivateClient.h in Headers */,
+				5149E5DC2F725A000019F7C3 /* MediaSourceTypeSupportedCache.h in Headers */,
 				9B1229C723FE4D6A008CA751 /* MediaStrategy.h in Headers */,
 				078E091517D14D1C00420AA1 /* MediaStream.h in Headers */,
 				078E094C17D1709600420AA1 /* MediaStreamAudioDestinationNode.h in Headers */,
@@ -47588,8 +47592,8 @@
 				414B82051D6DF0E50077EBE3 /* StructuredClone.h in Headers */,
 				46FEFBC826DD67A200B0C488 /* StructuredSerializeOptions.h in Headers */,
 				41E67A8325D16847007B0A4C /* STUNMessageParsing.h in Headers */,
-				CD06644B2E723F3D00B7D658 /* StylableInlines.h in Headers */,
 				713922BE2518AB77005DB3C2 /* Styleable.h in Headers */,
+				CD06644B2E723F3D00B7D658 /* StyleableInlines.h in Headers */,
 				BC4F32CC2E8C518D00F6AEC1 /* StyleAccentColor.h in Headers */,
 				E45BA6B6237622A3004DFC07 /* StyleAdjuster.h in Headers */,
 				BC76ADA42EB93B8D00331BEC /* StyleAlignContent.h in Headers */,
@@ -49284,7 +49288,7 @@
 				"$(SRCROOT)/Sources.txt",
 				"$(SRCROOT)/SourcesCocoa.txt",
 				"$(SRCROOT)/platform/SourcesLibWebRTC.txt",
-				"$(BUILT_PRODUCTS_DIR)$(WK_LIBRARY_HEADERS_FOLDER_PATH)/wtf/Scripts/generate-unified-source-bundles.rb",
+				"$(BUILT_PRODUCTS_DIR)$(WK_LIBRARY_HEADERS_FOLDER_PATH)/wtf/Scripts/generate-unified-source-bundles.py",
 			);
 			name = "Generate Unified Sources";
 			outputFileListPaths = (

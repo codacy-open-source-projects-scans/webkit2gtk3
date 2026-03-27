@@ -152,7 +152,7 @@
 #include "ShadowRootInit.h"
 #include "SimulatedClick.h"
 #include "SlotAssignment.h"
-#include "StylableInlines.h"
+#include "StyleableInlines.h"
 #include "StyleInvalidator.h"
 #include "StylePrimitiveNumericTypes+Evaluation.h"
 #include "StyleProperties.h"
@@ -4565,8 +4565,8 @@ void Element::addToTopLayer()
     RELEASE_ASSERT(isConnected());
     ScriptDisallowedScope::InMainThread scriptDisallowedScope;
 
-    if (auto* renderer = dynamicDowncast<RenderLayerModelObject>(this->renderer()); renderer && renderer->layer())
-        renderer->layer()->establishesTopLayerWillChange();
+    if (CheckedPtr renderer = this->renderer())
+        renderer->establishesTopLayerWillChange();
 
     Ref document = this->document();
     document->addTopLayerElement(*this);
@@ -4586,8 +4586,8 @@ void Element::addToTopLayer()
     if (RefPtr documentElement = document->documentElement())
         documentElement->invalidateStyleInternal();
 
-    if (auto* renderer = dynamicDowncast<RenderLayerModelObject>(this->renderer()); renderer && renderer->layer())
-        renderer->layer()->establishesTopLayerDidChange();
+    if (CheckedPtr renderer = this->renderer())
+        renderer->establishesTopLayerDidChange();
 }
 
 void Element::removeFromTopLayer()
@@ -4595,8 +4595,8 @@ void Element::removeFromTopLayer()
     RELEASE_ASSERT(isInTopLayer());
     ScriptDisallowedScope::InMainThread scriptDisallowedScope;
 
-    if (auto* renderer = dynamicDowncast<RenderLayerModelObject>(this->renderer()); renderer && renderer->layer())
-        renderer->layer()->establishesTopLayerWillChange();
+    if (CheckedPtr renderer = this->renderer())
+        renderer->establishesTopLayerWillChange();
 
     // We need to call Styleable::fromRenderer() while this element is still contained in
     // Document::topLayerElements(), since Styleable::fromRenderer() relies on this to
@@ -4629,8 +4629,8 @@ void Element::removeFromTopLayer()
     if (RefPtr modalElement = document().activeModalDialog())
         modalElement->invalidateStyleInternal();
 
-    if (auto* renderer = dynamicDowncast<RenderLayerModelObject>(this->renderer()); renderer && renderer->layer())
-        renderer->layer()->establishesTopLayerDidChange();
+    if (CheckedPtr renderer = this->renderer())
+        renderer->establishesTopLayerDidChange();
 }
 
 static PseudoElement* NODELETE beforeOrAfterPseudoElement(const Element& host, PseudoElementType pseudoElementSpecifier)
