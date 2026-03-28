@@ -214,7 +214,7 @@ public:
     Iterator& operator--() { Base::decrement(); return *this; }
     // postfix -- intentionally omitted
 
-    // Only forwarding + unsigned is supported.
+    // Only forwarding + size_t is supported.
     Iterator& operator+=(size_t count) { Base::increment(count); return *this; }
     Iterator operator+(size_t count) const { Iterator result(*this); result += count; return result; }
 };
@@ -252,7 +252,7 @@ public:
     Iterator& operator--() { Base::decrement(); return *this; }
     // postfix -- intentionally omitted
 
-    // Only forwarding + unsigned is supported.
+    // Only forwarding + size_t is supported.
     Iterator& operator+=(size_t count) { Base::increment(count); return *this; }
     Iterator operator+(size_t count) const { Iterator result(*this); result += count; return result; }
 };
@@ -395,6 +395,7 @@ inline void Deque<T, inlineCapacity>::swap(Deque<T, inlineCapacity>& other)
     checkValidity();
     other.checkValidity();
     invalidateIterators();
+    other.invalidateIterators();
     std::swap(m_start, other.m_start);
     std::swap(m_end, other.m_end);
     std::swap(m_capacityMask, other.m_capacityMask);
@@ -612,8 +613,8 @@ template<typename T, size_t inlineCapacity>
 template<std::predicate<T&> Predicate>
 inline T Deque<T, inlineCapacity>::takeFirst(NOESCAPE const Predicate& predicate)
 {
-    unsigned count = 0;
-    unsigned size = this->size();
+    size_t count = 0;
+    size_t size = this->size();
     while (count < size) {
         T candidate = takeFirst();
         if (predicate(candidate)) {
@@ -621,7 +622,7 @@ inline T Deque<T, inlineCapacity>::takeFirst(NOESCAPE const Predicate& predicate
                 prepend(takeLast());
             return candidate;
         }
-        count++;
+        ++count;
         append(WTF::move(candidate));
     }
     return T();
@@ -631,8 +632,8 @@ template<typename T, size_t inlineCapacity>
 template<std::predicate<T&> Predicate>
 inline T Deque<T, inlineCapacity>::takeLast(NOESCAPE const Predicate& predicate)
 {
-    unsigned count = 0;
-    unsigned size = this->size();
+    size_t count = 0;
+    size_t size = this->size();
     while (count < size) {
         T candidate = takeLast();
         if (predicate(candidate)) {
@@ -640,7 +641,7 @@ inline T Deque<T, inlineCapacity>::takeLast(NOESCAPE const Predicate& predicate)
                 append(takeFirst());
             return candidate;
         }
-        count++;
+        ++count;
         prepend(WTF::move(candidate));
     }
     return T();

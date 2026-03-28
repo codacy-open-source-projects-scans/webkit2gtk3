@@ -1035,6 +1035,12 @@ WebPageProxy::WebPageProxy(PageClient& pageClient, WebProcessProxy& process, Ref
     if (RefPtr gpuProcess = GPUProcessProxy::singletonIfCreated())
         gpuProcess->setPresentingApplicationAuditToken(process.coreProcessIdentifier(), m_webPageID, m_presentingApplicationAuditToken);
 #endif
+    // Inherit accessibility mode from the related page (if any), so that the new page starts with the correct mode.
+    if (RefPtr relatedPage = m_configuration->relatedPage()) {
+        if (auto mode = relatedPage->m_accessibilityMode; !WebCore::isAccessibilityModeOff(mode))
+            m_accessibilityMode = mode;
+    }
+
     if (protect(preferences())->siteIsolationEnabled()) {
         if (m_configuration->relatedPage()) {
             // relatedPage should only be used after setting browsing context group.
@@ -10031,6 +10037,9 @@ void WebPageProxy::rootViewToAccessibilityScreen(const IntRect& viewRect, Comple
 #if ENABLE(ACCESSIBILITY_LOCAL_FRAME)
 void WebPageProxy::requestFrameScreenPosition(FrameIdentifier frameID)
 {
+    if (WebCore::isAccessibilityModeOff(m_accessibilityMode))
+        return;
+
     static constexpr float unitRectSize = 1000;
     convertRectToMainFrameCoordinates(FloatRect(0, 0, unitRectSize, unitRectSize), frameID, [weakThis = WeakPtr { *this }, frameID](std::optional<FloatRect> finalRect) mutable {
         RefPtr protectedThis = weakThis.get();
@@ -17789,14 +17798,6 @@ void WebPageProxy::updateRemoteFrameAccessibilityInheritedState(WebCore::FrameId
     sendToProcessContainingFrame(frameID, Messages::WebPage::UpdateRemotePageAccessibilityInheritedState(frameID, state));
 }
 #endif
-
-void WebPageProxy::documentURLForConsoleLog(WebCore::FrameIdentifier frameID, CompletionHandler<void(const URL&)>&& completionHandler)
-{
-    // FIXME: <rdar://125885582> Respond with an empty string if there's no inspector and no test runner.
-    if (RefPtr frame = WebFrameProxy::webFrame(frameID))
-        return completionHandler(frame->url());
-    completionHandler({ });
-}
 
 void WebPageProxy::reportMixedContentViolation(FrameIdentifier frameID, bool blocked, const URL& target)
 {

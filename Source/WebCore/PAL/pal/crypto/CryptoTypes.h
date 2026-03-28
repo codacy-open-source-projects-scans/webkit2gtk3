@@ -68,6 +68,12 @@ struct CryptoOperationReturnValue {
     VectorUInt8 result;
 };
 
+enum class ECNamedCurve : uint8_t {
+    P256,
+    P384,
+    P521,
+};
+
 constexpr auto ed25519KeySize = 32;
 constexpr auto ed25519SignatureSize = ed25519KeySize * 2;
 
