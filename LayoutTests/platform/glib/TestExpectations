@@ -1331,6 +1331,8 @@ webkit.org/b/264579 imported/w3c/web-platform-tests/css/css-transforms/animation
 webkit.org/b/264579 imported/w3c/web-platform-tests/css/css-transforms/animation/transform-interpolation-rotate.html [ ImageOnlyFailure ]
 webkit.org/b/264579 imported/w3c/web-platform-tests/css/css-transforms/transform-3d-rotateY-stair-above-001.xht [ ImageOnlyFailure ]
 
+imported/w3c/web-platform-tests/css/css-transforms/animation/rotate-explicit-and-implicit-keyframes.html [ ImageOnlyFailure ]
+
 imported/w3c/web-platform-tests/css/css-images/gradient/conic-gradient-001.html [ ImageOnlyFailure ]
 
 webkit.org/b/215799 imported/w3c/web-platform-tests/css/css-content/quotes-018.html [ ImageOnlyFailure ]
@@ -1645,8 +1647,6 @@ webkit.org/b/213699 http/wpt/mediarecorder/MediaRecorder-audio-bitrate.html [ Pa
 webkit.org/b/306457 http/wpt/mediarecorder/MediaRecorder-audio-bitrate-webm.html [ Failure Pass ]
 webkit.org/b/213699 http/wpt/mediarecorder/MediaRecorder-AV-audio-video-dataavailable.html [ Crash Timeout Failure ]
 webkit.org/b/213699 http/wpt/mediarecorder/MediaRecorder-first-frame.html [ Failure Pass ]
-
-webkit.org/b/307032 imported/w3c/web-platform-tests/mediacapture-streams/MediaStream-removetrack.https.html [ Pass Timeout ]
 
 # No support for Matroska container in GStreamer port.
 http/wpt/mediarecorder/MediaRecorder-matroska-AV-audio-video-dataavailable.html
@@ -5410,6 +5410,16 @@ webkit.org/b/310543 fast/repaint/outline-with1px-auto-repaint-rect.html [ Failur
 webkit.org/b/310543 fast/repaint/outline-with2px-auto-repaint-rect.html [ Failure ]
 webkit.org/b/310543 fast/repaint/outline-with3px-auto-repaint-rect.html [ Failure ]
 webkit.org/b/310543 imported/w3c/web-platform-tests/css/css-ui/outline-028.html [ Pass ImageOnlyFailure ]
+webkit.org/b/310543 css3/color-filters/color-filter-caret-color.html [ ImageOnlyFailure ]
+webkit.org/b/310543 fast/css/caret-color.html [ ImageOnlyFailure ]
+webkit.org/b/310543 fast/css/caret-color-fallback-to-color.html [ ImageOnlyFailure ]
+webkit.org/b/310543 fast/css/caret-color-inherit.html [ ImageOnlyFailure ]
+webkit.org/b/310543 fast/css/caret-color-span-inside-editable-parent.html [ ImageOnlyFailure ]
+webkit.org/b/310543 fast/css/caret-color-with-inherited-color-property.html [ ImageOnlyFailure ]
+webkit.org/b/310543 fast/css/caret-color-with-initial-color-property.html [ ImageOnlyFailure ]
+webkit.org/b/310543 fast/repaint/body-innerhtml-quirks-mode.html [ ImageOnlyFailure ]
+webkit.org/b/310543 imported/w3c/web-platform-tests/css/css-contain/content-visibility/content-visibility-082.html [ ImageOnlyFailure ]
+webkit.org/b/310543 imported/w3c/web-platform-tests/css/css-contain/content-visibility/scrollIntoView-with-focus-target-with-contents-hidden.html [ ImageOnlyFailure ]
 
 webkit.org/b/310742 imported/w3c/web-platform-tests/IndexedDB/blob-valid-before-commit.any.html [ Pass Failure ]
 webkit.org/b/90980 fast/forms/textarea/textarea-state-restore.html [ Pass Timeout Failure ]
@@ -5419,6 +5429,10 @@ webkit.org/b/309872 imported/w3c/web-platform-tests/permissions-policy/experimen
 webkit.org/b/309872 imported/w3c/web-platform-tests/permissions-policy/experimental-features/vertical-scroll-scrollintoview.tentative.html [ Skip ]
 webkit.org/b/309872 imported/w3c/web-platform-tests/permissions-policy/reporting/xr-report-only.https.html [ Skip ]
 webkit.org/b/309872 imported/w3c/web-platform-tests/permissions-policy/reporting/xr-reporting.https.html [ Skip ]
+
+webkit.org/b/311032 imported/w3c/web-platform-tests/mediacapture-streams/MediaStream-removetrack.https.html [ Failure Timeout Pass ]
+webkit.org/b/311032 media/media-fragments/TC0009.html [ Timeout ]
+webkit.org/b/311032 media/media-fragments/TC0014.html [ Timeout ]
 
 # End: Common failures between GTK and WPE.
 

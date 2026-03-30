@@ -74,6 +74,16 @@ enum class ECNamedCurve : uint8_t {
     P521,
 };
 
+enum class EdSigningAlgorithm : uint8_t {
+    ED25519,
+    ED448,
+};
+
+enum class EdKeyAgreementAlgorithm : uint8_t {
+    X25519,
+    X448,
+};
+
 constexpr auto ed25519KeySize = 32;
 constexpr auto ed25519SignatureSize = ed25519KeySize * 2;
 

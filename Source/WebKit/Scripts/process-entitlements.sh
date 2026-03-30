@@ -524,7 +524,6 @@ function maccatalyst_process_webcontent_enhancedsecurity_entitlements()
     if (( "${TARGET_MAC_OS_X_VERSION_MAJOR}" >= 260000 ))
     then
         plistbuddy Add :com.apple.security.hardened-process.checked-allocations.soft-mode bool YES
-        plistbuddy Add :com.apple.security.hardened-process.checked-allocations.no-tagged-receive bool YES
     fi
 
     plistbuddy Add :com.apple.developer.kernel.extended-virtual-addressing bool YES
