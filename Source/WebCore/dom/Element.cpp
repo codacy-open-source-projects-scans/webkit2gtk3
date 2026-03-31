@@ -452,7 +452,7 @@ bool Element::isKeyboardFocusable(const FocusEventData&) const
             return false;
     }
     // Popovers with invokers delegate focus.
-    if (RefPtr popover = dynamicDowncast<HTMLElement>(*this)) {
+    if (auto* popover = dynamicDowncast<HTMLElement>(*this)) {
         if (popover->isPopoverShowing() && popover->popoverData()->invoker())
             return false;
     }
@@ -3055,7 +3055,7 @@ ExceptionOr<void> Element::setPrefix(const AtomString& prefix)
     return { };
 }
 
-const AtomString& Element::imageSourceURL() const
+String Element::imageSourceURL() const
 {
     return attributeWithoutSynchronization(srcAttr);
 }
@@ -6401,7 +6401,7 @@ void Element::setVisibilityAdjustment(OptionSet<VisibilityAdjustment> adjustment
     if (!adjustment)
         return;
 
-    if (RefPtr page = document().page())
+    if (auto* page = document().page())
         page->didSetVisibilityAdjustment();
 }
 

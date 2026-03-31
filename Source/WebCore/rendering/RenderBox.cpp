@@ -218,7 +218,7 @@ bool RenderBox::hasFragmentRangeInFragmentedFlow() const
     return false;
 }
 
-static RenderBlockFlow* outermostBlockContainingFloatingObject(RenderBox& box)
+static RenderBlockFlow* NODELETE outermostBlockContainingFloatingObject(RenderBox& box)
 {
     ASSERT(box.isFloating());
     RenderBlockFlow* parentBlock = nullptr;
@@ -2710,7 +2710,7 @@ static LayoutUnit inlineSizeFromAspectRatio(LayoutUnit borderPaddingInlineSum, L
     return LayoutUnit((blockSize - borderPaddingBlockSum) * aspectRatioValue) + borderPaddingInlineSum;
 }
 
-static bool shouldMarginInlineEndContributeToScrollableOverflow(auto& renderer)
+static bool NODELETE shouldMarginInlineEndContributeToScrollableOverflow(auto& renderer)
 {
     auto isSupportedContent = renderer.isGridItem() || renderer.isFlexItemIncludingDeprecated() || (renderer.isInFlow() && renderer.parent()->isBlockContainer());
     if (!isSupportedContent)
@@ -3760,6 +3760,9 @@ bool RenderBox::skipContainingBlockForPercentHeightCalculation(const RenderBox& 
     if (isPerpendicularWritingMode)
         return false;
     
+    if (containingBlock.isFlexItem() && downcast<RenderFlexibleBox>(containingBlock.parent())->canUseFlexItemForPercentageResolution(containingBlock))
+        return false;
+
     // Anonymous blocks should not impede percentage resolution on a child.
     // Examples of such anonymous blocks are blocks wrapped around inlines that
     // have block siblings (from the CSS spec) and multicol flow threads (an

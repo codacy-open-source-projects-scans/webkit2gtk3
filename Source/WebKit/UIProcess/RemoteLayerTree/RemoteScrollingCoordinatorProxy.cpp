@@ -90,22 +90,24 @@ ScrollRequestData RemoteScrollingCoordinatorProxy::commitScrollingTreeState(IPC:
 
     auto stateTree = WTF::move(const_cast<RemoteScrollingCoordinatorTransaction&>(transaction).scrollingStateTree());
 
-    auto* layerTreeHost = this->layerTreeHost();
-    if (!layerTreeHost) {
-        ASSERT_NOT_REACHED();
-        return { };
+    if (stateTree->hasChangedProperties()) {
+        auto* layerTreeHost = this->layerTreeHost();
+        if (!layerTreeHost) {
+            ASSERT_NOT_REACHED();
+            return { };
+        }
+
+        stateTree->setRootFrameIdentifier(transaction.rootFrameIdentifier());
+
+        ASSERT(stateTree);
+        connectStateNodeLayers(*stateTree, *layerTreeHost);
+        bool succeeded = m_scrollingTree->commitTreeState(WTF::move(stateTree), identifier);
+
+        MESSAGE_CHECK_WITH_RETURN_VALUE(succeeded, ScrollRequestData());
+
+        establishLayerTreeScrollingRelations(*layerTreeHost);
     }
 
-    stateTree->setRootFrameIdentifier(transaction.rootFrameIdentifier());
-
-    ASSERT(stateTree);
-    connectStateNodeLayers(*stateTree, *layerTreeHost);
-    bool succeeded = m_scrollingTree->commitTreeState(WTF::move(stateTree), identifier);
-
-    MESSAGE_CHECK_WITH_RETURN_VALUE(succeeded, ScrollRequestData());
-
-    establishLayerTreeScrollingRelations(*layerTreeHost);
-    
     if (transaction.clearScrollLatching())
         m_scrollingTree->clearLatchedNode();
 
@@ -214,10 +216,7 @@ void RemoteScrollingCoordinatorProxy::viewportChangedViaDelegatedScrolling(const
 
 void RemoteScrollingCoordinatorProxy::applyScrollingTreeLayerPositionsAfterCommit()
 {
-    // FIXME: (rdar://106293351) Set the `m_needsApplyLayerPositionsAfterCommit` flag in a more
-    // reasonable place once UI-side compositing scrolling synchronization is implemented
-    m_scrollingTree->setNeedsApplyLayerPositionsAfterCommit();
-    m_scrollingTree->applyLayerPositionsAfterCommit();
+    m_scrollingTree->applyLayerPositions();
 }
 
 void RemoteScrollingCoordinatorProxy::currentSnapPointIndicesDidChange(WebCore::ScrollingNodeID nodeID, std::optional<unsigned> horizontal, std::optional<unsigned> vertical)

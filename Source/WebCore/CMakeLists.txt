@@ -165,6 +165,8 @@ set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/platform"
     "${WEBCORE_DIR}/platform/animation"
     "${WEBCORE_DIR}/platform/animation/values"
+    "${WEBCORE_DIR}/platform/animation/values/paths"
+    "${WEBCORE_DIR}/platform/animation/values/shapes"
     "${WEBCORE_DIR}/platform/audio"
     "${WEBCORE_DIR}/platform/encryptedmedia"
     "${WEBCORE_DIR}/platform/gamepad"
@@ -2030,7 +2032,6 @@ list(APPEND WebCore_NON_SVG_IDL_FILES
     Modules/WebGPU/GPUPipelineLayout.idl
     Modules/WebGPU/GPUPipelineLayoutDescriptor.idl
     Modules/WebGPU/GPUPowerPreference.idl
-    Modules/WebGPU/GPUPredefinedColorSpace.idl
     Modules/WebGPU/GPUPrimitiveState.idl
     Modules/WebGPU/GPUPrimitiveTopology.idl
     Modules/WebGPU/GPUProgrammablePassEncoder.idl
@@ -2132,7 +2133,7 @@ set(WebCore_USER_AGENT_STYLE_SHEETS
 set(WebCore_LIBRARIES
     ICU::uc
     LibXml2::LibXml2
-    SQLite::SQLite3
+    SQLite3::SQLite3
     ZLIB::ZLIB
 )
 set(WebCore_FRAMEWORKS

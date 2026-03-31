@@ -1191,8 +1191,8 @@ bool Node::isShadowIncludingDescendantOf(const Node& other) const
 
 bool Node::isComposedTreeDescendantOf(const Node& node) const
 {
-    for (CheckedPtr currentAncestor = parentElementInComposedTree(); currentAncestor; currentAncestor = currentAncestor->parentElementInComposedTree()) {
-        if (currentAncestor.get() == &node)
+    for (auto* currentAncestor = parentElementInComposedTree(); currentAncestor; currentAncestor = currentAncestor->parentElementInComposedTree()) {
+        if (currentAncestor == &node)
             return true;
     }
     return false;
@@ -3002,7 +3002,7 @@ template<> ContainerNode* parent<ComposedTree>(const Node& node)
     return node.parentInComposedTree();
 }
 
-template<TreeType treeType> size_t depth(const Node& node)
+template<TreeType treeType> size_t NODELETE depth(const Node& node)
 {
     size_t depth = 0;
     SUPPRESS_UNCHECKED_LOCAL auto ancestor = &node;

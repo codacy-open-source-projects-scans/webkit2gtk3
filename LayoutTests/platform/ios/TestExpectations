@@ -59,7 +59,7 @@ webkit.org/b/296095 fast/forms/switch/click-animation-disabled.html [ Pass Timeo
 fast/forms/ios/inputmode-none-with-hardware-keyboard.html [ Pass Failure ]
 
 fast/forms/ios/dismiss-picker-using-keyboard.html [ Pass Timeout ]
-fast/forms/ios/drag-range-thumb.html [ Pass Timeout Timeout ]
+fast/forms/ios/drag-range-thumb.html [ Pass Timeout ]
 fast/forms/ios/inputmode-change-update-keyboard.html [ Pass Timeout ]
 
 fast/css/appearance-apple-pay-button.html [ Pass ]
@@ -4766,7 +4766,6 @@ imported/w3c/web-platform-tests/css/filter-effects/backdrop-filter-plus-mask-lar
 http/tests/site-isolation/mouse-events/ [ Skip ]
 webkit.org/b/257904 http/tests/site-isolation/draw-after-navigation.html [ Skip ]
 webkit.org/b/257904 http/tests/site-isolation/draw-with-size-after-same-origin-navigation.html [ Skip ]
-webkit.org/b/257904 http/tests/site-isolation/page-zoom.html [ Skip ]
 
 # Initial css/compositing test import
 imported/w3c/web-platform-tests/css/compositing/mix-blend-mode/mix-blend-mode-both-parent-and-blended-with-3D-transform.html [ ImageOnlyFailure ]

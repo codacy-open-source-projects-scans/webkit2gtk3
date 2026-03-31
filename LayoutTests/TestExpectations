@@ -744,11 +744,11 @@ imported/w3c/web-platform-tests/clipboard-apis/feature-policy/clipboard-write/cl
 imported/w3c/web-platform-tests/clipboard-apis/feature-policy/clipboard-write/clipboard-write-enabled-by-feature-policy.tentative.https.sub.html [ Skip ]
 imported/w3c/web-platform-tests/clipboard-apis/feature-policy/clipboard-write/clipboard-write-enabled-by-feature-policy-attribute-cross-origin-tentative.https.sub.html [ Skip ]
 imported/w3c/web-platform-tests/clipboard-apis/feature-policy/clipboard-write/clipboard-write-disabled-by-feature-policy.tentative.https.sub.html [ Skip ]
-imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/autoplay-allowed-by-feature-policy-attribute.https.sub.html [ Skip ]
-imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/autoplay-disabled-by-feature-policy.https.sub.html [ Skip ]
-imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/autoplay-allowed-by-feature-policy-attribute-redirect-on-load.https.sub.html [ Skip ]
-imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/autoplay-allowed-by-feature-policy.https.sub.html [ Skip ]
-imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/autoplay-default-feature-policy.https.sub.html [ Skip ]
+imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/autoplay-allowed-by-permissions-policy-attribute.https.sub.html [ Skip ]
+imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/autoplay-disabled-by-permissions-policy.https.sub.html [ Skip ] # timeout and passes a subtest
+imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/autoplay-allowed-by-permissions-policy-attribute-redirect-on-load.https.sub.html [ Skip ]
+imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/autoplay-allowed-by-permissions-policy.https.sub.html [ Skip ] # timeout and passes a subtest
+imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/autoplay-default-permissions-policy.https.sub.html [ Skip ] # timeout and passes a subtest
 imported/w3c/web-platform-tests/html/browsers/history/the-location-interface/location-origin-idna.sub.window.html [ Skip ]
 imported/w3c/web-platform-tests/html/browsers/history/the-location-interface/location_assign.html [ Skip ]
 imported/w3c/web-platform-tests/html/browsers/history/the-location-interface/per-global.window.html [ Skip ]
@@ -4521,12 +4521,6 @@ imported/w3c/web-platform-tests/css/css-sizing/aspect-ratio/intrinsic-size-024.h
 imported/w3c/web-platform-tests/css/css-sizing/aspect-ratio/intrinsic-size-025.html [ ImageOnlyFailure ]
 webkit.org/b/214463 imported/w3c/web-platform-tests/css/css-sizing/aspect-ratio/flex-aspect-ratio-038.html [ ImageOnlyFailure ]
 webkit.org/b/214463 imported/w3c/web-platform-tests/css/css-sizing/aspect-ratio/floats-aspect-ratio-001.html [ ImageOnlyFailure ]
-webkit.org/b/214463 imported/w3c/web-platform-tests/css/css-sizing/intrinsic-percent-replaced-dynamic-002.html [ ImageOnlyFailure ]
-webkit.org/b/214463 imported/w3c/web-platform-tests/css/css-sizing/intrinsic-percent-replaced-dynamic-003.html [ ImageOnlyFailure ]
-webkit.org/b/214463 imported/w3c/web-platform-tests/css/css-sizing/intrinsic-percent-replaced-dynamic-004.html [ ImageOnlyFailure ]
-webkit.org/b/214463 imported/w3c/web-platform-tests/css/css-sizing/intrinsic-percent-replaced-dynamic-006.html [ ImageOnlyFailure ]
-webkit.org/b/214463 imported/w3c/web-platform-tests/css/css-sizing/intrinsic-percent-replaced-dynamic-009.html [ ImageOnlyFailure ]
-webkit.org/b/214463 imported/w3c/web-platform-tests/css/css-sizing/intrinsic-percent-replaced-dynamic-010.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-sizing/aspect-ratio/block-aspect-ratio-042.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-sizing/aspect-ratio/block-aspect-ratio-043.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-sizing/aspect-ratio/block-aspect-ratio-057.tentative.html [ ImageOnlyFailure ]
@@ -4542,7 +4536,6 @@ imported/w3c/web-platform-tests/css/css-sizing/fit-content-min-inline-size.html 
 imported/w3c/web-platform-tests/css/css-sizing/intrinsic-percent-replaced-023.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-sizing/intrinsic-percent-replaced-030.tentative.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-sizing/intrinsic-percent-replaced-dynamic-011.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-sizing/intrinsic-percent-replaced-dynamic-012.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-sizing/margin-collapse-with-indefinite-block-size-001.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-sizing/margin-collapse-with-indefinite-block-size-002.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-sizing/margin-collapse-with-indefinite-block-size-003.html [ ImageOnlyFailure ]
@@ -4792,7 +4785,6 @@ imported/w3c/web-platform-tests/css/css-fonts/font-variant-emoji-004.html [ Imag
 imported/w3c/web-platform-tests/css/css-fonts/font-variant-emoji-005.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-fonts/font-variant-position-04.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-fonts/font-variant-position-05.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-fonts/italic-oblique-fallback.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-fonts/separators.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-fonts/size-adjust-unicode-range-system-fallback.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-fonts/variation-sequences.html [ ImageOnlyFailure ]
@@ -8351,6 +8343,14 @@ imported/w3c/web-platform-tests/css/css-text/line-breaking/segment-break-transfo
 imported/w3c/web-platform-tests/html/semantics/document-metadata/the-style-element/tentative/style-element-csp-allowed.html [ Skip ] # timeout
 imported/w3c/web-platform-tests/html/semantics/document-metadata/the-style-element/tentative/style-element-csp-blocked.html [ Skip ] # timeout - two subtests pass
 
+imported/w3c/web-platform-tests/html/semantics/forms/customizable-combobox/customizable-combobox-appearance.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/html/semantics/forms/the-datalist-element/input-text-datalist-removal.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/html/semantics/forms/the-input-element/input-text-overflow-ellipsis-scroll.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/html/semantics/forms/the-select-element/filterable-select/filterable-select-appearance.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/html/semantics/forms/form-submission-target/form-target-blank-useractivation-multi-globals.html [ Skip ] # timeout
+
 imported/w3c/web-platform-tests/css/selectors/media/media-loading-state.sub.html [ Skip ] # timeout, passes first subtest
 imported/w3c/web-platform-tests/css/selectors/media/media-loading-state-timing.sub.html [ Skip ] # timeout
 imported/w3c/web-platform-tests/css/selectors/invalidation/media-loading-pseudo-classes-in-has.sub.html [ Skip ] # timeout
+
+imported/w3c/web-platform-tests/html/browsers/the-window-object/open-close/open_fires_resize.tentative.html [ Skip ] # timeout

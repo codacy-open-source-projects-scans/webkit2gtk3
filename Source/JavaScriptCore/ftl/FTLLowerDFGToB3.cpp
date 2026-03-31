@@ -22114,7 +22114,7 @@ IGNORE_CLANG_WARNINGS_END
         {
         }
 
-        bool operator<(const CharacterCase& other) const
+        bool NODELETE operator<(const CharacterCase& other) const
         {
             return character < other.character;
         }
@@ -23587,8 +23587,7 @@ IGNORE_CLANG_WARNINGS_END
     LValue isStrictInt52(LValue int64Value)
     {
         LValue added = m_out.add(m_out.constInt64(0x0008000000000000ULL), int64Value);
-        LValue shifted = m_out.lShr(added, m_out.constInt32(52));
-        return m_out.isZero64(shifted);
+        return m_out.testIsZero64(added, m_out.constInt64(0xFFF0000000000000ULL));
     }
 
     LValue isNotStrictInt52(LValue int64Value)
