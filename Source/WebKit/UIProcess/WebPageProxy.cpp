@@ -1518,9 +1518,11 @@ WebBackForwardCache& WebPageProxy::backForwardCache() const
 bool WebPageProxy::shouldUseBackForwardCache() const
 {
     Ref preferences = m_preferences;
-    return preferences->usesBackForwardCache()
-        && backForwardCache().capacity() > 0
-        && !preferences->siteIsolationEnabled();
+    if (!preferences->usesBackForwardCache() || !backForwardCache().capacity())
+        return false;
+    if (preferences->siteIsolationEnabled())
+        return preferences->multiProcessBackForwardCacheEnabled();
+    return true;
 }
 
 void WebPageProxy::setBrowsingContextGroup(BrowsingContextGroup& browsingContextGroup)
@@ -15630,26 +15632,48 @@ void WebPageProxy::didRestoreScrollPosition()
         pageClient->didRestoreScrollPosition();
 }
 
-void WebPageProxy::getLoadDecisionForIcon(const WebCore::LinkIcon& icon, CallbackID loadIdentifier)
+void WebPageProxy::getLoadDecisionForIcons(const HashMap<CallbackID, WebCore::LinkIcon>& icons)
 {
-    m_iconLoadingClient->getLoadDecisionForIcon(icon, [this, protectedThis = Ref { *this }, loadIdentifier] (CompletionHandler<void(API::Data*)>&& callback) {
-        if (!hasRunningProcess()) {
-            if (callback)
-                callback(nullptr);
-            return;
-        }
+#if PLATFORM(COCOA)
+    for (const auto& [loadIdentifier, icon] : icons) {
+        m_iconLoadingClient->getLoadDecisionForIcon(icon, [this, protectedThis = Ref { *this }, loadIdentifier] (CompletionHandler<void(API::Data*)>&& callback) {
+            if (!hasRunningProcess()) {
+                if (callback)
+                    callback(nullptr);
+                return;
+            }
 
-        if (!callback) {
-            sendWithAsyncReply(Messages::WebPage::DidGetLoadDecisionForIcon(false, loadIdentifier), [](auto) { });
-            return;
-        }
-        sendWithAsyncReply(Messages::WebPage::DidGetLoadDecisionForIcon(true, loadIdentifier), [callback = WTF::move(callback)](const IPC::SharedBufferReference& iconData) mutable {
-            if (!iconData.isNull())
-                callback(API::Data::create(iconData.span()).ptr());
-            else
-                callback(nullptr);
+            if (!callback) {
+                sendWithAsyncReply(Messages::WebPage::DidGetLoadDecisionForIcon(false, loadIdentifier), [](auto) { });
+                return;
+            }
+
+            sendWithAsyncReply(Messages::WebPage::DidGetLoadDecisionForIcon(true, loadIdentifier), [callback = WTF::move(callback)](const IPC::SharedBufferReference& iconData) mutable {
+                if (!iconData.isNull())
+                    callback(API::Data::create(iconData.span()).ptr());
+                else
+                    callback(nullptr);
+            });
         });
+    }
+#else
+    m_iconLoadingClient->getLoadDecisionForIcons(icons, [this, icons, protectedThis = Ref { *this }] (HashSet<CallbackID>&& iconIdentifiers) {
+        if (iconIdentifiers.isEmpty() || !hasRunningProcess())
+            return;
+
+        for (const auto& loadIdentifier : icons.keys()) {
+            if (!iconIdentifiers.contains(loadIdentifier))
+                sendWithAsyncReply(Messages::WebPage::DidGetLoadDecisionForIcon(false, loadIdentifier), [](auto) { });
+            else {
+                LinkIcon icon = icons.get(loadIdentifier);
+                sendWithAsyncReply(Messages::WebPage::DidGetLoadDecisionForIcon(true, loadIdentifier), [weakThis = WeakPtr { *this }, loadIdentifier, icon = WTF::move(icon)](const IPC::SharedBufferReference& iconData) mutable {
+                    if (RefPtr protectedThis = weakThis.get())
+                        protectedThis->m_iconLoadingClient->iconLoaded(loadIdentifier, icon, iconData.isNull() ? nullptr : API::Data::create(iconData.span()).ptr());
+                });
+            }
+        }
     });
+#endif
 }
 
 WebCore::UserInterfaceLayoutDirection WebPageProxy::userInterfaceLayoutDirection()

@@ -1624,6 +1624,9 @@ webkit.org/b/182103 fast/forms/focus-selection-textarea.html [ Failure ]
 webkit.org/b/308037 imported/w3c/web-platform-tests/webrtc/simulcast/vp8.https.html [ Failure Pass ]
 webkit.org/b/308037 imported/w3c/web-platform-tests/webrtc/simulcast/vp9.https.html [ Failure Pass ]
 
+imported/w3c/web-platform-tests/webrtc/RTCRtpReceiver-audio-jitterBufferTarget-stats.https.html [ Failure ]
+imported/w3c/web-platform-tests/webrtc/RTCRtpReceiver-video-jitterBufferTarget-stats.html [ Failure ]
+
 webkit.org/b/307144 media/video-restricted-invisible-autoplay-not-allowed.html [ Timeout Pass ]
 
 webkit.org/b/254520 media/video-ended-event-negative-playback.html [ Failure Timeout Pass ]
@@ -1647,6 +1650,8 @@ webkit.org/b/213699 http/wpt/mediarecorder/MediaRecorder-audio-bitrate.html [ Pa
 webkit.org/b/306457 http/wpt/mediarecorder/MediaRecorder-audio-bitrate-webm.html [ Failure Pass ]
 webkit.org/b/213699 http/wpt/mediarecorder/MediaRecorder-AV-audio-video-dataavailable.html [ Crash Timeout Failure ]
 webkit.org/b/213699 http/wpt/mediarecorder/MediaRecorder-first-frame.html [ Failure Pass ]
+
+webkit.org/b/307032 imported/w3c/web-platform-tests/mediacapture-streams/MediaStream-removetrack.https.html [ Pass Failure ]
 
 # No support for Matroska container in GStreamer port.
 http/wpt/mediarecorder/MediaRecorder-matroska-AV-audio-video-dataavailable.html
@@ -1791,6 +1796,8 @@ webkit.org/b/284429 imported/w3c/web-platform-tests/webcodecs/audio-encoder.http
 # H.264 high-4:2:2 encoding is supported in the GStreamer ports, so this test (checking that profile
 # is not supported) is expected to fail.
 http/wpt/webcodecs/H264-422.html [ Failure ]
+
+http/wpt/webcodecs/encoder-decoder-vp9-I420.html [ Failure ]
 
 fast/mediacapturefromelement/CanvasCaptureMediaStream-capture-out-of-DOM-canvas-webgl.html [ Pass Failure ]
 
@@ -2988,7 +2995,6 @@ imported/w3c/web-platform-tests/webrtc/RTCPeerConnection-videoDetectorTest.html 
 imported/w3c/web-platform-tests/webrtc/RTCRtpParameters-encodings.html [ Pass ]
 imported/w3c/web-platform-tests/webrtc/RTCRtpParameters-headerExtensions.html [ Pass ]
 imported/w3c/web-platform-tests/webrtc/RTCRtpParameters-rtcp.html [ Pass ]
-imported/w3c/web-platform-tests/webrtc/RTCRtpReceiver-audio-jitterBufferTarget-stats.https.html [ Pass ]
 imported/w3c/web-platform-tests/webrtc/RTCRtpReceiver-getCapabilities.html [ Pass ]
 imported/w3c/web-platform-tests/webrtc/RTCRtpReceiver-getContributingSources.https.html [ Pass ]
 imported/w3c/web-platform-tests/webrtc/RTCRtpReceiver-getParameters.html [ Failure ]
@@ -2996,7 +3002,6 @@ imported/w3c/web-platform-tests/webrtc/RTCRtpReceiver-getStats.https.html [ Fail
 imported/w3c/web-platform-tests/webrtc/RTCRtpReceiver-jitterBufferTarget.html [ Pass ]
 imported/w3c/web-platform-tests/webrtc/RTCRtpReceiver-track-settings.tentative.html [ Failure ]
 imported/w3c/web-platform-tests/webrtc/RTCRtpReceiver-video-anyCodec.html [ Failure ]
-imported/w3c/web-platform-tests/webrtc/RTCRtpReceiver-video-jitterBufferTarget-stats.html [ Pass ]
 imported/w3c/web-platform-tests/webrtc/RTCRtpSender-encode-same-track-twice.https.html [ Pass ]
 imported/w3c/web-platform-tests/webrtc/RTCRtpSender-getCapabilities.html [ Pass ]
 imported/w3c/web-platform-tests/webrtc/RTCRtpSender-getParameters.html [ Failure ]
@@ -5421,15 +5426,13 @@ webkit.org/b/310543 fast/repaint/body-innerhtml-quirks-mode.html [ Pass ImageOnl
 webkit.org/b/310742 imported/w3c/web-platform-tests/IndexedDB/blob-valid-before-commit.any.html [ Pass Failure ]
 webkit.org/b/90980 fast/forms/textarea/textarea-state-restore.html [ Pass Timeout Failure ]
 imported/w3c/web-platform-tests/editing/other/fire-selection-change-on-deleting-empty-element.html [ Pass ]
+# Not supported on GTK/WPE
+webkit.org/b/158205 applicationmanifest/ [ Skip ]
 
 webkit.org/b/309872 imported/w3c/web-platform-tests/permissions-policy/experimental-features/vertical-scroll-disabled-scrollbar-tentative.html [ Skip ]
 webkit.org/b/309872 imported/w3c/web-platform-tests/permissions-policy/experimental-features/vertical-scroll-scrollintoview.tentative.html [ Skip ]
 webkit.org/b/309872 imported/w3c/web-platform-tests/permissions-policy/reporting/xr-report-only.https.html [ Skip ]
 webkit.org/b/309872 imported/w3c/web-platform-tests/permissions-policy/reporting/xr-reporting.https.html [ Skip ]
-
-webkit.org/b/311032 imported/w3c/web-platform-tests/mediacapture-streams/MediaStream-removetrack.https.html [ Failure Timeout Pass ]
-webkit.org/b/311032 media/media-fragments/TC0009.html [ Timeout ]
-webkit.org/b/311032 media/media-fragments/TC0014.html [ Timeout ]
 
 imported/w3c/web-platform-tests/css/css-overflow/scrollbar-gutter-root.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-overflow/scrollbar-gutter-root-both-edges.html [ ImageOnlyFailure ]

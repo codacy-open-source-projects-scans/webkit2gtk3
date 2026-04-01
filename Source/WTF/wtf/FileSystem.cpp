@@ -698,7 +698,9 @@ bool isAncestor(const String& possibleAncestor, const String& possibleChild)
         possibleChildLexicallyNormal = possibleChildLexicallyNormal.left(possibleChildLexicallyNormal.length() - 1);
     if (possibleAncestorLexicallyNormal.endsWith(static_cast<char16_t>(std::filesystem::path::preferred_separator)))
         possibleAncestorLexicallyNormal = possibleAncestorLexicallyNormal.left(possibleAncestorLexicallyNormal.length() - 1);
-    return possibleChildLexicallyNormal.startsWith(possibleAncestorLexicallyNormal) && possibleChildLexicallyNormal.length() != possibleAncestorLexicallyNormal.length();
+    return possibleChildLexicallyNormal.startsWith(possibleAncestorLexicallyNormal)
+        && possibleChildLexicallyNormal.length() > possibleAncestorLexicallyNormal.length()
+        && possibleChildLexicallyNormal[possibleAncestorLexicallyNormal.length()] == static_cast<char16_t>(std::filesystem::path::preferred_separator);
 }
 
 String createTemporaryFile(StringView prefix, StringView suffix)
@@ -713,7 +715,8 @@ FileHandle createDumpFile(StringView filename, StringView extension, StringView 
         auto [p, handle] = openTemporaryFile(filename, extension);
         return WTF::move(handle);
     }
-    return openFile(makeString(path, pathSeparator, filename, extension), FileOpenMode::Truncate);
+    // Why ReadWrite? On linux, we need to mmap dump files so that perf can see them, which will fail without read permission.
+    return openFile(makeString(path, pathSeparator, filename, extension), FileOpenMode::ReadWrite);
 }
 
 #if !PLATFORM(PLAYSTATION)
