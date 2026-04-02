@@ -1673,7 +1673,6 @@ http/tests/webgpu/webgpu/shader/validation/expression/call/builtin/textureSample
 http/tests/webgpu/webgpu/shader/validation/expression/call/builtin/textureSampleGrad.html [ Skip ]
 http/tests/webgpu/webgpu/shader/validation/expression/call/builtin/textureSampleLevel.html [ Skip ]
 http/tests/webgpu/webgpu/shader/validation/parse/shadow_builtins.html [ Skip ]
-http/tests/webgpu/webgpu/shader/validation/shader_io/group_and_binding.html [ Skip ]
 http/tests/webgpu/webgpu/api/operation/memory_sync/buffer/multiple_buffers.html  [ Skip ]
 http/tests/webgpu/webgpu/api/operation/rendering/depth_clip_clamp.html  [ Skip ]
 http/tests/webgpu/webgpu/api/validation/getBindGroupLayout.html  [ Skip ]
@@ -2451,10 +2450,9 @@ webkit.org/b/298909 http/tests/site-isolation/inspector/console/message-from-wor
 webkit.org/b/298909 http/tests/site-isolation/inspector/target/target-cross-origin-page-navigation.html [ Skip ]
 webkit.org/b/298909 http/tests/site-isolation/inspector/target/target.html [ Skip ]
 webkit.org/b/298909 http/tests/site-isolation/inspector/unit-tests/target-manager.html [ Skip ]
-webkit.org/b/308240 http/tests/site-isolation/inspector/runtime/evaluate-in-cross-origin-iframe.html [ Failure Crash ]
+webkit.org/b/308240 http/tests/site-isolation/inspector/runtime/evaluate-in-cross-origin-iframe.html [ Failure ]
 webkit.org/b/308240 http/tests/site-isolation/inspector/runtime/execution-context-from-frame-target.html [ Failure ]
 webkit.org/b/308240 http/tests/site-isolation/inspector/runtime/executionContextCreated-frame-target.html [ Failure ]
-[ Debug ] http/tests/site-isolation/inspector/page/override-user-agent-cross-origin-iframe.html [ Crash ]
 
 webkit.org/b/308165 [ Debug ] scrollingcoordinator/mac/latching/simple-page-rubberbands.html [ Pass Failure ]
 
