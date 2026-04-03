@@ -1841,6 +1841,7 @@ void WebPageProxy::initializeWebPage(const Site& site, WebCore::SandboxFlags eff
     }();
 
     m_mainFrame = WebFrameProxy::create(*this, frameProcess, generateFrameIdentifier(), effectiveSandboxFlags, effectiveReferrerPolicy, ScrollbarMode::Auto, protect(openerFrame.get()), nullptr, IsMainFrame::Yes, std::nullopt);
+    m_inspectorController->didCreateFrame(protect(*m_mainFrame));
     if (preferences->siteIsolationEnabled())
         browsingContextGroup->addPage(*this);
     process->send(Messages::WebProcess::CreateWebPage(m_webPageID, creationParameters(process, *protect(drawingArea()), m_mainFrame->frameID(), std::nullopt)), 0);
@@ -5329,7 +5330,7 @@ void WebPageProxy::receivedNavigationActionPolicyDecision(WebProcessProxy& proce
     if (preferences->enhancedSecurityForceDisabled())
         enhancedSecurity = EnhancedSecurity::Disabled;
 
-    if (preferences->enhancedSecurityHeuristicsEnabled())
+    if (preferences->enhancedSecurityHeuristicsEnabled() && enhancedSecurity != EnhancedSecurity::EnabledPolicy)
         protect(this->websiteDataStore())->trackEnhancedSecurityForDomain(RegistrableDomain { navigation.currentRequest().url() }, enhancedSecurity);
 
     Site site { navigation.currentRequest().url() };
@@ -5613,13 +5614,16 @@ void WebPageProxy::commitProvisionalPage(IPC::Connection& connection, FrameIdent
 
     RefPtr mainFrameInPreviousProcess = m_mainFrame;
     Ref preferences = m_preferences;
+    std::optional<WebCore::FrameIdentifier> oldMainFrameID;
     if (mainFrameInPreviousProcess && preferences->siteIsolationEnabled()) {
+        oldMainFrameID = mainFrameInPreviousProcess->frameID();
+
         // Update the back/forward list so existing entries use the new main frame's FrameIdentifier.
         // This is needed for back/forward navigations that trigger a process swap, since no new
         // back/forward list item is added (unlike forward navigations where backForwardAddItemShared
         // handles the update).
-        if (mainFrameInPreviousProcess->frameID() != frameID)
-            backForwardList().updateFrameIdentifier(mainFrameInPreviousProcess->frameID(), frameID);
+        if (*oldMainFrameID != frameID)
+            backForwardList().updateFrameIdentifier(*oldMainFrameID, frameID);
         mainFrameInPreviousProcess->removeChildFrames();
     }
 
@@ -5657,12 +5661,13 @@ void WebPageProxy::commitProvisionalPage(IPC::Connection& connection, FrameIdent
         dismissImmersiveElement([] { });
 #endif
 
+    const auto oldProcessID = siteIsolatedProcess().coreProcessIdentifier();
     const auto oldWebPageID = m_webPageID;
     swapToProvisionalPage(provisionalPage.releaseNonNull());
 
     didCommitLoadForFrame(connection, frameID, WTF::move(frameInfo), WTF::move(request), navigationID, WTF::move(mimeType), frameHasCustomContentProvider, frameLoadType, certificateInfo, usedLegacyTLS, privateRelayed, WTF::move(proxyName), source, containsPluginDocument, hasInsecureContent, mouseEventPolicy, WTF::move(documentSecurityPolicy), userData);
 
-    m_inspectorController->didCommitProvisionalPage(oldWebPageID, m_webPageID);
+    m_inspectorController->didCommitProvisionalPage(oldMainFrameID, oldProcessID, oldWebPageID, m_webPageID);
 }
 
 bool WebPageProxy::shouldClosePreviousPage(const ProvisionalPageProxy& provisionalPage)
@@ -7750,7 +7755,11 @@ void WebPageProxy::didFailProvisionalLoadForFrameShared(Ref<WebProcessProxy>&& p
         };
 #if HAVE(SAFE_BROWSING)
         URL failedURL { m_failingProvisionalLoadURL };
-        bool canFallbackToHTTP = frame.isMainFrame() && error.errorRecoveryMethod() == ResourceError::ErrorRecoveryMethod::HTTPFallback && failedURL.protocolIs("https"_s);
+        bool canFallbackToHTTP = frame.isMainFrame()
+            && error.errorRecoveryMethod() == ResourceError::ErrorRecoveryMethod::HTTPFallback
+            && failedURL.protocolIs("https"_s)
+            && !m_configuration->backgroundTextExtractionEnabled();
+
         if (RefPtr websitePolicies = navigation ? navigation->websitePolicies() : nullptr; websitePolicies
             && websitePolicies->isUpgradeWithUserMediatedFallbackEnabled()
             && !websitePolicies->advancedPrivacyProtections().contains(AdvancedPrivacyProtections::HTTPSOnlyExplicitlyBypassedForDomain)
@@ -8933,12 +8942,20 @@ void WebPageProxy::decidePolicyForNavigationAction(Ref<WebProcessProxy>&& proces
                 protectedPageLoadState->commitChanges();
             }
 
-            if (!frame->isMainFrame()) {
+            auto failProvisionalNavigation = [&] {
                 auto error = interruptedForPolicyChangeError(navigation->currentRequest());
                 m_navigationClient->didFailProvisionalNavigationWithError(*this, FrameInfoData { frameInfo }, navigation.get(), navigation->currentRequest().url(), error, nullptr);
-                WEBPAGEPROXY_RELEASE_LOG(Loading, "decidePolicyForNavigationAction: Ignoring request to load subframe resource because Safe Browsing found a match.");
                 completionHandlerWrapper(PolicyAction::Ignore);
-                return;
+            };
+
+            if (!frame->isMainFrame()) {
+                WEBPAGEPROXY_RELEASE_LOG(Loading, "decidePolicyForNavigationAction: Ignoring request to load subframe resource because Safe Browsing found a match.");
+                return failProvisionalNavigation();
+            }
+
+            if (m_configuration->backgroundTextExtractionEnabled()) {
+                WEBPAGEPROXY_RELEASE_LOG(Loading, "decidePolicyForNavigationAction: Ignoring main frame navigation because Safe Browsing found a match and background text extraction is enabled.");
+                return failProvisionalNavigation();
             }
 
             Ref protectedPageLoadState = pageLoadState();

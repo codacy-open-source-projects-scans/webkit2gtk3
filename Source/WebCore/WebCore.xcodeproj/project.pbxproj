@@ -3802,6 +3802,7 @@
 		9418278F1D8CAF9200492764 /* CSSShorthandSubstitutionValue.h in Headers */ = {isa = PBXBuildFile; fileRef = 9418278D1D8CAE9500492764 /* CSSShorthandSubstitutionValue.h */; };
 		9444CBE81D8861C20073A074 /* CSSVariableData.h in Headers */ = {isa = PBXBuildFile; fileRef = 9444CBDD1D8861580073A074 /* CSSVariableData.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		9444CBEA1D8861CA0073A074 /* CSSSubstitutionValue.h in Headers */ = {isa = PBXBuildFile; fileRef = 9444CBDB1D8861580073A074 /* CSSSubstitutionValue.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		A1B2C3D426040201DEADBEEF /* CSSNamespacePrefixMap.h in Headers */ = {isa = PBXBuildFile; fileRef = A1B2C3D426040200DEADBEEF /* CSSNamespacePrefixMap.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		946D374A1D6D06280077084F /* CSSMarkup.h in Headers */ = {isa = PBXBuildFile; fileRef = 946D37481D6D060C0077084F /* CSSMarkup.h */; };
 		9478A8EC2C180DF400808739 /* WrappedCryptoKey.h in Headers */ = {isa = PBXBuildFile; fileRef = 9478A8EB2C180D7A00808739 /* WrappedCryptoKey.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		947949251E0308AF00018D85 /* DeprecatedCSSOMValue.h in Headers */ = {isa = PBXBuildFile; fileRef = 947949231E02F90B00018D85 /* DeprecatedCSSOMValue.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -16079,6 +16080,7 @@
 		94077C6F2B92B0570012E357 /* CryptoClient.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CryptoClient.h; sourceTree = "<group>"; };
 		9418278D1D8CAE9500492764 /* CSSShorthandSubstitutionValue.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CSSShorthandSubstitutionValue.h; sourceTree = "<group>"; };
 		9444CBDB1D8861580073A074 /* CSSSubstitutionValue.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CSSSubstitutionValue.h; sourceTree = "<group>"; };
+		A1B2C3D426040200DEADBEEF /* CSSNamespacePrefixMap.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CSSNamespacePrefixMap.h; sourceTree = "<group>"; };
 		9444CBDC1D8861580073A074 /* CSSSubstitutionValue.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = CSSSubstitutionValue.cpp; sourceTree = "<group>"; };
 		9444CBDD1D8861580073A074 /* CSSVariableData.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CSSVariableData.h; sourceTree = "<group>"; };
 		9444CBDE1D8861580073A074 /* CSSVariableData.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = CSSVariableData.cpp; sourceTree = "<group>"; };
@@ -40788,6 +40790,7 @@
 				85C56CA20AA89C1000D95755 /* CSSMediaRule.idl */,
 				314BE3A21B30F6D100141982 /* CSSNamedImageValue.cpp */,
 				314BE3A01B30F6B700141982 /* CSSNamedImageValue.h */,
+				A1B2C3D426040200DEADBEEF /* CSSNamespacePrefixMap.h */,
 				94E8394E1DFB2700007BC6A7 /* CSSNamespaceRule.cpp */,
 				94E8394F1DFB2700007BC6A7 /* CSSNamespaceRule.h */,
 				94E839501DFB29A4007BC6A7 /* CSSNamespaceRule.idl */,
@@ -43789,6 +43792,7 @@
 				2A538A2626F0103600965FC8 /* CSSMatrixComponentOptions.h in Headers */,
 				A80E6D030A1989CA007FB8C5 /* CSSMediaRule.h in Headers */,
 				314BE3A11B30F6B700141982 /* CSSNamedImageValue.h in Headers */,
+				A1B2C3D426040201DEADBEEF /* CSSNamespacePrefixMap.h in Headers */,
 				94E839511DFB2A0E007BC6A7 /* CSSNamespaceRule.h in Headers */,
 				BEAA24022C34A9E600C37BBE /* CSSNestedDeclarations.h in Headers */,
 				BC89E31C2D11ECD10016DF06 /* CSSNoConversionDataRequiredToken.h in Headers */,

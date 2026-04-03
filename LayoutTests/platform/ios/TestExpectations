@@ -716,6 +716,7 @@ fast/events/mousemove-events-within-no-element.html [ Skip ]
 fast/events/mouse-click-events.html [ Skip ]
 fast/events/mouse-cursor-change.html [ Skip ]
 fast/events/mouse-cursor-image-set.html [ Skip ]
+fast/events/mouse-cursor-image-set-svg.html [ Skip ]
 fast/events/mouse-cursor-multiframecur.html [ Skip ]
 fast/events/mouse-cursor-no-mousemove.html [ Skip ]
 fast/events/mouse-cursor-update-during-raf.html [ Skip ]
@@ -6971,8 +6972,6 @@ webkit.org/b/245745 [ Debug ] svg/compositing/inline-svg-non-integer-position-di
 # rdar://118021950 ([ iOS ] [ Release ] fast/dom/focus-dialog-blur-input-type-change-crash.html is a flaky failure (264295))
 [ Release ] fast/dom/focus-dialog-blur-input-type-change-crash.html [ Pass Failure ]
 
-webkit.org/b/245994 imported/w3c/web-platform-tests/streams/readable-byte-streams/construct-byob-request.any.worker.html [ Pass Failure ]
-
 # webkit.org/b/246170 4X http/wpt/webauthn/public-key-credential(Layout tests) are constant crashes
 [ Release ] http/wpt/webauthn/public-key-credential-get-failure-u2f.https.html [ Skip ]
 [ Release ] http/wpt/webauthn/public-key-credential-get-success-u2f.https.html [ Skip ]
@@ -7586,6 +7585,7 @@ imported/w3c/web-platform-tests/mathml/presentation-markup/operators/embellished
 imported/w3c/web-platform-tests/mathml/presentation-markup/operators/embellished-op-4-2.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/mathml/presentation-markup/operators/embellished-op-4-3.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/mathml/relations/html5-tree/tabindex-002.tentative.html [ Skip ]
+imported/w3c/web-platform-tests/mathml/relations/html5-tree/maction-click.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/mathml/relations/css-styling/mozilla-393760-1.xml [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/mathml/presentation-markup/scripts/subsup-legacy-scriptshift-attributes-001.tentative.html [ ImageOnlyFailure ]
 
@@ -8611,8 +8611,6 @@ webgl/2.0.y/conformance/textures/image_bitmap_from_image_bitmap/tex-2d-rgb-rgb-u
 webgl/2.0.y/conformance/textures/image_bitmap_from_image_bitmap/tex-2d-rgba-rgba-unsigned_byte.html [ Pass Failure ]
 webgl/2.0.y/conformance/textures/image_bitmap_from_image_bitmap/tex-2d-rgba-rgba-unsigned_short_4_4_4_4.html [ Pass Failure ]
 webgl/2.0.y/conformance/textures/image_bitmap_from_image_bitmap/tex-2d-rgba-rgba-unsigned_short_5_5_5_1.html [ Pass Failure ]
-
-webkit.org/b/311207 imported/w3c/web-platform-tests/workers/semantics/structured-clone/shared.html [ Pass Failure ]
 
 webkit.org/b/311222 [ Release ] imported/w3c/web-platform-tests/navigation-api/navigate-event/signal-abort-window-stop-after-intercept.html [ Skip ]
 

@@ -41,6 +41,7 @@
 #include "IDBRequest.h"
 #include "IDBTransaction.h"
 #include "IndexedDB.h"
+#include "JSIDBKeyRange.h"
 #include "Logging.h"
 #include "Page.h"
 #include "ScriptExecutionContext.h"
@@ -618,7 +619,8 @@ ExceptionOr<Ref<IDBRequest>> IDBObjectStore::doGetAllShared(IndexedDB::GetAllTyp
         callingFunctionExceptionMessagePrefix = "Failed to execute 'getAllKeys' on IDBObjectStore': "_s;
         break;
     case IndexedDB::GetAllType::Records:
-        return Exception { ExceptionCode::NotSupportedError, "getAllRecords is not yet supported"_s };
+        callingFunctionExceptionMessagePrefix = "Failed to execute 'getAllRecords' on IDBObjectStore': "_s;
+        break;
     }
 
     Ref transaction = m_transaction.get();
@@ -665,7 +667,7 @@ ExceptionOr<Ref<IDBRequest>> IDBObjectStore::getAll(JSGlobalObject& execState, J
             return ParsedGetAllQueryOrOptions { onlyResult.releaseReturnValue(), count };
         }
 
-        if (!context || !context->settingsValues().indexedDBGetAllRecordsEnabled)
+        if (!context || !context->settingsValues().indexedDBGetAllRecordsAndGetAllOptionsEnabled)
             return Exception(ExceptionCode::DataError, "The parameter is not a valid key."_s);
 
         return parseGetAllOptions(*execState, keyOrOptions);
@@ -694,16 +696,32 @@ ExceptionOr<Ref<IDBRequest>> IDBObjectStore::getAllKeys(JSGlobalObject& execStat
             return ParsedGetAllQueryOrOptions { onlyResult.releaseReturnValue(), count };
         }
 
-        if (!context || !context->settingsValues().indexedDBGetAllRecordsEnabled)
+        if (!context || !context->settingsValues().indexedDBGetAllRecordsAndGetAllOptionsEnabled)
             return Exception(ExceptionCode::DataError, "The parameter is not a valid key."_s);
 
         return parseGetAllOptions(*execState, keyOrOptions);
     });
 }
 
-ExceptionOr<Ref<IDBRequest>> IDBObjectStore::getAllRecords(JSGlobalObject&, IDBGetAllOptions&&)
+ExceptionOr<Ref<IDBRequest>> IDBObjectStore::getAllRecords(JSGlobalObject& execState, IDBGetAllOptions&& options)
 {
-    return Exception { ExceptionCode::NotSupportedError, "getAllRecords is not yet supported"_s };
+    LOG(IndexedDB, "IDBObjectStore::getAllRecords");
+
+    return doGetAllShared(IndexedDB::GetAllType::Records, std::nullopt, [execState = &execState, options]() -> ExceptionOr<ParsedGetAllQueryOrOptions> {
+        auto query = options.query;
+
+        if (query.isUndefinedOrNull())
+            return ParsedGetAllQueryOrOptions { nullptr, options.count, options.direction };
+
+        if (RefPtr keyRange = JSIDBKeyRange::toWrapped(execState->vm(), query))
+            return ParsedGetAllQueryOrOptions { WTF::move(keyRange), options.count, options.direction };
+
+        auto onlyResultFromQuery = IDBKeyRange::only(*execState, query);
+        if (onlyResultFromQuery.hasException())
+            return Exception(ExceptionCode::DataError, "The query specified in options is not a valid key."_s);
+
+        return ParsedGetAllQueryOrOptions { onlyResultFromQuery.releaseReturnValue(), options.count, options.direction };
+    });
 }
 
 void IDBObjectStore::markAsDeleted()
