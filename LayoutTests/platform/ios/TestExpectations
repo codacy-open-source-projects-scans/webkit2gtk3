@@ -870,6 +870,7 @@ fast/forms/select-empty-list.html [ Skip ]
 fast/forms/select/listbox-focusable-items.html [ Skip ]
 fast/forms/select-listbox-focus-displaynone.html [ Skip ]
 fast/forms/select-listbox-multiple-no-focusring.html [ Skip ]
+fast/forms/select-listbox-onchange-fired-on-mouseup-outside.html [ Skip ]
 fast/forms/select-multiple-elements-with-mouse-drag-with-options-less-than-size.html [ Skip ]
 fast/forms/select-multiple-elements-with-mouse-drag.html [ Skip ]
 fast/forms/select/listbox-click-on-scrollbar.html [ Skip ]
@@ -8183,8 +8184,6 @@ editing/selection/ios/select-text-using-tap-and-half.html [ Skip ]
 
 webkit.org/b/296338 http/tests/site-isolation/fullscreen.html [ Pass Failure ]
 
-webkit.org/b/310677 [ Release ] imported/w3c/web-platform-tests/css/css-writing-modes/text-orientation-mixed-srl-016.xht [ Pass ImageOnlyFailure ]
-
 webkit.org/b/310677 [ Release ] compositing/iframes/overlapped-nested-iframes.html [ Pass Failure ]
 
 # webkit.org/b/296017 7x imported/w3c/web-platform-tests/css/css-shapes/shape-outside/shape-image/shape-image (layout-tests) are flakey image failures
@@ -8616,3 +8615,5 @@ webkit.org/b/311222 [ Release ] imported/w3c/web-platform-tests/navigation-api/n
 
 # rdar://173890240 ([iOS] imported/w3c/web-platform-tests/css/css-images/gradient/gradient-analogous-missing-components-003.html has 2 component pixel difference)
 imported/w3c/web-platform-tests/css/css-images/gradient/gradient-analogous-missing-components-003.html [ Pass ImageOnlyFailure ]
+
+webkit.org/b/311378 http/wpt/mediarecorder/MediaRecorder-audio-samplingrate-change.html [ Pass Failure ]

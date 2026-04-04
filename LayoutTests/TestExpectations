@@ -1569,7 +1569,11 @@ webkit.org/b/127697 fast/writing-mode/ruby-text-logical-left.html [ Skip ]
 
 # These tests will be rewritten, just skip them until that time.
 webkit.org/b/148036 http/tests/inspector/css/ [ Skip ]
-webkit.org/b/148036 http/tests/inspector/page/ [ Skip ]
+webkit.org/b/148036 http/tests/inspector/page/loading-iframe-document-node.html [ Skip ]
+webkit.org/b/148036 http/tests/inspector/page/setCookie.html [ Skip ]
+
+# These tests will fail until `Secure` cookies are allowed for insecure loopback URLs
+http/tests/inspector/page/get-cookies.html [ Failure ]
 
 # Debugger stepping tests can timeout if they run slowly due to a short timer scheduled in the frontend:
 webkit.org/b/161951 [ Debug ] inspector/debugger/stepping [ Skip ]
@@ -2624,7 +2628,6 @@ webkit.org/b/84772 ietestcenter/css3/multicolumn/column-width-applies-to-010.htm
 webkit.org/b/84773 ietestcenter/css3/multicolumn/column-width-applies-to-012.htm [ ImageOnlyFailure ]
 webkit.org/b/84777 ietestcenter/css3/multicolumn/column-width-applies-to-015.htm [ ImageOnlyFailure ]
 webkit.org/b/85308 ietestcenter/css3/valuesandunits/units-000.htm [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/svg/text/reftests/lang-attribute.svg [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/svg/text/reftests/text-bidi-controls-anchors-1.svg [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/svg/text/reftests/text-bidi-controls-anchors-2.svg [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/svg/text/reftests/text-complex-001.svg [ ImageOnlyFailure ]
@@ -2643,7 +2646,6 @@ imported/w3c/web-platform-tests/svg/text/reftests/text-multiline-003.svg [ Image
 imported/w3c/web-platform-tests/svg/text/reftests/text-shape-inside-001.svg [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/svg/text/reftests/text-shape-inside-002.svg [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/svg/text/reftests/text-xml-space-001.svg [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/svg/text/reftests/xml-lang-attribute.svg [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/svg/text/reftests/textpath-side-001.svg [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/svg/text/reftests/text-font-face-load-image.html [ Skip ]
 imported/w3c/web-platform-tests/svg/styling/css-linked-parameters/css-linked-parameters-precedence-1.html [ ImageOnlyFailure ]
@@ -4011,20 +4013,6 @@ webkit.org/b/210731 imported/w3c/web-platform-tests/IndexedDB/structured-clone.a
 webkit.org/b/210731 imported/w3c/web-platform-tests/IndexedDB/structured-clone.any.worker.html [ Skip ]
 
 imported/w3c/web-platform-tests/IndexedDB/idb-partitioned-coverage.sub.html [ Failure ]
-imported/w3c/web-platform-tests/IndexedDB/idbindex_getAll.any.html [ Failure ]
-imported/w3c/web-platform-tests/IndexedDB/idbindex_getAll.any.serviceworker.html [ Failure ]
-imported/w3c/web-platform-tests/IndexedDB/idbindex_getAll.any.sharedworker.html [ Failure ]
-imported/w3c/web-platform-tests/IndexedDB/idbindex_getAll.any.worker.html [ Failure ]
-imported/w3c/web-platform-tests/IndexedDB/idbindex_getAllKeys.any.html [ Failure ]
-imported/w3c/web-platform-tests/IndexedDB/idbindex_getAllKeys.any.serviceworker.html [ Failure ]
-imported/w3c/web-platform-tests/IndexedDB/idbindex_getAllKeys.any.sharedworker.html [ Failure ]
-imported/w3c/web-platform-tests/IndexedDB/idbindex_getAllKeys.any.worker.html [ Failure ]
-imported/w3c/web-platform-tests/IndexedDB/idbobjectstore_get.any.html [ Failure ]
-imported/w3c/web-platform-tests/IndexedDB/idbobjectstore_get.any.worker.html [ Failure ]
-imported/w3c/web-platform-tests/IndexedDB/idbobjectstore_getAll.any.html [ Failure ]
-imported/w3c/web-platform-tests/IndexedDB/idbobjectstore_getAll.any.worker.html [ Failure ]
-imported/w3c/web-platform-tests/IndexedDB/idbobjectstore_getAllKeys.any.html [ Failure ]
-imported/w3c/web-platform-tests/IndexedDB/idbobjectstore_getAllKeys.any.worker.html [ Failure ]
 imported/w3c/web-platform-tests/IndexedDB/interleaved-cursors-large.any.html [ Failure ]
 imported/w3c/web-platform-tests/IndexedDB/interleaved-cursors-large.any.serviceworker.html [ Failure ]
 imported/w3c/web-platform-tests/IndexedDB/interleaved-cursors-large.any.sharedworker.html [ Failure ]
@@ -6500,7 +6488,6 @@ imported/w3c/web-platform-tests/html/dom/render-blocking/remove-attr-unblocks-re
 imported/w3c/web-platform-tests/html/dom/self-origin.sub.html [ Skip ]
 imported/w3c/web-platform-tests/html/infrastructure/safe-passing-of-structured-data/shared-array-buffers/window-failure.https.html [ Skip ]
 imported/w3c/web-platform-tests/html/infrastructure/safe-passing-of-structured-data/structured-cloning-error-extra.html [ Skip ]
-imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/preserves-pitch.html [ Skip ]
 imported/w3c/web-platform-tests/html/semantics/embedded-content/the-iframe-element/iframe_sandbox_navigation_download_allow_downloads.sub.tentative.html [ Skip ]
 imported/w3c/web-platform-tests/html/semantics/embedded-content/the-img-element/delay-load-event-until-move-to-empty-source.html [ Skip ]
 imported/w3c/web-platform-tests/html/semantics/embedded-content/the-img-element/image-loading-lazy-move-into-script-disabled-iframe.html [ Skip ]

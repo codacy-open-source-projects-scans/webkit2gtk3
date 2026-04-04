@@ -23,21 +23,16 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
+#import <Foundation/Foundation.h>
 
-#include <WebCore/FrameIdentifier.h>
-#include <WebCore/NodeIdentifier.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-namespace WebKit {
+void TestWebKitAPIEnableAllSDKAlignedBehaviors(void);
 
-struct FrameAndNodeIdentifiers {
-    std::optional<WebCore::FrameIdentifier> frameIdentifier;
-    WebCore::NodeIdentifier nodeIdentifier;
+BOOL TestWebKitAPIRunTests(int argc, char * _Nullable * _Nonnull argv);
 
-    bool operator==(const FrameAndNodeIdentifiers& other) const
-    {
-        return frameIdentifier == other.frameIdentifier && nodeIdentifier == other.nodeIdentifier;
-    }
-};
-
-} // namespace WebKit
+#ifdef __cplusplus
+}
+#endif

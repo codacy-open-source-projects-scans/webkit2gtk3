@@ -139,6 +139,8 @@ imported/w3c/web-platform-tests/svg/shapes/rect-03.svg [ Pass ]
 imported/w3c/web-platform-tests/svg/struct/reftests/gradient-in-symbol.svg [ Pass ]
 imported/w3c/web-platform-tests/svg/text/reftests/opacity.svg [ Pass ]
 webkit.org/b/309044 imported/w3c/web-platform-tests/svg/text/reftests/textpath-shape-001.svg [ ImageOnlyFailure ]
+webkit.org/b/286290 imported/w3c/web-platform-tests/svg/text/reftests/lang-attribute.svg [ ImageOnlyFailure ]
+webkit.org/b/286290 imported/w3c/web-platform-tests/svg/text/reftests/xml-lang-attribute.svg [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/embedded_style_media_queries.html [ Pass ]
 imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/embedded_style_media_queries_resized.html [ Pass ]
 
@@ -838,6 +840,9 @@ accessibility/opacity-0-bounding-box.html [ Skip ]
 accessibility/clip-path-bounding-box.html [ Skip ]
 accessibility/first-letter-single-character.html [ Skip ]
 accessibility/table-cell-hit-test-not-column.html [ Skip ]
+
+# installImageOverlay is a no-op on platforms without IMAGE_ANALYSIS.
+accessibility/image-overlay-elements-presentational.html [ Skip ]
 
 accessibility/dynamic-expanded-text.html [ Failure ]
 
@@ -1914,6 +1919,7 @@ webkit.org/b/298269 imported/w3c/web-platform-tests/html/anonymous-iframe/sessio
 webkit.org/b/305509 imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/track/track-element/track-cues-pause-on-exit.html [ Failure Pass ]
 imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/played-loop.html [ Skip ] # timeout
 imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/playing-the-media-resource/fragmented-mp4-end.html [ Skip ] # timeout
+imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/preserves-pitch.html [ Skip ]
 
 imported/w3c/web-platform-tests/html/anonymous-iframe/local-storage.tentative.https.window.html [ Failure Pass ]
 
@@ -1976,6 +1982,10 @@ webkit.org/b/243614 imported/w3c/web-platform-tests/IndexedDB/idb-partitioned-co
 
 webkit.org/b/216298 imported/w3c/web-platform-tests/IndexedDB/blob-valid-after-deletion.any.html [ Pass Failure ]
 
+imported/w3c/web-platform-tests/IndexedDB/idbindex_getAll.any.html [ Failure ]
+imported/w3c/web-platform-tests/IndexedDB/idbindex_getAll.any.serviceworker.html [ Failure ]
+imported/w3c/web-platform-tests/IndexedDB/idbindex_getAll.any.sharedworker.html [ Failure ]
+imported/w3c/web-platform-tests/IndexedDB/idbindex_getAll.any.worker.html [ Failure ]
 imported/w3c/web-platform-tests/IndexedDB/idbindex_getAll-options.any.html [ Failure ]
 imported/w3c/web-platform-tests/IndexedDB/idbindex_getAll-options.any.serviceworker.html [ Failure ]
 imported/w3c/web-platform-tests/IndexedDB/idbindex_getAll-options.any.sharedworker.html [ Failure ]
@@ -2564,6 +2574,8 @@ webaudio/crashtest/audioworklet-concurrent-resampler-crash.html [ Timeout Pass ]
 webkit.org/b/309202 webaudio/audiomix-bufferingpolicy.html [ Pass Timeout Crash ]
 webkit.org/b/307727 webaudio/decode-audio-data-aac.html [ Failure ]
 webkit.org/b/307727 webaudio/decode-audio-data-mp3-8000.html [ Failure ]
+
+webaudio/MediaElementAudioSource/mediaelementaudiosourcenode-playbackrate.html [ Skip ]
 
 #////////////////////////////////////////////////////////////////////////////////////////
 # End of WebAudio-related bugs
