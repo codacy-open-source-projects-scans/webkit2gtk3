@@ -22868,6 +22868,7 @@
 		F5C041E10FFCA96D00839D4A /* JSHTMLDataListElement.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = JSHTMLDataListElement.cpp; sourceTree = "<group>"; };
 		F5C041E20FFCA96D00839D4A /* JSHTMLDataListElement.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = JSHTMLDataListElement.h; sourceTree = "<group>"; };
 		F658DC7BD08000000087F79C /* StyleSubstitutionResolver.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StyleSubstitutionResolver.h; sourceTree = "<group>"; };
+		F658DC7BD08100000087F79C /* StyleSubstitutionContext.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StyleSubstitutionContext.h; sourceTree = "<group>"; };
 		F75A059AF170D8FAA5B8CABE /* MathMLSelectElement.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = MathMLSelectElement.cpp; sourceTree = "<group>"; };
 		F8216299029F4FB501000131 /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = JavaScriptCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F916C48B0DB510F80076CD83 /* JSXMLHttpRequestProgressEvent.cpp */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.cpp.cpp; path = JSXMLHttpRequestProgressEvent.cpp; sourceTree = "<group>"; };
@@ -40361,6 +40362,7 @@
 				4989734A2B663C6600720679 /* StyleScrollbarState.h */,
 				E46B724E2B61141D00A1F9B5 /* StyleSheetContentsCache.cpp */,
 				E46B724F2B61141D00A1F9B5 /* StyleSheetContentsCache.h */,
+				F658DC7BD08100000087F79C /* StyleSubstitutionContext.h */,
 				8C9554043E0200000087F79C /* StyleSubstitutionResolver.cpp */,
 				F658DC7BD08000000087F79C /* StyleSubstitutionResolver.h */,
 				BCAA38192EFB27DF00AA7F6E /* StyleTransformResolver.cpp */,

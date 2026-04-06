@@ -83,9 +83,11 @@ public:
     explicit operator bool() const;
     bool isNull() const;
 
-    char16_t characterAt(unsigned index) const;
+    char16_t codeUnitAt(unsigned index) const;
     char16_t operator[](unsigned index) const;
     char32_t characterStartingAt(unsigned index) const;
+    char32_t codePointAt(unsigned index) const;
+    char32_t codePointBefore(unsigned index) const;
 
     class CodeUnits;
     CodeUnits codeUnits() const;
@@ -600,7 +602,7 @@ inline StringView StringView::substring(unsigned start, unsigned length) const
     return result;
 }
 
-inline char16_t StringView::characterAt(unsigned index) const
+inline char16_t StringView::codeUnitAt(unsigned index) const
 {
     if (is8Bit())
         return span8()[index];
@@ -609,10 +611,10 @@ inline char16_t StringView::characterAt(unsigned index) const
 
 inline char16_t StringView::operator[](unsigned index) const
 {
-    return characterAt(index);
+    return codeUnitAt(index);
 }
 
-inline char32_t StringView::characterStartingAt(unsigned index) const
+inline char32_t StringView::codePointAt(unsigned index) const
 {
     ASSERT(index < length());
     if (m_is8Bit)
@@ -623,6 +625,15 @@ inline char32_t StringView::characterStartingAt(unsigned index) const
     if (index + 1 < length() && U16_IS_LEAD(characters[index]) && U16_IS_TRAIL(characters[index + 1]))
         return U16_GET_SUPPLEMENTARY(characters[index], characters[index + 1]);
     return characters[index];
+}
+
+inline char32_t StringView::codePointBefore(unsigned index) const
+{
+    ASSERT(index > 0 && index <= length());
+    unsigned offset = index;
+    char32_t codePoint;
+    U16_PREV(*this, 0, offset, codePoint);
+    return codePoint;
 }
 
 inline bool StringView::contains(char16_t character) const
@@ -1098,7 +1109,7 @@ inline auto StringView::CodeUnits::Iterator::operator++() -> Iterator&
 
 inline char16_t StringView::CodeUnits::Iterator::operator*() const
 {
-    return m_stringView.characterAt(m_index);
+    return m_stringView.codeUnitAt(m_index);
 }
 
 inline bool StringView::CodeUnits::Iterator::operator==(const Iterator& other) const

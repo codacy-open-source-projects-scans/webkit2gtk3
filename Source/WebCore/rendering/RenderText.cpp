@@ -238,11 +238,11 @@ String capitalize(const String& string, char32_t previousCharacter)
     // Replace NO BREAK SPACE with a normal spaces since ICU does not treat it as a word separator.
     std::array<char16_t, 2> previousCharacterUTF16;
     int32_t previousCharacterLength = 0;
-    U16_APPEND_UNSAFE(previousCharacterUTF16, previousCharacterLength, convertNoBreakSpaceToSpace(previousCharacter));
+    U16_APPEND_UNSAFE(previousCharacterUTF16, previousCharacterLength, previousCharacter);
 
     Vector<char16_t> stringWithPrevious(previousCharacterLength + length);
     for (int32_t i = 0; i < previousCharacterLength; ++i)
-        stringWithPrevious[i] = previousCharacterUTF16[i];
+        stringWithPrevious[i] = convertNoBreakSpaceToSpace(previousCharacterUTF16[i]);
     for (int32_t i = previousCharacterLength; i < length + previousCharacterLength; ++i)
         stringWithPrevious[i] = convertNoBreakSpaceToSpace(stringImpl[i - previousCharacterLength]);
 
@@ -1027,12 +1027,11 @@ unsigned RenderText::lastCharacterIndexStrippingSpaces() const
     if (!style().collapseWhiteSpace())
         return text().length() - 1;
     
-    int i = text().length() - 1;
-    for ( ; i  >= 0; --i) {
+    for (auto i = text().length(); i--;) {
         if (text()[i] != ' ' && (text()[i] != '\n' || style().preserveNewline()) && text()[i] != '\t')
-            break;
+            return i;
     }
-    return i;
+    return 0;
 }
 
 RenderText::Widths RenderText::trimmedPreferredWidths(float leadWidth, bool& stripFrontSpaces)
@@ -1567,12 +1566,7 @@ char32_t RenderText::previousCharacter() const
     unsigned length = previousString.length();
     if (!length)
         return ' ';
-    if (previousString.is8Bit())
-        return previousString[length - 1];
-    unsigned offset = length;
-    char32_t codePoint;
-    U16_PREV(previousString, 0, offset, codePoint);
-    return codePoint;
+    return StringView(previousString).codePointBefore(length);
 }
 
 static String convertToFullSizeKana(const String& string)
