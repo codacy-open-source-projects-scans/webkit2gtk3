@@ -270,11 +270,10 @@ function webcontent_sandbox_entitlements()
     plistbuddy Add :com.apple.private.security.mutable-state-flags:4 string ParentProcessCanEnableQuickLookStateFlag
     plistbuddy Add :com.apple.private.security.mutable-state-flags:5 string BlockOpenDirectoryInWebContentSandbox
     plistbuddy Add :com.apple.private.security.mutable-state-flags:6 string BlockMobileAssetInWebContentSandbox
-    plistbuddy Add :com.apple.private.security.mutable-state-flags:7 string BlockWebInspectorInWebContentSandbox
-    plistbuddy Add :com.apple.private.security.mutable-state-flags:8 string BlockIconServicesInWebContentSandbox
-    plistbuddy Add :com.apple.private.security.mutable-state-flags:9 string UnifiedPDFEnabled
-    plistbuddy Add :com.apple.private.security.mutable-state-flags:10 string WebProcessDidNotInjectStoreBundle
-    plistbuddy Add :com.apple.private.security.mutable-state-flags:11 string BlockUserInstalledFonts
+    plistbuddy Add :com.apple.private.security.mutable-state-flags:7 string BlockIconServicesInWebContentSandbox
+    plistbuddy Add :com.apple.private.security.mutable-state-flags:8 string UnifiedPDFEnabled
+    plistbuddy Add :com.apple.private.security.mutable-state-flags:9 string WebProcessDidNotInjectStoreBundle
+    plistbuddy Add :com.apple.private.security.mutable-state-flags:10 string BlockUserInstalledFonts
     plistbuddy Add :com.apple.private.security.enable-state-flags array
     plistbuddy Add :com.apple.private.security.enable-state-flags:0 string EnableExperimentalSandbox
     plistbuddy Add :com.apple.private.security.enable-state-flags:1 string BlockIOKitInWebContentSandbox
@@ -282,11 +281,10 @@ function webcontent_sandbox_entitlements()
     plistbuddy Add :com.apple.private.security.enable-state-flags:3 string ParentProcessCanEnableQuickLookStateFlag
     plistbuddy Add :com.apple.private.security.enable-state-flags:4 string BlockOpenDirectoryInWebContentSandbox
     plistbuddy Add :com.apple.private.security.enable-state-flags:5 string BlockMobileAssetInWebContentSandbox
-    plistbuddy Add :com.apple.private.security.enable-state-flags:6 string BlockWebInspectorInWebContentSandbox
-    plistbuddy Add :com.apple.private.security.enable-state-flags:7 string BlockIconServicesInWebContentSandbox
-    plistbuddy Add :com.apple.private.security.enable-state-flags:8 string UnifiedPDFEnabled
-    plistbuddy Add :com.apple.private.security.enable-state-flags:9 string WebProcessDidNotInjectStoreBundle
-    plistbuddy Add :com.apple.private.security.enable-state-flags:10 string BlockUserInstalledFonts
+    plistbuddy Add :com.apple.private.security.enable-state-flags:6 string BlockIconServicesInWebContentSandbox
+    plistbuddy Add :com.apple.private.security.enable-state-flags:7 string UnifiedPDFEnabled
+    plistbuddy Add :com.apple.private.security.enable-state-flags:8 string WebProcessDidNotInjectStoreBundle
+    plistbuddy Add :com.apple.private.security.enable-state-flags:9 string BlockUserInstalledFonts
 }
 
 function extract_notification_names() {
@@ -636,10 +634,10 @@ function ios_family_process_webcontent_shared_entitlements()
         plistbuddy Add :com.apple.security.fatal-exceptions:0 string jit
     fi
 
-if [[ "${PRODUCT_NAME}" != WebContentExtension && "${PRODUCT_NAME}" != WebContentCaptivePortalExtension && "${PRODUCT_NAME}" != WebContentEnhancedSecurityExtension ]]; then
-    plistbuddy Add :com.apple.private.gpu-restricted bool YES
-    plistbuddy Add :com.apple.private.sandbox.profile string com.apple.WebKit.WebContent
-fi
+    if [[ "${PRODUCT_NAME}" != WebContentExtension && "${PRODUCT_NAME}" != WebContentCaptivePortalExtension && "${PRODUCT_NAME}" != WebContentEnhancedSecurityExtension ]]; then
+        plistbuddy Add :com.apple.private.gpu-restricted bool YES
+        plistbuddy Add :com.apple.private.sandbox.profile string com.apple.WebKit.WebContent
+    fi
     plistbuddy add :com.apple.coreaudio.LoadDecodersInProcess bool YES
     plistbuddy add :com.apple.coreaudio.allow-vorbis-decode bool YES
     plistbuddy Add :com.apple.developer.hardened-process bool YES
@@ -735,16 +733,16 @@ function ios_family_process_gpu_entitlements()
         plistbuddy Add :com.apple.security.fatal-exceptions:0 string jit
     fi
 
-if [[ "${PRODUCT_NAME}" != GPUExtension ]]; then
-    plistbuddy Add :com.apple.private.gpu-restricted bool YES
-    plistbuddy Add :com.apple.private.sandbox.profile string com.apple.WebKit.GPU
-    plistbuddy Add :com.apple.private.coremedia.allow-fps-attachment bool YES
+    if [[ "${PRODUCT_NAME}" != GPUExtension ]]; then
+        plistbuddy Add :com.apple.private.gpu-restricted bool YES
+        plistbuddy Add :com.apple.private.sandbox.profile string com.apple.WebKit.GPU
+        plistbuddy Add :com.apple.private.coremedia.allow-fps-attachment bool YES
 
-    if [[ "${WK_USE_FATAL_EXCEPTIONS}" == YES ]]
-    then
-        plistbuddy Add :com.apple.private.pac.exception bool YES
+        if [[ "${WK_USE_FATAL_EXCEPTIONS}" == YES ]]
+        then
+            plistbuddy Add :com.apple.private.pac.exception bool YES
+        fi
     fi
-fi
 
     plistbuddy Add :com.apple.systemstatus.activityattribution bool YES
     plistbuddy Add :com.apple.security.exception.mach-lookup.global-name array
@@ -754,11 +752,11 @@ fi
 
     plistbuddy add :com.apple.coreaudio.allow-vorbis-decode bool YES
 
-if [[ "${WK_PLATFORM_NAME}" == xros ]]; then
-    plistbuddy Add :com.apple.surfboard.application-service-client bool YES
-    plistbuddy Add :com.apple.surfboard.shared-simulation-connection-request bool YES
-    plistbuddy Add :com.apple.surfboard.shared-simulation-memory-attribution bool YES
-fi
+    if [[ "${WK_PLATFORM_NAME}" == xros ]]; then
+        plistbuddy Add :com.apple.surfboard.application-service-client bool YES
+        plistbuddy Add :com.apple.surfboard.shared-simulation-connection-request bool YES
+        plistbuddy Add :com.apple.surfboard.shared-simulation-memory-attribution bool YES
+    fi
 
     plistbuddy Add :com.apple.developer.hardened-process bool YES
     plistbuddy Add :com.apple.security.hardened-process.checked-allocations.no-tagged-receive bool YES
@@ -837,14 +835,14 @@ function ios_family_process_network_entitlements()
         plistbuddy Add :com.apple.security.fatal-exceptions:0 string jit
     fi
 
-if [[ "${PRODUCT_NAME}" != NetworkingExtension ]]; then
-    plistbuddy Add :com.apple.private.sandbox.profile string com.apple.WebKit.Networking
+    if [[ "${PRODUCT_NAME}" != NetworkingExtension ]]; then
+        plistbuddy Add :com.apple.private.sandbox.profile string com.apple.WebKit.Networking
 
-    if [[ "${WK_USE_FATAL_EXCEPTIONS}" == YES ]]
-    then
-        plistbuddy Add :com.apple.private.pac.exception bool YES
+        if [[ "${WK_USE_FATAL_EXCEPTIONS}" == YES ]]
+        then
+            plistbuddy Add :com.apple.private.pac.exception bool YES
+        fi
     fi
-fi
     plistbuddy Add :com.apple.symptom_analytics.configure bool YES
 
     plistbuddy Add :com.apple.private.assets.bypass-asset-types-check bool YES

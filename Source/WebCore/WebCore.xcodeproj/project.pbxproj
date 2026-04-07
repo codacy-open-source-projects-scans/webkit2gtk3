@@ -5159,8 +5159,6 @@
 		BC4AF4422CFAA94C0037C65C /* CSSColorValue.h in Headers */ = {isa = PBXBuildFile; fileRef = BC4AF40F2CF691B00037C65C /* CSSColorValue.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BC4AF44A2CFB85EE0037C65C /* CSSValueAggregates.h in Headers */ = {isa = PBXBuildFile; fileRef = BC4AF4492CFB85E50037C65C /* CSSValueAggregates.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BC4C223A2C01052A003F561F /* JSDOMConvertResult.h in Headers */ = {isa = PBXBuildFile; fileRef = BC4C222C2C00F312003F561F /* JSDOMConvertResult.h */; settings = {ATTRIBUTES = (Private, ); }; };
-		BC4DDD96273D949900660EBB /* SceneKitModelPlayer.h in Headers */ = {isa = PBXBuildFile; fileRef = BC4DDD8F273D84E700660EBB /* SceneKitModelPlayer.h */; settings = {ATTRIBUTES = (Private, ); }; };
-		BC4DDD97273D94A800660EBB /* SceneKitModelLoaderClient.h in Headers */ = {isa = PBXBuildFile; fileRef = BC4DDD91273D84E700660EBB /* SceneKitModelLoaderClient.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BC4F32AD2E89C15C00F6AEC1 /* StyleTransformFunctionWrapper.h in Headers */ = {isa = PBXBuildFile; fileRef = BC4F32AC2E89C15800F6AEC1 /* StyleTransformFunctionWrapper.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BC4F32B02E89C4BE00F6AEC1 /* StyleTransformFunctionBase.h in Headers */ = {isa = PBXBuildFile; fileRef = BC4F32AA2E89C0B800F6AEC1 /* StyleTransformFunctionBase.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		BC4F32B22E89C4DA00F6AEC1 /* StyleMatrixTransformFunction.h in Headers */ = {isa = PBXBuildFile; fileRef = BC4F329C2E89B04300F6AEC1 /* StyleMatrixTransformFunction.h */; };
@@ -19114,16 +19112,6 @@
 		BC4C22372C010346003F561F /* TouchEvent.idl */ = {isa = PBXFileReference; lastKnownFileType = text; path = TouchEvent.idl; sourceTree = "<group>"; };
 		BC4C22382C010352003F561F /* TouchList.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = TouchList.cpp; sourceTree = "<group>"; };
 		BC4C22392C010352003F561F /* TouchList.idl */ = {isa = PBXFileReference; lastKnownFileType = text; path = TouchList.idl; sourceTree = "<group>"; };
-		BC4DDD8B273D84E700660EBB /* SceneKitModelLoaderUSD.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SceneKitModelLoaderUSD.h; sourceTree = "<group>"; };
-		BC4DDD8C273D84E700660EBB /* SceneKitModelLoaderClient.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = SceneKitModelLoaderClient.mm; sourceTree = "<group>"; };
-		BC4DDD8D273D84E700660EBB /* SceneKitModelPlayer.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = SceneKitModelPlayer.mm; sourceTree = "<group>"; };
-		BC4DDD8E273D84E700660EBB /* SceneKitModelLoader.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = SceneKitModelLoader.mm; sourceTree = "<group>"; };
-		BC4DDD8F273D84E700660EBB /* SceneKitModelPlayer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SceneKitModelPlayer.h; sourceTree = "<group>"; };
-		BC4DDD90273D84E700660EBB /* SceneKitModel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SceneKitModel.h; sourceTree = "<group>"; };
-		BC4DDD91273D84E700660EBB /* SceneKitModelLoaderClient.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SceneKitModelLoaderClient.h; sourceTree = "<group>"; };
-		BC4DDD92273D84E700660EBB /* SceneKitModel.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = SceneKitModel.mm; sourceTree = "<group>"; };
-		BC4DDD93273D84E700660EBB /* SceneKitModelLoader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SceneKitModelLoader.h; sourceTree = "<group>"; };
-		BC4DDD94273D84E700660EBB /* SceneKitModelLoaderUSD.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = SceneKitModelLoaderUSD.mm; sourceTree = "<group>"; };
 		BC4E15E92C078188004A6A52 /* TransformOperationsSharedPrimitivesPrefix.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TransformOperationsSharedPrimitivesPrefix.h; sourceTree = "<group>"; };
 		BC4F329A2E89B04300F6AEC1 /* StyleMatrix3DTransformFunction.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StyleMatrix3DTransformFunction.h; sourceTree = "<group>"; };
 		BC4F329B2E89B04300F6AEC1 /* StyleMatrix3DTransformFunction.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = StyleMatrix3DTransformFunction.cpp; sourceTree = "<group>"; };
@@ -31214,7 +31202,6 @@
 			isa = PBXGroup;
 			children = (
 				BC2B412227335E0C00A2D191 /* dummy */,
-				BC4DDD8A273D84E700660EBB /* scenekit */,
 				71A3D1802562B8250064E2A6 /* HTMLModelElement.cpp */,
 				71A3D17D2562B8240064E2A6 /* HTMLModelElement.h */,
 				71A3D17F2562B8240064E2A6 /* HTMLModelElement.idl */,
@@ -37087,23 +37074,6 @@
 				BC4AF4052CF62F0E0037C65C /* StyleResolvedColor.h */,
 			);
 			path = color;
-			sourceTree = "<group>";
-		};
-		BC4DDD8A273D84E700660EBB /* scenekit */ = {
-			isa = PBXGroup;
-			children = (
-				BC4DDD90273D84E700660EBB /* SceneKitModel.h */,
-				BC4DDD92273D84E700660EBB /* SceneKitModel.mm */,
-				BC4DDD93273D84E700660EBB /* SceneKitModelLoader.h */,
-				BC4DDD8E273D84E700660EBB /* SceneKitModelLoader.mm */,
-				BC4DDD91273D84E700660EBB /* SceneKitModelLoaderClient.h */,
-				BC4DDD8C273D84E700660EBB /* SceneKitModelLoaderClient.mm */,
-				BC4DDD8B273D84E700660EBB /* SceneKitModelLoaderUSD.h */,
-				BC4DDD94273D84E700660EBB /* SceneKitModelLoaderUSD.mm */,
-				BC4DDD8F273D84E700660EBB /* SceneKitModelPlayer.h */,
-				BC4DDD8D273D84E700660EBB /* SceneKitModelPlayer.mm */,
-			);
-			path = scenekit;
 			sourceTree = "<group>";
 		};
 		BC4EDEF70C08F414007EDD49 /* Custom */ = {
@@ -47331,8 +47301,6 @@
 				CDD7089718359F6F002B3DC6 /* SampleMap.h in Headers */,
 				464F6ECE2C86CED5008A4915 /* SandboxFlags.h in Headers */,
 				49E911CB0EF86D47009D0CAF /* ScaleTransformOperation.h in Headers */,
-				BC4DDD97273D94A800660EBB /* SceneKitModelLoaderClient.h in Headers */,
-				BC4DDD96273D949900660EBB /* SceneKitModelPlayer.h in Headers */,
 				5DFE8F570D16477C0076E937 /* ScheduledAction.h in Headers */,
 				9BD0BF9312A42BF50072FD43 /* ScopedEventQueue.h in Headers */,
 				E401B3632A942E3F0018B557 /* ScopedName.h in Headers */,
