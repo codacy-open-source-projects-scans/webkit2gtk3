@@ -6129,6 +6129,7 @@
 		DDD5F55C2C703DFC00E1C692 /* TextBoxTrimmer.h in Headers */ = {isa = PBXBuildFile; fileRef = DDD5F55B2C703DFC00E1C692 /* TextBoxTrimmer.h */; };
 		DDDFE83E2846ECE2006F1EE5 /* cocoa in Copy PDF.js Extras */ = {isa = PBXBuildFile; fileRef = DDDFE83B2846ECD3006F1EE5 /* cocoa */; };
 		DDDFE83F2846ECE5006F1EE5 /* content-script.js in Copy PDF.js Extras */ = {isa = PBXBuildFile; fileRef = DDDFE83C2846ECD4006F1EE5 /* content-script.js */; };
+		DDE7487E2F7B42E8008013AB /* WorkAround173516139.h in Headers */ = {isa = PBXBuildFile; fileRef = DDE7487D2F7B42CE008013AB /* WorkAround173516139.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		DDE9931E278D0E4B00F60D26 /* libWebKitAdditions.a in Product Dependencies */ = {isa = PBXBuildFile; fileRef = DDE99308278D080B00F60D26 /* libWebKitAdditions.a */; };
 		DDEA91BA29946E43007E9FDA /* InlineLineTypes.h in Headers */ = {isa = PBXBuildFile; fileRef = DDEA91B929946E43007E9FDA /* InlineLineTypes.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		DDECCC1F2BABA8490041CD3C /* RangeBasedLineBuilder.h in Headers */ = {isa = PBXBuildFile; fileRef = DDECCC1E2BABA8480041CD3C /* RangeBasedLineBuilder.h */; };
@@ -7290,6 +7291,24 @@
 		FFAC30FE184FB145008C4F1E /* TrailingObjects.h in Headers */ = {isa = PBXBuildFile; fileRef = FFAC30FC184FB145008C4F1E /* TrailingObjects.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		FFDBC047183D27B700407109 /* LineWidth.h in Headers */ = {isa = PBXBuildFile; fileRef = FFDBC045183D27B700407109 /* LineWidth.h */; settings = {ATTRIBUTES = (Private, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXBuildRule section */
+		DDE748752F7B28D6008013AB /* PBXBuildRule */ = {
+			isa = PBXBuildRule;
+			compilerSpec = com.apple.compilers.proxy.script;
+			filePatterns = "*/WorkAround173516139.h";
+			fileType = pattern.proxy;
+			inputFiles = (
+				"$(WK_HEADERS_VFS_FILE)",
+			);
+			isEditable = 1;
+			name = "Workaround for rdar://173516139";
+			outputFiles = (
+				"$(HEADER_OUTPUT_DIR)/$(INPUT_FILE_NAME)",
+			);
+			script = "cp \"${INPUT_FILE_PATH}\" \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+		};
+/* End PBXBuildRule section */
 
 /* Begin PBXContainerItemProxy section */
 		1C09D04F1E31C32900725F18 /* PBXContainerItemProxy */ = {
@@ -21244,6 +21263,7 @@
 		DDDFE83B2846ECD3006F1EE5 /* cocoa */ = {isa = PBXFileReference; lastKnownFileType = folder; path = cocoa; sourceTree = "<group>"; };
 		DDDFE83C2846ECD4006F1EE5 /* content-script.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "content-script.js"; sourceTree = "<group>"; };
 		DDE1E1742D777D9B0019B0EA /* PositionedLayoutConstraints.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = PositionedLayoutConstraints.cpp; sourceTree = "<group>"; };
+		DDE7487D2F7B42CE008013AB /* WorkAround173516139.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = WorkAround173516139.h; sourceTree = "<group>"; };
 		DDE99308278D080B00F60D26 /* libWebKitAdditions.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; path = libWebKitAdditions.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		DDEA91B929946E43007E9FDA /* InlineLineTypes.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = InlineLineTypes.h; sourceTree = "<group>"; };
 		DDECCC1D2BABA83E0041CD3C /* RangeBasedLineBuilder.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = RangeBasedLineBuilder.cpp; sourceTree = "<group>"; };
@@ -23994,6 +24014,7 @@
 				1C09D04B1E31C32800725F18 /* PAL.xcodeproj */,
 				65C97AF208EA908800ACD273 /* config.h */,
 				EDEC98020AED7E170059137F /* WebCorePrefix.h */,
+				DDE7487D2F7B42CE008013AB /* WorkAround173516139.h */,
 				530A63461FA3E33D0026A545 /* Sources.txt */,
 				072717AE2ED3AAB900315445 /* WebCore.modulemap */,
 				072717AF2ED3AAC000315445 /* WebCore_Private.modulemap */,
@@ -49026,6 +49047,7 @@
 				A14832C4187F663C00DA63A6 /* WKView.h in Headers */,
 				A14832C6187F668F00DA63A6 /* WKViewPrivate.h in Headers */,
 				379919971200DDF400EA041C /* WOFFFileFormat.h in Headers */,
+				DDE7487E2F7B42E8008013AB /* WorkAround173516139.h in Headers */,
 				2E4346460F546A8200B0F1BA /* Worker.h in Headers */,
 				A45734CF1D3AFD590190608F /* WorkerAnimationController.h in Headers */,
 				91278D6221DEDAF000B57184 /* WorkerAuditAgent.h in Headers */,
@@ -49200,6 +49222,7 @@
 				6577FFC7276AC9AD0011AEC8 /* Create Symlink to Cryptex Path */,
 			);
 			buildRules = (
+				DDE748752F7B28D6008013AB /* PBXBuildRule */,
 			);
 			dependencies = (
 				DD041FF109D9E3250010AF2A /* PBXTargetDependency */,

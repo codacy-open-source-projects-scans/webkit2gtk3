@@ -605,7 +605,6 @@ imported/w3c/web-platform-tests/css/css-masking/clip/clip-rect-scroll.html [ Ima
 imported/w3c/web-platform-tests/css/css-position/position-fixed-scroll-nested-fixed.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-ui/outline-negative-offset-composited-scroll.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-transforms/transform3d-preserve3d-001.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/cssom-view/scroll-behavior-element.html [ Failure ]
 
 ### END OF (1) Classified failures with bug reports
 ########################################
@@ -1841,9 +1840,6 @@ imported/w3c/web-platform-tests/webrtc/simulcast/setParameters-active.https.html
 # webkit.org/b/278881 [ Sonoma F wk2 ] fast/scrolling/rubber-band-shows-background.html is a flaky image only failure.
 [ Sonoma+ ] fast/scrolling/rubber-band-shows-background.html [ Pass ImageOnlyFailure ]
 
-# webkit.org/b/278934 [ macOS iOS wk2 ] imported/w3c/web-platform-tests/content-security-policy/inheritance/history.sub.html is a flaky failure.
-imported/w3c/web-platform-tests/content-security-policy/inheritance/history.sub.html [ Failure Pass ]
-
 # webkit.org/b/279096 [ macOS wk2 arm64 debug ] animations/stop-animation-on-suspend.html is a flaky text failure.
 [ Debug arm64 ] animations/stop-animation-on-suspend.html [ Pass Failure ]
 
@@ -2472,3 +2468,7 @@ webkit.org/b/309850 [ Debug ] imported/w3c/web-platform-tests/uievents/mouse/mou
 webkit.org/b/308334 [ Debug ] http/tests/webgpu/webgpu/api/validation/gpu_external_texture_expiration.html [ Skip ]
 
 webkit.org/b/311378 http/wpt/mediarecorder/MediaRecorder-audio-samplingrate-change.html [ Pass Failure ]
+
+webkit.org/b/311677 [ Tahoe+ Release ] imported/w3c/web-platform-tests/svg/animations/svglength-animation-invalid-value-5.html [ Pass Failure ]
+webkit.org/b/311677 [ Tahoe+ Release ] imported/w3c/web-platform-tests/svg/animations/svglength-animation-invalid-value-7.html [ Pass Failure ]
+webkit.org/b/311677 [ Tahoe+ Release ] imported/w3c/web-platform-tests/svg/animations/svglength-animation-invalid-value-9.html [ Pass Failure ]

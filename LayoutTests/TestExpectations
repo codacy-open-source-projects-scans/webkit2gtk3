@@ -827,6 +827,8 @@ imported/w3c/web-platform-tests/html/infrastructure/urls/resolving-urls/query-en
 imported/w3c/web-platform-tests/html/infrastructure/urls/resolving-urls/query-encoding/utf-16le.html [ Skip ]
 imported/w3c/web-platform-tests/html/infrastructure/urls/resolving-urls/query-encoding/utf-8.html [ Skip ]
 imported/w3c/web-platform-tests/html/browsers/browsing-the-web/history-traversal/browsing_context_name_cross_origin_2.html [ Skip ]
+imported/w3c/web-platform-tests/html/infrastructure/urls/base-url/document-base-url-changes-about-srcdoc-2.https.html [ Skip ] # one subtest passess other timeout
+imported/w3c/web-platform-tests/html/infrastructure/urls/terminology-0/nontraditional-about-srcdoc.html [ Skip ] # timeout
 imported/w3c/web-platform-tests/cors/image-tainting-in-cross-origin-iframe.sub.html [ Skip ]
 imported/w3c/web-platform-tests/dom/events/EventListener-incumbent-global-1.sub.html [ Skip ]
 imported/w3c/web-platform-tests/dom/events/EventListener-incumbent-global-2.sub.html [ Skip ]
@@ -3739,7 +3741,6 @@ imported/w3c/web-platform-tests/css/css-pseudo/selection-background-painting-ord
 imported/w3c/web-platform-tests/css/css-pseudo/highlight-painting-003.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/highlight-painting-004.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/selection-originating-decoration-color.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-pseudo/first-letter-insert-text-node-dynamic.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/selection-text-decoration-currentcolor.html [ ImageOnlyFailure ]
 
 imported/w3c/web-platform-tests/css/css-highlight-api/painting/invalidation/css-highlight-invalidation-001.html [ ImageOnlyFailure ]
@@ -3856,9 +3857,6 @@ imported/w3c/web-platform-tests/css/css-display/run-in/run-in-text-between-005.x
 imported/w3c/web-platform-tests/css/css-display/display-flow-root-002.html [ ImageOnlyFailure ]
 
 imported/w3c/web-platform-tests/css/mediaqueries/viewport-script-dynamic.html [ ImageOnlyFailure ]
-
-# https://github.com/web-platform-tests/wpt/issues/31174
-imported/w3c/web-platform-tests/css/cssom-view/scroll-behavior-smooth.html [ Skip ]
 
 # Initial failures on the initial import of css-overflow
 imported/w3c/web-platform-tests/css/css-overflow/line-clamp/line-clamp-015.html [ ImageOnlyFailure ]
@@ -5224,11 +5222,8 @@ imported/w3c/web-platform-tests/css/css-writing-modes/text-combine-upright-rtl-0
 imported/w3c/web-platform-tests/css/css-writing-modes/test-plan/req-tcu-font.html [ Skip ]
 
 # Untriaged CSSOM-View timeout failures.
-imported/w3c/web-platform-tests/css/cssom-view/overflow-hidden-smooth-scroll-crash.html [ Skip ]
 imported/w3c/web-platform-tests/css/cssom-view/smooth-scrollIntoView-with-smooth-fragment-scroll-iframe.html [ Skip ]
 imported/w3c/web-platform-tests/css/cssom-view/smooth-scroll-nonstop.html [ Skip ] # passes few subtests
-imported/w3c/web-platform-tests/css/cssom-view/scrollIntoView-multiple.html [ Skip ]
-imported/w3c/web-platform-tests/css/cssom-view/scrollIntoView-multiple-nested.html [ Skip ]
 
 webkit.org/b/219343 imported/w3c/web-platform-tests/css/css-flexbox/aspect-ratio-intrinsic-size-005.html [ ImageOnlyFailure ]
 
@@ -6014,9 +6009,6 @@ webkit.org/b/228176 fast/text/variable-system-font.html [ Pass ImageOnlyFailure 
 webkit.org/b/228176 fast/text/variable-system-font-2.html [ Pass ImageOnlyFailure ]
 
 webkit.org/b/230237 imported/w3c/web-platform-tests/css/cssom-view/scrollIntoView-inline-image.html [ Failure ]
-
-# Timeout
-imported/w3c/web-platform-tests/css/cssom-view/scroll-behavior-smooth-navigation.html [ Skip ]
 
 webkit.org/b/230004 imported/w3c/web-platform-tests/css/css-pseudo/active-selection-012.html [ ImageOnlyFailure ]
 webkit.org/b/230004 imported/w3c/web-platform-tests/css/css-pseudo/active-selection-014.html [ ImageOnlyFailure ]
