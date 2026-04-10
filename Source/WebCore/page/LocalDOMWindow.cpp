@@ -60,6 +60,7 @@
 #include "DocumentEventLoop.h"
 #include "DocumentInlines.h"
 #include "DocumentLoader.h"
+#include "DocumentPage.h"
 #include "DocumentQuirks.h"
 #include "DocumentSecurityOrigin.h"
 #include "DocumentView.h"
@@ -76,6 +77,7 @@
 #include "FloatRect.h"
 #include "FocusController.h"
 #include "FrameConsoleClient.h"
+#include "FrameDestructionObserverInlines.h"
 #include "FrameInlines.h"
 #include "FrameLoadRequest.h"
 #include "FrameLoader.h"
@@ -97,6 +99,7 @@
 #include "JSPushSubscription.h"
 #include "KeyboardEvent.h"
 #include "LocalFrame.h"
+#include "LocalFrameInlines.h"
 #include "LocalFrameLoaderClient.h"
 #include "LocalFrameView.h"
 #include "Location.h"
@@ -2281,10 +2284,13 @@ void LocalDOMWindow::incrementScrollEventListenersCount()
     }
 }
 
-void LocalDOMWindow::decrementScrollEventListenersCount()
+void LocalDOMWindow::decrementScrollEventListenersCount(unsigned count)
 {
+    ASSERT(count);
+    ASSERT(m_scrollEventListenerCount >= count);
     RefPtr document = this->document();
-    if (!--m_scrollEventListenerCount && document->isTopDocument()) {
+    m_scrollEventListenerCount -= count;
+    if (!m_scrollEventListenerCount && document->isTopDocument()) {
         if (RefPtr frame = this->frame(); frame && frame->page() && document->backForwardCacheState() == Document::NotInBackForwardCache)
             protect(frame->page())->chrome().client().setNeedsScrollNotifications(*frame, false);
     }

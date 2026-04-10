@@ -3,7 +3,6 @@
 ####################
 # Tests that crash #
 ####################
-http/tests/inspector/target/provisional-load-cancels-previous-load.html [ Crash ]
 http/tests/security/referrer-policy-header-empty.html [ Crash ]
 http/tests/security/referrer-policy-header-invalid.html [ Crash ]
 http/tests/security/referrer-policy-header-no-referrer-when-downgrade.html [ Crash ]
@@ -496,6 +495,9 @@ imported/w3c/web-platform-tests/svg/shapes/rect-01.svg [ ImageOnlyFailure ]
 svg/compositing/hidpi-legacy-svg-compositing-sibling-no-shift.html [ ImageOnlyFailure ]
 svg/compositing/transform-change-repainting-no-viewBox.html [ ImageOnlyFailure ]
 svg/custom/svg-image-dark-mode-initial.html [ ImageOnlyFailure ]
+webkit.org/b/311812 http/tests/css/prefers-color-scheme-in-cross-origin-iframe-follows-system-preference-without-parent-color-scheme.html [ ImageOnlyFailure ]
+webkit.org/b/311812 imported/w3c/web-platform-tests/css/css-color-adjust/rendering/dark-color-scheme/color-scheme-iframe-preferred-cross-origin.sub.html [ ImageOnlyFailure ]
+webkit.org/b/311812 imported/w3c/web-platform-tests/css/css-color-adjust/rendering/dark-color-scheme/color-scheme-iframe-preferred-page-dark-cross-origin.sub.html [ ImageOnlyFailure ]
 
 ####################################
 # Tests with missing expectations #

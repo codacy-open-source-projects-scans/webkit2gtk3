@@ -1765,6 +1765,13 @@ String Internals::visiblePlaceholder(Element& element)
     return String();
 }
 
+String Internals::anchorPrefetchEagerness(Element& element)
+{
+    if (auto* anchor = dynamicDowncast<HTMLAnchorElement>(element))
+        return anchor->prefetchEagernessForTesting();
+    return String();
+}
+
 void Internals::setCanShowPlaceholder(Element& element, bool canShowPlaceholder)
 {
     if (auto* textFormControlElement = dynamicDowncast<HTMLTextFormControlElement>(element))
@@ -8033,7 +8040,7 @@ RefPtr<PushSubscription> Internals::createPushSubscription(const String& endpoin
 bool Internals::hasSleepDisabler() const
 {
     auto* document = contextDocument();
-    return document ? document->hasSleepDisabler() : false;
+    return document && document->hasSleepDisabler();
 }
 
 void Internals::acceptTypedArrays(Int32Array&)

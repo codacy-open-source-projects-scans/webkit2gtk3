@@ -123,6 +123,11 @@ struct Styleable {
         return element.hasRunningTransitions(pseudoElementIdentifier);
     }
 
+    const AnimatableCSSPropertyToTransitionMap* runningTransitionsByProperty() const
+    {
+        return element.runningTransitionsByProperty(pseudoElementIdentifier);
+    }
+
     AnimationCollection& ensureAnimations() const
     {
         return element.ensureAnimations(pseudoElementIdentifier);
@@ -203,7 +208,7 @@ public:
     {
         m_element = nullptr;
         m_pseudoElementIdentifier = Style::PseudoElementIdentifier();
-        m_pseudoElementIdentifier->nameOrPart = name;
+        m_pseudoElementIdentifier->nameOrPart = WTF::move(name);
     }
 
     explicit operator bool() const { return !!m_element; }

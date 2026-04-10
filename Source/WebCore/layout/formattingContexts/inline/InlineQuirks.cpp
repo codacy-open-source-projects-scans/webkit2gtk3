@@ -27,6 +27,8 @@
 #include "InlineQuirks.h"
 
 #include "InlineFormattingContext.h"
+#include "FontCascadeInlines.h"
+#include "LayoutBoxInlines.h"
 #include "InlineLineBox.h"
 #include "LayoutBoxGeometry.h"
 #include "RenderStyle+GettersInlines.h"
@@ -66,8 +68,12 @@ bool InlineQuirks::lineBreakBoxAffectsParentInlineBox(const LineBox& lineBox)
     // At this point we either have only the <br> on the line or inline boxes with or without content.
     auto& inlineLevelBoxes = lineBox.nonRootInlineLevelBoxes();
     ASSERT(!inlineLevelBoxes.isEmpty());
-    if (inlineLevelBoxes.size() == 1)
-        return true;
+    if (inlineLevelBoxes.size() == 1) {
+        // When the BR has explicit line-height, don't mark the parent as having content —
+        // the BR's own layout bounds will drive the line height directly.
+        auto& lineBreakBox = inlineLevelBoxes.first();
+        return lineBreakBox.isLineBreakBox() && lineBreakBox.isPreferredLineHeightFontMetricsBased();
+    }
     for (auto& inlineLevelBox : lineBox.nonRootInlineLevelBoxes()) {
         // Filter out empty inline boxes e.g. <div><span></span><span></span><br></div>
         if (inlineLevelBox.isInlineBox() && inlineLevelBox.hasContent())
