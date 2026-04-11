@@ -274,6 +274,11 @@ void WebPage::platformReinitializeAccessibilityToken()
     accessibilityTransferRemoteToken(accessibilityRemoteTokenData());
 }
 
+void WebPage::sendAccessibilityTokenIfNeeded()
+{
+    // On iOS, accessibility is always initialized eagerly, so this is a no-op.
+}
+
 RetainPtr<NSData> WebPage::accessibilityRemoteTokenData() const
 {
     return [[[NSUUID UUID] UUIDString] dataUsingEncoding:NSUTF8StringEncoding];
@@ -2680,7 +2685,7 @@ std::optional<FocusedElementInformation> WebPage::focusedElementInformation()
         information.nodeFontSize = protect(renderer->style())->fontDescription().computedSize();
 
         bool inFixed = false;
-        renderer->localToContainerPoint(FloatPoint(), nullptr, UseTransforms, &inFixed);
+        renderer->localToContainerPoint(FloatPoint(), nullptr, MapCoordinatesMode::UseTransforms, &inFixed);
         information.insideFixedPosition = inFixed;
         information.isRTL = renderer->writingMode().isBidiRTL();
 

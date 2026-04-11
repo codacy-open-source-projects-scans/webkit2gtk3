@@ -443,7 +443,7 @@ RefPtr<T> shadowHostOrSelfInclusiveParent(Node& node)
     if (node.isInUserAgentShadowTree())
         return dynamicDowncast<T>(node.shadowHost());
 
-    if (RefPtr element = dynamicDowncast<T>(node))
+    if (auto* element = dynamicDowncast<T>(node))
         return element;
 
     return dynamicDowncast<T>(node.parentElement());
@@ -494,7 +494,7 @@ static inline Variant<SkipExtraction, ItemData, URL, Editable> extractItemData(N
         return { SkipExtraction::Self };
 
     if (RefPtr textNode = dynamicDowncast<Text>(node)) {
-        if (shouldTreatAsPasswordField(protect(textNode->shadowHost())))
+        if (shouldTreatAsPasswordField(textNode->shadowHost()))
             return { SkipExtraction::Self };
 
         if (auto iterator = context.visibleText.find(*textNode); iterator != context.visibleText.end()) {
@@ -645,6 +645,7 @@ static inline Variant<SkipExtraction, ItemData, URL, Editable> extractItemData(N
                 .isReadonly = input && input->isReadOnly(),
                 .isDisabled = control->isDisabled(),
                 .isChecked = input && input->checked(),
+                .isAutofilled = input && (input->autofilled() || input->autofilledAndViewable() || input->autofilledAndObscured()),
             } };
         }
     }
@@ -991,7 +992,7 @@ static inline void extractRecursive(Node& node, Item& parentItem, TraversalConte
         context.onlyCollectTextAndLinksCount++;
     }
 
-    if (CheckedPtr renderer = node.renderer(); renderer && item)
+    if (auto* renderer = node.renderer(); renderer && item)
         item->hasLineThrough = renderer->style().textDecorationLineInEffect().hasLineThrough();
 
     ASSERT_IMPLIES(isScrollable, item);
@@ -1644,15 +1645,15 @@ static void dispatchSimulatedClick(LocalFrame& frame, IntPoint location, Complet
 {
     frame.eventHandler().handleMouseMoveEvent({
         location, location, MouseButton::Left, PlatformEvent::Type::MouseMoved, 0, { }, MonotonicTime::now(), ForceAtClick, SyntheticClickType::NoTap, MouseEventInputSource::UserDriven
-    });
+    }, nullptr, false, HitTestRequest::Type::IgnoreClipping);
 
     frame.eventHandler().handleMousePressEvent({
         location, location, MouseButton::Left, PlatformEvent::Type::MousePressed, 1, { }, MonotonicTime::now(), ForceAtClick, SyntheticClickType::NoTap, MouseEventInputSource::UserDriven
-    });
+    }, HitTestRequest::Type::IgnoreClipping);
 
     frame.eventHandler().handleMouseReleaseEvent({
         location, location, MouseButton::Left, PlatformEvent::Type::MouseReleased, 1, { }, MonotonicTime::now(), ForceAtClick, SyntheticClickType::NoTap, MouseEventInputSource::UserDriven
-    });
+    }, HitTestRequest::Type::IgnoreClipping);
 
     completion(true, { });
 }
@@ -1671,6 +1672,7 @@ static Node* findNodeAtRootViewLocation(const LocalFrameView& view, Document& do
     static constexpr OptionSet defaultHitTestOptions {
         HitTestRequest::Type::ReadOnly,
         HitTestRequest::Type::DisallowUserAgentShadowContent,
+        HitTestRequest::Type::IgnoreClipping,
     };
 
     HitTestResult result { view.rootViewToContents(roundedIntPoint(locationInRootView)) };

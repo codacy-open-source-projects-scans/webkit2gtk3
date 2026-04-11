@@ -59,6 +59,7 @@
 # registers (sc0, sc1, sc2, sc3)
 
 const alignIPInt = constexpr JSC::IPInt::alignIPInt
+const alignAtomicIPInt = constexpr JSC::IPInt::alignAtomicIPInt
 const alignArgumInt = constexpr JSC::IPInt::alignArgumInt
 const alignUInt = constexpr JSC::IPInt::alignUInt
 const alignMInt = constexpr JSC::IPInt::alignMInt
@@ -320,6 +321,31 @@ end
 
 macro reservedOpcode(opcode)
     unimplementedInstruction(_reserved_%opcode%)
+end
+
+macro atomicInstructionLabel(instrname)
+    aligned _ipint%instrname%_atomic_validate alignAtomicIPInt
+    _ipint%instrname%_atomic_validate:
+    _ipint%instrname%:
+end
+
+macro ipintAtomicOp(name, impl)
+    atomicInstructionLabel(name)
+
+    if TRACING
+        move cfr, a1
+        move PC, a2
+        move MC, a3
+        operationCall(macro() cCall4(_ipint_extern_trace) end)
+    end
+
+    impl()
+end
+
+macro reservedAtomicOpcode(opcode)
+    atomicInstructionLabel(_reserved_%opcode%)
+    validateOpcodeConfig(a0)
+    break
 end
 
 # ---------------------------------------
@@ -920,14 +946,10 @@ if ASSERT_ENABLED
     clobberVolatileRegisters()
 end
 
-    # Restore SP
-    loadp Callee[cfr], ws0 # CalleeBits(JSToWasmCallee*)
-    unboxWasmCallee(ws0, ws1)
-
-    loadi Wasm::JSToWasmCallee::m_frameSize[ws0], ws1
-    subp cfr, ws1, ws1
-    move ws1, sp
-    subp constexpr Wasm::JSToWasmCallee::SpillStackSpaceAligned, sp
+    # Don't restore SP to original position, stack results live above calleeSP.
+    # After a tail call the callee's frame may differ, so derive from actual SP.
+    # Just allocate register spill space below the callee's actual SP.
+    subp constexpr Wasm::JSToWasmCallee::RegisterStackSpaceAligned, sp
 
 if ASSERT_ENABLED
     repeat(ws0, macro (i)

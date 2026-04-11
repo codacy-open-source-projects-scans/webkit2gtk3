@@ -6841,6 +6841,7 @@ header: <WebCore/TextExtractionTypes.h>
     bool isReadonly;
     bool isDisabled;
     bool isChecked;
+    bool isAutofilled;
 };
 
 header: <WebCore/TextExtractionTypes.h>
@@ -9117,7 +9118,7 @@ header: <WebCore/AXObjectCache.h>
 };
 
 header: <WebCore/AXObjectCache.h>
-[CustomHeader] struct WebCore::FrameGeometry {
+[CustomHeader] struct WebCore::AXFrameGeometry {
     WebCore::IntPoint screenPosition;
     WebCore::AffineTransform screenTransform;
 };
