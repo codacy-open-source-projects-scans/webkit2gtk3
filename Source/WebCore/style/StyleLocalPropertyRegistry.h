@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 Samuel Weinig <sam@webkit.org>
+ * Copyright (C) 2026 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -22,23 +22,27 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "config.h"
-#include "CSSValueAggregates.h"
+#pragma once
 
-#include <wtf/text/TextStream.h>
+#include "CSSRegisteredCustomProperty.h"
+#include <wtf/HashMap.h>
 
 namespace WebCore {
+namespace Style {
 
-// MARK: - PropertyIdentifier
+// Lightweight property registration for custom function evaluation.
+// Unlike CustomPropertyRegistry, this has no association with a Style::Scope
+// and no invalidation or prototype style management.
+class LocalPropertyRegistry {
+public:
+    const CSSRegisteredCustomProperty* get(const AtomString&) const;
+    bool isInherited(const AtomString&) const;
 
-WTF::TextStream& operator<<(WTF::TextStream& ts, const PropertyIdentifier& value)
-{
-    return ts << nameLiteral(value.value);
-}
+    void add(CSSRegisteredCustomProperty&&);
 
-void add(Hasher& hasher, const PropertyIdentifier& value)
-{
-    add(hasher, value.value);
-}
+private:
+    UncheckedKeyHashMap<AtomString, UniqueRef<CSSRegisteredCustomProperty>> m_properties;
+};
 
+} // namespace Style
 } // namespace WebCore
