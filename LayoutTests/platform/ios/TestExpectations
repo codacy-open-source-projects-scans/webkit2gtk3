@@ -1068,6 +1068,7 @@ webkit.org/b/116046 fast/events/sequential-focus-navigation-starting-point.html 
 webkit.org/b/159240 fast/events/remove-focus-navigation-starting-point-crash.html [ Skip ]
 webkit.org/b/164888 fast/shadow-dom/focus-navigation-out-of-slot.html [ Skip ]
 webkit.org/b/164888 fast/shadow-dom/focus-navigation-passes-shadow-host.html [ Skip ]
+webkit.org/b/311742 fast/shadow-dom/focus-navigation-many-non-focusable-shadow-hosts.html [ Skip ]
 webkit.org/b/164888 fast/shadow-dom/focus-navigation-passes-svg-use-element.html [ Skip ]
 webkit.org/b/202497 imported/w3c/web-platform-tests/shadow-dom/focus/ [ Skip ]
 imported/w3c/web-platform-tests/shadow-dom/focus/focus-pseudo-matches-on-shadow-host.html [ Pass ]
@@ -3872,6 +3873,7 @@ webkit.org/b/243690 imported/w3c/web-platform-tests/html/cross-origin-opener-pol
 imported/w3c/web-platform-tests/css/css-pseudo/highlight-cascade/highlight-paired-cascade-005.html [ Pass ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/highlight-cascade/highlight-cascade-008.html [ Pass ]
 imported/w3c/web-platform-tests/css/css-pseudo/highlight-styling-001.html [ Pass ]
+imported/w3c/web-platform-tests/css/css-pseudo/highlight-styling-003.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/highlight-styling-004.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-pseudo/highlight-custom-properties-dynamic-001.html [ Pass ]
 imported/w3c/web-platform-tests/css/css-pseudo/input-element-pseudo-open-click.optional.html [ Skip ]
@@ -8236,6 +8238,8 @@ webkit.org/b/297067 fast/forms/state-restore-form-associated-custom-elements.htm
 # Inactive window appearance for form controls is not supported on iOS.
 fast/forms/form-control-refresh/accent-color-contrast-does-not-affect-inactive-window-light-mode.html [ Skip ]
 fast/forms/form-control-refresh/accent-color-contrast-does-not-affect-inactive-window-dark-mode.html [ Skip ]
+
+webkit.org/b/312190 compositing/accelerated-layers-after-back-2.html [ ImageOnlyFailure Pass ]
 
 webkit.org/b/297144 fast/forms/state-restore-to-non-edited-controls.html [ Pass Timeout ]
 

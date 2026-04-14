@@ -6094,6 +6094,7 @@
 		D640B24F2E3058D500EB6C49 /* UADataValues.h in Headers */ = {isa = PBXBuildFile; fileRef = D640B24C2E3058C800EB6C49 /* UADataValues.h */; };
 		D6489D26166FFCF1007C031B /* JSHTMLTemplateElement.h in Headers */ = {isa = PBXBuildFile; fileRef = D6489D24166FFCF1007C031B /* JSHTMLTemplateElement.h */; };
 		D66817FB166FE6D700FA07B4 /* HTMLTemplateElement.h in Headers */ = {isa = PBXBuildFile; fileRef = D6EFC0BC1666DF7A003D291E /* HTMLTemplateElement.h */; };
+		D6E082672F5A3AED009B51B0 /* CachedMatchFinder.h in Headers */ = {isa = PBXBuildFile; fileRef = D6E082652F5A3AD7009B51B0 /* CachedMatchFinder.h */; };
 		D6E276B014637455001D280A /* MutationObserverRegistration.h in Headers */ = {isa = PBXBuildFile; fileRef = D6E276AE14637455001D280A /* MutationObserverRegistration.h */; };
 		D6E528A4149A926D00EFE1F3 /* MutationObserverInterestGroup.h in Headers */ = {isa = PBXBuildFile; fileRef = D6E528A2149A926D00EFE1F3 /* MutationObserverInterestGroup.h */; };
 		D70AD65813E1342B005B50B4 /* RenderFragmentContainer.h in Headers */ = {isa = PBXBuildFile; fileRef = D70AD65613E1342B005B50B4 /* RenderFragmentContainer.h */; };
@@ -21214,6 +21215,8 @@
 		D640B2512E30595F00EB6C49 /* NavigatorUABrandVersion.idl */ = {isa = PBXFileReference; lastKnownFileType = text; path = NavigatorUABrandVersion.idl; sourceTree = "<group>"; };
 		D6489D23166FFCF1007C031B /* JSHTMLTemplateElement.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = JSHTMLTemplateElement.cpp; sourceTree = "<group>"; };
 		D6489D24166FFCF1007C031B /* JSHTMLTemplateElement.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = JSHTMLTemplateElement.h; sourceTree = "<group>"; };
+		D6E082652F5A3AD7009B51B0 /* CachedMatchFinder.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CachedMatchFinder.h; sourceTree = "<group>"; };
+		D6E082662F5A3ADE009B51B0 /* CachedMatchFinder.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = CachedMatchFinder.cpp; sourceTree = "<group>"; };
 		D6E276AD14637455001D280A /* MutationObserverRegistration.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = MutationObserverRegistration.cpp; sourceTree = "<group>"; };
 		D6E276AE14637455001D280A /* MutationObserverRegistration.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MutationObserverRegistration.h; sourceTree = "<group>"; };
 		D6E528A1149A926D00EFE1F3 /* MutationObserverInterestGroup.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = MutationObserverInterestGroup.cpp; sourceTree = "<group>"; };
@@ -32012,6 +32015,8 @@
 				93309D8A099E64910056E581 /* ApplyStyleCommand.h */,
 				93309D8B099E64910056E581 /* BreakBlockquoteCommand.cpp */,
 				93309D8C099E64910056E581 /* BreakBlockquoteCommand.h */,
+				D6E082662F5A3ADE009B51B0 /* CachedMatchFinder.cpp */,
+				D6E082652F5A3AD7009B51B0 /* CachedMatchFinder.h */,
 				F4D9817E2195FBF6008230FC /* ChangeListTypeCommand.cpp */,
 				F4D9817D2195FBF6008230FC /* ChangeListTypeCommand.h */,
 				07B93ECC2BF6FEBE0072078C /* CharacterRange.cpp */,
@@ -43365,6 +43370,7 @@
 				CD814C352996CA6A005A780A /* CachedHTMLCollectionInlines.h in Headers */,
 				BCB16C1C0979C3BD00467741 /* CachedImage.h in Headers */,
 				319FBD5F15D2F464009640A6 /* CachedImageClient.h in Headers */,
+				D6E082672F5A3AED009B51B0 /* CachedMatchFinder.h in Headers */,
 				E307DED01D81E4C700141CAF /* CachedModuleScriptLoader.h in Headers */,
 				510184690B08602A004A825F /* CachedPage.h in Headers */,
 				D0EDA775143E303C0028E383 /* CachedRawResource.h in Headers */,
