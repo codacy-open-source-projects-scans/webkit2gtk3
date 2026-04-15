@@ -1028,21 +1028,6 @@
 			runOncePerArchitecture = 0;
 			script = "cp -f \"${INPUT_FILE_PATH}\" \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 		};
-		DDE748582F77554F008013AB /* PBXBuildRule */ = {
-			isa = PBXBuildRule;
-			compilerSpec = com.apple.compilers.proxy.script;
-			filePatterns = "*/module.modulemap";
-			fileType = pattern.proxy;
-			inputFiles = (
-				"$(WK_HEADERS_VFS_FILE)",
-			);
-			isEditable = 1;
-			name = "Workaround for rdar://173516139";
-			outputFiles = (
-				"$(HEADER_OUTPUT_DIR)/$(INPUT_FILE_NAME)",
-			);
-			script = "cp \"${INPUT_FILE_PATH}\" \"${SCRIPT_OUTPUT_FILE_0}\"\n";
-		};
 		DDE7488A2F7B4577008013AB /* PBXBuildRule */ = {
 			isa = PBXBuildRule;
 			compilerSpec = com.apple.compilers.proxy.script;
@@ -4318,7 +4303,7 @@
 			isa = PBXProject;
 			attributes = {
 				LastSwiftUpdateCheck = 0700;
-				LastUpgradeCheck = 1140;
+				LastUpgradeCheck = 2640;
 				TargetAttributes = {
 					DDF3081D27C44EFE006A526F = {
 						CreatedOnToolsVersion = 13.3;
@@ -4348,6 +4333,7 @@
 		077FEABC2EE0084F0071F92D /* Verify Module */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
+			dependencyFile = "$(DERIVED_FILES_DIR)/verify-module.d";
 			files = (
 			);
 			inputFileListPaths = (
@@ -4355,16 +4341,16 @@
 			inputPaths = (
 				"$(SRCROOT)/Scripts/modules-verifier/library-modules-verifier.py",
 				"$(BUILT_PRODUCTS_DIR)/$(PRIVATE_HEADERS_FOLDER_PATH)/WTF.json",
-				"$(DSTROOT)/$(PRIVATE_HEADERS_FOLDER_PATH)/WTF.json",
 			);
 			name = "Verify Module";
 			outputFileListPaths = (
 			);
 			outputPaths = (
+				"$(DERIVED_FILE_DIR)/verify-module.timestamp",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ \"${ACTION}\" = \"installhdrs\" ]; then\n    exit 0;\nfi\n\nif [ ${DEPLOYMENT_LOCATION} != YES ]; then\n    \"${SCRIPT_INPUT_FILE_0}\" --relative-to=\"${BUILT_PRODUCTS_DIR}${WTF_INSTALL_PATH_PREFIX}${WK_LIBRARY_HEADERS_FOLDER_PATH}\" \"${SCRIPT_INPUT_FILE_1}\"\nelse\n    \"${SCRIPT_INPUT_FILE_0}\" --relative-to=\"<SDKROOT>${WK_LIBRARY_HEADERS_FOLDER_PATH}\"  \"${SCRIPT_INPUT_FILE_2}\"\nfi\n";
+			shellScript = "depfile=\"${SCRIPT_OUTPUT_FILE_0/%.timestamp/.d}\"\n\nif [ \"${ACTION}\" = \"installhdrs\" ]; then\n    echo \"dependencies: \" > \"${depfile}\"\n    touch \"${SCRIPT_OUTPUT_FILE_0}\"\n    exit 0;\nfi\n\nif [ ${DEPLOYMENT_LOCATION} != YES ]; then\n    \"${SCRIPT_INPUT_FILE_0}\" --depfile \"${depfile}\" --relative-to=\"${BUILT_PRODUCTS_DIR}${WTF_INSTALL_PATH_PREFIX}${WK_LIBRARY_HEADERS_FOLDER_PATH}\" \"${SCRIPT_INPUT_FILE_1}\"\nelse\n    \"${SCRIPT_INPUT_FILE_0}\" --depfile \"${depfile}\" --relative-to=\"<SDKROOT>${WK_LIBRARY_HEADERS_FOLDER_PATH}\" \"${DSTROOT}/${PRIVATE_HEADERS_FOLDER_PATH}/WTF.json\"\nfi\n\ntouch \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 		};
 		520CF9492BDA9B4800C27FD2 /* Generate clangd configuration file */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -4404,10 +4390,11 @@
 			);
 			outputPaths = (
 				"$(WK_DERIVED_SDK_HEADERS_DIR)",
+				"$(DERIVED_FILE_DIR)/symlink-public-sdk-headers.timestamp",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${SCRIPT_INPUT_FILE_0}\"\n";
+			shellScript = "\"${SCRIPT_INPUT_FILE_0}\"\ntouch \"${DERIVED_FILE_DIR}/symlink-public-sdk-headers.timestamp\"\n";
 		};
 		DDA35E4929CA74D4006C1018 /* Generate TAPI filelist */ = {
 			isa = PBXShellScriptBuildPhase;

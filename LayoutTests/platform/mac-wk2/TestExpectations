@@ -943,11 +943,11 @@ webkit.org/b/186362 [ Release ] http/tests/resourceLoadStatistics/prevalent-reso
 
 webkit.org/b/189598 compositing/backing/backing-store-attachment-fill-forwards-animation.html [ Pass Failure ]
 
-webkit.org/b/271207 http/wpt/webauthn/public-key-credential-create-failure-local-silent.https.html [ Failure Crash ]
-webkit.org/b/271207 http/wpt/webauthn/public-key-credential-create-failure-local.https.html [ Failure Crash ]
-webkit.org/b/271207 http/wpt/webauthn/public-key-credential-create-success-local.https.html [ Failure Crash ]
-webkit.org/b/271207 http/wpt/webauthn/public-key-credential-get-success-local.https.html [ Failure Crash ]
-webkit.org/b/271207 http/wpt/webauthn/public-key-credential-get-failure-local.https.html [ Failure Crash ]
+webkit.org/b/271207 [ Debug ] http/wpt/webauthn/public-key-credential-create-failure-local-silent.https.html [ Failure Crash ]
+webkit.org/b/271207 [ Debug ] http/wpt/webauthn/public-key-credential-create-failure-local.https.html [ Failure Crash ]
+webkit.org/b/271207 [ Debug ] http/wpt/webauthn/public-key-credential-create-success-local.https.html [ Failure Crash ]
+webkit.org/b/271207 [ Debug ] http/wpt/webauthn/public-key-credential-get-success-local.https.html [ Failure Crash ]
+webkit.org/b/271207 [ Debug ] http/wpt/webauthn/public-key-credential-get-failure-local.https.html [ Failure Crash ]
 
 webkit.org/b/194826 http/tests/resourceLoadStatistics/do-not-block-top-level-navigation-redirect.html [ Pass Timeout ]
 
@@ -969,34 +969,6 @@ webkit.org/b/187828 [ Release ] fast/css-grid-layout/flex-content-sized-columns-
 webkit.org/b/206696 editing/selection/caret-at-bidi-boundary.html [ Pass Timeout ]
 
 webkit.org/b/206708 fast/animation/request-animation-frame-iframe.html [ Pass Failure ]
-
-# rdar://92774119 ([ Ventura Release wk2 ] 27X imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements (Layout-Tests) are flaky text failures)
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/audio_loop_seek_to_eos.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/event_canplay.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/event_canplay_noautoplay.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/event_canplaythrough.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/event_canplaythrough_noautoplay.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/event_loadeddata.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/event_loadeddata_noautoplay.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/event_loadedmetadata.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/event_loadedmetadata_noautoplay.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/event_play.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/event_pause.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/event_order_loadstart_progress.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/event_order_loadedmetadata_loadeddata.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/event_order_canplay_playing.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/event_order_canplay_canplaythrough.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/paused_false_during_play.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/event_timeupdate_noautoplay.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/event_timeupdate.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/event_progress_noautoplay.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/event_progress.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/event_playing_noautoplay.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/event_playing.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/readyState_during_playing.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/readyState_during_loadedmetadata.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/readyState_during_loadeddata.html [ Pass Failure ]
-[ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/readyState_during_canplaythrough.html [ Pass Failure ]
 
 # After `media-elements/track` enablement - below lists tests fail:
 [ Release ] imported/w3c/web-platform-tests/html/semantics/embedded-content/media-elements/track/track-element/track-cues-missed.html [ Failure ]
@@ -2268,6 +2240,8 @@ http/tests/webgpu/webgpu/web_platform/copyToTexture/ImageBitmap.html [ Pass Time
 
 # skip on intel for now due to small precision error differences
 [ x86_64 ] http/tests/webgpu/webgpu/web_platform/copyToTexture/video.html [ Skip ]
+
+webkit.org/b/312307 fast/forms/switch/click-animation-twice.html [ ImageOnlyFailure Pass ]
 
 webkit.org/b/298416 [ Debug ] http/tests/websocket/construct-in-detached-frame.html [ Skip ]
 

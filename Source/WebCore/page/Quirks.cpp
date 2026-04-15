@@ -387,6 +387,17 @@ bool Quirks::needsYouTubeMouseOutQuirk() const
 #endif
 }
 
+bool Quirks::needsYouTubeCaptionsQuirk() const
+{
+#if PLATFORM(COCOA)
+    QUIRKS_EARLY_RETURN_IF_DISABLED_WITH_VALUE(false);
+
+    return m_quirksData.quirkIsEnabled(QuirksData::SiteSpecificQuirk::NeedsYouTubeCaptionQuirk);
+#else
+    return false;
+#endif
+}
+
 // safe.menlosecurity.com rdar://135114489
 // FIXME (rdar://138585709): Remove this quirk for safe.menlosecurity.com once investigation into text corruption on the site is completed and the issue is resolved.
 bool Quirks::shouldDisableWritingSuggestionsByDefault() const
@@ -943,6 +954,17 @@ bool Quirks::shouldIgnoreViewportArgumentsToAvoidEnlargedView() const
     return m_quirksData.quirkIsEnabled(QuirksData::SiteSpecificQuirk::ShouldIgnoreViewportArgumentsToAvoidEnlargedViewQuirk);
 #endif
     return false;
+}
+
+// slack.com rdar://171190689
+bool Quirks::shouldUseDynamicViewportUnitsAsDefault() const
+{
+#if ENABLE(META_VIEWPORT)
+    QUIRKS_EARLY_RETURN_IF_DISABLED_WITH_VALUE(false);
+    return m_quirksData.quirkIsEnabled(QuirksData::SiteSpecificQuirk::ShouldUseDynamicViewportUnitsAsDefaultQuirk);
+#else
+    return false;
+#endif
 }
 
 // docs.google.com https://bugs.webkit.org/show_bug.cgi?id=199933
@@ -2335,14 +2357,17 @@ bool Quirks::needsFacebookStoriesCreationFormQuirk(const Element& element, const
 }
 
 // hotels.com rdar://126631968
-bool Quirks::needsHotelsAnimationQuirk(Element& element, const RenderStyle& style) const
+bool Quirks::needsHotelsAnimationQuirk(Element& element) const
 {
     QUIRKS_EARLY_RETURN_IF_DISABLED_WITH_VALUE(false);
 
     if (!m_quirksData.quirkIsEnabled(QuirksData::SiteSpecificQuirk::NeedsHotelsAnimationQuirk))
         return false;
 
-    if (style.animations().isInitial())
+    // Quick pre-filter to avoid running the full selector match on ~99% of elements.
+    // We also check for uitk-menu-open to only apply the opening animation fix
+    // when the menu is actively being opened, not in its closed state.
+    if (!element.hasClassName("uitk-menu-container"_s) || !element.hasClassName("uitk-menu-open"_s))
         return false;
 
     auto matches = Ref { element }->matches(".uitk-menu-mounted .uitk-menu-container.uitk-menu-container-autoposition.uitk-menu-container-has-intersection-root-el"_s);
@@ -2693,6 +2718,8 @@ static void handleSlackQuirks(QuirksData& quirksData, const URL&, const String& 
 #if ENABLE(META_VIEWPORT)
     // slack.com: rdar://138614711
     quirksData.enableQuirk(QuirksData::SiteSpecificQuirk::ShouldIgnoreViewportArgumentsToAvoidEnlargedViewQuirk);
+    // slack.com: rdar://171190689
+    quirksData.enableQuirk(QuirksData::SiteSpecificQuirk::ShouldUseDynamicViewportUnitsAsDefaultQuirk);
 #else
     UNUSED_PARAM(quirksData);
 #endif
@@ -3547,6 +3574,9 @@ static void handleYouTubeQuirks(QuirksData& quirksData, const URL& quirksURL, co
         QuirksData::SiteSpecificQuirk::NeedsScrollbarWidthThinDisabledQuirk,
         // youtube.com rdar://66242343
         QuirksData::SiteSpecificQuirk::NeedsVP9FullRangeFlagQuirk,
+#if PLATFORM(COCOA)
+        QuirksData::SiteSpecificQuirk::NeedsYouTubeCaptionQuirk,
+#endif
 #if PLATFORM(IOS) || PLATFORM(VISION)
         // youtube.com: rdar://110097836
         QuirksData::SiteSpecificQuirk::ShouldSilenceResizeObservers,

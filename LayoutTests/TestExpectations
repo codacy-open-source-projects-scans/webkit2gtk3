@@ -791,11 +791,7 @@ imported/w3c/web-platform-tests/html/semantics/embedded-content/the-iframe-eleme
 imported/w3c/web-platform-tests/html/semantics/embedded-content/the-iframe-element/srcdoc_change_hash.html [ Skip ]
 imported/w3c/web-platform-tests/html/semantics/embedded-content/the-img-element/natural-size-orientation.html [ Skip ]
 imported/w3c/web-platform-tests/html/semantics/forms/the-button-element/button-submit-remove-children.html [ Skip ]
-imported/w3c/web-platform-tests/html/semantics/popovers/popover-anchor-inset-rule-display.tentative.html [ ImageOnlyFailure ]
-webkit.org/b/250171 imported/w3c/web-platform-tests/html/semantics/popovers/popover-anchor-change-display.tentative.html [ ImageOnlyFailure ]
-webkit.org/b/250171 imported/w3c/web-platform-tests/html/semantics/popovers/popover-anchor-display.tentative.html [ ImageOnlyFailure ]
 webkit.org/b/250171 imported/w3c/web-platform-tests/html/semantics/popovers/popover-anchor-nested-display.tentative.html [ ImageOnlyFailure ]
-webkit.org/b/250171 imported/w3c/web-platform-tests/html/semantics/popovers/popover-anchor-scroll-display.tentative.html [ ImageOnlyFailure ]
 webkit.org/b/250171 imported/w3c/web-platform-tests/html/semantics/popovers/popover-light-dismiss-scroll-within.html [ Skip ]
 imported/w3c/web-platform-tests/html/semantics/popovers/popover-top-layer-interactions.html [ Pass Failure ]
 imported/w3c/web-platform-tests/html/semantics/popovers/popover-top-layer-nesting.html [ Pass Failure ]
@@ -2368,7 +2364,7 @@ webkit.org/b/187003 imported/w3c/web-platform-tests/infrastructure/reftest/refte
 # WPT infrastructure tests failing.
 imported/w3c/web-platform-tests/infrastructure/assumptions/ahem.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/infrastructure/assumptions/min-font-size.html [ ImageOnlyFailure ]
-webkit.org/b/187039 imported/w3c/web-platform-tests/infrastructure/testdriver [ Skip ] # testdriver not supported yet.
+webkit.org/b/197011 imported/w3c/web-platform-tests/infrastructure/testdriver [ Skip ] # largely supported; some actions need interactive window
 webkit.org/b/187093 [ Debug ] imported/w3c/web-platform-tests/infrastructure/assumptions/html-elements.html [ Skip ]
 imported/w3c/web-platform-tests/infrastructure/server/wpt-server-websocket.sub.html [ Skip ] # non deterministic URL in text dump
 
@@ -3361,7 +3357,6 @@ imported/w3c/web-platform-tests/css/css-text/tab-size/tab-size-block-ancestor.ht
 imported/w3c/web-platform-tests/css/css-text/tab-size/tab-size-integer-004.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-text/tab-size/tab-size-spacing-002.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-text/tab-size/tab-size-spacing-003.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-text/text-autospace/text-autospace-dynamic-001.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-text/text-group-align/text-group-align-center-vlr.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-text/text-group-align/text-group-align-center.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-text/text-group-align/text-group-align-end-vlr.html [ ImageOnlyFailure ]
@@ -3494,7 +3489,33 @@ imported/w3c/web-platform-tests/css/css-text/white-space/eol-spaces-bidi-004.htm
 imported/w3c/web-platform-tests/css/css-text/white-space/hanging-whitespace-001.tentative.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-text/white-space/hanging-whitespace-002.tentative.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-text/white-space/hanging-whitespace-003.tentative.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-text/word-spacing/word-spacing-002.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/letter-spacing/letter-spacing-cursive-001.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/letter-spacing/letter-spacing-cursive-002.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/text-autospace/text-autospace-elements-002.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/text-autospace/text-autospace-elements-003.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/text-autospace/text-autospace-elements-004.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/text-autospace/text-autospace-elements-005.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/text-autospace/text-autospace-elements-005b.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/text-autospace/text-autospace-elements-006.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/text-autospace/text-autospace-elements-007.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/text-autospace/text-autospace-mixed-001.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/text-autospace/text-autospace-preformatted-001.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/text-autospace/text-autospace-vertical-combine-001.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/text-autospace/text-autospace-vertical-upright-001.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/text-autospace/text-autospace-zh-001.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/text-justify/text-justify-inter-character-atomic-inline.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/text-transform/text-transform-fullwidth-010.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/text-transform/text-transform-tailoring-001a.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/white-space/hanging-whitespace-004.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/white-space/text-wrap-balance-line-clamp-002.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/white-space/text-wrap-balance-line-clamp-003.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/white-space/text-wrap-balance-line-clamp-004.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/white-space/text-wrap-balance-line-clamp-005.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/white-space/text-wrap-balance-line-clamp-006.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/white-space/text-wrap-balance-line-clamp-007.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/white-space/textarea-always-preserves-spaces-001.tentative.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/word-break/word-break-keep-all-011.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-text/word-break/word-break-keep-all-u002d.html [ ImageOnlyFailure ]
 # css-text end
 
 webkit.org/b/186045 imported/w3c/web-platform-tests/css/css-animations/animation-delay-008.html [ ImageOnlyFailure Pass ]
@@ -6182,6 +6203,10 @@ webkit.org/b/263305 imported/w3c/web-platform-tests/close-watcher/user-activatio
 webkit.org/b/263305 imported/w3c/web-platform-tests/close-watcher/user-activation/yyy-popovers.html [ Skip ]
 webkit.org/b/263305 imported/w3c/web-platform-tests/close-watcher/user-activation/yyy.html?dialog [ Skip ]
 
+# Needs moveBefore support
+webkit.org/b/281223 imported/w3c/web-platform-tests/dom/nodes/moveBefore/focus-preserve-render.html [ Skip ]
+webkit.org/b/281223 imported/w3c/web-platform-tests/dom/nodes/moveBefore/moveBefore-as-flex-item.html [ ImageOnlyFailure ]
+
 # uncategorized dialog element failures
 webkit.org/b/286022 imported/w3c/web-platform-tests/html/semantics/interactive-elements/the-dialog-element/dialog-close-via-attribute.tentative.html [ Skip ]
 
@@ -6912,7 +6937,7 @@ imported/w3c/web-platform-tests/html/canvas/element/layers/2d.layer.valid-calls.
 imported/w3c/web-platform-tests/html/canvas/element/layers/2d.layer.valid-calls.save-beginLayer.html [ Failure ]
 imported/w3c/web-platform-tests/html/canvas/element/layers/2d.layer.valid-calls.save_reset_restore.html [ Failure ]
 
-webkit.org/b/259784 imported/w3c/web-platform-tests/html/canvas/offscreen/layers [ Skip ]
+webkit.org/b/273923 imported/w3c/web-platform-tests/html/canvas/offscreen/layers [ Skip ]
 
 # Some of Canvas Filter API features are not supported yet.
 
@@ -7781,7 +7806,6 @@ webkit.org/b/249100 imported/w3c/web-platform-tests/css/CSS2/floats/floats-zero-
 imported/w3c/web-platform-tests/css/CSS2/floats/new-fc-beside-float-with-margin-rtl.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/CSS2/floats/overflow-scroll-float-paint-order.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/CSS2/floats/overhanging-float-paint-order.html [ ImageOnlyFailure ]
-webkit.org/b/286883 imported/w3c/web-platform-tests/css/CSS2/floats/remove-block-between-inline-and-float.html [ ImageOnlyFailure ]
 webkit.org/b/286884 imported/w3c/web-platform-tests/css/CSS2/floats/zero-width-floats-positioning.tentative.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/CSS2/floats/float-nowrap-hyphen-rewind-1.html [ ImageOnlyFailure ]
 [ Debug ] imported/w3c/web-platform-tests/css/CSS2/floats/line-pushed-by-floats-crash.html [ Skip ]
@@ -7948,6 +7972,9 @@ imported/w3c/web-platform-tests/focus/iframe-focuses-parent-different-site.html 
 
 # Flaky focus failures
 imported/w3c/web-platform-tests/shadow-dom/focus/click-focus-delegatesFocus-click.html [ Skip ]
+
+# reading-flow is not yet supported
+imported/w3c/web-platform-tests/shadow-dom/focus-navigation/reading-flow [ Skip ]
 
 # Timeout.
 imported/w3c/web-platform-tests/mimesniff/sniffing/html.window.html [ Skip ]
@@ -8266,3 +8293,9 @@ imported/w3c/web-platform-tests/svg/text/reftests/textpath-path-attr-use-up-to-f
 imported/w3c/web-platform-tests/svg/text/reftests/textpath-pathlength-css-display-none.tentative.svg [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/svg/text/reftests/textpath-side-003.svg [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/svg/text/reftests/textpath-side-005.svg [ ImageOnlyFailure ]
+
+webkit.org/b/312264 imported/w3c/web-platform-tests/css/cssom-view/interrupt-hidden-smooth-scroll.html [ Pass Failure ]
+
+webkit.org/b/312304 imported/w3c/web-platform-tests/html/semantics/popovers/popover-events.html [ Skip ] # crash
+webkit.org/b/312304 imported/w3c/web-platform-tests/html/semantics/popovers/popover-focus-blur-crash.html [ Skip ] # crash
+webkit.org/b/312304 imported/w3c/web-platform-tests/html/semantics/popovers/popover-remove-attribute-during-focusing-steps.html [ Skip ] # crash

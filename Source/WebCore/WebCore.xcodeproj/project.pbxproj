@@ -5916,6 +5916,7 @@
 		CDB6354923F6023A00C0F9DE /* WebAVPlayerController.h in Headers */ = {isa = PBXBuildFile; fileRef = CDA29A2C1CBF73FC00901CCF /* WebAVPlayerController.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		CDB7045A1F7465A1003923DF /* CDMFairPlayStreaming.h in Headers */ = {isa = PBXBuildFile; fileRef = CDB704581F7465A1003923DF /* CDMFairPlayStreaming.h */; };
 		CDB7045B1F7465A1003923DF /* CDMFairPlayStreaming.cpp in Sources */ = {isa = PBXBuildFile; fileRef = CDB704591F7465A1003923DF /* CDMFairPlayStreaming.cpp */; };
+		CDBA1F362F8D9FEA00D30314 /* YouTubeCaptionQuirk.js in Product Dependencies */ = {isa = PBXBuildFile; fileRef = CDBA1F352F8D9EB300D30314 /* YouTubeCaptionQuirk.js */; };
 		CDBEAEAD19D92B6C00BEBA88 /* MediaSelectionGroupAVFObjC.h in Headers */ = {isa = PBXBuildFile; fileRef = CDBEAEAB19D92B6C00BEBA88 /* MediaSelectionGroupAVFObjC.h */; };
 		CDBEEF9A2ECF843200963F77 /* CDMKeyID.h in Headers */ = {isa = PBXBuildFile; fileRef = CDBEEF992ECF843200963F77 /* CDMKeyID.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		CDBEEF9C2ECF966900963F77 /* CDMTypesForward.h in Headers */ = {isa = PBXBuildFile; fileRef = CDBEEF9B2ECF966900963F77 /* CDMTypesForward.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -7438,6 +7439,7 @@
 			dstSubfolderSpec = 16;
 			files = (
 				DDE9931E278D0E4B00F60D26 /* libWebKitAdditions.a in Product Dependencies */,
+				CDBA1F362F8D9FEA00D30314 /* YouTubeCaptionQuirk.js in Product Dependencies */,
 			);
 			name = "Product Dependencies";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -10527,7 +10529,6 @@
 		3A25C5192CF99B4700DB9C39 /* FileSystemWriteCommandType.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FileSystemWriteCommandType.h; sourceTree = "<group>"; };
 		3A2A9AB32E4BAF48009E5497 /* ParentalControlsURLFilterParameters.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ParentalControlsURLFilterParameters.h; sourceTree = "<group>"; };
 		3A2FE8CE2978CC7800BA1D92 /* GCGLSpan.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = GCGLSpan.h; sourceTree = "<group>"; };
-		3A3189A22F79EACB0098092F /* SampledGradientBuilder.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SampledGradientBuilder.h; sourceTree = "<group>"; };
 		3A3A057F2B04971B00017309 /* PlatformXRPose.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = PlatformXRPose.cpp; sourceTree = "<group>"; };
 		3A3A05802B04971B00017309 /* PlatformXRPose.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PlatformXRPose.h; sourceTree = "<group>"; };
 		3A3A9BCA2D0C071700B99148 /* CryptoKeyData.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CryptoKeyData.h; sourceTree = "<group>"; };
@@ -20828,6 +20829,9 @@
 		CDAE8C081746B95700532D78 /* PlatformMediaSessionManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PlatformMediaSessionManager.h; sourceTree = "<group>"; };
 		CDB704581F7465A1003923DF /* CDMFairPlayStreaming.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CDMFairPlayStreaming.h; sourceTree = "<group>"; };
 		CDB704591F7465A1003923DF /* CDMFairPlayStreaming.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = CDMFairPlayStreaming.cpp; sourceTree = "<group>"; };
+		CDBA1F332F8C58FA00D30314 /* MediaSessionCaptionTrack.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MediaSessionCaptionTrack.h; sourceTree = "<group>"; };
+		CDBA1F342F8C58FA00D30314 /* MediaSessionCaptionTrack.idl */ = {isa = PBXFileReference; lastKnownFileType = text; path = MediaSessionCaptionTrack.idl; sourceTree = "<group>"; };
+		CDBA1F352F8D9EB300D30314 /* YouTubeCaptionQuirk.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = YouTubeCaptionQuirk.js; sourceTree = "<group>"; };
 		CDBD3D281FE85CB80012C545 /* VideoConfiguration.idl */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = VideoConfiguration.idl; sourceTree = "<group>"; };
 		CDBD3D291FE85CB90012C545 /* MediaConfiguration.idl */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = MediaConfiguration.idl; sourceTree = "<group>"; };
 		CDBD3D2A1FE85CBA0012C545 /* MediaEncodingConfiguration.idl */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = MediaEncodingConfiguration.idl; sourceTree = "<group>"; };
@@ -31182,6 +31186,7 @@
 				71F936F71DD4F99B00922CC7 /* tracks-support.js */,
 				717F90571DC40ED60006F520 /* volume-support.js */,
 				9551959025FA9E3D00F58CF0 /* watchos-media-controls-support.js */,
+				CDBA1F352F8D9EB300D30314 /* YouTubeCaptionQuirk.js */,
 			);
 			path = media;
 			sourceTree = "<group>";
@@ -36182,7 +36187,6 @@
 				729D052E25313E2600422098 /* RenderingResourceIdentifier.h */,
 				7225E8062A3E298C00947EBF /* RotationDirection.cpp */,
 				72D3F66C2A37F48E00F3A82B /* RotationDirection.h */,
-				3A3189A22F79EACB0098092F /* SampledGradientBuilder.h */,
 				0E9C1155291BF3CC00A2C2F2 /* ScreenDataOverrides.h */,
 				0F3DD44D12F5EA1B000D9190 /* ShadowBlur.cpp */,
 				0F3DD44E12F5EA1B000D9190 /* ShadowBlur.h */,
@@ -39419,6 +39423,8 @@
 				CDDDEA352538CE7000A1300C /* MediaSessionActionDetails.idl */,
 				CDDDEA3A2538E9C200A1300C /* MediaSessionActionHandler.h */,
 				CDDDEA392538E9C200A1300C /* MediaSessionActionHandler.idl */,
+				CDBA1F332F8C58FA00D30314 /* MediaSessionCaptionTrack.h */,
+				CDBA1F342F8C58FA00D30314 /* MediaSessionCaptionTrack.idl */,
 				072DBC0525DC6BD300A1350E /* MediaSessionCoordinator.cpp */,
 				072DBC0325DC6BD300A1350E /* MediaSessionCoordinator.h */,
 				072DBBFB25DB38BC00A1350E /* MediaSessionCoordinator.idl */,

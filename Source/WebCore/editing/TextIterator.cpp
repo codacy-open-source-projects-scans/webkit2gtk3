@@ -698,19 +698,21 @@ void TextIterator::handleTextRun()
         // Determine what the next text run will be, but don't advance yet
         auto nextTextRun = InlineIterator::nextTextBoxInLogicalOrder(m_textRun, m_textRunLogicalOrderCache);
         if (runStart < runEnd) {
-            auto isNewlineOrTab = [&](char16_t character) {
-                return character == '\n' || character == '\t';
+            bool shouldPreserveNewline = renderer->style().preserveNewline();
+            auto isCollapsibleNewlineOrTab = [&](char16_t character) {
+                return character == '\t' || (character == '\n' && !shouldPreserveNewline);
             };
-            // Handle either a single newline or tab character (which becomes a space),
-            // or a run of characters that does not include newlines or tabs.
-            // This effectively translates newlines and tabs to spaces without copying the text.
-            if (isNewlineOrTab(rendererText[runStart])) {
+            // Handle either a single collapsible newline or tab character (which becomes a space),
+            // or a run of characters that does not include such characters.
+            // This effectively translates collapsible newlines and tabs to spaces without copying the text.
+            // For white-space:pre-line, newlines are preserved rather than collapsed to spaces.
+            if (isCollapsibleNewlineOrTab(rendererText[runStart])) {
                 emitCharacter(' ', textNode.copyRef(), nullptr, runStart, runStart + 1);
                 m_offset = runStart + 1;
             } else {
                 auto subrunEnd = runStart + 1;
                 for (; subrunEnd < runEnd; ++subrunEnd) {
-                    if (isNewlineOrTab(rendererText[subrunEnd]))
+                    if (isCollapsibleNewlineOrTab(rendererText[subrunEnd]))
                         break;
                 }
                 if (subrunEnd == runEnd && m_behaviors.contains(TextIteratorBehavior::BehavesAsIfNodesFollowing)) {
@@ -1095,13 +1097,13 @@ void TextIterator::representNodeOffsetZero()
     // on m_currentNode to see if it necessitates emitting a character first and will early return
     // before encountering shouldRepresentNodeOffsetZero()s worse case behavior.
     RefPtr currentNode = m_currentNode;
+    bool emitsNewlinesPerInnerTextSpec = m_behaviors.contains(TextIteratorBehavior::EmitsNewlinesPerInnerTextSpec);
     if (shouldEmitTabBeforeNode(*currentNode)) {
         if (shouldRepresentNodeOffsetZero()) {
             RefPtr parentNode = currentNode->parentNode();
             emitCharacter('\t', WTF::move(parentNode), WTF::move(currentNode), 0, 0);
         }
     } else if (shouldEmitNewlineBeforeNode(*currentNode)) {
-        bool emitsNewlinesPerInnerTextSpec = m_behaviors.contains(TextIteratorBehavior::EmitsNewlinesPerInnerTextSpec);
         if (shouldRepresentNodeOffsetZero()) {
             RefPtr parentNode = currentNode->parentNode();
             emitCharacter('\n', WTF::move(parentNode), WTF::move(currentNode), 0, 0);
@@ -1129,6 +1131,18 @@ void TextIterator::representNodeOffsetZero()
         if (shouldRepresentNodeOffsetZero()) {
             RefPtr parentNode = currentNode->parentNode();
             emitCharacter(objectReplacementCharacter, WTF::move(parentNode), WTF::move(currentNode), 0, 0);
+        }
+    }
+
+    // When entering an inline-level block formatting context (e.g. inline-block),
+    // suppress leading collapsed whitespace. For normal blocks, the '\n' emitted
+    // above achieves this because '\n' is collapsible whitespace, preventing
+    // shouldEmitWhitespace from firing. Inline-blocks don't emit '\n', so mimic
+    // the same effect without emitting a visible character.
+    if (emitsNewlinesPerInnerTextSpec) {
+        if (CheckedPtr renderer = dynamicDowncast<RenderBlock>(m_currentNode->renderer()); renderer && renderer->isInline() && !renderer->isRenderTable()) {
+            m_lastTextNodeEndedWithCollapsedSpace = false;
+            m_lastCharacter = '\n';
         }
     }
 }
@@ -1191,6 +1205,13 @@ void TextIterator::exitNode(Node* exitedNode)
         RefPtr parentNode = baseNode->parentNode();
         emitCharacter(' ', WTF::move(parentNode), WTF::move(baseNode), 1, 1);
     }
+
+    // Trailing collapsed whitespace inside a block formatting context (e.g. inline-block)
+    // should not leak into the outer flow. For block-level elements, emitCharacter('\n')
+    // above already resets this flag, but for inline-level elements that establish a BFC
+    // (like inline-block), no newline is emitted, so we must reset it explicitly.
+    if (m_behaviors.contains(TextIteratorBehavior::EmitsNewlinesPerInnerTextSpec) && is<RenderBlock>(exitedNode->renderer()))
+        m_lastTextNodeEndedWithCollapsedSpace = false;
 }
 
 void TextIterator::emitCharacter(char16_t character, RefPtr<Node>&& characterNode, RefPtr<Node>&& offsetBaseNode, int textStartOffset, int textEndOffset)

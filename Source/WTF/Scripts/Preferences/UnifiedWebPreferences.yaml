@@ -893,20 +893,6 @@ BlockIOKitInWebContentSandbox:
     WebKit:
       default: true
 
-BlockIconServicesInWebContentSandbox:
-  type: bool
-  status: internal
-  category: networking
-  humanReadableName: "Block Icon services in the WebContent sandbox"
-  humanReadableDescription: "Block Icon services in the WebContent sandbox"
-  webcoreBinding: none
-  condition: HAVE(SANDBOX_STATE_FLAGS) && PLATFORM(MAC)
-  exposed: [ WebKit ]
-  defaultValue:
-    WebKit:
-      "ENABLE(REMOVE_XPC_AND_MACH_SANDBOX_EXTENSIONS_IN_WEBCONTENT)": true
-      default: false
-
 BlockMediaLayerRehostingInWebContentProcess:
   type: bool
   status: internal
@@ -920,20 +906,6 @@ BlockMediaLayerRehostingInWebContentProcess:
     WebKit:
       default: true
     WebCore:
-      default: false
-
-BlockMobileAssetInWebContentSandbox:
-  type: bool
-  status: internal
-  category: networking
-  humanReadableName: "Block MobileAsset service in the WebContent sandbox"
-  humanReadableDescription: "Block MobileAsset service in the WebContent sandbox"
-  webcoreBinding: none
-  condition: HAVE(SANDBOX_STATE_FLAGS)
-  exposed: [ WebKit ]
-  defaultValue:
-    WebKit:
-      "ENABLE(REMOVE_XPC_AND_MACH_SANDBOX_EXTENSIONS_IN_WEBCONTENT)": true
       default: false
 
 BlockOpenDirectoryInWebContentSandbox:
@@ -7807,17 +7779,17 @@ SpeakerSelectionRequiresUserGesture:
 
 SpeculationRulesPrefetchEnabled:
   type: bool
-  status: stable
+  status: preview
   category: html
   humanReadableName: "SpeculationRules prefetch"
   humanReadableDescription: "SpeculationRules prefetch"
   defaultValue:
     WebKitLegacy:
-      default: true
+      default: false
     WebKit:
-      default: true
+      default: false
     WebCore:
-      default: true
+      default: false
   disableInLockdownMode: true
   sharedPreferenceForWebProcess: true
   richJavaScript: true

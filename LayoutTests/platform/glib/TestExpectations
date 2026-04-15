@@ -407,6 +407,9 @@ imported/w3c/web-platform-tests/css/css-text/white-space/hanging-whitespace-001.
 imported/w3c/web-platform-tests/css/css-text/word-break/word-break-break-all-062.html [ Pass ]
 imported/w3c/web-platform-tests/css/css-text/word-break/word-break-keep-all-063.html [ Pass ]
 imported/w3c/web-platform-tests/css/css-text/word-spacing/word-spacing-001.html [ Pass ]
+imported/w3c/web-platform-tests/css/css-text/white-space/text-wrap-balance-line-clamp-002.html [ Pass ]
+imported/w3c/web-platform-tests/css/css-text/white-space/text-wrap-balance-line-clamp-005.html [ Pass ]
+imported/w3c/web-platform-tests/css/css-text/white-space/text-wrap-balance-line-clamp-006.html [ Pass ]
 imported/w3c/web-platform-tests/css/css-transforms/scale-transform-overlap.html [ Pass ]
 imported/w3c/web-platform-tests/css/css-transforms/transform-box/svgbox-stroke-box-002.html [ Pass ]
 imported/w3c/web-platform-tests/css/css-transforms/transforms-skewY.html [ Pass ]
@@ -968,6 +971,7 @@ accessibility/insert-text-into-password-field.html [ Skip ]
 accessibility/native-label-geometry-with-aria-labelledby.html [ Skip ]
 
 # These test a Cocoa-only API.
+accessibility/line-range-display-table-in-flex.html [ Skip ]
 accessibility/mixed-contenteditable-visible-character-range-hang.html [ Skip ]
 accessibility/mixed-contenteditable-double-br-visible-character-range-hang.html [ Skip ]
 
@@ -1263,7 +1267,7 @@ imported/w3c/web-platform-tests/css/css-text/hyphens/hyphens-vs-float-clearance-
 imported/w3c/web-platform-tests/css/css-text/letter-spacing/letter-spacing-ligatures-001.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-text/line-break/line-break-anywhere-overrides-uax-behavior-015.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-text/text-align/text-align-last-justify-br.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-text/text-autospace/text-autospace-mixed-001.html [ Failure ]
+imported/w3c/web-platform-tests/css/css-text/text-autospace/text-autospace-002.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/CSS2/visudet/height-applies-to-010a.xht [ ImageOnlyFailure Pass ]
 imported/w3c/web-platform-tests/css/CSS2/visudet/line-height-204.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/CSS2/linebox/inline-formatting-context-002.xht [ ImageOnlyFailure ]
@@ -3833,6 +3837,8 @@ webanimations/accelerated-animations-and-implicit-keyframes.html [ Skip ]
 fast/shadow-dom/focus-ring-on-shadow-host.html [ Skip ]
 fast/shadow-dom/focus-ring-on-shadow-host-focuswithin.html [ Skip ]
 fast/shadow-dom/focus-ring-on-shadow-host-sibling.html [ Skip ]
+imported/w3c/web-platform-tests/shadow-dom/dragleave-related-target.html [ Skip ]
+imported/w3c/web-platform-tests/shadow-dom/focus-navigation/tentative/focus-navigation-scroller-interactive-child.html [ Skip ]
 
 # HLS media playback support is disabled in the GStreamer ports.
 http/tests/media/clearkey/clear-key-hls-aes128.html [ Skip ]
@@ -4513,6 +4519,8 @@ imported/w3c/web-platform-tests/css/css-scroll-snap/snap-at-user-scroll-end.html
 imported/w3c/web-platform-tests/css/css-transforms/scroll-preserve-3d.html [ Skip ]
 imported/w3c/web-platform-tests/dom/events/non-cancelable-when-passive [ Skip ]
 imported/w3c/web-platform-tests/html/semantics/popovers/popover-light-dismiss-scroll-within.html [ Skip ]
+imported/w3c/web-platform-tests/html/semantics/popovers/popover-light-dismiss-touch-scroll.html [ Skip ]
+imported/w3c/web-platform-tests/html/semantics/popovers/popover-self-invoke.html [ Skip ]
 imported/w3c/web-platform-tests/uievents/order-of-events/mouse-events/wheel-scrolling.html [ Skip ]
 
 # Flaky tests Nov2023
@@ -5491,7 +5499,6 @@ webkit.org/b/278719 fast/events/touch/inserted-fragment-touch-target.html [ Time
 imported/w3c/web-platform-tests/css/css-text/text-autospace/text-autospace-supplementary-ideograph.html [ ImageOnlyFailure ]
 
 webkit.org/b/311844 fast/mediastream/mediastreamtrack-configurationchange.html [ Failure ]
-webkit.org/b/311845 media/encrypted-media/mock-navigator-requestMediaKeySystemAccess.html [ Pass Failure ]
 
 # This is expected to fail in all platforms but it rarely passes in GTK and WPE.
 imported/w3c/web-platform-tests/css/compositing/background-blending/background-blend-mode-plus-lighter.html [ ImageOnlyFailure Pass ]
@@ -5499,6 +5506,8 @@ imported/w3c/web-platform-tests/css/compositing/background-blending/background-b
 webkit.org/b/311928 fast/css/user-drag-none.html [ Failure Pass ]
 
 webkit.org/b/311929 fast/dom/access-key-iframe.html [ Failure Pass ]
+
+webkit.org/b/312267 imported/w3c/web-platform-tests/css/css-text/text-autospace/text-autospace-mixed-001.html [ ImageOnlyFailure ]
 
 # End: Common failures between GTK and WPE.
 

@@ -2005,7 +2005,7 @@ public:
     void inspectorNodeSearchEndedAtPosition(const WebCore::FloatPoint&);
 
     void blurFocusedElement();
-    void setIsShowingInputViewForFocusedElement(bool);
+    void setIsShowingInputViewForFocusedElement(std::optional<WebCore::FrameIdentifier>, bool);
 
     void requestFocusedElementInformation(CompletionHandler<void(const std::optional<FocusedElementInformation>&)>&&);
 #endif
@@ -2956,10 +2956,6 @@ public:
     RefPtr<WebDeviceOrientationUpdateProviderProxy> NODELETE webDeviceOrientationUpdateProviderProxy();
 #endif
 
-#if ENABLE(MODEL_ELEMENT_IMMERSIVE)
-    void exitImmersive();
-#endif
-
     friend class TextExtractionAssertionScope;
     UniqueRef<TextExtractionAssertionScope> NODELETE createTextExtractionAssertionScope();
 
@@ -2971,6 +2967,10 @@ public:
 #endif
 
     bool shouldUseBackForwardCache() const;
+
+#if ENABLE(MODEL_ELEMENT_IMMERSIVE)
+    void exitImmersive(CompletionHandler<void()>&&);
+#endif
 
 private:
     WebPageProxy(PageClient&, WebProcessProxy&, Ref<API::PageConfiguration>&&);
@@ -3371,6 +3371,7 @@ private:
 
     void elementDidFocus(IPC::Connection&, const FocusedElementInformation&, bool userIsInteracting, bool blurPreviousNode, OptionSet<WebCore::ActivityState> activityStateChanges, const UserData&);
     void elementDidBlur();
+    void convertFocusedElementInformationRectsToMainFrameCoordinates(FocusedElementInformation, CompletionHandler<void(FocusedElementInformation)>&&);
     void updateInputContextAfterBlurringAndRefocusingElement();
     void didProgrammaticallyClearFocusedElement(WebCore::ElementContext&&);
     void updateFocusedElementInformation(const FocusedElementInformation&);
@@ -4220,7 +4221,7 @@ private:
 
 #if ENABLE(MODEL_ELEMENT_IMMERSIVE)
     bool m_immersive { false };
-    std::optional<URL> m_allowedImmersiveElementFrameURL;
+    RefPtr<API::FrameInfo> m_allowedImmersiveElementFrameInfo;
 #endif
 
 #if HAVE(AUDIT_TOKEN)
