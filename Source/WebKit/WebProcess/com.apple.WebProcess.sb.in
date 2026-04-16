@@ -32,19 +32,8 @@
 (define (lockdown-mode)
     (signing-identifier "com.apple.WebKit.WebContent.CaptivePortal"))
 
-#define TRUE #t
-#define FALSE #f
-
 (define webcontent_gpu_sandbox_extensions_blocking?
 #if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 140400 && defined(RC_XBS) && RC_XBS == 1
-    TRUE
-#else
-    FALSE
-#endif
-)
-
-(define have_message_filtering?
-#if PLATFORM(MAC) && USE(APPLE_INTERNAL_SDK)
     TRUE
 #else
     FALSE
@@ -889,15 +878,15 @@
        (global-name "com.apple.system.opendirectoryd.membership"))
 )
 
-(with-filter (require-not (state-flag "BlockOpenDirectoryInWebContentSandbox"))
-    (allow mach-lookup (with telemetry-backtrace)
-        (require-all
-            (extension "com.apple.webkit.extension.mach")
-            (global-name "com.apple.system.opendirectoryd.libinfo"))))
-
-(with-filter (state-flag "BlockOpenDirectoryInWebContentSandbox")
-    (deny mach-lookup (with telemetry-backtrace)
+#if ENABLE(REMOVE_XPC_AND_MACH_SANDBOX_EXTENSIONS_IN_WEBCONTENT)
+(deny mach-lookup (with telemetry-backtrace)
+    (global-name "com.apple.system.opendirectoryd.libinfo"))
+#else
+(allow mach-lookup (with telemetry-backtrace)
+    (require-all
+        (extension "com.apple.webkit.extension.mach")
         (global-name "com.apple.system.opendirectoryd.libinfo")))
+#endif
 
 (allow file-read*
        (subpath "/private/var/db/mds")

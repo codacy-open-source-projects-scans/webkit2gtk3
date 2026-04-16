@@ -3450,7 +3450,7 @@ ExceptionOr<ShadowRoot&> Element::attachShadow(const ShadowRootInit& init, std::
     return shadow.get();
 }
 
-ExceptionOr<ShadowRoot&> Element::attachDeclarativeShadow(ShadowRootMode mode, ShadowRootDelegatesFocus delegatesFocus, ShadowRootClonable clonable, ShadowRootSerializable serializable, String referenceTarget, CustomElementRegistryKind registryKind)
+ExceptionOr<ShadowRoot&> Element::attachDeclarativeShadow(ShadowRootMode mode, ShadowRootDelegatesFocus delegatesFocus, ShadowRootClonable clonable, ShadowRootSerializable serializable, SlotAssignmentMode slotAssignment, String referenceTarget, CustomElementRegistryKind registryKind)
 {
     if (this->shadowRoot())
         return Exception { ExceptionCode::NotSupportedError };
@@ -3459,7 +3459,7 @@ ExceptionOr<ShadowRoot&> Element::attachDeclarativeShadow(ShadowRootMode mode, S
         delegatesFocus == ShadowRootDelegatesFocus::Yes,
         clonable == ShadowRootClonable::Yes,
         serializable == ShadowRootSerializable::Yes,
-        SlotAssignmentMode::Named,
+        slotAssignment,
         std::nullopt,
         referenceTarget,
     }, registryKind);
@@ -3691,6 +3691,16 @@ void Element::childrenChanged(const ChildChange& change)
             }
             if (!allInsertedElementsAreTreatedAsNeutralCharacter)
                 updateEffectiveTextDirection();
+        } else {
+            // No light DOM dir=auto ancestor, but this element may be slotted
+            // into a dir=auto slot whose direction depends on slotted content.
+            for (Ref ancestor : composedTreeAncestors(*this)) {
+                if (auto* slot = dynamicDowncast<HTMLSlotElement>(ancestor.get())) {
+                    if (slot->selfOrPrecedingNodesAffectDirAuto())
+                        slot->updateEffectiveTextDirection();
+                    break;
+                }
+            }
         }
     }
 }

@@ -738,9 +738,6 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     auto shouldAllowInstalledFonts = parameters.store.getBoolValueForKey(WebPreferencesKey::shouldAllowUserInstalledFontsKey());
     if (!shouldAllowInstalledFonts || !WTF::MacApplication::isAppleMail())
         sandbox_enable_state_flag("BlockUserInstalledFonts", *auditToken);
-    auto shouldBlockOpenDirectory = parameters.store.getBoolValueForKey(WebPreferencesKey::blockOpenDirectoryInWebContentSandboxKey());
-    if (shouldBlockOpenDirectory)
-        sandbox_enable_state_flag("BlockOpenDirectoryInWebContentSandbox", *auditToken);
 #endif // PLATFORM(MAC)
 #endif // HAVE(SANDBOX_STATE_FLAGS)
     auto shouldBlockIOKit = parameters.store.getBoolValueForKey(WebPreferencesKey::blockIOKitInWebContentSandboxKey())
@@ -4050,7 +4047,16 @@ static Expected<bool, WebCore::RemoteFrameGeometryTransformer> handleTouchEvent(
 
     auto result = localFrame->eventHandler().handleTouchEvent(platform(touchEvent));
 
-    if (weakPage && !result.value_or(false) && weakPage->pointerCaptureController().wasPointerDownDefaultPrevented())
+#if ENABLE(IOS_TOUCH_EVENTS)
+    bool canPreventNativeGestures = touchEvent.canPreventNativeGestures();
+#else
+    bool canPreventNativeGestures = false;
+#endif
+
+    // If a page has active (non-passive) touch listeners and calls pointerdown.preventDefault()
+    // but not touchstart.preventDefault(), scrolling will no longer be suppressed on the
+    // preventable path.
+    if (!canPreventNativeGestures && weakPage && !result.value_or(false) && weakPage->pointerCaptureController().wasPointerDownDefaultPrevented())
         return true;
 
     return result;

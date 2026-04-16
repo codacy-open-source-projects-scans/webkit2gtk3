@@ -1461,7 +1461,6 @@ webkit.org/b/260113 [ arm64 ] http/wpt/webauthn/ctap-hid-failure.https.html [ Pa
 [ Sonoma+ ] accessibility/mac/attributed-string/attributed-string-has-completion-annotation.html [ Pass ]
 
 # rdar://103251644 (REGRESSION : [ GuardMalloc ] com.apple.MediaToolbox: PerformTransferBytePumpAsync)
-editing/text-iterator/backwards-text-iterator-basic.html [ Crash ]
 
 # rdar://107460005 ([UI Side Compositing] fast/text/web-font-load-invisible-during-loading.html fails)
 fast/text/web-font-load-invisible-during-loading.html [ Failure ]
@@ -2240,8 +2239,6 @@ http/tests/webgpu/webgpu/web_platform/copyToTexture/ImageBitmap.html [ Pass Time
 
 # skip on intel for now due to small precision error differences
 [ x86_64 ] http/tests/webgpu/webgpu/web_platform/copyToTexture/video.html [ Skip ]
-
-webkit.org/b/312307 fast/forms/switch/click-animation-twice.html [ ImageOnlyFailure Pass ]
 
 webkit.org/b/298416 [ Debug ] http/tests/websocket/construct-in-detached-frame.html [ Skip ]
 

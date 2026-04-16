@@ -8225,8 +8225,6 @@ webkit.org/b/296910 http/tests/app-privacy-report/app-attribution-beacon-isnotap
 
 webkit.org/b/297001 http/tests/local/blob/navigate-blob.html [ Pass Failure ]
 
-webkit.org/b/312307 fast/forms/switch/click-animation-twice.html [ ImageOnlyFailure Pass ]
-
 webkit.org/b/297007 media/webaudio-background-playback.html [ Pass Failure ]
 
 webkit.org/b/297013 [ Debug ] imported/w3c/web-platform-tests/css/css-viewport/zoom/scroll-top-test-with-zoom.html [ Pass Crash ]
@@ -8452,8 +8450,6 @@ http/tests/site-isolation/remote-frame-loaded-while-hidden.html [ Pass ImageOnly
 # from fast/ tests that are flaky: adding timeout 
 webkit.org/b/304027 fast/block/basic/001.html [ Pass Failure Timeout ]
 
-webkit.org/b/310557 [ Release ] webanimations/transform-animation-with-delay-yields-accelerated-animation.html [ Pass Failure ]
-
 webkit.org/b/303650 fast/lists/marker-before-empty-inline.html [ ImageOnlyFailure ]
 
 webkit.org/b/304298 accessibility/text-stitching-inside-links.html [ Failure ]
@@ -8626,3 +8622,12 @@ webgl/2.0.y/conformance/textures/image_bitmap_from_image_bitmap/tex-2d-rgba-rgba
 webgl/2.0.y/conformance/textures/image_bitmap_from_image_bitmap/tex-2d-rgba-rgba-unsigned_short_5_5_5_1.html [ Pass Failure ]
 
 webkit.org/b/311222 [ Release ] imported/w3c/web-platform-tests/navigation-api/navigate-event/signal-abort-window-stop-after-intercept.html [ Skip ]
+
+# webkit.org/b/312385 NEW TEST (311246@main): [iOS] 7 tests in imported/w3c/web-platform-tests/html/semantics/popovers/ are failing
+imported/w3c/web-platform-tests/html/semantics/popovers/popover-focus-inside-slot.html [ Skip ]
+imported/w3c/web-platform-tests/html/semantics/popovers/popover-focus-overflow-visible.html [ Skip ]
+imported/w3c/web-platform-tests/html/semantics/popovers/popover-focus-slotted.html [ Skip ]
+imported/w3c/web-platform-tests/html/semantics/popovers/popover-light-dismiss-contextmenu.html [ Skip ]
+imported/w3c/web-platform-tests/html/semantics/popovers/popover-light-dismiss-touch-scroll.html [ Skip ]
+imported/w3c/web-platform-tests/html/semantics/popovers/popover-self-invoke.html [ Skip ]
+imported/w3c/web-platform-tests/html/semantics/popovers/popover-shadowhost-focus-navigation.html [ Skip ]
