@@ -2594,7 +2594,12 @@ static std::optional<WebCore::JSHandleIdentifier> jsHandleIdentifierInFrame(cons
 
 - (void)willBeginWritingToolsSession:(WTSession *)session requestContexts:(void (^)(NSArray<WTContext *> *))completion
 {
-    [self willBeginWritingToolsSession:session forProofreadingReview:NO requestContexts:completion];
+    BOOL proofreadingReview = NO;
+#if ENABLE(WRITING_TOOLS_EXTENDED_PROOFREADING)
+    if ([session respondsToSelector:@selector(proofreadingSessionType)] && [session proofreadingSessionType] == WTProofreadingSessionTypeGrammarChecking)
+        proofreadingReview = YES;
+#endif
+    [self willBeginWritingToolsSession:session forProofreadingReview:proofreadingReview requestContexts:completion];
 }
 
 - (void)didBeginWritingToolsSession:(WTSession *)session contexts:(NSArray<WTContext *> *)contexts
@@ -7197,10 +7202,12 @@ static RetainPtr<_WKTextExtractionResult> createEmptyTextExtractionResult()
     }
 
     if (wkInteraction.hasSetLocation) {
+        auto insets = self.obscuredContentInsets;
+        auto location = CGPointMake(wkInteraction.location.x + insets.left, wkInteraction.location.y + insets.top);
 #if PLATFORM(IOS_FAMILY)
-        interaction.locationInRootView = [self convertPoint:wkInteraction.location toView:_contentView.get()];
+        interaction.locationInRootView = [self convertPoint:location toView:_contentView.get()];
 #else
-        interaction.locationInRootView = wkInteraction.location;
+        interaction.locationInRootView = location;
 #endif
     }
     interaction.text = wkInteraction.text;

@@ -134,13 +134,13 @@ void ExecutionHandler::stopTheWorld(VM& debuggee, StopTheWorldEvent event)
     VMManager::singleton().notifyVMStop(debuggee, event);
 }
 
-DebuggerTrapStatus ExecutionHandler::handleDebuggerTrapIfNeeded(CallFrame* callFrame, JSWebAssemblyInstance* instance, IPIntCallee* callee, uint8_t* pc, uint8_t* mc, IPInt::IPIntLocal* locals, IPInt::IPIntStackEntry* stack, Wasm::ExceptionType exceptionType)
+DebuggerTrapStatus ExecutionHandler::handleDebuggerTrapIfNeeded(CallFrame* callFrame, JSWebAssemblyInstance* instance, IPIntCallee* callee, uint8_t* pc, uint8_t* mc, IPInt::IPIntStackEntry* stack, Wasm::ExceptionType exceptionType)
 {
     VM& debuggee = instance->vm();
     if (exceptionType == Wasm::ExceptionType::Unreachable && hasBreakpoints()) {
         VirtualAddress address = VirtualAddress::toVirtual(instance, callee->functionIndex(), pc);
         if (auto* breakpoint = m_breakpointManager->findBreakpoint(address)) {
-            debuggee.debugState()->setBreakpointStopData(breakpoint->type, address, breakpoint->originalBytecode, pc, mc, locals, stack, callee, instance, callFrame);
+            debuggee.debugState()->setBreakpointStopData(breakpoint->type, address, breakpoint->originalBytecode, pc, mc, stack, callee, instance, callFrame);
             dataLogLnIf(Options::verboseWasmDebugger(), "[Code][handleDebuggerTrapIfNeeded] Breakpoint at ", *breakpoint, " with ", *debuggee.debugState()->stopData);
             stopTheWorld(debuggee, StopTheWorldEvent::WasmProgramStop);
             return DebuggerTrapStatus::ResolvedByDebugger; // Don't throw; resume execution at this breakpoint
@@ -157,7 +157,7 @@ DebuggerTrapStatus ExecutionHandler::handleDebuggerTrapIfNeeded(CallFrame* callF
         debuggee.debugState()->stopReason = DebugState::Reason::WasmTrap;
         debuggee.debugState()->stopData->wasmTrapType = exceptionType;
     } else
-        debuggee.debugState()->setTrapStopData(callee, instance, callFrame, pc, mc, locals, stack, exceptionType);
+        debuggee.debugState()->setTrapStopData(callee, instance, callFrame, pc, mc, stack, exceptionType);
     dataLogLnIf(Options::verboseWasmDebugger(), "[Code][handleDebuggerTrapIfNeeded] Wasm trap at ", *debuggee.debugState()->stopData);
     stopTheWorld(debuggee, StopTheWorldEvent::WasmProgramStop);
     return DebuggerTrapStatus::NotResolvedByDebugger; // Throw; trap was reported, now propagate it
@@ -541,8 +541,7 @@ void ExecutionHandler::setStepIntoBreakpointForCall(VM& callerVM, CalleeBits box
         dataLogLnIf(Options::verboseWasmDebugger(), "[Code][StepIntoEvent] Start for call");
         RELEASE_ASSERT(m_debuggerState == DebuggerState::StepRequested);
 
-        if (!calleeInstance)
-            return;
+        RELEASE_ASSERT(calleeInstance);
         if (!boxedCallee.isNativeCallee())
             return;
         RefPtr wasmCallee = downcast<Wasm::Callee>(boxedCallee.asNativeCallee());
@@ -828,7 +827,9 @@ void ExecutionHandler::sendStopReplyForThread(AbstractLocker& locker, uint64_t t
     // Append library:; to prompt LLDB to re-query qXfer:libraries:read when there are pending
     // library changes: (1) new-module-load stop, (2) piggybacked on any natural stop when a module
     // was loaded but no dedicated stop fired yet, (3) module removal via unregisterModule().
-    if (m_moduleManager.needsLibraryRequery()) {
+    // Gated on isDebuggerReady() to avoid sending library:; in the ? reply before the initial
+    // qXfer:libraries:read handshake completes.
+    if (m_moduleManager.needsLibraryRequery() && m_debugServer.isDebuggerReady()) {
         reply.append("library:;"_s);
         // Include a human-readable description only for dedicated new-module-load stops.
         if (state->isNewModuleLoad) {

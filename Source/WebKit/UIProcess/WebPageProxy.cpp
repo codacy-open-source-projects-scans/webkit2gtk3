@@ -256,6 +256,7 @@
 #include <WebCore/MIMETypeRegistry.h>
 #include <WebCore/MediaDeviceHashSalts.h>
 #include <WebCore/MediaStreamRequest.h>
+#include <WebCore/MixedContentChecker.h>
 #include <WebCore/ModalContainerTypes.h>
 #include <WebCore/NotImplemented.h>
 #include <WebCore/OrganizationStorageAccessPromptQuirk.h>
@@ -6272,11 +6273,23 @@ void WebPageProxy::accessibilitySettingsDidChange()
 void WebPageProxy::setAccessibilityMode(WebCore::AccessibilityMode mode)
 {
     if (std::optional resolvedMode = WebCore::resolveAccessibilityModeTransition(m_accessibilityMode, mode)) {
+        bool modeWasOff = WebCore::isAccessibilityModeOff(m_accessibilityMode);
         m_accessibilityMode = *resolvedMode;
+        bool modeIsOn = !WebCore::isAccessibilityModeOff(m_accessibilityMode);
 
         forEachWebContentProcess([&](auto& webProcess, auto pageID) {
             webProcess.send(Messages::WebPage::InheritAccessibilityMode(m_accessibilityMode), pageID);
         });
+
+#if ENABLE(ACCESSIBILITY_LOCAL_FRAME)
+        // When transitioning from off to any on state, eagerly compute frame
+        // geometry so it's available as soon as accessibility clients need it.
+        if (modeWasOff && modeIsOn)
+            scheduleAccessibilityFrameGeometryUpdate();
+#else
+        UNUSED_VARIABLE(modeWasOff);
+        UNUSED_VARIABLE(modeIsOn);
+#endif
     }
 }
 
@@ -7343,22 +7356,70 @@ void WebPageProxy::setFramePrinting(IPC::Connection& connection, WebCore::FrameI
     });
 }
 
-void WebPageProxy::resolveAccessibilityHitTestForTesting(WebCore::FrameIdentifier frameID, WebCore::IntPoint point, CompletionHandler<void(String)>&& callback)
+void WebPageProxy::resolveAccessibilityHitTestForTesting(IPC::Connection& connection, WebCore::FrameIdentifier frameID, WebCore::IntPoint point, CompletionHandler<void(String)>&& callback)
 {
+    RefPtr frame = WebFrameProxy::webFrame(frameID);
+    if (!frame) {
+        callback({ });
+        return;
+    }
+
+    Ref process = WebProcessProxy::fromConnection(connection);
+    RefPtr parentFrame = frame->parentFrame();
+    // The sending process is hit-testing a remote child frame (|frame|), so the parent frame
+    // of |frame| must be associated with the sending process (the parent). This protects against
+    // compromised processes sending IPC to processes they shouldn't be talking to.
+    MESSAGE_CHECK_COMPLETION(process, parentFrame && &parentFrame->process() == process.ptr(), callback({ }));
+
     sendWithAsyncReplyToProcessContainingFrame(frameID, Messages::WebPage::ResolveAccessibilityHitTestForTesting(frameID, point), WTF::move(callback));
 }
 
 #if PLATFORM(MAC)
-void WebPageProxy::performAccessibilitySearchInRemoteFrame(WebCore::FrameIdentifier frameID, WebCore::AccessibilitySearchCriteriaIPC criteria, CompletionHandler<void(Vector<WebCore::AccessibilityRemoteToken>&&)>&& callback)
+void WebPageProxy::performAccessibilitySearchInRemoteFrame(IPC::Connection& connection, WebCore::FrameIdentifier frameID, WebCore::AccessibilitySearchCriteriaIPC criteria, CompletionHandler<void(Vector<WebCore::AccessibilityRemoteToken>&&)>&& callback)
 {
+    if (criteria.searchText.length() > AccessibilitySearchCriteriaIPC::maxSearchTextLength) {
+        callback({ });
+        return;
+    }
+
+    RefPtr frame = WebFrameProxy::webFrame(frameID);
+    if (!frame) {
+        callback({ });
+        return;
+    }
+
+    Ref process = WebProcessProxy::fromConnection(connection);
+    RefPtr parentFrame = frame->parentFrame();
+    // The sending process is searching a remote child frame (|frame|), so the parent frame
+    // of |frame| must be associated with the sending process (the parent). This protects against
+    // compromised processes sending IPC to processes they shouldn't be talking to.
+    MESSAGE_CHECK_COMPLETION(process, parentFrame && &parentFrame->process() == process.ptr(), callback({ }));
+
     sendWithAsyncReplyToProcessContainingFrame(frameID, Messages::WebPage::PerformAccessibilitySearchInRemoteFrame(frameID, criteria), WTF::move(callback));
 }
 
-void WebPageProxy::continueAccessibilitySearchFromChildFrame(WebCore::FrameIdentifier childFrameID, WebCore::AccessibilitySearchCriteriaIPC criteria, CompletionHandler<void(Vector<WebCore::AccessibilityRemoteToken>&&)>&& callback)
+void WebPageProxy::continueAccessibilitySearchFromChildFrame(IPC::Connection& connection, WebCore::FrameIdentifier childFrameID, WebCore::AccessibilitySearchCriteriaIPC criteria, CompletionHandler<void(Vector<WebCore::AccessibilityRemoteToken>&&)>&& callback)
 {
+    if (criteria.searchText.length() > AccessibilitySearchCriteriaIPC::maxSearchTextLength) {
+        callback({ });
+        return;
+    }
+
     // Find the child frame and get its parent frame to continue the search.
     RefPtr childFrame = WebFrameProxy::webFrame(childFrameID);
-    RefPtr parentFrame = childFrame ? childFrame->parentFrame() : nullptr;
+    if (!childFrame) {
+        callback({ });
+        return;
+    }
+
+    Ref process = WebProcessProxy::fromConnection(connection);
+    // The sending process just finished searching a remote child frame (|childFrame|), so the
+    // parent frame of |childFrame| must be associated with the sending process (the parent).
+    // This protects against compromised processes sending IPC to processes they shouldn't be
+    // talking to.
+    MESSAGE_CHECK_COMPLETION(process, &childFrame->process() == process.ptr(), callback({ }));
+
+    RefPtr parentFrame = childFrame->parentFrame();
     if (!parentFrame) {
         callback({ });
         return;
@@ -17811,16 +17872,8 @@ void WebPageProxy::reportMixedContentViolation(FrameIdentifier frameID, bool blo
     if (!frame)
         return;
 
-    auto isUpgradingLocalhostDisabled = !protect(preferences())->iPAddressAndLocalhostMixedContentUpgradeTestingEnabled() && shouldTreatAsPotentiallyTrustworthy(target);
-    ASCIILiteral errorString = [&] {
-        if (blocked)
-            return "blocked and must"_s;
-        if (isUpgradingLocalhostDisabled)
-            return "not upgraded to HTTPS and must be served from the local host."_s;
-        return "automatically upgraded and should"_s;
-    }();
+    auto message = MixedContentChecker::mixedContentViolationMessage(protect(preferences())->iPAddressAndLocalhostMixedContentUpgradeTestingEnabled(), blocked, frame->url(), target);
 
-    auto message = makeString((!blocked ? ""_s : "[blocked] "_s), "The page at "_s, frame->url().stringCenterEllipsizedToLength(), " requested insecure content from "_s, target.stringCenterEllipsizedToLength(), ". This content was "_s, errorString, !isUpgradingLocalhostDisabled ? " be served over HTTPS.\n"_s : "\n"_s);
     addConsoleMessage(frameID, MessageSource::Security, MessageLevel::Warning, message);
 }
 

@@ -180,15 +180,21 @@ macro ipintEntry()
     end
     mulp LocalSize, argumINTEnd
     mulp LocalSize, argumINTTmp
-    subp argumINTEnd, sp
-    move sp, argumINTEnd
+    # Allocate locals first (closest to CFR)
     subp argumINTTmp, sp
     move sp, argumINTDsp
+    # Allocate rethrow slots below locals
+    subp argumINTEnd, sp
+    # argumINTEnd = boundary for zero-init loop. Handlers write [argumINTDst] then subp,
+    # so after localSizeToAlloc handlers, argumINTDst = argumINTDsp - LocalSize.
+    move argumINTDsp, argumINTEnd
+    subp LocalSize, argumINTEnd
     loadp Wasm::IPIntCallee::m_argumINTBytecode + VectorBufferOffset[ws0], MC
 
     push argumINTTmp, argumINTDst, argumINTSrc, argumINTEnd
 
-    move argumINTDsp, argumINTDst
+    # Start writing at local[0] = CFR - IPIntLocalsBaseOffset, going downward
+    leap -IPIntLocalsBaseOffset[cfr], argumINTDst
     leap FirstArgumentOffset[cfr], argumINTSrc
 
     validateOpcodeConfig(argumINTTmp)
@@ -210,7 +216,7 @@ end
 end
 
 macro argumINTInitializeDefaultLocals()
-    # zero out remaining locals
+    # zero out remaining locals (argumINTDst moves downward toward argumINTEnd)
     bpeq argumINTDst, argumINTEnd, .ipint_entry_finish_zero
     loadb [MC], argumINTTmp
     addp 1, MC
@@ -223,7 +229,7 @@ elsif X86_64
     storep argumINTTmp, [argumINTDst]
     storep 0, 8[argumINTDst]
 end
-    addp LocalSize, argumINTDst
+    subp LocalSize, argumINTDst
 end
 
 macro argumINTFinish()
@@ -356,9 +362,8 @@ ipintOp(_rethrow, macro()
     copyCalleeSavesToEntryFrameCalleeSavesBuffer(t0)
 
     move cfr, a1
-    move PL, a2
-    loadi IPInt::RethrowMetadata::tryDepth[MC], a3
-    operationCall(macro() cCall4(_ipint_extern_rethrow_exception) end)
+    loadi IPInt::RethrowMetadata::tryDepth[MC], a2
+    operationCall(macro() cCall3(_ipint_extern_rethrow_exception) end)
     jumpToException()
 end)
 
@@ -740,9 +745,10 @@ end)
     ###################################
 
 macro localGetPostDecode()
-    # Index into locals
+    # Index into locals: local[i] = CFR - IPIntLocalsBaseOffset - i * LocalSize
     mulq LocalSize, t0
-    loadv [PL, t0], v0
+    subp cfr, t0, t0
+    loadv -IPIntLocalsBaseOffset[t0], v0
     # Push to stack
     pushVec(v0)
     nextIPIntInstruction()
@@ -759,9 +765,10 @@ end)
 macro localSetPostDecode()
     # Pop from stack
     popVec(v0)
-    # Store to locals
+    # Store to locals: local[i] = CFR - IPIntLocalsBaseOffset - i * LocalSize
     mulq LocalSize, t0
-    storev v0, [PL, t0]
+    subp cfr, t0, t0
+    storev v0, -IPIntLocalsBaseOffset[t0]
     nextIPIntInstruction()
 end
 
@@ -776,9 +783,10 @@ end)
 macro localTeePostDecode()
     # Load from stack
     loadv [sp], v0
-    # Store to locals
+    # Store to locals: local[i] = CFR - IPIntLocalsBaseOffset - i * LocalSize
     mulq LocalSize, t0
-    storev v0, [PL, t0]
+    subp cfr, t0, t0
+    storev v0, -IPIntLocalsBaseOffset[t0]
     nextIPIntInstruction()
 end
 
@@ -3075,8 +3083,8 @@ end)
 ipintOp(_conversion_prefix, macro()
     leap 1[PC], t4
     decodeLEBVarUInt(t0, t4, t1, t2)
-    # Security guarantee: always less than 18 (0x00 -> 0x11)
-    biaeq t0, 0x12, .ipint_conversion_nonexistent
+    # Security guarantee: always less than 23 (0x00 -> 0x16)
+    biaeq t0, 0x17, .ipint_conversion_nonexistent
     leap _os_script_config_storage, t1
     loadp JSC::LLInt::OpcodeConfig::ipint_conversion_dispatch_base[t1], t1
     if ARM64 or ARM64E
@@ -3946,6 +3954,91 @@ ipintOp(_table_fill, macro()
     loadb IPInt::TableFillMetadata::instructionLength[MC], t0
     advancePCByReg(t0)
     advanceMC(constexpr (sizeof(IPInt::TableFillMetadata)))
+    nextIPIntInstruction()
+end)
+
+reservedOpcode(misc_0x12)
+    break
+
+##################################
+## Wide Arithmetic Instructions ##
+##################################
+
+ipintOp(_i64_add128, macro()
+    # i64.add128: [lhsLo lhsHi rhsLo rhsHi] -> [resultLo resultHi]
+    # Stack layout (top first): sp[0]=rhsHi, sp[1]=rhsLo, sp[2]=lhsHi, sp[3]=lhsLo
+    popQuad(t3) # rhsHi
+    popQuad(t2) # rhsLo
+    popQuad(t1) # lhsHi
+    popQuad(t0) # lhsLo
+    if ARM64 or ARM64E
+        addqs t0, t2, t0   # resultLo = lhsLo + rhsLo, sets carry flag
+        adcq t1, t3, t1    # resultHi = lhsHi + rhsHi + carry flag
+    elsif X86_64
+        addq t2, t0        # resultLo = lhsLo + rhsLo, sets carry flag
+        adcq t3, t1        # resultHi = lhsHi + rhsHi + carry flag
+    end
+    pushQuad(t0)
+    pushQuad(t1)
+    move t4, PC
+    nextIPIntInstruction()
+end)
+
+ipintOp(_i64_sub128, macro()
+    # i64.sub128: [lhsLo lhsHi rhsLo rhsHi] -> [resultLo resultHi]
+    # Stack layout (top first): sp[0]=rhsHi, sp[1]=rhsLo, sp[2]=lhsHi, sp[3]=lhsLo
+    popQuad(t3) # rhsHi
+    popQuad(t2) # rhsLo
+    popQuad(t1) # lhsHi
+    popQuad(t0) # lhsLo
+    if ARM64 or ARM64E
+        subqs t0, t2, t0   # resultLo = lhsLo - rhsLo, sets carry flag (borrow)
+        sbcq t1, t3, t1    # resultHi = lhsHi - rhsHi - carry flag
+    elsif X86_64
+        subq t2, t0        # resultLo = lhsLo - rhsLo, sets carry flag (borrow)
+        sbcq t3, t1        # resultHi = lhsHi - rhsHi - carry flag
+    end
+    pushQuad(t0)
+    pushQuad(t1)
+    move t4, PC
+    nextIPIntInstruction()
+end)
+
+ipintOp(_i64_mul_wide_s, macro()
+    # i64.mul_wide_s: [lhs rhs] -> [resultLo resultHi]
+    # Stack layout (top first): sp[0]=rhs, sp[1]=lhs
+    popQuad(t1) # rhs
+    popQuad(t0) # lhs
+    if ARM64 or ARM64E
+        smulhq t0, t1, t2  # resultHi = smulh(lhs, rhs) - must precede mulq
+        mulq t1, t0        # resultLo = lhs * rhs
+    elsif X86_64
+        # t0 = rax
+        # t2 = rdx
+        smulhq t1          # imulq %rsi: rdx:rax = rax * rsi -> t0=resultLo, t2=resultHi
+    end
+    pushQuad(t0)
+    pushQuad(t2)
+    move t4, PC
+    nextIPIntInstruction()
+end)
+
+ipintOp(_i64_mul_wide_u, macro()
+    # i64.mul_wide_u: [lhs rhs] -> [resultLo resultHi]
+    # Stack layout (top first): sp[0]=rhs, sp[1]=lhs
+    popQuad(t1) # rhs
+    popQuad(t0) # lhs
+    if ARM64 or ARM64E
+        umulhq t0, t1, t2  # resultHi = umulh(lhs, rhs) - must precede mulq
+        mulq t1, t0        # resultLo = lhs * rhs
+    elsif X86_64
+        # t0 = rax
+        # t2 = rdx
+        umulhq t1          # mulq %rsi: rdx:rax = rax * rsi -> t0=resultLo, t2=resultHi
+    end
+    pushQuad(t0)
+    pushQuad(t2)
+    move t4, PC
     nextIPIntInstruction()
 end)
 
@@ -10298,8 +10391,6 @@ macro weakCASExchangeQuad(mem, value, expected, scratch, scratch2)
 end
 
 ipintAtomicOp(_i32_atomic_rmw_cmpxchg, macro()
-    # t7 is safe for value: PL is t6 on ARM64, t5 on x86, csr10 on RISCV64.
-    # ARMv7 (where PL=t7) does not run 64-bit atomic instructions.
     popInt64(t7)
     popInt64(t3)
     popMemoryIndex(t0)
@@ -10311,8 +10402,6 @@ ipintAtomicOp(_i32_atomic_rmw_cmpxchg, macro()
 end)
 
 ipintAtomicOp(_i64_atomic_rmw_cmpxchg, macro()
-    # t7 is safe for value: PL is t6 on ARM64, t5 on x86, csr10 on RISCV64.
-    # ARMv7 (where PL=t7) does not run 64-bit atomic instructions.
     popInt64(t7)
     popInt64(t3)
     popMemoryIndex(t0)
@@ -10324,8 +10413,6 @@ ipintAtomicOp(_i64_atomic_rmw_cmpxchg, macro()
 end)
 
 ipintAtomicOp(_i32_atomic_rmw8_cmpxchg_u, macro()
-    # t7 is safe for value: PL is t6 on ARM64, t5 on x86, csr10 on RISCV64.
-    # ARMv7 (where PL=t7) does not run 64-bit atomic instructions.
     popInt64(t7)
     popInt64(t3)
     popMemoryIndex(t0)
@@ -10337,8 +10424,6 @@ ipintAtomicOp(_i32_atomic_rmw8_cmpxchg_u, macro()
 end)
 
 ipintAtomicOp(_i32_atomic_rmw16_cmpxchg_u, macro()
-    # t7 is safe for value: PL is t6 on ARM64, t5 on x86, csr10 on RISCV64.
-    # ARMv7 (where PL=t7) does not run 64-bit atomic instructions.
     popInt64(t7)
     popInt64(t3)
     popMemoryIndex(t0)
@@ -10350,8 +10435,6 @@ ipintAtomicOp(_i32_atomic_rmw16_cmpxchg_u, macro()
 end)
 
 ipintAtomicOp(_i64_atomic_rmw8_cmpxchg_u, macro()
-    # t7 is safe for value: PL is t6 on ARM64, t5 on x86, csr10 on RISCV64.
-    # ARMv7 (where PL=t7) does not run 64-bit atomic instructions.
     popInt64(t7)
     popInt64(t3)
     popMemoryIndex(t0)
@@ -10363,8 +10446,6 @@ ipintAtomicOp(_i64_atomic_rmw8_cmpxchg_u, macro()
 end)
 
 ipintAtomicOp(_i64_atomic_rmw16_cmpxchg_u, macro()
-    # t7 is safe for value: PL is t6 on ARM64, t5 on x86, csr10 on RISCV64.
-    # ARMv7 (where PL=t7) does not run 64-bit atomic instructions.
     popInt64(t7)
     popInt64(t3)
     popMemoryIndex(t0)
@@ -10376,8 +10457,6 @@ ipintAtomicOp(_i64_atomic_rmw16_cmpxchg_u, macro()
 end)
 
 ipintAtomicOp(_i64_atomic_rmw32_cmpxchg_u, macro()
-    # t7 is safe for value: PL is t6 on ARM64, t5 on x86, csr10 on RISCV64.
-    # ARMv7 (where PL=t7) does not run 64-bit atomic instructions.
     popInt64(t7)
     popInt64(t3)
     popMemoryIndex(t0)
@@ -10448,7 +10527,7 @@ end
 
 .ipint_i32_load_mem_slow_path:
     leap 1[PC], t4
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     loadi [t0], t1
     pushInt32(t1)
     move t4, PC
@@ -10456,7 +10535,7 @@ end
 
 .ipint_i64_load_mem_slow_path:
     leap 1[PC], t4
-    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, t5, t6)
     loadq [t0], t1
     pushInt64(t1)
     move t4, PC
@@ -10464,7 +10543,7 @@ end
 
 .ipint_f32_load_mem_slow_path:
     leap 1[PC], t4
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     loadf [t0], ft0
     pushFloat32(ft0)
     move t4, PC
@@ -10472,7 +10551,7 @@ end
 
 .ipint_f64_load_mem_slow_path:
     leap 1[PC], t4
-    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, t5, t6)
     loadd [t0], ft0
     pushFloat64(ft0)
     move t4, PC
@@ -10480,7 +10559,7 @@ end
 
 .ipint_i32_load8s_mem_slow_path:
     leap 1[PC], t4
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     loadbsi [t0], t1
     pushInt32(t1)
     move t4, PC
@@ -10488,7 +10567,7 @@ end
 
 .ipint_i32_load8u_mem_slow_path:
     leap 1[PC], t4
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     loadb [t0], t1
     pushInt32(t1)
     move t4, PC
@@ -10496,7 +10575,7 @@ end
 
 .ipint_i32_load16s_mem_slow_path:
     leap 1[PC], t4
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     loadhsi [t0], t1
     pushInt32(t1)
     move t4, PC
@@ -10504,7 +10583,7 @@ end
 
 .ipint_i32_load16u_mem_slow_path:
     leap 1[PC], t4
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     loadh [t0], t1
     pushInt32(t1)
     move t4, PC
@@ -10512,7 +10591,7 @@ end
 
 .ipint_i64_load8s_mem_slow_path:
     leap 1[PC], t4
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     loadbsq [t0], t1
     pushInt64(t1)
     move t4, PC
@@ -10520,7 +10599,7 @@ end
 
 .ipint_i64_load8u_mem_slow_path:
     leap 1[PC], t4
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     loadb [t0], t1
     pushInt64(t1)
     move t4, PC
@@ -10528,7 +10607,7 @@ end
 
 .ipint_i64_load16s_mem_slow_path:
     leap 1[PC], t4
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     loadhsq [t0], t1
     pushInt64(t1)
     move t4, PC
@@ -10536,7 +10615,7 @@ end
 
 .ipint_i64_load16u_mem_slow_path:
     leap 1[PC], t4
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     loadh [t0], t1
     pushInt64(t1)
     move t4, PC
@@ -10544,7 +10623,7 @@ end
 
 .ipint_i64_load32s_mem_slow_path:
     leap 1[PC], t4
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     loadi [t0], t1
     sxi2q t1, t1
     pushInt64(t1)
@@ -10553,7 +10632,7 @@ end
 
 .ipint_i64_load32u_mem_slow_path:
     leap 1[PC], t4
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     loadi [t0], t1
     pushInt64(t1)
     move t4, PC
@@ -10561,63 +10640,63 @@ end
 
 .ipint_i32_store_mem_slow_path:
     leap 1[PC], t4
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     storei t3, [t0]
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_store_mem_slow_path:
     leap 1[PC], t4
-    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, t5, t6)
     storeq t3, [t0]
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_f32_store_mem_slow_path:
     leap 1[PC], t4
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     storef ft0, [t0]
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_f64_store_mem_slow_path:
     leap 1[PC], t4
-    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, t5, t6)
     stored ft0, [t0]
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_store8_mem_slow_path:
     leap 1[PC], t4
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     storeb t3, [t0]
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_store16_mem_slow_path:
     leap 1[PC], t4
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     storeh t3, [t0]
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_store8_mem_slow_path:
     leap 1[PC], t4
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     storeb t3, [t0]
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_store16_mem_slow_path:
     leap 1[PC], t4
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     storeh t3, [t0]
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_store32_mem_slow_path:
     leap 1[PC], t4
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     storei t3, [t0]
     move t4, PC
     nextIPIntInstruction()
@@ -10631,90 +10710,90 @@ end
 # After loadStoreMakePointerSlow, t4 points past the memarg.
 
 .simd_v128_load_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 16, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 16, t1, t2, t5, t6)
     loadv [t0], v0
     pushVec(v0)
     move t4, PC
     nextIPIntInstruction()
 
 .simd_v128_load_8x8s_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, t5, t6)
     simdLoad8x8s()
     pushVec(v0)
     move t4, PC
     nextIPIntInstruction()
 
 .simd_v128_load_8x8u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, t5, t6)
     simdLoad8x8u()
     pushVec(v0)
     move t4, PC
     nextIPIntInstruction()
 
 .simd_v128_load_16x4s_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, t5, t6)
     simdLoad16x4s()
     pushVec(v0)
     move t4, PC
     nextIPIntInstruction()
 
 .simd_v128_load_16x4u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, t5, t6)
     simdLoad16x4u()
     pushVec(v0)
     move t4, PC
     nextIPIntInstruction()
 
 .simd_v128_load_32x2s_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, t5, t6)
     simdLoad32x2s()
     pushVec(v0)
     move t4, PC
     nextIPIntInstruction()
 
 .simd_v128_load_32x2u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, t5, t6)
     simdLoad32x2u()
     pushVec(v0)
     move t4, PC
     nextIPIntInstruction()
 
 .simd_v128_load8_splat_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     simdLoadSplat8()
     pushVec(v0)
     move t4, PC
     nextIPIntInstruction()
 
 .simd_v128_load16_splat_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     simdLoadSplat16()
     pushVec(v0)
     move t4, PC
     nextIPIntInstruction()
 
 .simd_v128_load32_splat_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     simdLoadSplat32()
     pushVec(v0)
     move t4, PC
     nextIPIntInstruction()
 
 .simd_v128_load64_splat_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, t5, t6)
     simdLoadSplat64()
     pushVec(v0)
     move t4, PC
     nextIPIntInstruction()
 
 .simd_v128_store_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 16, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 16, t1, t2, t5, t6)
     storev v0, [t0]
     move t4, PC
     nextIPIntInstruction()
 
 .simd_v128_load32_zero_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     loadi [t0], t0
     subp V128ISize, sp
     storei t0, [sp]
@@ -10724,7 +10803,7 @@ end
     nextIPIntInstruction()
 
 .simd_v128_load64_zero_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, t5, t6)
     loadq [t0], t0
     subp V128ISize, sp
     storeq t0, [sp]
@@ -10736,7 +10815,7 @@ end
 # t4 points past memarg after loadStoreMakePointerSlow. Lane index is at [t4].
 
 .simd_v128_load8_lane_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     loadb [t0], t0
     loadb [t4], t1
     andi ImmLaneIdx16Mask, t1
@@ -10746,7 +10825,7 @@ end
     nextIPIntInstruction()
 
 .simd_v128_load16_lane_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     loadh [t0], t0
     loadb [t4], t1
     andi ImmLaneIdx8Mask, t1
@@ -10756,7 +10835,7 @@ end
     nextIPIntInstruction()
 
 .simd_v128_load32_lane_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     loadi [t0], t0
     loadb [t4], t1
     andi ImmLaneIdx4Mask, t1
@@ -10766,7 +10845,7 @@ end
     nextIPIntInstruction()
 
 .simd_v128_load64_lane_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, t5, t6)
     loadq [t0], t0
     loadb [t4], t1
     andi ImmLaneIdx2Mask, t1
@@ -10779,7 +10858,7 @@ end
 # t4 points past memarg. Lane index is at [t4].
 
 .simd_v128_store8_lane_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     loadb [t4], t1
     andi ImmLaneIdx16Mask, t1
     pushVec(v0)
@@ -10790,7 +10869,7 @@ end
     nextIPIntInstruction()
 
 .simd_v128_store16_lane_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     loadb [t4], t1
     andi ImmLaneIdx8Mask, t1
     pushVec(v0)
@@ -10801,7 +10880,7 @@ end
     nextIPIntInstruction()
 
 .simd_v128_store32_lane_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     loadb [t4], t1
     andi ImmLaneIdx4Mask, t1
     pushVec(v0)
@@ -10812,7 +10891,7 @@ end
     nextIPIntInstruction()
 
 .simd_v128_store64_lane_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, t5, t6)
     loadb [t4], t1
     andi ImmLaneIdx2Mask, t1
     pushVec(v0)
@@ -10833,448 +10912,434 @@ end
 # After loadStoreMakePointerSlow, t4 points past the memarg.
 
 .ipint_i32_atomic_load_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     doI32AtomicLoad(t0, t2)
     pushInt32(t2)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_load_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, t5, t6)
     doI64AtomicLoad(t0, t2)
     pushInt64(t2)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_load8_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     doI32AtomicLoad8(t0, t2)
     pushInt32(t2)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_load16_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     doI32AtomicLoad16(t0, t2)
     pushInt32(t2)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_load8_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     doI64AtomicLoad8(t0, t2)
     pushInt64(t2)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_load16_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     doI64AtomicLoad16(t0, t2)
     pushInt64(t2)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_load32_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     doI64AtomicLoad32(t0, t2)
     pushInt64(t2)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_store_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     doI32AtomicStore(t0, t3, t2, t1)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_store_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, t5, t6)
     doI64AtomicStore(t0, t3, t2, t1)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_store8_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     doI32AtomicStore8(t0, t3, t2, t1)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_store16_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     doI32AtomicStore16(t0, t3, t2, t1)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_store8_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     doI64AtomicStore8(t0, t3, t2, t1)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_store16_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     doI64AtomicStore16(t0, t3, t2, t1)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_store32_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     doI64AtomicStore32(t0, t3, t2, t1)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_rmw_add_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     doI32AtomicRmwAdd(t0, t3, t2, t1)
     pushInt32(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw_add_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, t5, t6)
     doI64AtomicRmwAdd(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_rmw8_add_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     doI32AtomicRmwAdd8(t0, t3, t2, t1)
     pushInt32(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_rmw16_add_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     doI32AtomicRmwAdd16(t0, t3, t2, t1)
     pushInt32(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw8_add_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     doI64AtomicRmwAdd8(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw16_add_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     doI64AtomicRmwAdd16(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw32_add_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     doI64AtomicRmwAdd32(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_rmw_sub_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     doI32AtomicRmwSub(t0, t3, t2, t1)
     pushInt32(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw_sub_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, t5, t6)
     doI64AtomicRmwSub(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_rmw8_sub_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     doI32AtomicRmwSub8(t0, t3, t2, t1)
     pushInt32(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_rmw16_sub_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     doI32AtomicRmwSub16(t0, t3, t2, t1)
     pushInt32(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw8_sub_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     doI64AtomicRmwSub8(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw16_sub_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     doI64AtomicRmwSub16(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw32_sub_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     doI64AtomicRmwSub32(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_rmw_and_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     doI32AtomicRmwAnd(t0, t3, t2, t1)
     pushInt32(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw_and_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, t5, t6)
     doI64AtomicRmwAnd(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_rmw8_and_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     doI32AtomicRmwAnd8(t0, t3, t2, t1)
     pushInt32(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_rmw16_and_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     doI32AtomicRmwAnd16(t0, t3, t2, t1)
     pushInt32(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw8_and_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     doI64AtomicRmwAnd8(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw16_and_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     doI64AtomicRmwAnd16(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw32_and_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     doI64AtomicRmwAnd32(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_rmw_or_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     doI32AtomicRmwOr(t0, t3, t2, t1)
     pushInt32(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw_or_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, t5, t6)
     doI64AtomicRmwOr(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_rmw8_or_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     doI32AtomicRmwOr8(t0, t3, t2, t1)
     pushInt32(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_rmw16_or_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     doI32AtomicRmwOr16(t0, t3, t2, t1)
     pushInt32(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw8_or_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     doI64AtomicRmwOr8(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw16_or_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     doI64AtomicRmwOr16(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw32_or_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     doI64AtomicRmwOr32(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_rmw_xor_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     doI32AtomicRmwXor(t0, t3, t2, t1)
     pushInt32(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw_xor_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, t5, t6)
     doI64AtomicRmwXor(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_rmw8_xor_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     doI32AtomicRmwXor8(t0, t3, t2, t1)
     pushInt32(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_rmw16_xor_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     doI32AtomicRmwXor16(t0, t3, t2, t1)
     pushInt32(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw8_xor_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     doI64AtomicRmwXor8(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw16_xor_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     doI64AtomicRmwXor16(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw32_xor_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     doI64AtomicRmwXor32(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_rmw_xchg_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     doI32AtomicRmwXchg(t0, t3, t2, t1)
     pushInt32(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw_xchg_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, t5, t6)
     doI64AtomicRmwXchg(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_rmw8_xchg_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     doI32AtomicRmwXchg8(t0, t3, t2, t1)
     pushInt32(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_rmw16_xchg_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     doI32AtomicRmwXchg16(t0, t3, t2, t1)
     pushInt32(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw8_xchg_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     doI64AtomicRmwXchg8(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw16_xchg_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     doI64AtomicRmwXchg16(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw32_xchg_u_slow_path:
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     doI64AtomicRmwXchg32(t0, t3, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_rmw_cmpxchg_slow_path:
-    push t3, t7
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
-    pop t7, t3
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     doI32AtomicCmpxchg(t0, t3, t7, t2, t1)
     pushInt32(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw_cmpxchg_slow_path:
-    push t3, t7
-    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, notPL, t7)
-    pop t7, t3
+    loadStoreMakePointerSlow(t4, t0, 8, t1, t2, t5, t6)
     doI64AtomicCmpxchg(t0, t3, t7, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_rmw8_cmpxchg_u_slow_path:
-    push t3, t7
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
-    pop t7, t3
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     doI32AtomicCmpxchg8(t0, t3, t7, t2, t1)
     pushInt32(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i32_atomic_rmw16_cmpxchg_u_slow_path:
-    push t3, t7
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
-    pop t7, t3
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     doI32AtomicCmpxchg16(t0, t3, t7, t2, t1)
     pushInt32(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw8_cmpxchg_u_slow_path:
-    push t3, t7
-    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, notPL, t7)
-    pop t7, t3
+    loadStoreMakePointerSlow(t4, t0, 1, t1, t2, t5, t6)
     doI64AtomicCmpxchg8(t0, t3, t7, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw16_cmpxchg_u_slow_path:
-    push t3, t7
-    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, notPL, t7)
-    pop t7, t3
+    loadStoreMakePointerSlow(t4, t0, 2, t1, t2, t5, t6)
     doI64AtomicCmpxchg16(t0, t3, t7, t2, t1)
     pushInt64(t0)
     move t4, PC
     nextIPIntInstruction()
 
 .ipint_i64_atomic_rmw32_cmpxchg_u_slow_path:
-    push t3, t7
-    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, notPL, t7)
-    pop t7, t3
+    loadStoreMakePointerSlow(t4, t0, 4, t1, t2, t5, t6)
     doI64AtomicCmpxchg32(t0, t3, t7, t2, t1)
     pushInt64(t0)
     move t4, PC
@@ -11391,8 +11456,6 @@ end
     # t3 is not used after this
     subp cfr, t3
     push t3, PC
-    # ditto for PL, t3 is okay to use as scratch
-    subp PL, cfr, t3
     push t3, wasmInstance
 
     # set up the call frame
@@ -11407,7 +11470,7 @@ end
     # reserved
     # reserved
     # (first_non_arg_addr - cfr), PC
-    # (PL - cfr), wasmInstance <- t2 = native argument stack (pushed by mINT)
+    # unused, wasmInstance <- t2 = native argument stack (pushed by mINT)
     # call frame
     # call frame
     # call frame
@@ -11723,7 +11786,6 @@ mintAlign(_tail_call)
 # CallArgumentBytecode::Call (0x1b)
 mintAlign(_call)
     pop wasmInstance, ws0
-    # pop targetInstance, targetEntrypoint
 
     # Save stack pointer, if we tail call someone who changes the frame above's stack argument size.
     # Store its value relative to cfp so stack frames can be easily relocated for JSPI.
@@ -11731,15 +11793,10 @@ mintAlign(_call)
     subp cfr, sc1
     storep sc1, ThisArgumentOffset[cfr]
 
-    # Swap instances
-    # move targetInstance, wasmInstance
-
     # Set up memory
     push t2, t3
     ipintReloadMemory()
     pop t3, t2
-
-    # move targetEntrypoint, ws0
 
     # Make the call
 if ARM64E
@@ -11916,7 +11973,7 @@ mintAlign(_end)
     # return result
     # return result     <- mintRetDst => new SP
     # (first_non_arg_addr - cfr), PC
-    # (PL - cfr), wasmInstance  <- sc3
+    # unused, wasmInstance  <- sc3
     # call frame
     # call frame
     # call frame
@@ -11936,7 +11993,6 @@ end
     loadp Callee[cfr], ws0
     unboxWasmCallee(ws0, ws1)
     storep ws0, UnboxedWasmCalleeStackSlot[cfr]
-    addp t3, cfr, PL
 
     # Restore memory
     ipintReloadMemory()
@@ -12223,18 +12279,18 @@ uintAlign(_ret)
 argumINTAlign(_a0)
 _argumINT_begin:
     storeq wa0, [argumINTDst]
-    addp LocalSize, argumINTDst
+    subp LocalSize, argumINTDst
     argumINTDispatch()
 
 argumINTAlign(_a1)
     storeq wa1, [argumINTDst]
-    addp LocalSize, argumINTDst
+    subp LocalSize, argumINTDst
     argumINTDispatch()
 
 argumINTAlign(_a2)
 if ARM64 or ARM64E or X86_64
     storeq wa2, [argumINTDst]
-    addp LocalSize, argumINTDst
+    subp LocalSize, argumINTDst
     argumINTDispatch()
 else
     break
@@ -12244,7 +12300,7 @@ end
 argumINTAlign(_a3)
 if ARM64 or ARM64E or X86_64
     storeq wa3, [argumINTDst]
-    addp LocalSize, argumINTDst
+    subp LocalSize, argumINTDst
     argumINTDispatch()
 else
     break
@@ -12253,7 +12309,7 @@ end
 argumINTAlign(_a4)
 if ARM64 or ARM64E or X86_64
     storeq wa4, [argumINTDst]
-    addp LocalSize, argumINTDst
+    subp LocalSize, argumINTDst
     argumINTDispatch()
 else
     break
@@ -12262,7 +12318,7 @@ end
 argumINTAlign(_a5)
 if ARM64 or ARM64E or X86_64
     storeq wa5, [argumINTDst]
-    addp LocalSize, argumINTDst
+    subp LocalSize, argumINTDst
     argumINTDispatch()
 else
     break
@@ -12271,7 +12327,7 @@ end
 argumINTAlign(_a6)
 if ARM64 or ARM64E
     storeq wa6, [argumINTDst]
-    addp LocalSize, argumINTDst
+    subp LocalSize, argumINTDst
     argumINTDispatch()
 else
     break
@@ -12280,7 +12336,7 @@ end
 argumINTAlign(_a7)
 if ARM64 or ARM64E
     storeq wa7, [argumINTDst]
-    addp LocalSize, argumINTDst
+    subp LocalSize, argumINTDst
     argumINTDispatch()
 else
     break
@@ -12288,49 +12344,49 @@ end
 
 argumINTAlign(_fa0)
     storev wfa0, [argumINTDst]
-    addp LocalSize, argumINTDst
+    subp LocalSize, argumINTDst
     argumINTDispatch()
 
 argumINTAlign(_fa1)
     storev wfa1, [argumINTDst]
-    addp LocalSize, argumINTDst
+    subp LocalSize, argumINTDst
     argumINTDispatch()
 
 argumINTAlign(_fa2)
     storev wfa2, [argumINTDst]
-    addp LocalSize, argumINTDst
+    subp LocalSize, argumINTDst
     argumINTDispatch()
 
 argumINTAlign(_fa3)
     storev wfa3, [argumINTDst]
-    addp LocalSize, argumINTDst
+    subp LocalSize, argumINTDst
     argumINTDispatch()
 
 argumINTAlign(_fa4)
     storev wfa4, [argumINTDst]
-    addp LocalSize, argumINTDst
+    subp LocalSize, argumINTDst
     argumINTDispatch()
 
 argumINTAlign(_fa5)
     storev wfa5, [argumINTDst]
-    addp LocalSize, argumINTDst
+    subp LocalSize, argumINTDst
     argumINTDispatch()
 
 argumINTAlign(_fa6)
     storev wfa6, [argumINTDst]
-    addp LocalSize, argumINTDst
+    subp LocalSize, argumINTDst
     argumINTDispatch()
 
 argumINTAlign(_fa7)
     storev wfa7, [argumINTDst]
-    addp LocalSize, argumINTDst
+    subp LocalSize, argumINTDst
     argumINTDispatch()
 
 argumINTAlign(_stack)
     loadq [argumINTSrc], csr0
     addp SlotSize, argumINTSrc
     storeq csr0, [argumINTDst]
-    addp LocalSize, argumINTDst
+    subp LocalSize, argumINTDst
     argumINTDispatch()
 
 argumINTAlign(_stack_vector)
@@ -12339,7 +12395,7 @@ argumINTAlign(_stack_vector)
     loadq 8[argumINTSrc], csr0
     storeq csr0, 8[argumINTDst]
     addp 2 * SlotSize, argumINTSrc
-    addp LocalSize, argumINTDst
+    subp LocalSize, argumINTDst
     argumINTDispatch()
 
 argumINTAlign(_end)

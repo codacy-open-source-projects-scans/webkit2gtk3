@@ -2855,7 +2855,7 @@ bool Element::isEventHandlerAttribute(const Attribute& attribute) const
 
 bool Element::attributeContainsJavaScriptURL(const Attribute& attribute) const
 {
-    return isURLAttribute(attribute) && WTF::protocolIsJavaScript(attribute.value());
+    return isURLAttribute(attribute) && WTF::isValidJavaScriptURL(attribute.value());
 }
 
 void Element::stripScriptingAttributes(Vector<Attribute>& attributeVector) const
@@ -4512,8 +4512,11 @@ String Element::innerText()
     // We need to update layout, since plainText uses line boxes in the render tree.
     protect(document())->updateLayoutIgnorePendingStylesheets();
 
-    if (!renderer())
+    if (!renderer()) {
+        if (hasDisplayContents())
+            return plainText(makeRangeSelectingNodeContents(*this), { TextIteratorBehavior::EmitsNewlinesPerInnerTextSpec });
         return textContent(true);
+    }
 
     if (renderer()->isSkippedContent())
         return String();

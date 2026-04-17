@@ -443,6 +443,7 @@
 
 #if ENABLE(VIDEO)
 #include "CaptionUserPreferences.h"
+#include "LazyLoadVideoObserver.h"
 #endif
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
@@ -4893,9 +4894,12 @@ void Document::processBaseElement()
     if (!href.isNull())
         baseElementURL = completeURL(href, fallbackBaseURL());
     if (m_baseElementURL != baseElementURL) {
-        if (!protect(contentSecurityPolicy())->allowBaseURI(baseElementURL))
+        if (settings().shouldRestrictBaseURLSchemes() && !baseElementURL.isEmpty() && !baseElementURL.isValid()) {
             m_baseElementURL = { };
-        else if (settings().shouldRestrictBaseURLSchemes() && !SecurityPolicy::isBaseURLSchemeAllowed(baseElementURL)) {
+            addConsoleMessage(MessageSource::Security, MessageLevel::Error, makeString("Blocked setting "_s, baseElementURL.stringCenterEllipsizedToLength(), " as the base URL because it is not a valid URL."_s));
+        } else if (!protect(contentSecurityPolicy())->allowBaseURI(baseElementURL))
+            m_baseElementURL = { };
+        else if (settings().shouldRestrictBaseURLSchemes() && !baseElementURL.isEmpty() && !SecurityPolicy::isBaseURLSchemeAllowed(baseElementURL)) {
             m_baseElementURL = { };
             addConsoleMessage(MessageSource::Security, MessageLevel::Error, makeString("Blocked setting "_s, baseElementURL.stringCenterEllipsizedToLength(), " as the base URL because it does not have an allowed scheme."_s));
         } else
@@ -11482,6 +11486,15 @@ LazyLoadModelObserver& Document::lazyLoadModelObserver()
     if (!m_lazyLoadModelObserver)
         m_lazyLoadModelObserver = makeUnique<LazyLoadModelObserver>();
     return *m_lazyLoadModelObserver;
+}
+#endif
+
+#if ENABLE(VIDEO)
+LazyLoadVideoObserver& Document::lazyLoadVideoObserver()
+{
+    if (!m_lazyLoadVideoObserver)
+        m_lazyLoadVideoObserver = makeUnique<LazyLoadVideoObserver>();
+    return *m_lazyLoadVideoObserver;
 }
 #endif
 
