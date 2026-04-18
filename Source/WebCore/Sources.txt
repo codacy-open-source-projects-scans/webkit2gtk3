@@ -2902,6 +2902,8 @@ rendering/InlineBoxPainter.cpp
 rendering/LayerAncestorClippingStack.cpp
 rendering/LayerOverlapMap.cpp
 rendering/LayoutScope.cpp
+rendering/RelayoutScopeForScrollbarChange.cpp
+rendering/ScrollbarUpdateScope.cpp
 rendering/LayoutDisallowedScope.cpp
 rendering/LayoutRepainter.cpp
 rendering/LegacyInlineBox.cpp
@@ -2952,6 +2954,7 @@ rendering/RenderLayerBacking.cpp
 rendering/RenderLayerCompositor.cpp
 rendering/RenderLayerFilters.cpp
 rendering/RenderLayerModelObject.cpp
+rendering/RenderLayerSVGAdditions.cpp
 rendering/RenderLayerScrollableArea.cpp
 rendering/RenderLayoutState.cpp
 rendering/RenderLineBoxList.cpp

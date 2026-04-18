@@ -2539,6 +2539,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/ImageObserver.h
     platform/graphics/ImageOrientation.h
     platform/graphics/ImagePaintingOptions.h
+    platform/graphics/ImageResolution.h
     platform/graphics/ImageSource.h
     platform/graphics/ImageTypes.h
     platform/graphics/ImageUtilities.h
@@ -2657,9 +2658,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/angle/ANGLEHeaders.h
     platform/graphics/angle/ANGLEUtilities.h
     platform/graphics/angle/GraphicsContextGLANGLE.h
-
-    platform/graphics/cg/ShareableSpatialImage.h
-    platform/graphics/cg/SpatialImageTypes.h
 
     platform/graphics/controls/ApplePayButtonPart.h
     platform/graphics/controls/ButtonPart.h
@@ -2948,6 +2946,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     plugins/PluginViewBase.h
 
     rendering/AccessibilityRegionContext.h
+    rendering/BaselineAlignment.h
     rendering/BreakablePositions.h
     rendering/CSSFilterRenderer.h
     rendering/CSSValueKey.h
@@ -2981,6 +2980,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/PaintPhase.h
     rendering/PathOperation.h
     rendering/RegionContext.h
+    rendering/RelayoutScopeForScrollbarChange
     rendering/RenderAttachment.h
     rendering/RenderBlock.h
     rendering/RenderBlockFlow.h
@@ -3001,6 +3001,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/RenderImageResource.h
     rendering/RenderInline.h
     rendering/RenderLayer.h
+    rendering/ScrollbarUpdateScope.h
     rendering/RenderLayerBacking.h
     rendering/RenderLayerCompositor.h
     rendering/RenderLayerModelObject.h

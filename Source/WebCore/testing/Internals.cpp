@@ -285,6 +285,7 @@
 #include <JavaScriptCore/InspectorFrontendChannel.h>
 #include <JavaScriptCore/JSCInlines.h>
 #include <JavaScriptCore/JSCJSValue.h>
+#include <JavaScriptCore/JSCellInlines.h>
 #include <JavaScriptCore/MarkedSpaceInlines.h>
 #include <wtf/FileHandle.h>
 #include <wtf/FileSystem.h>
@@ -3038,6 +3039,14 @@ bool Internals::hasSpellingMarker(int from, int length)
 bool Internals::hasGrammarMarker(int from, int length)
 {
     return hasMarkerFor(DocumentMarkerType::Grammar, from, length);
+}
+
+bool Internals::isAlternativeTextUIActive() const
+{
+    RefPtr document = contextDocument();
+    if (!document || !document->frame())
+        return false;
+    return document->frame()->editor().isAlternativeTextUIActive();
 }
 
 bool Internals::hasAutocorrectedMarker(int from, int length)

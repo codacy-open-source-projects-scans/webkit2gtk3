@@ -116,6 +116,7 @@ model-element [ Skip ]
 http/tests/model [ Skip ]
 http/wpt/model-element [ Skip ]
 http/tests/security/model-element [ Skip ]
+http/tests/security/registerBlobURL.html [ Skip ]
 system-preview [ Skip ]
 editing/pasteboard/dom-paste [ Skip ]
 editing/pasteboard/mac [ Skip ]
@@ -838,7 +839,6 @@ imported/w3c/web-platform-tests/workers/interfaces/WorkerGlobalScope/onerror/mes
 [ Debug ] imported/w3c/web-platform-tests/css/css-position/position-absolute-crash-chrome-013.html [ Skip ]
 [ Debug ] imported/w3c/web-platform-tests/css/css-properties-values-api/registered-property-revert.html [ Skip ]
 [ Debug ] imported/w3c/web-platform-tests/css/css-scoping/slotted-matches.html [ Skip ]
-imported/w3c/web-platform-tests/html/rendering/replaced-elements/the-option-element/option-label-whitespace.html [ ImageOnlyFailure ]
 
 # Cookie tests that are flaky since their import because they fail and and out some kind of unique id.
 imported/w3c/web-platform-tests/cookies/prefix/document-cookie.non-secure.html [ Pass Failure ]
@@ -1700,8 +1700,6 @@ imported/w3c/web-platform-tests/css/css-flexbox/flexbox-min-width-auto-005.html 
 imported/w3c/web-platform-tests/css/css-flexbox/flexbox-min-width-auto-006.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-flexbox/intrinsic-size/col-wrap-020.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-flexbox/aspect-ratio-intrinsic-size-009.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-flexbox/flexbox-flex-wrap-flexing-002.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-flexbox/flexbox-flex-wrap-flexing-003.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-flexbox/multiline-shrink-to-fit.html [ ImageOnlyFailure ]
 
 # grid layout tests
@@ -3441,7 +3439,6 @@ webkit.org/b/257049 imported/w3c/web-platform-tests/css/css-text/white-space/tra
 webkit.org/b/257049 imported/w3c/web-platform-tests/css/css-text/white-space/trailing-space-and-text-alignment-rtl-004.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-text/word-break/word-break-break-all-032.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-text/word-break/word-break-break-all-062.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-text/word-break/word-break-break-all-ethiopic.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-text/word-break/word-break-break-all-inline-007.tentative.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-text/word-break/word-break-keep-all-063.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-text/word-break/word-break-manual-001.html [ ImageOnlyFailure ]
@@ -3514,7 +3511,6 @@ imported/w3c/web-platform-tests/css/css-text/white-space/text-wrap-balance-line-
 imported/w3c/web-platform-tests/css/css-text/white-space/text-wrap-balance-line-clamp-006.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-text/white-space/text-wrap-balance-line-clamp-007.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-text/white-space/textarea-always-preserves-spaces-001.tentative.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-text/word-break/word-break-keep-all-011.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-text/word-break/word-break-keep-all-u002d.html [ ImageOnlyFailure ]
 # css-text end
 
@@ -5229,7 +5225,6 @@ webkit.org/b/212046 imported/w3c/web-platform-tests/css/css-flexbox/percentage-h
 webkit.org/b/212046 imported/w3c/web-platform-tests/css/css-flexbox/scrollbars-auto.html [ ImageOnlyFailure ]
 webkit.org/b/212046 imported/w3c/web-platform-tests/css/css-flexbox/scrollbars.html [ ImageOnlyFailure ]
 
-imported/w3c/web-platform-tests/css/css-flexbox/dynamic-orthogonal-flex-item.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-flexbox/gap-019.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-flexbox/inline-flexbox-vertical-rl-image-flexitem-crash-print.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-flexbox/intrinsic-size/col-wrap-013.html [ ImageOnlyFailure ]
@@ -5271,7 +5266,6 @@ webkit.org/b/230747 imported/w3c/web-platform-tests/css/css-flexbox/flex-contain
 webkit.org/b/230747 imported/w3c/web-platform-tests/css/css-flexbox/flex-container-min-content-001.html [ ImageOnlyFailure ]
 
 # min-size:auto in flexbox.
-webkit.org/b/221481 imported/w3c/web-platform-tests/css/css-flexbox/flex-minimum-height-flex-items-023.html [ ImageOnlyFailure ]
 webkit.org/b/221481 imported/w3c/web-platform-tests/css/css-flexbox/flex-minimum-height-flex-items-029.html [ ImageOnlyFailure ]
 webkit.org/b/221481 imported/w3c/web-platform-tests/css/css-flexbox/flex-minimum-width-flex-items-013.html [ ImageOnlyFailure ]
 webkit.org/b/221481 imported/w3c/web-platform-tests/css/css-flexbox/flex-minimum-width-flex-items-015.html [ ImageOnlyFailure ]
@@ -7904,6 +7898,7 @@ webkit.org/b/290285 imported/w3c/web-platform-tests/svg/struct/scripted/use-load
 
 # This test hits an assert in debug
 webkit.org/b/290133 [ Debug ] svg/dom/SVGGeometry-isPointInFill-with-null-path.html [ Skip ]
+[ Debug ] svg/dom/SVGGeometry-isPointInStroke-with-null-path.html [ Skip ]
 
 # The color input only has a swatch overlay on macOS
 fast/forms/color/input-color-swatch-overlay-appearance.html [ Skip ]
@@ -8179,7 +8174,6 @@ imported/w3c/web-platform-tests/css/CSS2/normal-flow/max-width-applies-to-015.xh
 imported/w3c/web-platform-tests/css/CSS2/normal-flow/min-height-applies-to-009.xht [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/CSS2/normal-flow/min-height-applies-to-012.xht [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/CSS2/normal-flow/min-height-applies-to-015.xht [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/CSS2/normal-flow/min-height-separates-margin.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/CSS2/normal-flow/min-width-058.xht [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/CSS2/normal-flow/min-width-applies-to-005.xht [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/CSS2/normal-flow/min-width-applies-to-006.xht [ ImageOnlyFailure ]

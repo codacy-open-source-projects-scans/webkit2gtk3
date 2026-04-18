@@ -565,7 +565,7 @@ set(WebKitLegacy_LEGACY_FORWARDING_HEADERS_FILES
     ${WEBCORE_DIR}/plugins/npapi.h
 )
 
-target_precompile_headers(WebKitLegacy PRIVATE mac/WebKitPrefix.h)
+add_definitions("-include WebKitPrefix.h")
 
 set(C99_FILES
     mac/DefaultDelegates/WebDefaultEditingDelegate.m
@@ -638,4 +638,4 @@ list(APPEND WebKitLegacy_SOURCES
 
 set(WebKitLegacy_OUTPUT_NAME WebKitLegacy)
 
-set(CMAKE_SHARED_LINKER_FLAGS ${CMAKE_SHARED_LINKER_FLAGS} "-compatibility_version 1 -current_version ${WEBKIT_MAC_VERSION} -framework SecurityInterface")
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -compatibility_version 1 -current_version ${WEBKIT_MAC_VERSION} -framework SecurityInterface")

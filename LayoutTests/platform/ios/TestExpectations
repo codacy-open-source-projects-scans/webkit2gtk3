@@ -338,6 +338,9 @@ editing/spelling/spelling-markers-after-pasting-sentence.html [ WontFix ]
 editing/spelling/text-replacement-after-typing-to-word.html [ Skip ]
 editing/spelling/text-replacement-first-word-second-line.html [ Skip ]
 
+# Grammar correction panel is Mac-only (USE(AUTOCORRECTION_PANEL))
+editing/spelling/grammar-correction-shown-clicking-middle-of-word.html [ Skip ]
+
 # UIKit draws selection on iOS
 fast/selectors/input-with-selection-pseudo-element.html [ WontFix ]
 fast/selectors/selection-window-inactive.html [ WontFix ]
@@ -5085,7 +5088,6 @@ http/tests/navigation/success200-subframeload.html [ Failure ]
 http/tests/navigation/timerredirect-subframeload.html [ Failure ]
 http/tests/security/drag-drop-same-unique-origin.html [ Failure ]
 http/tests/security/no-referrer.html [ Failure ]
-http/tests/security/redirect-BLOCKED-to-localURL.html [ Failure ]
 http/tests/security/setDomainRelaxationForbiddenForURLScheme.html [ Failure ]
 http/tests/uri/css-href.py [ Failure ]
 
@@ -8449,6 +8451,8 @@ http/tests/site-isolation/remote-frame-loaded-while-hidden.html [ Pass ImageOnly
 
 # from fast/ tests that are flaky: adding timeout 
 webkit.org/b/304027 fast/block/basic/001.html [ Pass Failure Timeout ]
+
+webkit.org/b/310557 [ Release ] webanimations/transform-animation-with-delay-yields-accelerated-animation.html [ Pass Failure ]
 
 webkit.org/b/303650 fast/lists/marker-before-empty-inline.html [ ImageOnlyFailure ]
 

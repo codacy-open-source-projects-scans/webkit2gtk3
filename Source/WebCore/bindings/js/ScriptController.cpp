@@ -71,6 +71,7 @@
 #include <JavaScriptCore/HeapCellInlines.h>
 #include <JavaScriptCore/ImportMap.h>
 #include <JavaScriptCore/InitializeThreading.h>
+#include <JavaScriptCore/JSCellInlines.h>
 #include <JavaScriptCore/JSFunction.h>
 #include <JavaScriptCore/JSLock.h>
 #include <JavaScriptCore/JSModuleRecord.h>
@@ -357,7 +358,7 @@ void ScriptController::initScriptForWindowProxy(JSWindowProxy& windowProxy)
 static Identifier jsValueToModuleKey(JSGlobalObject* lexicalGlobalObject, JSValue value)
 {
     if (value.isSymbol())
-        return Identifier::fromUid(jsCast<Symbol*>(value)->privateName());
+        return Identifier::fromUid(uncheckedDowncast<Symbol>(value)->privateName());
     ASSERT(value.isString());
     return asString(value)->toIdentifier(lexicalGlobalObject);
 }
