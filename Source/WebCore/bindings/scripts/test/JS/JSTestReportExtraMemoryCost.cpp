@@ -164,7 +164,7 @@ JSObject* JSTestReportExtraMemoryCost::prototype(VM& vm, JSDOMGlobalObject& glob
 
 JSValue JSTestReportExtraMemoryCost::getConstructor(VM& vm, const JSGlobalObject* globalObject)
 {
-    return getDOMConstructor<JSTestReportExtraMemoryCostDOMConstructor, DOMConstructorID::TestReportExtraMemoryCost>(vm, *jsCast<const JSDOMGlobalObject*>(globalObject));
+    return getDOMConstructor<JSTestReportExtraMemoryCostDOMConstructor, DOMConstructorID::TestReportExtraMemoryCost>(vm, *uncheckedDowncast<JSDOMGlobalObject>(globalObject));
 }
 
 void JSTestReportExtraMemoryCost::destroy(JSC::JSCell* cell)
@@ -177,7 +177,7 @@ JSC_DEFINE_CUSTOM_GETTER(jsTestReportExtraMemoryCostConstructor, (JSGlobalObject
 {
     SUPPRESS_UNCOUNTED_LOCAL auto& vm = JSC::getVM(lexicalGlobalObject);
     auto throwScope = DECLARE_THROW_SCOPE(vm);
-    auto* prototype = jsDynamicCast<JSTestReportExtraMemoryCostPrototype*>(JSValue::decode(thisValue));
+    auto* prototype = dynamicDowncast<JSTestReportExtraMemoryCostPrototype>(JSValue::decode(thisValue));
     if (!prototype) [[unlikely]]
         return throwVMTypeError(lexicalGlobalObject, throwScope);
     return JSValue::encode(JSTestReportExtraMemoryCost::getConstructor(vm, prototype->realm()));
@@ -196,7 +196,7 @@ JSC::GCClient::IsoSubspace* JSTestReportExtraMemoryCost::subspaceForImpl(JSC::VM
 template<typename Visitor>
 void JSTestReportExtraMemoryCost::visitChildrenImpl(JSCell* cell, Visitor& visitor)
 {
-    auto* thisObject = jsCast<JSTestReportExtraMemoryCost*>(cell);
+    auto* thisObject = uncheckedDowncast<JSTestReportExtraMemoryCost>(cell);
     ASSERT_GC_OBJECT_INHERITS(thisObject, info());
     Base::visitChildren(thisObject, visitor);
     visitor.reportExtraMemoryVisited(thisObject->wrapped().memoryCost());
@@ -206,13 +206,13 @@ DEFINE_VISIT_CHILDREN(JSTestReportExtraMemoryCost);
 
 size_t JSTestReportExtraMemoryCost::estimatedSize(JSCell* cell, VM& vm)
 {
-    auto* thisObject = jsCast<JSTestReportExtraMemoryCost*>(cell);
+    auto* thisObject = uncheckedDowncast<JSTestReportExtraMemoryCost>(cell);
     return Base::estimatedSize(thisObject, vm) + thisObject->wrapped().memoryCost();
 }
 
 void JSTestReportExtraMemoryCost::analyzeHeap(JSCell* cell, HeapAnalyzer& analyzer)
 {
-    auto* thisObject = jsCast<JSTestReportExtraMemoryCost*>(cell);
+    auto* thisObject = uncheckedDowncast<JSTestReportExtraMemoryCost>(cell);
     analyzer.setWrappedObjectForCell(cell, &thisObject->wrapped());
     if (RefPtr context = thisObject->scriptExecutionContext())
         analyzer.setLabelForCell(cell, makeString("url "_s, context->url().string()));
@@ -279,7 +279,7 @@ JSC::JSValue toJS(JSC::JSGlobalObject* lexicalGlobalObject, JSDOMGlobalObject* g
 
 TestReportExtraMemoryCost* JSTestReportExtraMemoryCost::toWrapped(JSC::VM&, JSC::JSValue value)
 {
-    if (auto* wrapper = jsDynamicCast<JSTestReportExtraMemoryCost*>(value))
+    if (auto* wrapper = dynamicDowncast<JSTestReportExtraMemoryCost>(value))
         return &wrapper->wrapped();
     return nullptr;
 }

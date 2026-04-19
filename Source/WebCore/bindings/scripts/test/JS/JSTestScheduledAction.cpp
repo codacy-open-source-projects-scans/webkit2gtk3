@@ -166,7 +166,7 @@ JSObject* JSTestScheduledAction::prototype(VM& vm, JSDOMGlobalObject& globalObje
 
 JSValue JSTestScheduledAction::getConstructor(VM& vm, const JSGlobalObject* globalObject)
 {
-    return getDOMConstructor<JSTestScheduledActionDOMConstructor, DOMConstructorID::TestScheduledAction>(vm, *jsCast<const JSDOMGlobalObject*>(globalObject));
+    return getDOMConstructor<JSTestScheduledActionDOMConstructor, DOMConstructorID::TestScheduledAction>(vm, *uncheckedDowncast<JSDOMGlobalObject>(globalObject));
 }
 
 void JSTestScheduledAction::destroy(JSC::JSCell* cell)
@@ -179,7 +179,7 @@ JSC_DEFINE_CUSTOM_GETTER(jsTestScheduledActionConstructor, (JSGlobalObject* lexi
 {
     SUPPRESS_UNCOUNTED_LOCAL auto& vm = JSC::getVM(lexicalGlobalObject);
     auto throwScope = DECLARE_THROW_SCOPE(vm);
-    auto* prototype = jsDynamicCast<JSTestScheduledActionPrototype*>(JSValue::decode(thisValue));
+    auto* prototype = dynamicDowncast<JSTestScheduledActionPrototype>(JSValue::decode(thisValue));
     if (!prototype) [[unlikely]]
         return throwVMTypeError(lexicalGlobalObject, throwScope);
     return JSValue::encode(JSTestScheduledAction::getConstructor(vm, prototype->realm()));
@@ -218,7 +218,7 @@ JSC::GCClient::IsoSubspace* JSTestScheduledAction::subspaceForImpl(JSC::VM& vm)
 
 void JSTestScheduledAction::analyzeHeap(JSCell* cell, HeapAnalyzer& analyzer)
 {
-    auto* thisObject = jsCast<JSTestScheduledAction*>(cell);
+    auto* thisObject = uncheckedDowncast<JSTestScheduledAction>(cell);
     analyzer.setWrappedObjectForCell(cell, &thisObject->wrapped());
     if (RefPtr context = thisObject->scriptExecutionContext())
         analyzer.setLabelForCell(cell, makeString("url "_s, context->url().string()));
@@ -285,7 +285,7 @@ JSC::JSValue toJS(JSC::JSGlobalObject* lexicalGlobalObject, JSDOMGlobalObject* g
 
 TestScheduledAction* JSTestScheduledAction::toWrapped(JSC::VM&, JSC::JSValue value)
 {
-    if (auto* wrapper = jsDynamicCast<JSTestScheduledAction*>(value))
+    if (auto* wrapper = dynamicDowncast<JSTestScheduledAction>(value))
         return &wrapper->wrapped();
     return nullptr;
 }

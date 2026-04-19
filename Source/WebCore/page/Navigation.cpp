@@ -310,8 +310,8 @@ static Ref<DOMPromise> createDOMPromise(const DeferredPromise& deferredPromise)
     Locker<JSC::JSLock> locker(commonVM().apiLock());
 
     auto promiseValue = deferredPromise.promise();
-    auto& jsPromise = *JSC::jsCast<JSC::JSPromise*>(promiseValue);
-    auto& globalObject = *JSC::jsCast<JSDOMGlobalObject*>(jsPromise.realm());
+    auto& jsPromise = *uncheckedDowncast<JSC::JSPromise>(promiseValue);
+    auto& globalObject = *uncheckedDowncast<JSDOMGlobalObject>(jsPromise.realm());
 
     return DOMPromise::create(globalObject, jsPromise);
 }
@@ -942,7 +942,7 @@ void Navigation::abortOngoingNavigation(NavigateEvent& event)
     auto error = JSC::createError(globalObject, "Navigation aborted"_s);
 
     ErrorInformation errorInformation;
-    if (auto* errorInstance = jsDynamicCast<JSC::ErrorInstance*>(error)) {
+    if (auto* errorInstance = dynamicDowncast<JSC::ErrorInstance>(error)) {
         if (auto result = extractErrorInformationFromErrorInstance(globalObject, *errorInstance))
             errorInformation = WTF::move(*result);
         // Default to document url if extractErrorInformationFromErrorInstance was not able to determine sourceURL.
@@ -977,7 +977,7 @@ public:
     static Ref<PromiseSettlementObserver> create(Document& document)
     {
         ASSERT(document.isFullyActive());
-        auto* globalObject = JSC::jsCast<JSDOMGlobalObject*>(document.globalObject());
+        auto* globalObject = uncheckedDowncast<JSDOMGlobalObject>(document.globalObject());
         JSC::JSLockHolder locker(globalObject->vm());
         RefPtr wrapper = DeferredPromise::create(*globalObject, DeferredPromise::Mode::RetainPromiseOnResolve);
         return adoptRef(*new PromiseSettlementObserver(wrapper.releaseNonNull()));
@@ -1071,7 +1071,7 @@ void Navigation::setupInterceptionState(NavigateEvent& event, NavigationNavigati
     }
 
     {
-        auto& domGlobalObject = *jsCast<JSDOMGlobalObject*>(document.globalObject());
+        auto& domGlobalObject = *uncheckedDowncast<JSDOMGlobalObject>(document.globalObject());
         JSC::JSLockHolder locker(domGlobalObject.vm());
         m_transition = NavigationTransition::create(navigationType, *fromNavigationHistoryEntry, DeferredPromise::create(domGlobalObject, DeferredPromise::Mode::RetainPromiseOnResolve).releaseNonNull());
     }
@@ -1176,7 +1176,7 @@ std::optional<Navigation::DispatchResult> Navigation::handleSameDocumentNavigati
 
                 ErrorInformation errorInformation;
                 String errorMessage;
-                if (auto* errorInstance = jsDynamicCast<JSC::ErrorInstance*>(result)) {
+                if (auto* errorInstance = dynamicDowncast<JSC::ErrorInstance>(result)) {
                     if (auto result = extractErrorInformationFromErrorInstance(protect(protectedThis->scriptExecutionContext())->globalObject(), *errorInstance)) {
                         errorInformation = WTF::move(*result);
                         errorMessage = makeString("Uncaught "_s, errorInformation.errorTypeString, ": "_s, errorInformation.message);
