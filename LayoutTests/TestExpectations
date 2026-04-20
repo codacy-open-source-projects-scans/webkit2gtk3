@@ -609,11 +609,14 @@ webkit.org/b/290522 imported/w3c/web-platform-tests/html/canvas/offscreen/manual
 webkit.org/b/290522 imported/w3c/web-platform-tests/html/canvas/offscreen/manual/text/canvas.2d.offscreen.worker.direction.inherit.html [ ImageOnlyFailure ]
 
 # These are the WebVTT rendering WPT we are already passing.
+imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/bidi/u06E9_no_strong_dir.html [ Pass ]
 imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/dom_override_remove_cue_while_paused.html [ Pass ]
 imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/embedded_style_cascade_priority.html [ Pass ]
 imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/embedded_style_cascade_priority_layer.html [ Pass ]
 imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/embedded_style_imports_blocked.html [ Pass ]
 imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/embedded_style_invalid_format.html [ Pass ]
+imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/embedded_style_media_queries.html [ Pass ]
+imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/embedded_style_media_queries_resized.html [ Pass ]
 imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/embedded_style_selectors.html [ Pass ]
 imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/embedded_style_urls.html [ Pass ]
 imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/evil/media_404_omit_subtitles.html [ Pass ]
@@ -626,6 +629,8 @@ imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-mode
 imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/line_0_is_top.html [ Pass ]
 imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/line_1_wrapped_cue_grow_downwards.html [ Pass ]
 imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/line_50_percent.html [ Pass ]
+imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/navigate_cue_position.html [ Pass ]
+imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/one_line_cue_plus_wrapped_cue.html [ Pass ]
 imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/size_50.html [ Pass ]
 
 # These WebVTT rendering WPT are flaky.
@@ -2160,12 +2165,6 @@ imported/w3c/web-platform-tests/mathml/relations/css-styling/padding-border-marg
 imported/w3c/web-platform-tests/mathml/relations/css-styling/padding-border-margin/padding-border-margin-006.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/mathml/relations/css-styling/table-width-3.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/mathml/relations/css-styling/width-height-002.html [ ImageOnlyFailure ]
-
-# https://bugs.webkit.org/show_bug.cgi?id=310864
-imported/w3c/web-platform-tests/mathml/relations/html5-tree/href-click-001.tentative.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/mathml/relations/html5-tree/href-click-002.tentative.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/mathml/relations/html5-tree/href-click-004.tentative.html [ Timeout ]
-imported/w3c/web-platform-tests/mathml/relations/html5-tree/link-color-002.tentative.html [ ImageOnlyFailure ]
 
 # This MathML test should be rewritten.
 webkit.org/b/201356 mathml/presentation/stretchy-depth-height-symmetric.html [ Skip ]
@@ -6133,6 +6132,15 @@ imported/w3c/web-platform-tests/workers/modules/dedicated-worker-import-csp.html
 # Test is flaky because MessagePort messages may get received in a different order when several MessagePorts are involved,
 # due to how MessagePort::dispatchMessages() is implemented.
 imported/w3c/web-platform-tests/workers/shared-worker-name-via-options.html [ Failure Pass ]
+
+# Tests are flaky since import.
+imported/w3c/web-platform-tests/workers/same-site-cookies/first-party.all.tentative.https.window.html [ Skip ]
+imported/w3c/web-platform-tests/workers/same-site-cookies/first-party.default.tentative.https.window.html [ Skip ]
+imported/w3c/web-platform-tests/workers/same-site-cookies/first-party.none.tentative.https.window.html [ Skip ]
+imported/w3c/web-platform-tests/workers/SharedWorker-extendedLifetime-named-module.html [ Skip ]
+imported/w3c/web-platform-tests/workers/SharedWorker-extendedLifetime.html [ Skip ]
+imported/w3c/web-platform-tests/workers/shared-worker-partitioned-cookies.tentative.https.html [ Skip ]
+imported/w3c/web-platform-tests/workers/shared-worker-from-blob-url.window.html [ Skip ]
 
 # Some Trusted Types tests are flaky due to subtest ordering
 webkit.org/b/274089 imported/w3c/web-platform-tests/trusted-types/trusted-types-from-literal.tentative.html [ Pass Failure ]
