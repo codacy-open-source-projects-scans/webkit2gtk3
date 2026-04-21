@@ -105,6 +105,7 @@ public:
     bool hasModernLayout() const { return m_hasFlexFormattingContextLayout && *m_hasFlexFormattingContextLayout; }
 
     bool shouldResetFlexItemLogicalHeightBeforeLayout() const { return m_shouldResetFlexItemLogicalHeightBeforeLayout; }
+    bool isInCrossAxisStretchLayout() const { return m_inLayout && m_afterCrossAxisItemSizing; }
 
     bool NODELETE isColumnOrRowReverse() const;
     bool NODELETE isWrapReverse() const;
@@ -173,6 +174,7 @@ private:
     LayoutUnit NODELETE mainAxisExtent() const;
     LayoutUnit crossAxisContentExtent() const;
     LayoutUnit mainAxisContentExtent(LayoutUnit contentLogicalHeight);
+    LayoutUnit mainAxisAvailableSpace();
     template<typename SizeType> std::optional<LayoutUnit> computeMainAxisExtentForFlexItem(RenderBox& flexItem, const SizeType&);
     FlowDirection NODELETE transformedBlockFlowDirection() const;
     LayoutUnit flowAwareBorderStart() const;
@@ -228,7 +230,7 @@ private:
         double totalWeightedFlexShrink { 0 };
         LayoutUnit sumHypotheticalMainSize;
     };
-    std::optional<FlexingLineData> computeNextFlexLine(size_t& nextIndex, const FlexLayoutItems& allItems, LayoutUnit lineBreakLength, LayoutUnit gapBetweenItems);
+    std::optional<FlexingLineData> computeNextFlexLine(size_t& nextIndex, const FlexLayoutItems& allItems, LayoutUnit mainAxisAvailableSpace, LayoutUnit gapBetweenItems);
 
     LayoutUnit NODELETE autoMarginOffsetInMainAxis(const FlexLayoutItems&, LayoutUnit& availableFreeSpace);
     void NODELETE updateAutoMarginsInMainAxis(RenderBox& flexItem, LayoutUnit autoMarginOffset);
@@ -246,7 +248,7 @@ private:
     void trimCrossAxisMarginStart(const FlexLayoutItem&);
     void trimCrossAxisMarginEnd(const FlexLayoutItem&);
     bool isChildEligibleForMarginTrim(Style::MarginTrimSide, const RenderBox&) const final;
-    bool canFitItemWithTrimmedMarginEnd(const FlexLayoutItem&, LayoutUnit sumHypotheticalMainSize, LayoutUnit lineBreakLength) const;
+    bool canFitItemWithTrimmedMarginEnd(const FlexLayoutItem&, LayoutUnit sumHypotheticalMainSize, LayoutUnit mainAxisAvailableSpace) const;
     void removeMarginEndFromFlexSizes(FlexLayoutItem&, LayoutUnit& sumFlexBaseSize, LayoutUnit& sumHypotheticalMainSize) const;
 
     bool NODELETE hasAutoMarginsInCrossAxis(const RenderBox& flexItem) const;
@@ -291,6 +293,7 @@ private:
     void repaintFlexItemsDuringLayoutIfMoved(const FlexItemFrameRects&);
 
     bool flexItemHasPercentHeightDescendants(const RenderBox&) const;
+    void dirtyPercentHeightDescendantsWithinFlexItem(RenderBox&);
 
     void resetHasDefiniteHeight() { m_hasDefiniteHeight = SizeDefiniteness::Unknown; }
     const RenderBox* flexItemForFirstBaseline() const;

@@ -4523,6 +4523,13 @@ String Element::innerText()
     if (renderer()->isSkippedContent())
         return String();
 
+    // When innerText is called directly on a <select>, we must collect option
+    // text explicitly because the options have no renderers and would be skipped
+    // by the TextIterator. When a <select> is encountered as a child of another
+    // element, TextIterator::handleReplacedElement() handles this instead.
+    if (auto* selectElement = dynamicDowncast<HTMLSelectElement>(this))
+        return selectElement->collectOptionInnerText();
+
     return plainText(makeRangeSelectingNodeContents(*this), { TextIteratorBehavior::EmitsNewlinesPerInnerTextSpec });
 }
 
@@ -5811,7 +5818,8 @@ void Element::resetComputedStyle()
 void Element::resetStyleRelations()
 {
     clearStyleFlags(NodeStyleFlag::StyleAffectedByEmpty);
-    clearStyleFlags(NodeStyleFlag::AffectedByHasWithPositionalPseudoClass);
+    clearStyleFlags(NodeStyleFlag::AffectedByHasWithSiblingRelationship);
+    clearStyleFlags(NodeStyleFlag::AffectedByHasWithAdjacentSiblingRelationship);
     if (!hasRareData())
         return;
     elementRareData()->setChildIndex(0);

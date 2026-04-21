@@ -441,10 +441,21 @@ TEST(WebAuthenticationPanel, NoPanelNfcSucceed)
     [webView loadRequest:[NSURLRequest requestWithURL:testURL.get()]];
     [webView waitForMessage:@"Succeeded!"];
 }
+
+TEST(WebAuthenticationPanel, NfcHardwareBusyRetry)
+{
+    RetainPtr<NSURL> testURL = [NSBundle.test_resourcesBundle URLForResource:@"web-authentication-get-assertion-nfc-busy" withExtension:@"html"];
+
+    auto webView = setUpTestWebViewForTestAuthenticationPanel();
+    [webView focus];
+
+    [webView loadRequest:[NSURLRequest requestWithURL:testURL.get()]];
+    [webView waitForMessage:@"Succeeded!"];
+}
 #endif
 
 // FIXME rdar://145102423
-#if PLATFORM(IOS) && (__IPHONE_OS_VERSION_MIN_REQUIRED > 180000) && !defined(NDEBUG)
+#if PLATFORM(IOS) && !defined(NDEBUG)
 TEST(WebAuthenticationPanel, DISABLED_NoPanelHidSuccess)
 #else
 TEST(WebAuthenticationPanel, NoPanelHidSuccess)
@@ -460,7 +471,7 @@ TEST(WebAuthenticationPanel, NoPanelHidSuccess)
 }
 
 // FIXME rdar://145102423
-#if PLATFORM(IOS) && (__IPHONE_OS_VERSION_MIN_REQUIRED > 180000) && !defined(NDEBUG)
+#if PLATFORM(IOS) && !defined(NDEBUG)
 TEST(WebAuthenticationPanel, DISABLED_PanelHidSuccess1)
 #else
 TEST(WebAuthenticationPanel, PanelHidSuccess1)
@@ -484,7 +495,7 @@ TEST(WebAuthenticationPanel, PanelHidSuccess1)
 }
 
 // FIXME rdar://145102423
-#if PLATFORM(IOS) && (__IPHONE_OS_VERSION_MIN_REQUIRED > 180000) && !defined(NDEBUG)
+#if PLATFORM(IOS) && !defined(NDEBUG)
 TEST(WebAuthenticationPanel, DISABLED_PanelHidSuccess2)
 #else
 TEST(WebAuthenticationPanel, PanelHidSuccess2)
@@ -555,7 +566,7 @@ TEST(WebAuthenticationPanel, PanelRacy2)
 #endif // HAVE(NEAR_FIELD)
 
 // FIXME rdar://145102423
-#if PLATFORM(IOS) && (__IPHONE_OS_VERSION_MIN_REQUIRED > 180000) && !defined(NDEBUG)
+#if PLATFORM(IOS) && !defined(NDEBUG)
 TEST(WebAuthenticationPanel, DISABLED_PanelTwice)
 #else
 TEST(WebAuthenticationPanel, PanelTwice)
@@ -748,7 +759,7 @@ TEST(WebAuthenticationPanel, PanelHidCancel)
 }
 
 // FIXME rdar://145102423
-#if PLATFORM(IOS) && (__IPHONE_OS_VERSION_MIN_REQUIRED > 180000) && !defined(NDEBUG)
+#if PLATFORM(IOS) && !defined(NDEBUG)
 TEST(WebAuthenticationPanel, DISABLED_PanelHidCtapNoCredentialsFound)
 #else
 TEST(WebAuthenticationPanel, PanelHidCtapNoCredentialsFound)
@@ -783,7 +794,7 @@ TEST(WebAuthenticationPanel, PanelU2fCtapNoCredentialsFound)
 }
 
 // FIXME rdar://145102423
-#if PLATFORM(IOS) && (__IPHONE_OS_VERSION_MIN_REQUIRED > 180000) && !defined(NDEBUG)
+#if PLATFORM(IOS) && !defined(NDEBUG)
 TEST(WebAuthenticationPanel, DISABLED_FakePanelHidSuccess)
 #else
 TEST(WebAuthenticationPanel, FakePanelHidSuccess)
@@ -820,7 +831,7 @@ TEST(WebAuthenticationPanel, FakePanelHidCtapNoCredentialsFound)
 }
 
 // FIXME rdar://145102423
-#if PLATFORM(IOS) && (__IPHONE_OS_VERSION_MIN_REQUIRED > 180000) && !defined(NDEBUG)
+#if PLATFORM(IOS) && !defined(NDEBUG)
 TEST(WebAuthenticationPanel, DISABLED_NullPanelHidSuccess)
 #else
 TEST(WebAuthenticationPanel, NullPanelHidSuccess)
@@ -891,7 +902,7 @@ TEST(WebAuthenticationPanel, PanelHidCancelReloadNoCrash)
 }
 
 // FIXME rdar://145102423
-#if PLATFORM(IOS) && (__IPHONE_OS_VERSION_MIN_REQUIRED > 180000) && !defined(NDEBUG)
+#if PLATFORM(IOS) && !defined(NDEBUG)
 TEST(WebAuthenticationPanel, DISABLED_PanelHidSuccessCancelNoCrash)
 #else
 TEST(WebAuthenticationPanel, PanelHidSuccessCancelNoCrash)
@@ -911,7 +922,7 @@ TEST(WebAuthenticationPanel, PanelHidSuccessCancelNoCrash)
 }
 
 // FIXME rdar://145102423
-#if PLATFORM(IOS) && (__IPHONE_OS_VERSION_MIN_REQUIRED > 180000) && !defined(NDEBUG)
+#if PLATFORM(IOS) && !defined(NDEBUG)
 TEST(WebAuthenticationPanel, DISABLED_PanelHidCtapNoCredentialsFoundCancelNoCrash)
 #else
 TEST(WebAuthenticationPanel, PanelHidCtapNoCredentialsFoundCancelNoCrash)
@@ -1123,7 +1134,7 @@ TEST(WebAuthenticationPanel, MakeCredentialPinInvalidErrorAndRetry)
 }
 
 // FIXME rdar://145102423
-#if PLATFORM(IOS) && (__IPHONE_OS_VERSION_MIN_REQUIRED > 180000) && !defined(NDEBUG)
+#if PLATFORM(IOS) && !defined(NDEBUG)
 TEST(WebAuthenticationPanel, DISABLED_GetAssertionPin)
 #else
 TEST(WebAuthenticationPanel, GetAssertionPin)
@@ -1143,7 +1154,7 @@ TEST(WebAuthenticationPanel, GetAssertionPin)
 }
 
 // FIXME rdar://145102423
-#if PLATFORM(IOS) && (__IPHONE_OS_VERSION_MIN_REQUIRED > 180000) && !defined(NDEBUG)
+#if PLATFORM(IOS) && !defined(NDEBUG)
 TEST(WebAuthenticationPanel, DISABLED_GetAssertionInternalUV)
 #else
 TEST(WebAuthenticationPanel, GetAssertionInternalUV)
@@ -1162,7 +1173,7 @@ TEST(WebAuthenticationPanel, GetAssertionInternalUV)
 }
 
 // FIXME rdar://145102423
-#if PLATFORM(IOS) && (__IPHONE_OS_VERSION_MIN_REQUIRED > 180000) && !defined(NDEBUG)
+#if PLATFORM(IOS) && !defined(NDEBUG)
 TEST(WebAuthenticationPanel, DISABLED_GetAssertionInternalUVPinFallback)
 #else
 TEST(WebAuthenticationPanel, GetAssertionInternalUVPinFallback)
@@ -1182,7 +1193,7 @@ TEST(WebAuthenticationPanel, GetAssertionInternalUVPinFallback)
 }
 
 // FIXME rdar://145102423
-#if PLATFORM(IOS) && (__IPHONE_OS_VERSION_MIN_REQUIRED > 180000) && !defined(NDEBUG)
+#if PLATFORM(IOS) && !defined(NDEBUG)
 TEST(WebAuthenticationPanel, DISABLED_GetAssertionPinAuthBlockedError)
 #else
 TEST(WebAuthenticationPanel, GetAssertionPinAuthBlockedError)
@@ -1203,7 +1214,7 @@ TEST(WebAuthenticationPanel, GetAssertionPinAuthBlockedError)
 }
 
 // FIXME rdar://145102423
-#if PLATFORM(IOS) && (__IPHONE_OS_VERSION_MIN_REQUIRED > 180000) && !defined(NDEBUG)
+#if PLATFORM(IOS) && !defined(NDEBUG)
 TEST(WebAuthenticationPanel, DISABLED_GetAssertionPinInvalidErrorAndRetry)
 #else
 TEST(WebAuthenticationPanel, GetAssertionPinInvalidErrorAndRetry)
@@ -1257,7 +1268,7 @@ TEST(WebAuthenticationPanel, MultipleAccountsNullDelegate)
 }
 
 // FIXME rdar://145102423
-#if PLATFORM(IOS) && (__IPHONE_OS_VERSION_MIN_REQUIRED > 180000) && !defined(NDEBUG)
+#if PLATFORM(IOS) && !defined(NDEBUG)
 TEST(WebAuthenticationPanel, DISABLED_MultipleAccounts)
 #else
 TEST(WebAuthenticationPanel, MultipleAccounts)
@@ -1350,7 +1361,7 @@ TEST(WebAuthenticationPanel, LANoCredential)
 }
 
 // FIXME rdar://145102423
-#if PLATFORM(IOS) && (__IPHONE_OS_VERSION_MIN_REQUIRED > 180000) && !defined(NDEBUG)
+#if PLATFORM(IOS) && !defined(NDEBUG)
 TEST(WebAuthenticationPanel, DISABLED_LAMakeCredentialAllowLocalAuthenticator)
 #else
 TEST(WebAuthenticationPanel, LAMakeCredentialAllowLocalAuthenticator)
@@ -1422,7 +1433,7 @@ TEST(WebAuthenticationPanel, LAGetAssertionMultipleCredentialStore)
 }
 
 // FIXME rdar://145102423
-#if ((PLATFORM(IOS) && (__IPHONE_OS_VERSION_MIN_REQUIRED > 180000)) || PLATFORM(MAC)) && !defined(NDEBUG)
+#if (PLATFORM(IOS) || PLATFORM(MAC)) && !defined(NDEBUG)
 TEST(WebAuthenticationPanel, DISABLED_LAGetAssertionNoMockNoUserGesture)
 #else
 TEST(WebAuthenticationPanel, LAGetAssertionNoMockNoUserGesture)
@@ -1699,7 +1710,7 @@ TEST(WebAuthenticationPanel, PublicKeyCredentialCreationOptionsMaximum2)
 }
 
 // FIXME rdar://145102423
-#if ((PLATFORM(IOS) && (__IPHONE_OS_VERSION_MIN_REQUIRED > 180000)) || PLATFORM(MAC)) && !defined(NDEBUG)
+#if (PLATFORM(IOS) || PLATFORM(MAC)) && !defined(NDEBUG)
 TEST(WebAuthenticationPanel, DISABLED_MakeCredentialSPITimeout)
 #else
 TEST(WebAuthenticationPanel, MakeCredentialSPITimeout)

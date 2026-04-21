@@ -2421,9 +2421,31 @@ LayoutUnit RenderBox::perpendicularContainingBlockLogicalHeight() const
         return containingBlock->adjustContentBoxLogicalHeightForBoxSizing(LayoutUnit { fixedLogicalHeight->resolveZoom(containingBlockStyle.usedZoomForLength()) });
     }
 
-    LayoutUnit fillFallbackExtent = containingBlockStyle.writingMode().isHorizontal()
-        ? view().frameView().layoutSize().height()
-        : view().frameView().layoutSize().width();
+    LayoutUnit fillFallbackExtent = containingBlockStyle.writingMode().isHorizontal() ? view().frameView().layoutSize().height() : view().frameView().layoutSize().width();
+    auto containingBlockHasIndefiniteHeight = [&] {
+        // When the containing block's block size is indefinite, the orthogonal
+        // child's available inline space is indefinite. Use the viewport fallback
+        // per CSS Writing Modes 4, 7.3.1.
+        if (!logicalHeight.isAuto())
+            return false;
+        // max-height provides a constraint per the spec's fallback rules.
+        if (!containingBlockStyle.logicalMaxHeight().isNone() && !containingBlockStyle.logicalMaxHeight().isMaxContent())
+            return false;
+        // Quirks mode percentage walk can make auto-height blocks effectively definite.
+        if (document().inQuirksMode())
+            return false;
+        // Multicol flow threads get their height from the column.
+        if (containingBlock->isRenderMultiColumnFlow())
+            return false;
+        // Aspect ratio gives a definite height even with auto.
+        if (containingBlock->shouldComputeLogicalHeightFromAspectRatio())
+            return false;
+        return true;
+    };
+    if (containingBlockHasIndefiniteHeight()) {
+        view().addPercentHeightDescendant(const_cast<RenderBox&>(*this));
+        return fillFallbackExtent;
+    }
     LayoutUnit fillAvailableExtent = containingBlock->availableLogicalHeight(AvailableLogicalHeightType::ExcludeMarginBorderPadding);
     view().addPercentHeightDescendant(const_cast<RenderBox&>(*this));
     // FIXME: https://bugs.webkit.org/show_bug.cgi?id=158286 We also need to perform the same percentHeightDescendant treatment to the element which dictates the return value for containingBlock()->availableLogicalHeight() above.
@@ -3867,9 +3889,22 @@ template<typename SizeType> std::optional<LayoutUnit> RenderBox::computePercenta
 
     auto availableHeight = !overridingAvailableSize ? (!isOrthogonal ? containingBlock->availableLogicalHeightForPercentageComputation() : containingBlockChild->containingBlockLogicalWidthForContent()) : overridingAvailableSize;
 
+    auto availableHeightForQuirksPercentageResolution = [&]() -> std::optional<LayoutUnit> {
+        // Quirks spec §3.5 step 4: the walk stops at flex containers because they
+        // are not block containers. The flex container may have auto height, making
+        // availableLogicalHeightForPercentageComputation return nullopt, but during
+        // cross-axis stretch layout its used content height is known.
+        if (availableHeight || !skippedAutoHeightContainingBlock)
+            return availableHeight;
+        CheckedPtr flexContainer = dynamicDowncast<RenderFlexibleBox>(*containingBlock);
+        if (!flexContainer || !flexContainer->isInCrossAxisStretchLayout())
+            return { };
+        return containingBlock->contentBoxLogicalHeight();
+    };
+    availableHeight = availableHeightForQuirksPercentageResolution();
+
     if (!availableHeight)
         return { };
-
 
     auto result = [&] {
         if constexpr (Style::IsPercentage<SizeType>)

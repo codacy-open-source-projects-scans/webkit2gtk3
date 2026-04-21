@@ -1682,7 +1682,6 @@ fast/css-custom-paint/out-of-memory-while-adding-worklet-module.html [ DumpJSCon
 # official flexbox tests
 webkit.org/b/136754 imported/w3c/web-platform-tests/css/css-flexbox/flexbox_visibility-collapse-line-wrapping.html [ ImageOnlyFailure ]
 webkit.org/b/136754 imported/w3c/web-platform-tests/css/css-flexbox/flexbox_visibility-collapse.html [ ImageOnlyFailure ]
-webkit.org/b/210243 imported/w3c/web-platform-tests/css/css-flexbox/percentage-size-quirks-002.html [ Failure ]
 webkit.org/b/136754 imported/w3c/web-platform-tests/css/css-flexbox/scrollbars-no-margin.html [ ImageOnlyFailure ]
 webkit.org/b/116117 imported/w3c/web-platform-tests/css/css-flexbox/intrinsic-size/row-002.html [ ImageOnlyFailure ]
 webkit.org/b/116117 imported/w3c/web-platform-tests/css/css-flexbox/intrinsic-size/row-003.html [ ImageOnlyFailure ]
@@ -1698,11 +1697,12 @@ webkit.org/b/116117 imported/w3c/web-platform-tests/css/css-flexbox/intrinsic-si
 imported/w3c/web-platform-tests/css/css-flexbox/stretch-flex-item-checkbox-input.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-flexbox/stretch-flex-item-radio-input.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-flexbox/webkit-box-vertical-writing-mode.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-flexbox/flexbox-min-width-auto-005.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-flexbox/flexbox-min-width-auto-006.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-flexbox/intrinsic-size/col-wrap-020.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-flexbox/aspect-ratio-intrinsic-size-009.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-flexbox/multiline-shrink-to-fit.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-flexbox/align-content-007.htm
+imported/w3c/web-platform-tests/css/css-flexbox/align-self-016.html
+imported/w3c/web-platform-tests/css/css-flexbox/percentage-size-quirks-003.html
 
 # grid layout tests
 webkit.org/b/191508 fast/css-grid-layout/crash-large-positions.html [ Skip ]
@@ -3517,7 +3517,6 @@ webkit.org/b/186045 imported/w3c/web-platform-tests/css/css-animations/animation
 ### START OF display: contents failures
 
 webkit.org/b/157477 imported/w3c/web-platform-tests/css/css-display/display-contents-dynamic-table-001-inline.html [ ImageOnlyFailure ]
-webkit.org/b/157477 imported/w3c/web-platform-tests/css/css-display/display-contents-dynamic-fieldset-legend-001.html [ ImageOnlyFailure ]
 webkit.org/b/157477 imported/w3c/web-platform-tests/css/css-display/display-contents-first-letter-002.html [ ImageOnlyFailure ]
 webkit.org/b/157477 imported/w3c/web-platform-tests/css/css-display/display-contents-svg-elements.html [ ImageOnlyFailure ]
 
@@ -5123,11 +5122,8 @@ webkit.org/b/208396 http/tests/misc/object-embedding-svg-delayed-size-negotiatio
 # Untriaged writing-mode failures.
 webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/central-baseline-alignment-003.xht [ ImageOnlyFailure Pass ]
 webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/clearance-calculations-vrl-002.xht [ ImageOnlyFailure Pass ]
-webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/available-size-002.html [ ImageOnlyFailure ]
 webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/available-size-003.html [ ImageOnlyFailure ]
 webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/available-size-005.html [ ImageOnlyFailure ]
-webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/available-size-007.html [ ImageOnlyFailure ]
-webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/available-size-010.html [ ImageOnlyFailure ]
 webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/available-size-013.html [ ImageOnlyFailure ]
 webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/available-size-014.html [ ImageOnlyFailure ]
 webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/available-size-017.html [ ImageOnlyFailure ]
@@ -5155,20 +5151,7 @@ webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/overco
 webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/overconstrained-rel-pos-rtl-left-right-vrl-008.xht [ ImageOnlyFailure ]
 webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/overconstrained-rel-pos-rtl-top-bottom-vlr-007.xht [ ImageOnlyFailure ]
 webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/overconstrained-rel-pos-rtl-top-bottom-vrl-006.xht [ ImageOnlyFailure ]
-webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/sizing-orthog-htb-in-vlr-001.xht [ ImageOnlyFailure ]
-webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/sizing-orthog-htb-in-vlr-004.xht [ ImageOnlyFailure ]
-webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/sizing-orthog-htb-in-vrl-001.xht [ ImageOnlyFailure ]
-webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/sizing-orthog-htb-in-vrl-004.xht [ ImageOnlyFailure ]
-webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/sizing-orthog-prct-htb-in-vlr-001.xht [ ImageOnlyFailure ]
-webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/sizing-orthog-prct-htb-in-vlr-002.xht [ ImageOnlyFailure ]
-webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/sizing-orthog-prct-htb-in-vrl-001.xht [ ImageOnlyFailure ]
-webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/sizing-orthog-prct-htb-in-vrl-002.xht [ ImageOnlyFailure ]
-webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/sizing-orthog-prct-vlr-in-htb-001.xht [ ImageOnlyFailure ]
-webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/sizing-orthog-prct-vlr-in-htb-002.xht [ ImageOnlyFailure ]
 webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/sizing-orthog-prct-vrl-in-htb-001.xht [ ImageOnlyFailure ]
-webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/sizing-orthog-prct-vrl-in-htb-002.xht [ ImageOnlyFailure ]
-webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/sizing-orthog-vlr-in-htb-001.xht [ ImageOnlyFailure ]
-webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/sizing-orthog-vlr-in-htb-004.xht [ ImageOnlyFailure ]
 webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/sizing-orthog-vrl-in-htb-001.xht [ ImageOnlyFailure ]
 webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/sizing-orthog-vrl-in-htb-004.xht [ ImageOnlyFailure ]
 webkit.org/b/209080 imported/w3c/web-platform-tests/css/css-writing-modes/sizing-orthog-vrl-in-htb-008.xht [ ImageOnlyFailure ]
@@ -5197,13 +5180,8 @@ imported/w3c/web-platform-tests/css/css-writing-modes/forms/checkbox-appearance-
 imported/w3c/web-platform-tests/css/css-writing-modes/forms/radio-appearance-native-vertical-lr-baseline.optional.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-writing-modes/forms/radio-appearance-native-vertical-rl-baseline.optional.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-writing-modes/margin-collapse-vrl-022.xht [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-writing-modes/orthogonal-root-resize-icb-001.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-writing-modes/orthogonal-root-resize-icb-002.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-writing-modes/orthogonal-root-resize-icb-003.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-writing-modes/orthogonal-root-resize-icb-004.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-writing-modes/orthogonal-root-resize-icb-005.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-writing-modes/orthogonal-root-resize-icb-006.html [ ImageOnlyFailure ]
-imported/w3c/web-platform-tests/css/css-writing-modes/orthogonal-root-resize-icb-007.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-writing-modes/text-combine-upright-rtl-002.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/css-writing-modes/test-plan/req-tcu-font.html [ Skip ]
 
@@ -5214,6 +5192,7 @@ imported/w3c/web-platform-tests/css/cssom-view/smooth-scroll-nonstop.html [ Skip
 webkit.org/b/219343 imported/w3c/web-platform-tests/css/css-flexbox/aspect-ratio-intrinsic-size-005.html [ ImageOnlyFailure ]
 
 webkit.org/b/145176 imported/w3c/web-platform-tests/css/css-flexbox/flexbox_align-items-stretch-3.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/css-flexbox/select-element-multiple.html [ ImageOnlyFailure ]
 webkit.org/b/210093 imported/w3c/web-platform-tests/css/css-flexbox/select-element-zero-height-001.html [ ImageOnlyFailure ]
 webkit.org/b/210093 imported/w3c/web-platform-tests/css/css-flexbox/select-element-zero-height-002.html [ ImageOnlyFailure ]
 webkit.org/b/212046 imported/w3c/web-platform-tests/css/css-flexbox/overflow-auto-005.html [ ImageOnlyFailure ]
@@ -5248,11 +5227,6 @@ webkit.org/b/234704 imported/w3c/web-platform-tests/css/css-writing-modes/text-c
 webkit.org/b/234704 imported/w3c/web-platform-tests/css/css-writing-modes/text-combine-upright-compression-006a.html [ ImageOnlyFailure ]
 webkit.org/b/234704 imported/w3c/web-platform-tests/css/css-writing-modes/text-combine-upright-compression-007.html [ ImageOnlyFailure ]
 
-# Used flex-basis should be used to compute definiteness instead of specified.
-webkit.org/b/233196 imported/w3c/web-platform-tests/css/css-flexbox/percentage-heights-016.html [ ImageOnlyFailure ]
-webkit.org/b/233196 imported/w3c/web-platform-tests/css/css-flexbox/percentage-heights-017.html [ ImageOnlyFailure ]
-webkit.org/b/233196 imported/w3c/web-platform-tests/css/css-flexbox/percentage-heights-018.html [ ImageOnlyFailure ]
-
 # align baseline in flexbox.
 webkit.org/b/221478 imported/w3c/web-platform-tests/css/css-flexbox/dynamic-baseline-change-nested.html [ ImageOnlyFailure ]
 webkit.org/b/221478 imported/w3c/web-platform-tests/css/css-flexbox/dynamic-baseline-change.html [ ImageOnlyFailure ]
@@ -5262,7 +5236,6 @@ webkit.org/b/230747 imported/w3c/web-platform-tests/css/css-flexbox/flex-contain
 webkit.org/b/230747 imported/w3c/web-platform-tests/css/css-flexbox/flex-container-min-content-001.html [ ImageOnlyFailure ]
 
 # min-size:auto in flexbox.
-webkit.org/b/221481 imported/w3c/web-platform-tests/css/css-flexbox/flex-minimum-height-flex-items-029.html [ ImageOnlyFailure ]
 webkit.org/b/221481 imported/w3c/web-platform-tests/css/css-flexbox/flex-minimum-width-flex-items-013.html [ ImageOnlyFailure ]
 webkit.org/b/221481 imported/w3c/web-platform-tests/css/css-flexbox/flex-minimum-width-flex-items-015.html [ ImageOnlyFailure ]
 
@@ -6201,7 +6174,11 @@ webkit.org/b/263305 imported/w3c/web-platform-tests/close-watcher/user-activatio
 
 # Needs moveBefore support
 webkit.org/b/281223 imported/w3c/web-platform-tests/dom/nodes/moveBefore/focus-preserve-render.html [ Skip ]
-webkit.org/b/281223 imported/w3c/web-platform-tests/dom/nodes/moveBefore/moveBefore-as-flex-item.html [ ImageOnlyFailure ]
+webkit.org/b/281223 imported/w3c/web-platform-tests/dom/nodes/moveBefore/moveBefore-as-flex-item.html [ Skip ]
+webkit.org/b/281223 imported/w3c/web-platform-tests/dom/nodes/moveBefore/moveBefore-option-recalc-style.html [ Skip ]
+webkit.org/b/281223 imported/w3c/web-platform-tests/dom/nodes/moveBefore/select-option-optgroup.html [ Skip ]
+webkit.org/b/281223 imported/w3c/web-platform-tests/dom/nodes/moveBefore/css-transition-trigger.html [ Skip ]
+webkit.org/b/281223 imported/w3c/web-platform-tests/dom/nodes/moveBefore/relevant-mutations.html [ Skip ]
 
 # uncategorized dialog element failures
 webkit.org/b/286022 imported/w3c/web-platform-tests/html/semantics/interactive-elements/the-dialog-element/dialog-close-via-attribute.tentative.html [ Skip ]

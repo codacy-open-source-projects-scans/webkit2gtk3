@@ -23456,7 +23456,6 @@
 		00B9318013BA867F0035A948 /* parser */ = {
 			isa = PBXGroup;
 			children = (
-				00C60E3E13D76D7E0092A275 /* MarkupTokenizerInlines.h */,
 				00B9318113BA867F0035A948 /* XMLDocumentParser.cpp */,
 				00B9318213BA867F0035A948 /* XMLDocumentParser.h */,
 				00B9318313BA867F0035A948 /* XMLDocumentParserLibxml2.cpp */,
@@ -33406,6 +33405,7 @@
 				977B37211228721700B81FF8 /* HTMLTreeBuilder.cpp */,
 				977B37221228721700B81FF8 /* HTMLTreeBuilder.h */,
 				A8805AF116C96AEA000E9D98 /* InputStreamPreprocessor.h */,
+				00C60E3E13D76D7E0092A275 /* MarkupTokenizerInlines.h */,
 				8A309C9E123950BE00CB9204 /* NestingLevelIncrementer.h */,
 				97BC84811236FD93000C6161 /* TextDocumentParser.cpp */,
 				97BC84821236FD93000C6161 /* TextDocumentParser.h */,

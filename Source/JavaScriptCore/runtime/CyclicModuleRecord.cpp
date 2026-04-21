@@ -61,7 +61,7 @@ void CyclicModuleRecord::finishCreation(JSGlobalObject* globalObject, VM& vm)
 template<typename Visitor>
 void CyclicModuleRecord::visitChildrenImpl(JSCell* cell, Visitor& visitor)
 {
-    CyclicModuleRecord* thisObject = jsCast<CyclicModuleRecord*>(cell);
+    CyclicModuleRecord* thisObject = uncheckedDowncast<CyclicModuleRecord>(cell);
     ASSERT_GC_OBJECT_INHERITS(thisObject, info());
     Base::visitChildren(thisObject, visitor);
     visitor.append(thisObject->m_evaluationError);
@@ -69,7 +69,7 @@ void CyclicModuleRecord::visitChildrenImpl(JSCell* cell, Visitor& visitor)
 
 DEFINE_VISIT_CHILDREN(CyclicModuleRecord);
 
-void CyclicModuleRecord::initializeEnvironment(JSGlobalObject* globalObject, JSValue scriptFetcher)
+void CyclicModuleRecord::initializeEnvironment(JSGlobalObject* globalObject, RefPtr<ScriptFetcher> scriptFetcher)
 {
     // InitializeEnvironment
     // https://tc39.es/ecma262/#sec-source-text-module-record-initialize-environment
@@ -82,7 +82,7 @@ void CyclicModuleRecord::initializeEnvironment(JSGlobalObject* globalObject, JSV
 
     auto* jsModule = dynamicDowncast<JSModuleRecord>(this);
 #if ENABLE(WEBASSEMBLY)
-    auto* wasmModule = !jsModule ? jsCast<WebAssemblyModuleRecord*>(this) : nullptr;
+    auto* wasmModule = !jsModule ? uncheckedDowncast<WebAssemblyModuleRecord>(this) : nullptr;
 #else
     ASSERT(jsModule);
 #endif
@@ -324,7 +324,7 @@ void CyclicModuleRecord::initializeEnvironment(JSGlobalObject* globalObject, JSV
     m_initialized = true;
 }
 
-void CyclicModuleRecord::link(JSGlobalObject* globalObject, JSValue scriptFetcher)
+void CyclicModuleRecord::link(JSGlobalObject* globalObject, RefPtr<ScriptFetcher> scriptFetcher)
 {
     // Link()
     // https://tc39.es/ecma262/#sec-moduledeclarationlinking
@@ -337,7 +337,7 @@ void CyclicModuleRecord::link(JSGlobalObject* globalObject, JSValue scriptFetche
     // 2. Let stack be a new empty List.
     Vector<CyclicModuleRecord*, 8> stack;
     // 3. Let result be Completion(InnerModuleLinking(module, stack, 0)).
-    innerModuleLinking(globalObject, stack, 0, scriptFetcher);
+    innerModuleLinking(globalObject, stack, 0, WTF::move(scriptFetcher));
     // 4. If result is an abrupt completion, then
     if (Exception* exception = scope.exception()) {
         // 4.a. For each Cyclic Module Record m of stack, do
@@ -404,7 +404,7 @@ JSPromise* CyclicModuleRecord::evaluate(JSGlobalObject* globalObject)
         // 9.a. For each Cyclic Module Record m of stack, do
         for (AbstractModuleRecord* abstractRecord : stack) {
             // 9.a.i. Assert: m.[[Status]] is EVALUATING.
-            auto* cyclic = jsCast<CyclicModuleRecord*>(abstractRecord);
+            auto* cyclic = uncheckedDowncast<CyclicModuleRecord>(abstractRecord);
             ASSERT(cyclic->status() == Status::Evaluating);
             // 9.a.ii. Set m.[[Status]] to EVALUATED.
             cyclic->status(Status::Evaluated);
@@ -461,7 +461,7 @@ void CyclicModuleRecord::execute(JSGlobalObject* globalObject, JSPromise* capabi
         RELEASE_AND_RETURN(scope, void());
     }
 #endif
-    RELEASE_AND_RETURN(scope, jsCast<JSModuleRecord*>(this)->execute(globalObject, capability));
+    RELEASE_AND_RETURN(scope, uncheckedDowncast<JSModuleRecord>(this)->execute(globalObject, capability));
 }
 
 void CyclicModuleRecord::executeAsync(JSGlobalObject* globalObject)
@@ -504,7 +504,7 @@ static void gatherAvailableAncestors(CyclicModuleRecord* module, Vector<CyclicMo
 
     // 1. For each Cyclic Module Record m of module.[[AsyncParentModules]], do
     for (const WriteBarrier<AbstractModuleRecord>& barrier : module->asyncParentModules()) {
-        auto* m = jsCast<CyclicModuleRecord*>(barrier.get());
+        auto* m = uncheckedDowncast<CyclicModuleRecord>(barrier.get());
         // 1.a. If execList does not contain m and m.[[CycleRoot]].[[EvaluationError]] is empty, then
         // (Probable spec bug (https://github.com/tc39/ecma262/issues/3766). We need an additional check here that m.[[CycleRoot]] isn't empty.)
         ASSERT_IMPLIES(!m->cycleRoot(), m->evaluationError());
@@ -570,7 +570,7 @@ void CyclicModuleRecord::asyncExecutionRejected(JSGlobalObject* globalObject, JS
     // 10. For each Cyclic Module Record m of module.[[AsyncParentModules]], do
     for (const WriteBarrier<AbstractModuleRecord>& m : asyncParentModules()) {
         // 10.a. Perform AsyncModuleExecutionRejected(m, error).
-        jsCast<CyclicModuleRecord*>(m.get())->asyncExecutionRejected(globalObject, error);
+        uncheckedDowncast<CyclicModuleRecord>(m.get())->asyncExecutionRejected(globalObject, error);
     }
     // 11. Return UNUSED.
 }

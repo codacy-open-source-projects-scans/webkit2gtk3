@@ -86,7 +86,7 @@ void AbstractModuleRecord::finishCreation(JSGlobalObject*, VM& vm)
 template<typename Visitor>
 void AbstractModuleRecord::visitChildrenImpl(JSCell* cell, Visitor& visitor)
 {
-    AbstractModuleRecord* thisObject = jsCast<AbstractModuleRecord*>(cell);
+    AbstractModuleRecord* thisObject = uncheckedDowncast<AbstractModuleRecord>(cell);
     ASSERT_GC_OBJECT_INHERITS(thisObject, info());
     Base::visitChildren(thisObject, visitor);
     visitor.append(thisObject->m_moduleEnvironment);
@@ -881,12 +881,12 @@ void AbstractModuleRecord::setModuleEnvironment(JSGlobalObject* globalObject, JS
     m_moduleEnvironment.set(vm, this, moduleEnvironment);
 }
 
-void AbstractModuleRecord::link(JSGlobalObject* globalObject, JSValue scriptFetcher)
+void AbstractModuleRecord::link(JSGlobalObject* globalObject, RefPtr<ScriptFetcher> scriptFetcher)
 {
     if (auto* cyclicModuleRecord = dynamicDowncast<CyclicModuleRecord>(this))
-        cyclicModuleRecord->link(globalObject, scriptFetcher); // can throw
+        cyclicModuleRecord->link(globalObject, WTF::move(scriptFetcher)); // can throw
     else if (auto* moduleRecord = dynamicDowncast<SyntheticModuleRecord>(this))
-        moduleRecord->link(globalObject, scriptFetcher);
+        moduleRecord->link(globalObject, WTF::move(scriptFetcher));
     else
         RELEASE_ASSERT_NOT_REACHED();
 }
@@ -1080,7 +1080,7 @@ unsigned AbstractModuleRecord::innerModuleEvaluation(JSGlobalObject* globalObjec
             // 16.b.ii. Remove the last element of stack.
             AbstractModuleRecord* requiredModule = stack.takeLast();
             // 16.b.iii. Assert: requiredModule is a Cyclic Module Record.
-            auto* cyclic = jsCast<CyclicModuleRecord*>(requiredModule); // cyclic is a downcasted alias of requiredModule.
+            auto* cyclic = uncheckedDowncast<CyclicModuleRecord>(requiredModule); // cyclic is a downcasted alias of requiredModule.
             // 16.b.iv. Assert: requiredModule.[[AsyncEvaluationOrder]] is either an integer or UNSET.
             ASSERT(cyclic->asyncEvaluationOrder().hasOrder() || cyclic->asyncEvaluationOrder().isUnset());
             // 16.b.v. If requiredModule.[[AsyncEvaluationOrder]] is UNSET, set requiredModule.[[Status]] to EVALUATED.
@@ -1099,7 +1099,7 @@ unsigned AbstractModuleRecord::innerModuleEvaluation(JSGlobalObject* globalObjec
     RELEASE_AND_RETURN(scope, index);
 }
 
-unsigned AbstractModuleRecord::innerModuleLinking(JSGlobalObject* globalObject, Vector<CyclicModuleRecord*, 8>& stack, unsigned index, JSValue scriptFetcher)
+unsigned AbstractModuleRecord::innerModuleLinking(JSGlobalObject* globalObject, Vector<CyclicModuleRecord*, 8>& stack, unsigned index, RefPtr<ScriptFetcher> scriptFetcher)
 {
     // InnerModuleLinking(module, stack, index)
     // https://tc39.es/ecma262/#sec-InnerModuleLinking
@@ -1182,7 +1182,7 @@ unsigned AbstractModuleRecord::innerModuleLinking(JSGlobalObject* globalObject, 
             // 13.b.ii. Remove the last element of stack.
             AbstractModuleRecord* requiredModule = stack.takeLast();
             // 13.b.iii. Assert: requiredModule is a Cyclic Module Record.
-            auto* cyclic = jsCast<CyclicModuleRecord*>(requiredModule);
+            auto* cyclic = uncheckedDowncast<CyclicModuleRecord>(requiredModule);
             // 13.b.iv. Set requiredModule.[[Status]] to LINKED.
             cyclic->status(Status::Linked);
             // 13.b.v. If requiredModule and module are the same Module Record, set done to true.

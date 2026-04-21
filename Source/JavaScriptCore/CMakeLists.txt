@@ -1087,6 +1087,7 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     runtime/DOMAttributeGetterSetter.h
     runtime/DumpContext.h
     runtime/ECMAMode.h
+    runtime/EmbedderArrayLike.h
     runtime/EnsureStillAliveHere.h
     runtime/EnumerationMode.h
     runtime/Error.h
@@ -1179,6 +1180,7 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     runtime/JSPIContext.h
     runtime/JSPIContextInlines.h
     runtime/JSCPtrTag.h
+    runtime/JSCTimeZone.h
     runtime/JSCustomGetterFunction.h
     runtime/JSCustomSetterFunction.h
     runtime/JSDataView.h
@@ -1186,6 +1188,7 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     runtime/JSDateMath.h
     runtime/JSDestructibleObject.h
     runtime/JSDestructibleObjectHeapCellType.h
+    runtime/JSEmbedderArrayLike.h
     runtime/JSHeapDouble.h
     runtime/JSHeapInt32.h
     runtime/JSExportMacros.h
@@ -1236,9 +1239,6 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     runtime/JSRemoteFunction.h
     runtime/JSRunLoopTimer.h
     runtime/JSScope.h
-    runtime/JSScriptFetchParameters.h
-    runtime/JSScriptFetcher.h
-    runtime/JSScriptFetchParametersInlines.h
     runtime/JSSegmentedVariableObject.h
     runtime/JSSet.h
     runtime/JSSetInlines.h

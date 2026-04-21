@@ -69,6 +69,7 @@
 # * XML
 # * XHR
 # * EME feature
+# * IPC Testing
 # * UNSUPPORTED tests
 #   * Things we do not test. (i.e. Skipped)
 # * NEEDS TRIAGING
@@ -888,10 +889,14 @@ accessibility/password-notifications-timing.html [ Skip ]
 accessibility/base-select-basic.html [ Skip ]
 accessibility/base-select-complex-options.html [ Skip ]
 accessibility/base-select-focus-on-open.html [ Skip ]
+accessibility/base-select-option-press-closes-popover.html [ Skip ]
 accessibility/base-select-notifications.html [ Skip ]
 # This one fails because it leans on a Cocoa-specific API (AccessibilityUIElement::uiElementForSearchPredicate), so
 # may be a true skip.
 accessibility/base-select-search-predicate.html [ Skip ]
+# pathDescription is not implemented for this platform.
+accessibility/base-select-option-border-radius-path.html [ Skip ]
+accessibility/element-path-with-css-transforms.html [ Skip ]
 
 # Failing because the mtable cannot be found as an accessible element.
 accessibility/table-row-bounding-boxes.html [ Skip ]
@@ -1856,28 +1861,16 @@ webkit.org/b/184457 media/video-aspect-ratio.html [ Pass Failure ]
 
 webkit.org/b/256768 fast/mediastream/captureStream/canvas3d.html [ Pass Failure ]
 webkit.org/b/312138 http/wpt/mediasession/setCaptureState.html [ Pass Failure ]
-webkit.org/b/312138 fast/mediastream/MediaStream-add-remove-tracks.html [ Pass Timeout ]
-webkit.org/b/312138 fast/mediastream/MediaStreamTrack-kind.html [ Pass Timeout ]
 webkit.org/b/312138 fast/mediastream/mediastreamtrack-video-frameRate-clone-decreasing.html [ Failure ]
 webkit.org/b/312138 imported/w3c/web-platform-tests/webrtc/protocol/candidate-exchange.https.html?interop-2026 [ Failure Pass ]
-webkit.org/b/312138 [ Debug ] media/media-preload-no-delay-loadevent.html [ Failure Pass ]
-webkit.org/b/312138 [ Debug ] media/track/webvtt-parser-does-not-leak.html [ Failure Pass ]
-webkit.org/b/312138 [ Debug ] http/wpt/webcodecs/videoFrame-video-element-compressed.html [ Failure ]
-webkit.org/b/312138 [ Debug ] imported/w3c/web-platform-tests/media-source/mediasource-append-buffer.html [ Failure ]
-webkit.org/b/312138 [ Debug ] media/audio-concurrent-supported.html [ Failure ]
-webkit.org/b/312138 [ Debug ] media/media-event-listeners.html [ Failure ]
-webkit.org/b/312138 [ Debug ] media/media-source/media-source-webm-configuration-change.html [ Failure ]
-webkit.org/b/312138 [ Debug ] media/video-background-playback.html [ Failure ]
-webkit.org/b/312138 [ Debug ] webrtc/video-rotation-black.html [ Failure ]
-webkit.org/b/312138 [ Debug ] http/tests/media/video-play-waiting.html [ Pass Failure Timeout ]
+webkit.org/b/312138 imported/w3c/web-platform-tests/media-source/mediasource-append-buffer.html [ Failure Pass ]
+webkit.org/b/312138 media/media-source/media-source-webm-configuration-change.html [ Failure Pass ]
+webkit.org/b/312138 webrtc/video-rotation-black.html [ Failure Pass ]
 webkit.org/b/312138 fast/mediastream/mediastreamtrack-video-zoom.html [ Pass Failure ]
-webkit.org/b/312138 [ Debug ] imported/w3c/web-platform-tests/video-rvfc/request-video-frame-callback.html [ Crash ]
 webkit.org/b/312138 imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/selectors/cue/text-decoration_line-through.html [ ImageOnlyFailure ]
 webkit.org/b/312138 imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/selectors/cue/text-decoration_overline.html [ ImageOnlyFailure ]
 webkit.org/b/312138 imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/selectors/cue/text-decoration_overline_underline_line-through.html [ ImageOnlyFailure ]
 webkit.org/b/312138 imported/w3c/web-platform-tests/webvtt/rendering/cues-with-video/processing-model/selectors/cue/text-decoration_underline.html [ ImageOnlyFailure ]
-webkit.org/b/312157 fast/mediastream/error.html [ Crash Pass ]
-webkit.org/b/312157 imported/w3c/web-platform-tests/permissions-policy/reporting/report-to-single-endpoint.https.sub.html [ Crash Pass ]
 
 #////////////////////////////////////////////////////////////////////////////////////////
 # End of GStreamer-related bugs
@@ -2630,7 +2623,6 @@ webkit.org/b/251195 webgl/1.0.x/conformance/extensions/ext-color-buffer-half-flo
 
 # Not applicable.
 webgl/webgl-backend-type.html [ Skip ]
-ipc/restrictedendpoints/allow-access-webGPU.html  [ Skip ]
 
 # Failing with ANGLE backend
 fast/canvas/webgl/oes-texture-float-linear.html [ Failure ]
@@ -3563,6 +3555,65 @@ imported/w3c/web-platform-tests/encrypted-media/clearkey-update-non-ascii-input.
 # End of EME feature
 #////////////////////////////////////////////////////////////////////////////////////////
 
+#////////////////////////////////////////////////////////////////////////////////////////
+# IPC testing
+#////////////////////////////////////////////////////////////////////////////////////////
+
+### TESTS TO BE SKIPPED
+
+# Specific to Cocoa-ports.
+ipc/networksessioncocoa-empty-resource-request.html [ Skip ]
+ipc/send-invalid-message.html [ Skip ]
+ipc/pasteboard-write-custom-data.html [ Skip ]
+ipc/remotedisplaylistrecorder-drawcontrolpart-slidertrackpart-crash.html [ Skip ]
+http/tests/ipc/gpu-load-error-empty-user-info-crssh.html [ Skip ]
+
+# ATTACHMENT_ELEMENT is disabled in glib ports.
+ipc/restrictedendpoints/allow-access-attachmentElement.html [ Skip ]
+
+# libwebrtc-specific.
+ipc/videoEncode.html [ Skip ]
+
+# WebAuthn not enabled
+ipc/web-authenticator-get-assertion.html [ Skip ]
+
+# These tests require UseGPUProcessForMediaEnabled
+ipc/restrictedendpoints/allow-access-testOnlyIPC.html [ Skip ]
+
+# Assorted crashes
+ipc/convert-to-luminance-mask-float16.html [ Crash ]
+ipc/empty-svgfilterrenderer-expression-crash.html [ Crash ]
+ipc/send-gpu-GetShareableBitmap-RemoteRenderingBackend.html [ Crash ]
+
+### FAILING TESTS
+
+# Read-Only shared-memory handle not supported, see https://bugs.webkit.org/show_bug.cgi?id=131542
+ipc/stream-sync-reply-shared-memory.html [ Failure ]
+
+
+### NEEDS PROPER TRIAGGING/GARDENING
+
+ipc/decode-feConvolveMatrix-kernelSize-overflow.html [ Failure ]
+ipc/invalid-addSourceBuffer-to-GPU-process-crash.html [ Failure ]
+ipc/invalid-message-to-web-process-crash.html [ Failure ]
+ipc/restore-empty-stack-crash.html [ Failure ]
+ipc/restrictedendpoints/deny-access-attachmentElement.html [ Failure ]
+ipc/serialized-type-info.html [ Failure ]
+http/tests/ipc/null-port-on-sharedmemoryhandle-creation.html [ Failure ]
+
+ipc/restrictedendpoints/deny-access-testOnlyIPC.html [ Crash ]
+ipc/restrictedendpoints/deny-access-webGPU.html [ Crash ]
+ipc/validate-message-check-in-networkconnectiontowebproces-crash.html [ Crash ]
+
+ipc/insufficient-svgfilter-inputs-crash.html [ Timeout ]
+ipc/invalid-feConvolveMatrix-crash.html [ Timeout ]
+ipc/invalid-svgfilter-expression-crash.html [ Timeout ]
+ipc/restrictedendpoints/deny-access-updateQuotaBasedOnSpaceUsageForTesting.html [ Timeout ]
+ipc/restrictedendpoints/deny-access-webPush.html [ Timeout ]
+
+#////////////////////////////////////////////////////////////////////////////////////////
+# End of IPC testing
+#////////////////////////////////////////////////////////////////////////////////////////
 
 #////////////////////////////////////////////////////////////////////////////////////////
 # UNSUPPORTED tests. Things we must skip.
