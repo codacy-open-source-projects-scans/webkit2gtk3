@@ -629,6 +629,7 @@ public:
     unsigned NODELETE numberOfLiveDocuments() const;
     unsigned NODELETE referencingNodeCount(const Document&) const;
     ExceptionOr<void> executeOpportunisticallyScheduledTasks() const;
+    ExceptionOr<void> releaseMemoryNow() const;
 
 #if ENABLE(WEB_AUDIO)
     // BaseAudioContext lifetime testing.
@@ -736,6 +737,8 @@ public:
     ExceptionOr<void> startTrackingStyleRecalcs();
     ExceptionOr<unsigned> styleRecalcCount();
     unsigned NODELETE lastStyleUpdateSize() const;
+    unsigned styleInvalidationTraversalCount() const;
+    void resetStyleInvalidationTraversalCount();
 
     ExceptionOr<void> startTrackingLayoutUpdates();
     ExceptionOr<unsigned> layoutUpdateCount();

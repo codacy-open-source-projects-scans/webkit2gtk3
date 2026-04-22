@@ -946,12 +946,6 @@ webkit.org/b/186362 [ Release ] http/tests/resourceLoadStatistics/prevalent-reso
 
 webkit.org/b/189598 compositing/backing/backing-store-attachment-fill-forwards-animation.html [ Pass Failure ]
 
-webkit.org/b/271207 [ Debug ] http/wpt/webauthn/public-key-credential-create-failure-local-silent.https.html [ Failure Crash ]
-webkit.org/b/271207 [ Debug ] http/wpt/webauthn/public-key-credential-create-failure-local.https.html [ Failure Crash ]
-webkit.org/b/271207 [ Debug ] http/wpt/webauthn/public-key-credential-create-success-local.https.html [ Failure Crash ]
-webkit.org/b/271207 [ Debug ] http/wpt/webauthn/public-key-credential-get-success-local.https.html [ Failure Crash ]
-webkit.org/b/271207 [ Debug ] http/wpt/webauthn/public-key-credential-get-failure-local.https.html [ Failure Crash ]
-
 webkit.org/b/194826 http/tests/resourceLoadStatistics/do-not-block-top-level-navigation-redirect.html [ Pass Timeout ]
 
 #http/tests/storageAccess/request-and-grant-access-cross-origin-sandboxed-iframe-from-prevalent-domain-with-user-interaction-but-access-from-wrong-frame.html [ Pass Timeout ]
@@ -2315,6 +2309,12 @@ webkit.org/b/305403 [ Sequoia ] http/tests/performance/performance-resource-timi
 [ Sequoia+ arm64 ] http/tests/media/hls/track-webvtt-multitracks.html [ Timeout ]
 [ Sequoia+ arm64 ] platform/mac/media/encrypted-media/fps-generateRequest.html [ Timeout ]
 
+webkit.org/b/312919 http/wpt/webauthn/public-key-credential-create-failure-local-silent.https.html [ Crash Failure ]
+webkit.org/b/312919 http/wpt/webauthn/public-key-credential-create-failure-local.https.html [ Crash Failure ]
+webkit.org/b/312919 http/wpt/webauthn/public-key-credential-create-success-local.https.html [ Crash Failure ]
+webkit.org/b/312919 http/wpt/webauthn/public-key-credential-get-success-local.https.html [ Crash Failure ]
+webkit.org/b/312919 http/wpt/webauthn/public-key-credential-get-failure-local.https.html [ Crash Failure ]
+
 webkit.org/b/305508 http/tests/resourceLoadStatistics/log-cross-site-load-with-link-decoration.html [ Pass Failure ]
 
 webkit.org/b/305581 http/tests/workers/service/shownotification-allowed.html [ Pass Failure ]
@@ -2373,6 +2373,12 @@ webkit.org/b/306821 [ Tahoe ] fast/css-grid-layout/grid-item-display.html [ Pass
 webkit.org/b/306380 [ Release arm64 ] imported/w3c/web-platform-tests/media-source/mediasource-config-change-webm-av-audio-bitrate.html [ Pass Failure ]
 
 webkit.org/b/309600 [ arm64 ] http/tests/xmlhttprequest/chunked-progress-event-expectedLength.html [ Pass Failure ]
+
+# webkit.org/b/312842 imported/w3c/web-platform-tests/css/css-flexbox/justify-content-00x.htm are constant image diffs
+[ arm64 ] imported/w3c/web-platform-tests/css/css-flexbox/justify-content-001.htm [ ImageOnlyFailure ]
+[ arm64 ] imported/w3c/web-platform-tests/css/css-flexbox/justify-content-002.htm [ ImageOnlyFailure ]
+[ arm64 ] imported/w3c/web-platform-tests/css/css-flexbox/justify-content-004.htm [ ImageOnlyFailure ]
+[ arm64 ] imported/w3c/web-platform-tests/css/css-flexbox/justify-content-005.htm [ ImageOnlyFailure ]
 
 webkit.org/b/307084 [ Tahoe Release ] webgl/smell-test.html [ ImageOnlyFailure Pass ]
 webkit.org/b/307088 [ Tahoe Release ] webgl/webgl-and-dom-in-gpup.html [ ImageOnlyFailure Pass ]

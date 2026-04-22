@@ -875,6 +875,7 @@ enum ContentsFormat {
     unsigned long numberOfLiveDocuments();
     unsigned long referencingNodeCount(Document document);
     undefined executeOpportunisticallyScheduledTasks();
+    undefined releaseMemoryNow();
     unsigned long numberOfIntersectionObservers(Document document);
     unsigned long numberOfResizeObservers(Document document);
     WindowProxy? openDummyInspectorFrontend(DOMString url);
@@ -957,6 +958,8 @@ enum ContentsFormat {
     undefined startTrackingStyleRecalcs();
     unsigned long styleRecalcCount();
     readonly attribute unsigned long lastStyleUpdateSize;
+    readonly attribute unsigned long styleInvalidationTraversalCount;
+    undefined resetStyleInvalidationTraversalCount();
 
     undefined startTrackingLayoutUpdates();
     unsigned long layoutUpdateCount();

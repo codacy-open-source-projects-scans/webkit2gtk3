@@ -64,6 +64,7 @@ WTF_ALLOW_UNSAFE_BUFFER_USAGE_BEGIN
 #include "JSPromise.h"
 #include "JSRemoteFunction.h"
 #include "JSWithScope.h"
+#include "JumpTable.h"
 #include "LLIntEntrypoint.h"
 #include "MegamorphicCache.h"
 #include "ObjectConstructor.h"
@@ -438,7 +439,7 @@ static ALWAYS_INLINE JSValue getByIdMegamorphic(JSGlobalObject* globalObject, VM
         if (hasProperty) {
             if (cacheable && slot.isCacheableValue() && slot.cachedOffset() <= MegamorphicCache::maxOffset) [[likely]] {
                 if (slot.slotBase() == baseObject || !baseObject->structure()->isDictionary())
-                    vm.megamorphicCache()->initAsHit(baseObject->structureID(), uid, slot.slotBase(), slot.cachedOffset(), slot.slotBase() == thisValue);
+                    vm.megamorphicCache()->initAsHit(baseObject->structureID(), uid, slot.slotBase(), slot.cachedOffset(), slot.slotBase() == baseValue);
                 else {
                     if (baseObject->structure()->hasBeenFlattenedBefore()) [[unlikely]] {
                         if (propertyCache && propertyCache->considerRepatchingCacheMegamorphic(vm))

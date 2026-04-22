@@ -105,9 +105,10 @@ struct RuleFeature : public RuleAndSelector {
 static_assert(sizeof(RuleFeature) <= 16, "RuleFeature is a frequently allocated object. Keep it small.");
 
 struct RuleFeatureWithInvalidationSelector : public RuleFeature {
-    RuleFeatureWithInvalidationSelector(const RuleData&, MatchElement, IsNegation, CSSSelectorList&& invalidationSelector);
+    RuleFeatureWithInvalidationSelector(const RuleData&, MatchElement, IsNegation, CSSSelectorList&& invalidationSelector, CSSSelectorList&& scopeSelector = { });
 
     CSSSelectorList invalidationSelector;
+    CSSSelectorList scopeSelector;
 };
 #pragma pack(pop)
 
@@ -167,7 +168,7 @@ struct RuleFeatureSet {
 private:
     struct SelectorFeatures {
         using InvalidationFeature = std::tuple<const CSSSelector*, MatchElement, IsNegation>;
-        using HasInvalidationFeature = std::tuple<const CSSSelector*, MatchElement, IsNegation, DoesBreakScope>;
+        using HasInvalidationFeature = std::tuple<const CSSSelector*, MatchElement, IsNegation, DoesBreakScope, const CSSSelector*>;
 
         Vector<InvalidationFeature> ids;
         Vector<InvalidationFeature> classes;

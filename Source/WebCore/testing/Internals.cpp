@@ -169,6 +169,7 @@
 #include "MediaUsageInfo.h"
 #include "MemoryCache.h"
 #include "MemoryInfo.h"
+#include "MemoryRelease.h"
 #include "MessagePort.h"
 #include "MockAudioDestinationCocoa.h"
 #include "MockLibWebRTCPeerConnection.h"
@@ -3325,6 +3326,12 @@ ExceptionOr<void> Internals::executeOpportunisticallyScheduledTasks() const
     return { };
 }
 
+ExceptionOr<void> Internals::releaseMemoryNow() const
+{
+    WebCore::releaseMemory(Critical::Yes, Synchronous::Yes);
+    return { };
+}
+
 #if ENABLE(WEB_AUDIO)
 uint64_t Internals::baseAudioContextIdentifier(const BaseAudioContext& context)
 {
@@ -4362,6 +4369,20 @@ unsigned Internals::lastStyleUpdateSize() const
     if (!document)
         return 0;
     return document->lastStyleUpdateSizeForTesting();
+}
+
+unsigned Internals::styleInvalidationTraversalCount() const
+{
+    Document* document = contextDocument();
+    if (!document)
+        return 0;
+    return document->styleInvalidationTraversalCountForTesting();
+}
+
+void Internals::resetStyleInvalidationTraversalCount()
+{
+    if (Document* document = contextDocument())
+        document->resetStyleInvalidationTraversalCountForTesting();
 }
 
 ExceptionOr<void> Internals::startTrackingLayoutUpdates()
