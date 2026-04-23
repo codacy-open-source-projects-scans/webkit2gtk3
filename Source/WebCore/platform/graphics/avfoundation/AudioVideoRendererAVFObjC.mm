@@ -69,6 +69,12 @@
 #import <pal/cf/CoreMediaSoftLink.h>
 #import <pal/cocoa/AVFoundationSoftLink.h>
 
+#if USE(APPLE_INTERNAL_SDK) && __has_include(<WebKitAdditions/AVSampleBufferRenderSynchronizerAdditions.mm>)
+#import <WebKitAdditions/AVSampleBufferRenderSynchronizerAdditions.mm>
+#else
+static void setSynchronizerScreenReserved(AVSampleBufferRenderSynchronizer *, bool) { }
+#endif
+
 @interface AVSampleBufferDisplayLayer (Staging_100128644)
 @property (assign, nonatomic) BOOL preventsAutomaticBackgroundingDuringVideoPlayback;
 @end
@@ -996,6 +1002,11 @@ bool AudioVideoRendererAVFObjC::seeking() const
     return m_seekState != SeekCompleted;
 }
 
+void AudioVideoRendererAVFObjC::setScreenReserved(bool reserved)
+{
+    setSynchronizerScreenReserved(m_synchronizer, reserved);
+}
+
 MediaTime AudioVideoRendererAVFObjC::clampTimeToLastSeekTime(const MediaTime& time) const
 {
     if (m_lastSeekTime.isFinite() && time < m_lastSeekTime)
@@ -1468,9 +1479,12 @@ Ref<GenericPromise> AudioVideoRendererAVFObjC::stageVideoRenderer(WebSampleBuffe
     }
 
     bool videoTrackChangeOnly = !m_previousRendererConfiguration.hasVideoTrack && newConfiguration.hasVideoTrack;
-    bool flushRequired = std::exchange(m_previousRendererConfiguration, newConfiguration) != newConfiguration && !videoTrackChangeOnly;
+    bool configurationChanged = std::exchange(m_previousRendererConfiguration, newConfiguration) != newConfiguration;
+    bool hasVideoRenderer = videoRenderer && videoRenderer->renderer();
+    bool switchingFromRenderless = renderer && !hasVideoRenderer && !isUsingDecompressionSession();
+    bool flushRequired = (configurationChanged || switchingFromRenderless) && !videoTrackChangeOnly;
     m_readyToRequestVideoData = !flushRequired;
-    ALWAYS_LOG(LOGIDENTIFIER, "renderer: ", !!renderer, " videoTrackChangeOnly: ", videoTrackChangeOnly, " flushRequired: ", flushRequired);
+    ALWAYS_LOG(LOGIDENTIFIER, "renderer: ", !!renderer, " videoTrackChangeOnly: ", videoTrackChangeOnly, " configurationChanged: ", configurationChanged, " switchingFromRenderless: ", switchingFromRenderless, " flushRequired: ", flushRequired);
 
     return videoRenderer->changeRenderer(renderer)->whenSettled(RunLoop::mainSingleton(), [weakThis = ThreadSafeWeakPtr { *this }, rendererToExpire = WTF::move(rendererToExpire), flushRequired]() {
         RefPtr protectedThis = weakThis.get();

@@ -557,7 +557,7 @@ static NSArray<WKBridgeTypedResourceId *> *convert(const Vector<TypedResourceId>
 }
 
 template<typename T>
-static NSData* convert(const Vector<T>& data)
+static NSData *convert(const Vector<T>& data)
 {
     if (!data.size())
         return nil;
@@ -690,11 +690,11 @@ static WKBridgeDataType convert(DataType type)
     case DataType::kFloat:
         return WKBridgeDataTypeFloat;
     case DataType::kColor3f:
-        return WKBridgeDataTypeColor3f;
+        return WKBridgeDataTypeCgColor3;
     case DataType::kColor3h:
         return WKBridgeDataTypeColor3h;
     case DataType::kColor4f:
-        return WKBridgeDataTypeColor4f;
+        return WKBridgeDataTypeCgColor4;
     case DataType::kColor4h:
         return WKBridgeDataTypeColor4h;
     case DataType::kFloat2:
@@ -737,6 +737,8 @@ static WKBridgeDataType convert(DataType type)
         return WKBridgeDataTypeToken;
     case DataType::kAsset:
         return WKBridgeDataTypeAsset;
+    default:
+        RELEASE_ASSERT_NOT_REACHED("unknown data type");
     }
 }
 
@@ -763,12 +765,7 @@ static NSArray<WKBridgeInputOutput *> *convert(const Vector<InputOutput>& inputO
 {
     NSMutableArray<WKBridgeInputOutput *> *result = [NSMutableArray array];
     for (const auto& io : inputOutputs) {
-        WKBridgeDataType semanticType = WKBridgeDataTypeAsset;
-        BOOL hasSemanticType = NO;
-        if (io.semanticType) {
-            semanticType = convert(*io.semanticType);
-            hasSemanticType = YES;
-        }
+        NSString *semanticTypeName = io.semanticTypeName ? io.semanticTypeName->createNSString().get() : nil;
 
         WKBridgeConstantContainer *defaultValue = nil;
         if (io.defaultValue)
@@ -776,8 +773,7 @@ static NSArray<WKBridgeInputOutput *> *convert(const Vector<InputOutput>& inputO
 
         [result addObject:[WebKit::allocWKBridgeInputOutputInstance() initWithType:convert(io.type)
             name:io.name.createNSString().get()
-            semanticType:semanticType
-            hasSemanticType:hasSemanticType
+            semanticTypeName:semanticTypeName
             defaultValue:defaultValue]];
     }
 
@@ -829,9 +825,27 @@ static NSArray<WKBridgeNode *> *convert(const Vector<Node>& nodes)
     return result;
 }
 
+static NSArray<NSString *> *convertStrings(const Vector<String>& strings)
+{
+    NSMutableArray<NSString *> *result = [NSMutableArray arrayWithCapacity:strings.size()];
+    for (const auto& s : strings)
+        [result addObject:s.createNSString().get()];
+    return result;
+}
+
 static WKBridgeMaterialGraph *convert(const MaterialGraph& material)
 {
-    return [WebKit::allocWKBridgeMaterialGraphInstance() initWithNodes:convert(material.nodes) edges:convert(material.edges) arguments:convert(material.arguments) results:convert(material.results) inputs:convert(material.inputs) outputs:convert(material.outputs)];
+    return [WebKit::allocWKBridgeMaterialGraphInstance()
+        initWithGraphName:material.graphName.createNSString().get()
+        nodes:convert(material.nodes)
+        edges:convert(material.edges)
+        arguments:convert(material.arguments)
+        results:convert(material.results)
+        inputs:convert(material.inputs)
+        outputs:convert(material.outputs)
+        primvarMappingPrimvarNames:convertStrings(material.primvarMappingPrimvarNames)
+        primvarMappingTexcoordNames:convertStrings(material.primvarMappingTexcoordNames)
+        functionConstantInputNames:convertStrings(material.functionConstantInputNames)];
 }
 
 #endif
@@ -887,7 +901,6 @@ WebMesh::~WebMesh() = default;
 void WebMesh::render(uint32_t textureIndex, Function<void(bool)>&& completionHandler) const
 {
 #if ENABLE(GPU_PROCESS_MODEL)
-    processUpdates();
     if (!m_meshDataExists) {
         completionHandler(false);
         return;
@@ -927,33 +940,20 @@ static WKBridgeUpdateMesh *convert(const WebModel::UpdateMeshDescriptor& input)
 void WebMesh::update(Vector<WebModel::UpdateMeshDescriptor>&& inputArray)
 {
 #if ENABLE(GPU_PROCESS_MODEL)
-    if (!m_batchedUpdates)
-        m_batchedUpdates = [NSMutableDictionary dictionary];
-
-    for (auto& input : inputArray) {
-        WKBridgeUpdateMesh *descriptor = convert(input);
-        RELEASE_ASSERT(descriptor);
-        [m_batchedUpdates setObject:descriptor forKey:@(descriptor.identifier.cachedHashValue)];
-    }
-#else
-    UNUSED_PARAM(inputArray);
-#endif
-}
-
-void WebMesh::processUpdates() const
-{
-#if ENABLE(GPU_PROCESS_MODEL)
-    if (![m_batchedUpdates count])
+    if (!inputArray.size())
         return;
 
-    BinarySemaphore completion;
     RELEASE_ASSERT(m_receiver);
-    [m_receiver updateMesh:[m_batchedUpdates allValues] completionHandler:[&] mutable {
+    BinarySemaphore completion;
+    [m_receiver updateMesh:createNSArray(inputArray, [](const WebModel::UpdateMeshDescriptor& desc) {
+        return convert(desc);
+    }) completionHandler:[&] mutable {
         completion.signal();
     }];
     completion.wait();
     m_meshDataExists = true;
-    [m_batchedUpdates removeAllObjects];
+#else
+    UNUSED_PARAM(inputArray);
 #endif
 }
 
@@ -1056,6 +1056,18 @@ void WebMesh::updateRenderBuffers(const WebModel::ResizeMeshDescriptor& descript
     m_textures = createMetalTextures(MTLCreateSystemDefaultDevice(), ioSurfaces, descriptor.width, descriptor.height);
 #else
     UNUSED_PARAM(descriptor);
+#endif
+}
+
+void WebMesh::processRemovals(Vector<WebModel::TypedResourceId>&& meshRemovals, Vector<WebModel::TypedResourceId>&& materialRemovals, Vector<WebModel::TypedResourceId>&& textureRemovals, CompletionHandler<void(bool)>&& completionHandler)
+{
+#if ENABLE(GPU_PROCESS_MODEL)
+    completionHandler(!![m_receiver processRemovals:WebModel::convert(meshRemovals) materialRemovals:WebModel::convert(materialRemovals) textureRemovals:WebModel::convert(textureRemovals)]);
+#else
+    UNUSED_PARAM(meshRemovals);
+    UNUSED_PARAM(materialRemovals);
+    UNUSED_PARAM(textureRemovals);
+    completionHandler(false);
 #endif
 }
 

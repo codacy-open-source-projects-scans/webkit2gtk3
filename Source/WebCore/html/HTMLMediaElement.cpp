@@ -128,6 +128,7 @@
 #include "RenderVideo.h"
 #include "RenderView.h"
 #include "ResourceLoadInfo.h"
+#include "ScreenProperties.h"
 #include "ScriptController.h"
 #include "ScriptDisallowedScope.h"
 #include "ScriptExecutionContextInlines.h"
@@ -672,10 +673,19 @@ HTMLMediaElement::HTMLMediaElement(const QualifiedName& tagName, Document& docum
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
     , m_remote(RemotePlayback::create(*this))
 #endif
+    , m_screenPropertiesChangedObserver { ScreenPropertiesChangedObserver::create([weakThis = WeakPtr { *this }] (PlatformDisplayID displayId) {
+        if (RefPtr protectedThis = weakThis.get())
+            protectedThis->screenPropertiesChanged(displayId);
+    }) }
 {
     RefPtr page = document.page();
     m_shouldAudioPlaybackRequireUserGesture = page && page->requiresUserGestureForAudioPlayback() && !processingUserGestureForMedia();
     m_shouldVideoPlaybackRequireUserGesture = page && page->requiresUserGestureForVideoPlayback() && !processingUserGestureForMedia();
+
+#if PLATFORM(MAC)
+    if (auto data = screenData(primaryScreenDisplayID()))
+        m_screenReserved = data->reserved;
+#endif
 
     allMediaElements().add(*this);
 
@@ -919,6 +929,7 @@ void HTMLMediaElement::registerWithDocument(Document& document)
 #endif
 
     document.addAudioProducer(*this);
+    document.addScreenPropertiesChangedObserver(m_screenPropertiesChangedObserver);
 }
 
 void HTMLMediaElement::unregisterWithDocument(Document& document)
@@ -2524,7 +2535,7 @@ void HTMLMediaElement::resumeSpeakingCueText()
     if (m_speechState != SpeechSynthesisState::Paused && m_speechState != SpeechSynthesisState::CompletingExtendedDescription)
         return;
 
-    ALWAYS_LOG(LOGIDENTIFIER);
+    HTMLMEDIAELEMENT_RELEASE_LOG(ResumeSpeakingCueText);
     setSpeechSynthesisState(SpeechSynthesisState::Speaking);
 #endif
 }
@@ -2535,7 +2546,7 @@ void HTMLMediaElement::cancelSpeakingCueText()
     if (m_speechState == SpeechSynthesisState::None)
         return;
 
-    ALWAYS_LOG(LOGIDENTIFIER);
+    HTMLMEDIAELEMENT_RELEASE_LOG(CancelSpeakingCueText);
     setSpeechSynthesisState(SpeechSynthesisState::None);
 #endif
 }
@@ -2546,7 +2557,7 @@ void HTMLMediaElement::pausePlaybackForExtendedTextDescription()
     if (m_speechState != SpeechSynthesisState::Speaking)
         return;
 
-    ALWAYS_LOG(LOGIDENTIFIER);
+    HTMLMEDIAELEMENT_RELEASE_LOG(PausePlaybackForExtendedTextDescription);
     setSpeechSynthesisState(SpeechSynthesisState::CompletingExtendedDescription);
 #endif
 }
@@ -2919,7 +2930,7 @@ void HTMLMediaElement::noneSupported()
     if (m_error)
         return;
 
-    ALWAYS_LOG(LOGIDENTIFIER);
+    HTMLMEDIAELEMENT_RELEASE_LOG(NoneSupported);
 
     stopPeriodicTimers();
     m_loadState = WaitingForSource;
@@ -8250,6 +8261,10 @@ void HTMLMediaElement::createMediaPlayer() WTF_IGNORES_THREAD_SAFETY_ANALYSIS
     player->setViewportVisibility(viewportVisibility());
     player->setInFullscreenOrPictureInPicture(isInFullscreenOrPictureInPicture());
 
+#if PLATFORM(MAC)
+    player->setScreenReserved(m_screenReserved);
+#endif
+
     schedulePlaybackControlsManagerUpdate();
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA) && ENABLE(ENCRYPTED_MEDIA)
     updateShouldContinueAfterNeedKey();
@@ -10469,6 +10484,28 @@ void HTMLMediaElement::rebuildMediaEngineForWirelessPlayback()
 }
 
 #endif // ENABLE(WIRELESS_PLAYBACK_MEDIA_PLAYER)
+
+void HTMLMediaElement::screenPropertiesChanged(PlatformDisplayID displayID)
+{
+    setPreferredDynamicRangeMode(preferredDynamicRangeMode(protect(document().view()).get()));
+#if PLATFORM(MAC)
+    if (auto data = screenData(displayID))
+        setScreenReserved(data->reserved);
+#else
+    UNUSED_PARAM(displayID);
+#endif
+}
+
+#if PLATFORM(MAC)
+void HTMLMediaElement::setScreenReserved(bool reserved)
+{
+    if (m_screenReserved == reserved)
+        return;
+    m_screenReserved = reserved;
+    if (RefPtr player = m_player)
+        player->setScreenReserved(reserved);
+}
+#endif
 
 } // namespace WebCore
 

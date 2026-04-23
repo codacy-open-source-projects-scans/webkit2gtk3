@@ -208,9 +208,9 @@ typedef NS_ENUM(NSInteger, WKBridgeDataType) {
     WKBridgeDataTypeInt3,
     WKBridgeDataTypeInt4,
     WKBridgeDataTypeFloat,
-    WKBridgeDataTypeColor3f,
+    WKBridgeDataTypeCgColor3,
+    WKBridgeDataTypeCgColor4,
     WKBridgeDataTypeColor3h,
-    WKBridgeDataTypeColor4f,
     WKBridgeDataTypeColor4h,
     WKBridgeDataTypeFloat2,
     WKBridgeDataTypeFloat3,
@@ -240,12 +240,11 @@ typedef NS_ENUM(NSInteger, WKBridgeDataType) {
 
 @property (nonatomic, readonly) WKBridgeDataType type;
 @property (nonatomic, readonly) NSString *name;
-@property (nonatomic, readonly) WKBridgeDataType semanticType;
-@property (nonatomic, readonly) BOOL hasSemanticType;
+@property (nonatomic, readonly, nullable) NSString *semanticTypeName;
 @property (nonatomic, readonly, nullable) WKBridgeConstantContainer *defaultValue;
 
 - (instancetype)init NS_UNAVAILABLE;
-- (instancetype)initWithType:(WKBridgeDataType)dataType name:(NSString *)name semanticType:(WKBridgeDataType)semanticType hasSemanticType:(BOOL)hasSemanticType defaultValue:(nullable WKBridgeConstantContainer *)defaultValue NS_DESIGNATED_INITIALIZER;
+- (instancetype)initWithType:(WKBridgeDataType)dataType name:(NSString *)name semanticTypeName:(nullable NSString *)semanticTypeName defaultValue:(nullable WKBridgeConstantContainer *)defaultValue NS_DESIGNATED_INITIALIZER;
 
 @end
 
@@ -282,14 +281,19 @@ typedef NS_ENUM(NSInteger, WKBridgeConstant) {
     WKBridgeConstantNormal3h,
     WKBridgeConstantVector3f,
     WKBridgeConstantVector3h,
-    WKBridgeConstantColor3f,
-    WKBridgeConstantColor3h,
-    WKBridgeConstantColor4f,
-    WKBridgeConstantColor4h,
+    WKBridgeConstantCgColor3,
+    WKBridgeConstantCgColor4,
     WKBridgeConstantTexCoord2h,
     WKBridgeConstantTexCoord2f,
     WKBridgeConstantTexCoord3h,
-    WKBridgeConstantTexCoord3f
+    WKBridgeConstantTexCoord3f,
+
+    // USD/MaterialX native color types encoded as float components (not through CGColor).
+    // color4f/color4h both encode as 4 floats; color3f/color3h both encode as 3 floats.
+    WKBridgeConstantColor4f,
+    WKBridgeConstantColor4h,
+    WKBridgeConstantColor3f,
+    WKBridgeConstantColor3h,
 };
 
 typedef NS_ENUM(NSInteger, WKBridgeNodeType) {
@@ -346,15 +350,19 @@ typedef NS_ENUM(NSInteger, WKBridgeNodeType) {
 NS_SWIFT_SENDABLE
 @interface WKBridgeMaterialGraph : NSObject
 
+@property (nonatomic, strong, readonly) NSString *graphName;
 @property (nonatomic, strong, readonly) NSArray<WKBridgeNode *> *nodes;
 @property (nonatomic, strong, readonly) NSArray<WKBridgeEdge *> *edges;
 @property (nonatomic, strong, readonly) WKBridgeNode *arguments;
 @property (nonatomic, strong, readonly) WKBridgeNode *results;
 @property (nonatomic, strong, readonly) NSArray<WKBridgeInputOutput *> *inputs;
 @property (nonatomic, strong, readonly) NSArray<WKBridgeInputOutput *> *outputs;
+@property (nonatomic, strong, readonly) NSArray<NSString *> *primvarMappingPrimvarNames;
+@property (nonatomic, strong, readonly) NSArray<NSString *> *primvarMappingTexcoordNames;
+@property (nonatomic, strong, readonly) NSArray<NSString *> *functionConstantInputNames;
 
 - (instancetype)init NS_UNAVAILABLE;
-- (instancetype)initWithNodes:(NSArray<WKBridgeNode *> *)nodes edges:(NSArray<WKBridgeEdge *> *)edges arguments:(WKBridgeNode *)arguments results:(WKBridgeNode *)results inputs:(NSArray<WKBridgeInputOutput *> *)inputs outputs:(NSArray<WKBridgeInputOutput *> *)outputs NS_DESIGNATED_INITIALIZER;
+- (instancetype)initWithGraphName:(NSString *)graphName nodes:(NSArray<WKBridgeNode *> *)nodes edges:(NSArray<WKBridgeEdge *> *)edges arguments:(WKBridgeNode *)arguments results:(WKBridgeNode *)results inputs:(NSArray<WKBridgeInputOutput *> *)inputs outputs:(NSArray<WKBridgeInputOutput *> *)outputs primvarMappingPrimvarNames:(NSArray<NSString *> *)primvarMappingPrimvarNames primvarMappingTexcoordNames:(NSArray<NSString *> *)primvarMappingTexcoordNames functionConstantInputNames:(NSArray<NSString *> *)functionConstantInputNames NS_DESIGNATED_INITIALIZER;
 
 @end
 
@@ -367,6 +375,20 @@ NS_SWIFT_SENDABLE
 
 - (instancetype)init NS_UNAVAILABLE;
 - (instancetype)initWithValue:(NSUUID *)value path:(NSString *)path hashValue:(NSInteger)hashValue NS_DESIGNATED_INITIALIZER;
+
+@end
+
+NS_SWIFT_SENDABLE
+@interface WKBridgeRemovals : NSObject
+
+@property (nonatomic, readonly) NSArray<WKBridgeTypedResourceId *> *meshRemovals;
+@property (nonatomic, readonly) NSArray<WKBridgeTypedResourceId *> *materialRemovals;
+@property (nonatomic, readonly) NSArray<WKBridgeTypedResourceId *> *textureRemovals;
+
+- (instancetype)init NS_UNAVAILABLE;
+- (instancetype)initWithMeshRemovals:(NSArray<WKBridgeTypedResourceId *> *)meshRemovals materialRemovals:(NSArray<WKBridgeTypedResourceId *> *)materialRemovals textureRemovals:(NSArray<WKBridgeTypedResourceId *> *)textureRemovals NS_DESIGNATED_INITIALIZER;
+
+- (BOOL)isEmpty;
 
 @end
 
@@ -466,6 +488,7 @@ NS_SWIFT_SENDABLE
 - (void)updateMesh:(NSArray<WKBridgeUpdateMesh *> *)descriptor completionHandler:(void (^)(void))completionHandler;
 - (void)updateTexture:(NSArray<WKBridgeUpdateTexture *> *)descriptor;
 - (void)updateMaterial:(NSArray<WKBridgeUpdateMaterial *> *)descriptor completionHandler:(void (^)(void))completionHandler;
+- (BOOL)processRemovals:(NSArray<WKBridgeTypedResourceId *> *)meshRemovals materialRemovals:(NSArray<WKBridgeTypedResourceId *> *)materialRemovals  textureRemovals:(NSArray<WKBridgeTypedResourceId *> *)textureRemovals;
 - (void)setTransform:(simd_float4x4)transform;
 - (void)setFOV:(float)fovY;
 - (void)setBackgroundColor:(simd_float3)color;
@@ -479,7 +502,8 @@ NS_SWIFT_SENDABLE
 
 @interface WKBridgeModelLoader : NSObject
 
-- (instancetype)init NS_DESIGNATED_INITIALIZER;
+- (instancetype)init NS_UNAVAILABLE;
+- (instancetype)initWithGPUFamily:(MTLGPUFamily)family NS_DESIGNATED_INITIALIZER;
 
 - (double)currentTime;
 - (void)setCurrentTime:(double)newTime;
@@ -487,10 +511,10 @@ NS_SWIFT_SENDABLE
 - (void)loadModelFrom:(NSURL *)url;
 - (void)loadModel:(NSData *)data;
 - (nullable WKBridgeUpdateTexture *)loadEnvironmentMap:(NSData *)data;
-- (void)update:(double)deltaTime completionHandler:(void (^)(void))completionHandler;
+- (void)update:(double)deltaTime;
 - (void)setLoop:(BOOL)loop;
 - (void)requestCompleted:(NSObject *)request;
-- (void)setCallbacksWithModelUpdatedCallback:(void (^)(NSArray<WKBridgeUpdateMesh *> *))modelUpdatedCallback textureUpdatedCallback:(void (^)(NSArray<WKBridgeUpdateTexture *> *))textureUpdatedCallback materialUpdatedCallback:(void (^)(NSArray<WKBridgeUpdateMaterial *> *))materialUpdatedCallback;
+- (void)setCallbacksWithModelUpdatedCallback:(void (^)(NSArray<WKBridgeUpdateMesh *> *))modelUpdatedCallback textureUpdatedCallback:(void (^)(NSArray<WKBridgeUpdateTexture *> *))textureUpdatedCallback materialUpdatedCallback:(void (^)(NSArray<WKBridgeUpdateMaterial *> *))materialUpdatedCallback processRemovalsCallback:(void (^)(WKBridgeRemovals *))processRemovalsCallback;
 
 @end
 
@@ -687,7 +711,7 @@ struct ConstantContainer {
 struct InputOutput {
     DataType type;
     String name;
-    std::optional<DataType> semanticType;
+    std::optional<String> semanticTypeName;
     std::optional<ConstantContainer> defaultValue;
 };
 
@@ -703,12 +727,16 @@ struct Node {
 };
 
 struct MaterialGraph {
+    String graphName;
     Vector<Node> nodes;
     Vector<Edge> edges;
     Node arguments;
     Node results;
     Vector<InputOutput> inputs;
     Vector<InputOutput> outputs;
+    Vector<String> primvarMappingPrimvarNames;
+    Vector<String> primvarMappingTexcoordNames;
+    Vector<String> functionConstantInputNames;
 };
 
 struct TypedResourceId {
