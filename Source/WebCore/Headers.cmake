@@ -2581,6 +2581,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/MediaSourceConfiguration.h
     platform/graphics/MediaSourcePrivate.h
     platform/graphics/MediaSourcePrivateClient.h
+    platform/graphics/MediaTimeUpdateData.h
     platform/graphics/MediaUsageInfo.h
     platform/graphics/Model.h
     platform/graphics/ModelContext.h
@@ -3530,6 +3531,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     testing/MockContentFilterSettingsClient.h
     testing/MockGamepad.h
     testing/MockGamepadProvider.h
+    testing/MockParentalControlsURLFilter.h
     testing/MockWebAuthenticationConfiguration.h
 
     testing/js/WebCoreTestSupport.h

@@ -181,7 +181,6 @@ webkit.org/b/264680 media/no-fullscreen-when-hidden.html [ Pass Failure ]
 webkit.org/b/298919 imported/w3c/web-platform-tests/custom-elements/form-associated/ElementInternals-reportValidity-delegatesFocus.html [ Skip ]
 
 # Pending to create bug.
-imported/w3c/web-platform-tests/cookies/attributes/domain.sub.html [ Failure ]
 imported/w3c/web-platform-tests/fetch/metadata/generated/css-font-face.sub.tentative.html [ Failure ]
 imported/w3c/web-platform-tests/fetch/metadata/generated/element-a.https.sub.html [ Failure ]
 imported/w3c/web-platform-tests/fetch/metadata/generated/element-area.https.sub.html [ Failure ]
@@ -579,7 +578,6 @@ fullscreen/full-screen-enter-while-exiting-multiple-elements.html [ Pass Timeout
 fast/events/touch/touch-inside-iframe-scrolled.html [ Pass Timeout ]
 
 # testRunner.dontForceRepaint makes these tests flaky with WPE Platform API.
-compositing/repaint/copy-forward-dirty-region-purged.html [ Pass ImageOnlyFailure ]
 compositing/repaint/copy-forward-dirty-region.html [ Pass ImageOnlyFailure ]
 
 webkit.org/b/304405 http/tests/scroll-to-text-fragment/clear-on-new-fragment-navigation.html [ Pass ImageOnlyFailure ]
@@ -1289,3 +1287,4 @@ webkit.org/b/313036 imported/w3c/web-platform-tests/editing/other/copy-elements-
 webkit.org/b/313054 [ arm64 ] compositing/backing/animate-into-view-with-descendant.html [ Pass Failure Crash ]
 webkit.org/b/160119 [ arm64 ] editing/selection/caret-at-bidi-boundary.html [ Pass Timeout ]
 webkit.org/b/313055 [ arm64 ] fast/canvas/image-buffer-backend-variants.html [ Pass Failure Timeout ]
+webkit.org/b/313112 [ arm64 ] webrtc/video-mute.html [ Pass Failure Timeout ]
