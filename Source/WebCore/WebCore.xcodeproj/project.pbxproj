@@ -2996,6 +2996,9 @@
 		77D510041ED4F71E00DA4C87 /* JSCredentialRequestOptions.h in Headers */ = {isa = PBXBuildFile; fileRef = 77D50FFF1ED4F70C00DA4C87 /* JSCredentialRequestOptions.h */; };
 		77D510061ED4F72500DA4C87 /* JSCredentialCreationOptions.h in Headers */ = {isa = PBXBuildFile; fileRef = 77D50FFD1ED4F70C00DA4C87 /* JSCredentialCreationOptions.h */; };
 		77D5100B1ED5E28800DA4C87 /* CredentialRequestOptions.h in Headers */ = {isa = PBXBuildFile; fileRef = 77D50FFB1ED4F16C00DA4C87 /* CredentialRequestOptions.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		FC260000000000FC00000003 /* FederatedCredentialRequestOptions.h in Headers */ = {isa = PBXBuildFile; fileRef = FC260000000000FC00000001 /* FederatedCredentialRequestOptions.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		FC260000000000DC00000003 /* IdentityCredentialRequestOptions.h in Headers */ = {isa = PBXBuildFile; fileRef = FC260000000000DC00000001 /* IdentityCredentialRequestOptions.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		FC2600000000000C00000003 /* OTPCredentialRequestOptions.h in Headers */ = {isa = PBXBuildFile; fileRef = FC2600000000000C00000001 /* OTPCredentialRequestOptions.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		77D5100D1ED5E29500DA4C87 /* CredentialCreationOptions.h in Headers */ = {isa = PBXBuildFile; fileRef = 77AAD6851ECFBD3900BFA2D1 /* CredentialCreationOptions.h */; };
 		77D510171ED6022200DA4C87 /* CredentialsContainer.h in Headers */ = {isa = PBXBuildFile; fileRef = 77D510161ED6021B00DA4C87 /* CredentialsContainer.h */; };
 		77D5101C1ED722BF00DA4C87 /* JSCredentialsContainer.h in Headers */ = {isa = PBXBuildFile; fileRef = 77D5101B1ED722B500DA4C87 /* JSCredentialsContainer.h */; };
@@ -14394,6 +14397,12 @@
 		77D50FFD1ED4F70C00DA4C87 /* JSCredentialCreationOptions.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = JSCredentialCreationOptions.h; sourceTree = "<group>"; };
 		77D50FFE1ED4F70C00DA4C87 /* JSCredentialRequestOptions.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = JSCredentialRequestOptions.cpp; sourceTree = "<group>"; };
 		77D50FFF1ED4F70C00DA4C87 /* JSCredentialRequestOptions.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = JSCredentialRequestOptions.h; sourceTree = "<group>"; };
+		FC260000000000FC00000001 /* FederatedCredentialRequestOptions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FederatedCredentialRequestOptions.h; sourceTree = "<group>"; };
+		FC260000000000FC00000002 /* FederatedCredentialRequestOptions.idl */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = FederatedCredentialRequestOptions.idl; sourceTree = "<group>"; };
+		FC260000000000DC00000001 /* IdentityCredentialRequestOptions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = IdentityCredentialRequestOptions.h; sourceTree = "<group>"; };
+		FC260000000000DC00000002 /* IdentityCredentialRequestOptions.idl */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = IdentityCredentialRequestOptions.idl; sourceTree = "<group>"; };
+		FC2600000000000C00000001 /* OTPCredentialRequestOptions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = OTPCredentialRequestOptions.h; sourceTree = "<group>"; };
+		FC2600000000000C00000002 /* OTPCredentialRequestOptions.idl */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = OTPCredentialRequestOptions.idl; sourceTree = "<group>"; };
 		77D510161ED6021B00DA4C87 /* CredentialsContainer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CredentialsContainer.h; sourceTree = "<group>"; };
 		77D510181ED7159900DA4C87 /* CredentialsContainer.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = CredentialsContainer.cpp; sourceTree = "<group>"; };
 		77D5101A1ED722B500DA4C87 /* JSCredentialsContainer.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = JSCredentialsContainer.cpp; sourceTree = "<group>"; };
@@ -20131,8 +20140,6 @@
 		BCE411CC2CF2560400731E47 /* CSSPropertyParserConsumer+Attr.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = "CSSPropertyParserConsumer+Attr.cpp"; sourceTree = "<group>"; };
 		BCE411CF2CF258D700731E47 /* CSSPropertyParserConsumer+Animations.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "CSSPropertyParserConsumer+Animations.h"; sourceTree = "<group>"; };
 		BCE411D02CF258D700731E47 /* CSSPropertyParserConsumer+Animations.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = "CSSPropertyParserConsumer+Animations.cpp"; sourceTree = "<group>"; };
-		BCE411D32CF2590500731E47 /* CSSPropertyParserConsumer+WillChange.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "CSSPropertyParserConsumer+WillChange.h"; sourceTree = "<group>"; };
-		BCE411D42CF2590500731E47 /* CSSPropertyParserConsumer+WillChange.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = "CSSPropertyParserConsumer+WillChange.cpp"; sourceTree = "<group>"; };
 		BCE411D72CF25B9800731E47 /* CSSPropertyParserConsumer+Box.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "CSSPropertyParserConsumer+Box.h"; sourceTree = "<group>"; };
 		BCE411D82CF25B9800731E47 /* CSSPropertyParserConsumer+Box.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = "CSSPropertyParserConsumer+Box.cpp"; sourceTree = "<group>"; };
 		BCE411DF2CF2B6F000731E47 /* CSSPropertyParserConsumer+Scrollbars.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "CSSPropertyParserConsumer+Scrollbars.h"; sourceTree = "<group>"; };
@@ -29374,10 +29381,16 @@
 				77D510181ED7159900DA4C87 /* CredentialsContainer.cpp */,
 				77D510161ED6021B00DA4C87 /* CredentialsContainer.h */,
 				57D846291FE99F6300CA3682 /* CredentialsContainer.idl */,
+				FC260000000000FC00000001 /* FederatedCredentialRequestOptions.h */,
+				FC260000000000FC00000002 /* FederatedCredentialRequestOptions.idl */,
+				FC260000000000DC00000001 /* IdentityCredentialRequestOptions.h */,
+				FC260000000000DC00000002 /* IdentityCredentialRequestOptions.idl */,
 				525B0CB02A9F8FD100E8A94B /* MediationRequirement.h */,
 				57D846251FE895F600CA3682 /* Navigator+Credentials.idl */,
 				57D846241FE895F500CA3682 /* NavigatorCredentials.cpp */,
 				57D846261FE895F800CA3682 /* NavigatorCredentials.h */,
+				FC2600000000000C00000001 /* OTPCredentialRequestOptions.h */,
+				FC2600000000000C00000002 /* OTPCredentialRequestOptions.idl */,
 			);
 			path = credentialmanagement;
 			sourceTree = "<group>";
@@ -33009,8 +33022,6 @@
 				BCC38E912C25E1A80013821F /* CSSPropertyParserConsumer+URL.h */,
 				BC6DA0ED2C8BDD95000ECE0F /* CSSPropertyParserConsumer+ViewTransition.cpp */,
 				BC6DA0EE2C8BDD95000ECE0F /* CSSPropertyParserConsumer+ViewTransition.h */,
-				BCE411D42CF2590500731E47 /* CSSPropertyParserConsumer+WillChange.cpp */,
-				BCE411D32CF2590500731E47 /* CSSPropertyParserConsumer+WillChange.h */,
 				BC3BEDB72DD54F40004E87D7 /* CSSPropertyParserCustom.h */,
 				BC812BC02CA46BCB0048BBC5 /* CSSPropertyParserOptions.h */,
 				BC3BEDBA2DD5509B004E87D7 /* CSSPropertyParserResult.cpp */,
@@ -44471,6 +44482,7 @@
 				A75E8B8D0E1DE2D6007F2481 /* FEComponentTransfer.h in Headers */,
 				A75E8B8F0E1DE2D6007F2481 /* FEComposite.h in Headers */,
 				84730D791248F0B300D3A9C9 /* FEConvolveMatrix.h in Headers */,
+				FC260000000000FC00000003 /* FederatedCredentialRequestOptions.h in Headers */,
 				84730D7B1248F0B300D3A9C9 /* FEDiffuseLighting.h in Headers */,
 				84730D7D1248F0B300D3A9C9 /* FEDisplacementMap.h in Headers */,
 				4358E8811360A31700E4748C /* FEDropShadow.h in Headers */,
@@ -45030,6 +45042,7 @@
 				516103AF1CADBA770016B4C7 /* IDBValue.h in Headers */,
 				5185FCB01BB4C4E80012898F /* IDBVersionChangeEvent.h in Headers */,
 				E4A814E01C7338EB00BF85AC /* IdChangeInvalidation.h in Headers */,
+				FC260000000000DC00000003 /* IdentityCredentialRequestOptions.h in Headers */,
 				49E911C50EF86D47009D0CAF /* IdentityTransformOperation.h in Headers */,
 				7CE9A12B1EA2F1DB00651AD1 /* IDLAttributes.json in Headers */,
 				9B864F06234C0893006D10EB /* IdleCallbackController.h in Headers */,
@@ -46729,6 +46742,7 @@
 				FE9E89FC16E2DC0500A908F8 /* OriginLock.h in Headers */,
 				FD581FAF1520F91F003A7A75 /* OscillatorNode.h in Headers */,
 				E755E8B324CA271E009F7C23 /* OscillatorOptions.h in Headers */,
+				FC2600000000000C00000003 /* OTPCredentialRequestOptions.h in Headers */,
 				E48359562ED73A0D00F72EF6 /* OutlinePainter.h in Headers */,
 				BC5EB5DD0E81B8DD00B25965 /* OutlineValue.h in Headers */,
 				7A29F57218C69514004D0F81 /* OutOfBandTextTrackPrivateAVF.h in Headers */,

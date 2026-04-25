@@ -394,7 +394,10 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     Modules/credentialmanagement/BasicCredential.h
     Modules/credentialmanagement/CredentialRequestOptions.h
+    Modules/credentialmanagement/FederatedCredentialRequestOptions.h
+    Modules/credentialmanagement/IdentityCredentialRequestOptions.h
     Modules/credentialmanagement/MediationRequirement.h
+    Modules/credentialmanagement/OTPCredentialRequestOptions.h
 
     Modules/encryptedmedia/CDM.h
     Modules/encryptedmedia/CDMClient.h
@@ -2983,7 +2986,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/PaintPhase.h
     rendering/PathOperation.h
     rendering/RegionContext.h
-    rendering/RelayoutScopeForScrollbarChange
+    rendering/RelayoutScopeForScrollbarChange.h
     rendering/RenderAttachment.h
     rendering/RenderBlock.h
     rendering/RenderBlockFlow.h
