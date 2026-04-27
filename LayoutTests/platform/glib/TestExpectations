@@ -977,6 +977,9 @@ accessibility/select-whitespace-collapsed-text.html [ Failure ]
 accessibility/insert-text-into-password-field.html [ Skip ]
 
 # Need to implement AccessibilityUIElement::{pageX, pageY}.
+accessibility/canvas-drawFocusIfNeeded-bounds.html [ Skip ]
+accessibility/canvas-drawFocusIfNeeded-bounds-with-object-fit.html [ Skip ]
+accessibility/canvas-drawFocusIfNeeded-bounds-with-transform.html [ Skip ]
 accessibility/native-label-geometry-with-aria-labelledby.html [ Skip ]
 
 # These test a Cocoa-only API.
@@ -2328,8 +2331,6 @@ fast/mediastream/multi-microphone.html [ Skip ]
 
 fast/mediastream/getUserMedia-and-getVideoPlaybackQuality.html [ Skip ]
 
-webkit.org/b/208182 fast/repaint/backgroundSizeRepaint.html [ ImageOnlyFailure Pass ]
-
 #////////////////////////////////////////////////////////////////////////////////////////
 # End of Skia-related bugs
 #////////////////////////////////////////////////////////////////////////////////////////
@@ -2497,7 +2498,11 @@ imported/w3c/web-platform-tests/css/filter-effects/backdrop-filter-backdrop-root
 imported/w3c/web-platform-tests/css/filter-effects/backdrop-filter-edge-behavior.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/filter-effects/backdrop-filter-edge-pixels-2.html [ ImageOnlyFailure ]
 imported/w3c/web-platform-tests/css/filter-effects/backdrop-filter-transform.html [ ImageOnlyFailure ]
-
+imported/w3c/web-platform-tests/css/filter-effects/backdrop-filter-backdrop-root-opacity.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/filter-effects/backdrop-filter-image-size-filter-size-mismatch.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/filter-effects/drop-shadow-with-3d-transform.html [ ImageOnlyFailure ]
+imported/w3c/web-platform-tests/css/filter-effects/fecolormatrix-display-p3.html [ Skip ] # timeout
+imported/w3c/web-platform-tests/css/filter-effects/fecomponenttransfer-display-p3.html [ Skip ] # timeout
 
 # The following tests need LBSE enabled builds, which is off by default for this port.
 svg/z-index [ Skip ]
@@ -3291,7 +3296,6 @@ webkit.org/b/212807 imported/w3c/web-platform-tests/fetch/api/basic/error-after-
 # As of r263626, the imported baseline based on Mojave fails for glib. Added custom baseline for it.
 
 webkit.org/b/214029 imported/w3c/web-platform-tests/html/semantics/embedded-content/the-video-element/resize-during-playback.html [ Failure Crash ]
-webkit.org/b/262391 imported/w3c/web-platform-tests/html/semantics/embedded-content/the-iframe-element/sandbox-top-navigation-escalate-privileges.tentative.sub.window.html [ Failure ]
 
 webkit.org/b/214125 imported/w3c/web-platform-tests/html/rendering/widgets/select-wrap-no-spill.optional.html [ Failure ]
 imported/w3c/web-platform-tests/html/rendering/widgets/button-layout/propagate-text-decoration.html [ ImageOnlyFailure ]
@@ -4499,7 +4503,6 @@ webkit.org/b/262949 media/media-garbage-collection.html [ Pass Timeout Failure ]
 webkit.org/b/286131 imported/w3c/web-platform-tests/css/css-transforms/transform-box/cssbox-content-box-002.html [ Pass Crash ImageOnlyFailure ]
 
 imported/w3c/web-platform-tests/css/css-overscroll-behavior/overscroll-behavior.html [ Skip ]
-imported/w3c/web-platform-tests/css/css-scroll-snap/input/snap-area-overflow-boundary.html [ Skip ]
 imported/w3c/web-platform-tests/css/css-scroll-snap/snap-at-user-scroll-end.html [ Skip ]
 imported/w3c/web-platform-tests/css/css-transforms/scroll-preserve-3d.html [ Skip ]
 imported/w3c/web-platform-tests/dom/events/non-cancelable-when-passive [ Skip ]
@@ -5445,6 +5448,8 @@ webkit.org/b/312985 svg/transforms/svg-transform-scale-with-and-without-layer.ht
 
 # Anchor mouse-focusability quirk is Cocoa-only.
 webkit.org/b/312692 fast/events/anchor-mouse-focusable-quirk.html [ Skip ]
+
+imported/w3c/web-platform-tests/html/semantics/embedded-content/the-iframe-element/iframe_sandbox_allow_top_navigation_by_user_activation_without_user_gesture.html [ Skip ]
 
 # End: Common failures between GTK and WPE.
 
