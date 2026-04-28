@@ -239,6 +239,10 @@ imported/w3c/web-platform-tests/requestidlecallback [ Pass ]
 imported/w3c/web-platform-tests/requestidlecallback/deadline-max-rAF.html [ Pass Failure ]
 http/tests/eventloop/idle-callback-not-affected-by-timers-in-cross-origin.html [ Pass ]
 
+fast/events/touch/ios/touch-event-regions-layer-tree [ Pass ]
+fast/events/touch/ios/touch-event-regions-layer-tree/input [ Skip ]
+fast/events/touch/ios/touch-event-regions-layer-tree/scrolling [ Skip ]
+
 #//////////////////////////////////////////////////////////////////////////////////////////
 # End platform-specific directories.
 #//////////////////////////////////////////////////////////////////////////////////////////
@@ -1372,6 +1376,7 @@ fast/css/resize-single-axis.html [ Skip ]
 fast/css/resize-textarea-align-content.html [ Skip ]
 fast/events/mouse-events-on-textarea-resize.html [ Skip ]
 fast/events/mouse_resizer_mousedown.html [ Skip ]
+fast/css/resize-corner-over-child-layer.html [ Skip ]
 
 # The file-wrapper part of <attachment> is not yet working on iOS
 fast/attachment/attachment-type-attribute.html [ Skip ]
@@ -8528,6 +8533,8 @@ webkit.org/b/310132 imported/w3c/web-platform-tests/intersection-observer/target
 media/caption-display-settings/caption-display-settings-default-anchorBounds.html [ Skip ]
 
 webkit.org/b/299830 imported/w3c/web-platform-tests/storage-access-api/hasStorageAccess-insecure.sub.window.html [ Pass Failure ]
+
+webkit.org/b/313089 fast/backgrounds/background-repeat-long-scroll.html [ ImageOnlyFailure Pass ]
 
 webkit.org/b/307582 compositing/overflow/rtl-scrollbar-layer-positioning.html [ Failure ]
 

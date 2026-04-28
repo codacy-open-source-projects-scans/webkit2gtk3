@@ -337,7 +337,8 @@ VM::VM(VMType vmType, HeapType heapType, WTF::RunLoop* runLoop, bool* success)
     pinballCompletionStructure.setWithoutWriteBarrier(PinballCompletion::createStructure(*this, nullptr, jsNull()));
 #endif
     moduleProgramExecutableStructure.setWithoutWriteBarrier(ModuleProgramExecutable::createStructure(*this, nullptr, jsNull()));
-    promiseReactionStructure.setWithoutWriteBarrier(JSPromiseReaction::createStructure(*this, nullptr, jsNull()));
+    slimPromiseReactionStructure.setWithoutWriteBarrier(JSSlimPromiseReaction::createStructure(*this, nullptr, jsNull()));
+    fullPromiseReactionStructure.setWithoutWriteBarrier(JSFullPromiseReaction::createStructure(*this, nullptr, jsNull()));
     jsMicrotaskDispatcherStructure.setWithoutWriteBarrier(JSMicrotaskDispatcher::createStructure(*this, nullptr, jsNull()));
     moduleLoaderStructure.setWithoutWriteBarrier(JSModuleLoader::createStructure(*this, nullptr, jsNull()));
     moduleRegistryEntryStructure.setWithoutWriteBarrier(ModuleRegistryEntry::createStructure(*this, nullptr, jsNull()));
@@ -513,7 +514,8 @@ WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
 
     Config::finalize();
 
-    initializeAvailableTimeZones();
+    if (!isInMiniMode())
+        initializeAvailableTimeZones();
 
     // We must set this at the end only after the VM is fully initialized.
     WTF::storeStoreFence();
@@ -1883,7 +1885,8 @@ void VM::visitAggregateImpl(Visitor& visitor)
     visitor.append(webAssemblyCalleeGroupStructure);
 #endif
     visitor.append(moduleProgramExecutableStructure);
-    visitor.append(promiseReactionStructure);
+    visitor.append(slimPromiseReactionStructure);
+    visitor.append(fullPromiseReactionStructure);
     visitor.append(jsMicrotaskDispatcherStructure);
     visitor.append(moduleLoaderStructure);
     visitor.append(moduleRegistryEntryStructure);
