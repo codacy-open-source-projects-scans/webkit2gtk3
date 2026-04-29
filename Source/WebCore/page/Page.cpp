@@ -1758,12 +1758,6 @@ void Page::setDeviceScaleFactor(float scaleFactor)
 
 void Page::screenPropertiesDidChange(bool affectsStyle)
 {
-#if ENABLE(VIDEO)
-    auto mode = preferredDynamicRangeMode(protect(protect(mainFrame())->virtualView()).get());
-    forEachMediaElement([mode] (auto& element) {
-        element.setPreferredDynamicRangeMode(mode);
-    });
-#endif
 #if HAVE(SUPPORT_HDR_DISPLAY)
     updateDisplayEDRHeadroom();
 #endif
@@ -2207,9 +2201,13 @@ void Page::syncLocalFrameInfoToRemote()
             for (RefPtr child = frame.tree().firstChild(); child; child = child->tree().nextSibling()) {
                 auto visibleRect = frameView->visibleRectOfChild(*child.get());
                 float usedZoom = frame.usedZoomForChild(*child);
-                bool useDarkAppearance = frameView->ownerElementOfChildFrameUsesDarkAppearance(*child);
+                auto frameOwnerElementAppearance = frameView->appearanceOfOwnerElementOfChildFrame(*child);
 
-                childrenFrameLayoutInfo.add(child->frameID(), RemoteFrameLayoutInfo { .visibleRectInParent = visibleRect, .usedZoom = usedZoom, .useDarkAppearance = useDarkAppearance });
+                childrenFrameLayoutInfo.add(child->frameID(), RemoteFrameLayoutInfo {
+                    .visibleRectInParent = visibleRect,
+                    .usedZoom = usedZoom,
+                    .ownerElementAppearance = frameOwnerElementAppearance
+                });
             }
 
             frame.loader().client().broadcastChildrenFrameLayoutInfoToOtherProcesses(childrenFrameLayoutInfo);

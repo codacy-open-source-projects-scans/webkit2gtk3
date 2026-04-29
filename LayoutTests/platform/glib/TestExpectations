@@ -3601,7 +3601,6 @@ ipc/validate-message-check-in-networkconnectiontowebproces-crash.html [ Skip ]
 
 ### NEEDS PROPER TRIAGGING/GARDENING
 
-ipc/invalid-addSourceBuffer-to-GPU-process-crash.html [ Failure ]
 ipc/serialized-type-info.html [ Failure ]
 
 #////////////////////////////////////////////////////////////////////////////////////////
@@ -5450,7 +5449,13 @@ imported/w3c/web-platform-tests/html/semantics/embedded-content/the-iframe-eleme
 webkit.org/b/313419 media/track/audio-track-configuration.html [ Failure Pass ]
 webkit.org/b/313419 media/track/audio-track-configuration-webm.html [ Failure Pass ]
 
+webkit.org/b/313511 media/media-source/media-source-real-duration-after-append.html [ Failure ]
+webkit.org/b/313511 media/media-source/media-source-real-fastseek.html [ Failure ]
+webkit.org/b/313511 media/media-source/media-source-real-overlapping-dts.html [ Failure ]
+
 [ Debug ] imported/w3c/web-platform-tests/dom/events/Event-dispatch-single-activation-behavior.html [ Pass Failure ]
+
+webkit.org/b/305531 webgl/webgl2-provoking-vertex-primitive-restart-uint16-nocrash.html [ Skip ]
 
 # End: Common failures between GTK and WPE.
 
